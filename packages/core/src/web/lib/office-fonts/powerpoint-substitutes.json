@@ -1,0 +1,6478 @@
+{
+ "_source": "PowerPoint for Mac's own PDFs of census decks (MRAI-corpus/pptx-r28/x/fontsub/evidence.py)",
+ "faces": {
+  " 微软雅黑": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R25_08:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": " 微软雅黑"
+  },
+  "-apple-system": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R104_07:4",
+      "R105_06:44",
+      "R108_06:13",
+      "R121_22:7",
+      "R122_09:14",
+      "R123_11:5",
+      "R127_01:2",
+      "R129_10:2",
+      "R12_04:28",
+      "R136_11:7",
+      "R139_13:2",
+      "R140_04:4",
+      "R140_11:1",
+      "R140_14:6",
+      "R149_10:9",
+      "R149_11:9",
+      "R152_11:5",
+      "R157_25:2",
+      "R162_06:8",
+      "R163_04:38",
+      "R166_03:3",
+      "R168_12:2",
+      "R178_08:3",
+      "R25_25:3",
+      "R27_16:12",
+      "R28_20:1",
+      "R31_16:2",
+      "R34_06:1",
+      "R37_11:8",
+      "R40_09:4",
+      "R41_08:29",
+      "R60_02:40",
+      "R61_13:2",
+      "R61_14:2",
+      "R62_10:18",
+      "R65_19:2",
+      "R66_06:6",
+      "R69_16:40",
+      "R71_03:31",
+      "R78_02:1",
+      "R80_13:5",
+      "R81_15:8",
+      "R82_04:14",
+      "R89_12:1",
+      "R94_22:6",
+      "R95_13:13",
+      "R96_24:8",
+      "R97_07:42",
+      "R98_17:12"
+     ],
+     "of": 533,
+     "runs": 529,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "-apple-system"
+  },
+  "72 monospace": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R14_24:36"
+     ],
+     "of": 36,
+     "runs": 36,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "72 Monospace"
+  },
+  "aa ks one": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "AA KS One"
+  },
+  "aaril": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R19_11:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Aaril"
+  },
+  "abadi mt condensed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R119_21:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Abadi MT Condensed"
+  },
+  "acto": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R131_29:43"
+     ],
+     "of": 43,
+     "runs": 43,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Acto"
+  },
+  "acto book": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R131_29:121"
+     ],
+     "of": 121,
+     "runs": 121,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Acto Book"
+  },
+  "acto semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R131_29:71"
+     ],
+     "of": 71,
+     "runs": 71,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Acto SemiBold"
+  },
+  "acumin pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R99_18:10"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Acumin Pro"
+  },
+  "adobe arabic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R122_18:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Times New Roman"
+    }
+   },
+   "face": "Adobe Arabic"
+  },
+  "adobe caslon pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R123_27:132"
+     ],
+     "of": 132,
+     "runs": 132,
+     "substitute": "Palatino Linotype"
+    }
+   },
+   "face": "Adobe Caslon Pro"
+  },
+  "adobe fan heiti std b": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R164_12:14"
+     ],
+     "of": 15,
+     "runs": 14,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "Adobe Fan Heiti Std B"
+  },
+  "adobe garamond pro bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R104_12:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Garamond"
+    }
+   },
+   "face": "Adobe Garamond Pro Bold"
+  },
+  "adobe gothic std b": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R136_17:1",
+      "R136_24:10",
+      "R20_16:12"
+     ],
+     "of": 23,
+     "runs": 23,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "Adobe Gothic Std B"
+  },
+  "adobe heiti std r": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R112_14:5",
+      "R136_24:47",
+      "R20_16:11"
+     ],
+     "of": 64,
+     "runs": 63,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "Adobe Heiti Std R"
+  },
+  "adobe myungjo std m": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R13_04:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "Adobe Myungjo Std M"
+  },
+  "adobe 黑体 std r": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R11_05:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "Adobe 黑体 Std R"
+  },
+  "adonis-web": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R89_25:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "adonis-web"
+  },
+  "advtta9c1b374": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R72_15:5"
+     ],
+     "of": 6,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "AdvTTa9c1b374"
+  },
+  "aerial": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R111_21:17",
+      "R141_03:2"
+     ],
+     "of": 19,
+     "runs": 19,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Aerial"
+  },
+  "aileron": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R49_15:40"
+     ],
+     "of": 40,
+     "runs": 40,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Aileron"
+  },
+  "aileron black": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R48_26:11",
+      "R49_15:8"
+     ],
+     "of": 19,
+     "runs": 19,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Aileron Black"
+  },
+  "aileron bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R165_29:1",
+      "R49_15:11"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Aileron Bold"
+  },
+  "akayakanadaka": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R55_21:8",
+      "R76_16:129",
+      "R89_25:32"
+     ],
+     "of": 169,
+     "runs": 169,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "AkayaKanadaka"
+  },
+  "akayatelivigala": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R55_21:7",
+      "R74_18:2",
+      "R89_25:6"
+     ],
+     "of": 15,
+     "runs": 15,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "AkayaTelivigala"
+  },
+  "alba": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R07_10:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Alba"
+  },
+  "albertus": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R21_04:135"
+     ],
+     "of": 137,
+     "runs": 135,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Albertus"
+  },
+  "alte din 1451 mittelschrift gepraegt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R75_13:14"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Alte DIN 1451 Mittelschrift gepraegt"
+  },
+  "amaranth": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R47_26:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Amaranth"
+  },
+  "amazon ember": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R12_15:24"
+     ],
+     "of": 24,
+     "runs": 24,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Amazon Ember"
+  },
+  "amazon ember display": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R96_20:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Amazon Ember Display"
+  },
+  "amazon ember regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R12_15:70"
+     ],
+     "of": 70,
+     "runs": 70,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Amazon Ember Regular"
+  },
+  "anaheim": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R15_11:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Anaheim"
+  },
+  "ancizar sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R160_27:21"
+     ],
+     "of": 21,
+     "runs": 21,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Ancizar Sans"
+  },
+  "anonymous pro for powerline": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R16_17:16"
+     ],
+     "of": 16,
+     "runs": 16,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Anonymous Pro for Powerline"
+  },
+  "antenna bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R76_04:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Antenna Bold"
+  },
+  "ar berkley": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R127_13:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Brush Script MT"
+    }
+   },
+   "face": "AR BERKLEY"
+  },
+  "ar blanca": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R142_17:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Brush Script MT"
+    }
+   },
+   "face": "AR BLANCA"
+  },
+  "ar cena": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R139_12:27",
+      "R142_17:4"
+     ],
+     "of": 31,
+     "runs": 31,
+     "substitute": "Comic Sans MS"
+    }
+   },
+   "face": "AR CENA"
+  },
+  "archivo": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R166_17:36"
+     ],
+     "of": 36,
+     "runs": 36,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Archivo"
+  },
+  "arila": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R72_16:250"
+     ],
+     "of": 255,
+     "runs": 250,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Arila"
+  },
+  "arimo": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R72_15:60"
+     ],
+     "of": 60,
+     "runs": 60,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Arimo"
+  },
+  "arno pro smbd subhead": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R104_12:10"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Arno Pro Smbd Subhead"
+  },
+  "atkinson hyperlegible": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R55_16:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Atkinson Hyperlegible"
+  },
+  "atlasgrotesk": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R38_13:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "AtlasGrotesk"
+  },
+  "avenirnextltpro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R33_20:55"
+     ],
+     "of": 55,
+     "runs": 55,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "avenirnextltpro"
+  },
+  "b karim": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R113_16:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Arial"
+    }
+   },
+   "face": "B Karim"
+  },
+  "b mitra": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R18_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Arial"
+    }
+   },
+   "face": "B Mitra"
+  },
+  "b nazanin": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R11_28:4",
+      "R179_22:3",
+      "R18_11:13",
+      "R25_21:3"
+     ],
+     "of": 23,
+     "runs": 23,
+     "substitute": "Arial"
+    }
+   },
+   "face": "B Nazanin"
+  },
+  "b titr": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R13_19:10"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Arial"
+    }
+   },
+   "face": "B Titr"
+  },
+  "bahnschrift semibold semiconden": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R46_17:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Bahnschrift SemiBold SemiConden"
+  },
+  "bahnschrift semilight semiconde": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R46_17:162"
+     ],
+     "of": 165,
+     "runs": 162,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Bahnschrift SemiLight SemiConde"
+  },
+  "ballet": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R166_17:11"
+     ],
+     "of": 11,
+     "runs": 11,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Ballet"
+  },
+  "baxter sans pro alt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R180_26:14"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Baxter Sans Pro Alt"
+  },
+  "belleza": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R73_11:18"
+     ],
+     "of": 18,
+     "runs": 18,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Belleza"
+  },
+  "bentonsansregular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R48_15:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "BentonSansRegular"
+  },
+  "berkshire swash": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R147_22:16"
+     ],
+     "of": 16,
+     "runs": 16,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Berkshire Swash"
+  },
+  "bickham script pro semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R179_11:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Bickham Script Pro Semibold"
+  },
+  "bignoodletitling": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R16_09:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "BigNoodleTitling"
+  },
+  "bitter": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R71_27:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Bitter"
+  },
+  "blairmditc tt-medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R123_01:2",
+      "R45_29:2",
+      "R65_10:1",
+      "R95_30:3"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "BlairMdITC TT-Medium"
+  },
+  "brandon text": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R50_29:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Brandon Text"
+  },
+  "bw nista grot bd": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R74_27:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Bw Nista Grot Bd"
+  },
+  "bw nista grot lt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R74_27:37"
+     ],
+     "of": 37,
+     "runs": 37,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Bw Nista Grot Lt"
+  },
+  "cabin": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R113_29:1",
+      "R12_27:4",
+      "R51_11:44",
+      "R57_24:1",
+      "R99_24:5"
+     ],
+     "of": 55,
+     "runs": 55,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cabin"
+  },
+  "cabin condensed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R82_04:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cabin Condensed"
+  },
+  "calbiri": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R167_22:4",
+      "R176_13:4"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Calbiri"
+  },
+  "calligraph421 bt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_14:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Viner Hand ITC"
+    }
+   },
+   "face": "Calligraph421 BT"
+  },
+  "candera": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R26_13:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Candera"
+  },
+  "cantarell": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R62_15:4",
+      "R90_17:3"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cantarell"
+  },
+  "canva sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R45_23:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Canva Sans"
+  },
+  "carlito": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R136_15:9",
+      "R151_27:6",
+      "R23_25:26",
+      "R24_07:1323",
+      "R37_27:14",
+      "R80_29:43",
+      "R81_25:25",
+      "R82_20:73",
+      "R83_17:6",
+      "R87_18:228"
+     ],
+     "of": 1763,
+     "runs": 1753,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Carlito"
+  },
+  "catamaran": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R09_11:38"
+     ],
+     "of": 38,
+     "runs": 38,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Catamaran"
+  },
+  "cataneo bt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R152_28:117"
+     ],
+     "of": 118,
+     "runs": 117,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cataneo BT"
+  },
+  "caveat": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R40_13:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Caveat"
+  },
+  "ccmeanwhile": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R60_16:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CCMeanwhile"
+  },
+  "cento": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R76_28:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cento"
+  },
+  "centurygothic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R101_18:2",
+      "R138_13:3"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CenturyGothic"
+  },
+  "charis sil": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R142_22:12"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Charis SIL"
+  },
+  "charité headline office": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R43_19:27"
+     ],
+     "of": 27,
+     "runs": 27,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Charité Headline Office"
+  },
+  "charité text office": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R43_19:192"
+     ],
+     "of": 192,
+     "runs": 192,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Charité Text Office"
+  },
+  "cidfont+f2": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R67_15:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CIDFont+F2"
+  },
+  "cinzel": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R175_04:33"
+     ],
+     "of": 39,
+     "runs": 33,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cinzel"
+  },
+  "ciscosanstt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R135_04:42",
+      "R38_01:1"
+     ],
+     "of": 43,
+     "runs": 43,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CiscoSansTT"
+  },
+  "ciscosanstt extralight": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R14_22:9",
+      "R21_14:505",
+      "R25_26:6",
+      "R38_01:31",
+      "R63_02:3",
+      "R75_07:4"
+     ],
+     "of": 558,
+     "runs": 558,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CiscoSansTT ExtraLight"
+  },
+  "ciscosanstt light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R14_22:18",
+      "R33_02:48",
+      "R63_02:44"
+     ],
+     "of": 110,
+     "runs": 110,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CiscoSansTT Light"
+  },
+  "clarivate bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R58_13:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Clarivate Bold"
+  },
+  "cmr10": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R27_01:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CMR10"
+  },
+  "cmr12": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R91_14:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CMR12"
+  },
+  "cmss12": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R48_12:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CMSS12"
+  },
+  "cmssbx10": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R121_11:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CMSSBX10"
+  },
+  "cmu sans serif": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R148_23:10",
+      "R94_14:109"
+     ],
+     "of": 119,
+     "runs": 119,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CMU Sans Serif"
+  },
+  "cmu serif": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R148_23:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "CMU Serif"
+  },
+  "comfortaa": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R96_22:24"
+     ],
+     "of": 24,
+     "runs": 24,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Comfortaa"
+  },
+  "config rounded bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_21:18"
+     ],
+     "of": 18,
+     "runs": 18,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Config Rounded Bold"
+  },
+  "config rounded italic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_21:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Config Rounded Italic"
+  },
+  "config rounded light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_21:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Config Rounded Light"
+  },
+  "config rounded medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_21:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Config Rounded Medium"
+  },
+  "config rounded medium italic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_21:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Config Rounded Medium Italic"
+  },
+  "config rounded regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_21:149"
+     ],
+     "of": 149,
+     "runs": 149,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Config Rounded Regular"
+  },
+  "config rounded text": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R78_21:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Config Rounded Text"
+  },
+  "countryside": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R140_14:26"
+     ],
+     "of": 26,
+     "runs": 26,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Countryside"
+  },
+  "courier (w1)": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R28_11:66",
+      "R92_01:24"
+     ],
+     "of": 91,
+     "runs": 90,
+     "substitute": "Courier New"
+    }
+   },
+   "face": "Courier (W1)"
+  },
+  "courier std": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R138_08:15",
+      "R55_30:25"
+     ],
+     "of": 40,
+     "runs": 40,
+     "substitute": "Courier New"
+    }
+   },
+   "face": "Courier Std"
+  },
+  "cousine": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R53_14:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cousine"
+  },
+  "crimson text": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R61_13:27"
+     ],
+     "of": 27,
+     "runs": 27,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Crimson Text"
+  },
+  "cutive mono": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R44_29:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Cutive Mono"
+  },
+  "dancing script": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R44_29:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Dancing Script"
+  },
+  "dejavu sans": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R08_12:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Microsoft YaHei"
+    },
+    "latin": {
+     "decks": [
+      "R07_06:1",
+      "R50_16:15"
+     ],
+     "of": 16,
+     "runs": 16,
+     "substitute": "Verdana"
+    }
+   },
+   "face": "DEJAVU SANS"
+  },
+  "dejavu sans condensed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R180_02:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Verdana"
+    }
+   },
+   "face": "DejaVu Sans Condensed"
+  },
+  "dejavu serif": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R44_11:19"
+     ],
+     "of": 19,
+     "runs": 19,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "DejaVu Serif"
+  },
+  "dejavusans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R92_12:241"
+     ],
+     "of": 241,
+     "runs": 241,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "DejaVuSans"
+  },
+  "derailed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R152_11:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Derailed"
+  },
+  "derailed black": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R152_11:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Derailed Black"
+  },
+  "desysans office cn medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R41_22:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "DesySans Office Cn Medium"
+  },
+  "din next lt arabic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R14_09:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Arial"
+    }
+   },
+   "face": "DIN Next LT Arabic"
+  },
+  "din next lt pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R21_24:43"
+     ],
+     "of": 43,
+     "runs": 43,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "DIN Next LT Pro"
+  },
+  "dinnextltpro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R58_11:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "DINNextLTPro"
+  },
+  "doulos sil": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R141_13:38"
+     ],
+     "of": 38,
+     "runs": 38,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Doulos SIL"
+  },
+  "droid sans mono": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R175_03:10",
+      "R22_20:263"
+     ],
+     "of": 273,
+     "runs": 273,
+     "substitute": "Segoe UI"
+    }
+   },
+   "face": "Droid Sans Mono"
+  },
+  "dsn freehand": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "DSN FreeHand"
+  },
+  "dsn freejack": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:11"
+     ],
+     "of": 11,
+     "runs": 11,
+     "substitute": "Browallia New"
+    },
+    "latin": {
+     "decks": [
+      "R14_19:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "DSN FreeJack"
+  },
+  "dsn modern": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "DSN Modern"
+  },
+  "dsn newspaper": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "DSN Newspaper"
+  },
+  "dsn patimoke extend": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:8"
+     ],
+     "of": 9,
+     "runs": 8,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "DSN PaTiMoke Extend"
+  },
+  "dsn saimai": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:10"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "DSN SaiMai"
+  },
+  "dsn sirin": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_19:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "DSN SiRin"
+  },
+  "dtl caspari st": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R34_14:24"
+     ],
+     "of": 24,
+     "runs": 24,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "DTL Caspari ST"
+  },
+  "dtl caspari st black": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R34_14:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "DTL Caspari ST Black"
+  },
+  "dual 400": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R24_16:10",
+      "R96_10:15"
+     ],
+     "of": 25,
+     "runs": 25,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Dual 400"
+  },
+  "eau": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R91_18:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Eau"
+  },
+  "ec square sans cond pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R01_23:13",
+      "R09_01:1"
+     ],
+     "of": 15,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "EC Square Sans Cond Pro"
+  },
+  "ec square sans pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R01_23:18",
+      "R122_13:65"
+     ],
+     "of": 83,
+     "runs": 83,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "EC Square Sans Pro"
+  },
+  "ec square sans pro light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R122_13:19"
+     ],
+     "of": 20,
+     "runs": 19,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "EC Square Sans Pro Light"
+  },
+  "ec square sans pro medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R01_23:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "EC Square Sans Pro Medium"
+  },
+  "elseviergulliver": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R39_12:1",
+      "R49_22:8"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "ElsevierGulliver"
+  },
+  "elseviersans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_19:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "ElsevierSans"
+  },
+  "encode sans condensed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R116_20:48"
+     ],
+     "of": 48,
+     "runs": 48,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Encode Sans Condensed"
+  },
+  "encode sans condensed exlight": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R116_20:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Encode Sans Condensed ExLight"
+  },
+  "ericsson capital tt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R108_06:14",
+      "R160_02:9",
+      "R177_04:1"
+     ],
+     "of": 24,
+     "runs": 24,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Ericsson Capital TT"
+  },
+  "ericsson hilda": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R39_02:14"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Ericsson Hilda"
+  },
+  "eualbertina": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R82_13:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "EUAlbertina"
+  },
+  "exo 2": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R92_16:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Exo 2"
+  },
+  "exo 2.0": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R119_19:28",
+      "R122_20:357"
+     ],
+     "of": 385,
+     "runs": 385,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Exo 2.0"
+  },
+  "federo": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R131_17:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Federo"
+  },
+  "figtree (body)": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R38_11:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Figtree (body)"
+  },
+  "fira sans extra condensed medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_15:3",
+      "R81_13:15"
+     ],
+     "of": 19,
+     "runs": 18,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Fira Sans Extra Condensed Medium"
+  },
+  "fjord one": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R127_21:14"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FJORD ONE"
+  },
+  "fkgroteskneue": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R52_14:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "fkGroteskNeue"
+  },
+  "franklin_gothic_fs_bookrg": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R25_17:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "franklin_gothic_fs_bookRg"
+  },
+  "freesans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R136_15:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FreeSans"
+  },
+  "freesentation 5 medium": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R23_07:103"
+     ],
+     "of": 109,
+     "runs": 103,
+     "substitute": "Malgun Gothic"
+    },
+    "latin": {
+     "decks": [
+      "R23_07:4"
+     ],
+     "of": 5,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Freesentation 5 Medium"
+  },
+  "freesentation 9 black": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R23_07:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Freesentation 9 Black"
+  },
+  "frontpage": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R114_22:2",
+      "R122_16:7"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FrontPage"
+  },
+  "frutiger 45 light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R46_11:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Frutiger 45 Light"
+  },
+  "frutiger bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R46_17:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Frutiger Bold"
+  },
+  "frutiger light condensed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R46_17:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Frutiger Light Condensed"
+  },
+  "frutiger linotype": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R95_28:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Frutiger Linotype"
+  },
+  "frutiger lt com 45 light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R178_15:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Frutiger LT Com 45 Light"
+  },
+  "frutiger lt com 65 bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R50_15:13"
+     ],
+     "of": 13,
+     "runs": 13,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Frutiger LT Com 65 Bold"
+  },
+  "frutigerltpro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R146_15:2",
+      "R40_13:14"
+     ],
+     "of": 16,
+     "runs": 16,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FrutigerLTPro"
+  },
+  "frutigernext lt blackcn": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R08_20:55",
+      "R134_01:11",
+      "R154_02:28"
+     ],
+     "of": 110,
+     "runs": 94,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FrutigerNext LT BlackCn"
+  },
+  "frutigernext lt light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R20_20:1",
+      "R66_04:53"
+     ],
+     "of": 54,
+     "runs": 54,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FrutigerNext LT Light"
+  },
+  "frutigernext lt medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R134_01:12",
+      "R42_03:1",
+      "R50_03:1",
+      "R56_02:1",
+      "R56_07:1"
+     ],
+     "of": 20,
+     "runs": 16,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FrutigerNext LT Medium"
+  },
+  "frutigernext lt regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R127_02:3",
+      "R30_04:4",
+      "R50_03:28",
+      "R51_01:3",
+      "R56_02:2",
+      "R56_07:2",
+      "R63_10:9",
+      "R66_02:20",
+      "R66_04:1"
+     ],
+     "of": 76,
+     "runs": 72,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FrutigerNext LT Regular"
+  },
+  "fsbrabo": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R88_12:1",
+      "R90_17:4"
+     ],
+     "of": 6,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "FSBrabo"
+  },
+  "ge inspira": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R105_17:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "GE Inspira"
+  },
+  "gentium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R77_16:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gentium"
+  },
+  "gentona": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R152_18:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "gentona"
+  },
+  "gentona semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R98_22:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gentona SemiBold"
+  },
+  "geologica": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R32_28:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Geologica"
+  },
+  "gillsansmt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R131_13:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "GillSansMT"
+  },
+  "gilroy extrabold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R117_28:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gilroy ExtraBold"
+  },
+  "glacial indifference": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_25:85",
+      "R28_18:308"
+     ],
+     "of": 393,
+     "runs": 393,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Glacial Indifference"
+  },
+  "glacial indifference bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_25:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Glacial Indifference Bold"
+  },
+  "glegoo": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R72_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Glegoo"
+  },
+  "gliker": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_25:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gliker"
+  },
+  "gochi hand": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R84_18:14"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gochi Hand"
+  },
+  "google sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R163_23:12",
+      "R166_04:47",
+      "R198_01:9",
+      "R35_13:4",
+      "R42_18:9",
+      "R94_14:2"
+     ],
+     "of": 89,
+     "runs": 83,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Google Sans"
+  },
+  "google sans flex": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R28_23:35"
+     ],
+     "of": 35,
+     "runs": 35,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Google Sans Flex"
+  },
+  "google sans text": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R181_12:44",
+      "R34_14:23"
+     ],
+     "of": 67,
+     "runs": 67,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Google Sans Text"
+  },
+  "gopen sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R102_16:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gopen sans"
+  },
+  "gotham": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R98_13:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gotham"
+  },
+  "gotham book": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R112_15:10",
+      "R125_24:1"
+     ],
+     "of": 11,
+     "runs": 11,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gotham Book"
+  },
+  "gotham light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R112_15:14"
+     ],
+     "of": 15,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gotham Light"
+  },
+  "gotham rounded bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R03_06:17"
+     ],
+     "of": 17,
+     "runs": 17,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Gotham Rounded Bold"
+  },
+  "graphik": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R145_01:5",
+      "R63_24:2",
+      "R74_24:1",
+      "R93_12:1"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Graphik"
+  },
+  "gt america": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R28_27:523"
+     ],
+     "of": 523,
+     "runs": 523,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "GT America"
+  },
+  "gt america regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R28_27:523"
+     ],
+     "of": 523,
+     "runs": 523,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "GT America Regular"
+  },
+  "gt america rg": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R28_27:523"
+     ],
+     "of": 523,
+     "runs": 523,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "GT America Rg"
+  },
+  "guttman yad": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R12_26:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Guttman Yad"
+  },
+  "haffer": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R49_11:25",
+      "R66_17:12",
+      "R71_11:7"
+     ],
+     "of": 44,
+     "runs": 44,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Haffer"
+  },
+  "hakgyoansim allimjang otf b": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R23_07:56"
+     ],
+     "of": 57,
+     "runs": 56,
+     "substitute": "Malgun Gothic"
+    },
+    "latin": {
+     "decks": [
+      "R23_07:11"
+     ],
+     "of": 11,
+     "runs": 11,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Hakgyoansim Allimjang OTF B"
+  },
+  "hamrah": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R173_08:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Hamrah"
+  },
+  "handlee": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R138_15:32"
+     ],
+     "of": 32,
+     "runs": 32,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Handlee"
+  },
+  "harding": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R181_10:1",
+      "R35_15:1",
+      "R85_21:15",
+      "R98_17:8"
+     ],
+     "of": 25,
+     "runs": 25,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Harding"
+  },
+  "harmonyos sans sc": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R08_14:55"
+     ],
+     "of": 55,
+     "runs": 55,
+     "substitute": "Microsoft YaHei"
+    },
+    "latin": {
+     "decks": [
+      "R08_14:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "HarmonyOS Sans SC"
+  },
+  "he_terminal": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R04_22:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "HE_TERMINAL"
+  },
+  "helevtica": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R143_13:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Helevtica"
+  },
+  "helvetica ": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R164_09:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Helvetica "
+  },
+  "helveticaneuelt com 55 roman": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R100_21:124"
+     ],
+     "of": 124,
+     "runs": 124,
+     "substitute": "Arial"
+    }
+   },
+   "face": "HelveticaNeueLT Com 55 Roman"
+  },
+  "helveticaneuelt com 65 md": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R100_21:91"
+     ],
+     "of": 91,
+     "runs": 91,
+     "substitute": "Arial"
+    }
+   },
+   "face": "HelveticaNeueLT Com 65 Md"
+  },
+  "helveticaneuelt pro 35 th": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R142_20:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Arial"
+    }
+   },
+   "face": "HelveticaNeueLT Pro 35 Th"
+  },
+  "helveticaneuelt pro 45 lt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R142_20:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Arial"
+    }
+   },
+   "face": "HelveticaNeueLT Pro 45 Lt"
+  },
+  "helveticaneuelt std ext": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R143_13:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Arial"
+    }
+   },
+   "face": "HelveticaNeueLT Std Ext"
+  },
+  "helveticaneuelt std lt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R122_15:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Arial"
+    }
+   },
+   "face": "HelveticaNeueLT Std Lt"
+  },
+  "hgp創英角ﾎﾟｯﾌﾟ体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R14_03:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "HGP創英角ﾎﾟｯﾌﾟ体"
+  },
+  "hgpｺﾞｼｯｸm": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R06_09:2",
+      "R14_03:6",
+      "R14_04:49"
+     ],
+     "of": 59,
+     "runs": 57,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "HGPｺﾞｼｯｸM"
+  },
+  "hgsｺﾞｼｯｸm": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R06_09:10",
+      "R14_03:13",
+      "R14_04:14"
+     ],
+     "of": 39,
+     "runs": 37,
+     "substitute": "Yu Gothic"
+    },
+    "latin": {
+     "decks": [
+      "R06_09:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "HGSｺﾞｼｯｸM"
+  },
+  "hg正楷書体-pro": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R11_07:126"
+     ],
+     "of": 126,
+     "runs": 126,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "HG正楷書体-PRO"
+  },
+  "hg行書体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R11_07:69"
+     ],
+     "of": 69,
+     "runs": 69,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "HG行書体"
+  },
+  "hgｺﾞｼｯｸm": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R02_12:19"
+     ],
+     "of": 19,
+     "runs": 19,
+     "substitute": "Yu Gothic"
+    },
+    "latin": {
+     "decks": [
+      "R02_12:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "HGｺﾞｼｯｸM"
+  },
+  "highway gothic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R60_16:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Highway Gothic"
+  },
+  "hp001 4 hàng": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R19_11:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "HP001 4 hàng"
+  },
+  "huawei sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R99_01:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Huawei Sans"
+  },
+  "humanst521 bt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R199_04:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Humanst521 BT"
+  },
+  "hypatia sans pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R121_17:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Hypatia Sans Pro"
+  },
+  "hy헤드라인m": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_29:2",
+      "R18_08:2"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "HY헤드라인M"
+  },
+  "ibm plex sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R12_06:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Tahoma"
+    }
+   },
+   "face": "IBM Plex Sans"
+  },
+  "indie flower": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R130_22:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Indie Flower"
+  },
+  "inherit": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R103_29:3",
+      "R10_22:6",
+      "R116_16:4",
+      "R12_21:2",
+      "R130_21:3",
+      "R166_05:1",
+      "R174_24:2",
+      "R24_22:4",
+      "R46_23:22",
+      "R48_26:12"
+     ],
+     "of": 64,
+     "runs": 59,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "inherit"
+  },
+  "intel clear": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R23_24:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Intel Clear"
+  },
+  "intel clear light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R23_24:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Intel Clear Light"
+  },
+  "intelone display light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R58_06:6",
+      "R72_01:12"
+     ],
+     "of": 18,
+     "runs": 18,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "IntelOne Display Light"
+  },
+  "intelone display medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R58_06:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "IntelOne Display Medium"
+  },
+  "intelone display regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R168_01:43",
+      "R58_06:95"
+     ],
+     "of": 138,
+     "runs": 138,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "IntelOne Display Regular"
+  },
+  "intelone text": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R168_01:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "IntelOne Text"
+  },
+  "inter": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R102_10:1",
+      "R105_06:3",
+      "R106_05:6",
+      "R111_09:6",
+      "R113_03:1",
+      "R120_03:18",
+      "R125_05:5",
+      "R12_04:7",
+      "R132_01:4",
+      "R136_09:5",
+      "R138_10:7",
+      "R13_02:44",
+      "R13_06:26",
+      "R13_11:1",
+      "R140_10:1",
+      "R142_08:22",
+      "R148_04:16",
+      "R149_05:7",
+      "R150_06:6",
+      "R153_08:1",
+      "R153_09:3",
+      "R155_13:9",
+      "R156_01:8",
+      "R15_25:7",
+      "R162_08:4",
+      "R167_26:2",
+      "R168_05:1",
+      "R24_26:26",
+      "R26_18:4",
+      "R35_29:6",
+      "R37_03:44",
+      "R40_13:12",
+      "R42_07:1",
+      "R43_06:2",
+      "R44_08:2",
+      "R44_28:2",
+      "R52_04:4",
+      "R52_06:1",
+      "R57_02:6",
+      "R57_09:5",
+      "R64_12:4",
+      "R64_19:5",
+      "R65_19:8",
+      "R92_04:1",
+      "R97_05:1"
+     ],
+     "of": 357,
+     "runs": 355,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Inter"
+  },
+  "inter extralight": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R02_14:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Inter ExtraLight"
+  },
+  "inter light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R02_14:1",
+      "R40_13:16",
+      "R64_19:13"
+     ],
+     "of": 30,
+     "runs": 30,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Inter Light"
+  },
+  "inter medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R35_29:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Inter Medium"
+  },
+  "inter var": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R170_07:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Inter var"
+  },
+  "intervariable": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R13_11:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "InterVariable"
+  },
+  "janitor": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R12_04:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Janitor"
+  },
+  "kalimati": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R20_13:104"
+     ],
+     "of": 107,
+     "runs": 104,
+     "substitute": "Mangal"
+    }
+   },
+   "face": "Kalimati"
+  },
+  "kanit": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R92_12:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Kanit"
+  },
+  "kefa": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R158_18:3",
+      "R181_24:3"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Kefa"
+  },
+  "klarinda playful personal": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R147_22:131"
+     ],
+     "of": 131,
+     "runs": 131,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Klarinda Playful Personal"
+  },
+  "kopub돋움체 bold": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R02_01:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "KoPub돋움체 Bold"
+  },
+  "kopub돋움체 medium": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R02_01:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "KoPub돋움체 Medium"
+  },
+  "kozuka gothic pro h": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R20_04:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "Kozuka Gothic Pro H"
+  },
+  "latin modern math": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R59_19:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Latin Modern Math"
+  },
+  "latin modern sans demi cond": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R99_17:15"
+     ],
+     "of": 15,
+     "runs": 15,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Latin Modern Sans Demi Cond"
+  },
+  "league spartan": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R27_13:15"
+     ],
+     "of": 15,
+     "runs": 15,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "League Spartan"
+  },
+  "lexend": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R171_13:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Lexend"
+  },
+  "liberation sans narrow": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R180_02:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Liberation Sans Narrow"
+  },
+  "liberation-mono": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R38_06:6",
+      "R43_07:15"
+     ],
+     "of": 21,
+     "runs": 21,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Liberation-Mono"
+  },
+  "liberationsans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R91_14:40"
+     ],
+     "of": 40,
+     "runs": 40,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "LiberationSans"
+  },
+  "linbiolinumob-identity-h": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R74_27:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "LinBiolinumOB-Identity-H"
+  },
+  "linlibertinet": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R29_19:19",
+      "R99_13:6"
+     ],
+     "of": 29,
+     "runs": 25,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "LinLibertineT"
+  },
+  "linlibertineti": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R29_19:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "LinLibertineTI"
+  },
+  "linux biolinum g": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_11:23"
+     ],
+     "of": 24,
+     "runs": 23,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Linux Biolinum G"
+  },
+  "livvic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R15_11:24"
+     ],
+     "of": 24,
+     "runs": 24,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Livvic"
+  },
+  "lm roman 12": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R75_11:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "LM Roman 12"
+  },
+  "lohit odia": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R136_15:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Lohit Odia"
+  },
+  "luckiest guy": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R168_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Luckiest Guy"
+  },
+  "lustria": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_20:28"
+     ],
+     "of": 28,
+     "runs": 28,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Lustria"
+  },
+  "marianne": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R15_05:887"
+     ],
+     "of": 888,
+     "runs": 887,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Marianne"
+  },
+  "marianne light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R15_05:31"
+     ],
+     "of": 31,
+     "runs": 31,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Marianne Light"
+  },
+  "marianne medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R15_05:17",
+      "R66_26:13"
+     ],
+     "of": 30,
+     "runs": 30,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Marianne Medium"
+  },
+  "maven pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_17:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Maven Pro"
+  },
+  "mentidisplay": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_19:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MentiDisplay"
+  },
+  "mentitext": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_19:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MentiText"
+  },
+  "metrichpe light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R141_01:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MetricHPE Light"
+  },
+  "microsoftyahei": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R180_04:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MicrosoftYaHei"
+  },
+  "microsoftyahei-bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R180_04:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MicrosoftYaHei-Bold"
+  },
+  "mimpexp": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R141_13:13"
+     ],
+     "of": 13,
+     "runs": 13,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MImpExp"
+  },
+  "mimprint": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R141_13:18"
+     ],
+     "of": 18,
+     "runs": 18,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MImprint"
+  },
+  "minion pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R50_24:50",
+      "R55_29:70"
+     ],
+     "of": 120,
+     "runs": 120,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Minion Pro"
+  },
+  "minionpro-regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R169_27:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MinionPro-Regular"
+  },
+  "mona-sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_15:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Monaco"
+    }
+   },
+   "face": "Mona-Sans"
+  },
+  "mona-sans regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_15:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Monaco"
+    }
+   },
+   "face": "Mona-Sans Regular"
+  },
+  "mona-sans semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_15:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Monaco"
+    }
+   },
+   "face": "Mona-Sans SemiBold"
+  },
+  "monaspace neon": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R148_03:14",
+      "R31_13:5"
+     ],
+     "of": 19,
+     "runs": 19,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Monaspace Neon"
+  },
+  "monserrat": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R60_24:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Monserrat"
+  },
+  "mont heavy demo": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R77_20:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Mont Heavy DEMO"
+  },
+  "montserrat 1 semi-bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R52_15:28"
+     ],
+     "of": 28,
+     "runs": 28,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Montserrat 1 Semi-Bold"
+  },
+  "montserrat classic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R27_05:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Montserrat Classic"
+  },
+  "montserrat classic bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R39_25:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Montserrat Classic Bold"
+  },
+  "montserrat classic light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R84_27:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Montserrat Classic Light"
+  },
+  "muli": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R125_20:80",
+      "R144_24:15",
+      "R153_14:9",
+      "R154_15:9",
+      "R57_21:8",
+      "R58_23:49",
+      "R92_21:189",
+      "R94_21:50"
+     ],
+     "of": 410,
+     "runs": 409,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Muli"
+  },
+  "muli bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R57_21:24"
+     ],
+     "of": 24,
+     "runs": 24,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Muli Bold"
+  },
+  "mulish": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R63_18:66",
+      "R70_15:8"
+     ],
+     "of": 74,
+     "runs": 74,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Mulish"
+  },
+  "museo": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R54_11:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Arial Narrow"
+    }
+   },
+   "face": "Museo"
+  },
+  "museo 300": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R143_16:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Museo 300"
+  },
+  "museo sans 300": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R143_16:6"
+     ],
+     "of": 7,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Museo Sans 300"
+  },
+  "museo sans 500": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R97_20:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Museo Sans 500"
+  },
+  "museo sans cyrl 900": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R23_03:81"
+     ],
+     "of": 81,
+     "runs": 81,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Museo Sans Cyrl 900"
+  },
+  "museosans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R100_20:9",
+      "R145_17:5"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "MuseoSans"
+  },
+  "myriad pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R102_17:3",
+      "R104_13:2",
+      "R105_17:4",
+      "R108_15:13",
+      "R138_17:141",
+      "R143_16:28",
+      "R164_12:11",
+      "R89_19:11",
+      "R92_27:5"
+     ],
+     "of": 220,
+     "runs": 218,
+     "substitute": "Segoe UI"
+    }
+   },
+   "face": "Myriad Pro"
+  },
+  "myriad pro light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R143_16:132"
+     ],
+     "of": 132,
+     "runs": 132,
+     "substitute": "Segoe UI"
+    }
+   },
+   "face": "Myriad Pro Light"
+  },
+  "national 2": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R60_16:19"
+     ],
+     "of": 19,
+     "runs": 19,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "National 2"
+  },
+  "national 2 medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R60_16:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "National 2 Medium"
+  },
+  "neo sans std": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Neo Sans Std"
+  },
+  "neo sans std medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Neo Sans Std Medium"
+  },
+  "neue-haas-grotesk-display": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R95_18:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "neue-haas-grotesk-display"
+  },
+  "neuehaasgrotesktext pro md": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R75_16:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "NeueHaasGroteskText Pro Md"
+  },
+  "new serif": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R198_01:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "New serif"
+  },
+  "nexus sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R117_13:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Nexus Sans"
+  },
+  "nexus sans pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_19:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Nexus Sans Pro"
+  },
+  "nexussans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R39_12:8",
+      "R98_17:2"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "NexusSans"
+  },
+  "nexussansot": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R129_17:12"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "NexusSansOT"
+  },
+  "nexussanspro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R129_17:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "NexusSansPro"
+  },
+  "nikoshban": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R14_20:81"
+     ],
+     "of": 81,
+     "runs": 81,
+     "substitute": "Nirmala UI"
+    }
+   },
+   "face": "NikoshBAN"
+  },
+  "nimbusromno9l-regu": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R117_15:14"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "NimbusRomNo9L-Regu"
+  },
+  "nimbusromno9l-reguital": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R117_15:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "NimbusRomNo9L-ReguItal"
+  },
+  "nimbussanl": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R51_13:37"
+     ],
+     "of": 37,
+     "runs": 37,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "NimbusSanL"
+  },
+  "nokia pure headline": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R110_01:40",
+      "R112_01:27"
+     ],
+     "of": 67,
+     "runs": 67,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Nokia Pure Headline"
+  },
+  "nokia pure headline light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R110_01:11",
+      "R112_01:2",
+      "R131_02:32",
+      "R156_09:11",
+      "R157_10:3",
+      "R36_07:80",
+      "R54_03:89",
+      "R63_03:4",
+      "R63_09:19",
+      "R70_01:3",
+      "R81_07:79",
+      "R82_02:32",
+      "R84_05:3",
+      "R87_03:115",
+      "R89_01:11",
+      "R91_09:71"
+     ],
+     "of": 570,
+     "runs": 565,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Nokia Pure Headline Light"
+  },
+  "nokia pure headline ultra light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R112_01:3",
+      "R125_01:22",
+      "R156_09:6",
+      "R91_09:2",
+      "R98_02:9"
+     ],
+     "of": 43,
+     "runs": 42,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Nokia Pure Headline Ultra Light"
+  },
+  "nokia pure text": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R54_03:22",
+      "R84_05:6"
+     ],
+     "of": 28,
+     "runs": 28,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Nokia Pure Text"
+  },
+  "nokia pure text light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R102_02:186",
+      "R110_01:6",
+      "R111_07:33",
+      "R112_01:21",
+      "R125_01:150",
+      "R156_09:52",
+      "R157_10:36",
+      "R18_27:11",
+      "R36_07:12",
+      "R63_03:57",
+      "R63_09:32",
+      "R70_01:13",
+      "R81_07:22",
+      "R82_02:12",
+      "R84_05:7",
+      "R87_03:42",
+      "R89_01:149",
+      "R91_09:185",
+      "R96_05:6",
+      "R98_02:160"
+     ],
+     "of": 1255,
+     "runs": 1192,
+     "substitute": "Segoe UI"
+    }
+   },
+   "face": "Nokia Pure Text Light"
+  },
+  "noto": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R13_07:70"
+     ],
+     "of": 70,
+     "runs": 70,
+     "substitute": "Cambria"
+    }
+   },
+   "face": "Noto"
+  },
+  "noto sans cjk kr bold": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R08_09:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "Noto Sans CJK KR Bold"
+  },
+  "noto sans cjk kr regular": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R08_09:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "Noto Sans CJK KR Regular"
+  },
+  "noto sans jp": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R07_10:1",
+      "R180_12:1"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "Noto Sans JP"
+  },
+  "noto sans medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R66_23:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Noto Sans Medium"
+  },
+  "noto sans mono": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R106_06:2",
+      "R125_05:1",
+      "R127_07:1",
+      "R147_02:1",
+      "R171_04:1",
+      "R172_02:6",
+      "R176_04:13",
+      "R35_05:16",
+      "R38_06:7",
+      "R97_05:1"
+     ],
+     "of": 50,
+     "runs": 49,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Noto Sans Mono"
+  },
+  "noto sans mono cjk jp bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R81_25:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Noto Sans Mono CJK JP Bold"
+  },
+  "noto sans sc": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R68_02:100"
+     ],
+     "of": 124,
+     "runs": 100,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Noto Sans SC"
+  },
+  "noto sans tamil": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R121_26:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Noto Sans Tamil"
+  },
+  "noto serif display light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R29_22:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Noto Serif Display Light"
+  },
+  "noto-serif": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R155_13:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Cambria"
+    }
+   },
+   "face": "Noto-Serif"
+  },
+  "old standard tt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R73_27:132"
+     ],
+     "of": 132,
+     "runs": 132,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Old Standard TT"
+  },
+  "onest": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_18:21"
+     ],
+     "of": 21,
+     "runs": 21,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Onest"
+  },
+  "open sans condensed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R129_25:22",
+      "R28_28:201"
+     ],
+     "of": 234,
+     "runs": 223,
+     "substitute": "Segoe UI"
+    }
+   },
+   "face": "Open Sans Condensed"
+  },
+  "open sans condensed light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R129_25:3",
+      "R36_29:3",
+      "R56_01:6"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Segoe UI"
+    }
+   },
+   "face": "Open Sans Condensed Light"
+  },
+  "open sauce italics": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R29_22:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Open Sauce Italics"
+  },
+  "opensans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R46_16:1",
+      "R88_11:13"
+     ],
+     "of": 14,
+     "runs": 14,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "OpenSans"
+  },
+  "opensans-light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R32_29:4",
+      "R57_27:1"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "OpenSans-Light"
+  },
+  "opensans-regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R57_22:25",
+      "R94_24:10"
+     ],
+     "of": 38,
+     "runs": 35,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "OpenSans-Regular"
+  },
+  "opensymbol": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R166_17:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "OpenSymbol"
+  },
+  "oracle sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_12:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Oracle Sans"
+  },
+  "orbitron black": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R70_11:62"
+     ],
+     "of": 62,
+     "runs": 62,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Orbitron Black"
+  },
+  "outfit": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R164_23:1",
+      "R34_14:51"
+     ],
+     "of": 52,
+     "runs": 52,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Outfit"
+  },
+  "overpass": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_17:86"
+     ],
+     "of": 86,
+     "runs": 86,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Overpass"
+  },
+  "overpass light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R79_12:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Overpass Light"
+  },
+  "palm club": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R29_22:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Palm Club"
+  },
+  "pf paperback": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R106_19:17",
+      "R124_26:1"
+     ],
+     "of": 18,
+     "runs": 18,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "PF Paperback"
+  },
+  "pf paperback light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R106_19:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "PF Paperback Light"
+  },
+  "pf square sans pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R104_18:12"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "PF Square Sans Pro"
+  },
+  "phonetica": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R141_13:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Phonetica"
+  },
+  "playfair display semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R02_14:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Playfair Display SemiBold"
+  },
+  "poppins bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R44_13:9",
+      "R61_18:9",
+      "R66_12:3"
+     ],
+     "of": 21,
+     "runs": 21,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Poppins Bold"
+  },
+  "pretendard semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R15_26:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Pretendard SemiBold"
+  },
+  "pretendard variable light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R149_08:101"
+     ],
+     "of": 101,
+     "runs": 101,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "Pretendard Variable Light"
+  },
+  "pretendard variable medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R149_08:11"
+     ],
+     "of": 11,
+     "runs": 11,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "Pretendard Variable Medium"
+  },
+  "produkt regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R15_23:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Produkt Regular"
+  },
+  "proxima nova": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R141_17:1",
+      "R144_19:2",
+      "R84_19:3",
+      "R90_17:3",
+      "R91_18:1"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Proxima Nova"
+  },
+  "proxima nova rg": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R151_15:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Tahoma"
+    }
+   },
+   "face": "Proxima Nova Rg"
+  },
+  "proxima-nova": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R101_18:10",
+      "R151_15:1",
+      "R25_17:12"
+     ],
+     "of": 23,
+     "runs": 23,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "proxima-nova"
+  },
+  "proximanova": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R159_23:2",
+      "R181_27:2"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "proximanova"
+  },
+  "public sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R28_20:8",
+      "R37_17:34"
+     ],
+     "of": 42,
+     "runs": 42,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Public Sans"
+  },
+  "public sans bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_17:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Public Sans Bold"
+  },
+  "public sans medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_17:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Public Sans Medium"
+  },
+  "public sans semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R166_23:4",
+      "R166_24:8"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Public Sans SemiBold"
+  },
+  "public sans thin": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_17:32"
+     ],
+     "of": 32,
+     "runs": 32,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Public Sans Thin"
+  },
+  "quicksand": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R149_26:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Quicksand"
+  },
+  "quicksand bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R68_19:56"
+     ],
+     "of": 56,
+     "runs": 56,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Quicksand Bold"
+  },
+  "quicksand book": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R68_19:58"
+     ],
+     "of": 58,
+     "runs": 58,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Quicksand Book"
+  },
+  "quote-cjk-patch": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R107_03:2",
+      "R135_03:1"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "quote-cjk-patch"
+  },
+  "red hat text semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R170_05:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Red Hat Text SemiBold"
+  },
+  "rijkstext": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R58_11:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "RijksText"
+  },
+  "roboto": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R09_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "SimSun"
+    }
+   },
+   "face": "Roboto"
+  },
+  "roboto cn": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R85_14:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Roboto Cn"
+  },
+  "roboto condensed black": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R31_19:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Roboto Condensed Black"
+  },
+  "roboto lt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R70_20:17"
+     ],
+     "of": 17,
+     "runs": 17,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Roboto Lt"
+  },
+  "rotisserif": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R100_20:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "RotisSerif"
+  },
+  "roya": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R18_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Arial"
+    }
+   },
+   "face": "Roya"
+  },
+  "san serifa": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R162_10:860",
+      "R164_17:297"
+     ],
+     "of": 1159,
+     "runs": 1157,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "San serifa"
+  },
+  "segoe wp black": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R133_22:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Segoe UI"
+    }
+   },
+   "face": "Segoe WP Black"
+  },
+  "sfmono-medium": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R137_12:26"
+     ],
+     "of": 26,
+     "runs": 26,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "SFMono-Medium"
+  },
+  "sfmono-regular": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R152_05:9",
+      "R33_04:4",
+      "R70_08:9"
+     ],
+     "of": 22,
+     "runs": 22,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "SFMono-Regular"
+  },
+  "sfrm1095": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R91_14:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "SFRM1095"
+  },
+  "shantell sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R160_06:1",
+      "R176_08:14"
+     ],
+     "of": 15,
+     "runs": 15,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Shantell Sans"
+  },
+  "signika": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R12_03:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Signika"
+  },
+  "slack-lato": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R103_08:5",
+      "R139_11:4",
+      "R154_25:1",
+      "R35_05:4",
+      "R63_27:24",
+      "R93_18:11"
+     ],
+     "of": 49,
+     "runs": 49,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Slack-Lato"
+  },
+  "sofia pro": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R97_28:19"
+     ],
+     "of": 19,
+     "runs": 19,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Sofia Pro"
+  },
+  "sofia pro extra light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R97_28:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Sofia Pro Extra Light"
+  },
+  "sofia pro ultra light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R97_28:16"
+     ],
+     "of": 16,
+     "runs": 16,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Sofia Pro Ultra Light"
+  },
+  "sofia sans semi condensed": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R183_04:15"
+     ],
+     "of": 15,
+     "runs": 15,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Sofia Sans Semi Condensed"
+  },
+  "sora": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R77_20:11"
+     ],
+     "of": 11,
+     "runs": 11,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Sora"
+  },
+  "sora bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R77_20:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Sora Bold"
+  },
+  "source han code jp r": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R174_18:28"
+     ],
+     "of": 28,
+     "runs": 28,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "Source Han Code JP R"
+  },
+  "special elite": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R77_05:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Special Elite"
+  },
+  "stadio now novarese": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R56_20:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Stadio Now Novarese"
+  },
+  "stadio now text": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R56_20:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Stadio Now Text"
+  },
+  "stag sans web light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R128_23:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Stag Sans Web Light"
+  },
+  "stencil std": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R162_02:1",
+      "R71_16:3"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Impact"
+    }
+   },
+   "face": "Stencil Std"
+  },
+  "swis721 bt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R43_12:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Swis721 BT"
+  },
+  "söhne": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R134_09:15",
+      "R165_02:7",
+      "R172_02:1",
+      "R42_01:4",
+      "R77_23:65",
+      "R90_15:1",
+      "R91_29:57"
+     ],
+     "of": 150,
+     "runs": 150,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Söhne"
+  },
+  "taipei sans tc beta": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R17_27:40"
+     ],
+     "of": 40,
+     "runs": 40,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Taipei Sans TC Beta"
+  },
+  "tan meringue": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R150_25:12"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TAN Meringue"
+  },
+  "teko semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R57_23:12"
+     ],
+     "of": 14,
+     "runs": 12,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Teko SemiBold"
+  },
+  "texgyretermes-regular-identity-h": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R77_08:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TeXGyreTermes-Regular-Identity-H"
+  },
+  "th sarabunit๙": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R18_09:167"
+     ],
+     "of": 172,
+     "runs": 167,
+     "substitute": "Browallia New"
+    },
+    "latin": {
+     "decks": [
+      "R18_09:8"
+     ],
+     "of": 8,
+     "runs": 8,
+     "substitute": "Browallia New"
+    }
+   },
+   "face": "TH SarabunIT๙"
+  },
+  "thesans lp5 plain": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R118_20:23"
+     ],
+     "of": 27,
+     "runs": 23,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TheSans LP5 Plain"
+  },
+  "thesans lp7 bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R118_20:9"
+     ],
+     "of": 9,
+     "runs": 9,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TheSans LP7 Bold"
+  },
+  "thesansosf bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R29_17:29"
+     ],
+     "of": 29,
+     "runs": 29,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TheSansOsF Bold"
+  },
+  "thesansosf plain": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R29_17:554",
+      "R65_23:1"
+     ],
+     "of": 555,
+     "runs": 555,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TheSansOsF Plain"
+  },
+  "the명품고딕eb": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R149_03:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "THE명품고딕EB"
+  },
+  "tim sans": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R33_09:9",
+      "R38_01:6",
+      "R69_02:27"
+     ],
+     "of": 42,
+     "runs": 42,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TIM Sans"
+  },
+  "times new arabic": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R147_22:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Times New Roman"
+    }
+   },
+   "face": "Times New Arabic"
+  },
+  "times-roman": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R71_27:58",
+      "R73_07:78"
+     ],
+     "of": 145,
+     "runs": 136,
+     "substitute": "Times New Roman"
+    }
+   },
+   "face": "Times-Roman"
+  },
+  "tlwgtypewriter": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R123_18:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TlwgTypewriter"
+  },
+  "toppan bunkyu midashi mincho ex": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R180_12:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "ToppanBunkyuMidashiMinchoStdN-ExtraBold"
+    }
+   },
+   "face": "Toppan Bunkyu Midashi Mincho Ex"
+  },
+  "ttroundscondensedthin": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R100_20:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TTRoundsCondensedThin"
+  },
+  "tu delft-ultralight": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R108_25:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "TU Delft-UltraLight"
+  },
+  "twentieth century": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R10_10:1",
+      "R120_26:4",
+      "R59_25:26",
+      "R78_28:9"
+     ],
+     "of": 40,
+     "runs": 40,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Twentieth Century"
+  },
+  "ud デジタル 教科書体 n-b": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_02:23",
+      "R11_06:7",
+      "R12_19:34"
+     ],
+     "of": 64,
+     "runs": 64,
+     "substitute": "UD Digi Kyokasho N-B"
+    },
+    "latin": {
+     "decks": [
+      "R10_02:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "UD Digi Kyokasho N-B"
+    }
+   },
+   "face": "UD デジタル 教科書体 N-B"
+  },
+  "ud デジタル 教科書体 nk-b": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_03:96"
+     ],
+     "of": 96,
+     "runs": 96,
+     "substitute": "UD Digi Kyokasho NK-B"
+    }
+   },
+   "face": "UD デジタル 教科書体 NK-B"
+  },
+  "uictfonttextstylebody": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R183_20:10"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "UICTFontTextStyleBody"
+  },
+  "ultra": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R181_28:10"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Ultra"
+  },
+  "un-abhaya": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R21_13:12"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Iskoola Pota"
+    }
+   },
+   "face": "UN-Abhaya"
+  },
+  "unbounded": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R57_24:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Unbounded"
+  },
+  "univers com 45 light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R73_19:227"
+     ],
+     "of": 227,
+     "runs": 227,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Univers Com 45 Light"
+  },
+  "urbanist semibold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R35_29:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Urbanist SemiBold"
+  },
+  "urwpalladiol-roma": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R65_11:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "URWPalladioL-Roma"
+  },
+  "var(--bs-font-monospace)": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R138_10:22",
+      "R155_04:12",
+      "R161_05:1",
+      "R35_06:1",
+      "R40_05:1",
+      "R57_02:52"
+     ],
+     "of": 90,
+     "runs": 89,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "var(--bs-font-monospace)"
+  },
+  "verizon nhg ds": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R35_05:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Verizon NHG DS"
+  },
+  "vestula": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R50_24:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Vestula"
+  },
+  "vestula light": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R50_24:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Vestula Light"
+  },
+  "viaoda libre": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R166_17:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Viaoda Libre"
+  },
+  "virgil": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R60_16:47"
+     ],
+     "of": 47,
+     "runs": 47,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Virgil"
+  },
+  "vni-times": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R58_21:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "VNI-Times"
+  },
+  "voces": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R77_13:26"
+     ],
+     "of": 28,
+     "runs": 26,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Voces"
+  },
+  "vodafone rg": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R70_15:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Vodafone Rg"
+  },
+  "wenquanyi zen hei mono": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R83_17:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "WenQuanYi Zen Hei Mono"
+  },
+  "wordvisi_msfontservice": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R92_19:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "WordVisi_MSFontService"
+  },
+  "xfinity brown": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_02:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Xfinity Brown"
+  },
+  "xfinity brown tt": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R37_02:6"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Xfinity Brown TT"
+  },
+  "yagut": {
+   "by": {
+    "cs": {
+     "decks": [
+      "R18_12:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Yagut"
+  },
+  "zing sans rust bold bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R167_19:7"
+     ],
+     "of": 7,
+     "runs": 7,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "Zing Sans Rust Bold Bold"
+  },
+  "フォントポにほんご": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R01_17:17",
+      "R08_12:6"
+     ],
+     "of": 23,
+     "runs": 23,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "フォントポにほんご"
+  },
+  "华光琥珀_cnki": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R11_11:12"
+     ],
+     "of": 13,
+     "runs": 12,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "华光琥珀_CNKI"
+  },
+  "国标黑体": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R35_02:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "国标黑体"
+  },
+  "小塚ゴシック pr6n l": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R01_17:53",
+      "R08_12:27"
+     ],
+     "of": 80,
+     "runs": 80,
+     "substitute": "Microsoft YaHei"
+    },
+    "latin": {
+     "decks": [
+      "R01_17:16",
+      "R08_12:12"
+     ],
+     "of": 28,
+     "runs": 28,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "小塚ゴシック Pr6N L"
+  },
+  "小塚ゴシック pr6n m": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R01_17:6",
+      "R08_12:5"
+     ],
+     "of": 11,
+     "runs": 11,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "小塚ゴシック Pr6N M"
+  },
+  "小塚ゴシック pr6n r": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R01_17:14",
+      "R08_12:6"
+     ],
+     "of": 20,
+     "runs": 20,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "小塚ゴシック Pr6N R"
+  },
+  "小塚ゴシック pro m": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R01_17:3",
+      "R08_12:3"
+     ],
+     "of": 6,
+     "runs": 6,
+     "substitute": "Microsoft YaHei"
+    },
+    "latin": {
+     "decks": [
+      "R01_17:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "小塚ゴシック Pro M"
+  },
+  "幼圆": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R03_22:10"
+     ],
+     "of": 10,
+     "runs": 10,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "幼圆"
+  },
+  "方正书宋": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R09_23:12"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正书宋"
+  },
+  "方正大黑简体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R03_22:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正大黑简体"
+  },
+  "方正小标宋简体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R01_12:13"
+     ],
+     "of": 13,
+     "runs": 13,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正小标宋简体"
+  },
+  "方正楷体简体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_30:8"
+     ],
+     "of": 9,
+     "runs": 8,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正楷体简体"
+  },
+  "方正水柱简体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R03_22:2",
+      "R09_23:1",
+      "R10_30:1"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正水柱简体"
+  },
+  "方正粗倩简体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R09_23:4",
+      "R10_30:9"
+     ],
+     "of": 13,
+     "runs": 13,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正粗倩简体"
+  },
+  "方正黑体_gbk": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R14_01:15"
+     ],
+     "of": 15,
+     "runs": 15,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正黑体_GBK"
+  },
+  "方正黑体简体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R01_12:62",
+      "R09_23:2",
+      "R10_30:2"
+     ],
+     "of": 66,
+     "runs": 66,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "方正黑体简体"
+  },
+  "汉仪君黑-85简": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R33_08:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "汉仪君黑-85简"
+  },
+  "汉仪旗黑-70简": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R53_03:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Microsoft YaHei"
+    },
+    "latin": {
+     "decks": [
+      "R53_03:21"
+     ],
+     "of": 22,
+     "runs": 21,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "汉仪旗黑-70简"
+  },
+  "汉仪铸字美心体简": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R171_25:12"
+     ],
+     "of": 12,
+     "runs": 12,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "汉仪铸字美心体简"
+  },
+  "汉仪雅酷黑简": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R14_01:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "汉仪雅酷黑简"
+  },
+  "華康中圓體": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_29:110"
+     ],
+     "of": 111,
+     "runs": 110,
+     "substitute": "Microsoft JhengHei"
+    },
+    "latin": {
+     "decks": [
+      "R10_29:2"
+     ],
+     "of": 2,
+     "runs": 2,
+     "substitute": "Microsoft JhengHei"
+    }
+   },
+   "face": "華康中圓體"
+  },
+  "華康儷金黑 std w8": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_29:3"
+     ],
+     "of": 3,
+     "runs": 3,
+     "substitute": "Microsoft JhengHei"
+    }
+   },
+   "face": "華康儷金黑 Std W8"
+  },
+  "華康勘亭流": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_29:4"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Microsoft JhengHei"
+    }
+   },
+   "face": "華康勘亭流"
+  },
+  "華康特粗圓體": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R10_29:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Microsoft JhengHei"
+    }
+   },
+   "face": "華康特粗圓體"
+  },
+  "隶书": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R03_22:1",
+      "R10_30:3"
+     ],
+     "of": 4,
+     "runs": 4,
+     "substitute": "Microsoft YaHei"
+    }
+   },
+   "face": "隶书"
+  },
+  "나눔스퀘어 bold": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R13_23:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "나눔스퀘어 Bold"
+  },
+  "배달의민족 주아": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R02_01:1"
+     ],
+     "of": 1,
+     "runs": 1,
+     "substitute": "Malgun Gothic"
+    }
+   },
+   "face": "배달의민족 주아"
+  },
+  "한컴바탕": {
+   "by": {
+    "latin": {
+     "decks": [
+      "R103_03:5"
+     ],
+     "of": 5,
+     "runs": 5,
+     "substitute": "Calibri"
+    }
+   },
+   "face": "한컴바탕"
+  },
+  "ｄｆ特太ゴシック体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R02_11:2",
+      "R14_03:5",
+      "R14_04:35"
+     ],
+     "of": 52,
+     "runs": 42,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "ＤＦ特太ゴシック体"
+  },
+  "ｄｈｐ特太ゴシック体": {
+   "by": {
+    "ea": {
+     "decks": [
+      "R14_04:20"
+     ],
+     "of": 24,
+     "runs": 20,
+     "substitute": "Yu Gothic"
+    }
+   },
+   "face": "ＤＨＰ特太ゴシック体"
+  }
+ }
+}

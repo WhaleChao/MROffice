@@ -1,0 +1,22 @@
+/* Find's Reading Highlight over the slide (PresentationFindHighlights.tsx).
+   The marks take the document editor's yellow / orange from
+   `.office-find-highlights .document-find-match` in note-editor.css; they sit
+   above the text and multiply with it, so the words stay legible through
+   the paint, and never take a pointer. */
+.layer {
+  inset: 0;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  position: absolute;
+  z-index: 8999;
+}
+
+.mark {
+  position: absolute;
+}
+
+@media print {
+  .layer {
+    display: none;
+  }
+}

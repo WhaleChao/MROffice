@@ -1,0 +1,25 @@
+{
+ "source": "The open-source editors draw no theme decoration.",
+ "viewBox": [
+  3200,
+  1800
+ ],
+ "layoutIds": [
+  "title",
+  "title-content",
+  "section-header",
+  "two-content",
+  "comparison",
+  "title-only",
+  "blank",
+  "content-caption",
+  "picture-caption",
+  "title-vertical-text",
+  "vertical-title-text"
+ ],
+ "colors": [],
+ "fills": [],
+ "paths": [],
+ "shapes": [],
+ "themes": {}
+}

@@ -1,0 +1,1352 @@
+/*!
+ * MR Office - https://mroffice.ai
+ * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
+ * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+ */
+/**
+ * Docs line layout from the text engine (PLAN-phase2.md, Docs).
+ *
+ * A Word paragraph as the editor draws it -- a block whose inline content is
+ * text runs, atoms (pictures, list labels, fields drawn as inline blocks),
+ * tabs and hard breaks -- read into one sequence of pieces: every grapheme of
+ * text with its advance from the served font file (no kerning unless the run
+ * kerns, no ligatures, the run's letter and word spacing on top), every atom
+ * with its drawn width. The lines are then filled the way Word fills them:
+ * trailing spaces hang past the edge, a piece overflows only when the pen
+ * passes the edge, a word too long for a line breaks between characters, and
+ * a justified line in compatibility mode 15 keeps a word Word would keep by
+ * narrowing its spaces (docs-word-rules.ts).
+ *
+ * The browser's own lines are read from the same pieces' drawn boxes, so the
+ * two can be compared paragraph by paragraph (`auditDocsParagraph`), and,
+ * where they differ, the browser can be told where to break.
+ */
+import type { KinsokuList } from "./kinsoku";
+import { lineBreakOpportunities } from "./line-break";
+import { measureText, type EngineFont } from "./measure";
+import { pageEngineFont } from "./page-adapter";
+import { wordKeepsJustifiedWord, wordTrailingPunctuationLength } from "./docs-word-rules";
+import { WORD_DEFAULT_TAB_INTERVAL_TWIPS, wordTabAdvanceAt, type TabStop } from "../document-tabstops";
+
+export type DocsPieceKind = "text" | "space" | "box" | "tab" | "break";
+
+export interface DocsPiece {
+  readonly kind: DocsPieceKind;
+  /** The grapheme ("￼" for an atom, "\t", "\n"). */
+  readonly text: string;
+  /** Advance in CSS px: the engine's for text, the drawn width for others. */
+  readonly advance: number;
+  /** Text pieces: where the grapheme starts in the DOM. */
+  readonly node?: Text;
+  readonly offset?: number;
+  /** Atoms, tabs drawn as boxes, hard breaks drawn as <br>. */
+  readonly element?: Element;
+  /** The run's font size in px (text pieces). */
+  readonly fontPx?: number;
+  /** The run's engine font (text pieces), for the line's box. */
+  readonly font?: EngineFont;
+  /** A space's natural advance in its run (text pieces). */
+  readonly spacePx?: number;
+  /** Letter spacing an engine correction span adds to the drawn grapheme, px. */
+  readonly correction?: number;
+  /** The run's own letter spacing, px (text pieces). */
+  readonly letterSpacing?: number;
+  /** The run's own word spacing, px (text pieces). */
+  readonly wordSpacing?: number;
+  /** Text pieces: the run's computed line-height (px or "normal") and its
+   * vertical-align as a length (px, up), for the line's CSS box; absent
+   * when an inline around the run aligns it otherwise (super, middle...). */
+  readonly lineHeight?: number | "normal";
+  readonly shift?: number;
+  /** Atoms whose box the page states (a formula's placeholder): its margin
+   * box height and its vertical-align length (px, up). */
+  readonly atom?: { readonly height: number; readonly shift: number };
+  /** A box drawn as an inline-block of one line (a list or heading number):
+   * the text boxes of that line, which raise the line it stands on as they
+   * would standing on it themselves (its baseline is theirs). */
+  readonly lineBoxes?: readonly { readonly font: EngineFont; readonly lineHeight: number | "normal" }[];
+}
+
+/** The block's own font and line-height: the strut every line starts from. */
+export interface DocsStrut {
+  readonly font: EngineFont;
+  readonly lineHeight: number | "normal";
+}
+
+export interface DocsParagraph {
+  readonly pieces: readonly DocsPiece[];
+  /** Available width of the first line and of every later line, CSS px. */
+  readonly firstWidth: number;
+  readonly restWidth: number;
+  readonly align: string;
+  /** Why the engine cannot lay this paragraph out (the browser keeps it). */
+  readonly unsupported?: string;
+  /** Pending: a face is still loading. */
+  readonly pending?: boolean;
+  /** What the paragraph holds that may explain a difference. */
+  readonly flags: readonly string[];
+  /** CSS px per drawn (client rect) px: 1 / the page's scale. */
+  readonly unscale: number;
+  /** Word's "Allow punctuation to overflow the margin" is on for the
+   * paragraph (`data-document-effective-overflow-punctuation`). */
+  readonly overflowPunctuation?: boolean;
+  /** The paragraph stands in a table cell, where only a comma or stop may hang. */
+  readonly inTableCell?: boolean;
+  /** The block's strut, when its font could be read. */
+  readonly strut?: DocsStrut;
+  /** The block's padding and border above its first line and below its
+   * last, px: its box is its lines and these. */
+  readonly chrome?: { readonly top: number; readonly bottom: number };
+  /** A list paragraph's first-line strut (`p[data-document-list-marker-strut]`
+   * ::before): an empty inline of the block's font, this tall and shifted,
+   * which a larger number raises the line by. */
+  readonly firstLineStrut?: { readonly lineHeight: number; readonly shift: number };
+  /** Column mode with the paragraph's stops: its tabs advance to Word's stops
+   * as its lines are filled (`docsEngineLineStarts` sets a tab piece's
+   * advance from the pen), measured from the column's left edge. */
+  readonly tabStops?: DocsTabLayout;
+}
+
+/** The paragraph's own tab stops, as `ReadDocsParagraphOptions.tabStops`
+ * gives them (the editor node's `tabStops`, normalized). */
+export interface DocsTabStopsInput {
+  readonly stops: readonly TabStop[] | null;
+  /** The paragraph's tabs run past the right margin as Word 2010's did
+   * (`wordTabOverMargin`): a centre or right stop there is not moved in. */
+  readonly overMargin?: boolean;
+  /** The room the boxes around the paragraph (a list and its items) take on
+   * each side of the column the stops measure from, px: `columnWidthPx` is
+   * what they leave. */
+  readonly aroundLeftPx?: number;
+  readonly aroundRightPx?: number;
+}
+
+export interface DocsTabLayout {
+  readonly stops: readonly TabStop[] | null;
+  readonly intervalTwips: number;
+  /** Where the paragraph's text box starts in the column, and what its
+   * right side leaves, px (its margin, padding and border). */
+  readonly contentLeftPx: number;
+  readonly indentRightPx: number;
+  readonly columnPx: number;
+  readonly stopsEndAtRightEdge: boolean;
+}
+
+/** A formula placeholder's box as the page states it (`--math-placeholder-*`,
+ * note-editor.css: a hidden-overflow inline-block, so its baseline is its
+ * bottom margin edge, lowered by the formula's depth); nothing for any other
+ * atom. */
+function placeholderAtom(node: Element, style: CSSStyleDeclaration): { atom?: { height: number; shift: number } } {
+  if (!node.matches(".inline-math-preview[data-math-pending][data-math-layout-ready=\"inline\"]")) return {};
+  const height = px(style.getPropertyValue("--math-placeholder-height"));
+  const depth = px(style.getPropertyValue("--math-placeholder-depth") || "0px");
+  if (!(height >= 0) || !(depth >= 0) || style.overflow === "visible") return {};
+  return { atom: { height: height + px(style.marginTop) + px(style.marginBottom), shift: -depth } };
+}
+
+/** An atom's border-box width, CSS px: a formula placeholder's stated one
+ * (no layout read), any other's drawn box. */
+const STATED_WIDTH_ATOM = ".inline-math-preview[data-math-pending][data-math-layout-ready=\"inline\"]";
+
+function atomWidthPx(node: Element, style: CSSStyleDeclaration, unscale: number): number {
+  if (node.matches(STATED_WIDTH_ATOM)) {
+    const stated = px(style.getPropertyValue("--math-placeholder-width"));
+    if (stated >= 0) return stated;
+  }
+  return node.getBoundingClientRect().width * unscale;
+}
+
+/** A computed line-height: px, or "normal". */
+function cssLineHeight(value: string): number | "normal" | null {
+  if (value === "normal") return "normal";
+  return value.endsWith("px") ? px(value) : null;
+}
+
+/** A computed vertical-align as a length (px, up), or null for a keyword
+ * other than baseline (whose box the CSS model does not place). */
+function cssShift(value: string): number | null {
+  if (value === "baseline") return 0;
+  return value.endsWith("px") ? px(value) : null;
+}
+
+export interface DocsLayoutRules {
+  /** Word compatibility mode of the document (null: none recorded). */
+  readonly compatibilityMode: number | null;
+  readonly kinsoku: KinsokuList | null;
+}
+
+const OUT_OF_FLOW_POSITIONS = new Set(["absolute", "fixed"]);
+const ATOMIC_DISPLAYS = new Set(["inline-block", "inline-flex", "inline-grid", "inline-table"]);
+const REPLACED = new Set(["IMG", "SVG", "svg", "CANVAS", "VIDEO", "INPUT", "IFRAME", "OBJECT", "math", "MATH"]);
+const INLINE_TAGS_SAFE = new Set(["SPAN", "A", "B", "I", "U", "S", "STRONG", "EM", "SUB", "SUP", "MARK", "SMALL", "CODE", "INS", "DEL", "FONT", "ABBR", "BDI", "Q", "CITE", "DFN", "KBD", "SAMP", "VAR", "TIME", "DATA", "LABEL"]);
+const FIT_EPSILON = 1 / 256;
+/**
+ * In a table cell: the cell's text width comes through the browser's layout,
+ * which keeps the column, each padding and each border in 1/64 px units, so a
+ * column Word widened to its longest word (wordTableAutofitDisplay) reads a few
+ * units short of that word. Corpus R283-D20, R283-D23, R283-D28, R282-D08: a
+ * 22 pt bold Arial heading ("SECURITY_S", 184.19 px) in a text width read as
+ * 184.172 px was cut before its last letter; Word's PDF draws each on one line
+ * (138.64 pt of ink at 22.08 pt). 1/16 px is under one twip (1/15 px).
+ */
+const CELL_FIT_EPSILON = 1 / 16;
+function fitEpsilon(paragraph: DocsParagraph): number {
+  return paragraph.inTableCell ? CELL_FIT_EPSILON : FIT_EPSILON;
+}
+/** On the spans the engine's line corrections draw (documentEngineLineBreaks). */
+export const DOCS_ENGINE_LINE_ATTR = "data-docs-engine-line";
+/** The line break the engine draws before a tab that opens a line: no piece
+ * of the paragraph (the engine breaks there by itself). */
+export const DOCS_ENGINE_TAB_BREAK_CLASS = "docs-engine-tab-break";
+/** bandTabLayout's box around a tab it laid out. */
+const LAID_TAB_CLASS = "sheet-band-story-tab";
+/** The run's own letter spacing under a correction span, px. */
+export const DOCS_ENGINE_BASE_SPACING_ATTR = "data-docs-engine-base-spacing";
+/** The run's own word spacing under a correction span, px. */
+export const DOCS_ENGINE_BASE_WORD_SPACING_ATTR = "data-docs-engine-base-word-spacing";
+/** The marks Word lets hang past the right edge (overflowPunctuationHang.ts). */
+const HANGING = new Set(["，", "。", "、", "．", "﹐", "﹒", "｡", "､", ",", "."]);
+
+function px(value: string | null | undefined): number {
+  const parsed = Number.parseFloat(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasPseudoContent(view: Window, element: Element, which: "::before" | "::after"): boolean {
+  const style = view.getComputedStyle(element, which);
+  const content = style.content;
+  if (!content || content === "none" || content === "normal" || content === '""' || content === "''") return false;
+  // A label drawn out of the flow (a source numbering label) paints only.
+  if (style.position === "absolute" || style.position === "fixed") return false;
+  return style.display !== "none";
+}
+
+/** The text of a `content` value that is one quoted string, or null (a
+ * counter, an attr(), several parts). */
+function literalContent(content: string): string | null {
+  const match = /^"((?:[^"\\]|\\.)*)"$/.exec(content.trim());
+  return match ? match[1]!.replace(/\\(.)/g, "$1") : null;
+}
+
+/**
+ * The room a list label drawn by `::before` takes at the start of the first
+ * line, read with no layout: an inline-block of one literal glyph string
+ * (a native list's marker) is the wider of its `min-width` and the glyph,
+ * plus its margins (a negative start margin hangs it into the indent).
+ * Null where only the page can say; "pending" while its face loads.
+ */
+function unlaidLabelAdvance(view: Window, element: Element): number | null | "pending" {
+  const style = view.getComputedStyle(element, "::before");
+  if (style.display !== "inline-block" || (style.float && style.float !== "none")) return null;
+  const text = literalContent(style.content);
+  if (text === null) return null;
+  if (!/px$/.test(style.minWidth) && style.minWidth !== "auto" && style.minWidth !== "0px") return null;
+  const minWidth = style.minWidth === "auto" ? 0 : px(style.minWidth);
+  let glyph = 0;
+  if (text) {
+    const font = pageEngineFont(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`);
+    const measured = font ? measureText(text, { ...font, followLocalOnly: true }) : null;
+    if (measured?.status === "pending") return "pending";
+    if (measured?.status === "ok") glyph = measured.width;
+    // One symbol (a bullet in a symbol face the engine has no metrics for)
+    // in a box at least one and a half of its em wide: no glyph is that
+    // wide, so the box is its min-width.
+    else if (!(Array.from(text).length === 1 && minWidth >= 1.5 * px(style.fontSize))) return null;
+  }
+  return Math.max(minWidth, glyph) + px(style.marginLeft) + px(style.marginRight);
+}
+
+/** Width a run's text-transform gives: what the browser draws. */
+function transformed(text: string, transform: string): string {
+  if (transform === "uppercase") return text.toUpperCase();
+  if (transform === "lowercase") return text.toLowerCase();
+  return text;
+}
+
+/**
+ * Read a paragraph element into pieces. The block's own box gives the line
+ * widths; `skip` drops editor chrome that takes no room (formatting marks).
+ */
+export interface ReadDocsParagraphOptions {
+  /**
+   * Read the paragraph without laying the page out: its width is this
+   * column's (CSS px) less its own margins, padding and borders, read as
+   * computed values (a px margin or padding is no layout read; `width` and
+   * any box are). What only a laid-out page can say -- a tab's or an
+   * object's drawn width, a CSS list label's room -- makes it unsupported.
+   * The page ledger plans the pages it has not laid out with this.
+   */
+  readonly columnWidthPx?: number;
+  /**
+   * In column mode, a tab taken as wide as the interval the browser draws
+   * the paragraph's tabs at (its `tab-size`, Word's default stops) instead
+   * of leaving the paragraph to the page: its lines are then an estimate
+   * (`flags` holds "approximate"), for a plan the page still checks.
+   */
+  readonly approximateTabs?: boolean;
+  /**
+   * In column mode, a run in a family the browser draws from an installed
+   * font that differs from the served file read with the served file's
+   * metrics instead of leaving the paragraph to the page: its lines are then
+   * an estimate (`flags` holds "approximate").
+   */
+  readonly approximateFonts?: boolean;
+  /**
+   * In column mode, the paragraph's tab stops: each tab goes to its stop
+   * (left, centre, right, decimal; past the last one Word's default stops at
+   * the paragraph's `tab-size`) from where its line has got to, as Word and
+   * the page's own tab layout (bandTabLayout) place it. Positional tabs are
+   * not this: leave it out for a paragraph that holds one.
+   */
+  readonly tabStops?: DocsTabStopsInput;
+  /**
+   * In column mode, the box of the `ordinal`-th in-line formula preview the
+   * paragraph draws (`.inline-math-preview`, in document order) when the
+   * page states none (it has not been typeset or placed): the engine's
+   * (paged/ledger/ledgerEngineMath). A paragraph read with a box that is not
+   * `exact` holds "engine-formula" in its flags.
+   */
+  readonly formulaBox?: (ordinal: number, preview: HTMLElement) => DocsFormulaBox | null;
+}
+
+/** An in-line formula's box: its width, its height and its depth below the
+ * baseline, CSS px. `exact`: a typeset box (a clone's), not the engine's. */
+export interface DocsFormulaBox {
+  readonly width: number;
+  readonly height: number;
+  readonly depth: number;
+  readonly exact: boolean;
+}
+
+export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagraphOptions = {}): DocsParagraph {
+  const view = element.ownerDocument.defaultView;
+  const flags = new Set<string>();
+  const empty = (unsupported: string): DocsParagraph => ({ pieces: [], firstWidth: 0, restWidth: 0, align: "", unsupported, flags: [...flags], unscale: 1 });
+  if (!view) return empty("no window");
+  // A display equation on a line of its own within the paragraph: read from the page.
+  if (element.querySelector("[data-math-display]")) return empty("display equation in a paragraph");
+  const unlaid = options.columnWidthPx !== undefined;
+  const approximateFonts = unlaid && options.approximateFonts === true;
+  const style = view.getComputedStyle(element);
+  if (style.writingMode && style.writingMode !== "horizontal-tb") return empty("vertical writing");
+  if (style.direction === "rtl") return empty("rtl");
+  const padL = px(style.paddingLeft), padR = px(style.paddingRight), borL = px(style.borderLeftWidth), borR = px(style.borderRightWidth);
+  let rect: DOMRect | null = null;
+  let outer: number;
+  let content: number;
+  let unscale: number;
+  if (unlaid) {
+    if (/%|auto/.test(`${style.marginLeft} ${style.marginRight} ${style.paddingLeft} ${style.paddingRight}`)) return empty("box not in px");
+    outer = options.columnWidthPx! - px(style.marginLeft) - px(style.marginRight);
+    content = outer - padL - padR - borL - borR;
+    if (!(content > 0)) return empty("no room");
+    unscale = 1;
+  } else {
+    rect = element.getBoundingClientRect();
+    const borderBox = style.boxSizing === "border-box";
+    const cssWidth = px(style.width);
+    outer = borderBox ? cssWidth : cssWidth + padL + padR + borL + borR;
+    content = borderBox ? cssWidth - padL - padR - borL - borR : cssWidth;
+    if (!(outer > 0) || !(rect.width > 0)) return empty("not drawn");
+    unscale = outer / rect.width;
+  }
+  const textIndent = px(style.textIndent);
+  const tabIntervalPx = style.tabSize?.endsWith("px") ? px(style.tabSize) : 0;
+  const align = style.textAlign;
+  const pieces: DocsPiece[] = [];
+  let unsupported: string | undefined;
+  let pending = false;
+  let formulaOrdinal = 0;
+  if (hasPseudoContent(view, element, "::before")) flags.add("pseudo-before");
+  if (hasPseudoContent(view, element, "::after")) flags.add("pseudo-after");
+
+  // The run's line-height and its shift from the block's baseline: the
+  // shifts of the inlines between it and the block add up.
+  const runBox = (parent: Element, runStyle: CSSStyleDeclaration): { lineHeight?: number | "normal"; shift?: number } => {
+    const lineHeight = cssLineHeight(runStyle.lineHeight);
+    if (lineHeight === null) return {};
+    let shift = 0;
+    for (let inline: Element | null = parent; inline && inline !== element; inline = inline.parentElement) {
+      const own = cssShift(inline === parent ? runStyle.verticalAlign : view.getComputedStyle(inline).verticalAlign);
+      if (own === null) return {};
+      shift += own;
+    }
+    return { lineHeight, shift };
+  };
+
+  const pushText = (node: Text, parent: Element) => {
+    const raw = node.data;
+    if (!raw) return;
+    const runStyle = view.getComputedStyle(parent);
+    if (runStyle.display === "none" || runStyle.visibility === "collapse") return;
+    if (runStyle.fontVariantCaps && runStyle.fontVariantCaps !== "normal") { unsupported ??= "font-variant-caps"; return; }
+    if (runStyle.fontVariantLigatures && runStyle.fontVariantLigatures !== "none" && runStyle.fontVariantLigatures !== "no-common-ligatures") flags.add("ligatures");
+    if (runStyle.textTransform === "capitalize" || runStyle.textTransform === "full-width") { unsupported ??= `text-transform ${runStyle.textTransform}`; return; }
+    const shrunk = parent.closest("[data-docs-justified-shrink]");
+    if (shrunk) flags.add("justified-shrink");
+    if (parent.closest("[data-docs-distributed-line]")) flags.add("distributed");
+    const fontCss = `${runStyle.fontStyle} ${runStyle.fontWeight} ${runStyle.fontSize} ${runStyle.fontFamily}`;
+    const base = pageEngineFont(fontCss);
+    if (!base) { unsupported ??= "font not parsed"; return; }
+    const font: EngineFont = { ...base, kerning: runStyle.fontKerning !== "none", followLocalOnly: true, ...(approximateFonts ? { approximateInstalled: true } : {}) };
+    if (font.kerning) flags.add("kerning");
+    // The engine's own line correction (DOCS_ENGINE_LINE_ATTR) states the
+    // run's spacing without it.
+    const corrected = parent.closest(`[${DOCS_ENGINE_LINE_ATTR}]`);
+    const baseSpacing = corrected?.getAttribute(DOCS_ENGINE_BASE_SPACING_ATTR);
+    const letterSpacing = baseSpacing != null ? px(baseSpacing) : runStyle.letterSpacing === "normal" ? 0 : px(runStyle.letterSpacing);
+    const correction = corrected ? px(corrected.getAttribute(DOCS_ENGINE_LINE_ATTR)) : 0;
+    if (corrected) flags.add("engine-corrected");
+    // A shrink decoration's word spacing is the engine's own decision.
+    const baseWordSpacing = corrected?.getAttribute(DOCS_ENGINE_BASE_WORD_SPACING_ATTR);
+    const wordSpacing = baseWordSpacing != null ? px(baseWordSpacing) : shrunk || runStyle.wordSpacing === "normal" ? 0 : px(runStyle.wordSpacing);
+    if (letterSpacing) flags.add("letter-spacing");
+    if (wordSpacing) flags.add("word-spacing");
+    const text = transformed(raw, runStyle.textTransform);
+    if (text.length !== raw.length) { unsupported ??= "text-transform changes length"; return; }
+    const spaceMeasure = measureText(" ", font);
+    const spacePx = spaceMeasure.status === "ok" ? spaceMeasure.width + letterSpacing + wordSpacing : undefined;
+    const fontPx = font.sizePx;
+    const box = runBox(parent, runStyle);
+    // Tabs and line feeds are pieces of their own; the text between them is
+    // measured run by run.
+    let at = 0;
+    const flush = (end: number) => {
+      if (end <= at) return;
+      const chunk = text.slice(at, end);
+      const measured = measureText(chunk, font);
+      if (measured.status === "pending") { pending = true; at = end; return; }
+      if (measured.status === "unsupported") { unsupported ??= measured.reason; at = end; return; }
+      if (measured.approximate) flags.add("approximate");
+      let offset = at;
+      for (const grapheme of measured.graphemes) {
+        const isSpace = grapheme.text === " " || grapheme.text === " ";
+        const advance = grapheme.advance + (grapheme.advance > 0 || !isZeroWidth(grapheme.text) ? letterSpacing : 0) + (isSpace ? wordSpacing : 0);
+        pieces.push({ kind: grapheme.text === " " ? "space" : "text", text: grapheme.text, advance, node, offset, fontPx, font, spacePx, letterSpacing, wordSpacing, ...(correction ? { correction } : {}), ...box });
+        offset += grapheme.text.length;
+      }
+      at = end;
+    };
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+      if (char === "\t" || char === "\n") {
+        flush(index);
+        if (char === "\n") pieces.push({ kind: "break", text: "\n", advance: 0, node, offset: index });
+        else if (unlaid && options.tabStops) {
+          flags.add("tab");
+          flags.add("tab-stops");
+          // Its advance is the pen's: set as the line is filled.
+          pieces.push({ kind: "tab", text: "\t", advance: 0, node, offset: index, fontPx });
+        } else if (unlaid && options.approximateTabs && tabIntervalPx > 0) {
+          flags.add("tab");
+          flags.add("approximate");
+          pieces.push({ kind: "tab", text: "\t", advance: tabIntervalPx, node, offset: index, fontPx });
+        } else if (unlaid) {
+          unsupported ??= "tab without layout";
+        } else {
+          flags.add("tab");
+          pieces.push({ kind: "tab", text: "\t", advance: drawnWidth(node, index, unscale), node, offset: index, fontPx });
+        }
+        at = index + 1;
+      }
+    }
+    flush(text.length);
+  };
+
+  const walk = (node: Node) => {
+    if (unsupported) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      pushText(node as Text, node.parentElement ?? element);
+      return;
+    }
+    if (!(node instanceof Element)) return;
+    if (node.tagName === "BR") {
+      if (node.classList.contains("ProseMirror-trailingBreak") || node.classList.contains(DOCS_ENGINE_TAB_BREAK_CLASS)) return;
+      pieces.push({ kind: "break", text: "\n", advance: 0, element: node });
+      return;
+    }
+    if (node.tagName === "IMG" && node.classList.contains("ProseMirror-separator")) return;
+    // JustifiedLineBreaks' filler moves a manual break onto a line of its
+    // own so the line before it is justified: it takes no room of a line.
+    if (node.classList.contains("mrnote-justified-break-filler")) return;
+    // A formatting mark shown on screen (the paragraph mark, a line-break
+    // arrow): Word's marks move no line break, and the page draws them over
+    // the line without taking room from it.
+    if (unlaid && node.classList.contains("mrnote-formatting-mark")) return;
+    const nodeStyle = view.getComputedStyle(node);
+    if (nodeStyle.display === "none") return;
+    if (OUT_OF_FLOW_POSITIONS.has(nodeStyle.position)) { flags.add("positioned"); return; }
+    if (nodeStyle.float !== "none") { flags.add("float"); return; }
+    // An in-line formula the page states no box for (typeset or waiting for
+    // its clone): the engine's box stands for it.
+    if (node.classList.contains("inline-math-preview")) {
+      const ordinal = formulaOrdinal;
+      formulaOrdinal += 1;
+      if (unlaid && options.formulaBox && !node.matches(STATED_WIDTH_ATOM)) {
+        const box = options.formulaBox(ordinal, node as HTMLElement);
+        if (!box) { unsupported ??= "formula the engine cannot box"; return; }
+        flags.add("atom");
+        if (!box.exact) flags.add("engine-formula");
+        pieces.push({ kind: "box", text: "\ufffc", advance: box.width, element: node, atom: { height: box.height, shift: -box.depth } });
+        return;
+      }
+    }
+    // The page's own tab layout draws a tab as a box its stop sizes: in
+    // column mode it is the tab it holds, which goes to its stop here.
+    if (unlaid && (options.tabStops || options.approximateTabs) && node.classList.contains(LAID_TAB_CLASS)) {
+      node.childNodes.forEach(walk);
+      return;
+    }
+    if (ATOMIC_DISPLAYS.has(nodeStyle.display) || REPLACED.has(node.tagName)) {
+      // Only an atom's drawn box is read: reading every run's laid the page
+      // out again between the editor's writes.
+      if (unlaid && (node.classList.contains("docs-list-marker") || node.classList.contains("mrnote-heading-number--list"))) {
+        const marker = unlaidMarkerWidth(node as HTMLElement, nodeStyle, view);
+        if (marker === "pending") { pending = true; return; }
+        if (marker === null) { unsupported ??= "list marker without layout"; return; }
+        flags.add("list-marker");
+        pieces.push({ kind: "box", text: "\ufffc", advance: marker.width, element: node, ...(marker.atom ? { atom: marker.atom } : {}), ...(marker.lineBoxes ? { lineBoxes: marker.lineBoxes } : {}) });
+        return;
+      }
+      if (unlaid && node.matches(FIXED_INLINE_PICTURE)) {
+        const picture = unlaidInlinePicture(node as HTMLElement, nodeStyle);
+        if (!picture) { unsupported ??= "picture without a stated size"; return; }
+        flags.add("atom");
+        pieces.push({ kind: "box", text: "\ufffc", advance: picture.width, element: node, atom: picture.atom });
+        return;
+      }
+      // A zero-size box the page states (a source page break's anchor) takes
+      // no room on its line.
+      if (unlaid && (node as HTMLElement).style?.width === "0px" && (node as HTMLElement).style?.height === "0px") return;
+      if (unlaid && !node.matches(STATED_WIDTH_ATOM)) {
+        unsupported ??= `object without layout (${node.tagName.toLowerCase()}${node.classList.length ? `.${node.classList[0]}` : ""})`;
+        return;
+      }
+      const width = atomWidthPx(node, nodeStyle, unscale) + px(nodeStyle.marginLeft) + px(nodeStyle.marginRight);
+      if (node.classList.contains("docs-list-marker")) flags.add("list-marker");
+      else if (width > 0.01) flags.add("atom");
+      pieces.push({ kind: "box", text: "￼", advance: width, element: node, ...placeholderAtom(node, nodeStyle) });
+      return;
+    }
+    if (nodeStyle.display !== "inline" && nodeStyle.display !== "contents") { unsupported ??= `block ${node.tagName.toLowerCase()} inside`; return; }
+    if (node.tagName === "RUBY" || node.tagName === "RT") { unsupported ??= "ruby"; return; }
+    if (!INLINE_TAGS_SAFE.has(node.tagName)) flags.add(`tag-${node.tagName.toLowerCase()}`);
+    if (hasPseudoContent(view, node, "::before") || hasPseudoContent(view, node, "::after")) { unsupported ??= "inline pseudo-element"; return; }
+    const sideRoom = px(nodeStyle.marginLeft) + px(nodeStyle.paddingLeft) + px(nodeStyle.borderLeftWidth);
+    if (sideRoom > 0.01) pieces.push({ kind: "box", text: "​", advance: sideRoom, element: node });
+    node.childNodes.forEach(walk);
+    const endRoom = px(nodeStyle.marginRight) + px(nodeStyle.paddingRight) + px(nodeStyle.borderRightWidth);
+    if (endRoom > 0.01) pieces.push({ kind: "box", text: "​", advance: endRoom, element: node });
+  };
+  element.childNodes.forEach(walk);
+
+  let firstWidth = content - textIndent;
+  // A leading ::before (a list label drawn by CSS) takes room on the first
+  // line: read where the first piece stands.
+  if (flags.has("pseudo-before") && unlaid) {
+    const label = unlaidLabelAdvance(view, element);
+    if (label === "pending") pending = true;
+    else if (label === null) unsupported ??= "list label without layout";
+    else {
+      // The label opens the first line; its own line-height adds nothing.
+      flags.add("list-marker");
+      pieces.unshift({ kind: "box", text: "\ufffc", advance: label, atom: { height: 0, shift: 0 } });
+    }
+  }
+  else if (flags.has("pseudo-before")) {
+    if (align !== "left" && align !== "start" && align !== "justify") unsupported ??= "list label beside non-left text";
+    else {
+      const first = pieces.find((piece) => piece.kind !== "break");
+      const firstRect = first ? pieceRect(first) : null;
+      if (firstRect) {
+        const contentLeft = rect!.left + (padL + borL) / unscale;
+        firstWidth = content - (firstRect.left - contentLeft) * unscale;
+      } else unsupported ??= "list label without text";
+    }
+  }
+  const overflowPunctuation = element.getAttribute("data-document-effective-overflow-punctuation") === "true";
+  const strutFont = pageEngineFont(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`);
+  const strutLineHeight = cssLineHeight(style.lineHeight);
+  const strut: DocsStrut | undefined = strutFont && strutLineHeight !== null
+    ? { font: { ...strutFont, followLocalOnly: true, ...(approximateFonts ? { approximateInstalled: true } : {}) }, lineHeight: strutLineHeight }
+    : undefined;
+  const chrome = {
+    top: px(style.paddingTop) + px(style.borderTopWidth),
+    bottom: px(style.paddingBottom) + px(style.borderBottomWidth),
+  };
+  let firstLineStrut: DocsParagraph["firstLineStrut"];
+  if (element.getAttribute("data-document-list-marker-strut") === "true") {
+    const height = style.getPropertyValue("--document-list-marker-strut-height").trim();
+    const shift = style.getPropertyValue("--document-list-marker-strut-shift").trim() || "0px";
+    if (height.endsWith("px") && shift.endsWith("px")) firstLineStrut = { lineHeight: px(height), shift: px(shift) };
+    else unsupported ??= "list strut not in px";
+  }
+  const tabStops: DocsTabLayout | undefined = unlaid && options.tabStops && flags.has("tab-stops")
+    ? {
+        stops: options.tabStops.stops,
+        intervalTwips: tabIntervalPx > 0 ? tabIntervalPx * TWIPS_PER_CSS_PX : WORD_DEFAULT_TAB_INTERVAL_TWIPS,
+        contentLeftPx: (options.tabStops.aroundLeftPx ?? 0) + px(style.marginLeft) + padL + borL,
+        indentRightPx: (options.tabStops.aroundRightPx ?? 0) + px(style.marginRight) + padR + borR,
+        columnPx: options.columnWidthPx! + (options.tabStops.aroundLeftPx ?? 0) + (options.tabStops.aroundRightPx ?? 0),
+        stopsEndAtRightEdge: options.tabStops.overMargin !== true,
+      }
+    : undefined;
+  const inTableCell = element.closest("td, th") !== null;
+  return { pieces, firstWidth, restWidth: content, align, unsupported, pending, flags: [...flags], unscale, overflowPunctuation, inTableCell, ...(strut ? { strut } : {}), chrome, ...(firstLineStrut ? { firstLineStrut } : {}), ...(tabStops ? { tabStops } : {}) };
+}
+
+/**
+ * A paragraph's min-content and max-content widths as the browser lays its
+ * margin box out in those modes (CSS Sizing 3 \u00a74; a table cell's
+ * autofit reads them), from a paragraph read in column mode
+ * (`columnWidthPx`): max-content is its longest line between hard breaks,
+ * min-content its widest piece between two of the browser's break
+ * opportunities, the first line's indent added to each and trailing spaces
+ * hanging. Null where only the page can say (unsupported, pending, a
+ * negative indent).
+ */
+export function docsContentWidths(paragraph: DocsParagraph, columnWidthPx: number): { min: number; max: number } | null {
+  if (paragraph.unsupported || paragraph.pending) return null;
+  const indent = paragraph.restWidth - paragraph.firstWidth;
+  if (indent < 0) return null;
+  const extra = columnWidthPx - paragraph.restWidth;
+  const pieces = paragraph.pieces;
+  const texts = pieces.map((piece) => (piece.kind === "box" ? "\ufffc" : piece.kind === "break" ? "\n" : piece.text));
+  const opportunities = lineBreakOpportunities(texts, { kinsoku: null, browser: true });
+  let max = 0;
+  let min = 0;
+  let line = indent;
+  let lineTrailing = 0;
+  let segment = indent;
+  let segmentTrailing = 0;
+  const closeSegment = () => {
+    min = Math.max(min, segment - segmentTrailing);
+    segment = 0;
+    segmentTrailing = 0;
+  };
+  pieces.forEach((piece, index) => {
+    if (piece.kind === "break") {
+      max = Math.max(max, line - lineTrailing);
+      closeSegment();
+      line = 0;
+      lineTrailing = 0;
+      return;
+    }
+    if (index > 0 && opportunities[index] && pieces[index - 1]?.kind !== "break") closeSegment();
+    const space = piece.kind === "space";
+    line += piece.advance;
+    segment += piece.advance;
+    lineTrailing = space ? lineTrailing + piece.advance : 0;
+    segmentTrailing = space ? segmentTrailing + piece.advance : 0;
+  });
+  max = Math.max(max, line - lineTrailing);
+  closeSegment();
+  return { min: extra + min, max: extra + max };
+}
+
+/**
+ * A tab-suffixed list marker's width with no layout: its fitted minimum
+ * (the `min-width` listDefinitionMarkers writes, in pt or px) or its label's
+ * engine width if wider (an inline-block takes the larger). Its line-height
+ * is 0 where the auto line-box plugin took the line over from it: then it
+ * raises no line (a zero-high atom). Null for one the engine cannot read.
+ */
+function unlaidMarkerWidth(
+  marker: HTMLElement,
+  style: CSSStyleDeclaration,
+  view: Window,
+): { width: number; atom?: { height: number; shift: number }; lineBoxes?: DocsPiece["lineBoxes"] } | "pending" | null {
+  // A heading number reaching a default tab stop is sized once laid out.
+  if (marker.dataset.defaultTab === "true" && !marker.style.minWidth) return null;
+  const minWidth = marker.style.minWidth;
+  const minPx = !minWidth ? 0 : minWidth.endsWith("pt") ? (px(minWidth) * 4) / 3 : minWidth.endsWith("px") ? px(minWidth) : NaN;
+  if (!Number.isFinite(minPx)) return null;
+  const text = marker.textContent ?? "";
+  const base = pageEngineFont(`${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`);
+  let labelPx = 0;
+  if (text) {
+    if (!base) return null;
+    const measured = measureText(text, { ...base, kerning: style.fontKerning !== "none", followLocalOnly: true });
+    if (measured.status === "pending") return "pending";
+    if (measured.status !== "ok") return null;
+    const spacing = style.letterSpacing === "normal" ? 0 : px(style.letterSpacing);
+    labelPx = measured.width + spacing * measured.graphemes.length;
+  }
+  const sidePad = px(style.paddingLeft) + px(style.paddingRight) + px(style.borderLeftWidth) + px(style.borderRightWidth);
+  // `min-width` holds the padding in a border box, not in a content box.
+  const box = style.boxSizing === "border-box" ? Math.max(minPx, labelPx + sidePad) : Math.max(minPx, labelPx) + sidePad;
+  const width = box + px(style.marginLeft) + px(style.marginRight);
+  const lineHeight = cssLineHeight(style.lineHeight);
+  if (lineHeight === 0) return { width, atom: { height: 0, shift: 0 } };
+  // Its one line: its own strut and each run inside that raises a line.
+  if (!base || lineHeight === null) return null;
+  const lineBoxes: { font: EngineFont; lineHeight: number | "normal" }[] = [{ font: { ...base, followLocalOnly: true }, lineHeight }];
+  for (const child of Array.from(marker.querySelectorAll("*"))) {
+    const childStyle = view.getComputedStyle(child);
+    const childLineHeight = cssLineHeight(childStyle.lineHeight);
+    if (childLineHeight === 0) continue;
+    if (childLineHeight === null || childStyle.display !== "inline" || childStyle.verticalAlign !== "baseline") return null;
+    const font = pageEngineFont(`${childStyle.fontStyle} ${childStyle.fontWeight} ${childStyle.fontSize} ${childStyle.fontFamily}`);
+    if (!font) return null;
+    lineBoxes.push({ font: { ...font, followLocalOnly: true }, lineHeight: childLineHeight });
+  }
+  return { width, lineBoxes };
+}
+
+/** An "In Line with Text" picture drawn at its stated px size (the image
+ * node view's fixed-size frame), not one fitted to the page by CSS. */
+const FIXED_INLINE_PICTURE = '.note-editor-image-resizable[data-inline-picture="true"][data-picture-fixed-size="true"]:not([data-page-fit-inline-image="true"])';
+
+/**
+ * Such a picture's box with no layout: the wrapper holds no line box (its
+ * img is a block), so its baseline is its bottom margin edge and it sits on
+ * the text baseline (note-editor.css) -- an atom as tall as the picture and
+ * its margins, as wide as the picture and its side margins.
+ */
+function unlaidInlinePicture(wrapper: HTMLElement, style: CSSStyleDeclaration): { width: number; atom: { height: number; shift: number } } | null {
+  const img = wrapper.querySelector<HTMLElement>(":scope > img");
+  if (!img || !img.style.width.endsWith("px") || !img.style.height.endsWith("px")) return null;
+  const width = px(img.style.width);
+  const height = px(img.style.height);
+  if (!(width > 0) || !(height > 0)) return null;
+  if (/%|auto/.test(`${style.marginTop} ${style.marginBottom} ${style.marginLeft} ${style.marginRight}`)) return null;
+  const chrome = px(style.paddingTop) + px(style.paddingBottom) + px(style.borderTopWidth) + px(style.borderBottomWidth);
+  const sides = px(style.paddingLeft) + px(style.paddingRight) + px(style.borderLeftWidth) + px(style.borderRightWidth);
+  return {
+    width: width + sides + px(style.marginLeft) + px(style.marginRight),
+    atom: { height: height + chrome + px(style.marginTop) + px(style.marginBottom), shift: 0 },
+  };
+}
+
+function isZeroWidth(text: string): boolean {
+  return /^[​‌‍⁠﻿­]+$/.test(text);
+}
+
+let range: Range | null = null;
+function rangeOf(doc: Document): Range {
+  if (!range || range.startContainer.ownerDocument !== doc) range = doc.createRange();
+  return range;
+}
+
+function drawnWidth(node: Text, offset: number, unscale: number): number {
+  const r = rangeOf(node.ownerDocument);
+  r.setStart(node, offset);
+  r.setEnd(node, offset + 1);
+  const rects = r.getClientRects();
+  return rects.length ? rects[0].width * unscale : 0;
+}
+
+/** The drawn box of a piece (client coordinates), or null. */
+export function pieceRect(piece: DocsPiece): DOMRect | null {
+  if (piece.element) {
+    const rects = piece.element.getClientRects();
+    return rects.length ? rects[0] : null;
+  }
+  if (!piece.node || piece.offset === undefined) return null;
+  const r = rangeOf(piece.node.ownerDocument);
+  r.setStart(piece.node, piece.offset);
+  r.setEnd(piece.node, Math.min(piece.node.data.length, piece.offset + piece.text.length));
+  const rects = r.getClientRects();
+  for (const candidate of Array.from(rects)) if (candidate.height > 0) return candidate;
+  return rects.length ? rects[0] : null;
+}
+
+const TWIPS_PER_CSS_PX = 15;
+
+/**
+ * How far the tab at `index` advances from `penPx` (column px): to the next of
+ * the paragraph's stops past the pen, aligning the text up to its next tab or
+ * line break there (bandTabLayout's segment).
+ */
+function docsTabAdvance(paragraph: DocsParagraph, tabs: DocsTabLayout, index: number, penPx: number): number {
+  const pieces = paragraph.pieces;
+  let widthPx = 0;
+  let decimalPx: number | undefined;
+  for (let at = index + 1; at < pieces.length; at += 1) {
+    const piece = pieces[at];
+    if (piece.kind === "tab" || piece.kind === "break") break;
+    if (decimalPx === undefined && piece.text === ".") decimalPx = widthPx;
+    widthPx += piece.advance;
+  }
+  return wordTabAdvanceAt({
+    penPx,
+    next: decimalPx === undefined ? { widthPx } : { widthPx, decimalPx },
+    stops: tabs.stops,
+    defaultIntervalTwips: tabs.intervalTwips,
+    positional: null,
+    line: { widthPx: tabs.columnPx, indentLeftPx: tabs.contentLeftPx, indentRightPx: tabs.indentRightPx },
+    stopsEndAtRightEdge: tabs.stopsEndAtRightEdge,
+  });
+}
+
+/**
+ * Where each line starts (piece indices; the first is 0), filled the way Word
+ * fills a line. A paragraph read with its stops (`tabStops`) gets each tab's
+ * advance here, from where its line has got to.
+ */
+export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayoutRules): number[] {
+  const pieces = paragraph.pieces;
+  const count = pieces.length;
+  const starts = [0];
+  if (!count) return starts;
+  // Opportunities over the visible sequence: zero-width atoms (editor
+  // chrome) are transparent, an atom with width breaks on both sides as a
+  // browser and Word break around an inline picture.
+  const texts = pieces.map((piece) => (piece.kind === "box" ? "￼" : piece.kind === "break" ? "\n" : piece.text));
+  const visible: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const piece = pieces[index];
+    if (piece.kind === "box" && piece.advance <= 0.01) continue;
+    if (piece.kind === "break") continue;
+    visible.push(index);
+  }
+  const visibleOpportunities = lineBreakOpportunities(visible.map((index) => texts[index]), { kinsoku: rules.kinsoku, word: true });
+  const opportunity = new Array<boolean>(count).fill(false);
+  visible.forEach((index, order) => {
+    const piece = pieces[index];
+    const previous = order > 0 ? pieces[visible[order - 1]] : undefined;
+    let may = visibleOpportunities[order];
+    if (order > 0 && piece.kind === "box" && previous?.kind !== "space") may = true;
+    if (order > 0 && previous?.kind === "box" && piece.kind !== "space") may = true;
+    // A tab stays with what follows it: what does not fit after the tab takes
+    // the tab to the next line, with or without a space before it, in modes
+    // 14 and 15, justified or not (Word 16 for Mac, probe t-tabw, 128 lines;
+    // R283-D12's references hang by exactly this).
+    if (previous?.kind === "tab") may = false;
+    if (order > 0 && piece.kind === "tab") may = true;
+    opportunity[index] = may;
+  });
+  const justified = paragraph.align === "justify" && rules.compatibilityMode !== null && rules.compatibilityMode >= 15;
+  // Word lets a stop or comma hang past the edge (wordPunctuationMayHang):
+  // from mode 15 only in a justified or distributed paragraph.
+  // In mode 14 and earlier every closing mark hangs, in any paragraph (Word 16.86
+  // ladder: , . ; : ) ! ? % and the closing quote, justified or left), out of a table.
+  const everyMarkHangs = rules.compatibilityMode !== null && rules.compatibilityMode < 15 && !paragraph.inTableCell;
+  const hangs = Boolean(paragraph.overflowPunctuation) &&
+    (rules.compatibilityMode === null || rules.compatibilityMode < 15 || paragraph.align === "justify" || paragraph.align === "distribute");
+  const fit = fitEpsilon(paragraph);
+  let lineStart = 0;
+  let lineIndex = 0;
+  while (lineStart < count) {
+    const width = lineIndex === 0 ? paragraph.firstWidth : paragraph.restWidth;
+    let used = 0;
+    let pendingSpace = 0;
+    let lastBreak = -1;
+    let next = -1;
+    let hard = false;
+    let lastTab = -1;
+    for (let index = lineStart; index < count; index += 1) {
+      const piece = pieces[index];
+      if (piece.kind === "break") {
+        next = index + 1;
+        hard = true;
+        break;
+      }
+      if (index > lineStart && opportunity[index]) lastBreak = index;
+      if (piece.kind === "space") {
+        pendingSpace += piece.advance;
+        continue;
+      }
+      if (piece.kind === "tab") {
+        lastTab = index;
+        const tabs = paragraph.tabStops;
+        if (tabs) {
+          // The line's text starts at the paragraph's box, the first line at
+          // its indent (a hanging one to the left).
+          const lineLeft = tabs.contentLeftPx + (lineIndex === 0 ? paragraph.restWidth - paragraph.firstWidth : 0);
+          (piece as { advance: number }).advance = docsTabAdvance(paragraph, tabs, index, lineLeft + used + pendingSpace);
+        }
+      }
+      const nextUsed = used + pendingSpace + piece.advance;
+      if (index > lineStart && nextUsed > width + fit && piece.advance > 0) {
+        // Mode 14 and earlier: only the word's last character hangs, by its own
+        // width, and a straight double quote not at all. Word 16 for Mac, left
+        // Times New Roman 12 pt, 0.05 pt steps (fixtures-1110/hang-marks, 1 150
+        // paragraphs): "data." and "data," stay 2.98 pt over and go at 3.03 (the
+        // mark is 3.00); "data”" 5.31 / 5.36 (5.33); "data.”" the same
+        // 5.31 / 5.36, "data)," 2.98 / 3.03 and "data”," 2.96 / 3.01 -- the
+        // last mark's width, not the two marks' 8.33, 7.00 and 8.33; 'data."'
+        // goes as soon as it is over. Corpus R280-D30 "(S01–S08),", R283-D02.
+        const closesWord = everyMarkHangs && (() => {
+          let after = index + 1;
+          while (after < count && pieces[after].kind === "box" && pieces[after].advance <= 0.01) after += 1;
+          return after >= count || pieces[after].kind !== "text";
+        })();
+        const hangingMark = everyMarkHangs
+          ? closesWord && piece.kind === "text" && piece.text !== '"' && (HANGING.has(piece.text) || wordTrailingPunctuationLength(piece.text) === piece.text.length)
+          : HANGING.has(piece.text);
+        if (hangs && hangingMark && (used === Number.POSITIVE_INFINITY || used + pendingSpace <= width + fit)) {
+          // The mark hangs; whatever follows it opens the next line.
+          used = Number.POSITIVE_INFINITY;
+          pendingSpace = 0;
+          continue;
+        }
+        // Word keeps the next word on a justified line when narrowing the
+        // line's spaces is enough.
+        // Only a word that reaches the piece that does not fit: past a space that
+        // gives no opportunity (a closing mark, "words )", R329-D30) keeping the
+        // word before it came back here for ever, and the page never answered.
+        if (
+          justified &&
+          lastBreak > lineStart &&
+          wordEnd(pieces, lastBreak, opportunity) > index &&
+          keepsWord(pieces, lineStart, lastBreak, lastTab, width, opportunity, Boolean(paragraph.inTableCell))
+        ) {
+          const end = wordEnd(pieces, lastBreak, opportunity);
+          // Continue the line past the kept word.
+          let kept = 0;
+          for (let at = lineStart; at < end; at += 1) if (pieces[at].kind !== "break") kept += pieces[at].advance;
+          used = kept;
+          pendingSpace = 0;
+          index = end - 1;
+          // The kept word is now part of the line: later words fit or not
+          // against the line's natural width (Word narrows once per line).
+          continue;
+        }
+        next = lastBreak > lineStart ? lastBreak : index;
+        break;
+      }
+      used = nextUsed;
+      pendingSpace = 0;
+    }
+    if (next < 0 || next >= count) {
+      if (hard && next === count) starts.push(count);
+      break;
+    }
+    starts.push(next);
+    lineStart = next;
+    lineIndex += 1;
+    if (hard && next === count) break;
+  }
+  return starts;
+}
+
+function wordEnd(pieces: readonly DocsPiece[], from: number, opportunity: readonly boolean[]): number {
+  let end = from + 1;
+  while (end < pieces.length && pieces[end].kind !== "space" && pieces[end].kind !== "break" && !opportunity[end]) end += 1;
+  return end;
+}
+
+function keepsWord(pieces: readonly DocsPiece[], lineStart: number, breakAt: number, lastTab: number, width: number, opportunity: readonly boolean[], inTableCell: boolean): boolean {
+  const end = wordEnd(pieces, breakAt, opportunity);
+  let natural = 0;
+  for (let at = lineStart; at < end; at += 1) natural += pieces[at].advance;
+  // The line's trailing spaces before the word count; its own spaces after
+  // the word hang.
+  const overflow = natural - width;
+  let spaces = 0;
+  let spacePx = 0;
+  let fontPx = 0;
+  // The spaces a line opens with take their room and narrow nothing: Word 16
+  // for Mac, mode 15, Arial 12 pt, "lighthouse" after four spaces, a paragraph
+  // opened by 0, 1 and 2 spaces (fixtures-1110/lead-spaces, 243 paragraphs):
+  // kept to 4.118, 4.152 and 4.136 pt over and sent down 0.05 pt later, the
+  // limit of the five spaces (4.167 pt) each time. Corpus R279-D13.
+  let from = Math.max(lineStart, lastTab + 1);
+  if (from === lineStart) while (from < breakAt && (pieces[from].kind === "space" || (pieces[from].kind === "box" && pieces[from].advance <= 0.01))) from += 1;
+  for (let at = from; at < breakAt; at += 1) {
+    const piece = pieces[at];
+    if (piece.kind !== "space") continue;
+    spaces += 1;
+    spacePx = piece.spacePx ?? piece.advance;
+    fontPx = piece.fontPx ?? 0;
+  }
+  let wordPx = 0;
+  for (let at = breakAt; at < end; at += 1) wordPx += pieces[at].advance;
+  let trailingPx = 0;
+  // In a table cell the punctuation is paid for with the letters: Word's limit
+  // there is the same with or without it (justifiedSpaceShrink: Word 16.86
+  // ladder m10, corpus R280-D01; R280-D15's cell keeps "kn." off the line).
+  for (let at = inTableCell ? breakAt - 1 : end - 1; at >= breakAt; at -= 1) {
+    const piece = pieces[at];
+    // What takes no room after the word (a bookmark's end, the paragraph's
+    // closing chrome) does not hide its punctuation: corpus R280-D14, a
+    // definition ending "EIR;" that Word keeps on its one line (PDF p. 3).
+    if (piece.kind === "box" && piece.advance <= 0.01) continue;
+    if (piece.kind !== "text" || wordTrailingPunctuationLength(piece.text) !== piece.text.length) break;
+    trailingPx += piece.advance;
+  }
+  // Past a hyphen no space stands before the word (probe t-hy-keep).
+  return wordKeepsJustifiedWord(overflow, spaces, pieces[breakAt - 1]?.kind === "space" ? fontPx : 0, spacePx, wordPx, trailingPx);
+}
+
+/**
+ * Where the browser started each line: piece indices, from the drawn boxes.
+ * A piece starts a line when its box shares no band with the line so far
+ * (40 % of the smaller height, as the layout check counts lines).
+ */
+export function docsBrowserLineStarts(paragraph: DocsParagraph): number[] {
+  const starts: number[] = [];
+  let top = 0, bottom = 0;
+  let open = false;
+  paragraph.pieces.forEach((piece, index) => {
+    if (piece.kind === "space" || piece.kind === "break") return;
+    if (piece.kind === "box" && piece.advance <= 0.01) return;
+    const r = pieceRect(piece);
+    if (!r || !(r.height > 0)) return;
+    if (!open) {
+      starts.push(index);
+      top = r.top; bottom = r.bottom; open = true;
+      return;
+    }
+    const overlap = Math.min(bottom, r.bottom) - Math.max(top, r.top);
+    if (overlap >= 0.4 * Math.min(bottom - top, r.bottom - r.top)) {
+      top = Math.min(top, r.top); bottom = Math.max(bottom, r.bottom);
+      return;
+    }
+    starts.push(index);
+    top = r.top; bottom = r.bottom;
+  });
+  if (!starts.length || starts[0] !== 0) {
+    // Leading spaces or chrome before the first drawn piece belong to line 1.
+    if (starts.length) starts[0] = 0;
+    else starts.push(0);
+  }
+  return starts;
+}
+
+/** Engine line starts mapped onto the drawn sequence: a start that falls on a
+ * space or chrome moves to the next drawn piece, the way the browser's are
+ * read. */
+export function normalizeStarts(paragraph: DocsParagraph, starts: readonly number[]): number[] {
+  const out: number[] = [];
+  for (const start of starts) {
+    let at = start;
+    while (at < paragraph.pieces.length) {
+      const piece = paragraph.pieces[at];
+      if (piece.kind === "space" || piece.kind === "break" || (piece.kind === "box" && piece.advance <= 0.01)) at += 1;
+      else break;
+    }
+    if (at >= paragraph.pieces.length) {
+      // A line made only of a hard break's empty tail: not drawn by itself.
+      continue;
+    }
+    if (!out.length) out.push(0);
+    else if (at !== out[out.length - 1]) out.push(at);
+  }
+  return out.length ? out : [0];
+}
+
+/**
+ * The paragraph's words (text between spaces, tabs and breaks; atoms are not
+ * words) and, for each line start, the index of the word it starts with --
+ * fractional when the line starts inside a word. For comparing lines with
+ * another layout of the same words (Word's PDF).
+ */
+export function docsLineWords(paragraph: DocsParagraph, starts: readonly number[]): { words: string[]; lineWords: number[] } {
+  const words: string[] = [];
+  const wordOf = new Array<number>(paragraph.pieces.length).fill(-1);
+  const charOf = new Array<number>(paragraph.pieces.length).fill(0);
+  let open = false;
+  paragraph.pieces.forEach((piece, index) => {
+    if (piece.kind !== "text") {
+      if (piece.kind !== "box" || piece.advance > 0.01) open = false;
+      return;
+    }
+    if (isZeroWidth(piece.text)) return;
+    if (!open) { words.push(""); open = true; }
+    wordOf[index] = words.length - 1;
+    charOf[index] = words[words.length - 1].length;
+    words[words.length - 1] += piece.text;
+  });
+  const lineWords: number[] = [];
+  for (const start of starts) {
+    let at = start;
+    while (at < paragraph.pieces.length && wordOf[at] < 0) at += 1;
+    if (at >= paragraph.pieces.length) continue;
+    const word = wordOf[at] + (charOf[at] > 0 ? 0.5 : 0);
+    if (!lineWords.length || lineWords[lineWords.length - 1] !== word) lineWords.push(word);
+  }
+  return { words, lineWords };
+}
+
+export interface DocsParagraphAudit {
+  readonly status: "same" | "differs" | "unsupported" | "pending";
+  readonly reason?: string;
+  readonly flags: readonly string[];
+  readonly engineLines: number;
+  readonly browserLines: number;
+  /** First line (0-based) whose start differs. */
+  readonly firstDiff?: number;
+  /** At the first differing line: engine's start minus the browser's, in
+   * pieces (negative: the engine breaks earlier). */
+  readonly shift?: number;
+  /** The engine's slack at that line end: width left on the line before the
+   * word that went down (negative: the word overflowed by that much). */
+  readonly margin?: number;
+  /** Largest |drawn - engine| ink width of a line, px (text pieces only). */
+  readonly inkDelta?: number;
+  readonly text?: string;
+  /** Text of each line by the engine and the browser at the first difference. */
+  readonly at?: { engine: string; browser: string };
+  /** With `detail`: the words and the word each line starts with. */
+  readonly words?: string[];
+  readonly engineWords?: number[];
+  readonly browserWords?: number[];
+}
+
+function lineInk(paragraph: DocsParagraph, from: number, to: number): { engine: number; drawn: number } {
+  let engine = 0;
+  let drawn = 0;
+  for (let at = from; at < to; at += 1) {
+    const piece = paragraph.pieces[at];
+    if (piece.kind !== "text") continue;
+    const r = pieceRect(piece);
+    if (!r) continue;
+    engine += piece.advance;
+    drawn += r.width * paragraph.unscale;
+  }
+  return { engine, drawn };
+}
+
+/** Engine against browser, one paragraph. */
+export function auditDocsParagraph(element: HTMLElement, rules: DocsLayoutRules, detail = false): DocsParagraphAudit {
+  const paragraph = readDocsParagraph(element);
+  const base = { flags: paragraph.flags, engineLines: 0, browserLines: 0 };
+  if (paragraph.unsupported) return { ...base, status: "unsupported", reason: paragraph.unsupported };
+  if (paragraph.pending) return { ...base, status: "pending" };
+  const engine = normalizeStarts(paragraph, docsEngineLineStarts(paragraph, rules));
+  const browser = docsBrowserLineStarts(paragraph);
+  let inkDelta = 0;
+  for (let line = 0; line < browser.length; line += 1) {
+    const ink = lineInk(paragraph, browser[line], browser[line + 1] ?? paragraph.pieces.length);
+    inkDelta = Math.max(inkDelta, Math.abs(ink.drawn - ink.engine));
+  }
+  const textOf = (from: number, to: number) => paragraph.pieces.slice(from, to).map((piece) => (piece.kind === "box" ? "▫" : piece.text)).join("");
+  let firstDiff = -1;
+  for (let line = 0; line < Math.max(engine.length, browser.length); line += 1) {
+    if (engine[line] !== browser[line]) { firstDiff = line; break; }
+  }
+  const words = detail ? docsLineWords(paragraph, engine) : null;
+  const out = {
+    ...base, engineLines: engine.length, browserLines: browser.length, inkDelta: Number(inkDelta.toFixed(3)),
+    ...(words ? { words: words.words, engineWords: words.lineWords, browserWords: docsLineWords(paragraph, browser).lineWords } : {}),
+  };
+  if (firstDiff < 0) return { ...out, status: "same" };
+  const e = engine[firstDiff] ?? paragraph.pieces.length;
+  const b = browser[firstDiff] ?? paragraph.pieces.length;
+  // The engine's slack where the line it ends at the earlier of the two starts.
+  const lineFrom = firstDiff > 0 ? engine[firstDiff - 1] : 0;
+  const width = firstDiff <= 1 && lineFrom === 0 ? paragraph.firstWidth : paragraph.restWidth;
+  let used = 0;
+  let pendingSpace = 0;
+  const until = Math.max(e, b);
+  for (let at = lineFrom; at < until; at += 1) {
+    const piece = paragraph.pieces[at];
+    if (piece.kind === "space") { pendingSpace += piece.advance; continue; }
+    used += pendingSpace + piece.advance;
+    pendingSpace = 0;
+  }
+  return {
+    ...out,
+    status: "differs",
+    firstDiff,
+    shift: e - b,
+    margin: Number((width - used).toFixed(3)),
+    text: textOf(0, paragraph.pieces.length).slice(0, 400),
+    at: {
+      engine: textOf(lineFrom, e).slice(-80),
+      browser: textOf(firstDiff > 0 ? browser[firstDiff - 1] : 0, b).slice(-80),
+    },
+  };
+}
+
+/** Where a line's content ends: past its trailing spaces and breaks. */
+function contentEnd(pieces: readonly DocsPiece[], from: number, to: number): number {
+  let end = to;
+  while (end > from && (pieces[end - 1].kind === "space" || pieces[end - 1].kind === "break")) end -= 1;
+  return end;
+}
+
+/**
+ * Each piece's natural width as the browser draws it, CSS px: text from its
+ * drawn box, spaces at the engine's width (a justified line stretches them),
+ * atoms and tabs as read. Read with the paragraph left-aligned when it is
+ * justified, so no glyph box carries justification (callers arrange that).
+ */
+export function docsDrawnWidths(paragraph: DocsParagraph): number[] {
+  return paragraph.pieces.map((piece) => {
+    if (piece.kind !== "text") return piece.advance;
+    const r = pieceRect(piece);
+    return r ? r.width * paragraph.unscale - (piece.correction ?? 0) : piece.advance;
+  });
+}
+
+export interface DocsLineCorrection {
+  /** Pieces [from, to) the correction spans: the line's text, without its
+   * trailing spaces. */
+  readonly from: number;
+  readonly to: number;
+  /** Extra letter spacing for every grapheme of the range, px: the drawn
+   * width brought to the computed one. */
+  readonly letterSpacing: number;
+  /** Extra word spacing for the spaces after the line's last tab, px: a
+   * justified line Word keeps by narrowing its spaces narrows them. */
+  readonly wordSpacing: number;
+  /** The first piece the word spacing applies from (after the last tab). */
+  readonly spacesFrom: number;
+  /** The tab that opens the next line (its piece index), or null. A browser
+   * keeps a tab at the end of a line however full the line is (preserved
+   * white space hangs past the measure, Chromium and WebKit alike), so the
+   * line is ended before it by a break the engine draws there. */
+  readonly tabBreak: number | null;
+}
+
+/** Below this a line's drawn and computed widths count as equal, px. */
+const SAME_WIDTH = 0.004;
+/** What a correction leaves on the safe side of the edge, px. */
+const CORRECTION_SLACK = 0.02;
+
+/**
+ * The corrections that make the browser break where the engine does: for
+ * every engine line whose drawn width decides differently from the
+ * engine's -- the line does not fit as drawn, or the next word would still
+ * fit -- the drawn width is brought to the computed one by spreading the
+ * difference over its graphemes' letter spacing, and a line the engine keeps
+ * wider than the measure (Word's justified kept word) narrows its spaces to
+ * fit. `force` corrects those lines whatever the widths say (a line the
+ * browser still broke otherwise).
+ */
+export function planDocsLineCorrections(
+  paragraph: DocsParagraph, starts: readonly number[], drawn: readonly number[], force: ReadonlySet<number> = new Set(),
+): DocsLineCorrection[] {
+  const pieces = paragraph.pieces;
+  const fit = fitEpsilon(paragraph);
+  const out: DocsLineCorrection[] = [];
+  for (let line = 0; line < starts.length; line += 1) {
+    const from = starts[line];
+    const to = starts[line + 1] ?? pieces.length;
+    const end = contentEnd(pieces, from, to);
+    if (end <= from) continue;
+    let engine = 0;
+    let browser = 0;
+    let graphemes = 0;
+    let lastTab = from - 1;
+    for (let at = from; at < end; at += 1) {
+      const piece = pieces[at];
+      if (piece.kind === "break") continue;
+      if (piece.kind === "tab") lastTab = at;
+      engine += piece.advance;
+      browser += drawn[at];
+      if (piece.kind === "text" || piece.kind === "space") graphemes += 1;
+    }
+    if (!graphemes) continue;
+    const width = line === 0 ? paragraph.firstWidth : paragraph.restWidth;
+    // Wider than the measure: a word kept by narrowing, on the paragraph's
+    // last line too (corpus R279-D25: left as drawn, the browser sent the
+    // word down and a two-line paragraph took three). That line, or one a
+    // hard break ends, may overflow by a hanging mark alone: nothing narrows.
+    const lastLine = to >= pieces.length || pieces[to - 1]?.kind === "break";
+    const hangingPx = paragraph.overflowPunctuation && HANGING.has(pieces[end - 1].text) ? pieces[end - 1].advance : 0;
+    const overflows = engine - (lastLine ? hangingPx : 0) > width + fit;
+    const squeeze = overflows ? engine - width : 0;
+    // The browser leaves a tab on this line for as long as it fits. A justified
+    // line takes up the room in its spaces, as Word's does; another is padded.
+    const tabOpensNext = !lastLine && pieces[to]?.kind === "tab";
+    let needed = force.has(line) || squeeze > 0 || tabOpensNext;
+    if (!needed && Math.abs(engine - browser) > SAME_WIDTH) {
+      // Does the browser keep this line whole?
+      if (browser > width + fit) needed = true;
+      // And leave the next line's first word down? (A hard break or the
+      // paragraph's end decides by itself.)
+      else if (!lastLine && pieces[end]?.kind !== "break") {
+        let trailing = 0;
+        for (let at = end; at < to; at += 1) trailing += drawn[at];
+        let next = to;
+        let nextWidth = 0;
+        while (next < pieces.length && pieces[next].kind !== "space" && pieces[next].kind !== "break" && (next === to || !isOpportunityAfterSpace(pieces, next))) {
+          nextWidth += drawn[next];
+          next += 1;
+        }
+        if (browser + trailing + nextWidth <= width + fit) needed = true;
+      }
+    }
+    if (!needed) continue;
+    let spaces = 0;
+    for (let at = lastTab + 1; at < end; at += 1) if (pieces[at].kind === "space") spaces += 1;
+    const narrow = squeeze > 0 ? squeeze + CORRECTION_SLACK : 0;
+    // Word justifies the line a tab left: its spaces take up the room.
+    const room = tabOpensNext ? Math.max(0, width - engine) : 0;
+    const stretches = room > 0 && spaces > 0 && paragraph.align === "justify";
+    out.push({
+      from,
+      to: end,
+      letterSpacing: (engine - browser - (narrow > 0 && spaces ? 0 : narrow + CORRECTION_SLACK)) / graphemes,
+      wordSpacing: narrow > 0 && spaces ? -narrow / spaces : stretches ? room / spaces : 0,
+      spacesFrom: lastTab + 1,
+      tabBreak: tabOpensNext ? to : null,
+    });
+  }
+  return out;
+}
+
+/** A conservative word end for the next-word check: the word runs to the
+ * next space (CJK text breaks at every character, so one grapheme). */
+function isOpportunityAfterSpace(pieces: readonly DocsPiece[], at: number): boolean {
+  return /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/.test(pieces[at].text);
+}
+
+/**
+ * A quick yes to "does the browser break where the engine does?" without
+ * reading every grapheme: the paragraph draws as many rows as the engine has
+ * lines, and each engine line's first piece stands on a row below the piece
+ * before it. False means "not shown cheaply" (read the full lines).
+ */
+export function docsBrowserAgreesQuickly(element: HTMLElement, paragraph: DocsParagraph, starts: readonly number[]): boolean {
+  const doc = element.ownerDocument;
+  const r = doc.createRange();
+  r.selectNodeContents(element);
+  const rows: { top: number; bottom: number }[] = [];
+  for (const rect of Array.from(r.getClientRects())) {
+    if (!(rect.height > 0.5) || !(rect.width > 0.5)) continue;
+    const row = rows.find((band) => Math.min(band.bottom, rect.bottom) - Math.max(band.top, rect.top) >= 0.4 * Math.min(band.bottom - band.top, rect.bottom - rect.top));
+    if (row) { row.top = Math.min(row.top, rect.top); row.bottom = Math.max(row.bottom, rect.bottom); }
+    else rows.push({ top: rect.top, bottom: rect.bottom });
+  }
+  if (rows.length !== starts.length) return false;
+  const drawnPiece = (index: number) => {
+    const piece = paragraph.pieces[index];
+    return piece && piece.kind !== "space" && piece.kind !== "break" && !(piece.kind === "box" && piece.advance <= 0.01);
+  };
+  for (let line = 1; line < starts.length; line += 1) {
+    let before = starts[line] - 1;
+    while (before >= 0 && !drawnPiece(before)) before -= 1;
+    if (before < 0) return false;
+    const a = pieceRect(paragraph.pieces[before]);
+    const b = pieceRect(paragraph.pieces[starts[line]]);
+    if (!a || !b) return false;
+    if (Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) >= 0.4 * Math.min(a.height, b.height)) return false;
+  }
+  return true;
+}
+
+/** The floats drawn in one page sheet (client rects), read once per pass. */
+export type DocsFloatCache = Map<Element, DOMRect[]>;
+
+/**
+ * Whether a float (a picture or text box wrapped square or tight, a
+ * float-both strip spacer's object, a floating table) narrows any of the
+ * paragraph's lines: the engine fills full-width lines, so such a
+ * paragraph is left to the browser's wrap around the float.
+ */
+export function docsParagraphBesideFloat(element: HTMLElement, cache: DocsFloatCache): boolean {
+  if (element.querySelector('[data-float-wrap-spacer="true"]')) return true;
+  const view = element.ownerDocument.defaultView;
+  if (!view) return false;
+  const sheet = element.closest(".page-sheet") ?? element.closest(".ProseMirror") ?? element.ownerDocument.body;
+  let floats = cache.get(sheet);
+  if (!floats) {
+    floats = [];
+    for (const candidate of Array.from(sheet.querySelectorAll<HTMLElement>("*"))) {
+      if (candidate === element || element.contains(candidate)) continue;
+      const style = view.getComputedStyle(candidate);
+      if (style.float === "none" || style.display === "none") continue;
+      const rect = candidate.getBoundingClientRect();
+      if (rect.width > 0.5 && rect.height > 0.5) floats.push(rect);
+    }
+    cache.set(sheet, floats);
+  }
+  if (!floats.length) return false;
+  const box = element.getBoundingClientRect();
+  return floats.some((rect) => rect.bottom > box.top + 0.5 && rect.top < box.bottom - 0.5 && rect.right > box.left + 0.5 && rect.left < box.right - 0.5);
+}

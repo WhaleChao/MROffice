@@ -1,0 +1,57 @@
+/* Designer's Design Ideas pane (PresentationDesignerPane.tsx). The cards are
+   the shared insert-gallery cards (OfficeInsertGallery.module.css) in the
+   deck's accent; here they stack in one column, as PowerPoint's Designer
+   pane lists its ideas, and each shows the slide the idea makes. */
+.body {
+  display: grid;
+  align-content: start;
+  flex: 1 1 auto;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px 12px;
+  --office-smartart-gallery-accent: #c43e1c;
+  --office-smartart-gallery-accent-soft: rgba(196, 62, 28, 0.18);
+  --office-smartart-gallery-focus-ring: rgba(196, 62, 28, 0.28);
+  --office-smartart-gallery-hover-border: #d97a5c;
+}
+
+.cards.cards {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0;
+}
+
+.card {
+  align-items: stretch;
+  cursor: pointer;
+  font: inherit;
+  min-height: 0;
+  text-align: left;
+}
+
+/* The idea now on the slide. */
+.card[data-applied="true"] {
+  border-color: var(--office-smartart-gallery-accent);
+  box-shadow: 0 0 0 1px var(--office-smartart-gallery-accent);
+}
+
+/* The real slide, as applying the idea leaves it (the slide list's miniature). */
+.slidePreview {
+  display: block;
+  width: 100%;
+}
+
+.name {
+  align-items: center;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 4px;
+}
+
+/* Designer's two options, at the foot of the pane. */
+.options {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 8px 10px 10px;
+}

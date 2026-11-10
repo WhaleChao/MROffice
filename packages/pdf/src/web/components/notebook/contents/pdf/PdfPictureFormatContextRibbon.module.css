@@ -1,0 +1,44 @@
+/* The surface marker: identity and save disposition only, never a box. */
+.surface {
+  display: none;
+}
+
+.group {
+  min-width: max-content;
+}
+
+.rotated {
+  align-self: center;
+  max-width: 148px;
+  overflow: hidden;
+  padding-inline: 5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Rotate left is the rotate glyph mirrored; the icon keeps the compact
+   command's 20px because it is the glyph box's direct child. */
+.mirror {
+  transform: scaleX(-1);
+}
+
+.sizeField {
+  min-inline-size: max-content;
+}
+
+/* Four digits and a point, at the shared field's 30px height. */
+.sizeInput {
+  min-width: 58px;
+  width: 58px;
+}
+
+.sizeInput input {
+  text-align: end;
+}

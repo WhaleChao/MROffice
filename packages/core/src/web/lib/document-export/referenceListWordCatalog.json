@@ -1,0 +1,60 @@
+{
+ "source": "Written for the open-source MR Note editors.",
+ "about": "Per format: whether an index writes letter headings, and the leader and alignment the dialog starts from.",
+ "index": {
+  "template": {
+   "headings": false,
+   "defaultTabLeader": "dot"
+  },
+  "classic": {
+   "headings": true,
+   "defaultTabLeader": "none"
+  },
+  "fancy": {
+   "headings": true,
+   "defaultTabLeader": "none"
+  },
+  "modern": {
+   "headings": true,
+   "defaultTabLeader": "none"
+  },
+  "bulleted": {
+   "headings": true,
+   "defaultTabLeader": "none"
+  },
+  "formal": {
+   "headings": true,
+   "defaultTabLeader": "dot"
+  },
+  "simple": {
+   "headings": false,
+   "defaultTabLeader": "none"
+  }
+ },
+ "tableOfFigures": {
+  "template": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  },
+  "classic": {
+   "defaultTabLeader": "none",
+   "defaultRightAlignPageNumbers": true
+  },
+  "distinctive": {
+   "defaultTabLeader": "underscore",
+   "defaultRightAlignPageNumbers": true
+  },
+  "centered": {
+   "defaultTabLeader": "none",
+   "defaultRightAlignPageNumbers": false
+  },
+  "formal": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  },
+  "simple": {
+   "defaultTabLeader": "none",
+   "defaultRightAlignPageNumbers": true
+  }
+ }
+}

@@ -1,0 +1,6476 @@
+{
+ "circle-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "in": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "circle",
+      "t": "in",
+      "arg": "in"
+     }
+    ]
+   },
+   "out": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "circle",
+      "t": "in",
+      "arg": "out"
+     }
+    ]
+   }
+  },
+  "def": "in"
+ },
+ "circle-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "in": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "circle",
+      "t": "out",
+      "arg": "in"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "out": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "circle",
+      "t": "out",
+      "arg": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  },
+  "def": "in"
+ },
+ "crawl-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "from-bottom": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     }
+    ]
+   },
+   "from-left": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X-0.5"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     }
+    ]
+   },
+   "from-right": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X+0.5"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     }
+    ]
+   },
+   "from-top": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y-0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     }
+    ]
+   }
+  },
+  "def": "from-bottom"
+ },
+ "crawl-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "from-bottom": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "from-left": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X-0.5"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "from-right": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "from-top": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y-0.5"
+       ]
+      ]
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  },
+  "def": "from-bottom"
+ },
+ "diamond-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "in": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "diamond",
+      "t": "in",
+      "arg": "in"
+     }
+    ]
+   },
+   "out": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "diamond",
+      "t": "in",
+      "arg": "out"
+     }
+    ]
+   }
+  },
+  "def": "in"
+ },
+ "diamond-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "in": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "diamond",
+      "t": "out",
+      "arg": "in"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "out": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "diamond",
+      "t": "out",
+      "arg": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  },
+  "def": "in"
+ },
+ "dissolve-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "dissolve",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "dissolve-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "dissolve",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "flash-once-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "flash-once-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "plus-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "in": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "plus",
+      "t": "in",
+      "arg": "in"
+     }
+    ]
+   },
+   "out": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "plus",
+      "t": "in",
+      "arg": "out"
+     }
+    ]
+   }
+  },
+  "def": "in"
+ },
+ "plus-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "in": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "plus",
+      "t": "out",
+      "arg": "in"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "out": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "plus",
+      "t": "out",
+      "arg": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  },
+  "def": "in"
+ },
+ "spiral-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "spiral-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "basic-swivel-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "basic-swivel-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "wedge-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wedge",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "wedge-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wedge",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "wheel-in": {
+  "cls": "entr",
+  "group": "basic",
+  "variants": {
+   "1-spoke": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "in",
+      "arg": "1-spoke"
+     }
+    ]
+   },
+   "2-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "in",
+      "arg": "2-spokes"
+     }
+    ]
+   },
+   "3-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "in",
+      "arg": "3-spokes"
+     }
+    ]
+   },
+   "4-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "in",
+      "arg": "4-spokes"
+     }
+    ]
+   },
+   "8-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "in",
+      "arg": "8-spokes"
+     }
+    ]
+   }
+  },
+  "def": "1-spoke"
+ },
+ "wheel-out": {
+  "cls": "exit",
+  "group": "basic",
+  "variants": {
+   "1-spoke": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "out",
+      "arg": "1-spoke"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "2-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "out",
+      "arg": "2-spokes"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "3-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "out",
+      "arg": "3-spokes"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "4-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "out",
+      "arg": "4-spokes"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "8-spokes": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "wheel",
+      "t": "out",
+      "arg": "8-spokes"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  },
+  "def": "1-spoke"
+ },
+ "boomerang-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "boomerang-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "bounce-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "bounce-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "color-typewriter-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ],
+    "it": {
+     "type": "lt",
+     "pct": 0.1
+    }
+   }
+  }
+ },
+ "color-typewriter-out": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ],
+    "it": {
+     "type": "lt",
+     "pct": 0.1
+    }
+   }
+  }
+ },
+ "credits-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "credits-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "ease-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "ease-out": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "float-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "float-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "shrink-and-turn": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "light-speed-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "light-speed-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "pinwheel-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-360"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "pinwheel-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "360"
+       ]
+      ]
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "sink-down": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y-0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "drop-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y-0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "drop-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y-0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "thread-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "thread-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "unfold-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "unfold-out": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "whip-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "whip-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "float-up-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "float-down-out": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y-0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "center-revolve-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "center-revolve-out": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "swivel-in": {
+  "cls": "entr",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "swivel-out": {
+  "cls": "exit",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "float-down-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y-0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "float-up-out": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "sling-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "sling-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "spinner-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-360"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "spinner-out": {
+  "cls": "exit",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "360"
+       ]
+      ]
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "compress-in": {
+  "cls": "entr",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "zip-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "zip-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "curve-up-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "curve-down-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y-0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "glide-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y+0.5"
+       ],
+       [
+        1,
+        "Y"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "glide-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "x",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "X"
+       ],
+       [
+        1,
+        "X"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "y",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "Y"
+       ],
+       [
+        1,
+        "Y+0.5"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "contract-out": {
+  "cls": "exit",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "flip-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "-180"
+       ],
+       [
+        1,
+        "0"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "flip-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "rot",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0"
+       ],
+       [
+        1,
+        "180"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "fold-in": {
+  "cls": "entr",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "fold-out": {
+  "cls": "exit",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "font": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontFamily",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "Arial"
+     }
+    ]
+   }
+  }
+ },
+ "font-size": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "25-percent": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontSize",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": "0.25"
+     }
+    ]
+   },
+   "50-percent": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontSize",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": "0.5"
+     }
+    ]
+   },
+   "150-percent": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontSize",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": "1.5"
+     }
+    ]
+   },
+   "400-percent": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontSize",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": "4"
+     }
+    ]
+   }
+  },
+  "def": "150-percent"
+ },
+ "font-style": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "bold": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontWeight",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "bold"
+     },
+     {
+      "k": "prop",
+      "p": "style.fontStyle",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "italic"
+     }
+    ]
+   },
+   "italic": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontWeight",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "bold"
+     },
+     {
+      "k": "prop",
+      "p": "style.fontStyle",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "italic"
+     }
+    ]
+   },
+   "underline": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontWeight",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "bold"
+     },
+     {
+      "k": "prop",
+      "p": "style.fontStyle",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "italic"
+     }
+    ]
+   }
+  },
+  "def": "bold"
+ },
+ "bold-flash": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontWeight",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "normal"
+       ],
+       [
+        0.5,
+        "bold"
+       ],
+       [
+        0.6,
+        "normal"
+       ],
+       [
+        1,
+        "normal"
+       ]
+      ],
+      "cm": "discrete"
+     }
+    ]
+   }
+  }
+ },
+ "blast": {
+  "cls": "emph",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "opacity",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "1"
+       ],
+       [
+        0.5,
+        "0.3"
+       ],
+       [
+        1,
+        "1"
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "bold-reveal": {
+  "cls": "emph",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontWeight",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "bold"
+     }
+    ],
+    "it": {
+     "type": "lt",
+     "pct": 0.1
+    }
+   }
+  }
+ },
+ "brush-color": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "style.color",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent2"
+      }
+     }
+    ]
+   }
+  }
+ },
+ "underline": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.textDecorationUnderline",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ],
+    "it": {
+     "type": "lt",
+     "pct": 0.1
+    }
+   }
+  }
+ },
+ "object-color": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent2"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "color-wave": {
+  "cls": "emph",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "style.color",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent2"
+      }
+     }
+    ]
+   }
+  }
+ },
+ "complementary-color": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent4"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "complementary-color-2": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent4"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "contrasting-color": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent4"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "darken": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "dk2"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "desaturate": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "lt2"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "flash-bulb": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "opacity",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "1"
+       ],
+       [
+        0.5,
+        "0.3"
+       ],
+       [
+        1,
+        "1"
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "flicker": {
+  "cls": "emph",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "opacity",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "1"
+       ],
+       [
+        0.5,
+        "0.3"
+       ],
+       [
+        1,
+        "1"
+       ]
+      ]
+     }
+    ],
+    "it": {
+     "type": "lt",
+     "pct": 0.1
+    }
+   }
+  }
+ },
+ "grow-with-color": {
+  "cls": "emph",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "scale",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "by": [
+       1.5,
+       1.5
+      ]
+     },
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent2"
+      }
+     }
+    ]
+   }
+  }
+ },
+ "lighten": {
+  "cls": "emph",
+  "group": "subtle",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "lt2"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "style-emphasis": {
+  "cls": "emph",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "prop",
+      "p": "style.fontWeight",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "bold"
+     },
+     {
+      "k": "prop",
+      "p": "style.fontStyle",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "italic"
+     }
+    ]
+   }
+  }
+ },
+ "teeter": {
+  "cls": "emph",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "rot",
+      "b": 0,
+      "d": 0.25,
+      "hold": 1,
+      "by": -3
+     },
+     {
+      "k": "rot",
+      "b": 0.25,
+      "d": 0.25,
+      "hold": 1,
+      "by": 6
+     },
+     {
+      "k": "rot",
+      "b": 0.5,
+      "d": 0.25,
+      "hold": 1,
+      "by": -6
+     },
+     {
+      "k": "rot",
+      "b": 0.75,
+      "d": 0.25,
+      "hold": 1,
+      "by": 3
+     }
+    ]
+   }
+  }
+ },
+ "vertical-highlight": {
+  "cls": "emph",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "opacity",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "1"
+       ],
+       [
+        0.5,
+        "0.3"
+       ],
+       [
+        1,
+        "1"
+       ]
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "wave": {
+  "cls": "emph",
+  "group": "exciting",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 0.5,
+      "ar": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0 -0.05 E"
+     }
+    ],
+    "it": {
+     "type": "lt",
+     "pct": 0.1
+    }
+   }
+  }
+ },
+ "shimmer": {
+  "cls": "emph",
+  "group": "moderate",
+  "variants": {
+   "": {
+    "d": 1000,
+    "tracks": [
+     {
+      "k": "clr",
+      "p": "fillcolor",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "to": {
+       "sp": "schemeClr",
+       "val": "accent2"
+      }
+     },
+     {
+      "k": "prop",
+      "p": "fill.type",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "solid"
+     },
+     {
+      "k": "prop",
+      "p": "fill.on",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "v": "true"
+     }
+    ]
+   }
+  }
+ },
+ "path-4-point-star": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0354 0.0896 L 0.125 0.125 L 0.0354 0.1604 L 0 0.25 L -0.0354 0.1604 L -0.125 0.125 L -0.0354 0.0896 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-5-point-star": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0294 0.0845 L 0.1189 0.0864 L 0.0476 0.1405 L 0.0735 0.2261 L 0 0.175 L -0.0735 0.2261 L -0.0476 0.1405 L -0.1189 0.0864 L -0.0294 0.0845 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-6-point-star": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.025 0.0817 L 0.1083 0.0625 L 0.05 0.125 L 0.1083 0.1875 L 0.025 0.1683 L 0 0.25 L -0.025 0.1683 L -0.1083 0.1875 L -0.05 0.125 L -0.1083 0.0625 L -0.025 0.0817 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-8-point-star": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0191 0.0788 L 0.0884 0.0366 L 0.0462 0.1059 L 0.125 0.125 L 0.0462 0.1441 L 0.0884 0.2134 L 0.0191 0.1712 L 0 0.25 L -0.0191 0.1712 L -0.0884 0.2134 L -0.0462 0.1441 L -0.125 0.125 L -0.0462 0.1059 L -0.0884 0.0366 L -0.0191 0.0788 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-circle": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0163 0.0011 L 0.0324 0.0043 L 0.0478 0.0095 L 0.0625 0.0167 L 0.0761 0.0258 L 0.0884 0.0366 L 0.0992 0.0489 L 0.1083 0.0625 L 0.1155 0.0772 L 0.1207 0.0926 L 0.1239 0.1087 L 0.125 0.125 L 0.1239 0.1413 L 0.1207 0.1574 L 0.1155 0.1728 L 0.1083 0.1875 L 0.0992 0.2011 L 0.0884 0.2134 L 0.0761 0.2242 L 0.0625 0.2333 L 0.0478 0.2405 L 0.0324 0.2457 L 0.0163 0.2489 L 0 0.25 L -0.0163 0.2489 L -0.0324 0.2457 L -0.0478 0.2405 L -0.0625 0.2333 L -0.0761 0.2242 L -0.0884 0.2134 L -0.0992 0.2011 L -0.1083 0.1875 L -0.1155 0.1728 L -0.1207 0.1574 L -0.1239 0.1413 L -0.125 0.125 L -0.1239 0.1087 L -0.1207 0.0926 L -0.1155 0.0772 L -0.1083 0.0625 L -0.0992 0.0489 L -0.0884 0.0366 L -0.0761 0.0258 L -0.0625 0.0167 L -0.0478 0.0095 L -0.0324 0.0043 L -0.0163 0.0011 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-crescent-moon": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0163 0.0011 L 0.0324 0.0043 L 0.0478 0.0095 L 0.0625 0.0167 L 0.0761 0.0258 L 0.0884 0.0366 L 0.0992 0.0489 L 0.1083 0.0625 L 0.1155 0.0772 L 0.1207 0.0926 L 0.1239 0.1087 L 0.125 0.125 L 0.1239 0.1413 L 0.1207 0.1574 L 0.1155 0.1728 L 0.1083 0.1875 L 0.0992 0.2011 L 0.0884 0.2134 L 0.0761 0.2242 L 0.0625 0.2333 L 0.0478 0.2405 L 0.0324 0.2457 L 0.0163 0.2489 L 0 0.25 L -0.0082 0.2489 L -0.0162 0.2457 L -0.0239 0.2405 L -0.0313 0.2333 L -0.038 0.2242 L -0.0442 0.2134 L -0.0496 0.2011 L -0.0541 0.1875 L -0.0577 0.1728 L -0.0604 0.1574 L -0.062 0.1413 L -0.0625 0.125 L -0.062 0.1087 L -0.0604 0.0926 L -0.0577 0.0772 L -0.0541 0.0625 L -0.0496 0.0489 L -0.0442 0.0366 L -0.038 0.0258 L -0.0313 0.0167 L -0.0239 0.0095 L -0.0162 0.0043 L -0.0082 0.0011 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-diamond": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.125 0.125 L 0 0.25 L -0.125 0.125 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-equal-triangle": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.1083 0.1875 L -0.1083 0.1875 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-football": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0163 0.0005 L 0.0324 0.0021 L 0.0478 0.0048 L 0.0625 0.0084 L 0.0761 0.0129 L 0.0884 0.0183 L 0.0992 0.0245 L 0.1083 0.0312 L 0.1155 0.0386 L 0.1207 0.0463 L 0.1239 0.0543 L 0.125 0.0625 L 0.1239 0.0707 L 0.1207 0.0787 L 0.1155 0.0864 L 0.1083 0.0937 L 0.0992 0.1005 L 0.0884 0.1067 L 0.0761 0.1121 L 0.0625 0.1166 L 0.0478 0.1202 L 0.0324 0.1229 L 0.0163 0.1245 L 0 0.125 L -0.0163 0.1245 L -0.0324 0.1229 L -0.0478 0.1202 L -0.0625 0.1166 L -0.0761 0.1121 L -0.0884 0.1067 L -0.0992 0.1005 L -0.1083 0.0938 L -0.1155 0.0864 L -0.1207 0.0787 L -0.1239 0.0707 L -0.125 0.0625 L -0.1239 0.0543 L -0.1207 0.0463 L -0.1155 0.0386 L -0.1083 0.0312 L -0.0992 0.0245 L -0.0884 0.0183 L -0.0761 0.0129 L -0.0625 0.0084 L -0.0478 0.0048 L -0.0324 0.0021 L -0.0163 0.0005 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-heart": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0001 -0.0015 L 0.0009 -0.0057 L 0.0029 -0.0122 L 0.0067 -0.0203 L 0.0126 -0.0291 L 0.0206 -0.0374 L 0.0306 -0.0446 L 0.0424 -0.0495 L 0.0554 -0.0518 L 0.069 -0.051 L 0.0823 -0.0471 L 0.0946 -0.0402 L 0.1052 -0.0307 L 0.1132 -0.0192 L 0.1183 -0.0063 L 0.12 0.0075 L 0.1183 0.0216 L 0.1132 0.0355 L 0.1052 0.0491 L 0.0946 0.0622 L 0.0823 0.0747 L 0.069 0.0867 L 0.0554 0.0983 L 0.0424 0.1095 L 0.0306 0.1203 L 0.0206 0.1305 L 0.0126 0.14 L 0.0067 0.1484 L 0.0029 0.1553 L 0.0009 0.1606 L 0.0001 0.1639 L 0 0.165 L -0.0001 0.1639 L -0.0009 0.1606 L -0.0029 0.1553 L -0.0067 0.1484 L -0.0126 0.14 L -0.0206 0.1305 L -0.0306 0.1203 L -0.0424 0.1095 L -0.0554 0.0983 L -0.069 0.0867 L -0.0823 0.0747 L -0.0946 0.0622 L -0.1052 0.0491 L -0.1132 0.0355 L -0.1183 0.0216 L -0.12 0.0075 L -0.1183 -0.0063 L -0.1132 -0.0192 L -0.1052 -0.0307 L -0.0946 -0.0402 L -0.0823 -0.0471 L -0.069 -0.051 L -0.0554 -0.0518 L -0.0424 -0.0495 L -0.0306 -0.0446 L -0.0206 -0.0374 L -0.0126 -0.0291 L -0.0067 -0.0203 L -0.0029 -0.0122 L -0.0009 -0.0057 L -0.0001 -0.0015 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-hexagon": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.1083 0.0625 L 0.1083 0.1875 L 0 0.25 L -0.1083 0.1875 L -0.1083 0.0625 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-octagon": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0884 0.0366 L 0.125 0.125 L 0.0884 0.2134 L 0 0.25 L -0.0884 0.2134 L -0.125 0.125 L -0.0884 0.0366 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-parallelogram": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.25 0 L 0.1875 0.15 L -0.0625 0.15 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-pentagon": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.1189 0.0864 L 0.0735 0.2261 L -0.0735 0.2261 L -0.1189 0.0864 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-right-triangle": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0 0.25 L 0.25 0.25 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-square": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.25 0 L 0.25 0.25 L 0 0.25 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-teardrop": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0011 0.0011 L 0.0042 0.0043 L 0.0093 0.0095 L 0.0162 0.0167 L 0.0245 0.0258 L 0.0338 0.0366 L 0.0439 0.0489 L 0.0541 0.0625 L 0.0642 0.0772 L 0.0735 0.0926 L 0.0817 0.1087 L 0.0884 0.125 L 0.0932 0.1413 L 0.0958 0.1574 L 0.096 0.1728 L 0.0938 0.1875 L 0.0889 0.2011 L 0.0817 0.2134 L 0.0721 0.2242 L 0.0604 0.2333 L 0.0469 0.2405 L 0.0321 0.2457 L 0.0163 0.2489 L 0 0.25 L -0.0163 0.2489 L -0.0321 0.2457 L -0.0469 0.2405 L -0.0604 0.2333 L -0.0721 0.2242 L -0.0817 0.2134 L -0.0889 0.2011 L -0.0937 0.1875 L -0.096 0.1728 L -0.0958 0.1574 L -0.0932 0.1413 L -0.0884 0.125 L -0.0817 0.1087 L -0.0735 0.0926 L -0.0642 0.0772 L -0.0541 0.0625 L -0.0439 0.0489 L -0.0338 0.0366 L -0.0245 0.0258 L -0.0162 0.0167 L -0.0093 0.0095 L -0.0042 0.0043 L -0.0011 0.0011 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-trapezoid": {
+  "cls": "emph",
+  "group": "basic",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.15 0 L 0.2 0.15 L -0.05 0.15 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-arc-down": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0052 0.0082 L 0.0104 0.0163 L 0.0156 0.0244 L 0.0208 0.0324 L 0.026 0.0402 L 0.0313 0.0478 L 0.0365 0.0553 L 0.0417 0.0625 L 0.0469 0.0694 L 0.0521 0.0761 L 0.0573 0.0824 L 0.0625 0.0884 L 0.0677 0.094 L 0.0729 0.0992 L 0.0781 0.1039 L 0.0833 0.1083 L 0.0885 0.1121 L 0.0938 0.1155 L 0.099 0.1184 L 0.1042 0.1207 L 0.1094 0.1226 L 0.1146 0.1239 L 0.1198 0.1247 L 0.125 0.125 L 0.1302 0.1247 L 0.1354 0.1239 L 0.1406 0.1226 L 0.1458 0.1207 L 0.151 0.1184 L 0.1563 0.1155 L 0.1615 0.1121 L 0.1667 0.1083 L 0.1719 0.1039 L 0.1771 0.0992 L 0.1823 0.094 L 0.1875 0.0884 L 0.1927 0.0824 L 0.1979 0.0761 L 0.2031 0.0694 L 0.2083 0.0625 L 0.2135 0.0553 L 0.2188 0.0478 L 0.224 0.0402 L 0.2292 0.0324 L 0.2344 0.0244 L 0.2396 0.0163 L 0.2448 0.0082 L 0.25 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-arc-left": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0082 0.0052 L -0.0163 0.0104 L -0.0244 0.0156 L -0.0324 0.0208 L -0.0402 0.026 L -0.0478 0.0313 L -0.0553 0.0365 L -0.0625 0.0417 L -0.0694 0.0469 L -0.0761 0.0521 L -0.0824 0.0573 L -0.0884 0.0625 L -0.094 0.0677 L -0.0992 0.0729 L -0.1039 0.0781 L -0.1083 0.0833 L -0.1121 0.0885 L -0.1155 0.0938 L -0.1184 0.099 L -0.1207 0.1042 L -0.1226 0.1094 L -0.1239 0.1146 L -0.1247 0.1198 L -0.125 0.125 L -0.1247 0.1302 L -0.1239 0.1354 L -0.1226 0.1406 L -0.1207 0.1458 L -0.1184 0.151 L -0.1155 0.1563 L -0.1121 0.1615 L -0.1083 0.1667 L -0.1039 0.1719 L -0.0992 0.1771 L -0.094 0.1823 L -0.0884 0.1875 L -0.0824 0.1927 L -0.0761 0.1979 L -0.0694 0.2031 L -0.0625 0.2083 L -0.0553 0.2135 L -0.0478 0.2188 L -0.0402 0.224 L -0.0324 0.2292 L -0.0244 0.2344 L -0.0163 0.2396 L -0.0082 0.2448 L 0 0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-arc-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0082 0.0052 L 0.0163 0.0104 L 0.0244 0.0156 L 0.0324 0.0208 L 0.0402 0.026 L 0.0478 0.0313 L 0.0553 0.0365 L 0.0625 0.0417 L 0.0694 0.0469 L 0.0761 0.0521 L 0.0824 0.0573 L 0.0884 0.0625 L 0.094 0.0677 L 0.0992 0.0729 L 0.1039 0.0781 L 0.1083 0.0833 L 0.1121 0.0885 L 0.1155 0.0938 L 0.1184 0.099 L 0.1207 0.1042 L 0.1226 0.1094 L 0.1239 0.1146 L 0.1247 0.1198 L 0.125 0.125 L 0.1247 0.1302 L 0.1239 0.1354 L 0.1226 0.1406 L 0.1207 0.1458 L 0.1184 0.151 L 0.1155 0.1563 L 0.1121 0.1615 L 0.1083 0.1667 L 0.1039 0.1719 L 0.0992 0.1771 L 0.094 0.1823 L 0.0884 0.1875 L 0.0824 0.1927 L 0.0761 0.1979 L 0.0694 0.2031 L 0.0625 0.2083 L 0.0553 0.2135 L 0.0478 0.2188 L 0.0402 0.224 L 0.0324 0.2292 L 0.0244 0.2344 L 0.0163 0.2396 L 0.0082 0.2448 L 0 0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-arc-up": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0052 -0.0082 L 0.0104 -0.0163 L 0.0156 -0.0244 L 0.0208 -0.0324 L 0.026 -0.0402 L 0.0313 -0.0478 L 0.0365 -0.0553 L 0.0417 -0.0625 L 0.0469 -0.0694 L 0.0521 -0.0761 L 0.0573 -0.0824 L 0.0625 -0.0884 L 0.0677 -0.094 L 0.0729 -0.0992 L 0.0781 -0.1039 L 0.0833 -0.1083 L 0.0885 -0.1121 L 0.0938 -0.1155 L 0.099 -0.1184 L 0.1042 -0.1207 L 0.1094 -0.1226 L 0.1146 -0.1239 L 0.1198 -0.1247 L 0.125 -0.125 L 0.1302 -0.1247 L 0.1354 -0.1239 L 0.1406 -0.1226 L 0.1458 -0.1207 L 0.151 -0.1184 L 0.1563 -0.1155 L 0.1615 -0.1121 L 0.1667 -0.1083 L 0.1719 -0.1039 L 0.1771 -0.0992 L 0.1823 -0.094 L 0.1875 -0.0884 L 0.1927 -0.0824 L 0.1979 -0.0761 L 0.2031 -0.0694 L 0.2083 -0.0625 L 0.2135 -0.0553 L 0.2188 -0.0478 L 0.224 -0.0402 L 0.2292 -0.0324 L 0.2344 -0.0244 L 0.2396 -0.0163 L 0.2448 -0.0082 L 0.25 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-bounce-left": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0069 -0.0161 L -0.0139 -0.0315 L -0.0208 -0.0458 L -0.0278 -0.059 L -0.0347 -0.0708 L -0.0417 -0.081 L -0.0486 -0.0895 L -0.0556 -0.0962 L -0.0625 -0.101 L -0.0694 -0.104 L -0.0764 -0.105 L -0.0833 -0.1042 L -0.0903 -0.1016 L -0.0972 -0.0973 L -0.1042 -0.0914 L -0.1111 -0.0842 L -0.1181 -0.0758 L -0.125 -0.0663 L -0.1319 -0.056 L -0.1389 -0.0451 L -0.1458 -0.0339 L -0.1528 -0.0225 L -0.1597 -0.0111 L -0.1667 0 L -0.1736 -0.0107 L -0.1806 -0.0207 L -0.1875 -0.0299 L -0.1944 -0.0382 L -0.2014 -0.0454 L -0.2083 -0.0516 L -0.2153 -0.0565 L -0.2222 -0.0601 L -0.2292 -0.0626 L -0.2361 -0.0637 L -0.2431 -0.0637 L -0.25 -0.0625 L -0.2569 -0.0602 L -0.2639 -0.057 L -0.2708 -0.0529 L -0.2778 -0.0481 L -0.2847 -0.0427 L -0.2917 -0.0368 L -0.2986 -0.0306 L -0.3056 -0.0243 L -0.3125 -0.0179 L -0.3194 -0.0117 L -0.3264 -0.0057 L -0.3333 0 L -0.3403 -0.0052 L -0.3472 -0.0099 L -0.3542 -0.014 L -0.3611 -0.0174 L -0.3681 -0.0201 L -0.375 -0.0221 L -0.3819 -0.0234 L -0.3889 -0.0241 L -0.3958 -0.0241 L -0.4028 -0.0235 L -0.4097 -0.0224 L -0.4167 -0.0208 L -0.4236 -0.0189 L -0.4306 -0.0168 L -0.4375 -0.0144 L -0.4444 -0.012 L -0.4514 -0.0096 L -0.4583 -0.0074 L -0.4653 -0.0053 L -0.4722 -0.0035 L -0.4792 -0.002 L -0.4861 -0.0009 L -0.4931 -0.0002 L -0.5 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-bounce-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0069 -0.0161 L 0.0139 -0.0315 L 0.0208 -0.0458 L 0.0278 -0.059 L 0.0347 -0.0708 L 0.0417 -0.081 L 0.0486 -0.0895 L 0.0556 -0.0962 L 0.0625 -0.101 L 0.0694 -0.104 L 0.0764 -0.105 L 0.0833 -0.1042 L 0.0903 -0.1016 L 0.0972 -0.0973 L 0.1042 -0.0914 L 0.1111 -0.0842 L 0.1181 -0.0758 L 0.125 -0.0663 L 0.1319 -0.056 L 0.1389 -0.0451 L 0.1458 -0.0339 L 0.1528 -0.0225 L 0.1597 -0.0111 L 0.1667 0 L 0.1736 -0.0107 L 0.1806 -0.0207 L 0.1875 -0.0299 L 0.1944 -0.0382 L 0.2014 -0.0454 L 0.2083 -0.0516 L 0.2153 -0.0565 L 0.2222 -0.0601 L 0.2292 -0.0626 L 0.2361 -0.0637 L 0.2431 -0.0637 L 0.25 -0.0625 L 0.2569 -0.0602 L 0.2639 -0.057 L 0.2708 -0.0529 L 0.2778 -0.0481 L 0.2847 -0.0427 L 0.2917 -0.0368 L 0.2986 -0.0306 L 0.3056 -0.0243 L 0.3125 -0.0179 L 0.3194 -0.0117 L 0.3264 -0.0057 L 0.3333 0 L 0.3403 -0.0052 L 0.3472 -0.0099 L 0.3542 -0.014 L 0.3611 -0.0174 L 0.3681 -0.0201 L 0.375 -0.0221 L 0.3819 -0.0234 L 0.3889 -0.0241 L 0.3958 -0.0241 L 0.4028 -0.0235 L 0.4097 -0.0224 L 0.4167 -0.0208 L 0.4236 -0.0189 L 0.4306 -0.0168 L 0.4375 -0.0144 L 0.4444 -0.012 L 0.4514 -0.0096 L 0.4583 -0.0074 L 0.4653 -0.0053 L 0.4722 -0.0035 L 0.4792 -0.002 L 0.4861 -0.0009 L 0.4931 -0.0002 L 0.5 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-curvy-left": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0104 0.0082 L -0.0208 0.0162 L -0.0313 0.0239 L -0.0417 0.0312 L -0.0521 0.038 L -0.0625 0.0442 L -0.0729 0.0496 L -0.0833 0.0541 L -0.0938 0.0577 L -0.1042 0.0604 L -0.1146 0.062 L -0.125 0.0625 L -0.1354 0.062 L -0.1458 0.0604 L -0.1563 0.0577 L -0.1667 0.0541 L -0.1771 0.0496 L -0.1875 0.0442 L -0.1979 0.038 L -0.2083 0.0312 L -0.2188 0.0239 L -0.2292 0.0162 L -0.2396 0.0082 L -0.25 0 L -0.2604 -0.0082 L -0.2708 -0.0162 L -0.2813 -0.0239 L -0.2917 -0.0313 L -0.3021 -0.038 L -0.3125 -0.0442 L -0.3229 -0.0496 L -0.3333 -0.0541 L -0.3438 -0.0577 L -0.3542 -0.0604 L -0.3646 -0.062 L -0.375 -0.0625 L -0.3854 -0.062 L -0.3958 -0.0604 L -0.4063 -0.0577 L -0.4167 -0.0541 L -0.4271 -0.0496 L -0.4375 -0.0442 L -0.4479 -0.038 L -0.4583 -0.0313 L -0.4688 -0.0239 L -0.4792 -0.0162 L -0.4896 -0.0082 L -0.5 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-curvy-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0104 0.0082 L 0.0208 0.0162 L 0.0313 0.0239 L 0.0417 0.0312 L 0.0521 0.038 L 0.0625 0.0442 L 0.0729 0.0496 L 0.0833 0.0541 L 0.0938 0.0577 L 0.1042 0.0604 L 0.1146 0.062 L 0.125 0.0625 L 0.1354 0.062 L 0.1458 0.0604 L 0.1563 0.0577 L 0.1667 0.0541 L 0.1771 0.0496 L 0.1875 0.0442 L 0.1979 0.038 L 0.2083 0.0312 L 0.2188 0.0239 L 0.2292 0.0162 L 0.2396 0.0082 L 0.25 0 L 0.2604 -0.0082 L 0.2708 -0.0162 L 0.2813 -0.0239 L 0.2917 -0.0313 L 0.3021 -0.038 L 0.3125 -0.0442 L 0.3229 -0.0496 L 0.3333 -0.0541 L 0.3438 -0.0577 L 0.3542 -0.0604 L 0.3646 -0.062 L 0.375 -0.0625 L 0.3854 -0.062 L 0.3958 -0.0604 L 0.4063 -0.0577 L 0.4167 -0.0541 L 0.4271 -0.0496 L 0.4375 -0.0442 L 0.4479 -0.038 L 0.4583 -0.0313 L 0.4688 -0.0239 L 0.4792 -0.0162 L 0.4896 -0.0082 L 0.5 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-decaying-wave": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0078 0.0241 L 0.0156 0.0468 L 0.0234 0.0673 L 0.0313 0.0847 L 0.0391 0.0985 L 0.0469 0.1083 L 0.0547 0.1137 L 0.0625 0.1146 L 0.0703 0.1111 L 0.0781 0.1035 L 0.0859 0.092 L 0.0938 0.0773 L 0.1016 0.06 L 0.1094 0.0409 L 0.1172 0.0206 L 0.125 0 L 0.1328 -0.0201 L 0.1406 -0.0389 L 0.1484 -0.0557 L 0.1563 -0.07 L 0.1641 -0.0812 L 0.1719 -0.089 L 0.1797 -0.0932 L 0.1875 -0.0938 L 0.1953 -0.0907 L 0.2031 -0.0842 L 0.2109 -0.0747 L 0.2188 -0.0626 L 0.2266 -0.0485 L 0.2344 -0.0329 L 0.2422 -0.0165 L 0.25 0 L 0.2578 0.016 L 0.2656 0.0309 L 0.2734 0.0441 L 0.2813 0.0552 L 0.2891 0.0639 L 0.2969 0.0698 L 0.3047 0.0728 L 0.3125 0.0729 L 0.3203 0.0702 L 0.3281 0.065 L 0.3359 0.0574 L 0.3438 0.0479 L 0.3516 0.0369 L 0.3594 0.0249 L 0.3672 0.0124 L 0.375 0 L 0.3828 -0.0119 L 0.3906 -0.0229 L 0.3984 -0.0326 L 0.4063 -0.0405 L 0.4141 -0.0466 L 0.4219 -0.0505 L 0.4297 -0.0524 L 0.4375 -0.0521 L 0.4453 -0.0498 L 0.4531 -0.0457 L 0.4609 -0.0401 L 0.4688 -0.0331 L 0.4766 -0.0253 L 0.4844 -0.0169 L 0.4922 -0.0084 L 0.5 0 L 0.5078 0.0079 L 0.5156 0.0149 L 0.5234 0.021 L 0.5313 0.0258 L 0.5391 0.0292 L 0.5469 0.0313 L 0.5547 0.0319 L 0.5625 0.0313 L 0.5703 0.0294 L 0.5781 0.0265 L 0.5859 0.0227 L 0.5938 0.0184 L 0.6016 0.0137 L 0.6094 0.009 L 0.6172 0.0043 L 0.625 0 L 0.6328 -0.0038 L 0.6406 -0.007 L 0.6484 -0.0094 L 0.6563 -0.011 L 0.6641 -0.0119 L 0.6719 -0.012 L 0.6797 -0.0115 L 0.6875 -0.0104 L 0.6953 -0.0089 L 0.7031 -0.0072 L 0.7109 -0.0054 L 0.7188 -0.0037 L 0.7266 -0.0022 L 0.7344 -0.001 L 0.7422 -0.0003 L 0.75 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-diagonal-down-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.25 0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-diagonal-up-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.25 -0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-down": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0 0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-funnel": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0216 0.0009 L 0.0422 0.0007 L 0.0612 -0.0005 L 0.0781 -0.0026 L 0.0924 -0.0056 L 0.1037 -0.0091 L 0.1118 -0.0131 L 0.1163 -0.0175 L 0.1172 -0.0219 L 0.1146 -0.0262 L 0.1085 -0.0302 L 0.0992 -0.0339 L 0.0871 -0.0369 L 0.0725 -0.0391 L 0.056 -0.0406 L 0.038 -0.041 L 0.0191 -0.0406 L 0 -0.0391 L -0.0188 -0.0366 L -0.0368 -0.0331 L -0.0534 -0.0288 L -0.0681 -0.0236 L -0.0805 -0.0178 L -0.0902 -0.0115 L -0.0971 -0.0047 L -0.1009 0.0023 L -0.1016 0.0094 L -0.0992 0.0164 L -0.0938 0.0231 L -0.0857 0.0294 L -0.0751 0.0352 L -0.0625 0.0404 L -0.0482 0.0448 L -0.0327 0.0484 L -0.0164 0.0512 L 0 0.0531 L 0.0161 0.0542 L 0.0315 0.0544 L 0.0456 0.0539 L 0.058 0.0527 L 0.0685 0.0509 L 0.0767 0.0487 L 0.0824 0.0461 L 0.0855 0.0434 L 0.0859 0.0406 L 0.0838 0.0379 L 0.0791 0.0355 L 0.0722 0.0333 L 0.0632 0.0317 L 0.0524 0.0306 L 0.0404 0.0301 L 0.0273 0.0303 L 0.0137 0.0312 L 0 0.0328 L -0.0134 0.0352 L -0.0261 0.0382 L -0.0378 0.0418 L -0.048 0.046 L -0.0565 0.0507 L -0.0631 0.0557 L -0.0677 0.061 L -0.0701 0.0664 L -0.0703 0.0719 L -0.0684 0.0772 L -0.0644 0.0824 L -0.0586 0.0872 L -0.0512 0.0917 L -0.0424 0.0957 L -0.0326 0.0992 L -0.022 0.1021 L -0.011 0.1045 L 0 0.1062 L 0.0107 0.1074 L 0.0208 0.1081 L 0.0299 0.1083 L 0.0379 0.108 L 0.0446 0.1074 L 0.0496 0.1065 L 0.053 0.1054 L 0.0547 0.1043 L 0.0547 0.1031 L 0.053 0.1021 L 0.0498 0.1012 L 0.0451 0.1005 L 0.0392 0.1002 L 0.0324 0.1002 L 0.0247 0.1007 L 0.0166 0.1016 L 0.0083 0.1029 L 0 0.1047 L -0.008 0.1069 L -0.0154 0.1095 L -0.0221 0.1125 L -0.0279 0.1157 L -0.0326 0.1192 L -0.0361 0.1229 L -0.0383 0.1267 L -0.0393 0.1306 L -0.0391 0.1344 L -0.0376 0.1381 L -0.0351 0.1417 L -0.0316 0.1451 L -0.0273 0.1482 L -0.0223 0.151 L -0.0169 0.1536 L -0.0113 0.1558 L -0.0056 0.1578 L 0 0.1594 L 0.0053 0.1607 L 0.0101 0.1618 L 0.0143 0.1627 L 0.0179 0.1633 L 0.0206 0.1639 L 0.0226 0.1643 L 0.0237 0.1647 L 0.0239 0.1652 L 0.0234 0.1656 L 0.0222 0.1662 L 0.0204 0.1669 L 0.018 0.1677 L 0.0153 0.1687 L 0.0123 0.1699 L 0.0091 0.1713 L 0.0059 0.1729 L 0.0029 0.1746 L 0 0.1766 L -0.0026 0.1786 L -0.0048 0.1808 L -0.0065 0.1831 L -0.0078 0.1854 L -0.0086 0.1878 L -0.009 0.1901 L -0.009 0.1924 L -0.0085 0.1947 L -0.0078 0.1969 L -0.0068 0.199 L -0.0057 0.201 L -0.0045 0.2029 L -0.0033 0.2047 L -0.0022 0.2064 L -0.0013 0.208 L -0.0006 0.2095 L -0.0002 0.211 L 0 0.2125 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-heartbeat": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.125 0 L 0.15 -0.125 L 0.1875 0.1 L 0.2125 0 L 0.375 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-left": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.25 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.25 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-s-curve-1": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0163 0.0078 L 0.0324 0.0156 L 0.0478 0.0234 L 0.0625 0.0313 L 0.0761 0.0391 L 0.0884 0.0469 L 0.0992 0.0547 L 0.1083 0.0625 L 0.1155 0.0703 L 0.1207 0.0781 L 0.1239 0.0859 L 0.125 0.0938 L 0.1239 0.1016 L 0.1207 0.1094 L 0.1155 0.1172 L 0.1083 0.125 L 0.0992 0.1328 L 0.0884 0.1406 L 0.0761 0.1484 L 0.0625 0.1563 L 0.0478 0.1641 L 0.0324 0.1719 L 0.0163 0.1797 L 0 0.1875 L -0.0163 0.1953 L -0.0324 0.2031 L -0.0478 0.2109 L -0.0625 0.2188 L -0.0761 0.2266 L -0.0884 0.2344 L -0.0992 0.2422 L -0.1083 0.25 L -0.1155 0.2578 L -0.1207 0.2656 L -0.1239 0.2734 L -0.125 0.2813 L -0.1239 0.2891 L -0.1207 0.2969 L -0.1155 0.3047 L -0.1083 0.3125 L -0.0992 0.3203 L -0.0884 0.3281 L -0.0761 0.3359 L -0.0625 0.3438 L -0.0478 0.3516 L -0.0324 0.3594 L -0.0163 0.3672 L 0 0.375 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-s-curve-2": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0078 0.0163 L 0.0156 0.0324 L 0.0234 0.0478 L 0.0313 0.0625 L 0.0391 0.0761 L 0.0469 0.0884 L 0.0547 0.0992 L 0.0625 0.1083 L 0.0703 0.1155 L 0.0781 0.1207 L 0.0859 0.1239 L 0.0938 0.125 L 0.1016 0.1239 L 0.1094 0.1207 L 0.1172 0.1155 L 0.125 0.1083 L 0.1328 0.0992 L 0.1406 0.0884 L 0.1484 0.0761 L 0.1563 0.0625 L 0.1641 0.0478 L 0.1719 0.0324 L 0.1797 0.0163 L 0.1875 0 L 0.1953 -0.0163 L 0.2031 -0.0324 L 0.2109 -0.0478 L 0.2188 -0.0625 L 0.2266 -0.0761 L 0.2344 -0.0884 L 0.2422 -0.0992 L 0.25 -0.1083 L 0.2578 -0.1155 L 0.2656 -0.1207 L 0.2734 -0.1239 L 0.2813 -0.125 L 0.2891 -0.1239 L 0.2969 -0.1207 L 0.3047 -0.1155 L 0.3125 -0.1083 L 0.3203 -0.0992 L 0.3281 -0.0884 L 0.3359 -0.0761 L 0.3438 -0.0625 L 0.3516 -0.0478 L 0.3594 -0.0324 L 0.3672 -0.0163 L 0.375 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-sine-wave": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0078 0.0082 L 0.0156 0.0162 L 0.0234 0.0239 L 0.0313 0.0312 L 0.0391 0.038 L 0.0469 0.0442 L 0.0547 0.0496 L 0.0625 0.0541 L 0.0703 0.0577 L 0.0781 0.0604 L 0.0859 0.062 L 0.0938 0.0625 L 0.1016 0.062 L 0.1094 0.0604 L 0.1172 0.0577 L 0.125 0.0541 L 0.1328 0.0496 L 0.1406 0.0442 L 0.1484 0.038 L 0.1563 0.0312 L 0.1641 0.0239 L 0.1719 0.0162 L 0.1797 0.0082 L 0.1875 0 L 0.1953 -0.0082 L 0.2031 -0.0162 L 0.2109 -0.0239 L 0.2188 -0.0313 L 0.2266 -0.038 L 0.2344 -0.0442 L 0.2422 -0.0496 L 0.25 -0.0541 L 0.2578 -0.0577 L 0.2656 -0.0604 L 0.2734 -0.062 L 0.2813 -0.0625 L 0.2891 -0.062 L 0.2969 -0.0604 L 0.3047 -0.0577 L 0.3125 -0.0541 L 0.3203 -0.0496 L 0.3281 -0.0442 L 0.3359 -0.038 L 0.3438 -0.0313 L 0.3516 -0.0239 L 0.3594 -0.0162 L 0.3672 -0.0082 L 0.375 0 L 0.3828 0.0082 L 0.3906 0.0162 L 0.3984 0.0239 L 0.4063 0.0312 L 0.4141 0.038 L 0.4219 0.0442 L 0.4297 0.0496 L 0.4375 0.0541 L 0.4453 0.0577 L 0.4531 0.0604 L 0.4609 0.062 L 0.4688 0.0625 L 0.4766 0.062 L 0.4844 0.0604 L 0.4922 0.0577 L 0.5 0.0541 L 0.5078 0.0496 L 0.5156 0.0442 L 0.5234 0.038 L 0.5313 0.0312 L 0.5391 0.0239 L 0.5469 0.0162 L 0.5547 0.0082 L 0.5625 0 L 0.5703 -0.0082 L 0.5781 -0.0162 L 0.5859 -0.0239 L 0.5938 -0.0312 L 0.6016 -0.038 L 0.6094 -0.0442 L 0.6172 -0.0496 L 0.625 -0.0541 L 0.6328 -0.0577 L 0.6406 -0.0604 L 0.6484 -0.062 L 0.6563 -0.0625 L 0.6641 -0.062 L 0.6719 -0.0604 L 0.6797 -0.0577 L 0.6875 -0.0541 L 0.6953 -0.0496 L 0.7031 -0.0442 L 0.7109 -0.038 L 0.7188 -0.0312 L 0.7266 -0.0239 L 0.7344 -0.0162 L 0.7422 -0.0082 L 0.75 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-spiral-left": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0001 -0.0009 L -0.0004 -0.0017 L -0.001 -0.0024 L -0.0017 -0.003 L -0.0026 -0.0034 L -0.0037 -0.0037 L -0.0048 -0.0037 L -0.006 -0.0035 L -0.0072 -0.003 L -0.0084 -0.0022 L -0.0095 -0.0012 L -0.0104 0 L -0.0112 0.0015 L -0.0117 0.0031 L -0.012 0.005 L -0.012 0.0069 L -0.0117 0.009 L -0.011 0.011 L -0.01 0.0131 L -0.0087 0.015 L -0.007 0.0168 L -0.0049 0.0184 L -0.0026 0.0198 L 0 0.0208 L 0.0028 0.0215 L 0.0058 0.0218 L 0.009 0.0217 L 0.0122 0.021 L 0.0153 0.02 L 0.0184 0.0184 L 0.0213 0.0164 L 0.0241 0.0139 L 0.0265 0.011 L 0.0285 0.0076 L 0.0301 0.004 L 0.0313 0 L 0.0318 -0.0042 L 0.0319 -0.0085 L 0.0313 -0.013 L 0.0301 -0.0174 L 0.0282 -0.0217 L 0.0258 -0.0258 L 0.0227 -0.0296 L 0.0191 -0.0331 L 0.0149 -0.0361 L 0.0103 -0.0386 L 0.0053 -0.0404 L 0 -0.0417 L -0.0056 -0.0422 L -0.0112 -0.0419 L -0.0169 -0.0409 L -0.0226 -0.0391 L -0.028 -0.0365 L -0.0331 -0.0331 L -0.0379 -0.0291 L -0.0421 -0.0243 L -0.0457 -0.0189 L -0.0486 -0.013 L -0.0508 -0.0067 L -0.0521 0 L -0.0525 0.0069 L -0.052 0.0139 L -0.0505 0.0209 L -0.0481 0.0278 L -0.0448 0.0343 L -0.0405 0.0405 L -0.0354 0.0461 L -0.0295 0.0511 L -0.0229 0.0553 L -0.0157 0.0587 L -0.008 0.0611 L 0 0.0625 L 0.0083 0.0628 L 0.0166 0.062 L 0.0249 0.0601 L 0.033 0.0571 L 0.0407 0.053 L 0.0479 0.0479 L 0.0544 0.0417 L 0.0601 0.0347 L 0.065 0.0269 L 0.0688 0.0184 L 0.0714 0.0094 L 0.0729 0 L 0.0732 -0.0096 L 0.0721 -0.0193 L 0.0698 -0.0289 L 0.0662 -0.0382 L 0.0613 -0.047 L 0.0552 -0.0552 L 0.0481 -0.0627 L 0.0399 -0.0692 L 0.0309 -0.0746 L 0.0211 -0.0788 L 0.0108 -0.0818 L 0 -0.0833 L -0.011 -0.0835 L -0.022 -0.0822 L -0.0329 -0.0794 L -0.0434 -0.0752 L -0.0534 -0.0696 L -0.0626 -0.0626 L -0.0709 -0.0544 L -0.0782 -0.0451 L -0.0842 -0.0349 L -0.0889 -0.0238 L -0.0921 -0.0121 L -0.0938 0 L -0.0938 0.0124 L -0.0922 0.0247 L -0.089 0.0369 L -0.0842 0.0486 L -0.0778 0.0597 L -0.07 0.07 L -0.0608 0.0792 L -0.0503 0.0872 L -0.0389 0.0938 L -0.0265 0.0989 L -0.0135 0.1024 L 0 0.1042 L 0.0137 0.1041 L 0.0274 0.1023 L 0.0409 0.0986 L 0.0538 0.0932 L 0.0661 0.0861 L 0.0773 0.0773 L 0.0875 0.0671 L 0.0962 0.0556 L 0.1035 0.0429 L 0.109 0.0292 L 0.1127 0.0148 L 0.1146 0 L 0.1145 -0.0151 L 0.1124 -0.0301 L 0.1083 -0.0448 L 0.1022 -0.059 L 0.0943 -0.0724 L 0.0847 -0.0847 L 0.0735 -0.0957 L 0.0608 -0.1052 L 0.0468 -0.1131 L 0.0319 -0.1191 L 0.0162 -0.1231 L 0 -0.125 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-spiral-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0001 -0.0009 L 0.0004 -0.0017 L 0.001 -0.0024 L 0.0017 -0.003 L 0.0026 -0.0034 L 0.0037 -0.0037 L 0.0048 -0.0037 L 0.006 -0.0035 L 0.0072 -0.003 L 0.0084 -0.0022 L 0.0095 -0.0012 L 0.0104 0 L 0.0112 0.0015 L 0.0117 0.0031 L 0.012 0.005 L 0.012 0.0069 L 0.0117 0.009 L 0.011 0.011 L 0.01 0.0131 L 0.0087 0.015 L 0.007 0.0168 L 0.0049 0.0184 L 0.0026 0.0198 L 0 0.0208 L -0.0028 0.0215 L -0.0058 0.0218 L -0.009 0.0217 L -0.0122 0.021 L -0.0153 0.02 L -0.0184 0.0184 L -0.0213 0.0164 L -0.0241 0.0139 L -0.0265 0.011 L -0.0285 0.0076 L -0.0301 0.004 L -0.0313 0 L -0.0318 -0.0042 L -0.0319 -0.0085 L -0.0313 -0.013 L -0.0301 -0.0174 L -0.0282 -0.0217 L -0.0258 -0.0258 L -0.0227 -0.0296 L -0.0191 -0.0331 L -0.0149 -0.0361 L -0.0103 -0.0386 L -0.0053 -0.0404 L 0 -0.0417 L 0.0056 -0.0422 L 0.0112 -0.0419 L 0.0169 -0.0409 L 0.0226 -0.0391 L 0.028 -0.0365 L 0.0331 -0.0331 L 0.0379 -0.0291 L 0.0421 -0.0243 L 0.0457 -0.0189 L 0.0486 -0.013 L 0.0508 -0.0067 L 0.0521 0 L 0.0525 0.0069 L 0.052 0.0139 L 0.0505 0.0209 L 0.0481 0.0278 L 0.0448 0.0343 L 0.0405 0.0405 L 0.0354 0.0461 L 0.0295 0.0511 L 0.0229 0.0553 L 0.0157 0.0587 L 0.008 0.0611 L 0 0.0625 L -0.0083 0.0628 L -0.0166 0.062 L -0.0249 0.0601 L -0.033 0.0571 L -0.0407 0.053 L -0.0479 0.0479 L -0.0544 0.0417 L -0.0601 0.0347 L -0.065 0.0269 L -0.0688 0.0184 L -0.0714 0.0094 L -0.0729 0 L -0.0732 -0.0096 L -0.0721 -0.0193 L -0.0698 -0.0289 L -0.0662 -0.0382 L -0.0613 -0.047 L -0.0552 -0.0552 L -0.0481 -0.0627 L -0.0399 -0.0692 L -0.0309 -0.0746 L -0.0211 -0.0788 L -0.0108 -0.0818 L 0 -0.0833 L 0.011 -0.0835 L 0.022 -0.0822 L 0.0329 -0.0794 L 0.0434 -0.0752 L 0.0534 -0.0696 L 0.0626 -0.0626 L 0.0709 -0.0544 L 0.0782 -0.0451 L 0.0842 -0.0349 L 0.0889 -0.0238 L 0.0921 -0.0121 L 0.0938 0 L 0.0938 0.0124 L 0.0922 0.0247 L 0.089 0.0369 L 0.0842 0.0486 L 0.0778 0.0597 L 0.07 0.07 L 0.0608 0.0792 L 0.0503 0.0872 L 0.0389 0.0938 L 0.0265 0.0989 L 0.0135 0.1024 L 0 0.1042 L -0.0137 0.1041 L -0.0274 0.1023 L -0.0409 0.0986 L -0.0538 0.0932 L -0.0661 0.0861 L -0.0773 0.0773 L -0.0875 0.0671 L -0.0962 0.0556 L -0.1035 0.0429 L -0.109 0.0292 L -0.1127 0.0148 L -0.1146 0 L -0.1145 -0.0151 L -0.1124 -0.0301 L -0.1083 -0.0448 L -0.1022 -0.059 L -0.0943 -0.0724 L -0.0847 -0.0847 L -0.0735 -0.0957 L -0.0608 -0.1052 L -0.0468 -0.1131 L -0.0319 -0.1191 L -0.0162 -0.1231 L 0 -0.125 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-spring": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0135 0.0026 L 0.0264 0.0052 L 0.038 0.0078 L 0.0479 0.0104 L 0.0554 0.013 L 0.0604 0.0156 L 0.0624 0.0182 L 0.0616 0.0208 L 0.0577 0.0234 L 0.0512 0.026 L 0.0422 0.0286 L 0.0313 0.0313 L 0.0188 0.0339 L 0.0054 0.0365 L -0.0082 0.0391 L -0.0214 0.0417 L -0.0336 0.0443 L -0.0442 0.0469 L -0.0527 0.0495 L -0.0587 0.0521 L -0.062 0.0547 L -0.0623 0.0573 L -0.0596 0.0599 L -0.0541 0.0625 L -0.0461 0.0651 L -0.0358 0.0677 L -0.0239 0.0703 L -0.0109 0.0729 L 0.0027 0.0755 L 0.0162 0.0781 L 0.0289 0.0807 L 0.0402 0.0833 L 0.0496 0.0859 L 0.0566 0.0885 L 0.061 0.0911 L 0.0625 0.0938 L 0.061 0.0964 L 0.0566 0.099 L 0.0496 0.1016 L 0.0402 0.1042 L 0.0289 0.1068 L 0.0162 0.1094 L 0.0027 0.112 L -0.0109 0.1146 L -0.0239 0.1172 L -0.0358 0.1198 L -0.0461 0.1224 L -0.0541 0.125 L -0.0596 0.1276 L -0.0623 0.1302 L -0.062 0.1328 L -0.0587 0.1354 L -0.0527 0.138 L -0.0442 0.1406 L -0.0336 0.1432 L -0.0214 0.1458 L -0.0082 0.1484 L 0.0054 0.151 L 0.0188 0.1536 L 0.0313 0.1563 L 0.0422 0.1589 L 0.0512 0.1615 L 0.0577 0.1641 L 0.0616 0.1667 L 0.0624 0.1693 L 0.0604 0.1719 L 0.0554 0.1745 L 0.0479 0.1771 L 0.038 0.1797 L 0.0264 0.1823 L 0.0135 0.1849 L 0 0.1875 L -0.0135 0.1901 L -0.0264 0.1927 L -0.038 0.1953 L -0.0479 0.1979 L -0.0554 0.2005 L -0.0604 0.2031 L -0.0624 0.2057 L -0.0616 0.2083 L -0.0577 0.2109 L -0.0512 0.2135 L -0.0422 0.2161 L -0.0313 0.2188 L -0.0188 0.2214 L -0.0054 0.224 L 0.0082 0.2266 L 0.0214 0.2292 L 0.0336 0.2318 L 0.0442 0.2344 L 0.0527 0.237 L 0.0587 0.2396 L 0.062 0.2422 L 0.0623 0.2448 L 0.0596 0.2474 L 0.0541 0.25 L 0.0461 0.2526 L 0.0358 0.2552 L 0.0239 0.2578 L 0.0109 0.2604 L -0.0027 0.263 L -0.0162 0.2656 L -0.0289 0.2682 L -0.0402 0.2708 L -0.0496 0.2734 L -0.0566 0.276 L -0.061 0.2786 L -0.0625 0.2813 L -0.061 0.2839 L -0.0566 0.2865 L -0.0496 0.2891 L -0.0402 0.2917 L -0.0289 0.2943 L -0.0162 0.2969 L -0.0027 0.2995 L 0.0109 0.3021 L 0.0239 0.3047 L 0.0358 0.3073 L 0.0461 0.3099 L 0.0541 0.3125 L 0.0596 0.3151 L 0.0623 0.3177 L 0.062 0.3203 L 0.0587 0.3229 L 0.0527 0.3255 L 0.0442 0.3281 L 0.0336 0.3307 L 0.0214 0.3333 L 0.0082 0.3359 L -0.0054 0.3385 L -0.0188 0.3411 L -0.0312 0.3438 L -0.0422 0.3464 L -0.0512 0.349 L -0.0577 0.3516 L -0.0616 0.3542 L -0.0624 0.3568 L -0.0604 0.3594 L -0.0554 0.362 L -0.0479 0.3646 L -0.038 0.3672 L -0.0264 0.3698 L -0.0135 0.3724 L 0 0.375 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-stairs-down": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0833 0 L 0.0833 0.0833 L 0.1667 0.0833 L 0.1667 0.1667 L 0.25 0.1667 L 0.25 0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-turn-down": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0082 0.0001 L 0.0164 0.0005 L 0.0245 0.0012 L 0.0326 0.0021 L 0.0407 0.0033 L 0.0488 0.0048 L 0.0568 0.0065 L 0.0647 0.0085 L 0.0726 0.0108 L 0.0804 0.0133 L 0.0881 0.016 L 0.0957 0.019 L 0.1032 0.0223 L 0.1106 0.0258 L 0.1178 0.0295 L 0.125 0.0335 L 0.132 0.0377 L 0.1389 0.0421 L 0.1456 0.0468 L 0.1522 0.0517 L 0.1586 0.0567 L 0.1648 0.062 L 0.1709 0.0675 L 0.1768 0.0732 L 0.1825 0.0791 L 0.188 0.0852 L 0.1933 0.0914 L 0.1983 0.0978 L 0.2032 0.1044 L 0.2079 0.1111 L 0.2123 0.118 L 0.2165 0.125 L 0.2205 0.1322 L 0.2242 0.1394 L 0.2277 0.1468 L 0.231 0.1543 L 0.234 0.1619 L 0.2367 0.1696 L 0.2392 0.1774 L 0.2415 0.1853 L 0.2435 0.1932 L 0.2452 0.2012 L 0.2467 0.2093 L 0.2479 0.2174 L 0.2488 0.2255 L 0.2495 0.2336 L 0.2499 0.2418 L 0.25 0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-turn-down-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0001 0.0082 L 0.0005 0.0164 L 0.0012 0.0245 L 0.0021 0.0326 L 0.0033 0.0407 L 0.0048 0.0488 L 0.0065 0.0568 L 0.0085 0.0647 L 0.0108 0.0726 L 0.0133 0.0804 L 0.016 0.0881 L 0.019 0.0957 L 0.0223 0.1032 L 0.0258 0.1106 L 0.0295 0.1178 L 0.0335 0.125 L 0.0377 0.132 L 0.0421 0.1389 L 0.0468 0.1456 L 0.0517 0.1522 L 0.0567 0.1586 L 0.062 0.1648 L 0.0675 0.1709 L 0.0732 0.1768 L 0.0791 0.1825 L 0.0852 0.188 L 0.0914 0.1933 L 0.0978 0.1983 L 0.1044 0.2032 L 0.1111 0.2079 L 0.118 0.2123 L 0.125 0.2165 L 0.1322 0.2205 L 0.1394 0.2242 L 0.1468 0.2277 L 0.1543 0.231 L 0.1619 0.234 L 0.1696 0.2367 L 0.1774 0.2392 L 0.1853 0.2415 L 0.1932 0.2435 L 0.2012 0.2452 L 0.2093 0.2467 L 0.2174 0.2479 L 0.2255 0.2488 L 0.2336 0.2495 L 0.2418 0.2499 L 0.25 0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-turn-up": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0082 -0.0001 L 0.0164 -0.0005 L 0.0245 -0.0012 L 0.0326 -0.0021 L 0.0407 -0.0033 L 0.0488 -0.0048 L 0.0568 -0.0065 L 0.0647 -0.0085 L 0.0726 -0.0108 L 0.0804 -0.0133 L 0.0881 -0.016 L 0.0957 -0.019 L 0.1032 -0.0223 L 0.1106 -0.0258 L 0.1178 -0.0295 L 0.125 -0.0335 L 0.132 -0.0377 L 0.1389 -0.0421 L 0.1456 -0.0468 L 0.1522 -0.0517 L 0.1586 -0.0567 L 0.1648 -0.062 L 0.1709 -0.0675 L 0.1768 -0.0732 L 0.1825 -0.0791 L 0.188 -0.0852 L 0.1933 -0.0914 L 0.1983 -0.0978 L 0.2032 -0.1044 L 0.2079 -0.1111 L 0.2123 -0.118 L 0.2165 -0.125 L 0.2205 -0.1322 L 0.2242 -0.1394 L 0.2277 -0.1468 L 0.231 -0.1543 L 0.234 -0.1619 L 0.2367 -0.1696 L 0.2392 -0.1774 L 0.2415 -0.1853 L 0.2435 -0.1932 L 0.2452 -0.2012 L 0.2467 -0.2093 L 0.2479 -0.2174 L 0.2488 -0.2255 L 0.2495 -0.2336 L 0.2499 -0.2418 L 0.25 -0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-turn-up-right": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0001 -0.0082 L 0.0005 -0.0164 L 0.0012 -0.0245 L 0.0021 -0.0326 L 0.0033 -0.0407 L 0.0048 -0.0488 L 0.0065 -0.0568 L 0.0085 -0.0647 L 0.0108 -0.0726 L 0.0133 -0.0804 L 0.016 -0.0881 L 0.019 -0.0957 L 0.0223 -0.1032 L 0.0258 -0.1106 L 0.0295 -0.1178 L 0.0335 -0.125 L 0.0377 -0.132 L 0.0421 -0.1389 L 0.0468 -0.1456 L 0.0517 -0.1522 L 0.0567 -0.1586 L 0.062 -0.1648 L 0.0675 -0.1709 L 0.0732 -0.1768 L 0.0791 -0.1825 L 0.0852 -0.188 L 0.0914 -0.1933 L 0.0978 -0.1983 L 0.1044 -0.2032 L 0.1111 -0.2079 L 0.118 -0.2123 L 0.125 -0.2165 L 0.1322 -0.2205 L 0.1394 -0.2242 L 0.1468 -0.2277 L 0.1543 -0.231 L 0.1619 -0.234 L 0.1696 -0.2367 L 0.1774 -0.2392 L 0.1853 -0.2415 L 0.1932 -0.2435 L 0.2012 -0.2452 L 0.2093 -0.2467 L 0.2174 -0.2479 L 0.2255 -0.2488 L 0.2336 -0.2495 L 0.2418 -0.2499 L 0.25 -0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-up": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0 -0.25 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-wave": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0078 0.0081 L 0.0156 0.0159 L 0.0234 0.0231 L 0.0313 0.0295 L 0.0391 0.0346 L 0.0469 0.0385 L 0.0547 0.0409 L 0.0625 0.0417 L 0.0703 0.0409 L 0.0781 0.0385 L 0.0859 0.0346 L 0.0938 0.0295 L 0.1016 0.0231 L 0.1094 0.0159 L 0.1172 0.0081 L 0.125 0 L 0.1328 -0.0081 L 0.1406 -0.0159 L 0.1484 -0.0231 L 0.1563 -0.0295 L 0.1641 -0.0346 L 0.1719 -0.0385 L 0.1797 -0.0409 L 0.1875 -0.0417 L 0.1953 -0.0409 L 0.2031 -0.0385 L 0.2109 -0.0346 L 0.2188 -0.0295 L 0.2266 -0.0231 L 0.2344 -0.0159 L 0.2422 -0.0081 L 0.25 0 L 0.2578 0.0081 L 0.2656 0.0159 L 0.2734 0.0231 L 0.2813 0.0295 L 0.2891 0.0346 L 0.2969 0.0385 L 0.3047 0.0409 L 0.3125 0.0417 L 0.3203 0.0409 L 0.3281 0.0385 L 0.3359 0.0346 L 0.3438 0.0295 L 0.3516 0.0231 L 0.3594 0.0159 L 0.3672 0.0081 L 0.375 0 L 0.3828 -0.0081 L 0.3906 -0.0159 L 0.3984 -0.0231 L 0.4063 -0.0295 L 0.4141 -0.0346 L 0.4219 -0.0385 L 0.4297 -0.0409 L 0.4375 -0.0417 L 0.4453 -0.0409 L 0.4531 -0.0385 L 0.4609 -0.0346 L 0.4688 -0.0295 L 0.4766 -0.0231 L 0.4844 -0.0159 L 0.4922 -0.0081 L 0.5 0 L 0.5078 0.0081 L 0.5156 0.0159 L 0.5234 0.0231 L 0.5313 0.0295 L 0.5391 0.0346 L 0.5469 0.0385 L 0.5547 0.0409 L 0.5625 0.0417 L 0.5703 0.0409 L 0.5781 0.0385 L 0.5859 0.0346 L 0.5938 0.0295 L 0.6016 0.0231 L 0.6094 0.0159 L 0.6172 0.0081 L 0.625 0 L 0.6328 -0.0081 L 0.6406 -0.0159 L 0.6484 -0.0231 L 0.6563 -0.0295 L 0.6641 -0.0346 L 0.6719 -0.0385 L 0.6797 -0.0409 L 0.6875 -0.0417 L 0.6953 -0.0409 L 0.7031 -0.0385 L 0.7109 -0.0346 L 0.7188 -0.0295 L 0.7266 -0.0231 L 0.7344 -0.0159 L 0.7422 -0.0081 L 0.75 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-zigzag": {
+  "cls": "emph",
+  "group": "lines",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0833 -0.0417 L 0.1667 0 L 0.25 -0.0417 L 0.3333 0 L 0.4167 -0.0417 L 0.5 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-bean": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0011 0.0073 L -0.0043 0.0144 L -0.0094 0.021 L -0.0163 0.027 L -0.0246 0.0322 L -0.0339 0.0365 L -0.0439 0.0399 L -0.0543 0.0424 L -0.0647 0.0441 L -0.0748 0.0451 L -0.0844 0.0456 L -0.0935 0.0456 L -0.102 0.0455 L -0.11 0.0453 L -0.1176 0.0451 L -0.125 0.045 L -0.1324 0.0451 L -0.14 0.0453 L -0.148 0.0455 L -0.1565 0.0456 L -0.1656 0.0456 L -0.1752 0.0451 L -0.1853 0.0441 L -0.1957 0.0424 L -0.2061 0.0399 L -0.2161 0.0365 L -0.2254 0.0322 L -0.2337 0.027 L -0.2406 0.021 L -0.2457 0.0144 L -0.2489 0.0073 L -0.25 0 L -0.2489 -0.0073 L -0.2457 -0.0144 L -0.2406 -0.021 L -0.2337 -0.027 L -0.2254 -0.0322 L -0.2161 -0.0365 L -0.2061 -0.0399 L -0.1957 -0.0424 L -0.1853 -0.0441 L -0.1752 -0.0451 L -0.1656 -0.0456 L -0.1565 -0.0456 L -0.148 -0.0455 L -0.14 -0.0453 L -0.1324 -0.0451 L -0.125 -0.045 L -0.1176 -0.0451 L -0.11 -0.0453 L -0.102 -0.0455 L -0.0935 -0.0456 L -0.0844 -0.0456 L -0.0748 -0.0451 L -0.0647 -0.0441 L -0.0543 -0.0424 L -0.0439 -0.0399 L -0.0339 -0.0365 L -0.0246 -0.0322 L -0.0163 -0.027 L -0.0094 -0.021 L -0.0043 -0.0144 L -0.0011 -0.0073 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-buzz-saw": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0067 -0.0029 L 0.0139 -0.0053 L 0.0213 -0.0073 L 0.0291 -0.0087 L 0.0372 -0.0095 L 0.0454 -0.0097 L 0.0539 -0.0093 L 0.05 0.0134 L 0.0573 0.0143 L 0.0647 0.0157 L 0.0721 0.0178 L 0.0795 0.0205 L 0.0869 0.0238 L 0.0942 0.0277 L 0.1013 0.0323 L 0.0866 0.05 L 0.0925 0.0544 L 0.0982 0.0593 L 0.1036 0.0648 L 0.1087 0.0709 L 0.1134 0.0774 L 0.1177 0.0845 L 0.1216 0.092 L 0.1 0.1 L 0.1029 0.1067 L 0.1053 0.1139 L 0.1073 0.1213 L 0.1087 0.1291 L 0.1095 0.1372 L 0.1097 0.1454 L 0.1093 0.1539 L 0.0866 0.15 L 0.0857 0.1573 L 0.0843 0.1647 L 0.0822 0.1721 L 0.0795 0.1795 L 0.0762 0.1869 L 0.0723 0.1942 L 0.0677 0.2013 L 0.05 0.1866 L 0.0456 0.1925 L 0.0407 0.1982 L 0.0352 0.2036 L 0.0291 0.2087 L 0.0226 0.2134 L 0.0155 0.2177 L 0.008 0.2216 L 0 0.2 L -0.0067 0.2029 L -0.0139 0.2053 L -0.0213 0.2073 L -0.0291 0.2087 L -0.0372 0.2095 L -0.0454 0.2097 L -0.0539 0.2093 L -0.05 0.1866 L -0.0573 0.1857 L -0.0647 0.1843 L -0.0721 0.1822 L -0.0795 0.1795 L -0.0869 0.1762 L -0.0942 0.1723 L -0.1013 0.1677 L -0.0866 0.15 L -0.0925 0.1456 L -0.0982 0.1407 L -0.1036 0.1352 L -0.1087 0.1291 L -0.1134 0.1226 L -0.1177 0.1155 L -0.1216 0.108 L -0.1 0.1 L -0.1029 0.0933 L -0.1053 0.0861 L -0.1073 0.0787 L -0.1087 0.0709 L -0.1095 0.0628 L -0.1097 0.0546 L -0.1093 0.0461 L -0.0866 0.05 L -0.0857 0.0427 L -0.0843 0.0353 L -0.0822 0.0279 L -0.0795 0.0205 L -0.0762 0.0131 L -0.0723 0.0058 L -0.0677 -0.0013 L -0.05 0.0134 L -0.0456 0.0075 L -0.0407 0.0018 L -0.0352 -0.0036 L -0.0291 -0.0087 L -0.0226 -0.0134 L -0.0155 -0.0177 L -0.008 -0.0216 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-curved-square": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0003 0.0391 L -0.0012 0.0552 L -0.0027 0.0673 L -0.0049 0.0773 L -0.0076 0.0858 L -0.011 0.0932 L -0.0151 0.0996 L -0.0199 0.1051 L -0.0254 0.1099 L -0.0318 0.114 L -0.0392 0.1174 L -0.0477 0.1201 L -0.0577 0.1223 L -0.0698 0.1238 L -0.0859 0.1247 L -0.125 0.125 L -0.1641 0.1247 L -0.1802 0.1238 L -0.1923 0.1223 L -0.2023 0.1201 L -0.2108 0.1174 L -0.2182 0.114 L -0.2246 0.1099 L -0.2301 0.1051 L -0.2349 0.0996 L -0.239 0.0932 L -0.2424 0.0858 L -0.2451 0.0773 L -0.2473 0.0673 L -0.2488 0.0552 L -0.2497 0.0391 L -0.25 0 L -0.2497 -0.0391 L -0.2488 -0.0552 L -0.2473 -0.0673 L -0.2451 -0.0773 L -0.2424 -0.0858 L -0.239 -0.0932 L -0.2349 -0.0996 L -0.2301 -0.1051 L -0.2246 -0.1099 L -0.2182 -0.114 L -0.2108 -0.1174 L -0.2023 -0.1201 L -0.1923 -0.1223 L -0.1802 -0.1238 L -0.1641 -0.1247 L -0.125 -0.125 L -0.0859 -0.1247 L -0.0698 -0.1238 L -0.0577 -0.1223 L -0.0477 -0.1201 L -0.0392 -0.1174 L -0.0318 -0.114 L -0.0254 -0.1099 L -0.0199 -0.1051 L -0.0151 -0.0996 L -0.011 -0.0932 L -0.0076 -0.0858 L -0.0049 -0.0773 L -0.0027 -0.0673 L -0.0012 -0.0552 L -0.0003 -0.0391 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-curved-x": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0123 0.0122 L 0.0244 0.0239 L 0.0363 0.0347 L 0.0478 0.0442 L 0.0589 0.052 L 0.0694 0.0577 L 0.0793 0.0613 L 0.0884 0.0625 L 0.0966 0.0613 L 0.1039 0.0577 L 0.1102 0.052 L 0.1155 0.0442 L 0.1196 0.0347 L 0.1226 0.0239 L 0.1244 0.0122 L 0.125 0 L 0.1244 -0.0122 L 0.1226 -0.0239 L 0.1196 -0.0347 L 0.1155 -0.0442 L 0.1102 -0.052 L 0.1039 -0.0577 L 0.0966 -0.0613 L 0.0884 -0.0625 L 0.0793 -0.0613 L 0.0694 -0.0577 L 0.0589 -0.052 L 0.0478 -0.0442 L 0.0363 -0.0347 L 0.0244 -0.0239 L 0.0123 -0.0122 L 0 0 L -0.0123 0.0122 L -0.0244 0.0239 L -0.0363 0.0347 L -0.0478 0.0442 L -0.0589 0.052 L -0.0694 0.0577 L -0.0793 0.0613 L -0.0884 0.0625 L -0.0966 0.0613 L -0.1039 0.0577 L -0.1102 0.052 L -0.1155 0.0442 L -0.1196 0.0347 L -0.1226 0.0239 L -0.1244 0.0122 L -0.125 0 L -0.1244 -0.0122 L -0.1226 -0.0239 L -0.1196 -0.0347 L -0.1155 -0.0442 L -0.1102 -0.052 L -0.1039 -0.0577 L -0.0966 -0.0613 L -0.0884 -0.0625 L -0.0793 -0.0613 L -0.0694 -0.0577 L -0.0589 -0.052 L -0.0478 -0.0442 L -0.0363 -0.0347 L -0.0244 -0.0239 L -0.0123 -0.0122 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-curvy-star": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.008 0.0023 L 0.0153 0.0088 L 0.0211 0.0187 L 0.0252 0.0311 L 0.0273 0.0445 L 0.028 0.0574 L 0.0278 0.0687 L 0.0275 0.0773 L 0.0282 0.0828 L 0.0306 0.0851 L 0.0355 0.0845 L 0.0431 0.0819 L 0.0533 0.0782 L 0.0655 0.0747 L 0.0788 0.0723 L 0.092 0.0719 L 0.1038 0.0738 L 0.1128 0.0783 L 0.1183 0.0848 L 0.1195 0.093 L 0.1164 0.1018 L 0.1094 0.1106 L 0.0993 0.1185 L 0.0875 0.125 L 0.0753 0.1299 L 0.0641 0.1334 L 0.0552 0.136 L 0.0495 0.1383 L 0.0474 0.1411 L 0.0488 0.1452 L 0.0532 0.1512 L 0.0595 0.1594 L 0.0667 0.1695 L 0.0733 0.1812 L 0.0783 0.1936 L 0.0806 0.2056 L 0.0799 0.2161 L 0.0759 0.2239 L 0.069 0.2283 L 0.06 0.2289 L 0.0496 0.2257 L 0.039 0.2191 L 0.0289 0.2102 L 0.0201 0.2001 L 0.013 0.1904 L 0.0075 0.1823 L 0.0034 0.1769 L 0 0.175 L -0.0034 0.1769 L -0.0075 0.1823 L -0.013 0.1904 L -0.0201 0.2001 L -0.0289 0.2102 L -0.039 0.2191 L -0.0496 0.2257 L -0.06 0.2289 L -0.069 0.2283 L -0.0759 0.2239 L -0.0799 0.2161 L -0.0806 0.2056 L -0.0783 0.1936 L -0.0733 0.1812 L -0.0667 0.1695 L -0.0595 0.1594 L -0.0532 0.1512 L -0.0488 0.1452 L -0.0474 0.1411 L -0.0495 0.1383 L -0.0552 0.136 L -0.0641 0.1334 L -0.0753 0.1299 L -0.0875 0.125 L -0.0993 0.1185 L -0.1094 0.1106 L -0.1164 0.1018 L -0.1195 0.093 L -0.1183 0.0848 L -0.1128 0.0783 L -0.1038 0.0738 L -0.092 0.0719 L -0.0788 0.0723 L -0.0655 0.0747 L -0.0533 0.0782 L -0.0431 0.0819 L -0.0355 0.0845 L -0.0306 0.0851 L -0.0282 0.0828 L -0.0275 0.0773 L -0.0278 0.0687 L -0.028 0.0574 L -0.0273 0.0445 L -0.0252 0.0311 L -0.0211 0.0187 L -0.0153 0.0088 L -0.008 0.0023 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-figure-8-four": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0163 0.0082 L 0.0324 0.0163 L 0.0478 0.0244 L 0.0625 0.0324 L 0.0761 0.0402 L 0.0884 0.0478 L 0.0992 0.0553 L 0.1083 0.0625 L 0.1155 0.0694 L 0.1207 0.0761 L 0.1239 0.0824 L 0.125 0.0884 L 0.1239 0.094 L 0.1207 0.0992 L 0.1155 0.1039 L 0.1083 0.1083 L 0.0992 0.1121 L 0.0884 0.1155 L 0.0761 0.1184 L 0.0625 0.1207 L 0.0478 0.1226 L 0.0324 0.1239 L 0.0163 0.1247 L 0 0.125 L -0.0163 0.1247 L -0.0324 0.1239 L -0.0478 0.1226 L -0.0625 0.1207 L -0.0761 0.1184 L -0.0884 0.1155 L -0.0992 0.1121 L -0.1083 0.1083 L -0.1155 0.1039 L -0.1207 0.0992 L -0.1239 0.094 L -0.125 0.0884 L -0.1239 0.0824 L -0.1207 0.0761 L -0.1155 0.0694 L -0.1083 0.0625 L -0.0992 0.0553 L -0.0884 0.0478 L -0.0761 0.0402 L -0.0625 0.0324 L -0.0478 0.0244 L -0.0324 0.0163 L -0.0163 0.0082 L 0 0 L 0.0163 -0.0082 L 0.0324 -0.0163 L 0.0478 -0.0244 L 0.0625 -0.0324 L 0.0761 -0.0402 L 0.0884 -0.0478 L 0.0992 -0.0553 L 0.1083 -0.0625 L 0.1155 -0.0694 L 0.1207 -0.0761 L 0.1239 -0.0824 L 0.125 -0.0884 L 0.1239 -0.094 L 0.1207 -0.0992 L 0.1155 -0.1039 L 0.1083 -0.1083 L 0.0992 -0.1121 L 0.0884 -0.1155 L 0.0761 -0.1184 L 0.0625 -0.1207 L 0.0478 -0.1226 L 0.0324 -0.1239 L 0.0163 -0.1247 L 0 -0.125 L -0.0163 -0.1247 L -0.0324 -0.1239 L -0.0478 -0.1226 L -0.0625 -0.1207 L -0.0761 -0.1184 L -0.0884 -0.1155 L -0.0992 -0.1121 L -0.1083 -0.1083 L -0.1155 -0.1039 L -0.1207 -0.0992 L -0.1239 -0.094 L -0.125 -0.0884 L -0.1239 -0.0824 L -0.1207 -0.0761 L -0.1155 -0.0694 L -0.1083 -0.0625 L -0.0992 -0.0553 L -0.0884 -0.0478 L -0.0761 -0.0402 L -0.0625 -0.0324 L -0.0478 -0.0244 L -0.0324 -0.0163 L -0.0163 -0.0082 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-horizontal-figure-8": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0123 0.0122 L 0.0244 0.0239 L 0.0363 0.0347 L 0.0478 0.0442 L 0.0589 0.052 L 0.0694 0.0577 L 0.0793 0.0613 L 0.0884 0.0625 L 0.0966 0.0613 L 0.1039 0.0577 L 0.1102 0.052 L 0.1155 0.0442 L 0.1196 0.0347 L 0.1226 0.0239 L 0.1244 0.0122 L 0.125 0 L 0.1244 -0.0122 L 0.1226 -0.0239 L 0.1196 -0.0347 L 0.1155 -0.0442 L 0.1102 -0.052 L 0.1039 -0.0577 L 0.0966 -0.0613 L 0.0884 -0.0625 L 0.0793 -0.0613 L 0.0694 -0.0577 L 0.0589 -0.052 L 0.0478 -0.0442 L 0.0363 -0.0347 L 0.0244 -0.0239 L 0.0123 -0.0122 L 0 0 L -0.0123 0.0122 L -0.0244 0.0239 L -0.0363 0.0347 L -0.0478 0.0442 L -0.0589 0.052 L -0.0694 0.0577 L -0.0793 0.0613 L -0.0884 0.0625 L -0.0966 0.0613 L -0.1039 0.0577 L -0.1102 0.052 L -0.1155 0.0442 L -0.1196 0.0347 L -0.1226 0.0239 L -0.1244 0.0122 L -0.125 0 L -0.1244 -0.0122 L -0.1226 -0.0239 L -0.1196 -0.0347 L -0.1155 -0.0442 L -0.1102 -0.052 L -0.1039 -0.0577 L -0.0966 -0.0613 L -0.0884 -0.0625 L -0.0793 -0.0613 L -0.0694 -0.0577 L -0.0589 -0.052 L -0.0478 -0.0442 L -0.0363 -0.0347 L -0.0244 -0.0239 L -0.0123 -0.0122 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-inverted-square": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0018 0.0001 L -0.0071 0.0009 L -0.0155 0.0031 L -0.0264 0.007 L -0.0393 0.0131 L -0.0531 0.0214 L -0.0673 0.0319 L -0.0808 0.0442 L -0.0931 0.0577 L -0.1036 0.0719 L -0.1119 0.0857 L -0.118 0.0986 L -0.1219 0.1095 L -0.1241 0.1179 L -0.1249 0.1232 L -0.125 0.125 L -0.1251 0.1232 L -0.1259 0.1179 L -0.1281 0.1095 L -0.132 0.0986 L -0.1381 0.0857 L -0.1464 0.0719 L -0.1569 0.0577 L -0.1692 0.0442 L -0.1827 0.0319 L -0.1969 0.0214 L -0.2107 0.0131 L -0.2236 0.007 L -0.2345 0.0031 L -0.2429 0.0009 L -0.2482 0.0001 L -0.25 0 L -0.2482 -0.0001 L -0.2429 -0.0009 L -0.2345 -0.0031 L -0.2236 -0.007 L -0.2107 -0.0131 L -0.1969 -0.0214 L -0.1827 -0.0319 L -0.1692 -0.0442 L -0.1569 -0.0577 L -0.1464 -0.0719 L -0.1381 -0.0857 L -0.132 -0.0986 L -0.1281 -0.1095 L -0.1259 -0.1179 L -0.1251 -0.1232 L -0.125 -0.125 L -0.1249 -0.1232 L -0.1241 -0.1179 L -0.1219 -0.1095 L -0.118 -0.0986 L -0.1119 -0.0857 L -0.1036 -0.0719 L -0.0931 -0.0577 L -0.0808 -0.0442 L -0.0673 -0.0319 L -0.0531 -0.0214 L -0.0393 -0.0131 L -0.0264 -0.007 L -0.0155 -0.0031 L -0.0071 -0.0009 L -0.0018 -0.0001 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-inverted-triangle": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.25 0 L 0.125 0.2125 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-loop-de-loop": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.004 -0.0005 L -0.0078 -0.0021 L -0.0114 -0.0048 L -0.0146 -0.0084 L -0.0172 -0.0129 L -0.0192 -0.0183 L -0.0204 -0.0245 L -0.0208 -0.0312 L -0.0202 -0.0386 L -0.0187 -0.0463 L -0.0161 -0.0543 L -0.0125 -0.0625 L -0.0078 -0.0707 L -0.002 -0.0787 L 0.0048 -0.0864 L 0.0125 -0.0937 L 0.0212 -0.1005 L 0.0308 -0.1067 L 0.0411 -0.1121 L 0.0521 -0.1166 L 0.0636 -0.1202 L 0.0755 -0.1229 L 0.0877 -0.1245 L 0.1 -0.125 L 0.1123 -0.1245 L 0.1245 -0.1229 L 0.1364 -0.1202 L 0.1479 -0.1166 L 0.1589 -0.1121 L 0.1692 -0.1067 L 0.1788 -0.1005 L 0.1875 -0.0938 L 0.1952 -0.0864 L 0.202 -0.0787 L 0.2078 -0.0707 L 0.2125 -0.0625 L 0.2161 -0.0543 L 0.2187 -0.0463 L 0.2202 -0.0386 L 0.2208 -0.0312 L 0.2204 -0.0245 L 0.2192 -0.0183 L 0.2172 -0.0129 L 0.2146 -0.0084 L 0.2114 -0.0048 L 0.2078 -0.0021 L 0.204 -0.0005 L 0.2 0 L 0.196 -0.0005 L 0.1922 -0.0021 L 0.1886 -0.0048 L 0.1854 -0.0084 L 0.1828 -0.0129 L 0.1808 -0.0183 L 0.1796 -0.0245 L 0.1792 -0.0313 L 0.1798 -0.0386 L 0.1813 -0.0463 L 0.1839 -0.0543 L 0.1875 -0.0625 L 0.1922 -0.0707 L 0.198 -0.0787 L 0.2048 -0.0864 L 0.2125 -0.0937 L 0.2212 -0.1005 L 0.2308 -0.1067 L 0.2411 -0.1121 L 0.2521 -0.1166 L 0.2636 -0.1202 L 0.2755 -0.1229 L 0.2877 -0.1245 L 0.3 -0.125 L 0.3123 -0.1245 L 0.3245 -0.1229 L 0.3364 -0.1202 L 0.3479 -0.1166 L 0.3589 -0.1121 L 0.3692 -0.1067 L 0.3788 -0.1005 L 0.3875 -0.0937 L 0.3952 -0.0864 L 0.402 -0.0787 L 0.4078 -0.0707 L 0.4125 -0.0625 L 0.4161 -0.0543 L 0.4187 -0.0463 L 0.4202 -0.0386 L 0.4208 -0.0313 L 0.4204 -0.0245 L 0.4192 -0.0183 L 0.4172 -0.0129 L 0.4146 -0.0084 L 0.4114 -0.0048 L 0.4078 -0.0021 L 0.404 -0.0005 L 0.4 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-neutron": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0011 0.0163 L -0.0043 0.0324 L -0.0096 0.0478 L -0.0169 0.0625 L -0.0261 0.0761 L -0.0369 0.0884 L -0.0493 0.0992 L -0.0629 0.1083 L -0.0776 0.1155 L -0.093 0.1207 L -0.1089 0.1239 L -0.125 0.125 L -0.141 0.1239 L -0.1567 0.1207 L -0.1717 0.1155 L -0.1858 0.1083 L -0.1988 0.0992 L -0.2104 0.0884 L -0.2204 0.0761 L -0.2287 0.0625 L -0.2351 0.0478 L -0.2396 0.0324 L -0.2421 0.0163 L -0.2425 0 L -0.2408 -0.0163 L -0.2372 -0.0324 L -0.2317 -0.0478 L -0.2244 -0.0625 L -0.2155 -0.0761 L -0.2051 -0.0884 L -0.1935 -0.0992 L -0.1809 -0.1083 L -0.1674 -0.1155 L -0.1535 -0.1207 L -0.1392 -0.1239 L -0.125 -0.125 L -0.111 -0.1239 L -0.0975 -0.1207 L -0.0847 -0.1155 L -0.0728 -0.1083 L -0.062 -0.0992 L -0.0526 -0.0884 L -0.0446 -0.0761 L -0.0382 -0.0625 L -0.0334 -0.0478 L -0.0303 -0.0324 L -0.0289 -0.0163 L -0.0292 0 L -0.0312 0.0163 L -0.0348 0.0324 L -0.0399 0.0478 L -0.0463 0.0625 L -0.0539 0.0761 L -0.0625 0.0884 L -0.072 0.0992 L -0.0821 0.1083 L -0.0927 0.1155 L -0.1035 0.1207 L -0.1143 0.1239 L -0.125 0.125 L -0.1353 0.1239 L -0.1451 0.1207 L -0.1541 0.1155 L -0.1623 0.1083 L -0.1695 0.0992 L -0.1757 0.0884 L -0.1807 0.0761 L -0.1845 0.0625 L -0.1871 0.0478 L -0.1884 0.0324 L -0.1885 0.0163 L -0.1875 0 L -0.1854 -0.0163 L -0.1823 -0.0324 L -0.1783 -0.0478 L -0.1736 -0.0625 L -0.1682 -0.0761 L -0.1624 -0.0884 L -0.1562 -0.0992 L -0.1498 -0.1083 L -0.1433 -0.1155 L -0.1369 -0.1207 L -0.1308 -0.1239 L -0.125 -0.125 L -0.1196 -0.1239 L -0.1148 -0.1207 L -0.1106 -0.1155 L -0.1071 -0.1083 L -0.1042 -0.0992 L -0.1021 -0.0884 L -0.1007 -0.0761 L -0.1 -0.0625 L -0.1 -0.0478 L -0.1006 -0.0324 L -0.1017 -0.0163 L -0.1033 0 L -0.1053 0.0163 L -0.1075 0.0324 L -0.1099 0.0478 L -0.1124 0.0625 L -0.1149 0.0761 L -0.1173 0.0884 L -0.1195 0.0992 L -0.1214 0.1083 L -0.1229 0.1155 L -0.1241 0.1207 L -0.1248 0.1239 L -0.125 0.125 L -0.1248 0.1239 L -0.1241 0.1207 L -0.1229 0.1155 L -0.1214 0.1083 L -0.1195 0.0992 L -0.1173 0.0884 L -0.1149 0.0761 L -0.1124 0.0625 L -0.1099 0.0478 L -0.1075 0.0324 L -0.1053 0.0163 L -0.1033 0 L -0.1017 -0.0163 L -0.1006 -0.0324 L -0.1 -0.0478 L -0.1 -0.0625 L -0.1007 -0.0761 L -0.1021 -0.0884 L -0.1042 -0.0992 L -0.1071 -0.1083 L -0.1106 -0.1155 L -0.1148 -0.1207 L -0.1196 -0.1239 L -0.125 -0.125 L -0.1308 -0.1239 L -0.1369 -0.1207 L -0.1433 -0.1155 L -0.1498 -0.1083 L -0.1562 -0.0992 L -0.1624 -0.0884 L -0.1682 -0.0761 L -0.1736 -0.0625 L -0.1783 -0.0478 L -0.1823 -0.0324 L -0.1854 -0.0163 L -0.1875 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-peanut": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L -0.0008 0.0086 L -0.0033 0.0169 L -0.0074 0.025 L -0.013 0.0325 L -0.02 0.0393 L -0.0281 0.0453 L -0.0371 0.0505 L -0.047 0.0546 L -0.0573 0.0577 L -0.0679 0.0598 L -0.0785 0.0609 L -0.089 0.0609 L -0.099 0.06 L -0.1085 0.0582 L -0.1172 0.0557 L -0.125 0.0525 L -0.1328 0.0557 L -0.1415 0.0582 L -0.151 0.06 L -0.161 0.0609 L -0.1715 0.0609 L -0.1821 0.0598 L -0.1927 0.0577 L -0.203 0.0546 L -0.2129 0.0505 L -0.2219 0.0453 L -0.23 0.0393 L -0.237 0.0325 L -0.2426 0.025 L -0.2467 0.0169 L -0.2492 0.0086 L -0.25 0 L -0.2492 -0.0086 L -0.2467 -0.0169 L -0.2426 -0.025 L -0.237 -0.0325 L -0.23 -0.0393 L -0.2219 -0.0453 L -0.2129 -0.0505 L -0.203 -0.0546 L -0.1927 -0.0577 L -0.1821 -0.0598 L -0.1715 -0.0609 L -0.161 -0.0609 L -0.151 -0.06 L -0.1415 -0.0582 L -0.1328 -0.0557 L -0.125 -0.0525 L -0.1172 -0.0557 L -0.1085 -0.0582 L -0.099 -0.06 L -0.089 -0.0609 L -0.0785 -0.0609 L -0.0679 -0.0598 L -0.0573 -0.0577 L -0.047 -0.0546 L -0.0371 -0.0505 L -0.0281 -0.0453 L -0.02 -0.0393 L -0.013 -0.0325 L -0.0074 -0.025 L -0.0033 -0.0169 L -0.0008 -0.0086 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-plus": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0833 0 L 0.0833 0.0833 L 0.1667 0.0833 L 0.1667 0.1667 L 0.0833 0.1667 L 0.0833 0.25 L 0 0.25 L 0 0.1667 L -0.0833 0.1667 L -0.0833 0.0833 L 0 0.0833 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-pointy-star": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0217 0.08 L 0.0977 0.0471 L 0.0487 0.1139 L 0.1219 0.1528 L 0.0391 0.1562 L 0.0542 0.2376 L 0 0.175 L -0.0542 0.2376 L -0.0391 0.1562 L -0.1219 0.1528 L -0.0487 0.1139 L -0.0977 0.0471 L -0.0217 0.08 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-swoosh": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0104 -0.016 L 0.0208 -0.0313 L 0.0313 -0.0457 L 0.0417 -0.0593 L 0.0521 -0.072 L 0.0625 -0.0837 L 0.0729 -0.0944 L 0.0833 -0.1042 L 0.0938 -0.1129 L 0.1042 -0.1205 L 0.1146 -0.1271 L 0.125 -0.1326 L 0.1354 -0.1371 L 0.1458 -0.1405 L 0.1563 -0.1429 L 0.1667 -0.1443 L 0.1771 -0.1448 L 0.1875 -0.1444 L 0.1979 -0.143 L 0.2083 -0.1409 L 0.2188 -0.1379 L 0.2292 -0.1343 L 0.2396 -0.1299 L 0.25 -0.125 L 0.2604 -0.1195 L 0.2708 -0.1136 L 0.2813 -0.1073 L 0.2917 -0.1006 L 0.3021 -0.0937 L 0.3125 -0.0866 L 0.3229 -0.0794 L 0.3333 -0.0722 L 0.3438 -0.065 L 0.3542 -0.0578 L 0.3646 -0.0509 L 0.375 -0.0442 L 0.3854 -0.0378 L 0.3958 -0.0317 L 0.4063 -0.026 L 0.4167 -0.0208 L 0.4271 -0.0161 L 0.4375 -0.012 L 0.4479 -0.0084 L 0.4583 -0.0054 L 0.4688 -0.003 L 0.4792 -0.0014 L 0.4896 -0.0003 L 0.5 0 E"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "path-vertical-figure-8": {
+  "cls": "emph",
+  "group": "special",
+  "variants": {
+   "": {
+    "d": 2000,
+    "tracks": [
+     {
+      "k": "motion",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "path": "M 0 0 L 0.0122 0.0123 L 0.0239 0.0244 L 0.0347 0.0363 L 0.0442 0.0478 L 0.052 0.0589 L 0.0577 0.0694 L 0.0613 0.0793 L 0.0625 0.0884 L 0.0613 0.0966 L 0.0577 0.1039 L 0.052 0.1102 L 0.0442 0.1155 L 0.0347 0.1196 L 0.0239 0.1226 L 0.0122 0.1244 L 0 0.125 L -0.0122 0.1244 L -0.0239 0.1226 L -0.0347 0.1196 L -0.0442 0.1155 L -0.052 0.1102 L -0.0577 0.1039 L -0.0613 0.0966 L -0.0625 0.0884 L -0.0613 0.0793 L -0.0577 0.0694 L -0.052 0.0589 L -0.0442 0.0478 L -0.0347 0.0363 L -0.0239 0.0244 L -0.0122 0.0123 L 0 0 L 0.0122 -0.0123 L 0.0239 -0.0244 L 0.0347 -0.0363 L 0.0442 -0.0478 L 0.052 -0.0589 L 0.0577 -0.0694 L 0.0613 -0.0793 L 0.0625 -0.0884 L 0.0613 -0.0966 L 0.0577 -0.1039 L 0.052 -0.1102 L 0.0442 -0.1155 L 0.0347 -0.1196 L 0.0239 -0.1226 L 0.0122 -0.1244 L 0 -0.125 L -0.0122 -0.1244 L -0.0239 -0.1226 L -0.0347 -0.1196 L -0.0442 -0.1155 L -0.052 -0.1102 L -0.0577 -0.1039 L -0.0613 -0.0966 L -0.0625 -0.0884 L -0.0613 -0.0793 L -0.0577 -0.0694 L -0.052 -0.0589 L -0.0442 -0.0478 L -0.0347 -0.0363 L -0.0239 -0.0244 L -0.0122 -0.0123 L 0 0 Z"
+     }
+    ],
+    "ac": 0.5,
+    "dc": 0.5
+   }
+  }
+ },
+ "basic-zoom-in": {
+  "cls": "entr",
+  "group": "",
+  "ext": 1,
+  "variants": {
+   "out": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   },
+   "in-slightly": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   },
+   "in-from-screen-center": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   },
+   "out-slightly": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   },
+   "out-from-screen-bottom": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "basic-zoom-out": {
+  "cls": "exit",
+  "group": "",
+  "ext": 1,
+  "variants": {
+   "in": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "in-slightly": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "out-slightly": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "out-to-screen-center": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   },
+   "in-to-screen-bottom": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ },
+ "zoom": {
+  "cls": "entr",
+  "group": "",
+  "ext": 1,
+  "variants": {
+   "slide-center": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "vis",
+      "at": 0,
+      "v": "visible"
+     },
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*W"
+       ],
+       [
+        1,
+        "W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "0.2*H"
+       ],
+       [
+        1,
+        "H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "in"
+     }
+    ]
+   }
+  }
+ },
+ "zoom-out": {
+  "cls": "exit",
+  "group": "",
+  "ext": 1,
+  "variants": {
+   "slide-center": {
+    "d": 500,
+    "tracks": [
+     {
+      "k": "num",
+      "p": "w",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "W"
+       ],
+       [
+        1,
+        "0.2*W"
+       ]
+      ]
+     },
+     {
+      "k": "num",
+      "p": "h",
+      "b": 0,
+      "d": 1,
+      "hold": 1,
+      "keys": [
+       [
+        0,
+        "H"
+       ],
+       [
+        1,
+        "0.2*H"
+       ]
+      ]
+     },
+     {
+      "k": "fx",
+      "b": 0,
+      "d": 1,
+      "f": "fade",
+      "t": "out"
+     },
+     {
+      "k": "vis",
+      "at": 0.999,
+      "v": "hidden"
+     }
+    ]
+   }
+  }
+ }
+}

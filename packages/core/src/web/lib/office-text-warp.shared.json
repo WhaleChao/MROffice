@@ -1,0 +1,10734 @@
+{
+ "source": "ST_TextShapeType (ECMA-376 Part 1 section 20.1.10.76), the MSOSPT ordinals VML names the same warps by, and every preset's guide formulas and paths from presetTextWarpDefinitions.xml (ECMA-376 Part 1 annex; Apache-2.0 copy in Apache OpenOffice main/oox/source/export). 'drawing': 'none' = no warp (textNoShape); 'fit' = textPlain, two straight paths, the text rectangle fitted to the box (what a Word watermark is); 'envelope' = paths taken in (top, bottom) pairs, one band per pair, the tight ink rectangle of each band's lines mapped into it by arc length; 'follow' = each path is a baseline the glyphs are rotated onto rigidly. 'adjustments' = the a:avLst guide names with their default and handle range; 'guides' / 'paths' = the preset's program in the drawingml-default-program-v1 atom form ({ref: name} or a literal). Measured against Word: docs/office-graphics/TEXT-WARP.md. apps/api/app/services/office_text_warp.json and apps/web/lib/office-text-warp.shared.json are byte-identical copies, pinned by both test suites.",
+ "presets": [
+  {
+   "token": "textNoShape",
+   "drawing": "none",
+   "spt": null
+  },
+  {
+   "token": "textPlain",
+   "drawing": "fit",
+   "spt": 136,
+   "adjustments": {
+    "adj": {
+     "default": 50000,
+     "min": 30000,
+     "max": 70000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      30000,
+      {
+       "ref": "adj"
+      },
+      70000
+     ]
+    },
+    {
+     "name": "mid",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "w"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "midDir",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "mid"
+      },
+      0,
+      {
+       "ref": "hc"
+      }
+     ]
+    },
+    {
+     "name": "dl",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "mid"
+      },
+      0,
+      {
+       "ref": "l"
+      }
+     ]
+    },
+    {
+     "name": "dr",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "mid"
+      }
+     ]
+    },
+    {
+     "name": "dl2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dl"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "dr2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dr"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "dx",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "midDir"
+      },
+      {
+       "ref": "dr2"
+      },
+      {
+       "ref": "dl2"
+      }
+     ]
+    },
+    {
+     "name": "xr",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx"
+      },
+      0
+     ]
+    },
+    {
+     "name": "xl",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx"
+      }
+     ]
+    },
+    {
+     "name": "tlx",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "midDir"
+      },
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "xl"
+      }
+     ]
+    },
+    {
+     "name": "trx",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "midDir"
+      },
+      {
+       "ref": "xr"
+      },
+      {
+       "ref": "r"
+      }
+     ]
+    },
+    {
+     "name": "blx",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "midDir"
+      },
+      {
+       "ref": "xl"
+      },
+      {
+       "ref": "l"
+      }
+     ]
+    },
+    {
+     "name": "brx",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "midDir"
+      },
+      {
+       "ref": "r"
+      },
+      {
+       "ref": "xr"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "tlx"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "trx"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "blx"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "brx"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textStop",
+   "drawing": "envelope",
+   "spt": 137,
+   "adjustments": {
+    "adj": {
+     "default": 25000,
+     "min": 14286,
+     "max": 50000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      25000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      14286,
+      {
+       "ref": "adj"
+      },
+      50000
+     ]
+    },
+    {
+     "name": "dx",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      1,
+      3
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx"
+      }
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textTriangle",
+   "drawing": "envelope",
+   "spt": 138,
+   "adjustments": {
+    "adj": {
+     "default": 50000,
+     "min": 0,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textTriangleInverted",
+   "drawing": "envelope",
+   "spt": 139,
+   "adjustments": {
+    "adj": {
+     "default": 50000,
+     "min": 0,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textChevron",
+   "drawing": "envelope",
+   "spt": 140,
+   "adjustments": {
+    "adj": {
+     "default": 25000,
+     "min": 0,
+     "max": 50000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      25000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      50000
+     ]
+    },
+    {
+     "name": "y",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "b"
+      },
+      {
+       "ref": "y"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textChevronInverted",
+   "drawing": "envelope",
+   "spt": 141,
+   "adjustments": {
+    "adj": {
+     "default": 75000,
+     "min": 50000,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      75000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      50000,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "y"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textRingInside",
+   "drawing": "envelope",
+   "spt": 142,
+   "adjustments": {
+    "adj": {
+     "default": 60000,
+     "min": 50000,
+     "max": 99000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      60000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      50000,
+      {
+       "ref": "adj"
+      },
+      99000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "r",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      1,
+      2
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "r"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "r"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "r"
+       },
+       10800000,
+       21599999
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "r"
+       },
+       10800000,
+       21599999
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textRingOutside",
+   "drawing": "envelope",
+   "spt": 143,
+   "adjustments": {
+    "adj": {
+     "default": 60000,
+     "min": 50000,
+     "max": 99000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      60000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      50000,
+      {
+       "ref": "adj"
+      },
+      99000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "r",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      1,
+      2
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "r"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "r"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "r"
+       },
+       10800000,
+       -21599999
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "r"
+       },
+       10800000,
+       -21599999
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textArchUp",
+   "drawing": "follow",
+   "spt": 144,
+   "adjustments": {
+    "adj": {
+     "default": 10800000,
+     "min": 0,
+     "max": 21599999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      {
+       "ref": "cd2"
+      }
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "v1",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "v2",
+     "op": "+-",
+     "args": [
+      32400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "end",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "v2"
+      }
+     ]
+    },
+    {
+     "name": "w1",
+     "op": "+-",
+     "args": [
+      5400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "w2",
+     "op": "+-",
+     "args": [
+      16200000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "end"
+      },
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d2",
+     "op": "+-",
+     "args": [
+      21600000,
+      {
+       "ref": "d1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "c2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w2"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "d2"
+      }
+     ]
+    },
+    {
+     "name": "c1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "d2"
+      },
+      {
+       "ref": "c2"
+      }
+     ]
+    },
+    {
+     "name": "swAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w1"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "c1"
+      }
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "adval"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textArchDown",
+   "drawing": "follow",
+   "spt": 145,
+   "adjustments": {
+    "adj": {
+     "default": 0,
+     "min": 0,
+     "max": 21599999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      0
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "v1",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "v2",
+     "op": "+-",
+     "args": [
+      32400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "nv1",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "stAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "nv1"
+      },
+      {
+       "ref": "v2"
+      },
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "w1",
+     "op": "+-",
+     "args": [
+      5400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "w2",
+     "op": "+-",
+     "args": [
+      16200000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      0,
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "d2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "d1"
+      },
+      0,
+      21600000
+     ]
+    },
+    {
+     "name": "v3",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      10800000
+     ]
+    },
+    {
+     "name": "c2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w2"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "d2"
+      }
+     ]
+    },
+    {
+     "name": "c1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "d2"
+      },
+      {
+       "ref": "c2"
+      }
+     ]
+    },
+    {
+     "name": "c0",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w1"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "c1"
+      }
+     ]
+    },
+    {
+     "name": "swAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "stAng"
+      },
+      {
+       "ref": "c0"
+      },
+      {
+       "ref": "v3"
+      }
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "wt2",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "ht2",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "stAng"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCircle",
+   "drawing": "follow",
+   "spt": 146,
+   "adjustments": {
+    "adj": {
+     "default": 10800000,
+     "min": 0,
+     "max": 21599999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      10800000
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "d0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      0,
+      10800000
+     ]
+    },
+    {
+     "name": "d1",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d2",
+     "op": "+-",
+     "args": [
+      21600000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d3",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "d1"
+      },
+      10799999
+     ]
+    },
+    {
+     "name": "d4",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "d0"
+      },
+      {
+       "ref": "d2"
+      },
+      {
+       "ref": "d3"
+      }
+     ]
+    },
+    {
+     "name": "swAng",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "d4"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "adval"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textButton",
+   "drawing": "follow",
+   "spt": 147,
+   "adjustments": {
+    "adj": {
+     "default": 10800000,
+     "min": 0,
+     "max": 21599999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      10800000
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "bot",
+     "op": "+-",
+     "args": [
+      5400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "lef",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "top",
+     "op": "+-",
+     "args": [
+      16200000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "rig",
+     "op": "+-",
+     "args": [
+      21600000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "c3",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "top"
+      },
+      {
+       "ref": "adval"
+      },
+      0
+     ]
+    },
+    {
+     "name": "c2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      10800000,
+      {
+       "ref": "c3"
+      }
+     ]
+    },
+    {
+     "name": "c1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "bot"
+      },
+      {
+       "ref": "rig"
+      },
+      {
+       "ref": "c2"
+      }
+     ]
+    },
+    {
+     "name": "stAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      {
+       "ref": "c1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "w1",
+     "op": "+-",
+     "args": [
+      21600000,
+      0,
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "stAngB",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "stAng"
+      },
+      {
+       "ref": "w1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "td1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "bot"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "td2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "top"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "ntd2",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      {
+       "ref": "td2"
+      }
+     ]
+    },
+    {
+     "name": "w2",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      10800000
+     ]
+    },
+    {
+     "name": "c6",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "top"
+      },
+      {
+       "ref": "ntd2"
+      },
+      {
+       "ref": "w2"
+      }
+     ]
+    },
+    {
+     "name": "c5",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      10800000,
+      {
+       "ref": "c6"
+      }
+     ]
+    },
+    {
+     "name": "c4",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "bot"
+      },
+      {
+       "ref": "td1"
+      },
+      {
+       "ref": "c5"
+      }
+     ]
+    },
+    {
+     "name": "v1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      {
+       "ref": "c4"
+      },
+      10800000
+     ]
+    },
+    {
+     "name": "swAngT",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "stT",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "stAngB"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "stB",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "stAng"
+      },
+      {
+       "ref": "stAngB"
+      }
+     ]
+    },
+    {
+     "name": "swT",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "swAngT"
+      }
+     ]
+    },
+    {
+     "name": "swB",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "swAngT"
+      },
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "stT"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "stT"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "wt2",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "stB"
+      }
+     ]
+    },
+    {
+     "name": "ht2",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "stB"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "wt3",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "ht3",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "adj"
+      }
+     ]
+    },
+    {
+     "name": "dx3",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht3"
+      },
+      {
+       "ref": "wt3"
+      }
+     ]
+    },
+    {
+     "name": "dy3",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht3"
+      },
+      {
+       "ref": "wt3"
+      }
+     ]
+    },
+    {
+     "name": "x3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy3"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "stT"
+       },
+       {
+        "ref": "swT"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "vc"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "vc"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "stB"
+       },
+       {
+        "ref": "swB"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textArchUpPour",
+   "drawing": "envelope",
+   "spt": 148,
+   "adjustments": {
+    "adj1": {
+     "default": 10800000,
+     "min": 0,
+     "max": 21599999
+    },
+    "adj2": {
+     "default": 50000,
+     "min": 0,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      {
+       "ref": "cd2"
+      }
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "v1",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "v2",
+     "op": "+-",
+     "args": [
+      32400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "end",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "v2"
+      }
+     ]
+    },
+    {
+     "name": "w1",
+     "op": "+-",
+     "args": [
+      5400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "w2",
+     "op": "+-",
+     "args": [
+      16200000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "end"
+      },
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d2",
+     "op": "+-",
+     "args": [
+      21600000,
+      {
+       "ref": "d1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "c2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w2"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "d2"
+      }
+     ]
+    },
+    {
+     "name": "c1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "d2"
+      },
+      {
+       "ref": "c2"
+      }
+     ]
+    },
+    {
+     "name": "swAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w1"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "c1"
+      }
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "adval2",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj2"
+      },
+      99000
+     ]
+    },
+    {
+     "name": "ratio",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "adval2"
+      },
+      1,
+      100000
+     ]
+    },
+    {
+     "name": "iwd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "ihd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "wt2",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "ht2",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "adval"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "iwd2"
+       },
+       {
+        "ref": "ihd2"
+       },
+       {
+        "ref": "adval"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textArchDownPour",
+   "drawing": "envelope",
+   "spt": 149,
+   "adjustments": {
+    "adj1": {
+     "default": 0,
+     "min": 0,
+     "max": 21599999
+    },
+    "adj2": {
+     "default": 25000,
+     "min": 0,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      0
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      25000
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "v1",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "v2",
+     "op": "+-",
+     "args": [
+      32400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "nv1",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "stAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "nv1"
+      },
+      {
+       "ref": "v2"
+      },
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "w1",
+     "op": "+-",
+     "args": [
+      5400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "w2",
+     "op": "+-",
+     "args": [
+      16200000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      0,
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "d2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "d1"
+      },
+      0,
+      21600000
+     ]
+    },
+    {
+     "name": "v3",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      10800000
+     ]
+    },
+    {
+     "name": "c2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w2"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "d2"
+      }
+     ]
+    },
+    {
+     "name": "c1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "d2"
+      },
+      {
+       "ref": "c2"
+      }
+     ]
+    },
+    {
+     "name": "c0",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "w1"
+      },
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "c1"
+      }
+     ]
+    },
+    {
+     "name": "swAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "stAng"
+      },
+      {
+       "ref": "c0"
+      },
+      {
+       "ref": "v3"
+      }
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "adval2",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj2"
+      },
+      99000
+     ]
+    },
+    {
+     "name": "ratio",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "adval2"
+      },
+      1,
+      100000
+     ]
+    },
+    {
+     "name": "iwd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "ihd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "wt2",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "ht2",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "wt3",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "ht3",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "dx3",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "ht3"
+      },
+      {
+       "ref": "wt3"
+      }
+     ]
+    },
+    {
+     "name": "dy3",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "ht3"
+      },
+      {
+       "ref": "wt3"
+      }
+     ]
+    },
+    {
+     "name": "x3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy3"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x3"
+       },
+       {
+        "ref": "y3"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "iwd2"
+       },
+       {
+        "ref": "ihd2"
+       },
+       {
+        "ref": "stAng"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "stAng"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCirclePour",
+   "drawing": "envelope",
+   "spt": 150,
+   "adjustments": {
+    "adj1": {
+     "default": 10800000,
+     "min": 0,
+     "max": 21599999
+    },
+    "adj2": {
+     "default": 50000,
+     "min": 0,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      {
+       "ref": "cd2"
+      }
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "d0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      0,
+      10800000
+     ]
+    },
+    {
+     "name": "d1",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d2",
+     "op": "+-",
+     "args": [
+      21600000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "d3",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "d1"
+      },
+      {
+       "ref": "d1"
+      },
+      10799999
+     ]
+    },
+    {
+     "name": "d4",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "d0"
+      },
+      {
+       "ref": "d2"
+      },
+      {
+       "ref": "d3"
+      }
+     ]
+    },
+    {
+     "name": "swAng",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "d4"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "adval2",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj2"
+      },
+      99000
+     ]
+    },
+    {
+     "name": "ratio",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "adval2"
+      },
+      1,
+      100000
+     ]
+    },
+    {
+     "name": "iwd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "ihd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "wt2",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "ht2",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "adval"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "iwd2"
+       },
+       {
+        "ref": "ihd2"
+       },
+       {
+        "ref": "adval"
+       },
+       {
+        "ref": "swAng"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textButtonPour",
+   "drawing": "envelope",
+   "spt": 151,
+   "adjustments": {
+    "adj1": {
+     "default": 10800000,
+     "min": 0,
+     "max": 21599999
+    },
+    "adj2": {
+     "default": 50000,
+     "min": 0,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      {
+       "ref": "cd2"
+      }
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "adval",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      21599999
+     ]
+    },
+    {
+     "name": "bot",
+     "op": "+-",
+     "args": [
+      5400000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "lef",
+     "op": "+-",
+     "args": [
+      10800000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "top",
+     "op": "+-",
+     "args": [
+      16200000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "rig",
+     "op": "+-",
+     "args": [
+      21600000,
+      0,
+      {
+       "ref": "adval"
+      }
+     ]
+    },
+    {
+     "name": "c3",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "top"
+      },
+      {
+       "ref": "adval"
+      },
+      0
+     ]
+    },
+    {
+     "name": "c2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      10800000,
+      {
+       "ref": "c3"
+      }
+     ]
+    },
+    {
+     "name": "c1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "bot"
+      },
+      {
+       "ref": "rig"
+      },
+      {
+       "ref": "c2"
+      }
+     ]
+    },
+    {
+     "name": "stAng",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      {
+       "ref": "c1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "w1",
+     "op": "+-",
+     "args": [
+      21600000,
+      0,
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "stAngB",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "stAng"
+      },
+      {
+       "ref": "w1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "td1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "bot"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "td2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "top"
+      },
+      2,
+      1
+     ]
+    },
+    {
+     "name": "ntd2",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      {
+       "ref": "td2"
+      }
+     ]
+    },
+    {
+     "name": "w2",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      10800000
+     ]
+    },
+    {
+     "name": "c6",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "top"
+      },
+      {
+       "ref": "ntd2"
+      },
+      {
+       "ref": "w2"
+      }
+     ]
+    },
+    {
+     "name": "c5",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      10800000,
+      {
+       "ref": "c6"
+      }
+     ]
+    },
+    {
+     "name": "c4",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "bot"
+      },
+      {
+       "ref": "td1"
+      },
+      {
+       "ref": "c5"
+      }
+     ]
+    },
+    {
+     "name": "v1",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "adval"
+      },
+      {
+       "ref": "c4"
+      },
+      10800000
+     ]
+    },
+    {
+     "name": "swAngT",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "stT",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "stAngB"
+      },
+      {
+       "ref": "stAng"
+      }
+     ]
+    },
+    {
+     "name": "stB",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "stAng"
+      },
+      {
+       "ref": "stAngB"
+      }
+     ]
+    },
+    {
+     "name": "swT",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "v1"
+      },
+      {
+       "ref": "swAngT"
+      }
+     ]
+    },
+    {
+     "name": "swB",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "lef"
+      },
+      {
+       "ref": "swAngT"
+      },
+      {
+       "ref": "v1"
+      }
+     ]
+    },
+    {
+     "name": "wt1",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "stT"
+      }
+     ]
+    },
+    {
+     "name": "ht1",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "stT"
+      }
+     ]
+    },
+    {
+     "name": "dx1",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht1"
+      },
+      {
+       "ref": "wt1"
+      }
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "wt6",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "stB"
+      }
+     ]
+    },
+    {
+     "name": "ht6",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "stB"
+      }
+     ]
+    },
+    {
+     "name": "dx6",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ht6"
+      },
+      {
+       "ref": "wt6"
+      }
+     ]
+    },
+    {
+     "name": "dy6",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ht6"
+      },
+      {
+       "ref": "wt6"
+      }
+     ]
+    },
+    {
+     "name": "x6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx6"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy6"
+      },
+      0
+     ]
+    },
+    {
+     "name": "adval2",
+     "op": "pin",
+     "args": [
+      40000,
+      {
+       "ref": "adj2"
+      },
+      99000
+     ]
+    },
+    {
+     "name": "ratio",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "adval2"
+      },
+      1,
+      100000
+     ]
+    },
+    {
+     "name": "iwd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "wd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "ihd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      {
+       "ref": "ratio"
+      },
+      1
+     ]
+    },
+    {
+     "name": "wt2",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "stT"
+      }
+     ]
+    },
+    {
+     "name": "ht2",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "stT"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "ht2"
+      },
+      {
+       "ref": "wt2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "wt5",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "stB"
+      }
+     ]
+    },
+    {
+     "name": "ht5",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "stB"
+      }
+     ]
+    },
+    {
+     "name": "dx5",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "ht5"
+      },
+      {
+       "ref": "wt5"
+      }
+     ]
+    },
+    {
+     "name": "dy5",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "ht5"
+      },
+      {
+       "ref": "wt5"
+      }
+     ]
+    },
+    {
+     "name": "x5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dx5"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dy5"
+      },
+      0
+     ]
+    },
+    {
+     "name": "d1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hd2"
+      },
+      0,
+      {
+       "ref": "ihd2"
+      }
+     ]
+    },
+    {
+     "name": "d12",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "d1"
+      },
+      1,
+      2
+     ]
+    },
+    {
+     "name": "yu",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      0,
+      {
+       "ref": "d12"
+      }
+     ]
+    },
+    {
+     "name": "yd",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "d12"
+      },
+      0
+     ]
+    },
+    {
+     "name": "v1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "d12"
+      },
+      {
+       "ref": "d12"
+      },
+      1
+     ]
+    },
+    {
+     "name": "v2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "ihd2"
+      },
+      1
+     ]
+    },
+    {
+     "name": "v3",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "v1"
+      },
+      1,
+      {
+       "ref": "v2"
+      }
+     ]
+    },
+    {
+     "name": "v4",
+     "op": "+-",
+     "args": [
+      1,
+      0,
+      {
+       "ref": "v3"
+      }
+     ]
+    },
+    {
+     "name": "v5",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "iwd2"
+      },
+      1
+     ]
+    },
+    {
+     "name": "v6",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "v4"
+      },
+      {
+       "ref": "v5"
+      },
+      1
+     ]
+    },
+    {
+     "name": "v7",
+     "op": "sqrt",
+     "args": [
+      {
+       "ref": "v6"
+      }
+     ]
+    },
+    {
+     "name": "xl",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      0,
+      {
+       "ref": "v7"
+      }
+     ]
+    },
+    {
+     "name": "xr",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "v7"
+      },
+      0
+     ]
+    },
+    {
+     "name": "wtadj",
+     "op": "sin",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "adj1"
+      }
+     ]
+    },
+    {
+     "name": "htadj",
+     "op": "cos",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "adj1"
+      }
+     ]
+    },
+    {
+     "name": "dxadj",
+     "op": "cat2",
+     "args": [
+      {
+       "ref": "iwd2"
+      },
+      {
+       "ref": "htadj"
+      },
+      {
+       "ref": "wtadj"
+      }
+     ]
+    },
+    {
+     "name": "dyadj",
+     "op": "sat2",
+     "args": [
+      {
+       "ref": "ihd2"
+      },
+      {
+       "ref": "htadj"
+      },
+      {
+       "ref": "wtadj"
+      }
+     ]
+    },
+    {
+     "name": "xadj",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "dxadj"
+      },
+      0
+     ]
+    },
+    {
+     "name": "yadj",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "vc"
+      },
+      {
+       "ref": "dyadj"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "stT"
+       },
+       {
+        "ref": "swT"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "iwd2"
+       },
+       {
+        "ref": "ihd2"
+       },
+       {
+        "ref": "stT"
+       },
+       {
+        "ref": "swT"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "xl"
+       },
+       {
+        "ref": "yu"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "xr"
+       },
+       {
+        "ref": "yu"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "xl"
+       },
+       {
+        "ref": "yd"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "xr"
+       },
+       {
+        "ref": "yd"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x5"
+       },
+       {
+        "ref": "y5"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "iwd2"
+       },
+       {
+        "ref": "ihd2"
+       },
+       {
+        "ref": "stB"
+       },
+       {
+        "ref": "swB"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x6"
+       },
+       {
+        "ref": "y6"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "hd2"
+       },
+       {
+        "ref": "stB"
+       },
+       {
+        "ref": "swB"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCurveUp",
+   "drawing": "envelope",
+   "spt": 152,
+   "adjustments": {
+    "adj": {
+     "default": 45977,
+     "min": 0,
+     "max": 56338
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      45977
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      56338
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "gd1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      3,
+      4
+     ]
+    },
+    {
+     "name": "gd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      5,
+      4
+     ]
+    },
+    {
+     "name": "gd3",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      3,
+      8
+     ]
+    },
+    {
+     "name": "gd4",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      1,
+      8
+     ]
+    },
+    {
+     "name": "gd5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "gd3"
+      }
+     ]
+    },
+    {
+     "name": "gd6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "gd4"
+      },
+      {
+       "ref": "h"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd4"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd5"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd6"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "wd3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "wd3"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y0"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y1"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y5"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y5"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCurveDown",
+   "drawing": "envelope",
+   "spt": 153,
+   "adjustments": {
+    "adj": {
+     "default": 45977,
+     "min": 0,
+     "max": 56338
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      45977
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      56338
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "gd1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      3,
+      4
+     ]
+    },
+    {
+     "name": "gd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      5,
+      4
+     ]
+    },
+    {
+     "name": "gd3",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      3,
+      8
+     ]
+    },
+    {
+     "name": "gd4",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      1,
+      8
+     ]
+    },
+    {
+     "name": "gd5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "gd3"
+      }
+     ]
+    },
+    {
+     "name": "gd6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "gd4"
+      },
+      {
+       "ref": "h"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd4"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd5"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd6"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "wd3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "wd3"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       },
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y0"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y5"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y5"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCanUp",
+   "drawing": "envelope",
+   "spt": 174,
+   "adjustments": {
+    "adj": {
+     "default": 85714,
+     "min": 66667,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      85714
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      66667,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "dy1"
+      }
+     ]
+    },
+    {
+     "name": "y0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "dy"
+       },
+       {
+        "ref": "cd2"
+       },
+       {
+        "ref": "cd2"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "dy"
+       },
+       {
+        "ref": "cd2"
+       },
+       {
+        "ref": "cd2"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCanDown",
+   "drawing": "envelope",
+   "spt": 175,
+   "adjustments": {
+    "adj": {
+     "default": 14286,
+     "min": 0,
+     "max": 33333
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      14286
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      33333
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    },
+    {
+     "name": "ncd2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "cd2"
+      },
+      -1,
+      1
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "dy"
+       },
+       {
+        "ref": "cd2"
+       },
+       {
+        "ref": "ncd2"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "arcTo",
+      "args": [
+       {
+        "ref": "wd2"
+       },
+       {
+        "ref": "dy"
+       },
+       {
+        "ref": "cd2"
+       },
+       {
+        "ref": "ncd2"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textWave1",
+   "drawing": "envelope",
+   "spt": 156,
+   "adjustments": {
+    "adj1": {
+     "default": 12500,
+     "min": 0,
+     "max": 20000
+    },
+    "adj2": {
+     "default": 0,
+     "min": -10000,
+     "max": 10000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      12500
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      0
+     ]
+    },
+    {
+     "name": "a1",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      20000
+     ]
+    },
+    {
+     "name": "a2",
+     "op": "pin",
+     "args": [
+      -10000,
+      {
+       "ref": "adj2"
+      },
+      10000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      {
+       "ref": "a1"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      10,
+      3
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "y1"
+      }
+     ]
+    },
+    {
+     "name": "y5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "of",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "of2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      50000
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "abs",
+     "args": [
+      {
+       "ref": "of"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      0,
+      {
+       "ref": "of2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      0,
+      {
+       "ref": "dx2"
+      }
+     ]
+    },
+    {
+     "name": "dx5",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      {
+       "ref": "of2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx5"
+      }
+     ]
+    },
+    {
+     "name": "dx3",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "dx2"
+      },
+      {
+       "ref": "x5"
+      },
+      3
+     ]
+    },
+    {
+     "name": "x3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x4",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x3"
+      },
+      {
+       "ref": "x5"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx5"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x10",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x7",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x6"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x8",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x7"
+      },
+      {
+       "ref": "x10"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x9",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "x1"
+      }
+     ]
+    },
+    {
+     "name": "xAdj",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "of"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x3"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "x4"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "x5"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x6"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x7"
+       },
+       {
+        "ref": "y5"
+       },
+       {
+        "ref": "x8"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x10"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textWave2",
+   "drawing": "envelope",
+   "spt": 157,
+   "adjustments": {
+    "adj1": {
+     "default": 12500,
+     "min": 0,
+     "max": 20000
+    },
+    "adj2": {
+     "default": 0,
+     "min": -10000,
+     "max": 10000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      12500
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      0
+     ]
+    },
+    {
+     "name": "a1",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      20000
+     ]
+    },
+    {
+     "name": "a2",
+     "op": "pin",
+     "args": [
+      -10000,
+      {
+       "ref": "adj2"
+      },
+      10000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      {
+       "ref": "a1"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      10,
+      3
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "y1"
+      }
+     ]
+    },
+    {
+     "name": "y5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "of",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "of2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      50000
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "abs",
+     "args": [
+      {
+       "ref": "of"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      0,
+      {
+       "ref": "of2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      0,
+      {
+       "ref": "dx2"
+      }
+     ]
+    },
+    {
+     "name": "dx5",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      {
+       "ref": "of2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx5"
+      }
+     ]
+    },
+    {
+     "name": "dx3",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "dx2"
+      },
+      {
+       "ref": "x5"
+      },
+      3
+     ]
+    },
+    {
+     "name": "x3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x4",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x3"
+      },
+      {
+       "ref": "x5"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx5"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x10",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x7",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x6"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x8",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x7"
+      },
+      {
+       "ref": "x10"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x9",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "x1"
+      }
+     ]
+    },
+    {
+     "name": "xAdj",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "of"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x3"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "x4"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "x5"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x6"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x7"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x8"
+       },
+       {
+        "ref": "y5"
+       },
+       {
+        "ref": "x10"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textDoubleWave1",
+   "drawing": "envelope",
+   "spt": 158,
+   "adjustments": {
+    "adj1": {
+     "default": 6250,
+     "min": 0,
+     "max": 12500
+    },
+    "adj2": {
+     "default": 0,
+     "min": -10000,
+     "max": 10000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      6250
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      0
+     ]
+    },
+    {
+     "name": "a1",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      12500
+     ]
+    },
+    {
+     "name": "a2",
+     "op": "pin",
+     "args": [
+      -10000,
+      {
+       "ref": "adj2"
+      },
+      10000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      {
+       "ref": "a1"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      10,
+      3
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "y1"
+      }
+     ]
+    },
+    {
+     "name": "y5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "of",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "of2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      50000
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "abs",
+     "args": [
+      {
+       "ref": "of"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      0,
+      {
+       "ref": "of2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      0,
+      {
+       "ref": "dx2"
+      }
+     ]
+    },
+    {
+     "name": "dx8",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      {
+       "ref": "of2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x8",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx8"
+      }
+     ]
+    },
+    {
+     "name": "dx3",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "dx2"
+      },
+      {
+       "ref": "x8"
+      },
+      6
+     ]
+    },
+    {
+     "name": "x3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "dx4",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "dx2"
+      },
+      {
+       "ref": "x8"
+      },
+      3
+     ]
+    },
+    {
+     "name": "x4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "dx4"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x5",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "x8"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x5"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x7",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x6"
+      },
+      {
+       "ref": "x8"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x9",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx8"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x15",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x10",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x9"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x11",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x9"
+      },
+      {
+       "ref": "dx4"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x12",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x9"
+      },
+      {
+       "ref": "x15"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x13",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x12"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x14",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x13"
+      },
+      {
+       "ref": "x15"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x16",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "x1"
+      }
+     ]
+    },
+    {
+     "name": "xAdj",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "of"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x3"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "x4"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "x5"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x6"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "x7"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "x8"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x9"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x10"
+       },
+       {
+        "ref": "y5"
+       },
+       {
+        "ref": "x11"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x12"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x13"
+       },
+       {
+        "ref": "y5"
+       },
+       {
+        "ref": "x14"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x15"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textWave4",
+   "drawing": "envelope",
+   "spt": 159,
+   "adjustments": {
+    "adj1": {
+     "default": 6250,
+     "min": 0,
+     "max": 12500
+    },
+    "adj2": {
+     "default": 0,
+     "min": -10000,
+     "max": 10000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj1",
+     "op": "val",
+     "args": [
+      6250
+     ]
+    },
+    {
+     "name": "adj2",
+     "op": "val",
+     "args": [
+      0
+     ]
+    },
+    {
+     "name": "a1",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj1"
+      },
+      12500
+     ]
+    },
+    {
+     "name": "a2",
+     "op": "pin",
+     "args": [
+      -10000,
+      {
+       "ref": "adj2"
+      },
+      10000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      {
+       "ref": "a1"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      10,
+      3
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "y1"
+      }
+     ]
+    },
+    {
+     "name": "y5",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    },
+    {
+     "name": "y6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y4"
+      },
+      {
+       "ref": "dy2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "of",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "of2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "w"
+      },
+      {
+       "ref": "a2"
+      },
+      50000
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "abs",
+     "args": [
+      {
+       "ref": "of"
+      }
+     ]
+    },
+    {
+     "name": "dx2",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      0,
+      {
+       "ref": "of2"
+      }
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      0,
+      {
+       "ref": "dx2"
+      }
+     ]
+    },
+    {
+     "name": "dx8",
+     "op": "?:",
+     "args": [
+      {
+       "ref": "of2"
+      },
+      {
+       "ref": "of2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x8",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx8"
+      }
+     ]
+    },
+    {
+     "name": "dx3",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "dx2"
+      },
+      {
+       "ref": "x8"
+      },
+      6
+     ]
+    },
+    {
+     "name": "x3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "dx4",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "dx2"
+      },
+      {
+       "ref": "x8"
+      },
+      3
+     ]
+    },
+    {
+     "name": "x4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "dx4"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x5",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x2"
+      },
+      {
+       "ref": "x8"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x6",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x5"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x7",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x6"
+      },
+      {
+       "ref": "x8"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x9",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx8"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x15",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      {
+       "ref": "dx2"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x10",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x9"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x11",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x9"
+      },
+      {
+       "ref": "dx4"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x12",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x9"
+      },
+      {
+       "ref": "x15"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x13",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "x12"
+      },
+      {
+       "ref": "dx3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x14",
+     "op": "+/",
+     "args": [
+      {
+       "ref": "x13"
+      },
+      {
+       "ref": "x15"
+      },
+      2
+     ]
+    },
+    {
+     "name": "x16",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "x1"
+      }
+     ]
+    },
+    {
+     "name": "xAdj",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "hc"
+      },
+      {
+       "ref": "of"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x3"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "x4"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "x5"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x6"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "x7"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "x8"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x9"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x10"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x11"
+       },
+       {
+        "ref": "y5"
+       },
+       {
+        "ref": "x12"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x13"
+       },
+       {
+        "ref": "y6"
+       },
+       {
+        "ref": "x14"
+       },
+       {
+        "ref": "y5"
+       },
+       {
+        "ref": "x15"
+       },
+       {
+        "ref": "y4"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textInflate",
+   "drawing": "envelope",
+   "spt": 160,
+   "adjustments": {
+    "adj": {
+     "default": 18750,
+     "min": 0,
+     "max": 20000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      18750
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      20000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "gd",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      1,
+      3
+     ]
+    },
+    {
+     "name": "gd0",
+     "op": "+-",
+     "args": [
+      0,
+      0,
+      {
+       "ref": "gd"
+      }
+     ]
+    },
+    {
+     "name": "gd1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "gd0"
+      }
+     ]
+    },
+    {
+     "name": "ty",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "by",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    },
+    {
+     "name": "y0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd0"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "wd3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "wd3"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "ty"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x0"
+       },
+       {
+        "ref": "y0"
+       },
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y0"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "ty"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "by"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x0"
+       },
+       {
+        "ref": "y1"
+       },
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "by"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textDeflate",
+   "drawing": "envelope",
+   "spt": 161,
+   "adjustments": {
+    "adj": {
+     "default": 18750,
+     "min": 0,
+     "max": 37500
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      18750
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      37500
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "ss"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "gd0",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      4,
+      3
+     ]
+    },
+    {
+     "name": "gd1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "gd0"
+      }
+     ]
+    },
+    {
+     "name": "adjY",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd0"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "gd1"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x0",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "wd3"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "wd3"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x0"
+       },
+       {
+        "ref": "y0"
+       },
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y0"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "cubicBezTo",
+      "args": [
+       {
+        "ref": "x0"
+       },
+       {
+        "ref": "y1"
+       },
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "y1"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textInflateBottom",
+   "drawing": "envelope",
+   "spt": 162,
+   "adjustments": {
+    "adj": {
+     "default": 60000,
+     "min": 60000,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      60000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      60000,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "ty",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "ty"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "b"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "ty"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textDeflateBottom",
+   "drawing": "envelope",
+   "spt": 163,
+   "adjustments": {
+    "adj": {
+     "default": 50000,
+     "min": 6250,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      6250,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "ss"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "cp",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      0,
+      {
+       "ref": "dy2"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "cp"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textInflateTop",
+   "drawing": "envelope",
+   "spt": 164,
+   "adjustments": {
+    "adj": {
+     "default": 40000,
+     "min": 0,
+     "max": 50000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      40000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      50000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "ty",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "ty"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "t"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "ty"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textDeflateTop",
+   "drawing": "envelope",
+   "spt": 165,
+   "adjustments": {
+    "adj": {
+     "default": 50000,
+     "min": 0,
+     "max": 93750
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      50000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      93750
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "cp",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "y1"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "cp"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textDeflateInflate",
+   "drawing": "envelope",
+   "spt": 166,
+   "adjustments": {
+    "adj": {
+     "default": 35000,
+     "min": 5000,
+     "max": 95000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      35000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      5000,
+      {
+       "ref": "adj"
+      },
+      95000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "del",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      5,
+      100
+     ]
+    },
+    {
+     "name": "dh1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      45,
+      100
+     ]
+    },
+    {
+     "name": "dh2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      55,
+      100
+     ]
+    },
+    {
+     "name": "yh",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      0,
+      {
+       "ref": "del"
+      }
+     ]
+    },
+    {
+     "name": "yl",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      {
+       "ref": "del"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "yh"
+      },
+      {
+       "ref": "yh"
+      },
+      {
+       "ref": "dh1"
+      }
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "yl"
+      },
+      {
+       "ref": "yl"
+      },
+      {
+       "ref": "dh2"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "dh1"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "dh1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "dh2"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y4"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "dh2"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textDeflateInflateDeflate",
+   "drawing": "envelope",
+   "spt": 167,
+   "adjustments": {
+    "adj": {
+     "default": 25000,
+     "min": 3000,
+     "max": 47000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      25000
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      3000,
+      {
+       "ref": "adj"
+      },
+      47000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "del",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      3,
+      100
+     ]
+    },
+    {
+     "name": "ey1",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      30,
+      100
+     ]
+    },
+    {
+     "name": "ey2",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      36,
+      100
+     ]
+    },
+    {
+     "name": "ey3",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      63,
+      100
+     ]
+    },
+    {
+     "name": "ey4",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "h"
+      },
+      70,
+      100
+     ]
+    },
+    {
+     "name": "by",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    },
+    {
+     "name": "yh1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      0,
+      {
+       "ref": "del"
+      }
+     ]
+    },
+    {
+     "name": "yl1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "dy"
+      },
+      {
+       "ref": "del"
+      },
+      0
+     ]
+    },
+    {
+     "name": "yh2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "by"
+      },
+      0,
+      {
+       "ref": "del"
+      }
+     ]
+    },
+    {
+     "name": "yl2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "by"
+      },
+      {
+       "ref": "del"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "yh1"
+      },
+      {
+       "ref": "yh1"
+      },
+      {
+       "ref": "ey1"
+      }
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "yl1"
+      },
+      {
+       "ref": "yl1"
+      },
+      {
+       "ref": "ey2"
+      }
+     ]
+    },
+    {
+     "name": "y3",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "yh2"
+      },
+      {
+       "ref": "yh2"
+      },
+      {
+       "ref": "ey3"
+      }
+     ]
+    },
+    {
+     "name": "y4",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "yl2"
+      },
+      {
+       "ref": "yl2"
+      },
+      {
+       "ref": "ey4"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "ey1"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y1"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "ey1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "ey2"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y2"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "ey2"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "ey3"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y3"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "ey3"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "ey4"
+       }
+      ]
+     },
+     {
+      "op": "quadBezTo",
+      "args": [
+       {
+        "ref": "hc"
+       },
+       {
+        "ref": "y4"
+       },
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "ey4"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textFadeRight",
+   "drawing": "envelope",
+   "spt": 168,
+   "adjustments": {
+    "adj": {
+     "default": 33333,
+     "min": 0,
+     "max": 49999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      33333
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      49999
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textFadeLeft",
+   "drawing": "envelope",
+   "spt": 169,
+   "adjustments": {
+    "adj": {
+     "default": 33333,
+     "min": 0,
+     "max": 49999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      33333
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      49999
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textFadeUp",
+   "drawing": "envelope",
+   "spt": 170,
+   "adjustments": {
+    "adj": {
+     "default": 33333,
+     "min": 0,
+     "max": 49999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      33333
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      49999
+     ]
+    },
+    {
+     "name": "dx",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "w"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textFadeDown",
+   "drawing": "envelope",
+   "spt": 171,
+   "adjustments": {
+    "adj": {
+     "default": 33333,
+     "min": 0,
+     "max": 49999
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      33333
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      49999
+     ]
+    },
+    {
+     "name": "dx",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "w"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "x1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "l"
+      },
+      {
+       "ref": "dx"
+      },
+      0
+     ]
+    },
+    {
+     "name": "x2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "r"
+      },
+      0,
+      {
+       "ref": "dx"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "x1"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "x2"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textSlantUp",
+   "drawing": "envelope",
+   "spt": 172,
+   "adjustments": {
+    "adj": {
+     "default": 55555,
+     "min": 0,
+     "max": 71431
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      55555
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      0,
+      {
+       "ref": "adj"
+      },
+      71431
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textSlantDown",
+   "drawing": "envelope",
+   "spt": 173,
+   "adjustments": {
+    "adj": {
+     "default": 44445,
+     "min": 28569,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      44445
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      28569,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "b"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCascadeUp",
+   "drawing": "envelope",
+   "spt": 154,
+   "adjustments": {
+    "adj": {
+     "default": 44444,
+     "min": 28570,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      44444
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      28570,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    },
+    {
+     "name": "dy3",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy2"
+      },
+      1,
+      4
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy3"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "token": "textCascadeDown",
+   "drawing": "envelope",
+   "spt": 155,
+   "adjustments": {
+    "adj": {
+     "default": 44444,
+     "min": 28570,
+     "max": 100000
+    }
+   },
+   "guides": [
+    {
+     "name": "adj",
+     "op": "val",
+     "args": [
+      44444
+     ]
+    },
+    {
+     "name": "a",
+     "op": "pin",
+     "args": [
+      28570,
+      {
+       "ref": "adj"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "dy",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "a"
+      },
+      {
+       "ref": "h"
+      },
+      100000
+     ]
+    },
+    {
+     "name": "y1",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy"
+      },
+      0
+     ]
+    },
+    {
+     "name": "dy2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "h"
+      },
+      0,
+      {
+       "ref": "dy"
+      }
+     ]
+    },
+    {
+     "name": "dy3",
+     "op": "*/",
+     "args": [
+      {
+       "ref": "dy2"
+      },
+      1,
+      4
+     ]
+    },
+    {
+     "name": "y2",
+     "op": "+-",
+     "args": [
+      {
+       "ref": "t"
+      },
+      {
+       "ref": "dy3"
+      },
+      0
+     ]
+    }
+   ],
+   "paths": [
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "t"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "y2"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "op": "moveTo",
+      "args": [
+       {
+        "ref": "l"
+       },
+       {
+        "ref": "y1"
+       }
+      ]
+     },
+     {
+      "op": "lnTo",
+      "args": [
+       {
+        "ref": "r"
+       },
+       {
+        "ref": "b"
+       }
+      ]
+     }
+    ]
+   ]
+  }
+ ],
+ "rejected": [
+  "",
+  "TEXTPLAIN",
+  "textplain",
+  "rect",
+  "textWave3",
+  "text Plain"
+ ]
+}

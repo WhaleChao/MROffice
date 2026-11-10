@@ -1,0 +1,20 @@
+{
+ "about": "The open-source editors carry no per-theme body ladders: every placeholder pours with the editor's own defaults.",
+ "levelFields": [
+  "marL",
+  "indent",
+  "sz",
+  "b",
+  "before",
+  "after",
+  "line",
+  "bu",
+  "buFont",
+  "buClr",
+  "buClrMods",
+  "buSzPct",
+  "buAutoNum"
+ ],
+ "levels": [],
+ "themes": {}
+}

@@ -1,0 +1,49 @@
+{
+  "sourceCommit": "06dd76ea6a4da876d135a33330ac0c287be2c445",
+  "editors": [
+    "code",
+    "pdf",
+    "ink",
+    "docs",
+    "sheets",
+    "slides"
+  ],
+  "counts": {
+    "code": {
+      "files": 162,
+      "lines": 107017,
+      "stubs": 0
+    },
+    "pdf": {
+      "files": 726,
+      "lines": 456414,
+      "stubs": 0
+    },
+    "docs": {
+      "files": 224,
+      "lines": 152657,
+      "stubs": 0
+    },
+    "sheets": {
+      "files": 568,
+      "lines": 325712,
+      "stubs": 0
+    },
+    "slides": {
+      "files": 358,
+      "lines": 179684,
+      "stubs": 0
+    },
+    "core": {
+      "files": 1932,
+      "lines": 930635,
+      "stubs": 96
+    },
+    "ink": {
+      "files": 12,
+      "lines": 4077,
+      "stubs": 0
+    }
+  },
+  "generatedBy": "MR Note scripts/open-editors/export.mjs"
+}

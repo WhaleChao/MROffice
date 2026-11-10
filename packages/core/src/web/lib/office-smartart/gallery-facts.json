@@ -1,0 +1,5 @@
+{
+ "about": "The open-source editors' own SmartArt gallery metadata: every catalog layout is listed in its own category, in the catalog's order, and no alias card is offered (an alias is drawn from a layout definition the open-source editors do not carry). MR Note's own gallery facts are read from an office suite's layout definitions and are not published.",
+ "tabs": {},
+ "aliasCards": []
+}

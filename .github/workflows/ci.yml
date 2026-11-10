@@ -1,0 +1,39 @@
+# Install, build and smoke-test the editors on every push and pull request.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Licenses
+        run: node scripts/third-party-notices.mjs --check
+      - name: Office substitute fonts
+        run: npm run fonts
+      - name: Build
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+      - name: Browser for the smoke test
+        run: npm install --no-save --no-audit --no-fund playwright@1.58.2 && npx playwright install --with-deps chromium
+      - name: Smoke test (open, edit, save and reopen a file in each editor)
+        run: node scripts/smoke.mjs

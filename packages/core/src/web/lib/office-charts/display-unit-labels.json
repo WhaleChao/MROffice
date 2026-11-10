@@ -1,0 +1,200 @@
+{
+  "en": {
+    "hundreds": "Hundreds",
+    "thousands": "Thousands",
+    "tenThousands": "x 10000",
+    "hundredThousands": "x 100000",
+    "millions": "Millions",
+    "tenMillions": "x 10000000",
+    "hundredMillions": "x 100000000",
+    "billions": "Billions",
+    "trillions": "Trillions"
+  },
+  "zh": {
+    "hundreds": "百",
+    "thousands": "千",
+    "tenThousands": "x 10000",
+    "hundredThousands": "x 100000",
+    "millions": "百万",
+    "tenMillions": "x 10000000",
+    "hundredMillions": "x 100000000",
+    "billions": "十亿",
+    "trillions": "兆"
+  },
+  "da": {
+    "hundreds": "Hundreder",
+    "thousands": "Tusinder",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Millioner",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Milliarder",
+    "trillions": "Billioner"
+  },
+  "de": {
+    "hundreds": "Hunderte",
+    "thousands": "Tausende",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Millionen",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Milliarden",
+    "trillions": "Billionen"
+  },
+  "es": {
+    "hundreds": "Cientos",
+    "thousands": "Miles",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Millones",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Miles de millones",
+    "trillions": "Billones"
+  },
+  "fi": {
+    "hundreds": "Sadat",
+    "thousands": "Tuhannet",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Miljoonat",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Miljardit",
+    "trillions": "Biljoonat"
+  },
+  "fr": {
+    "hundreds": "Centaines",
+    "thousands": "Milliers",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Millions",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Milliards",
+    "trillions": "Billions"
+  },
+  "id": {
+    "hundreds": "Ratusan",
+    "thousands": "Ribuan",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Jutaan",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Miliaran",
+    "trillions": "Triliunan"
+  },
+  "it": {
+    "hundreds": "Centinaia",
+    "thousands": "Migliaia",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Milioni",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Miliardi",
+    "trillions": "Bilioni"
+  },
+  "ja": {
+    "hundreds": "百",
+    "thousands": "千",
+    "tenThousands": "万",
+    "hundredThousands": "10万",
+    "millions": "百万",
+    "tenMillions": "1000万",
+    "hundredMillions": "億",
+    "billions": "10億",
+    "trillions": "兆"
+  },
+  "ko": {
+    "hundreds": "백",
+    "thousands": "천",
+    "tenThousands": "만",
+    "hundredThousands": "십만",
+    "millions": "백만",
+    "tenMillions": "천만",
+    "hundredMillions": "억",
+    "billions": "십억",
+    "trillions": "조"
+  },
+  "nl": {
+    "hundreds": "Honderden",
+    "thousands": "Duizenden",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Miljoenen",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Miljarden",
+    "trillions": "Biljoenen"
+  },
+  "no": {
+    "hundreds": "Hundre",
+    "thousands": "Tusen",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Millioner",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Milliarder",
+    "trillions": "Billioner"
+  },
+  "pt-BR": {
+    "hundreds": "Centenas",
+    "thousands": "Milhares",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Milhões",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Bilhões",
+    "trillions": "Trilhões"
+  },
+  "sv": {
+    "hundreds": "Hundratal",
+    "thousands": "Tusental",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Miljoner",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Miljarder",
+    "trillions": "Biljoner"
+  },
+  "th": {
+    "hundreds": "ร้อย",
+    "thousands": "พัน",
+    "tenThousands": "หมื่น",
+    "hundredThousands": "แสน",
+    "millions": "ล้าน",
+    "tenMillions": "สิบล้าน",
+    "hundredMillions": "ร้อยล้าน",
+    "billions": "พันล้าน",
+    "trillions": "ล้านล้าน"
+  },
+  "vi": {
+    "hundreds": "Trăm",
+    "thousands": "Nghìn",
+    "tenThousands": "10000",
+    "hundredThousands": "100000",
+    "millions": "Triệu",
+    "tenMillions": "10000000",
+    "hundredMillions": "100000000",
+    "billions": "Tỷ",
+    "trillions": "Nghìn tỷ"
+  },
+  "zh-TW": {
+    "hundreds": "百",
+    "thousands": "千",
+    "tenThousands": "萬",
+    "hundredThousands": "十萬",
+    "millions": "百萬",
+    "tenMillions": "千萬",
+    "hundredMillions": "億",
+    "billions": "十億",
+    "trillions": "兆"
+  }
+}

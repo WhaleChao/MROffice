@@ -1,0 +1,108 @@
+/* Excel's Spelling dialog (Review > Spelling, F7). The card, title row,
+   fields, list box and buttons come from the shared Office dialog chrome
+   (components/office-ribbon/OfficeDialogChrome.css, centred by
+   .native-window__modal-dialog); this module lays out what is particular to
+   Spelling: the fields on the left and Excel's two button columns' worth of
+   commands on the right. */
+
+.dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.layout {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.fields {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fields input,
+.fields select {
+  min-width: 0;
+  width: 100%;
+}
+
+.suggestions {
+  height: 132px;
+}
+
+.actions {
+  align-content: start;
+  display: grid;
+  gap: 6px;
+}
+
+.actions button {
+  justify-content: center;
+  min-width: 136px;
+}
+
+.actionGap {
+  height: 10px;
+}
+
+.location {
+  min-height: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  min-height: 56px;
+}
+
+.optionsBody {
+  display: grid;
+  gap: 12px;
+}
+
+.checks {
+  display: grid;
+  gap: 6px;
+}
+
+.check {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.entryEditor {
+  display: grid;
+  gap: 6px;
+}
+
+.entryInputs {
+  display: flex;
+  gap: 6px;
+}
+
+.entryInputs input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.entryList {
+  max-height: 112px;
+  min-height: 40px;
+}
+
+.entryRow {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.entryText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

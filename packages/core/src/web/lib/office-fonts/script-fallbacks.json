@@ -1,0 +1,236 @@
+{
+  "$comment": [
+    "The faces a run's characters fall back to when its own face (and that face's open stand-in) has no glyph for them, by script, in the order a font stack lists them. One table for every surface that draws text: the presentation stacks (script-fallbacks.ts), the print page (the same stacks in the server's browser) and the census font-coverage leg (MRAI-corpus/pptx-fast/look/font_cover.py), so what the coverage metric calls covered is what the page draws.",
+    "Why (census rounds 31-83, 2179 decks, 11.9 M characters, 10-22): 2.3 % of the characters decks draw are ones their face's stand-in has no glyph for -- Arial's Arabic (Arimo has none: 71 k characters), Cambria's Cyrillic (Caladea has none: 44 k), Calibri's Telugu and Gurmukhi, Hangul and emoji in Latin runs. Office draws them from the named face itself or from its own linked fallback; the page drew whatever the reader's machine had (a CJK face for Cyrillic under a zh locale, a missing-glyph box on the print server).",
+    "Order: the Latin family's own extension first (Latin Extended, Greek, Cyrillic, Vietnamese), then the complex scripts, then emoji (in colour, as Office's Segoe UI Emoji draws them), symbols and math, East Asian last: a Han face ahead of the others would draw the Latin-script punctuation it also carries (full-width quotes, the 10-22 audit's 'quotes drawn wide').",
+    "East Asian ambiguous punctuation (U+2018-201D quotes, U+2026 ellipsis, U+2014 em dash, U+00B7) is not a fallback question: DrawingML gives a run three slots by character (ECMA-376 21.1.2.3.7/.3/.1), and these characters are Latin-slot characters whatever the run's language (app/services/document_font_face.font_slot_for_codepoint, officeFontScriptSlots.ts). A run's Latin face draws them; where that face is a Chinese Office face, its metric stand-in carries them at the Office face's own advances (cjk-latin-advances.json)."
+  ],
+  "classes": {
+    "serif": [
+      "serif",
+      "tinos",
+      "caladea",
+      "gelasio",
+      "liberation serif",
+      "tex gyre termes",
+      "tex gyre pagella",
+      "tex gyre bonum",
+      "tex gyre schola",
+      "merriweather",
+      "playfair",
+      "lora",
+      "crimson",
+      "garamond",
+      "baskerville",
+      "frank ruhl",
+      "david libre",
+      "source serif",
+      "pt serif",
+      "bodoni",
+      "noto naskh",
+      "amiri",
+      "mincho"
+    ],
+    "mono": [
+      "mono",
+      "cousine",
+      "courier",
+      "inconsolata",
+      "cascadia",
+      "consolas",
+      "menlo",
+      "code"
+    ]
+  },
+  "scripts": [
+    {
+      "script": "latin-greek-cyrillic",
+      "sans": [
+        "Noto Sans"
+      ],
+      "serif": [
+        "Noto Serif"
+      ],
+      "mono": [
+        "DejaVu Sans Mono"
+      ]
+    },
+    {
+      "script": "arabic",
+      "sans": [
+        "Noto Sans Arabic"
+      ],
+      "serif": [
+        "Noto Naskh Arabic"
+      ]
+    },
+    {
+      "script": "hebrew",
+      "sans": [
+        "Noto Sans Hebrew"
+      ],
+      "serif": [
+        "Noto Serif Hebrew"
+      ]
+    },
+    {
+      "script": "thai",
+      "sans": [
+        "Noto Sans Thai"
+      ],
+      "serif": [
+        "Noto Serif Thai"
+      ]
+    },
+    {
+      "script": "devanagari",
+      "sans": [
+        "Noto Sans Devanagari"
+      ],
+      "serif": [
+        "Noto Serif Devanagari"
+      ]
+    },
+    {
+      "script": "bengali",
+      "sans": [
+        "Noto Sans Bengali"
+      ],
+      "serif": [
+        "Noto Serif Bengali"
+      ]
+    },
+    {
+      "script": "tamil",
+      "sans": [
+        "Noto Sans Tamil"
+      ],
+      "serif": [
+        "Noto Serif Tamil"
+      ]
+    },
+    {
+      "script": "telugu",
+      "sans": [
+        "Noto Sans Telugu"
+      ],
+      "serif": [
+        "Noto Serif Telugu"
+      ]
+    },
+    {
+      "script": "gurmukhi",
+      "sans": [
+        "Noto Sans Gurmukhi"
+      ]
+    },
+    {
+      "script": "gujarati",
+      "sans": [
+        "Noto Sans Gujarati"
+      ]
+    },
+    {
+      "script": "kannada",
+      "sans": [
+        "Noto Sans Kannada"
+      ]
+    },
+    {
+      "script": "malayalam",
+      "sans": [
+        "Noto Sans Malayalam"
+      ]
+    },
+    {
+      "script": "oriya",
+      "sans": [
+        "Noto Sans Oriya"
+      ]
+    },
+    {
+      "script": "sinhala",
+      "sans": [
+        "Noto Sans Sinhala"
+      ]
+    },
+    {
+      "script": "khmer",
+      "sans": [
+        "Noto Sans Khmer"
+      ],
+      "serif": [
+        "Noto Serif Khmer"
+      ]
+    },
+    {
+      "script": "lao",
+      "sans": [
+        "Noto Sans Lao"
+      ]
+    },
+    {
+      "script": "myanmar",
+      "sans": [
+        "Noto Sans Myanmar"
+      ]
+    },
+    {
+      "script": "armenian",
+      "sans": [
+        "Noto Serif Armenian"
+      ]
+    },
+    {
+      "script": "georgian",
+      "sans": [
+        "Noto Serif Georgian"
+      ]
+    },
+    {
+      "script": "ethiopic",
+      "sans": [
+        "Noto Sans Ethiopic"
+      ],
+      "serif": [
+        "Noto Serif Ethiopic"
+      ]
+    },
+    {
+      "script": "syriac-thaana",
+      "sans": [
+        "Noto Sans Syriac",
+        "Noto Sans Thaana"
+      ]
+    },
+    {
+      "script": "tibetan-mongolian-yi",
+      "sans": [
+        "Noto Serif Tibetan",
+        "Noto Sans Mongolian",
+        "Noto Sans Yi"
+      ]
+    },
+    {
+      "script": "emoji-symbols-math",
+      "sans": [
+        "Noto Color Emoji",
+        "Noto Sans Symbols",
+        "Noto Sans Symbols 2",
+        "Noto Sans Math",
+        "DejaVu Sans"
+      ]
+    },
+    {
+      "script": "east-asian",
+      "sans": [
+        "Noto Sans SC",
+        "Noto Sans KR"
+      ],
+      "serif": [
+        "Noto Serif SC",
+        "Noto Serif KR"
+      ]
+    }
+  ]
+}

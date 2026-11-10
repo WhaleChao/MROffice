@@ -1,0 +1,46 @@
+{
+  "name": "@mrnote/docs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "description": "The MR Office document editor.",
+  "homepage": "https://mroffice.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dongmingyang2007-pixel/MROffice.git",
+    "directory": "packages/docs"
+  },
+  "exports": {
+    ".": "./src/index.tsx",
+    "./*": "./src/*"
+  },
+  "sideEffects": [
+    "*.css",
+    "**/*.css"
+  ],
+  "dependencies": {
+    "@mrnote/core": "*",
+    "@mrnote/ink": "*",
+    "@mrnote/sheets": "*",
+    "@mrnote/slides": "*",
+    "@tiptap/core": "3.30.5",
+    "@tiptap/extension-table": "3.30.5",
+    "@tiptap/extensions": "3.30.5",
+    "@tiptap/pm": "3.30.5",
+    "@tiptap/react": "3.30.5",
+    "@tiptap/y-tiptap": "3.0.9",
+    "dompurify": "3.4.17",
+    "katex": "0.16.47",
+    "lowlight": "3.3.0",
+    "lucide-react": "0.577.0",
+    "opencc-js": "1.3.1",
+    "pinyin-pro": "3.29.4",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  }
+}

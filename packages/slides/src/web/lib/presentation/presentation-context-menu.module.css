@@ -1,0 +1,67 @@
+/* The deck's own right-click menu and the AutoFit smart-tag menu wear the
+   Cupertino menu card (docs-cupertino-menu:
+   glass, radius, dark theme). These rules add what their hand-built items
+   need on top of it: hover, native `disabled`, the active AutoFit choice and
+   the divider's height, in light and dark. */
+.menu {
+  user-select: none;
+}
+
+.item {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: block;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 5px 14px;
+  text-align: start;
+  width: 100%;
+}
+
+.item:hover:not(:disabled),
+.item[aria-checked="true"] {
+  background: color-mix(in srgb, var(--console-accent-strong, #087c73) 10%, transparent);
+}
+
+.item:disabled {
+  color: #84918f;
+  cursor: default;
+  opacity: 0.58;
+}
+
+.item[data-danger="true"]:not(:disabled) {
+  color: #b91c1c;
+}
+
+.separator {
+  height: 1px;
+}
+
+:global([data-theme-mode="dark"]) .item:hover:not(:disabled),
+:global([data-theme-mode="dark"]) .item[aria-checked="true"],
+:global([data-theme-mode="high-contrast"]) .item:hover:not(:disabled),
+:global([data-theme-mode="high-contrast"]) .item[aria-checked="true"] {
+  background: rgb(255 255 255 / 10%);
+}
+
+:global([data-theme-mode="dark"]) .item:disabled {
+  color: #8e8e93;
+  opacity: 1;
+}
+
+:global([data-theme-mode="high-contrast"]) .item:disabled {
+  color: #8e8e93;
+  opacity: 1;
+}
+
+:global([data-theme-mode="dark"]) .item[data-danger="true"]:not(:disabled) {
+  color: #ff6b6b;
+}
+
+:global([data-theme-mode="high-contrast"]) .item[data-danger="true"]:not(:disabled) {
+  color: #ff6b6b;
+}

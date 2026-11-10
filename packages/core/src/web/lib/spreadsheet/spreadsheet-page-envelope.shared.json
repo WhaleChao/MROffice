@@ -1,0 +1,14 @@
+{
+ "source": "The spreadsheet page envelope: what one spreadsheet page may hold, measured on the stored form (each distinct cell style once, spreadsheet_cell_styles / cell-style-table.ts). The API's page validator and SPREADSHEET_JSON_TREE_BUDGET (app/services/spreadsheet_limits.py, app/schemas/universal_document_content.py) and the editor's command layer (apps/web/lib/editor-commands/spreadsheet/envelope.ts) read these numbers from here, so a workbook that imports as an editable page is one its commands may save (xlsx-rounds XQ-042). maxSheets: the worksheets a page may ADD sheets up to (New Sheet, Move or Copy, an AI or an import adding one): a workbook already holding more keeps them. maxSheetsTotal: the most sheets any page holds, the only sheet count a page is validated against; a workbook of more than maxSheets imports its sheets past maxSheets as placeholders (sheetPending) read when opened (xlsx-rounds R283-X12, 260 sheets; Excel itself sets no count). maxConditionalFormatsPerSheet: the conditional-format rules one sheet holds; Excel itself sets no count (a workbook Excel saved holds 309 on one sheet, xlsx-rounds XQ-092), so it is the import's own bound, and a page the import writes is never one the editor refuses. Measurements behind them: docs/spreadsheet-page-limits.md. apps/api/app/services/spreadsheet_page_envelope.json and apps/web/lib/spreadsheet/spreadsheet-page-envelope.shared.json are byte-identical copies, pinned by both test suites.",
+ "maxSheets": 200,
+ "maxSheetsTotal": 4096,
+ "maxCellsPerSheet": 200000,
+ "maxObjects": 10000,
+ "maxNodes": 1500000,
+ "maxArrayLength": 100000,
+ "maxDepth": 256,
+ "maxStringChars": 1048576,
+ "maxTotalStringChars": 16000000,
+ "maxJsonBytes": 16777216,
+ "maxConditionalFormatsPerSheet": 1000
+}

@@ -1,0 +1,75 @@
+/* The Erase picker's footer: how the eraser paints (a dragged rectangle or a
+   freehand brush), the brush widths, and the note that a cover is not a
+   redaction. It sits under the shared colour palette and takes its tokens. */
+.eraseOptions {
+  border-top: 1px solid var(--palette-separator, #e5e7eb);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+}
+
+.eraseOptionRow {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.eraseOptionLabel {
+  color: var(--office-ribbon-muted, #6b7280);
+  font-size: 12px;
+  margin-inline-end: 4px;
+  min-width: 56px;
+}
+
+/* A native window's blanket `button` rule (native-page-window.css) outranks
+   one class; the option restates its own box a step above it, as the
+   palette's rows do. */
+.eraseOption.eraseOption.eraseOption {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--palette-separator, #d1d5db);
+  border-radius: 4px;
+  box-shadow: none;
+  box-sizing: border-box;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 44px;
+  padding: 2px 8px;
+  transform: none;
+}
+
+.eraseOption.eraseOption.eraseOption:hover {
+  background: var(--palette-hover, #f3f4f6);
+}
+
+.eraseOption.eraseOption.eraseOption[aria-pressed="true"] {
+  background: var(--palette-selected, #eef6ff);
+  border-color: var(--palette-focus, #2563eb);
+}
+
+.eraseOption.eraseOption.eraseOption:focus-visible {
+  outline: 2px solid var(--palette-focus, #2563eb);
+  outline-offset: 1px;
+}
+
+.eraseNote {
+  color: var(--office-ribbon-muted, #6b7280);
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 2px 0 0;
+}
+
+/* Dark and high contrast: the palette's dark hover / selected grounds (the
+   light fallbacks washed out the dark menu's light ink). */
+:global(:is([data-theme-mode="dark"], [data-theme-mode="high-contrast"])) .eraseOptions {
+  --palette-hover: rgb(255 255 255 / 8%);
+  --palette-selected: rgb(255 255 255 / 12%);
+}

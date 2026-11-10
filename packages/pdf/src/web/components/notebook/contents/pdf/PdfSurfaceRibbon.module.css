@@ -1,0 +1,88 @@
+ 
+.lane {
+  min-block-size: 66px;
+}
+
+ 
+.toolsLanes.toolsLanes {
+  column-gap: 2px;
+  grid-auto-columns: max-content;
+  grid-auto-flow: column;
+  grid-template-columns: none;
+}
+
+/* Read-only text inside a group: the caption's size and colour, one line,
+   cut with an ellipsis (the block's title carries the full text). */
+.caption {
+  align-self: center;
+  color: var(--muted-foreground, #64748b);
+  font-size: 11px;
+  line-height: 1.25;
+  max-inline-size: 180px;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding-inline: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+ 
+.inputs {
+  align-items: center;
+  align-self: center;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+  max-block-size: 66px;
+  min-inline-size: 0;
+  padding-inline: 4px;
+}
+
+.inputs input[type="range"] {
+  inline-size: 84px;
+}
+
+.inputs input[type="color"] {
+  block-size: 26px;
+  inline-size: 30px;
+  padding: 0;
+}
+
+/* Swatches are the ink palette, not commands: a tight row of 18px dots. */
+.swatches {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.swatch.swatch {
+  block-size: 18px;
+  border-radius: 999px;
+  inline-size: 18px;
+  min-block-size: 18px;
+  min-inline-size: 18px;
+  padding: 0;
+}
+
+/* The large command's glyph box anchors the busy spinner. */
+.glyph {
+  position: relative;
+}
+
+/* One labelled field row: caption, field, unit; the caption is the
+   compact command's 11px muted text, the row a compact command's 30px. */
+.fieldRow {
+  align-items: center;
+  color: var(--muted-foreground, #64748b);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 5px;
+  min-block-size: 30px;
+  padding-inline: 4px;
+  white-space: nowrap;
+}
+
+.fieldRow > svg {
+  flex: 0 0 16px;
+}

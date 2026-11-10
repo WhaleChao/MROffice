@@ -1,0 +1,104 @@
+.group {
+  min-width: max-content;
+}
+
+.identity {
+  align-items: center;
+  display: grid;
+  gap: 2px 7px;
+  grid-template-columns: 22px minmax(86px, 150px);
+  max-width: 188px;
+  padding: 3px 6px;
+}
+
+.identity > svg {
+  color: var(--console-accent-strong, #0f766e);
+  grid-row: 1 / span 2;
+}
+
+.name {
+  color: var(--foreground, #0f172a);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kind,
+.measurement {
+  color: var(--muted-foreground, #475569);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.colorField {
+  align-items: center;
+  color: var(--muted-foreground, #475569);
+  display: grid;
+  font-size: 10px;
+  gap: 3px;
+  justify-items: center;
+  line-height: 1;
+  min-width: 44px;
+}
+
+.colorField input {
+  background: transparent;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  height: 25px;
+  padding: 2px;
+  width: 38px;
+}
+
+.colorField input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/*
+ * Two stacked rows must fit the shared 100px Home band under the group
+ * caption, so each row keeps the shared 30px checkbox height; the hidden
+ * input below still covers the whole row as the hit target.
+ */
+.hitTargetCheckbox {
+  box-sizing: border-box;
+  min-block-size: 30px;
+}
+
+.hitTargetCheckbox > :global(input[type="checkbox"]) {
+  box-sizing: border-box;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+}
+
+.measurement {
+  align-items: center;
+  background: color-mix(in srgb, var(--console-accent, #0d9488) 8%, white);
+  border: 1px solid
+    color-mix(in srgb, var(--console-accent, #0d9488) 28%, white);
+  border-radius: 4px;
+  display: inline-flex;
+  min-height: 24px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* A colour command and the palette popover anchored under it. */
+.paletteHost {
+  display: inline-flex;
+  position: relative;
+}

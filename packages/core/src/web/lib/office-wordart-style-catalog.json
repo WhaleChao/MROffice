@@ -1,0 +1,334 @@
+[
+ {
+  "id": "ink",
+  "label": {
+   "en": "Black, soft shadow",
+   "zh": "黑色，柔和阴影"
+  },
+  "paint": {
+   "fill": "#1b1b1f",
+   "outline": "none",
+   "outlineWidthPt": 0,
+   "shadow": {
+    "color": "#000000",
+    "blur": 3,
+    "offsetX": 0,
+    "offsetY": 2,
+    "opacity": 0.4
+   }
+  }
+ },
+ {
+  "id": "blue",
+  "label": {
+   "en": "Blue fill",
+   "zh": "蓝色填充"
+  },
+  "paint": {
+   "fill": "#2f6fb3",
+   "outline": "none",
+   "outlineWidthPt": 0
+  }
+ },
+ {
+  "id": "coral",
+  "label": {
+   "en": "Light red, red outline",
+   "zh": "浅红色，红色轮廓"
+  },
+  "paint": {
+   "fill": "#f2c4bd",
+   "outline": "#c4473a",
+   "outlineWidthPt": 1
+  }
+ },
+ {
+  "id": "cyan-outline-shadow",
+  "label": {
+   "en": "White, cyan outline and shadow",
+   "zh": "白色，青色轮廓和阴影"
+  },
+  "paint": {
+   "fill": "#ffffff",
+   "outline": "#1f9bb0",
+   "outlineWidthPt": 1,
+   "shadow": {
+    "color": "#3a3a3a",
+    "blur": 2,
+    "offsetX": 0,
+    "offsetY": 2,
+    "opacity": 0.4
+   }
+  }
+ },
+ {
+  "id": "purple-bevel",
+  "label": {
+   "en": "Purple gradient, bevel",
+   "zh": "紫色渐变，棱台"
+  },
+  "paint": {
+   "fill": "#b6a3d0",
+   "outline": "#5a3f80",
+   "outlineWidthPt": 0.5,
+   "fillGradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "position": 0,
+      "color": "#b6a3d0"
+     },
+     {
+      "position": 0.5,
+      "color": "#7d5ba6"
+     },
+     {
+      "position": 1,
+      "color": "#5a3f80"
+     }
+    ]
+   },
+   "bevel": {
+    "width": 2,
+    "height": 2,
+    "depth": 2
+   }
+  }
+ },
+ {
+  "id": "gray-gradient",
+  "label": {
+   "en": "Gray gradient",
+   "zh": "灰色渐变"
+  },
+  "paint": {
+   "fill": "#5e6670",
+   "outline": "none",
+   "outlineWidthPt": 0,
+   "fillGradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "position": 0,
+      "color": "#5e6670"
+     },
+     {
+      "position": 0.5,
+      "color": "#8b939c"
+     },
+     {
+      "position": 1,
+      "color": "#c3c8ce"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "id": "cyan-reflection",
+  "label": {
+   "en": "Cyan gradient, reflection",
+   "zh": "青色渐变，映像"
+  },
+  "paint": {
+   "fill": "#16788a",
+   "outline": "none",
+   "outlineWidthPt": 0,
+   "fillGradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "position": 0,
+      "color": "#16788a"
+     },
+     {
+      "position": 0.5,
+      "color": "#1f9bb0"
+     },
+     {
+      "position": 1,
+      "color": "#74c7d5"
+     }
+    ]
+   },
+   "reflection": {
+    "opacity": 0.35,
+    "blur": 0,
+    "distance": 1
+   }
+  }
+ },
+ {
+  "id": "lilac-outline",
+  "label": {
+   "en": "Light purple, purple outline",
+   "zh": "浅紫色，紫色轮廓"
+  },
+  "paint": {
+   "fill": "#d9cdea",
+   "outline": "#7d5ba6",
+   "outlineWidthPt": 1
+  }
+ },
+ {
+  "id": "blue-glow",
+  "label": {
+   "en": "White, blue outline and glow",
+   "zh": "白色，蓝色轮廓和发光"
+  },
+  "paint": {
+   "fill": "#ffffff",
+   "outline": "#2f6fb3",
+   "outlineWidthPt": 1,
+   "glow": {
+    "color": "#2f6fb3",
+    "radius": 4,
+    "opacity": 0.6
+   }
+  }
+ },
+ {
+  "id": "green-bevel",
+  "label": {
+   "en": "Green gradient, bevel",
+   "zh": "绿色渐变，棱台"
+  },
+  "paint": {
+   "fill": "#8cbf5a",
+   "outline": "#4f7d2a",
+   "outlineWidthPt": 0.5,
+   "fillGradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "position": 0,
+      "color": "#8cbf5a"
+     },
+     {
+      "position": 0.5,
+      "color": "#6a9e3c"
+     },
+     {
+      "position": 1,
+      "color": "#4f7d2a"
+     }
+    ]
+   },
+   "bevel": {
+    "width": 2,
+    "height": 2,
+    "depth": 2
+   }
+  }
+ },
+ {
+  "id": "ink-white-shadow",
+  "label": {
+   "en": "Black, white outline and shadow",
+   "zh": "黑色，白色轮廓和阴影"
+  },
+  "paint": {
+   "fill": "#1b1b1f",
+   "outline": "#ffffff",
+   "outlineWidthPt": 1.5,
+   "shadow": {
+    "color": "#3a3a3a",
+    "blur": 2,
+    "offsetX": 1,
+    "offsetY": 2,
+    "opacity": 0.55
+   }
+  }
+ },
+ {
+  "id": "ink-cyan-shadow",
+  "label": {
+   "en": "Dark fill, white outline and cyan shadow",
+   "zh": "深色填充，白色轮廓和青色阴影"
+  },
+  "paint": {
+   "fill": "#22303a",
+   "outline": "#ffffff",
+   "outlineWidthPt": 1.2,
+   "shadow": {
+    "color": "#1f9bb0",
+    "blur": 0,
+    "offsetX": 2,
+    "offsetY": 2,
+    "opacity": 1
+   }
+  }
+ },
+ {
+  "id": "cyan-white-shadow",
+  "label": {
+   "en": "Cyan, white outline and shadow",
+   "zh": "青色，白色轮廓和阴影"
+  },
+  "paint": {
+   "fill": "#1f9bb0",
+   "outline": "#ffffff",
+   "outlineWidthPt": 1.2,
+   "shadow": {
+    "color": "#1f9bb0",
+    "blur": 1,
+    "offsetX": 1,
+    "offsetY": 2,
+    "opacity": 0.6
+   }
+  }
+ },
+ {
+  "id": "red-outline-depth",
+  "label": {
+   "en": "White, red outline and hard shadow",
+   "zh": "白色，红色轮廓和硬阴影"
+  },
+  "paint": {
+   "fill": "#ffffff",
+   "outline": "#c4473a",
+   "outlineWidthPt": 1.8,
+   "shadow": {
+    "color": "#c4473a",
+    "blur": 0,
+    "offsetX": 0,
+    "offsetY": 2,
+    "opacity": 1
+   }
+  }
+ },
+ {
+  "id": "cream-bevel",
+  "label": {
+   "en": "Cream gradient, bevel",
+   "zh": "米色渐变，棱台"
+  },
+  "paint": {
+   "fill": "#e3dccb",
+   "outline": "#cfc6b0",
+   "outlineWidthPt": 0.3,
+   "fillGradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "position": 0,
+      "color": "#e3dccb"
+     },
+     {
+      "position": 0.5,
+      "color": "#cfc6b0"
+     },
+     {
+      "position": 1,
+      "color": "#b5ab92"
+     }
+    ]
+   },
+   "bevel": {
+    "width": 2,
+    "height": 2,
+    "depth": 2
+   }
+  }
+ }
+]

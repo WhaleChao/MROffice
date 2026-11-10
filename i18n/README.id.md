@@ -1,0 +1,64 @@
+# MR Office — Bahasa Indonesia
+
+[English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
+
+> ### ⬇ Untuk semua fitur, pasang aplikasi desktop MR Office (gratis)
+>
+> Aplikasi desktop MR Office gratis, berisi editor-editor ini dan layanan lengkap, serta berjalan offline di komputer Anda sendiri. Aplikasi ini menambahkan yang tidak ada di editor sumber terbuka:
+>
+> - Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx)
+> - Menghitung rumus dengan fungsi (SUM, IF, VLOOKUP …)
+> - Bagan
+> - Pengeditan SmartArt
+> - Menyimpan hasil edit PDF kembali ke file
+>
+> **[Unduh MR Office dari Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [atau dari mroffice.ai](https://mroffice.ai)
+
+<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Coba di MR Office →</a></p>
+
+> Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban.
+
+MR Office adalah ruang kerja untuk catatan, AI, dan file sungguhan. Repositori ini menerbitkan kode sumber editornya: editor yang sama dengan yang dijalankan MR Office, yang bisa Anda bangun, jalankan, dan sematkan sendiri. Ini adalah editor sumber terbuka, bukan paket perkantoran sumber terbuka yang lengkap: membaca dan menulis file Microsoft Office tetap ada di MR Office (lihat di bawah).
+
+## Editor
+
+Yang dilakukan setiap editor di repositori ini:
+
+- **Dokumen** — pengolah kata berhalaman: gaya, font, daftar, tabel, header dan footer, bagian dan kolom, bentuk dan persamaan, halaman sampul dan daftar isi, komentar dan lacak perubahan, serta tinta di halaman. Menyimpan dalam formatnya sendiri (.mrdoc); membuka HTML, Markdown, dan teks biasa.
+- **Lembar kerja** — sel dan rumus, format angka, pemformatan bersyarat, pengurutan dan filter, panel beku, dan banyak lembar, dengan jumlah dan rata-rata pilihan. Aritmetika antarsel (=A1*B1+10) dihitung di peramban saat diketik; rumus dengan fungsi (SUM, IF, VLOOKUP …) disimpan seperti yang ditulis. Menyimpan dalam formatnya sendiri (.mrsheet); membuka dan menyimpan CSV serta TSV.
+- **Presentasi** — slide dengan delapan tema miliknya sendiri, tata letak, tampilan master slide dan tata letak, teks, bentuk, kotak teks, tabel, WordArt dan persamaan, komentar, bagian, transisi dan animasi dengan pratinjau, serta tayangan slide. Menyimpan dalam formatnya sendiri (.mrslides).
+- **PDF** — membaca, mencari, menyajikan, dan mencetak file PDF, menyalin dan membacakan teksnya, serta menandai teks terpilih (sorot, garis bawah, coret, bergelombang) dengan catatan dan panel komentar selama file terbuka; menyimpan mengembalikan file seperti saat dibuka.
+- **Tulisan tangan** — catatan tulisan tangan dengan pena peka tekanan, stabilo, penghapus, laso, dan penggaris, serta tinta yang diubah menjadi bentuk. Menyimpan dalam formatnya sendiri (.mrink).
+- **Kode** — editor kode ringan dengan penyorotan sintaks untuk banyak bahasa, kerangka, serta cari dan ganti; JavaScript/TypeScript, Python, SQL, Lua, dan shell berjalan langsung di peramban.
+
+Penghitungan rumus dengan fungsi, penggambaran bagan, dan tata letak SmartArt dijalankan oleh mesin MR Office sendiri, di aplikasi desktop MR Office: editor sumber terbuka menyimpan rumus, bagan, dan SmartArt dalam file, dan menampilkan SmartArt sebagaimana disimpan.
+
+## File Word, Excel, PowerPoint, dan PDF
+
+Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx), serta menyimpan hasil edit PDF kembali ke file, disediakan oleh aplikasi desktop MR Office (gratis), yang berisi semua editor ini dan berjalan offline di komputer Anda sendiri:
+
+- **MR Office** (aplikasi desktop gratis): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **Situs web**: https://mroffice.ai
+
+[Semua versi →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+
+## Menjalankan editor
+
+Keenam editor ada di `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, yang berbagi `@mrnote/core`) dan berjalan bersama di `apps/playground`:
+
+```bash
+npm install
+npm run fonts     # the open substitutes for Office's fonts
+npm run build
+npm run preview   # http://localhost:5178
+```
+
+`npm run dev` memulai server pengembangan di alamat yang sama, dan `npm run smoke` memeriksa hasil build. README setiap paket menjelaskan secara rinci apa yang dilakukannya dan cara menyematkannya.
+
+## Lisensi
+
+Sumber terbuka di bawah GNU Affero General Public License v3.0 (LICENSE), dengan ketentuan tambahan di NOTICE.md: pertahankan atribusi "MR Office" dan tautan ke https://mroffice.ai, dan tidak ada hak atas nama atau logo MR Office. Lisensi komersial tersedia melalui support@mr-note.com. Perangkat lunak dan data pihak ketiga tercantum di THIRD_PARTY_NOTICES.md. Kontribusi: lihat CONTRIBUTING.md.
+
+## Selengkapnya
+
+Situs web dan produk lengkap: **https://mroffice.ai** · Pertanyaan dan masukan: support@mr-note.com

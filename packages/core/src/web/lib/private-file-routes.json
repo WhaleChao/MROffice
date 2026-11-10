@@ -1,0 +1,13 @@
+[
+  {"methods":["GET","HEAD"],"path":"^/__private_files/[A-Za-z0-9_-]{40,8192}$"},
+  {"methods":["PUT"],"path":"^/api/v1/uploads/proxy/[A-Za-z0-9_-]+$"},
+  {"methods":["PUT"],"path":"^/api/v1/models/[A-Za-z0-9_-]+/artifact-uploads/proxy/[A-Za-z0-9_-]+$"},
+  {"methods":["POST"],"path":"^/api/v1/pages/[A-Za-z0-9_-]+/(attachments/upload|pdf/page-import/convert|spreadsheet/data-from-picture/analyze|export)$"},
+  {"methods":["POST"],"path":"^/api/v1/messaging/threads/[A-Za-z0-9_-]+/attachments$"},
+  {"methods":["POST"],"path":"^/api/v1/chat/conversations/[A-Za-z0-9_-]+/(attachments|voice|dictate|image)$"},
+  {"methods":["PUT"],"path":"^/api/v1/notebooks/[A-Za-z0-9_-]+/import-batches/[A-Za-z0-9_-]+$"},
+  {"methods":["GET","HEAD"],"path":"^/api/v1/attachments/[A-Za-z0-9_-]+/download$"},
+  {"methods":["GET","POST"],"path":"^/api/v1/data-items/[A-Za-z0-9_-]+/verified-pdfa-export$"},
+  {"methods":["GET"],"path":"^/api/v1/admin/dsr/jobs/[A-Za-z0-9_-]+/download$"},
+  {"methods":["POST"],"path":"^/api/v1/(auth/data-export|dsr/subject-export|dsr/audit-export)$"}
+]

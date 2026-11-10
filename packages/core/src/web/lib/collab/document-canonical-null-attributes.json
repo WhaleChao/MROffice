@@ -1,0 +1,761 @@
+{
+  "nodes": {
+    "paragraph": [
+      "adjustRightInd",
+      "anchor_id",
+      "autoSpaceDE",
+      "autoSpaceDN",
+      "block_id",
+      "borderPreset",
+      "builtinStyleId",
+      "commentThreadIds",
+      "contextualSpacing",
+      "customStyleId",
+      "customStyleName",
+      "dir",
+      "docxStyleId",
+      "dropCap",
+      "dropCapDistancePt",
+      "dropCapLines",
+      "dropCapPosition",
+      "firstLineIndentPt",
+      "indentCharacterUnits",
+      "indentLeftPt",
+      "indentRightPt",
+      "keepLines",
+      "keepNext",
+      "kinsoku",
+      "lineHeight",
+      "lineHeightPt",
+      "lineHeightRule",
+      "mirrorIndents",
+      "overflowPunct",
+      "paragraphBorders",
+      "paragraphFontSize",
+      "paragraphMarkMarks",
+      "shadingColor",
+      "snapToGrid",
+      "source",
+      "spaceAfter",
+      "spaceBefore",
+      "tabStops",
+      "textAlign",
+      "textAlignment",
+      "textIndent",
+      "tocEntryLeader",
+      "tocLevel",
+      "tocOutlineLevel",
+      "toc_anchor_id",
+      "topLinePunct",
+      "trackParagraphFormatting",
+      "trackParagraphMark",
+      "widowControl",
+      "wordHorizontalRule",
+      "wordWrap"
+    ],
+    "blockquote": [
+      "block_id",
+      "source"
+    ],
+    "hardBreak": [
+      "docxBreakClear",
+      "docxRunMarks",
+      "trackedInsertion"
+    ],
+    "heading": [
+      "adjustRightInd",
+      "anchor_id",
+      "autoSpaceDE",
+      "autoSpaceDN",
+      "block_id",
+      "borderPreset",
+      "builtinStyleId",
+      "commentThreadIds",
+      "contextualSpacing",
+      "customStyleId",
+      "customStyleName",
+      "dir",
+      "docxStyleId",
+      "dropCap",
+      "dropCapDistancePt",
+      "dropCapLines",
+      "dropCapPosition",
+      "firstLineIndentPt",
+      "indentCharacterUnits",
+      "indentLeftPt",
+      "indentRightPt",
+      "keepLines",
+      "keepNext",
+      "kinsoku",
+      "lineHeight",
+      "lineHeightPt",
+      "lineHeightRule",
+      "listChain",
+      "listDefinition",
+      "listKind",
+      "listStart",
+      "listStyle",
+      "mirrorIndents",
+      "overflowPunct",
+      "paragraphBorders",
+      "paragraphFontSize",
+      "paragraphMarkMarks",
+      "shadingColor",
+      "snapToGrid",
+      "source",
+      "spaceAfter",
+      "spaceBefore",
+      "tabStops",
+      "textAlign",
+      "textAlignment",
+      "textIndent",
+      "tocEntryLeader",
+      "tocLevel",
+      "tocOutlineLevel",
+      "toc_anchor_id",
+      "topLinePunct",
+      "trackParagraphFormatting",
+      "trackParagraphMark",
+      "widowControl",
+      "wordHorizontalRule",
+      "wordWrap"
+    ],
+    "listItem": [
+      "block_id",
+      "source"
+    ],
+    "orderedList": [
+      "block_id",
+      "listChain",
+      "listDefinition",
+      "listLevel",
+      "listStyleId",
+      "source",
+      "type"
+    ],
+    "bulletList": [
+      "block_id",
+      "bulletAlign",
+      "bulletFont",
+      "bulletGlyph",
+      "bulletPicture",
+      "listLevel",
+      "source"
+    ],
+    "bookmarkPoint": [
+      "name"
+    ],
+    "rangePermission": [
+      "columnFirst",
+      "columnLast",
+      "edge",
+      "editor",
+      "editorGroup",
+      "permissionId"
+    ],
+    "taskList": [
+      "block_id",
+      "source"
+    ],
+    "taskItem": [
+      "block_id",
+      "source"
+    ],
+    "imageRow": [
+      "block_id",
+      "dataAlign",
+      "source"
+    ],
+    "image": [
+      "alt",
+      "artisticEffect",
+      "artisticEffectRendered",
+      "attachment_id",
+      "block_id",
+      "dataAlign",
+      "dataFloat",
+      "fieldWrap",
+      "filename",
+      "floatAnchor",
+      "height",
+      "heightEmu",
+      "inertLinkHref",
+      "keepNext",
+      "linkHref",
+      "linkTitle",
+      "mime_type",
+      "officeDrawingKind",
+      "oleObject",
+      "picture3d",
+      "pictureDisplayLook",
+      "pictureEffectExtent",
+      "pictureGeometry",
+      "pictureGeometryAdjustments",
+      "pictureGlow",
+      "pictureLegacyLook",
+      "pictureLockAspectRatioEditable",
+      "pictureReflection",
+      "pictureShadow",
+      "pictureSoftEdge",
+      "pictureSourceLink",
+      "pictureStyle",
+      "pictureVisualFormattingEditable",
+      "relativeHeight",
+      "size_bytes",
+      "source",
+      "src",
+      "title",
+      "trackObjectDeletion",
+      "trackObjectInsertion",
+      "width",
+      "widthEmu",
+      "widthPercent"
+    ],
+    "inlineImage": [
+      "alt",
+      "artisticEffect",
+      "artisticEffectRendered",
+      "attachment_id",
+      "dataAlign",
+      "dataFloat",
+      "fieldWrap",
+      "filename",
+      "floatAnchor",
+      "height",
+      "heightEmu",
+      "inertLinkHref",
+      "keepNext",
+      "linkHref",
+      "linkTitle",
+      "mime_type",
+      "officeDrawingKind",
+      "oleObject",
+      "picture3d",
+      "pictureDisplayLook",
+      "pictureEffectExtent",
+      "pictureGeometry",
+      "pictureGeometryAdjustments",
+      "pictureGlow",
+      "pictureLegacyLook",
+      "pictureLockAspectRatioEditable",
+      "pictureReflection",
+      "pictureShadow",
+      "pictureSoftEdge",
+      "pictureSourceLink",
+      "pictureStyle",
+      "pictureVisualFormattingEditable",
+      "relativeHeight",
+      "size_bytes",
+      "source",
+      "src",
+      "title",
+      "trackObjectDeletion",
+      "trackObjectInsertion",
+      "width",
+      "widthEmu",
+      "widthPercent"
+    ],
+    "documentMedia": [
+      "block_id",
+      "poster",
+      "source",
+      "textAlign"
+    ],
+    "documentSignatureLine": [
+      "allowComments",
+      "block_id",
+      "height",
+      "schemaVersion",
+      "showSignDate",
+      "signatureId",
+      "signingInstructions",
+      "source",
+      "suggestedSigner",
+      "suggestedSignerEmail",
+      "suggestedSignerTitle",
+      "width"
+    ],
+    "documentAltChunkReadOnly": [
+      "block_id",
+      "nativePayload",
+      "source"
+    ],
+    "documentVirtualTable": [
+      "block_id",
+      "columns",
+      "formattingSimplified",
+      "rows",
+      "source",
+      "tableFixedWidthTwips",
+      "tableId"
+    ],
+    "horizontalRule": [
+      "block_id",
+      "source",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "pageBreak": [
+      "block_id",
+      "source",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "columnBreak": [
+      "block_id",
+      "source",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "sectionBreak": [
+      "block_id",
+      "source",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "codeBlock": [
+      "block_id",
+      "filename",
+      "fontCjkFamily",
+      "fontFamily",
+      "fontSize",
+      "language",
+      "lineHeight",
+      "lineHeightPt",
+      "lineHeightRule",
+      "shadingColor",
+      "source",
+      "spaceAfter",
+      "spaceBefore"
+    ],
+    "table": [
+      "block_id",
+      "source",
+      "tableAlign",
+      "tableBorders",
+      "tableCaption",
+      "tableCellMargin",
+      "tableCellSpacingPx",
+      "tableCellSpacingTwips",
+      "tableDescription",
+      "tableFixedWidthTwips",
+      "tableIndentPx",
+      "tableIndentTwips",
+      "tableLayoutPolicy",
+      "tableLayoutType",
+      "tablePositioning",
+      "tableShading",
+      "tableStyleTheme",
+      "trackTableFormatting"
+    ],
+    "tableRow": [
+      "rowContentControl",
+      "rowHeight",
+      "rowHeightRule",
+      "rowHeightTwips",
+      "trackRowDeletion",
+      "trackRowFormatting",
+      "trackRowInsertion"
+    ],
+    "tableHeader": [
+      "align",
+      "backgroundColor",
+      "borderStyle",
+      "cellBorders",
+      "cellContentControl",
+      "cellMargin",
+      "cellShading",
+      "colwidth",
+      "colwidthTwips",
+      "formula",
+      "formulaNumberFormat",
+      "gridFiller",
+      "textAlign",
+      "textDirection",
+      "trackCellFormatting",
+      "verticalAlign"
+    ],
+    "tableCell": [
+      "align",
+      "backgroundColor",
+      "borderStyle",
+      "cellBorders",
+      "cellContentControl",
+      "cellMargin",
+      "cellShading",
+      "colwidth",
+      "colwidthTwips",
+      "formula",
+      "formulaNumberFormat",
+      "gridFiller",
+      "textAlign",
+      "textDirection",
+      "trackCellFormatting",
+      "verticalAlign"
+    ],
+    "mathBlock": [
+      "block_id",
+      "fontSize",
+      "mathAlignedLines",
+      "mathStyle",
+      "source",
+      "textAlign",
+      "textColor",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "inlineMath": [
+      "fontSize",
+      "mathAlignedLines",
+      "mathDisplay",
+      "mathStyle",
+      "runStyle",
+      "trackObjectDeletion",
+      "trackedInsertion"
+    ],
+    "callout": [
+      "block_id",
+      "source"
+    ],
+    "whiteboard": [
+      "block_id",
+      "source"
+    ],
+    "whiteboardObject": [
+      "angle",
+      "autoResize",
+      "backgroundColor",
+      "baseline",
+      "boundElements",
+      "containerId",
+      "crop",
+      "customData",
+      "elbowed",
+      "endArrowhead",
+      "endBinding",
+      "endIsSpecial",
+      "extraFields",
+      "fileId",
+      "fillStyle",
+      "fixedSegments",
+      "fontFamily",
+      "fontSize",
+      "frameId",
+      "groupIds",
+      "height",
+      "index",
+      "isDeleted",
+      "lastCommittedPoint",
+      "lineHeight",
+      "link",
+      "locked",
+      "name",
+      "opacity",
+      "originalText",
+      "points",
+      "pressures",
+      "roughness",
+      "roundness",
+      "scale",
+      "seed",
+      "simulatePressure",
+      "startArrowhead",
+      "startBinding",
+      "startIsSpecial",
+      "status",
+      "strokeColor",
+      "strokeSharpness",
+      "strokeStyle",
+      "strokeWidth",
+      "text",
+      "textAlign",
+      "type",
+      "updated",
+      "version",
+      "versionNonce",
+      "verticalAlign",
+      "width",
+      "x",
+      "y"
+    ],
+    "documentShape": [
+      "block_id",
+      "floatAnchor",
+      "outlineAlign",
+      "outlineDash",
+      "source",
+      "textAlign",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "inlineDocumentShape": [
+      "floatAnchor",
+      "outlineAlign",
+      "outlineDash",
+      "source",
+      "textAlign",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "file": [
+      "block_id",
+      "source"
+    ],
+    "chart": [
+      "block_id",
+      "categories",
+      "chartSubtype",
+      "data",
+      "series",
+      "source",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "inlineChart": [
+      "categories",
+      "chartSubtype",
+      "data",
+      "series",
+      "source",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ],
+    "smartArt": [
+      "block_id",
+      "scene",
+      "source"
+    ],
+    "mermaid": [
+      "block_id"
+    ],
+    "codeChart": [
+      "block_id"
+    ],
+    "ai_output": [
+      "block_id",
+      "model_id",
+      "source"
+    ],
+    "reference": [
+      "block_id",
+      "source"
+    ],
+    "task": [
+      "completed_at",
+      "description",
+      "due_date",
+      "source"
+    ],
+    "flashcard": [
+      "block_id",
+      "card_id",
+      "source"
+    ],
+    "tableOfContents": [
+      "block_id",
+      "cachedEntries",
+      "source",
+      "title"
+    ],
+    "documentCoverPage": [
+      "block_id",
+      "controlId",
+      "coverId",
+      "scene",
+      "source"
+    ],
+    "frontmatter": [
+      "block_id",
+      "source"
+    ],
+    "footnoteRef": [
+      "customMark",
+      "noteId",
+      "trackObjectDeletion",
+      "trackedInsertion"
+    ],
+    "footnoteList": [
+      "block_id",
+      "source"
+    ],
+    "citation": [
+      "nativeFieldAuthority",
+      "segments",
+      "sourceId"
+    ],
+    "bibliography": [
+      "block_id",
+      "nativeFieldAuthority",
+      "source"
+    ],
+    "crossRef": [
+      "referenceTo",
+      "runStyle",
+      "targetAnchorId"
+    ],
+    "documentField": [
+      "preservedField",
+      "runStyle"
+    ],
+    "mergeField": [
+      "condition",
+      "runStyle"
+    ],
+    "ruby": [
+      "align",
+      "baseFontSize",
+      "fontFamily",
+      "fontSize",
+      "offset",
+      "runStyle"
+    ],
+    "caption": [
+      "anchor_id",
+      "block_id",
+      "labelName",
+      "source"
+    ],
+    "listOfFigures": [
+      "block_id",
+      "cachedEntries",
+      "source"
+    ],
+    "blockContentControl": [
+      "block_id",
+      "checkedState",
+      "controlId",
+      "lock",
+      "source",
+      "uncheckedState"
+    ],
+    "textBox": [
+      "block_id",
+      "floatAnchor",
+      "frameBody",
+      "frameChain",
+      "frameExtent",
+      "frameName",
+      "source",
+      "textBoxFill",
+      "textBoxOutline",
+      "textBoxShadow",
+      "trackObjectDeletion",
+      "trackObjectInsertion"
+    ]
+  },
+  "marks": {
+    "link": [
+      "class",
+      "href",
+      "inertHref",
+      "title"
+    ],
+    "fontSize": [
+      "size"
+    ],
+    "fontFamily": [
+      "family"
+    ],
+    "fontCjkFamily": [
+      "family"
+    ],
+    "fontComplexFamily": [
+      "family"
+    ],
+    "charBorder": [
+      "color",
+      "sizePt",
+      "spacePt",
+      "style"
+    ],
+    "textColor": [
+      "color",
+      "themeColor"
+    ],
+    "highlight": [
+      "color",
+      "shading"
+    ],
+    "characterStyle": [
+      "name",
+      "styleId"
+    ],
+    "charSpacing": [
+      "spacing"
+    ],
+    "charScale": [
+      "scale"
+    ],
+    "fitText": [
+      "id",
+      "width"
+    ],
+    "kerningThreshold": [
+      "halfPoints",
+      "inheritedHalfPoints",
+      "provenance"
+    ],
+    "textEffects": [
+      "stated"
+    ],
+    "symbolChar": [
+      "charCode",
+      "font"
+    ],
+    "proofingLanguage": [
+      "bidi",
+      "eastAsia",
+      "val"
+    ],
+    "underline": [
+      "underlineColor"
+    ],
+    "trackInsertion": [
+      "author",
+      "moveId",
+      "moveRangeId",
+      "moveRole",
+      "revisionId",
+      "timestamp"
+    ],
+    "trackDeletion": [
+      "author",
+      "moveId",
+      "moveRangeId",
+      "moveRole",
+      "revisionId",
+      "timestamp"
+    ],
+    "trackFormatting": [
+      "author",
+      "revisionId",
+      "timestamp"
+    ],
+    "comment": [
+      "threadId"
+    ],
+    "bookmark": [
+      "name"
+    ],
+    "emphasisDots": [
+      "placement"
+    ],
+    "textPosition": [
+      "halfPoints"
+    ],
+    "enclosedChar": [
+      "style",
+      "unit"
+    ],
+    "wikiLink": [
+      "display"
+    ],
+    "contentControl": [
+      "checkedState",
+      "controlId",
+      "controlKey",
+      "lock",
+      "uncheckedState"
+    ]
+  }
+}

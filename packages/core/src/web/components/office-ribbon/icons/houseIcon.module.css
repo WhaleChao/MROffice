@@ -1,0 +1,174 @@
+/*
+ * Inline form of the shared Office semantic icons: the same geometry and
+ * colour roles as officeSemanticIcon.module.css, sized by the caller (size
+ * prop or a utility class) and inked with the surrounding text colour, so
+ * the glyph can stand wherever a generic outline icon used to.
+ */
+.house {
+  --house-icon-ink: currentColor;
+  --house-icon-ink-soft: color-mix(in srgb, currentColor 68%, transparent);
+  /*
+   * Paper is a faint wash of the ink unless an editor scope names a real
+   * surface: an inline icon can land on any background in either theme,
+   * and an opaque sheet would show as a block on the ones it does not match.
+   */
+  --house-icon-surface: var(
+    --mrai-office-icon-surface,
+    color-mix(in srgb, currentColor 7%, transparent)
+  );
+  --house-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #176f92)
+  );
+  --house-icon-accent-soft: var(
+    --mrai-office-icon-accent-soft,
+    color-mix(in srgb, var(--house-icon-accent) 16%, transparent)
+  );
+  --house-icon-warm: var(--mrai-office-icon-warm, #b96920);
+  --house-icon-warm-soft: var(
+    --mrai-office-icon-warm-soft,
+    color-mix(in srgb, var(--house-icon-warm) 16%, transparent)
+  );
+
+  overflow: visible;
+}
+
+.house path,
+.house rect,
+.house circle,
+.house ellipse,
+.house line,
+.house polyline,
+.house polygon {
+  vector-effect: non-scaling-stroke;
+}
+
+.house [data-office-icon-role="ink"] {
+  fill: none;
+  stroke: var(--house-icon-ink);
+}
+
+.house [data-office-icon-role="ink-soft"] {
+  fill: none;
+  stroke: var(--house-icon-ink-soft);
+}
+
+.house [data-office-icon-role="paper"] {
+  fill: var(--house-icon-surface);
+  stroke: var(--house-icon-ink);
+}
+
+.house [data-office-icon-role="accent"] {
+  fill: none;
+  stroke: var(--house-icon-accent);
+}
+
+.house [data-office-icon-role="accent-fill"] {
+  fill: var(--house-icon-accent);
+  stroke: var(--house-icon-accent);
+}
+
+.house [data-office-icon-role="accent-soft-fill"] {
+  fill: var(--house-icon-accent-soft);
+  stroke: none;
+}
+
+.house [data-office-icon-role="warm"] {
+  fill: none;
+  stroke: var(--house-icon-warm);
+}
+
+.house [data-office-icon-role="warm-fill"] {
+  fill: var(--house-icon-warm-soft);
+  stroke: var(--house-icon-warm);
+}
+
+/*
+ * A caller that colours the icon itself (a status tint, white on a filled
+ * button) gets every role in that one colour: the accent would otherwise
+ * fight the tint or vanish into the fill behind it.
+ */
+.house[data-house-icon-tone="mono"],
+:global(button:disabled) .house,
+:global(button[aria-disabled="true"]) .house,
+:global(button[data-disabled=""]) .house,
+:global(button[data-disabled="true"]) .house {
+  --house-icon-surface: transparent;
+  --house-icon-accent: currentColor;
+  --house-icon-accent-soft: color-mix(in srgb, currentColor 16%, transparent);
+  --house-icon-warm: currentColor;
+  --house-icon-warm-soft: color-mix(in srgb, currentColor 16%, transparent);
+}
+
+:global(.dark) .house {
+  --house-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #78c3e3)
+  );
+  --house-icon-warm: var(--mrai-office-icon-warm, #e9ad67);
+}
+
+:global([data-theme="dark"]) .house {
+  --house-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #78c3e3)
+  );
+  --house-icon-warm: var(--mrai-office-icon-warm, #e9ad67);
+}
+
+:global(:is([data-theme-mode="dark"], [data-theme-mode="high-contrast"])) .house {
+  --house-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #78c3e3)
+  );
+  --house-icon-warm: var(--mrai-office-icon-warm, #e9ad67);
+}
+
+:global([data-color-scheme="dark"]) .house {
+  --house-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #78c3e3)
+  );
+  --house-icon-warm: var(--mrai-office-icon-warm, #e9ad67);
+}
+
+:global(.dark) .house[data-house-icon-tone="mono"] {
+  --house-icon-accent: currentColor;
+  --house-icon-warm: currentColor;
+}
+
+:global([data-theme="dark"]) .house[data-house-icon-tone="mono"] {
+  --house-icon-accent: currentColor;
+  --house-icon-warm: currentColor;
+}
+
+:global(:is([data-theme-mode="dark"], [data-theme-mode="high-contrast"])) .house[data-house-icon-tone="mono"] {
+  --house-icon-accent: currentColor;
+  --house-icon-warm: currentColor;
+}
+
+:global([data-color-scheme="dark"]) .house[data-house-icon-tone="mono"] {
+  --house-icon-accent: currentColor;
+  --house-icon-warm: currentColor;
+}
+
+@media (prefers-contrast: more) {
+  .house {
+    --house-icon-ink-soft: currentColor;
+    --house-icon-accent-soft: transparent;
+    --house-icon-warm-soft: transparent;
+  }
+}
+
+@media (forced-colors: active) {
+  .house {
+    --house-icon-ink: CanvasText;
+    --house-icon-ink-soft: CanvasText;
+    --house-icon-surface: Canvas;
+    --house-icon-accent: LinkText;
+    --house-icon-accent-soft: Canvas;
+    --house-icon-warm: Highlight;
+    --house-icon-warm-soft: Canvas;
+    forced-color-adjust: auto;
+  }
+}

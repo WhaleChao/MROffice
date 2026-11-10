@@ -1,0 +1,1315 @@
+{
+ "version": 1,
+ "orders": {
+  "en": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "zh": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "da": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "de": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "es": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "fi": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "fr": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "id": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "it": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "ja": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "ko": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "nl": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "no": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "pt-BR": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "sv": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "th": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "vi": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ],
+  "zh-TW": [
+   "plain",
+   "band",
+   "margin",
+   "frame"
+  ]
+ },
+ "placeholders": {
+  "en": {
+   "title": "‹Title›",
+   "subtitle": "‹Subtitle›",
+   "author": "‹Author›",
+   "abstract": "‹A few lines on what this document is about›",
+   "publishDate": "‹Date›",
+   "company": "‹Organization›",
+   "companyAddress": "‹Address›",
+   "companyEmail": "‹Email›",
+   "category": "‹Subject›"
+  },
+  "zh": {
+   "title": "‹标题›",
+   "subtitle": "‹副标题›",
+   "author": "‹作者›",
+   "abstract": "‹用几句话说明这份文档的内容›",
+   "publishDate": "‹日期›",
+   "company": "‹单位›",
+   "companyAddress": "‹地址›",
+   "companyEmail": "‹电子邮件›",
+   "category": "‹主题›"
+  },
+  "da": {
+   "title": "‹Titel›",
+   "subtitle": "‹Undertitel›",
+   "author": "‹Forfatter›",
+   "abstract": "‹Et par linjer om, hvad dokumentet handler om›",
+   "publishDate": "‹Dato›",
+   "company": "‹Organisation›",
+   "companyAddress": "‹Adresse›",
+   "companyEmail": "‹E-mail›",
+   "category": "‹Emne›"
+  },
+  "de": {
+   "title": "‹Titel›",
+   "subtitle": "‹Untertitel›",
+   "author": "‹Autor›",
+   "abstract": "‹Ein paar Zeilen dazu, worum es in diesem Dokument geht›",
+   "publishDate": "‹Datum›",
+   "company": "‹Organisation›",
+   "companyAddress": "‹Adresse›",
+   "companyEmail": "‹E-Mail›",
+   "category": "‹Thema›"
+  },
+  "es": {
+   "title": "‹Título›",
+   "subtitle": "‹Subtítulo›",
+   "author": "‹Autor›",
+   "abstract": "‹Unas líneas sobre el contenido de este documento›",
+   "publishDate": "‹Fecha›",
+   "company": "‹Organización›",
+   "companyAddress": "‹Dirección›",
+   "companyEmail": "‹Correo›",
+   "category": "‹Tema›"
+  },
+  "fi": {
+   "title": "‹Otsikko›",
+   "subtitle": "‹Alaotsikko›",
+   "author": "‹Tekijä›",
+   "abstract": "‹Muutama rivi siitä, mitä asiakirja käsittelee›",
+   "publishDate": "‹Päivämäärä›",
+   "company": "‹Organisaatio›",
+   "companyAddress": "‹Osoite›",
+   "companyEmail": "‹Sähköposti›",
+   "category": "‹Aihe›"
+  },
+  "fr": {
+   "title": "‹Titre›",
+   "subtitle": "‹Sous-titre›",
+   "author": "‹Auteur›",
+   "abstract": "‹Quelques lignes sur le sujet de ce document›",
+   "publishDate": "‹Date›",
+   "company": "‹Organisation›",
+   "companyAddress": "‹Adresse›",
+   "companyEmail": "‹E-mail›",
+   "category": "‹Sujet›"
+  },
+  "id": {
+   "title": "‹Judul›",
+   "subtitle": "‹Subjudul›",
+   "author": "‹Penulis›",
+   "abstract": "‹Beberapa baris tentang isi dokumen ini›",
+   "publishDate": "‹Tanggal›",
+   "company": "‹Organisasi›",
+   "companyAddress": "‹Alamat›",
+   "companyEmail": "‹Email›",
+   "category": "‹Topik›"
+  },
+  "it": {
+   "title": "‹Titolo›",
+   "subtitle": "‹Sottotitolo›",
+   "author": "‹Autore›",
+   "abstract": "‹Alcune righe sul contenuto di questo documento›",
+   "publishDate": "‹Data›",
+   "company": "‹Organizzazione›",
+   "companyAddress": "‹Indirizzo›",
+   "companyEmail": "‹E-mail›",
+   "category": "‹Argomento›"
+  },
+  "ja": {
+   "title": "‹タイトル›",
+   "subtitle": "‹サブタイトル›",
+   "author": "‹作成者›",
+   "abstract": "‹この文書の内容を数行で›",
+   "publishDate": "‹日付›",
+   "company": "‹組織›",
+   "companyAddress": "‹住所›",
+   "companyEmail": "‹メール›",
+   "category": "‹テーマ›"
+  },
+  "ko": {
+   "title": "‹제목›",
+   "subtitle": "‹부제목›",
+   "author": "‹작성자›",
+   "abstract": "‹이 문서의 내용을 몇 줄로›",
+   "publishDate": "‹날짜›",
+   "company": "‹조직›",
+   "companyAddress": "‹주소›",
+   "companyEmail": "‹이메일›",
+   "category": "‹주제›"
+  },
+  "nl": {
+   "title": "‹Titel›",
+   "subtitle": "‹Ondertitel›",
+   "author": "‹Auteur›",
+   "abstract": "‹Een paar regels over waar dit document over gaat›",
+   "publishDate": "‹Datum›",
+   "company": "‹Organisatie›",
+   "companyAddress": "‹Adres›",
+   "companyEmail": "‹E-mail›",
+   "category": "‹Onderwerp›"
+  },
+  "no": {
+   "title": "‹Tittel›",
+   "subtitle": "‹Undertittel›",
+   "author": "‹Forfatter›",
+   "abstract": "‹Noen linjer om hva dokumentet handler om›",
+   "publishDate": "‹Dato›",
+   "company": "‹Organisasjon›",
+   "companyAddress": "‹Adresse›",
+   "companyEmail": "‹E-post›",
+   "category": "‹Emne›"
+  },
+  "pt-BR": {
+   "title": "‹Título›",
+   "subtitle": "‹Subtítulo›",
+   "author": "‹Autor›",
+   "abstract": "‹Algumas linhas sobre o assunto deste documento›",
+   "publishDate": "‹Data›",
+   "company": "‹Organização›",
+   "companyAddress": "‹Endereço›",
+   "companyEmail": "‹E-mail›",
+   "category": "‹Assunto›"
+  },
+  "sv": {
+   "title": "‹Titel›",
+   "subtitle": "‹Undertitel›",
+   "author": "‹Författare›",
+   "abstract": "‹Några rader om vad dokumentet handlar om›",
+   "publishDate": "‹Datum›",
+   "company": "‹Organisation›",
+   "companyAddress": "‹Adress›",
+   "companyEmail": "‹E-post›",
+   "category": "‹Ämne›"
+  },
+  "th": {
+   "title": "‹ชื่อเรื่อง›",
+   "subtitle": "‹ชื่อรอง›",
+   "author": "‹ผู้เขียน›",
+   "abstract": "‹สรุปเนื้อหาของเอกสารนี้สั้น ๆ›",
+   "publishDate": "‹วันที่›",
+   "company": "‹องค์กร›",
+   "companyAddress": "‹ที่อยู่›",
+   "companyEmail": "‹อีเมล›",
+   "category": "‹หัวข้อ›"
+  },
+  "vi": {
+   "title": "‹Tiêu đề›",
+   "subtitle": "‹Phụ đề›",
+   "author": "‹Tác giả›",
+   "abstract": "‹Vài dòng về nội dung tài liệu này›",
+   "publishDate": "‹Ngày›",
+   "company": "‹Tổ chức›",
+   "companyAddress": "‹Địa chỉ›",
+   "companyEmail": "‹Email›",
+   "category": "‹Chủ đề›"
+  },
+  "zh-TW": {
+   "title": "‹標題›",
+   "subtitle": "‹副標題›",
+   "author": "‹作者›",
+   "abstract": "‹用幾句話說明這份文件的內容›",
+   "publishDate": "‹日期›",
+   "company": "‹單位›",
+   "companyAddress": "‹地址›",
+   "companyEmail": "‹電子郵件›",
+   "category": "‹主題›"
+  }
+ },
+ "aliases": {
+  "en": {
+   "title": "Title",
+   "subtitle": "Subtitle",
+   "author": "Author",
+   "abstract": "Summary",
+   "publishDate": "Date",
+   "company": "Organization",
+   "companyAddress": "Address",
+   "companyEmail": "Email",
+   "category": "Subject"
+  },
+  "zh": {
+   "title": "标题",
+   "subtitle": "副标题",
+   "author": "作者",
+   "abstract": "摘要",
+   "publishDate": "日期",
+   "company": "单位",
+   "companyAddress": "地址",
+   "companyEmail": "电子邮件",
+   "category": "主题"
+  },
+  "da": {
+   "title": "Titel",
+   "subtitle": "Undertitel",
+   "author": "Forfatter",
+   "abstract": "Resumé",
+   "publishDate": "Dato",
+   "company": "Organisation",
+   "companyAddress": "Adresse",
+   "companyEmail": "E-mail",
+   "category": "Emne"
+  },
+  "de": {
+   "title": "Titel",
+   "subtitle": "Untertitel",
+   "author": "Autor",
+   "abstract": "Zusammenfassung",
+   "publishDate": "Datum",
+   "company": "Organisation",
+   "companyAddress": "Adresse",
+   "companyEmail": "E-Mail",
+   "category": "Thema"
+  },
+  "es": {
+   "title": "Título",
+   "subtitle": "Subtítulo",
+   "author": "Autor",
+   "abstract": "Resumen",
+   "publishDate": "Fecha",
+   "company": "Organización",
+   "companyAddress": "Dirección",
+   "companyEmail": "Correo",
+   "category": "Tema"
+  },
+  "fi": {
+   "title": "Otsikko",
+   "subtitle": "Alaotsikko",
+   "author": "Tekijä",
+   "abstract": "Tiivistelmä",
+   "publishDate": "Päivämäärä",
+   "company": "Organisaatio",
+   "companyAddress": "Osoite",
+   "companyEmail": "Sähköposti",
+   "category": "Aihe"
+  },
+  "fr": {
+   "title": "Titre",
+   "subtitle": "Sous-titre",
+   "author": "Auteur",
+   "abstract": "Résumé",
+   "publishDate": "Date",
+   "company": "Organisation",
+   "companyAddress": "Adresse",
+   "companyEmail": "E-mail",
+   "category": "Sujet"
+  },
+  "id": {
+   "title": "Judul",
+   "subtitle": "Subjudul",
+   "author": "Penulis",
+   "abstract": "Ringkasan",
+   "publishDate": "Tanggal",
+   "company": "Organisasi",
+   "companyAddress": "Alamat",
+   "companyEmail": "Email",
+   "category": "Topik"
+  },
+  "it": {
+   "title": "Titolo",
+   "subtitle": "Sottotitolo",
+   "author": "Autore",
+   "abstract": "Sintesi",
+   "publishDate": "Data",
+   "company": "Organizzazione",
+   "companyAddress": "Indirizzo",
+   "companyEmail": "E-mail",
+   "category": "Argomento"
+  },
+  "ja": {
+   "title": "タイトル",
+   "subtitle": "サブタイトル",
+   "author": "作成者",
+   "abstract": "概要",
+   "publishDate": "日付",
+   "company": "組織",
+   "companyAddress": "住所",
+   "companyEmail": "メール",
+   "category": "テーマ"
+  },
+  "ko": {
+   "title": "제목",
+   "subtitle": "부제목",
+   "author": "작성자",
+   "abstract": "요약",
+   "publishDate": "날짜",
+   "company": "조직",
+   "companyAddress": "주소",
+   "companyEmail": "이메일",
+   "category": "주제"
+  },
+  "nl": {
+   "title": "Titel",
+   "subtitle": "Ondertitel",
+   "author": "Auteur",
+   "abstract": "Samenvatting",
+   "publishDate": "Datum",
+   "company": "Organisatie",
+   "companyAddress": "Adres",
+   "companyEmail": "E-mail",
+   "category": "Onderwerp"
+  },
+  "no": {
+   "title": "Tittel",
+   "subtitle": "Undertittel",
+   "author": "Forfatter",
+   "abstract": "Sammendrag",
+   "publishDate": "Dato",
+   "company": "Organisasjon",
+   "companyAddress": "Adresse",
+   "companyEmail": "E-post",
+   "category": "Emne"
+  },
+  "pt-BR": {
+   "title": "Título",
+   "subtitle": "Subtítulo",
+   "author": "Autor",
+   "abstract": "Resumo",
+   "publishDate": "Data",
+   "company": "Organização",
+   "companyAddress": "Endereço",
+   "companyEmail": "E-mail",
+   "category": "Assunto"
+  },
+  "sv": {
+   "title": "Titel",
+   "subtitle": "Undertitel",
+   "author": "Författare",
+   "abstract": "Sammanfattning",
+   "publishDate": "Datum",
+   "company": "Organisation",
+   "companyAddress": "Adress",
+   "companyEmail": "E-post",
+   "category": "Ämne"
+  },
+  "th": {
+   "title": "ชื่อเรื่อง",
+   "subtitle": "ชื่อรอง",
+   "author": "ผู้เขียน",
+   "abstract": "สรุป",
+   "publishDate": "วันที่",
+   "company": "องค์กร",
+   "companyAddress": "ที่อยู่",
+   "companyEmail": "อีเมล",
+   "category": "หัวข้อ"
+  },
+  "vi": {
+   "title": "Tiêu đề",
+   "subtitle": "Phụ đề",
+   "author": "Tác giả",
+   "abstract": "Tóm tắt",
+   "publishDate": "Ngày",
+   "company": "Tổ chức",
+   "companyAddress": "Địa chỉ",
+   "companyEmail": "Email",
+   "category": "Chủ đề"
+  },
+  "zh-TW": {
+   "title": "標題",
+   "subtitle": "副標題",
+   "author": "作者",
+   "abstract": "摘要",
+   "publishDate": "日期",
+   "company": "單位",
+   "companyAddress": "地址",
+   "companyEmail": "電子郵件",
+   "category": "主題"
+  }
+ },
+ "dateFormats": {
+  "en": {
+   "short": "M/d/yyyy",
+   "year": "yyyy"
+  },
+  "zh": {
+   "short": "yyyy/M/d",
+   "year": "yyyy"
+  },
+  "da": {
+   "short": "dd.MM.yyyy",
+   "year": "yyyy"
+  },
+  "de": {
+   "short": "dd.MM.yyyy",
+   "year": "yyyy"
+  },
+  "es": {
+   "short": "d/M/yyyy",
+   "year": "yyyy"
+  },
+  "fi": {
+   "short": "d.M.yyyy",
+   "year": "yyyy"
+  },
+  "fr": {
+   "short": "dd/MM/yyyy",
+   "year": "yyyy"
+  },
+  "id": {
+   "short": "dd/MM/yyyy",
+   "year": "yyyy"
+  },
+  "it": {
+   "short": "dd/MM/yyyy",
+   "year": "yyyy"
+  },
+  "ja": {
+   "short": "yyyy/MM/dd",
+   "year": "yyyy"
+  },
+  "ko": {
+   "short": "yyyy. M. d.",
+   "year": "yyyy"
+  },
+  "nl": {
+   "short": "dd-MM-yyyy",
+   "year": "yyyy"
+  },
+  "no": {
+   "short": "dd.MM.yyyy",
+   "year": "yyyy"
+  },
+  "pt-BR": {
+   "short": "dd/MM/yyyy",
+   "year": "yyyy"
+  },
+  "sv": {
+   "short": "yyyy-MM-dd",
+   "year": "yyyy"
+  },
+  "th": {
+   "short": "d/M/yyyy",
+   "year": "yyyy"
+  },
+  "vi": {
+   "short": "dd/MM/yyyy",
+   "year": "yyyy"
+  },
+  "zh-TW": {
+   "short": "yyyy/M/d",
+   "year": "yyyy"
+  }
+ },
+ "covers": [
+  {
+   "id": "plain",
+   "names": {
+    "en": "Plain",
+    "zh": "简洁",
+    "da": "Enkel",
+    "de": "Schlicht",
+    "es": "Sencilla",
+    "fi": "Pelkistetty",
+    "fr": "Épurée",
+    "id": "Sederhana",
+    "it": "Semplice",
+    "ja": "シンプル",
+    "ko": "단순",
+    "nl": "Eenvoudig",
+    "no": "Enkel",
+    "pt-BR": "Simples",
+    "sv": "Enkel",
+    "th": "เรียบ",
+    "vi": "Đơn giản",
+    "zh-TW": "簡潔"
+   },
+   "fields": [
+    "title",
+    "subtitle",
+    "author",
+    "publishDate"
+   ],
+   "items": [
+    {
+     "type": "text",
+     "id": "title",
+     "box": [
+      0.15,
+      0.3,
+      0.7,
+      0.18
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "b",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "title",
+          "size": 36,
+          "paint": {
+           "theme": "dk2"
+          }
+         }
+        ],
+        "after": 8
+       },
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "subtitle",
+          "size": 16,
+          "paint": {
+           "theme": "accent1"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "type": "shape",
+     "id": "rule",
+     "box": [
+      0.4,
+      0.5,
+      0.2,
+      0.004
+     ],
+     "geom": "rect",
+     "behind": false,
+     "fill": {
+      "theme": "accent1"
+     }
+    },
+    {
+     "type": "text",
+     "id": "byline",
+     "box": [
+      0.15,
+      0.53,
+      0.7,
+      0.08
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "t",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "author",
+          "size": 12,
+          "paint": {
+           "theme": "dk1"
+          }
+         }
+        ],
+        "after": 4
+       },
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "publishDate",
+          "size": 11,
+          "paint": {
+           "theme": "dk1",
+           "lumMod": 0.65,
+           "lumOff": 0.35
+          },
+          "dateFormat": "short"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "band",
+   "names": {
+    "en": "Band",
+    "zh": "色带",
+    "da": "Bånd",
+    "de": "Band",
+    "es": "Franja",
+    "fi": "Nauha",
+    "fr": "Bandeau",
+    "id": "Pita",
+    "it": "Fascia",
+    "ja": "帯",
+    "ko": "띠",
+    "nl": "Band",
+    "no": "Bånd",
+    "pt-BR": "Faixa",
+    "sv": "Band",
+    "th": "แถบ",
+    "vi": "Dải màu",
+    "zh-TW": "色帶"
+   },
+   "fields": [
+    "title",
+    "subtitle",
+    "abstract",
+    "author",
+    "company",
+    "publishDate"
+   ],
+   "items": [
+    {
+     "type": "shape",
+     "id": "band",
+     "box": [
+      0,
+      0.22,
+      1,
+      0.26
+     ],
+     "geom": "rect",
+     "behind": true,
+     "fill": {
+      "theme": "accent1"
+     }
+    },
+    {
+     "type": "text",
+     "id": "title",
+     "box": [
+      0.1,
+      0.25,
+      0.8,
+      0.2
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "ctr",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "title",
+          "size": 40,
+          "paint": {
+           "theme": "lt1"
+          },
+          "bold": true
+         }
+        ],
+        "after": 6
+       },
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "subtitle",
+          "size": 16,
+          "paint": {
+           "theme": "lt1"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "type": "text",
+     "id": "summary",
+     "box": [
+      0.1,
+      0.52,
+      0.8,
+      0.14
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "t",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "abstract",
+          "size": 11,
+          "paint": {
+           "theme": "dk1"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "type": "text",
+     "id": "byline",
+     "box": [
+      0.1,
+      0.84,
+      0.8,
+      0.08
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "b",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "author",
+          "size": 12,
+          "paint": {
+           "theme": "dk2"
+          },
+          "bold": true
+         }
+        ],
+        "after": 2
+       },
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "company",
+          "size": 11,
+          "paint": {
+           "theme": "dk2"
+          }
+         },
+         {
+          "text": " · ",
+          "size": 11,
+          "paint": {
+           "theme": "dk2"
+          }
+         },
+         {
+          "field": "publishDate",
+          "size": 11,
+          "paint": {
+           "theme": "dk2"
+          },
+          "dateFormat": "short"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "margin",
+   "names": {
+    "en": "Margin bar",
+    "zh": "侧边条",
+    "da": "Sidebjælke",
+    "de": "Randleiste",
+    "es": "Barra lateral",
+    "fi": "Reunapalkki",
+    "fr": "Barre latérale",
+    "id": "Bilah tepi",
+    "it": "Barra laterale",
+    "ja": "サイドバー",
+    "ko": "측면 막대",
+    "nl": "Zijbalk",
+    "no": "Sidelinje",
+    "pt-BR": "Barra lateral",
+    "sv": "Sidofält",
+    "th": "แถบข้าง",
+    "vi": "Thanh bên",
+    "zh-TW": "側邊條"
+   },
+   "fields": [
+    "title",
+    "subtitle",
+    "category",
+    "author",
+    "publishDate"
+   ],
+   "items": [
+    {
+     "type": "shape",
+     "id": "bar",
+     "box": [
+      0,
+      0,
+      0.08,
+      1
+     ],
+     "geom": "rect",
+     "behind": true,
+     "fill": {
+      "gradient": {
+       "angle": 90,
+       "stops": [
+        {
+         "pos": 0,
+         "paint": {
+          "theme": "accent2"
+         }
+        },
+        {
+         "pos": 1,
+         "paint": {
+          "theme": "accent1"
+         }
+        }
+       ]
+      }
+     }
+    },
+    {
+     "type": "text",
+     "id": "year",
+     "box": [
+      0.14,
+      0.08,
+      0.3,
+      0.06
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "t",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "publishDate",
+          "size": 20,
+          "paint": {
+           "theme": "accent1"
+          },
+          "dateFormat": "year",
+          "bold": true
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "type": "text",
+     "id": "title",
+     "box": [
+      0.14,
+      0.34,
+      0.74,
+      0.22
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "b",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "title",
+          "size": 34,
+          "paint": {
+           "theme": "dk1"
+          }
+         }
+        ],
+        "after": 8
+       },
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "subtitle",
+          "size": 15,
+          "paint": {
+           "theme": "dk2"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "type": "text",
+     "id": "details",
+     "box": [
+      0.14,
+      0.86,
+      0.74,
+      0.06
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "b",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "category",
+          "size": 11,
+          "paint": {
+           "theme": "accent1"
+          },
+          "caps": true,
+          "spacing": 1
+         }
+        ],
+        "after": 2
+       },
+       {
+        "align": "left",
+        "runs": [
+         {
+          "field": "author",
+          "size": 11,
+          "paint": {
+           "theme": "dk1"
+          }
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "id": "frame",
+   "names": {
+    "en": "Frame",
+    "zh": "边框",
+    "da": "Ramme",
+    "de": "Rahmen",
+    "es": "Marco",
+    "fi": "Kehys",
+    "fr": "Cadre",
+    "id": "Bingkai",
+    "it": "Cornice",
+    "ja": "枠",
+    "ko": "테두리",
+    "nl": "Kader",
+    "no": "Ramme",
+    "pt-BR": "Moldura",
+    "sv": "Ram",
+    "th": "กรอบ",
+    "vi": "Khung",
+    "zh-TW": "邊框"
+   },
+   "fields": [
+    "title",
+    "subtitle",
+    "author",
+    "company",
+    "companyAddress",
+    "publishDate"
+   ],
+   "items": [
+    {
+     "type": "shape",
+     "id": "frame",
+     "box": [
+      0.06,
+      0.05,
+      0.88,
+      0.9
+     ],
+     "geom": "rect",
+     "behind": true,
+     "line": {
+      "paint": {
+       "theme": "accent1"
+      },
+      "widthPt": 2
+     }
+    },
+    {
+     "type": "shape",
+     "id": "inner",
+     "box": [
+      0.08,
+      0.065,
+      0.84,
+      0.87
+     ],
+     "geom": "rect",
+     "behind": true,
+     "line": {
+      "paint": {
+       "theme": "accent1",
+       "lumMod": 0.6,
+       "lumOff": 0.4
+      },
+      "widthPt": 0.75
+     }
+    },
+    {
+     "type": "text",
+     "id": "title",
+     "box": [
+      0.14,
+      0.32,
+      0.72,
+      0.2
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "ctr",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "title",
+          "size": 32,
+          "paint": {
+           "theme": "dk1"
+          },
+          "caps": true,
+          "spacing": 2
+         }
+        ],
+        "after": 10
+       },
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "subtitle",
+          "size": 14,
+          "paint": {
+           "theme": "accent1"
+          },
+          "italic": true
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "type": "text",
+     "id": "byline",
+     "box": [
+      0.14,
+      0.7,
+      0.72,
+      0.16
+     ],
+     "behind": false,
+     "text": {
+      "anchor": "b",
+      "inset": [
+       0,
+       0,
+       0,
+       0
+      ],
+      "paragraphs": [
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "author",
+          "size": 12,
+          "paint": {
+           "theme": "dk1"
+          }
+         }
+        ],
+        "after": 4
+       },
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "company",
+          "size": 11,
+          "paint": {
+           "theme": "dk2"
+          }
+         }
+        ],
+        "after": 2
+       },
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "companyAddress",
+          "size": 10,
+          "paint": {
+           "theme": "dk2"
+          }
+         }
+        ],
+        "after": 6
+       },
+       {
+        "align": "center",
+        "runs": [
+         {
+          "field": "publishDate",
+          "size": 10,
+          "paint": {
+           "theme": "dk2"
+          },
+          "dateFormat": "short"
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,263 @@
+{
+ "source": "Office 3-D rotation camera presets (DrawingML a:camera@prst, ECMA-376 ST_PresetCameraType) as [x, y, z, fov] degrees, the turn each preset gives a flat picture or text; shared by the web (office-picture-effects.ts) and the PDF engines (presentation_pdf).",
+ "cameras": {
+  "isometricOffAxis1Right": [
+   26,
+   18,
+   0,
+   45
+  ],
+  "isometricOffAxis1Left": [
+   -64,
+   18,
+   0,
+   45
+  ],
+  "isometricOffAxis2Left": [
+   -26,
+   18,
+   0,
+   45
+  ],
+  "isometricOffAxis2Right": [
+   64,
+   18,
+   0,
+   45
+  ],
+  "isometricOffAxis1Top": [
+   53.45,
+   -58.74,
+   -57.64,
+   45
+  ],
+  "isometricOffAxis2Top": [
+   -53.45,
+   -58.74,
+   57.64,
+   45
+  ],
+  "isometricOffAxis3Left": [
+   -64,
+   -18,
+   0,
+   45
+  ],
+  "isometricOffAxis3Right": [
+   26,
+   -18,
+   0,
+   45
+  ],
+  "isometricOffAxis3Bottom": [
+   53.45,
+   58.74,
+   57.64,
+   45
+  ],
+  "isometricOffAxis4Left": [
+   -26,
+   -18,
+   0,
+   45
+  ],
+  "isometricOffAxis4Right": [
+   64,
+   -18,
+   0,
+   45
+  ],
+  "isometricOffAxis4Bottom": [
+   -53.45,
+   58.74,
+   -57.64,
+   45
+  ],
+  "isometricLeftDown": [
+   -45,
+   35,
+   0,
+   45
+  ],
+  "isometricRightUp": [
+   45,
+   35,
+   0,
+   45
+  ],
+  "isometricTopUp": [
+   45.28,
+   -35.4,
+   -60.16,
+   45
+  ],
+  "isometricBottomDown": [
+   45.28,
+   35.4,
+   60.16,
+   45
+  ],
+  "isometricLeftUp": [
+   -45,
+   -35,
+   0,
+   45
+  ],
+  "isometricRightDown": [
+   45,
+   -35,
+   0,
+   45
+  ],
+  "isometricTopDown": [
+   -45.28,
+   -35.4,
+   60.16,
+   45
+  ],
+  "isometricBottomUp": [
+   -45.28,
+   35.4,
+   -60.16,
+   45
+  ],
+  "perspectiveFront": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "perspectiveLeft": [
+   -20,
+   0,
+   0,
+   45
+  ],
+  "perspectiveRight": [
+   20,
+   0,
+   0,
+   45
+  ],
+  "perspectiveBelow": [
+   0,
+   20,
+   0,
+   45
+  ],
+  "perspectiveAbove": [
+   0,
+   -20,
+   0,
+   45
+  ],
+  "perspectiveRelaxedModerately": [
+   0,
+   -35.16,
+   0,
+   45
+  ],
+  "perspectiveRelaxed": [
+   0,
+   -50.44,
+   0,
+   45
+  ],
+  "perspectiveContrastingLeftFacing": [
+   -43.94,
+   10.4,
+   3.55,
+   45
+  ],
+  "perspectiveContrastingRightFacing": [
+   43.94,
+   10.4,
+   -3.55,
+   45
+  ],
+  "perspectiveHeroicExtremeLeftFacing": [
+   -34.46,
+   8.12,
+   2.91,
+   80
+  ],
+  "perspectiveHeroicExtremeRightFacing": [
+   34.46,
+   8.12,
+   -2.91,
+   80
+  ],
+  "perspectiveAboveLeftFacing": [
+   -14.34,
+   39.31,
+   18.88,
+   45
+  ],
+  "perspectiveAboveRightFacing": [
+   14.34,
+   39.31,
+   -18.88,
+   45
+  ],
+  "perspectiveHeroicLeftFacing": [
+   -14.29,
+   -11.02,
+   -2.63,
+   45
+  ],
+  "perspectiveHeroicRightFacing": [
+   14.29,
+   -11.02,
+   2.63,
+   45
+  ],
+  "obliqueTopLeft": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "obliqueTop": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "obliqueTopRight": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "obliqueLeft": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "obliqueRight": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "obliqueBottomLeft": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "obliqueBottom": [
+   0,
+   0,
+   0,
+   45
+  ],
+  "obliqueBottomRight": [
+   0,
+   0,
+   0,
+   45
+  ]
+ }
+}

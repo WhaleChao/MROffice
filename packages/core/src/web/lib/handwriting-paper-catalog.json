@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "colors": {
+    "white": { "paper": "#ffffff", "rule": "#c4cfde", "strong": "#8a98ae", "accent": "#e3a1a1", "band": "#f0f3f8", "dot": "#9fabbe" },
+    "cream": { "paper": "#fbf6e9", "rule": "#d8ccb1", "strong": "#a5977a", "accent": "#e0a593", "band": "#f3ebd9", "dot": "#b6a98d" },
+    "yellow": { "paper": "#fcf1b4", "rule": "#a6c1da", "strong": "#7d99b5", "accent": "#e28585", "band": "#f6e69b", "dot": "#a3aeae" },
+    "mist": { "paper": "#eef3f8", "rule": "#bccadb", "strong": "#7f92ab", "accent": "#d99ca8", "band": "#e2e9f2", "dot": "#97a6ba" },
+    "dark": { "paper": "#23262c", "rule": "#3d424b", "strong": "#5d636e", "accent": "#8c5656", "band": "#2b2f36", "dot": "#5a616c" }
+  },
+  "categories": [
+    { "id": "basic", "papers": ["blank", "dotGrid", "narrowRuled", "wideRuled", "squared", "graph", "isometricDots"] },
+    { "id": "writing", "papers": ["cornell", "legalPad", "singleColumn", "singleColumnMixed", "twoColumn", "threeColumn"] },
+    { "id": "planning", "papers": ["accounting", "monthlyPlanner", "weeklyPlanner", "dailyPlanner", "todoList"] },
+    { "id": "music", "papers": ["staff", "guitarTab"] }
+  ],
+  "papers": {
+    "blank": [],
+    "dotGrid": [
+      { "t": "dots", "x0": 6, "y0": 6, "x1": -6, "y1": -6, "pitch": 5, "r": 0.34, "tone": "dot" }
+    ],
+    "narrowRuled": [
+      { "t": "rules", "x0": 0, "x1": "100%", "y0": 25, "y1": -10, "pitch": 7.1, "tone": "rule", "w": 0.2 },
+      { "t": "line", "x0": 24, "y0": 0, "x1": 24, "y1": "100%", "tone": "accent", "w": 0.25 }
+    ],
+    "wideRuled": [
+      { "t": "rules", "x0": 0, "x1": "100%", "y0": 30, "y1": -10, "pitch": 8.7, "tone": "rule", "w": 0.22 },
+      { "t": "line", "x0": 30, "y0": 0, "x1": 30, "y1": "100%", "tone": "accent", "w": 0.25 }
+    ],
+    "squared": [
+      { "t": "grid", "x0": 5, "y0": 5, "x1": -5, "y1": -5, "pitch": 5, "tone": "rule", "w": 0.15 }
+    ],
+    "graph": [
+      { "t": "grid", "x0": 10, "y0": 10, "x1": -10, "y1": -10, "pitch": 2, "snap": 10, "tone": "band", "w": 0.12 },
+      { "t": "grid", "x0": 10, "y0": 10, "x1": -10, "y1": -10, "pitch": 10, "tone": "rule", "w": 0.22 }
+    ],
+    "isometricDots": [
+      { "t": "dots", "x0": 6, "y0": 6, "x1": -6, "y1": -6, "pitch": 5, "pitchY": 4.33, "stagger": true, "r": 0.34, "tone": "dot" }
+    ],
+    "cornell": [
+      { "t": "line", "x0": 0, "y0": 24, "x1": "100%", "y1": 24, "tone": "strong", "w": 0.3 },
+      { "t": "rules", "x0": 0, "x1": "100%", "y0": 31.1, "y1": -60, "pitch": 7.1, "tone": "rule", "w": 0.2 },
+      { "t": "line", "x0": "30%", "y0": 24, "x1": "30%", "y1": -54, "tone": "strong", "w": 0.3 },
+      { "t": "line", "x0": 0, "y0": -54, "x1": "100%", "y1": -54, "tone": "strong", "w": 0.3 },
+      { "t": "rules", "x0": 0, "x1": "100%", "y0": -46.9, "y1": -8, "pitch": 7.1, "tone": "rule", "w": 0.2 }
+    ],
+    "legalPad": [
+      { "t": "box", "x0": 0, "y0": 0, "x1": "100%", "y1": 24, "fill": "band" },
+      { "t": "line", "x0": 0, "y0": 24, "x1": "100%", "y1": 24, "tone": "strong", "w": 0.35 },
+      { "t": "rules", "x0": 0, "x1": "100%", "y0": 32, "y1": -8, "pitch": 8, "tone": "rule", "w": 0.22 },
+      { "t": "line", "x0": 30, "y0": 0, "x1": 30, "y1": "100%", "tone": "accent", "w": 0.25 },
+      { "t": "line", "x0": 31.6, "y0": 0, "x1": 31.6, "y1": "100%", "tone": "accent", "w": 0.25 }
+    ],
+    "singleColumn": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 28, "stroke": "strong", "w": 0.3, "r": 2 },
+      { "t": "rules", "x0": 12, "x1": -12, "y0": 38, "y1": -12, "pitch": 8, "tone": "rule", "w": 0.2 }
+    ],
+    "singleColumnMixed": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 28, "stroke": "strong", "w": 0.3, "r": 2 },
+      { "t": "rules", "x0": 12, "x1": -12, "y0": 38, "y1": "50%", "pitch": 8, "tone": "rule", "w": 0.2 },
+      { "t": "grid", "x0": 12, "y0": "54%", "x1": -12, "y1": -12, "pitch": 5, "tone": "rule", "w": 0.14 }
+    ],
+    "twoColumn": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 28, "stroke": "strong", "w": 0.3, "r": 2 },
+      { "t": "rules", "x0": 12, "x1": "48%", "y0": 38, "y1": -12, "pitch": 8, "tone": "rule", "w": 0.2 },
+      { "t": "rules", "x0": "52%", "x1": -12, "y0": 38, "y1": -12, "pitch": 8, "tone": "rule", "w": 0.2 },
+      { "t": "line", "x0": "50%", "y0": 34, "x1": "50%", "y1": -12, "tone": "strong", "w": 0.22, "dash": [1.2, 1.2] }
+    ],
+    "threeColumn": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 28, "stroke": "strong", "w": 0.3, "r": 2 },
+      { "t": "rules", "x0": 12, "x1": "32%", "y0": 38, "y1": -12, "pitch": 8, "tone": "rule", "w": 0.2 },
+      { "t": "rules", "x0": "35%", "x1": "65%", "y0": 38, "y1": -12, "pitch": 8, "tone": "rule", "w": 0.2 },
+      { "t": "rules", "x0": "68%", "x1": -12, "y0": 38, "y1": -12, "pitch": 8, "tone": "rule", "w": 0.2 },
+      { "t": "line", "x0": "33.5%", "y0": 34, "x1": "33.5%", "y1": -12, "tone": "strong", "w": 0.22, "dash": [1.2, 1.2] },
+      { "t": "line", "x0": "66.5%", "y0": 34, "x1": "66.5%", "y1": -12, "tone": "strong", "w": 0.22, "dash": [1.2, 1.2] }
+    ],
+    "accounting": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 26, "fill": "band", "r": 2 },
+      { "t": "box", "x0": 12, "y0": 32, "x1": -12, "y1": 39, "fill": "band" },
+      { "t": "line", "x0": 12, "y0": 39, "x1": -12, "y1": 39, "tone": "strong", "w": 0.35 },
+      { "t": "rules", "x0": 12, "x1": -12, "y0": 45.35, "y1": -12, "pitch": 6.35, "tone": "rule", "w": 0.18 },
+      { "t": "line", "x0": 36, "y0": 32, "x1": 36, "y1": -12, "tone": "strong", "w": 0.22 },
+      { "t": "line", "x0": "62%", "y0": 32, "x1": "62%", "y1": -12, "tone": "strong", "w": 0.22 },
+      { "t": "line", "x0": "74.5%", "y0": 32, "x1": "74.5%", "y1": -12, "tone": "strong", "w": 0.22 },
+      { "t": "line", "x0": "87%", "y0": 32, "x1": "87%", "y1": -12, "tone": "strong", "w": 0.22 },
+      { "t": "box", "x0": 12, "y0": 32, "x1": -12, "y1": -12, "stroke": "strong", "w": 0.3 }
+    ],
+    "monthlyPlanner": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 30, "fill": "band", "r": 2 },
+      { "t": "box", "x0": 12, "y0": 36, "x1": -12, "y1": 43, "fill": "band" },
+      { "t": "cells", "x0": 12, "y0": 36, "x1": -12, "y1": 43, "cols": 7, "rows": 1, "tone": "strong", "w": 0.22 },
+      { "t": "cells", "x0": 12, "y0": 43, "x1": -12, "y1": -12, "cols": 7, "rows": 5, "tone": "strong", "w": 0.25 }
+    ],
+    "weeklyPlanner": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 28, "fill": "band", "r": 2 },
+      { "t": "cells", "x0": 12, "y0": 34, "x1": -12, "y1": -12, "cols": 2, "rows": 4, "tone": "strong", "w": 0.25, "head": 8 }
+    ],
+    "dailyPlanner": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 28, "fill": "band", "r": 2 },
+      { "t": "rules", "x0": 12, "x1": -12, "y0": 40, "y1": -12, "pitch": 10, "tone": "rule", "w": 0.22 },
+      { "t": "rules", "x0": 32, "x1": -12, "y0": 45, "y1": -14, "pitch": 10, "tone": "rule", "w": 0.14, "dash": [0.8, 1.2] },
+      { "t": "line", "x0": 30, "y0": 34, "x1": 30, "y1": -12, "tone": "accent", "w": 0.28 }
+    ],
+    "todoList": [
+      { "t": "box", "x0": 12, "y0": 12, "x1": -12, "y1": 28, "stroke": "strong", "w": 0.3, "r": 2 },
+      { "t": "rules", "x0": 12, "x1": -12, "y0": 40, "y1": -12, "pitch": 9, "tone": "rule", "w": 0.2 },
+      { "t": "checks", "x": 14, "y0": 40, "y1": -12, "pitch": 9, "size": 4.6, "tone": "strong", "w": 0.3 }
+    ],
+    "staff": [
+      { "t": "staves", "x0": 14, "x1": -14, "y0": 22, "y1": -14, "lines": 5, "gap": 2.2, "space": 13, "tone": "strong", "w": 0.2 }
+    ],
+    "guitarTab": [
+      { "t": "staves", "x0": 14, "x1": -14, "y0": 22, "y1": -14, "lines": 6, "gap": 3, "space": 12, "tone": "strong", "w": 0.2 }
+    ]
+  }
+}

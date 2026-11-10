@@ -1,0 +1,942 @@
+/*!
+ * MR Office - https://mroffice.ai
+ * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
+ * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+ */
+import { ptToPx, pxToPt } from "../office-units";
+import OFFICE_DIGIT_ADVANCES from "./office-digit-advances.json";
+import OFFICE_DIGIT_WHOLE_EM from "./office-digit-whole-em.json";
+import OFFICE_ROW_METRICS from "./office-row-metrics.json";
+
+/**
+ * Pure helpers for spreadsheet column-width / row-height resizing (Excel/WPS
+ * parity).
+ *
+ * The sheet model can override the default column width / row height per line
+ * via two optional maps keyed by stringified line index: `columnWidths` and
+ * `rowHeights`. A missing entry means "use the default". This module keeps all
+ * the size math out of the React component so it can be unit-tested in
+ * isolation, and so the renderer (which sizes each cell) and the virtualization
+ * window (which decides the visible band from the scroll offset) agree on the
+ * model.
+ *
+ * Sizes are clamped to a sane min/max so a drag can never collapse a line to
+ * zero (lost forever) or blow it up past the schema bound. Cumulative offsets
+ * let variable-size virtualization stay correct: the first visible line is the
+ * one whose running offset crosses the scroll position, and the rendered table
+ * is positioned at that line's offset so the body never jumps.
+ */
+
+/** A per-line size override map keyed by stringified line index. */
+export type SizeMap = Record<number | string, number>;
+
+// Shared blank-sheet geometry. Excel's default row height is 15 points, which
+// is 20 CSS pixels at 96 DPI; the column width is the reference desktop grid's
+// compact 80-pixel band. Imported workbook defaults and persisted per-line
+// overrides remain authoritative over these editor-created-sheet fallbacks.
+export const DEFAULT_SPREADSHEET_COLUMN_WIDTH_PX = 80;
+/**
+ * The default column width a NEW sheet is created with: Excel's 8.43
+ * characters of the Normal font, 64 px at 96 DPI (XLS-A095). It is stamped on
+ * the new sheet as its `defaultColumnWidth`, so sheets saved before keep the
+ * 80-px fallback above (and every object anchored on them stays put) while a
+ * new workbook or sheet opens on Excel's grid. The xlsx export writes it as
+ * the sheet's defaultColWidth.
+ */
+export const NEW_SHEET_DEFAULT_COLUMN_WIDTH_PX = 64;
+export const DEFAULT_SPREADSHEET_ROW_HEIGHT_PX = 20;
+export const DEFAULT_SPREADSHEET_HEADER_WIDTH_PX = 48;
+export const DEFAULT_SPREADSHEET_HEADER_HEIGHT_PX = 20;
+export const DEFAULT_SPREADSHEET_ROW_COUNT = 50;
+export const DEFAULT_SPREADSHEET_COLUMN_COUNT = 20;
+
+// A column is as wide as Column Width accepts: 0 to 255 characters, where 0
+// hides it. These are that range in pixels, the same one an imported grid
+// already keeps (nativeColumnCssClamp), so a width typed as 1 or as 255 is
+// the width the column gets instead of being moved to an older, narrower
+// drag range without a word (live audit B372). A row runs from a single text
+// line up to a tall multi-line block.
+export const MIN_COLUMN_WIDTH_PX = 1;
+export const MAX_COLUMN_WIDTH_PX = 4096;
+export const MIN_ROW_HEIGHT_PX = 18;
+export const MAX_ROW_HEIGHT_PX = 512;
+
+// Excel's full worksheet address space. These are ADDRESS bounds, not collection
+// budgets: a sparse sheet may contain XFD1048576 without allocating every line
+// before it.
+export const MAX_GRID_COLUMNS = 16_384;
+export const MAX_GRID_ROWS = 1_048_576;
+
+// Persisted size overrides remain independently bounded. Reusing the row
+// address ceiling as an entry-count limit would let a hostile sparse workbook
+// allocate a million-entry map even though almost every line uses the default
+// size. The row budget is the importer's own (page_projection
+// _MAX_ROW_SIZE_OVERRIDES, 200,000; past it the import reports
+// xlsx_line_sizes_not_projected): at 10,000 here, a sheet with more sized or
+// hidden rows had them set aside on open and a row edit left them behind
+
+// outline groups. A column map is bounded by the 16,384 columns themselves, a small map,
+// and a workbook may size every one of them: P07_62629 states <col> widths out
+// to XFD (7,757 of them not the default), where a 1,000-entry budget set the
+// sheet's widths aside whole (X-065). The importer's own budget is the column
+// count too (page_projection _MAX_COLUMN_SIZE_OVERRIDES).
+export const MAX_GRID_COLUMN_SIZE_OVERRIDES = MAX_GRID_COLUMNS;
+export const MAX_GRID_ROW_SIZE_OVERRIDES = 200_000;
+
+/** The tallest row a file states: 409.5 pt, 546 px. */
+export const MAX_NATIVE_ROW_HEIGHT_PX = 546;
+
+
+
+
+export const MAX_DRAWING_LAYER_X_PX = DEFAULT_SPREADSHEET_HEADER_WIDTH_PX + MAX_GRID_COLUMNS * MAX_COLUMN_WIDTH_PX;
+export const MAX_DRAWING_LAYER_Y_PX = DEFAULT_SPREADSHEET_HEADER_HEIGHT_PX + MAX_GRID_ROWS * MAX_NATIVE_ROW_HEIGHT_PX;
+
+const SPARSE_AXIS_RESOLVER = Symbol("spreadsheet-sparse-axis-resolver");
+
+interface SparseAxisResolverMetadata {
+  offsetOfLine(index: number): number;
+  visibleLine?(index: number, count: number, direction: 1 | -1): number;
+  defaultSize: number;
+  overrides: ReadonlyMap<number, number>;
+  hidden?: ReadonlySet<number>;
+  intrinsic?: SparseAxisSizeResolver;
+}
+
+export type SparseAxisSizeResolver = ((line: number) => number) & {
+  [SPARSE_AXIS_RESOLVER]: SparseAxisResolverMetadata;
+};
+
+/**
+ * Build a line-size resolver whose cumulative offset is O(log K), where K is
+ * the number of persisted overrides. This keeps virtual navigation to row
+ * 1,048,576 bounded while preserving the existing function-shaped API used by
+ * the renderer and drag logic.
+ */
+export function createSparseAxisSizeResolver(options: {
+  overrides: SizeMap | undefined;
+  defaultSize: number;
+  clampSize: (value: unknown, fallback: number) => number;
+  /** The live drag preview: one line, or every line one drag is sizing. */
+  transientOverride?:
+    | { index: number; size: number }
+    | readonly { index: number; size: number }[]
+    | null;
+}): SparseAxisSizeResolver {
+  const fallback = options.clampSize(options.defaultSize, options.defaultSize);
+  const transient = options.transientOverride;
+  const entries = new Map<number, number>();
+  for (const [rawIndex, rawSize] of Object.entries(options.overrides ?? {})) {
+    const index = Number(rawIndex);
+    if (!Number.isInteger(index) || index < 0) continue;
+    entries.set(index, options.clampSize(rawSize, fallback));
+  }
+  for (const line of transient
+    ? Array.isArray(transient)
+      ? transient
+      : [transient as { index: number; size: number }]
+    : []) {
+    if (!Number.isInteger(line.index) || line.index < 0) continue;
+    entries.set(line.index, options.clampSize(line.size, fallback));
+  }
+  const sorted = [...entries.entries()].sort(([left], [right]) => left - right);
+  const indices = sorted.map(([index]) => index);
+  const prefixDeltas: number[] = [];
+  let delta = 0;
+  for (const [, size] of sorted) {
+    delta += size - fallback;
+    prefixDeltas.push(delta);
+  }
+  const upperBound = (index: number): number => {
+    let low = 0;
+    let high = indices.length;
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2);
+      if (indices[middle] < index) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  };
+  const resolver = ((line: number) => {
+    if (!Number.isInteger(line) || line < 0) return fallback;
+    return entries.get(line) ?? fallback;
+  }) as SparseAxisSizeResolver;
+  resolver[SPARSE_AXIS_RESOLVER] = {
+    defaultSize: fallback,
+    overrides: entries,
+    offsetOfLine(index: number): number {
+      const bound = Math.max(0, Math.floor(index));
+      const position = upperBound(bound);
+      return (
+        bound * fallback + (position > 0 ? prefixDeltas[position - 1] : 0)
+      );
+    },
+  };
+  return resolver;
+}
+
+/** View-only collapse. Stored dimensions remain in the base resolver. */
+export function maskHiddenAxisLines(base: SparseAxisSizeResolver, hiddenLines: Iterable<number>): SparseAxisSizeResolver {
+  const baseMetadata = base[SPARSE_AXIS_RESOLVER];
+  const intrinsic = baseMetadata.intrinsic ?? base;
+  const source = intrinsic[SPARSE_AXIS_RESOLVER];
+  const hidden = new Set([...(baseMetadata.hidden ?? []), ...hiddenLines].filter(index => Number.isSafeInteger(index) && index >= 0));
+  if (hidden.size === 0) return base;
+  const indices = [...hidden].sort((a,b)=>a-b);
+  const runs: Array<{ first: number; last: number }> = [];
+  for (const index of indices) {
+    const previous = runs[runs.length-1];
+    if (previous && previous.last + 1 === index) previous.last = index;
+    else runs.push({ first:index, last:index });
+  }
+  const overrides=[...source.overrides].filter(([index])=>!hidden.has(index)).sort(([a],[b])=>a-b);
+  const overrideIndices=overrides.map(([index])=>index),prefixDeltas:number[]=[];
+  let delta=0;
+  for(const [,size] of overrides){delta+=size-source.defaultSize;prefixDeltas.push(delta);}
+  const positive=overrides.filter(([,size])=>size>0).map(([index])=>index);
+  const lowerBound=(values:readonly number[],index:number)=>{
+    let low=0,high=values.length;
+    while(low<high){const middle=(low+high)>>>1;if(values[middle]<index)low=middle+1;else high=middle;}
+    return low;
+  };
+  const resolver = ((index:number)=>hidden.has(index)?0:intrinsic(index)) as SparseAxisSizeResolver;
+  resolver[SPARSE_AXIS_RESOLVER] = {
+    defaultSize:source.defaultSize,overrides:source.overrides,hidden,intrinsic,
+    offsetOfLine(index) {
+      const bound=Math.max(0,Math.floor(index)),position=lowerBound(overrideIndices,bound);
+      // Count visible default lines instead of subtracting two large fractional
+      // sums: a fully hidden interval must have exactly zero extent for hits.
+      return (bound-lowerBound(indices,bound))*source.defaultSize+(position?prefixDeltas[position-1]:0);
+    },
+    visibleLine(index,count,direction) {
+      if(index<0||index>=count)return index;
+      if(source.defaultSize<=0){
+        const position=direction===1?lowerBound(positive,index):lowerBound(positive,index+1)-1;
+        const found=positive[position];
+        return found===undefined?(direction===1?count:-1):found;
+      }
+      let candidate=index;
+      while(candidate>=0&&candidate<count){
+        let low=0,high=runs.length;
+        while(low<high){const middle=(low+high)>>>1;if(runs[middle].first<=candidate)low=middle+1;else high=middle;}
+        const run=runs[low-1];
+        if(run&&candidate<=run.last){candidate=direction===1?run.last+1:run.first-1;continue;}
+        if(intrinsic(candidate)>0)return candidate;
+        candidate+=direction;
+      }
+      return candidate;
+    },
+  };
+  return resolver;
+}
+
+export function nextVisibleAxisLine(index:number,count:number,size:(line:number)=>number,direction:1|-1=1):number {
+  const sparse=(size as Partial<SparseAxisSizeResolver>)[SPARSE_AXIS_RESOLVER];
+  if(sparse?.visibleLine)return sparse.visibleLine(index,count,direction);
+  let candidate=index;
+  while(candidate>=0&&candidate<count&&size(candidate)<=0)candidate+=direction;
+  return candidate;
+}
+
+export function hasHiddenAxisLines(size:(line:number)=>number):boolean {
+  return Boolean((size as Partial<SparseAxisSizeResolver>)[SPARSE_AXIS_RESOLVER]?.visibleLine);
+}
+
+/**
+ * Clamp a raw (possibly fractional / out-of-range / non-finite) column width to
+ * the supported pixel range, rounding to a whole pixel. Non-finite input falls
+ * back to the supplied default (itself clamped) so a corrupt drag never yields
+ * NaN.
+ */
+export function clampColumnWidth(value: unknown, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return clampColumnWidth(fallback, MIN_COLUMN_WIDTH_PX);
+  }
+  return Math.min(MAX_COLUMN_WIDTH_PX, Math.max(MIN_COLUMN_WIDTH_PX, Math.round(n)));
+}
+
+/**
+ * Clamp a raw row height to the supported pixel range (see clampColumnWidth).
+ */
+export function clampRowHeight(value: unknown, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) {
+    return clampRowHeight(fallback, MIN_ROW_HEIGHT_PX);
+  }
+  return Math.min(MAX_ROW_HEIGHT_PX, Math.max(MIN_ROW_HEIGHT_PX, Math.round(n)));
+}
+
+// Excel's own units for a line's size. A column width counts characters of the
+// Normal style font's maximum digit width, plus 5 pixels of cell margin and
+// gridline (ISO/IEC 29500-1 §18.3.1.13, CT_Col); a row height counts points.
+// The Column Width dialog and the drag readout show characters, which are
+// `(pixels - 5) / 7` for the 7-pixel digit of the default font (Calibri or
+// Aptos Narrow 11 at 96 DPI, where 8.43 characters are 64 pixels); a row is
+// `points / 0.75` pixels. The model keeps pixels.
+//
+// The FILE's width is a different number: `CT_Col@width` and
+// `sheetFormatPr@defaultColWidth` hold the characters PLUS the 5-pixel margin,
+// in characters. Desktop Excel stores a column set to 8 as 8.7109375 at a
+// 7-pixel digit (8.83203125 at a 6-pixel one), so reading the file's width as
+// dialog characters and adding the margin again made every sized column 5
+// pixels wider than Excel draws it. Read the file's width with
+// columnFileWidthToPixels (§18.3.1.13's own truncation).
+export const DEFAULT_MAX_DIGIT_WIDTH_PX = 7;
+export const COLUMN_WIDTH_PADDING_PX = 5;
+export const MAX_COLUMN_WIDTH_CHARACTERS = 255;
+export const MAX_ROW_HEIGHT_POINTS = 409;
+
+/** Pixels of a column `characters` wide (see DEFAULT_MAX_DIGIT_WIDTH_PX). */
+export function columnCharactersToPixels(
+  characters: number,
+  digitWidth = DEFAULT_MAX_DIGIT_WIDTH_PX,
+  dpi = 96,
+): number {
+  const device = characters * digitWidth + COLUMN_WIDTH_PADDING_PX;
+  return dpi === 96 ? device : (device * 96) / dpi;
+}
+
+/**
+ * The maximum digit width, in 96dpi pixels, of a workbook grid font: the unit
+ * every column width of that workbook is counted in (Calibri and Aptos Narrow
+ * 11 are 7; 等线 11, Chinese Excel's Normal font, is 8, which is why its
+ * default column is 72 pixels, "8.38"). The widest digit's advance comes from
+ * a table measured off the font files Office ships, keyed by every name a
+ * face carries (Excel writes the author's: 等线, 游ゴシック); the API keeps an
+ * identical copy, so the page, its print and its export count alike. A face
+ * missing from the table counts like Calibri, on both sides.
+ */
+const WHOLE_EM_DIGIT_FACES: ReadonlySet<string> = new Set(OFFICE_DIGIT_WHOLE_EM as readonly string[]);
+
+export function officeDigitWidth(
+  font: { readonly family?: string; readonly sizePt?: number } | undefined,
+): number {
+  const size = font?.sizePt;
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) {
+    return DEFAULT_MAX_DIGIT_WIDTH_PX;
+  }
+  const advances = OFFICE_DIGIT_ADVANCES as Readonly<Record<string, number>>;
+  const key = (font?.family ?? "").trim().toLowerCase();
+  // The East Asian fixed-pitch faces whose digits are half the em (宋体,
+  // ＭＳ Ｐゴシック ...) carry no hinted widths: GDI draws them at the whole-
+  // pixel em, half of which rounds up -- 宋体 11 is a 15-pixel em with 8-pixel
+  // digits, Chinese Excel 2007's "8.38 (72 像素)" default column (X-090). The
+  // API's office_digit_width reads the same list.
+  if (WHOLE_EM_DIGIT_FACES.has(key)) {
+    const em = Math.floor((size * 96) / 72 + 0.5);
+    return Math.max(1, Math.floor(em / 2 + 0.5));
+  }
+  const ratio = advances[key] ?? advances.calibri;
+  return Math.max(1, Math.round((ratio * size * 96) / 72));
+}
+
+/**
+ * How much wider Excel draws a run of digits than the browser in the same
+ * face and size: the face's maximum digit width on Excel's grid
+ * ({@link officeDigitWidth}, whole pixels) over the digit's plain advance at
+ * that size. Calibri 11 is 7 / 7.43 (Excel's hinted digits are narrower:
+ * S26_pivottable_date_field_filter's "2016/ 1/ 6. 0:00" fits its 101-pixel
+ * column in Excel and measured 96.5 pixels in the browser, X-101); 宋体 11 is
+ * 8 / 7.33. A number's fit is judged at Excel's widths.
+ */
+export function officeDigitWidthScale(
+  font: { readonly family?: string; readonly sizePt?: number } | undefined,
+): number {
+  const size = font?.sizePt;
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return 1;
+  const advances = OFFICE_DIGIT_ADVANCES as Readonly<Record<string, number>>;
+  const ratio = advances[(font?.family ?? "").trim().toLowerCase()] ?? advances.calibri;
+  const plain = (ratio * size * 96) / 72;
+  return plain > 0 ? officeDigitWidth(font) / plain : 1;
+}
+
+/**
+ * The automatic row height, in 96dpi pixels, of a grid font: what Windows
+ * Excel gives a row that holds nothing taller. Its line box from the face's
+ * own metrics at GDI's whole-pixel em (Windows metrics with the hhea line gap
+ * beyond them, or the typo metrics a face asks for, as Aptos does), plus one
+ * pixel: ceil(ascent) + round(descent) + floor(leading) + 1. It reproduces
+ * every Normal font default found in real Excel files: Calibri and Aptos
+ * Narrow 11 are 20 (15 pt), Arial and Times New Roman 10 are 17, 宋体 11 is
+ * 18 and 12 is 19 (14.25 pt), 新細明體 11 is 19, 游ゴシック 11 is 25 (18.75 pt),
+ * 맑은 고딕 11 is 22. The integers come from office-row-metrics.json (the API
+ * keeps an identical copy); a face missing from it measures like Calibri.
+ */
+export function officeRowHeight(
+  font: { readonly family?: string; readonly sizePt?: number } | undefined,
+): number {
+  const size = font?.sizePt;
+  const metrics = OFFICE_ROW_METRICS as Readonly<Record<string, readonly number[]>>;
+  const [ascent, descent, leading, unitsPerEm] =
+    metrics[(font?.family ?? "").trim().toLowerCase()] ?? metrics.calibri;
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return 20;
+  const em = Math.ceil((size * 96) / 72 - 1e-9);
+  return (
+    Math.ceil((ascent * em) / unitsPerEm) +
+    Math.floor((2 * descent * em + unitsPerEm) / (2 * unitsPerEm)) +
+    Math.floor((leading * em) / unitsPerEm) +
+    1
+  );
+}
+
+/**
+ * Device pixels of a column whose FILE width (`CT_Col@width`, which already
+ * includes the 5-pixel margin) is `width`: §18.3.1.13's
+ * `Truncate(((256 * width + Truncate(128 / MDW)) / 256) * MDW)`. For any width
+ * Excel wrote this is exactly the pixel count it was written from.
+ */
+export function columnFileWidthToPixels(
+  width: number,
+  digitWidth = DEFAULT_MAX_DIGIT_WIDTH_PX,
+): number {
+  return Math.floor(((256 * width + Math.floor(128 / digitWidth)) / 256) * digitWidth);
+}
+
+/**
+ * Device pixels of the default column of a sheet whose file names no
+ * `defaultColWidth`, from its `baseColWidth` characters plus the 5-pixel
+ * margin. Windows Excel rounds that up to a multiple of 8 pixels, which is
+ * why a base of 8 at the 7-pixel digit is 64 pixels, "8.43" characters, and not
+ * 61; Excel for Mac does not round (a new Mac workbook's base of 10 at its
+ * 6-point digit is 65 points, measured).
+ */
+export function columnBaseWidthToPixels(
+  baseColumnWidth: number,
+  digitWidth = DEFAULT_MAX_DIGIT_WIDTH_PX,
+  dpi = 96,
+): number {
+  const device = baseColumnWidth * digitWidth + COLUMN_WIDTH_PADDING_PX;
+  return dpi === 72 ? device : Math.ceil(device / 8) * 8;
+}
+
+/** Characters shown for a column `pixels` wide (never below zero). */
+export function columnPixelsToCharacters(
+  pixels: number,
+  digitWidth = DEFAULT_MAX_DIGIT_WIDTH_PX,
+  dpi = 96,
+): number {
+  const device = dpi === 96 ? pixels : (pixels * dpi) / 96;
+  return Math.max(0, (device - COLUMN_WIDTH_PADDING_PX) / digitWidth);
+}
+
+export function rowPixelsToPoints(pixels: number): number {
+  return pxToPt(pixels);
+}
+
+export function rowPointsToPixels(points: number): number {
+  return ptToPx(points);
+}
+
+/** Excel reads sizes to two decimals (8.43 characters, 14.25 points). */
+export function roundSizeReading(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * The value typed in Column Width (characters, 0 to 255) or Row Height
+ * (points, 0 to 409), or null when it is not a number in that range. Zero is a
+ * valid entry: Excel hides the line.
+ */
+export function parseLineSizeEntry(raw: unknown, max: number): number | null {
+  const text =
+    typeof raw === "number" ? String(raw) : typeof raw === "string" ? raw.trim() : "";
+  if (text === "") return null;
+  const value = Number(text);
+  if (!Number.isFinite(value) || value < 0 || value > max) return null;
+  return value;
+}
+
+/**
+ * The resolved width for a column: its persisted override (clamped) when set,
+ * otherwise the sheet default. Negative / non-integer indices resolve to the
+ * default. The `defaultWidth` is itself clamped so a wild default never escapes
+ * the bounds.
+ */
+export function resolvedColumnWidth(
+  index: number,
+  widths: SizeMap | undefined,
+  defaultWidth: number,
+): number {
+  const fallback = clampColumnWidth(defaultWidth, MIN_COLUMN_WIDTH_PX);
+  if (!widths || !Number.isInteger(index) || index < 0) return fallback;
+  const raw = widths[index];
+  if (raw === undefined) return fallback;
+  return clampColumnWidth(raw, fallback);
+}
+
+/**
+ * The resolved height for a row: its persisted override (clamped) when set,
+ * otherwise the sheet default (see resolvedColumnWidth).
+ */
+export function resolvedRowHeight(
+  index: number,
+  heights: SizeMap | undefined,
+  defaultHeight: number,
+): number {
+  const fallback = clampRowHeight(defaultHeight, MIN_ROW_HEIGHT_PX);
+  if (!heights || !Number.isInteger(index) || index < 0) return fallback;
+  const raw = heights[index];
+  if (raw === undefined) return fallback;
+  return clampRowHeight(raw, fallback);
+}
+
+/**
+ * The cumulative pixel offset of line `index` measured from the first line's
+ * leading edge (i.e. the sum of the resolved sizes of every line before it).
+ * `offsetOfLine(0, ...)` is always 0; `offsetOfLine(count, ...)` is the total
+ * size of the whole axis. Out-of-range indices clamp to [0, count].
+ *
+ * @param resolveSize resolves the size of a single line by index (already clamped)
+ */
+export function offsetOfLine(
+  index: number,
+  count: number,
+  resolveSize: (line: number) => number,
+): number {
+  const safeCount = Math.max(0, Math.floor(count));
+  const bound = Math.min(Math.max(0, Math.floor(index)), safeCount);
+  const sparse = (resolveSize as Partial<SparseAxisSizeResolver>)[
+    SPARSE_AXIS_RESOLVER
+  ];
+  if (sparse) return sparse.offsetOfLine(bound);
+  let offset = 0;
+  for (let i = 0; i < bound; i += 1) offset += resolveSize(i);
+  return offset;
+}
+
+/**
+ * The total pixel size of an axis: the sum of every line's resolved size.
+ * Equivalent to offsetOfLine(count, count, resolveSize) but named for clarity.
+ */
+export function totalAxisSize(
+  count: number,
+  resolveSize: (line: number) => number,
+): number {
+  return offsetOfLine(Math.max(0, Math.floor(count)), count, resolveSize);
+}
+
+/**
+ * The index of the first line whose trailing edge is past `scroll` pixels — i.e.
+ * the first line at least partially visible at the given scroll offset. Used to
+ * derive the virtualization window start from the scroll position when lines can
+ * have variable sizes (the fixed-size shortcut `floor(scroll / size)` no longer
+ * holds). Clamped to [0, count - 1] (or 0 for an empty axis); a non-positive
+ * scroll resolves to line 0.
+ */
+export function lineIndexAtOffset(
+  scroll: number,
+  count: number,
+  resolveSize: (line: number) => number,
+): number {
+  const safeCount = Math.max(0, Math.floor(count));
+  if (safeCount === 0) return 0;
+  const target = Number.isFinite(scroll) ? Math.max(0, scroll) : 0;
+  const sparse = (resolveSize as Partial<SparseAxisSizeResolver>)[
+    SPARSE_AXIS_RESOLVER
+  ];
+  if (sparse) {
+    let low = 0;
+    let high = safeCount - 1;
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2);
+      if (sparse.offsetOfLine(middle + 1) > target) high = middle;
+      else low = middle + 1;
+    }
+    return low;
+  }
+  let acc = 0;
+  for (let i = 0; i < safeCount; i += 1) {
+    acc += resolveSize(i);
+    // Strictly-greater so a scroll landing exactly on a boundary picks the next
+    // line (its leading edge is the boundary), matching the fixed-size floor().
+    if (acc > target) return i;
+  }
+  return safeCount - 1;
+}
+
+/**
+ * Auto-fit a column to its content width: the widest cell text drives the size,
+ * clamped to the bounds, with a small fixed padding so text never touches the
+ * cell edge. When no cell has text the column resets to its (clamped) default —
+ * Excel's double-click on an empty column collapses to a minimal width, but a
+ * reset-to-default is the safe, predictable behaviour here. The text width is
+ * estimated from a per-character pixel budget (no DOM measuring in this pure
+ * layer); the renderer can pass the longest visible string per column.
+ */
+// A CJK / fullwidth code point occupies ~1.7 ASCII-character widths at the grid
+// font (~13px vs the 8px ASCII budget). Slight over-fit beats clipping.
+const CJK_DISPLAY_WIDTH = 1.7;
+
+/** True for East-Asian Wide / Fullwidth code points (the chars that render ~2x). */
+function isWideCodePoint(cp: number): boolean {
+  return (
+    (cp >= 0x1100 && cp <= 0x115f) || // Hangul Jamo
+    (cp >= 0x2e80 && cp <= 0x303e) || // CJK radicals, Kangxi, symbols/punct
+    (cp >= 0x3041 && cp <= 0x33ff) || // Hiragana, Katakana, CJK symbols
+    (cp >= 0x3400 && cp <= 0x4dbf) || // CJK Ext A
+    (cp >= 0x4e00 && cp <= 0x9fff) || // CJK Unified Ideographs
+    (cp >= 0xa000 && cp <= 0xa4cf) || // Yi
+    (cp >= 0xac00 && cp <= 0xd7a3) || // Hangul Syllables
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK Compatibility Ideographs
+    (cp >= 0xfe30 && cp <= 0xfe4f) || // CJK Compatibility Forms
+    (cp >= 0xff00 && cp <= 0xff60) || // Fullwidth Forms
+    (cp >= 0xffe0 && cp <= 0xffe6) || // Fullwidth signs
+    (cp >= 0x1f300 && cp <= 0x1faff) || // Emoji & pictographs (wide)
+    (cp >= 0x20000 && cp <= 0x3fffd) // CJK Ext B+ (supplementary ideographs)
+  );
+}
+
+/**
+ * Display width of a string in "ASCII-character" units: each East-Asian wide /
+ * fullwidth code point counts as {@link CJK_DISPLAY_WIDTH}, every other as 1.
+ * Iterates by code POINT (so an astral CJK Ext-B glyph counts once, not twice).
+ * For ASCII-only text this equals `text.length`, so non-CJK callers are
+ * byte-identical. PURE.
+ */
+export function eastAsianTextWidth(text: string): number {
+  if (typeof text !== "string" || text.length === 0) return 0;
+  let width = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0) ?? 0;
+    width += isWideCodePoint(cp) ? CJK_DISPLAY_WIDTH : 1;
+  }
+  return width;
+}
+
+export function autoFitColumnWidth(
+  longestText: string,
+  defaultWidth: number,
+  options?: {
+    pxPerChar?: number;
+    paddingPx?: number;
+    /** The widest cell's text measured in its OWN font (the grid's canvas
+     * measurement); the per-character estimate below is only a fallback. */
+    measure?: (text: string) => number;
+  },
+): number {
+  const fallback = clampColumnWidth(defaultWidth, MIN_COLUMN_WIDTH_PX);
+  const text = typeof longestText === "string" ? longestText : "";
+  if (text.length === 0) return fallback;
+  const pxPerChar = options?.pxPerChar ?? 8;
+  const paddingPx = options?.paddingPx ?? 16;
+  if (options?.measure) {
+    const measured = options.measure(text);
+    if (Number.isFinite(measured) && measured > 0) {
+      return clampColumnWidth(Math.ceil(measured) + paddingPx, fallback);
+    }
+  }
+  // East-Asian-width-aware: a CJK / fullwidth glyph renders ~1.7x an ASCII one at
+  // the grid font, so sizing by the raw code-unit count under-fits (clips) a
+  // Chinese/Japanese/Korean column. ASCII-only text is unchanged (factor 1).
+  return clampColumnWidth(
+    eastAsianTextWidth(text) * pxPerChar + paddingPx,
+    fallback,
+  );
+}
+
+/**
+ * The wrapped line count with REAL glyph widths, for the row heights AutoFit
+ * writes. The per-character budget below is an estimate and over-counts the
+ * lines of proportional text, which left an auto-fitted row taller than its
+ * own text; `measure` (the grid's canvas measurement, in the cell's own font)
+ * counts the lines the grid actually draws.
+ *
+ * The wrap mirrors the wrapped-text layer's CSS: lines break at whitespace,
+ * the whitespace at a break hangs rather than starting the next line, a word
+ * wider than the line breaks anywhere inside it (`overflow-wrap: anywhere`),
+ * and each "\n" starts a new paragraph. Always >= 1.
+ */
+function measuredWrappedLineCount(
+  text: string,
+  usableWidthPx: number,
+  measure: (segment: string) => number,
+): number {
+  let lines = 0;
+  for (const paragraph of text.split("\n")) {
+    lines += 1; // every paragraph occupies at least one line
+    if (paragraph === "") continue;
+    let current = "";
+    for (const token of paragraph.match(/\s+|\S+/g) ?? []) {
+      let rest = token;
+      // Bounded by the token's length: each turn either places the rest of
+      // the token or consumes at least one character of it.
+      for (let guard = rest.length + 1; rest.length > 0 && guard > 0; guard -= 1) {
+        if (measure(current + rest) <= usableWidthPx) {
+          current += rest;
+          break;
+        }
+        if (current !== "") {
+          // Break here. Whitespace at the break hangs off the line's end.
+          lines += 1;
+          current = "";
+          if (token.trim() === "") {
+            rest = "";
+            break;
+          }
+          continue;
+        }
+        // A word wider than a whole line: fill this line, continue below.
+        let cut = 1;
+        while (
+          cut < rest.length &&
+          measure(rest.slice(0, cut + 1)) <= usableWidthPx
+        ) {
+          cut += 1;
+        }
+        current = rest.slice(0, cut);
+        rest = rest.slice(cut);
+        if (rest.length > 0) {
+          lines += 1;
+          current = "";
+        }
+      }
+    }
+  }
+  return Math.max(1, lines);
+}
+
+/**
+ * Estimate how many wrapped display lines a string occupies inside a column of
+ * `columnWidthPx`, given a per-character pixel budget. Used by the wrap-text row
+ * auto-grow: a cell whose text wraps onto N lines needs ~N line-heights of room.
+ *
+ * The wrap is a greedy word/char wrap with the SAME `pxPerChar` budget the
+ * column-width auto-fit uses, so the row-height estimate and the column-width
+ * estimate stay consistent. Explicit "\n" breaks (Excel Alt+Enter / a formula
+ * result with a newline) always start a new line. A word longer than the usable
+ * width is broken across lines (Excel's `overflow-wrap: anywhere`). An empty
+ * string is one line. The result is always >= 1.
+ *
+ * @param text the cell's displayed text (may contain "\n")
+ * @param columnWidthPx the resolved (spanned) column width in px
+ * @param options.pxPerChar per-character width budget (default 8, matches auto-fit)
+ * @param options.paddingPx leading+trailing cell padding subtracted from the width
+ */
+export function wrappedLineCount(
+  text: string,
+  columnWidthPx: number,
+  options?: {
+    pxPerChar?: number;
+    paddingPx?: number;
+    measure?: (segment: string) => number;
+  },
+): number {
+  const raw = typeof text === "string" ? text : "";
+  if (options?.measure) {
+    const paddingPx = Math.max(0, options.paddingPx ?? 18);
+    const width = Number.isFinite(columnWidthPx) ? columnWidthPx : 0;
+    return measuredWrappedLineCount(
+      raw,
+      Math.max(1, width - paddingPx),
+      options.measure,
+    );
+  }
+  const pxPerChar = Math.max(1, options?.pxPerChar ?? 8);
+  const paddingPx = Math.max(0, options?.paddingPx ?? 18);
+  const width = Number.isFinite(columnWidthPx) ? columnWidthPx : 0;
+  // Usable text width is the column minus padding; floor of one char so a
+  // pathologically narrow column still wraps one char per line (never 0 → ∞).
+  const usable = Math.max(pxPerChar, width - paddingPx);
+  const charsPerLine = Math.max(1, Math.floor(usable / pxPerChar));
+  let lines = 0;
+  // CJK-aware floor: the word-wrap loop below counts by raw code units, which
+  // OVER-fits a CJK column (each glyph is ~1.7 ASCII widths) and under-counts the
+  // lines, clipping wrapped Chinese/Japanese text. Track a parallel display-width
+  // estimate per paragraph and take the max. `charsPerLine` is already in
+  // ASCII-char-width units (usable/pxPerChar), the same units eastAsianTextWidth
+  // returns. For ASCII text this estimate is <= the word-wrap count (which only
+  // adds lines at word boundaries), so non-CJK results stay byte-identical.
+  let displayLines = 0;
+  // Split on explicit newlines first: each hard break is its own paragraph that
+  // wraps independently. An empty paragraph still occupies one line.
+  for (const paragraph of raw.split("\n")) {
+    if (paragraph.length === 0) {
+      lines += 1;
+      displayLines += 1;
+      continue;
+    }
+    displayLines += Math.max(
+      1,
+      Math.ceil(eastAsianTextWidth(paragraph) / charsPerLine),
+    );
+    // Greedy word wrap: accumulate words onto the current line until the next
+    // word would overflow; a single word wider than the line is hard-split.
+    let lineLen = 0;
+    const words = paragraph.split(/(\s+)/); // keep whitespace tokens
+    for (const token of words) {
+      let remaining = token;
+      while (remaining.length > 0) {
+        const room = charsPerLine - lineLen;
+        if (remaining.length <= room) {
+          lineLen += remaining.length;
+          remaining = "";
+        } else if (room > 0 && remaining.length > charsPerLine) {
+          // A word longer than a whole line: fill the rest of this line, wrap.
+          lineLen = charsPerLine;
+          remaining = remaining.slice(room);
+          lines += 1;
+          lineLen = 0;
+        } else {
+          // Word fits on a fresh line: wrap then place it (or as much as fits).
+          lines += 1;
+          lineLen = 0;
+          if (remaining.length <= charsPerLine) {
+            lineLen = remaining.length;
+            remaining = "";
+          } else {
+            remaining = remaining.slice(charsPerLine);
+            lines += 1;
+          }
+        }
+      }
+    }
+    lines += 1; // the last (or only) line of this paragraph
+  }
+  return Math.max(1, lines, displayLines);
+}
+
+/**
+ * The row height needed to show `text` wrapped inside `columnWidthPx`: the
+ * wrapped line count times the per-line height plus vertical padding, clamped to
+ * the row-height bounds. Mirrors `autoFitColumnWidth` for the row axis. A single
+ * line resolves to the (clamped) default height so a one-line wrapped cell keeps
+ * the byte-stable default.
+ *
+ * @param defaultHeight the sheet's default row height (fallback / one-line height)
+ * @param options.lineHeightPx height of one wrapped text line (default 18)
+ * @param options.paddingPx vertical cell padding added on top of the lines
+ */
+export function wrappedTextHeightPx(
+  text: string,
+  columnWidthPx: number,
+  defaultHeight: number,
+  options?: {
+    pxPerChar?: number;
+    paddingPx?: number;
+    lineHeightPx?: number;
+    verticalPaddingPx?: number;
+    measure?: (segment: string) => number;
+  },
+): number {
+  const fallback = clampRowHeight(defaultHeight, MIN_ROW_HEIGHT_PX);
+  const lines = wrappedLineCount(text, columnWidthPx, {
+    pxPerChar: options?.pxPerChar,
+    paddingPx: options?.paddingPx,
+    measure: options?.measure,
+  });
+  if (lines <= 1) return fallback;
+  const lineHeightPx = Math.max(1, options?.lineHeightPx ?? 18);
+  const verticalPaddingPx = Math.max(0, options?.verticalPaddingPx ?? 6);
+  // Excel's AutoFit Row Height is the lines' own height plus a small padding
+  // (Microsoft Support, "Change the column width and row height"), so the
+  // fractional line box is carried, not dropped.
+  const needed = Math.ceil(lines * lineHeightPx) + verticalPaddingPx;
+  // Never shrink below the default: a wrapped cell is at least one default row.
+  return clampRowHeight(Math.max(needed, fallback), fallback);
+}
+
+/**
+ * The row height AutoFit Row Height gives one cell, as the grid draws its
+ * text: wrapped lines, one line in a font taller than the row, a line turned
+ * by an angle (the row fits its rotated box) or letters stacked upright. The
+ * automatic row heights measure the same shapes on the page; the height
+ * AutoFit fixes must not be shorter (live audit S-051: a 90° label fixed at
+ * 20px showed one character).
+ */
+export function autoFitCellHeightPx(
+  text: string,
+  columnWidthPx: number,
+  defaultHeight: number,
+  metrics: {
+    lineHeightPx: number;
+    verticalPaddingPx: number;
+    fontSizePx: number;
+    measure: (segment: string) => number;
+  },
+  layout: { wraps: boolean; rotation?: number; stacked?: boolean },
+): number {
+  const fallback = clampRowHeight(defaultHeight, MIN_ROW_HEIGHT_PX);
+  // The automatic row's own allowance around a single measured line.
+  const fit = (needed: number) => clampRowHeight(Math.max(fallback, Math.ceil(needed)), fallback);
+  if (layout.stacked) {
+    // One upright letter per em, down the cell.
+    const letters = [...text.replace(/\n/g, "")].length;
+    return fit(letters * metrics.fontSizePx + 4);
+  }
+  const rotation = Number(layout.rotation ?? 0);
+  if (rotation) {
+    const radians = (rotation * Math.PI) / 180;
+    const longest = Math.max(0, ...text.split("\n").map((line) => metrics.measure(line)));
+    return fit(Math.abs(Math.sin(radians)) * longest + Math.abs(Math.cos(radians)) * metrics.lineHeightPx + 4);
+  }
+  if (layout.wraps) {
+    return wrappedTextHeightPx(text, columnWidthPx, defaultHeight, metrics);
+  }
+  return fit(metrics.lineHeightPx + metrics.verticalPaddingPx);
+}
+
+/**
+ * Produce the next size map after a resize, dropping a back-to-default override
+ * so the persisted model stays minimal (a column dragged back to the default
+ * width should not keep a redundant entry — important for "double-click =
+ * reset" to actually clear the override). Returns `undefined` when the result is
+ * empty so the sheet field can be omitted entirely.
+ *
+ * @param clamp the axis clamp (clampColumnWidth / clampRowHeight)
+ * @param defaultSize the sheet default for the axis (used to detect "= default")
+ */
+export function setLineSize(
+  map: SizeMap | undefined,
+  index: number,
+  size: number,
+  defaultSize: number,
+  clamp: (value: unknown, fallback: number) => number,
+): SizeMap | undefined {
+  if (!Number.isInteger(index) || index < 0) return map;
+  const fallback = clamp(defaultSize, 1);
+  const next: SizeMap = {};
+  for (const [key, value] of Object.entries(map || {})) {
+    const k = Number(key);
+    if (!Number.isInteger(k) || k < 0 || k === index) continue;
+    next[k] = clamp(value, fallback);
+  }
+  const clamped = clamp(size, fallback);
+  // Keep the override only when it differs from the default; otherwise the line
+  // already renders at the default and the entry is redundant.
+  if (clamped !== fallback) next[index] = clamped;
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/**
+ * Set MANY line sizes in one pass (the multi-selection autofit / resize: a whole
+ * span of columns or rows updated as a SINGLE model change = one undo step).
+ * Mirrors {@link setLineSize}: each requested override is clamped, an override
+ * equal to the default is dropped (the line already renders at the default), and
+ * a carried entry the overrides replace is dropped. Last write wins per index;
+ * invalid indices are ignored. Returns undefined when nothing remains.
+ */
+export function setLineSizes(
+  map: SizeMap | undefined,
+  sizes: ReadonlyArray<{ index: number; size: number }>,
+  defaultSize: number,
+  clamp: (value: unknown, fallback: number) => number,
+): SizeMap | undefined {
+  const fallback = clamp(defaultSize, 1);
+  const requested = new Map<number, number>();
+  for (const entry of sizes) {
+    const index = entry?.index;
+    if (!Number.isInteger(index) || index < 0) continue;
+    requested.set(index, clamp(entry.size, fallback));
+  }
+  const next: SizeMap = {};
+  for (const [key, value] of Object.entries(map || {})) {
+    const k = Number(key);
+    if (!Number.isInteger(k) || k < 0 || requested.has(k)) continue;
+    next[k] = clamp(value, fallback);
+  }
+  for (const [index, clamped] of requested) {
+    if (clamped !== fallback) next[index] = clamped;
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}

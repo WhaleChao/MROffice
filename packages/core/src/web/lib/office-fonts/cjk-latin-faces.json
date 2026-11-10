@@ -1,0 +1,430 @@
+{
+ "faces": {
+  "apple-sd-gothic-neo": {
+   "400": "apple-sd-gothic-neo-400.woff2",
+   "700": "apple-sd-gothic-neo-700.woff2"
+  },
+  "batang": {
+   "400": "batang-400.woff2"
+  },
+  "dengxian": {
+   "400": "dengxian-400.woff2",
+   "700": "dengxian-700.woff2"
+  },
+  "dengxian-light": {
+   "400": "dengxian-light-400.woff2"
+  },
+  "dotum": {
+   "400": "dotum-400.woff2"
+  },
+  "fangsong": {
+   "400": "fangsong-400.woff2"
+  },
+  "gulim": {
+   "400": "gulim-400.woff2"
+  },
+  "heiti-sc": {
+   "400": "heiti-sc-400.woff2",
+   "700": "heiti-sc-700.woff2"
+  },
+  "hiragino-mincho": {
+   "400": "hiragino-mincho-400.woff2",
+   "700": "hiragino-mincho-700.woff2"
+  },
+  "hiragino-sans": {
+   "400": "hiragino-sans-400.woff2",
+   "700": "hiragino-sans-700.woff2"
+  },
+  "kaiti": {
+   "400": "kaiti-400.woff2"
+  },
+  "malgun-gothic": {
+   "400": "malgun-gothic-400.woff2",
+   "700": "malgun-gothic-700.woff2"
+  },
+  "meiryo": {
+   "400": "meiryo-400.woff2",
+   "700": "meiryo-700.woff2"
+  },
+  "microsoft-jhenghei": {
+   "400": "microsoft-jhenghei-400.woff2",
+   "700": "microsoft-jhenghei-700.woff2"
+  },
+  "microsoft-yahei": {
+   "400": "microsoft-yahei-400.woff2",
+   "700": "microsoft-yahei-700.woff2"
+  },
+  "microsoft-yahei-light": {
+   "400": "microsoft-yahei-light-400.woff2"
+  },
+  "mingliu": {
+   "400": "mingliu-400.woff2"
+  },
+  "ms-gothic": {
+   "400": "ms-gothic-400.woff2"
+  },
+  "ms-mincho": {
+   "400": "ms-mincho-400.woff2"
+  },
+  "ms-pgothic": {
+   "400": "ms-pgothic-400.woff2"
+  },
+  "ms-pmincho": {
+   "400": "ms-pmincho-400.woff2"
+  },
+  "ms-ui-gothic": {
+   "400": "ms-ui-gothic-400.woff2"
+  },
+  "pingfang-sc": {
+   "400": "pingfang-sc-400.woff2",
+   "700": "pingfang-sc-700.woff2"
+  },
+  "pingfang-tc": {
+   "400": "pingfang-tc-400.woff2",
+   "700": "pingfang-tc-700.woff2"
+  },
+  "pmingliu": {
+   "400": "pmingliu-400.woff2"
+  },
+  "simhei": {
+   "400": "simhei-400.woff2"
+  },
+  "simsun": {
+   "400": "simsun-400.woff2"
+  },
+  "songti-sc": {
+   "400": "songti-sc-400.woff2",
+   "700": "songti-sc-700.woff2"
+  },
+  "yu-gothic": {
+   "400": "yu-gothic-400.woff2",
+   "700": "yu-gothic-700.woff2"
+  }
+ },
+ "names": {
+  "apple sd gothic neo": "apple-sd-gothic-neo",
+  "applesdgothicneo-regular": "apple-sd-gothic-neo",
+  "batang": "batang",
+  "dengxian": "dengxian",
+  "dengxian light": "dengxian-light",
+  "dotum": "dotum",
+  "fangsong": "fangsong",
+  "fangsong_gb2312": "fangsong",
+  "gulim": "gulim",
+  "heiti sc": "heiti-sc",
+  "heiti tc": "heiti-sc",
+  "hiragino kaku gothic pro": "hiragino-sans",
+  "hiragino kaku gothic pron": "hiragino-sans",
+  "hiragino mincho pro": "hiragino-mincho",
+  "hiragino mincho pron": "hiragino-mincho",
+  "hiragino sans": "hiragino-sans",
+  "kaiti": "kaiti",
+  "kaiti_gb2312": "kaiti",
+  "malgun gothic": "malgun-gothic",
+  "meiryo": "meiryo",
+  "microsoft jhenghei": "microsoft-jhenghei",
+  "microsoft yahei": "microsoft-yahei",
+  "microsoft yahei light": "microsoft-yahei-light",
+  "mingliu": "mingliu",
+  "ms gothic": "ms-gothic",
+  "ms mincho": "ms-mincho",
+  "ms pgothic": "ms-pgothic",
+  "ms pmincho": "ms-pmincho",
+  "ms ui gothic": "ms-ui-gothic",
+  "nsimsun": "simsun",
+  "pingfang hk": "pingfang-tc",
+  "pingfang sc": "pingfang-sc",
+  "pingfang tc": "pingfang-tc",
+  "pingfang-sc-regular": "pingfang-sc",
+  "pingfangsc-regular": "pingfang-sc",
+  "pingfangsc-semibold": "pingfang-sc",
+  "pmingliu": "pmingliu",
+  "simhei": "simhei",
+  "simsun": "simsun",
+  "songti sc": "songti-sc",
+  "songti tc": "songti-sc",
+  "yu gothic": "yu-gothic",
+  "ヒラギノ明朝 pro w3": "simsun",
+  "ヒラギノ明朝 pron w3": "simsun",
+  "ヒラギノ角ゴ pro w3": "simsun",
+  "ヒラギノ角ゴ pron w3": "simsun",
+  "ヒラギノ角ゴシック": "simsun",
+  "メイリオ": "meiryo",
+  "仿宋": "fangsong",
+  "仿宋_gb2312": "fangsong",
+  "宋体": "simsun",
+  "宋体-简": "simsun",
+  "微軟正黑體": "microsoft-jhenghei",
+  "微软雅黑": "microsoft-yahei",
+  "微软雅黑 light": "microsoft-yahei-light",
+  "新宋体": "simsun",
+  "新細明體": "pmingliu",
+  "楷体": "kaiti",
+  "楷体_gb2312": "kaiti",
+  "游ゴシック": "yu-gothic",
+  "等线": "dengxian",
+  "等线 light": "dengxian-light",
+  "細明體": "mingliu",
+  "苹方-简": "simsun",
+  "苹方-繁": "simsun",
+  "黑体": "simhei",
+  "黑体-简": "heiti-sc",
+  "굴림": "gulim",
+  "돋움": "dotum",
+  "맑은 고딕": "malgun-gothic",
+  "바탕": "batang",
+  "ｍｓ ゴシック": "ms-gothic",
+  "ｍｓ 明朝": "ms-mincho",
+  "ｍｓ ｐゴシック": "ms-pgothic",
+  "ｍｓ ｐ明朝": "ms-pmincho"
+ },
+ "ranges": {
+  "apple-sd-gothic-neo": "U+0020-007E,U+00A0-00A5,U+00A7-00AD,U+00B0-00B4,U+00B6-00BF,U+00C4-00C6,U+00CB,U+00CF-00D0,U+00D6-00D8,U+00DC,U+00DE-00DF,U+00E4-00E6,U+00EB,U+00F0,U+00F6-00F8,U+00FC,U+00FE-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "batang": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "dengxian": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "dengxian-light": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "dotum": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "fangsong": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
+  "gulim": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "heiti-sc": "U+0020-007E,U+00A1-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hiragino-mincho": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hiragino-sans": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "kaiti": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
+  "malgun-gothic": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "meiryo": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "microsoft-jhenghei": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "microsoft-yahei": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "microsoft-yahei-light": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "mingliu": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "ms-gothic": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "ms-mincho": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "ms-pgothic": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "ms-pmincho": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "ms-ui-gothic": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "pingfang-sc": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "pingfang-tc": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "pmingliu": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "simhei": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
+  "simsun": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "songti-sc": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "yu-gothic": "U+0020-007E,U+00A0-00FF,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026"
+ },
+ "server": {
+  "apple-sd-gothic-neo": {
+   "family": "MRAI-Metric-AppleSDGothicNeo",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/apple-sd-gothic-neo-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/apple-sd-gothic-neo-700.ttf.gz"
+   },
+   "source": "noto-sans-kr"
+  },
+  "batang": {
+   "family": "MRAI-Metric-Batang",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/batang-400.ttf.gz"
+   },
+   "source": "noto-serif-kr"
+  },
+  "dengxian": {
+   "family": "MRAI-Metric-DengXian",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/dengxian-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/dengxian-700.ttf.gz"
+   },
+   "source": "noto-sans-sc"
+  },
+  "dengxian-light": {
+   "family": "MRAI-Metric-DengXianLight",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/dengxian-light-400.ttf.gz"
+   },
+   "source": "noto-sans-sc"
+  },
+  "dotum": {
+   "family": "MRAI-Metric-Dotum",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/dotum-400.ttf.gz"
+   },
+   "source": "noto-sans-kr"
+  },
+  "fangsong": {
+   "family": "MRAI-Metric-FangSong",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/fangsong-400.ttf.gz"
+   },
+   "source": "noto-serif-sc"
+  },
+  "gulim": {
+   "family": "MRAI-Metric-Gulim",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/gulim-400.ttf.gz"
+   },
+   "source": "noto-sans-kr"
+  },
+  "heiti-sc": {
+   "family": "MRAI-Metric-HeitiSC",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/heiti-sc-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/heiti-sc-700.ttf.gz"
+   },
+   "source": "noto-sans-sc"
+  },
+  "hiragino-mincho": {
+   "family": "MRAI-Metric-HiraginoMinchoProN",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hiragino-mincho-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/hiragino-mincho-700.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "hiragino-sans": {
+   "family": "MRAI-Metric-HiraginoSans",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hiragino-sans-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/hiragino-sans-700.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "kaiti": {
+   "family": "MRAI-Metric-KaiTi",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/kaiti-400.ttf.gz"
+   },
+   "source": "lxgw-wenkai-tc"
+  },
+  "malgun-gothic": {
+   "family": "MRAI-Metric-MalgunGothic",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/malgun-gothic-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/malgun-gothic-700.ttf.gz"
+   },
+   "source": "noto-sans-kr"
+  },
+  "meiryo": {
+   "family": "MRAI-Metric-Meiryo",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/meiryo-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/meiryo-700.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "microsoft-jhenghei": {
+   "family": "MRAI-Metric-MicrosoftJhengHei",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/microsoft-jhenghei-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/microsoft-jhenghei-700.ttf.gz"
+   },
+   "source": "noto-sans-tc"
+  },
+  "microsoft-yahei": {
+   "family": "MRAI-Metric-MicrosoftYaHei",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/microsoft-yahei-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/microsoft-yahei-700.ttf.gz"
+   },
+   "source": "noto-sans-sc"
+  },
+  "microsoft-yahei-light": {
+   "family": "MRAI-Metric-MicrosoftYaHeiLight",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/microsoft-yahei-light-400.ttf.gz"
+   },
+   "source": "noto-sans-sc"
+  },
+  "mingliu": {
+   "family": "MRAI-Metric-MingLiU",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/mingliu-400.ttf.gz"
+   },
+   "source": "noto-serif-tc"
+  },
+  "ms-gothic": {
+   "family": "MRAI-Metric-MSGothic",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/ms-gothic-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "ms-mincho": {
+   "family": "MRAI-Metric-MSMincho",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/ms-mincho-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "ms-pgothic": {
+   "family": "MRAI-Metric-MSPGothic",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/ms-pgothic-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "ms-pmincho": {
+   "family": "MRAI-Metric-MSPMincho",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/ms-pmincho-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "ms-ui-gothic": {
+   "family": "MRAI-Metric-MSUIGothic",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/ms-ui-gothic-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "pingfang-sc": {
+   "family": "MRAI-Metric-PingFangSC",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/pingfang-sc-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/pingfang-sc-700.ttf.gz"
+   },
+   "source": "noto-sans-sc"
+  },
+  "pingfang-tc": {
+   "family": "MRAI-Metric-PingFangTC",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/pingfang-tc-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/pingfang-tc-700.ttf.gz"
+   },
+   "source": "noto-sans-tc"
+  },
+  "pmingliu": {
+   "family": "MRAI-Metric-PMingLiU",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/pmingliu-400.ttf.gz"
+   },
+   "source": "noto-serif-tc"
+  },
+  "simhei": {
+   "family": "MRAI-Metric-SimHei",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/simhei-400.ttf.gz"
+   },
+   "source": "noto-sans-sc"
+  },
+  "simsun": {
+   "family": "MRAI-Metric-SimSun",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/simsun-400.ttf.gz"
+   },
+   "source": "noto-serif-sc"
+  },
+  "songti-sc": {
+   "family": "MRAI-Metric-SongtiSC",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/songti-sc-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/songti-sc-700.ttf.gz"
+   },
+   "source": "noto-serif-sc"
+  },
+  "yu-gothic": {
+   "family": "MRAI-Metric-YuGothic",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/yu-gothic-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/yu-gothic-700.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  }
+ }
+}

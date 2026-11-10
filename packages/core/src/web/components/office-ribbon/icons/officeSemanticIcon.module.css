@@ -1,0 +1,240 @@
+.root {
+  --office-icon-ink: var(
+    --mrai-office-icon-foreground,
+    var(--console-text-primary, #26383d)
+  );
+  --office-icon-ink-soft: var(
+    --mrai-office-icon-foreground-soft,
+    var(--console-text-secondary, #52676c)
+  );
+  --office-icon-surface: var(
+    --mrai-office-icon-surface,
+    var(--console-surface-raised, #ffffff)
+  );
+  --office-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #176f92)
+  );
+  --office-icon-accent-soft: var(
+    --mrai-office-icon-accent-soft,
+    color-mix(in srgb, var(--office-icon-accent) 16%, transparent)
+  );
+  --office-icon-warm: var(--mrai-office-icon-warm, #b96920);
+  --office-icon-warm-soft: var(
+    --mrai-office-icon-warm-soft,
+    color-mix(in srgb, var(--office-icon-warm) 16%, transparent)
+  );
+  --office-icon-disabled: var(--mrai-office-icon-disabled, GrayText);
+  --office-icon-transition: var(--mrai-office-icon-transition-duration, 180ms);
+
+  display: block;
+  flex: 0 0 auto;
+  width: var(--office-icon-size, 24px);
+  height: var(--office-icon-size, 24px);
+  overflow: visible;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.root path,
+.root rect,
+.root circle,
+.root ellipse,
+.root line,
+.root polyline,
+.root polygon {
+  vector-effect: non-scaling-stroke;
+  transition:
+    fill var(--office-icon-transition) ease,
+    stroke var(--office-icon-transition) ease;
+}
+
+.root [data-office-icon-role="ink"] {
+  fill: none;
+  stroke: var(--office-icon-ink);
+}
+
+.root [data-office-icon-role="ink-soft"] {
+  fill: none;
+  stroke: var(--office-icon-ink-soft);
+}
+
+.root [data-office-icon-role="paper"] {
+  fill: var(--office-icon-surface);
+  stroke: var(--office-icon-ink);
+}
+
+.root [data-office-icon-role="accent"] {
+  fill: none;
+  stroke: var(--office-icon-accent);
+}
+
+.root [data-office-icon-role="accent-fill"] {
+  fill: var(--office-icon-accent);
+  stroke: var(--office-icon-accent);
+}
+
+.root [data-office-icon-role="accent-soft-fill"] {
+  fill: var(--office-icon-accent-soft);
+  stroke: none;
+}
+
+.root [data-office-icon-role="warm"] {
+  fill: none;
+  stroke: var(--office-icon-warm);
+}
+
+.root [data-office-icon-role="warm-fill"] {
+  fill: var(--office-icon-warm-soft);
+  stroke: var(--office-icon-warm);
+}
+
+.root[data-office-icon-state="hover"],
+:global(button:hover:not(:disabled)) .root {
+  --office-icon-ink: var(
+    --mrai-office-icon-foreground,
+    var(--console-text-primary, #172d33)
+  );
+  --office-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #0f6589)
+  );
+}
+
+.root[data-office-icon-state="active"],
+.root[data-office-icon-state="pressed"],
+:global(button:active:not(:disabled)) .root,
+:global(button[aria-pressed="true"]) .root,
+:global(button[data-state="open"]) .root {
+  --office-icon-ink: var(
+    --mrai-office-icon-foreground,
+    var(--console-text-primary, #102a30)
+  );
+  --office-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #075c7e)
+  );
+}
+
+.root[data-office-icon-state="focus"],
+:global(button:focus-visible) .root {
+  --office-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-focus-ring, #0a6f9c)
+  );
+}
+
+.root[data-office-icon-state="disabled"],
+:global(button:disabled) .root,
+:global(button[aria-disabled="true"]) .root,
+:global(button[data-disabled=""]) .root,
+:global(button[data-disabled="true"]) .root {
+  --office-icon-ink: var(--office-icon-disabled);
+  --office-icon-ink-soft: var(--office-icon-disabled);
+  --office-icon-accent: var(--office-icon-disabled);
+  --office-icon-accent-soft: transparent;
+  --office-icon-warm: var(--office-icon-disabled);
+  --office-icon-warm-soft: transparent;
+}
+
+:global([dir="rtl"]) .root[data-office-icon-mirror="rtl"],
+.root[data-office-icon-direction="rtl"][data-office-icon-mirror="rtl"],
+.root[data-office-icon-mirror="rtl"]:dir(rtl) {
+  transform: scaleX(-1);
+}
+
+:global(.dark) .root {
+  --office-icon-ink: var(
+    --mrai-office-icon-foreground,
+    var(--console-text-primary, #edf4f5)
+  );
+  --office-icon-ink-soft: var(
+    --mrai-office-icon-foreground-soft,
+    var(--console-text-secondary, #aec0c4)
+  );
+  --office-icon-surface: var(
+    --mrai-office-icon-surface,
+    var(--console-surface-raised, #203036)
+  );
+  --office-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #78c3e3)
+  );
+  --office-icon-warm: var(--mrai-office-icon-warm, #e9ad67);
+}
+
+:global([data-theme="dark"]) .root {
+  --office-icon-ink: var(
+    --mrai-office-icon-foreground,
+    var(--console-text-primary, #edf4f5)
+  );
+  --office-icon-ink-soft: var(
+    --mrai-office-icon-foreground-soft,
+    var(--console-text-secondary, #aec0c4)
+  );
+  --office-icon-surface: var(
+    --mrai-office-icon-surface,
+    var(--console-surface-raised, #203036)
+  );
+  --office-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #78c3e3)
+  );
+  --office-icon-warm: var(--mrai-office-icon-warm, #e9ad67);
+}
+
+:global([data-color-scheme="dark"]) .root {
+  --office-icon-ink: var(
+    --mrai-office-icon-foreground,
+    var(--console-text-primary, #edf4f5)
+  );
+  --office-icon-ink-soft: var(
+    --mrai-office-icon-foreground-soft,
+    var(--console-text-secondary, #aec0c4)
+  );
+  --office-icon-surface: var(
+    --mrai-office-icon-surface,
+    var(--console-surface-raised, #203036)
+  );
+  --office-icon-accent: var(
+    --mrai-office-icon-accent,
+    var(--console-accent-strong, #78c3e3)
+  );
+  --office-icon-warm: var(--mrai-office-icon-warm, #e9ad67);
+}
+
+@media (prefers-contrast: more) {
+  .root {
+    --office-icon-ink-soft: var(--office-icon-ink);
+    --office-icon-accent-soft: transparent;
+    --office-icon-warm-soft: transparent;
+  }
+}
+
+@media (forced-colors: active) {
+  .root,
+  :global(.dark) .root,
+  :global([data-theme="dark"]) .root,
+  :global([data-color-scheme="dark"]) .root {
+    --office-icon-ink: CanvasText;
+    --office-icon-ink-soft: CanvasText;
+    --office-icon-surface: Canvas;
+    --office-icon-accent: LinkText;
+    --office-icon-accent-soft: Canvas;
+    --office-icon-warm: Highlight;
+    --office-icon-warm-soft: Canvas;
+    --office-icon-disabled: GrayText;
+    forced-color-adjust: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    --office-icon-transition: 0ms;
+  }
+}
+
+:where(:root[data-touch-mode]) .root {
+  flex-shrink: 0;
+}

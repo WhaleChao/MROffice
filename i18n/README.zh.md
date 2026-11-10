@@ -1,0 +1,64 @@
+# MR Office — 简体中文
+
+[English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
+
+> ### ⬇ 完整功能请安装 MR Office 桌面版（免费）
+>
+> MR Office 桌面版免费，包含这些编辑器和完整服务，在你自己的电脑上离线可用。开源编辑器没有的功能，桌面版都提供：
+>
+> - 打开和保存 Word、Excel、PowerPoint 文件（.docx、.xlsx、.pptx）
+> - 带函数的公式（SUM、IF、VLOOKUP 等）计算
+> - 图表
+> - SmartArt 编辑
+> - PDF 编辑后写回文件
+>
+> **[从 Releases 下载 MR Office →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
+
+<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">在 MR Office 中体验 →</a></p>
+
+> MR Office 的开源编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。
+
+MR Office 是一个集笔记、AI 和真实文件于一体的工作空间。本仓库公开它的编辑器源代码：与 MR Office 中运行的是同一套编辑器，你可以自己构建、运行和嵌入。这是开源编辑器，不是一套完整开源的 Office 套件：Microsoft Office 文件的读写由 MR Office 提供（见下文）。
+
+## 编辑器一览
+
+各编辑器在本仓库中能做的事：
+
+- **文档** — 分页文字处理器：样式、字体、列表、表格、页眉页脚、分节与分栏、形状和公式、封面和目录、批注与修订，以及在页面上手写。保存为自有格式（.mrdoc）；可打开 HTML、Markdown 和纯文本。
+- **表格** — 单元格与公式、数字格式、条件格式、排序筛选、冻结窗格和多工作表，并显示选区的求和与平均值。单元格之间的四则运算（如 =A1*B1+10）在浏览器中随输入计算；含函数的公式（SUM、IF、VLOOKUP 等）按原样保留。保存为自有格式（.mrsheet）；可打开和保存 CSV、TSV。
+- **演示文稿** — 带 8 个自有主题的幻灯片：版式、幻灯片母版与版式视图、文字、形状、文本框、表格、艺术字和公式、批注、分节、切换与动画（可预览），以及幻灯片放映。保存为自有格式（.mrslides）。
+- **PDF** — 阅读、搜索、放映和打印 PDF，复制和朗读其中的文字；文件打开期间可对选中文字做高亮、下划线、删除线、波浪线标记，并添加便笺、使用批注面板；保存时交回打开时的原文件。
+- **手写** — 支持压感的钢笔、荧光笔、橡皮、套索和标尺，笔迹可转换为图形。保存为自有格式（.mrink）。
+- **代码** — 轻量代码编辑器，支持多种语言的语法高亮、大纲和查找替换；JavaScript/TypeScript、Python、SQL、Lua 和 Shell 可直接在浏览器中运行。
+
+带函数的公式计算、图表绘制和 SmartArt 排版由 MR Office 自己的引擎完成，在 MR Office 桌面版中提供：开源编辑器会保留文件中的公式、图表和 SmartArt，并按保存时的样子显示 SmartArt。
+
+## Word、Excel、PowerPoint 和 PDF 文件
+
+打开和保存 Word、Excel、PowerPoint 文件（.docx、.xlsx、.pptx），以及把 PDF 的修改写回文件，由免费的 MR Office 桌面版提供。桌面版包含以上全部编辑器，在你自己的电脑上离线也能用：
+
+- **MR Office** (免费桌面应用): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **官网**: https://mroffice.ai
+
+[全部版本 →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+
+## 运行编辑器
+
+六个编辑器在 `packages/` 下（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`ink`、`code`，共用 `@mrnote/core`），在 `apps/playground` 中一起运行：
+
+```bash
+npm install
+npm run fonts     # the open substitutes for Office's fonts
+npm run build
+npm run preview   # http://localhost:5178
+```
+
+`npm run dev` 在同一地址启动开发服务器，`npm run smoke` 检查构建结果。各包的 README 详细列出了它能做的事和嵌入方法。
+
+## 许可协议
+
+依据 GNU Affero 通用公共许可证 v3.0（LICENSE）开源，并附加 NOTICE.md 中的条款：保留“MR Office”署名及指向 https://mroffice.ai 的链接，且不授予 MR Office 名称与标志的使用权。如需商业授权，请联系 support@mr-note.com。第三方软件与数据见 THIRD_PARTY_NOTICES.md。贡献代码请先阅读 CONTRIBUTING.md。
+
+## 更多
+
+官网与完整产品：**https://mroffice.ai** · 问题与反馈：support@mr-note.com

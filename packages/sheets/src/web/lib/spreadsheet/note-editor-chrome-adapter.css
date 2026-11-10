@@ -1,0 +1,271 @@
+/*
+ * SpreadsheetWindow lives inside the legacy `native-page-window` shell while
+ * NoteEditor does not. The shell's broad `.native-page-window button` rule has
+ * greater specificity than the shared NoteEditor Ribbon classes, so it used to
+ * inflate every spreadsheet tab/control to 36px and draw an extra border.
+ *
+ * Keep note-editor.css as the visual source of truth. This narrowly scoped
+ * adapter only restores the same computed box model inside SpreadsheetWindow;
+ * it intentionally defines no independent palette or component design.
+ */
+
+.native-page-window.spreadsheet-window .note-editor-toolbar-stack {
+  margin: 0;
+   
+  padding: 8px 8px 6px;
+  position: static;
+  top: auto;
+  z-index: auto;
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-tab {
+  align-items: normal;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  display: block;
+  gap: normal;
+   
+  font-size: 12px;
+  min-height: 30px;
+  border-radius: 7px 7px 0 0;
+  padding: 5px 12px 6px;
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-tab:hover {
+  background: var(--office-ribbon-hover, var(--tb-hover, rgba(13, 148, 136, 0.08)));
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.native-page-window.spreadsheet-window .note-editor-office-toolbar__button {
+  border: 1px solid var(--office-control-border, transparent);
+  border-radius: 6px;
+  font-size: inherit;
+}
+
+/* Shared commands own their icon, compact and disclosure geometry. */
+.native-page-window.spreadsheet-window .note-editor-office-toolbar__button:not(.office-ribbon-control) {
+  display: inline-flex;
+  gap: 0;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  width: 28px;
+}
+
+.native-page-window.spreadsheet-window .note-editor-office-toolbar__button:not(.office-ribbon-control) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__button:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: var(--office-control-border, transparent);
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__button:hover:not(:disabled):not([aria-disabled="true"]):not(.office-ribbon-control) {
+  background: var(--office-ribbon-hover, var(--tb-hover, rgba(13, 148, 136, 0.08)));
+  box-shadow: none;
+  color: var(--tb-ink-strong, #0f766e);
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__button.is-active {
+  border-color: var(--office-control-border, var(--tb-active-border, rgba(13, 148, 136, 0.32)));
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__button.is-active:not(.office-ribbon-control) {
+  background: var(--tb-active-bg, rgba(13, 148, 136, 0.14));
+  color: var(--tb-ink-strong, #0f766e);
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-big {
+  border: 0;
+  border-radius: 6px;
+  display: inline-flex;
+  font-size: 11px;
+  gap: 3px;
+  min-height: 0;
+  padding: 5px 7px;
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-big:not(.office-ribbon-control) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.native-page-window.spreadsheet-window .spreadsheet-ribbon-action__label {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  max-width: 64px;
+  overflow: hidden;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-big:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: var(--office-control-border, transparent);
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-big:hover:not(:disabled):not([aria-disabled="true"]):not(.office-ribbon-control) {
+  background: var(--office-ribbon-hover, var(--tb-hover, rgba(13, 148, 136, 0.08)));
+  box-shadow: none;
+  color: var(--tb-ink-strong, #0f766e);
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-ribbon-big.note-editor-ribbon-big--active:not(.office-ribbon-control) {
+  background: rgba(10, 125, 114, 0.12);
+  color: #0a7d72;
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__menu-trigger {
+  border: 1px solid var(--office-control-border, transparent);
+  border-radius: 6px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 3px;
+  height: 28px;
+  min-height: 0;
+  padding: 0 7px;
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__menu-trigger:not(.office-ribbon-control) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__menu-trigger:hover:not(:disabled):not([aria-disabled="true"]) {
+  border-color: var(--office-control-border, transparent);
+}
+
+.native-page-window.spreadsheet-window
+  .note-editor-office-toolbar__menu-trigger:hover:not(:disabled):not([aria-disabled="true"]):not(.office-ribbon-control) {
+  background: var(--office-ribbon-hover, var(--tb-hover, rgba(13, 148, 136, 0.08)));
+  box-shadow: none;
+  color: var(--tb-ink-strong, #0f766e);
+}
+
+.native-page-window.spreadsheet-window .spreadsheet-ribbon-select--font {
+  min-width: 120px;
+  width: 120px;
+}
+
+.native-page-window.spreadsheet-window .spreadsheet-ribbon-select--size {
+  min-width: 54px;
+  width: 54px;
+}
+
+.native-page-window.spreadsheet-window .spreadsheet-ribbon-select--number {
+  min-width: 120px;
+  width: 120px;
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-scroll {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  gap: 0;
+  min-height: 0;
+  padding: 0;
+}
+
+.native-page-window.spreadsheet-window .note-editor-save-button {
+  display: block;
+  font-size: 12px;
+  gap: normal;
+  min-height: 0;
+  padding: 3px 10px;
+}
+
+.native-page-window.spreadsheet-window .note-editor-import-button {
+  display: inline-flex;
+  font-size: 12px;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.native-page-window.spreadsheet-window .note-editor-ribbon-tab:active:not(:disabled),
+.native-page-window.spreadsheet-window .note-editor-office-toolbar__button:active:not(:disabled),
+.native-page-window.spreadsheet-window .note-editor-ribbon-big:active:not(:disabled),
+.native-page-window.spreadsheet-window .note-editor-office-toolbar__menu-trigger:active:not(:disabled),
+.native-page-window.spreadsheet-window .note-editor-ribbon-scroll:active:not(:disabled),
+.native-page-window.spreadsheet-window .note-editor-save-button:active:not(:disabled),
+.native-page-window.spreadsheet-window .note-editor-import-button:active:not(:disabled) {
+  transform: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Reading mode (WPS 阅读模式) and eye-care mode (WPS 护眼模式).
+
+   Both are display-only view options. The reading tint is an ::after overlay
+   rather than a background, so it composes over whatever fill the cell already
+   carries instead of replacing it, and it stays out of the inline style objects
+   the grid builds per cell. pointer-events stay off so the overlay never eats a
+   click, and the cell's own outline (selection, cut marquee) still wins because
+   an outline is painted outside the box.
+   --------------------------------------------------------------------------- */
+
+.native-page-window.spreadsheet-window td[data-reading-crosshair="true"] {
+  position: relative;
+}
+
+/* The colour channels come from Excel's "Focus Cell Color" choice (the
+   workbook surface sets --spreadsheet-reading-tint-rgb; Green is Excel's
+   default) and the alpha stays here: Excel paints the tint lighter than the
+   swatch it offers, and the strength has to survive a colour change. */
+.native-page-window.spreadsheet-window
+  td[data-reading-crosshair="true"]::after {
+  background: rgb(var(--spreadsheet-reading-tint-rgb, 0 176 80) / 0.16);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .native-page-window.spreadsheet-window
+    td[data-reading-crosshair="true"]::after {
+    background: rgb(var(--spreadsheet-reading-tint-rgb, 0 176 80) / 0.26);
+  }
+}
+
+/* The paper turns a low-saturation green; the grid, headings and frozen panes
+   all inherit it because they are transparent over this surface. The cells
+   are the workbook's light paper with its dark ink in every app theme, so
+   the tint is the light green in every theme too (it used to turn a dark
+   green with the operating system's dark mode, under the dark cell ink). */
+.native-page-window.spreadsheet-window
+  [data-testid="spreadsheet-workbook-surface"][data-eye-care="true"] {
+  --spreadsheet-paper: var(--spreadsheet-eye-care, #cce8cf);
+  background: var(--spreadsheet-eye-care, #cce8cf);
+}
+
+/* Reduced motion: globals.css shortens every transition to 0.01ms on `*`.
+   With the default `transition-property: all` that still starts a transition
+   (an animation object plus transitionrun/start/end events) for every changed
+   property on every grid element, which a single commit turns into hundreds
+   of transitions across the selection. The grid declares no transitions of
+   its own, so under reduced motion it has none at all. Tag selectors keep the
+   rule cheap to match. */
+@media (prefers-reduced-motion: reduce) {
+  .spreadsheet-window__grid tr,
+  .spreadsheet-window__grid th,
+  .spreadsheet-window__grid td,
+  .spreadsheet-window__grid input,
+  .spreadsheet-window__grid span,
+  .spreadsheet-window__grid button {
+    transition: none !important;
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "note": "ONE fact about Office's own layout definitions, in one file, because two halves of it live in two languages. For a catalog layout, where Office's layoutDef binds each picture SLOT's blip: 'sibTrans' means the picture is presented from the sibling TRANSITION point that reaches the slot's outline item instead of from its node, and 'none' means the layout draws no picture for that slot at all. Any slot not listed is the ordinary case: the blip belongs to the item's own node. Read at runtime by apps/web/lib/office-smartart/picture-command.ts (which disables a 'none' slot in the menu, with its reason) and pinned to apps/api/app/services/office_smartart_diagram_write.py's _PICTURE_SLOT_BINDINGS (which writes a 'sibTrans' blip onto the transition point) by test_the_picture_slot_bindings_are_one_table. Keys are catalog layout ids; the inner keys are OUTLINE ITEM indices, not member indices. See docs/office-graphics/SMARTART-IMPORT.md §5.21 and §5.27.",
+  "layouts": {
+    "circular-picture-callout": {
+      "0": "sibTrans"
+    },
+    "bubble-picture-list": {
+      "0": "sibTrans"
+    },
+    "hexagon-cluster": {
+      "0": "sibTrans"
+    },
+    "spiral-picture": {
+      "0": "sibTrans"
+    },
+    "ascending-picture-accent-process": {
+      "0": "sibTrans"
+    },
+    "accented-picture": {
+      "0": "sibTrans"
+    }
+  }
+}

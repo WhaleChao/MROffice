@@ -1,0 +1,643 @@
+{
+ "source": "Written for the open-source MR Note editors.",
+ "title": {
+  "en": "Contents",
+  "zh": "目录",
+  "da": "Indhold",
+  "de": "Inhalt",
+  "es": "Índice",
+  "fi": "Sisältö",
+  "fr": "Sommaire",
+  "id": "Isi",
+  "it": "Indice",
+  "ja": "目次",
+  "ko": "목차",
+  "nl": "Inhoud",
+  "no": "Innhold",
+  "pt-BR": "Índice",
+  "sv": "Innehåll",
+  "th": "สารบัญ",
+  "vi": "Mục lục",
+  "zh-TW": "目錄"
+ },
+ "noEntries": {
+  "en": "There are no headings to list yet.",
+  "zh": "还没有可列出的标题。",
+  "da": "Der er endnu ingen overskrifter at vise.",
+  "de": "Noch keine Überschriften zum Auflisten.",
+  "es": "Aún no hay títulos que mostrar.",
+  "fi": "Luetteloitavia otsikoita ei vielä ole.",
+  "fr": "Aucun titre à lister pour l’instant.",
+  "id": "Belum ada judul untuk dicantumkan.",
+  "it": "Non ci sono ancora titoli da elencare.",
+  "ja": "一覧にする見出しはまだありません。",
+  "ko": "아직 나열할 제목이 없습니다.",
+  "nl": "Er zijn nog geen koppen om te tonen.",
+  "no": "Det er ingen overskrifter å vise ennå.",
+  "pt-BR": "Ainda não há títulos para listar.",
+  "sv": "Det finns inga rubriker att visa än.",
+  "th": "ยังไม่มีหัวเรื่องให้แสดง",
+  "vi": "Chưa có đề mục nào để liệt kê.",
+  "zh-TW": "還沒有可列出的標題。"
+ },
+ "formats": {
+  "template": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  },
+  "classic": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  },
+  "distinctive": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  },
+  "fancy": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  },
+  "modern": {
+   "defaultTabLeader": "none",
+   "defaultRightAlignPageNumbers": false
+  },
+  "formal": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  },
+  "simple": {
+   "defaultTabLeader": "none",
+   "defaultRightAlignPageNumbers": false
+  },
+  "gallery": {
+   "defaultTabLeader": "dot",
+   "defaultRightAlignPageNumbers": true
+  }
+ },
+ "gallery": {
+  "automatic": [
+   {
+    "id": "automatic",
+    "name": {
+     "en": "Automatic contents",
+     "zh": "自动目录",
+     "da": "Automatisk indhold",
+     "de": "Automatisches Inhaltsverzeichnis",
+     "es": "Índice automático",
+     "fi": "Automaattinen sisältö",
+     "fr": "Sommaire automatique",
+     "id": "Daftar isi otomatis",
+     "it": "Indice automatico",
+     "ja": "自動の目次",
+     "ko": "자동 목차",
+     "nl": "Automatische inhoud",
+     "no": "Automatisk innhold",
+     "pt-BR": "Índice automático",
+     "sv": "Automatiskt innehåll",
+     "th": "สารบัญอัตโนมัติ",
+     "vi": "Mục lục tự động",
+     "zh-TW": "自動目錄"
+    },
+    "format": "gallery"
+   },
+   {
+    "id": "plain",
+    "name": {
+     "en": "Plain contents",
+     "zh": "简洁目录",
+     "da": "Enkelt indhold",
+     "de": "Schlichtes Inhaltsverzeichnis",
+     "es": "Índice sencillo",
+     "fi": "Pelkistetty sisältö",
+     "fr": "Sommaire épuré",
+     "id": "Daftar isi sederhana",
+     "it": "Indice semplice",
+     "ja": "シンプルな目次",
+     "ko": "간단한 목차",
+     "nl": "Eenvoudige inhoud",
+     "no": "Enkelt innhold",
+     "pt-BR": "Índice simples",
+     "sv": "Enkelt innehåll",
+     "th": "สารบัญแบบเรียบ",
+     "vi": "Mục lục đơn giản",
+     "zh-TW": "簡潔目錄"
+    },
+    "format": "simple"
+   }
+  ],
+  "manual": [
+   {
+    "id": "manual",
+    "name": {
+     "en": "Contents to fill in",
+     "zh": "手动填写的目录",
+     "da": "Indhold til udfyldning",
+     "de": "Inhaltsverzeichnis zum Ausfüllen",
+     "es": "Índice para completar",
+     "fi": "Täytettävä sisältö",
+     "fr": "Sommaire à remplir",
+     "id": "Daftar isi untuk diisi",
+     "it": "Indice da compilare",
+     "ja": "手入力の目次",
+     "ko": "직접 채우는 목차",
+     "nl": "In te vullen inhoud",
+     "no": "Innhold til utfylling",
+     "pt-BR": "Índice para preencher",
+     "sv": "Innehåll att fylla i",
+     "th": "สารบัญสำหรับกรอกเอง",
+     "vi": "Mục lục tự điền",
+     "zh-TW": "手動填寫的目錄"
+    },
+    "format": "gallery",
+    "entries": {
+     "en": [
+      {
+       "level": 1,
+       "text": "Heading, level 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Heading, level 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Heading, level 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Heading, level 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Heading, level 2",
+       "page": 5
+      }
+     ],
+     "zh": [
+      {
+       "level": 1,
+       "text": "第 1 级标题",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "第 2 级标题",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "第 3 级标题",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "第 1 级标题",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "第 2 级标题",
+       "page": 5
+      }
+     ],
+     "da": [
+      {
+       "level": 1,
+       "text": "Overskrift, niveau 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Overskrift, niveau 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Overskrift, niveau 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Overskrift, niveau 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Overskrift, niveau 2",
+       "page": 5
+      }
+     ],
+     "de": [
+      {
+       "level": 1,
+       "text": "Überschrift, Ebene 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Überschrift, Ebene 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Überschrift, Ebene 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Überschrift, Ebene 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Überschrift, Ebene 2",
+       "page": 5
+      }
+     ],
+     "es": [
+      {
+       "level": 1,
+       "text": "Título, nivel 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Título, nivel 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Título, nivel 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Título, nivel 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Título, nivel 2",
+       "page": 5
+      }
+     ],
+     "fi": [
+      {
+       "level": 1,
+       "text": "Otsikko, taso 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Otsikko, taso 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Otsikko, taso 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Otsikko, taso 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Otsikko, taso 2",
+       "page": 5
+      }
+     ],
+     "fr": [
+      {
+       "level": 1,
+       "text": "Titre, niveau 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Titre, niveau 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Titre, niveau 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Titre, niveau 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Titre, niveau 2",
+       "page": 5
+      }
+     ],
+     "id": [
+      {
+       "level": 1,
+       "text": "Judul, tingkat 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Judul, tingkat 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Judul, tingkat 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Judul, tingkat 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Judul, tingkat 2",
+       "page": 5
+      }
+     ],
+     "it": [
+      {
+       "level": 1,
+       "text": "Titolo, livello 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Titolo, livello 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Titolo, livello 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Titolo, livello 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Titolo, livello 2",
+       "page": 5
+      }
+     ],
+     "ja": [
+      {
+       "level": 1,
+       "text": "見出し（レベル 1）",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "見出し（レベル 2）",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "見出し（レベル 3）",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "見出し（レベル 1）",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "見出し（レベル 2）",
+       "page": 5
+      }
+     ],
+     "ko": [
+      {
+       "level": 1,
+       "text": "제목, 수준 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "제목, 수준 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "제목, 수준 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "제목, 수준 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "제목, 수준 2",
+       "page": 5
+      }
+     ],
+     "nl": [
+      {
+       "level": 1,
+       "text": "Kop, niveau 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Kop, niveau 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Kop, niveau 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Kop, niveau 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Kop, niveau 2",
+       "page": 5
+      }
+     ],
+     "no": [
+      {
+       "level": 1,
+       "text": "Overskrift, nivå 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Overskrift, nivå 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Overskrift, nivå 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Overskrift, nivå 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Overskrift, nivå 2",
+       "page": 5
+      }
+     ],
+     "pt-BR": [
+      {
+       "level": 1,
+       "text": "Título, nível 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Título, nível 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Título, nível 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Título, nível 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Título, nível 2",
+       "page": 5
+      }
+     ],
+     "sv": [
+      {
+       "level": 1,
+       "text": "Rubrik, nivå 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Rubrik, nivå 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Rubrik, nivå 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Rubrik, nivå 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Rubrik, nivå 2",
+       "page": 5
+      }
+     ],
+     "th": [
+      {
+       "level": 1,
+       "text": "หัวเรื่อง ระดับ 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "หัวเรื่อง ระดับ 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "หัวเรื่อง ระดับ 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "หัวเรื่อง ระดับ 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "หัวเรื่อง ระดับ 2",
+       "page": 5
+      }
+     ],
+     "vi": [
+      {
+       "level": 1,
+       "text": "Đề mục, cấp 1",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "Đề mục, cấp 2",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "Đề mục, cấp 3",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "Đề mục, cấp 1",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "Đề mục, cấp 2",
+       "page": 5
+      }
+     ],
+     "zh-TW": [
+      {
+       "level": 1,
+       "text": "第 1 級標題",
+       "page": 1
+      },
+      {
+       "level": 2,
+       "text": "第 2 級標題",
+       "page": 2
+      },
+      {
+       "level": 3,
+       "text": "第 3 級標題",
+       "page": 3
+      },
+      {
+       "level": 1,
+       "text": "第 1 級標題",
+       "page": 4
+      },
+      {
+       "level": 2,
+       "text": "第 2 級標題",
+       "page": 5
+      }
+     ]
+    }
+   }
+  ]
+ }
+}

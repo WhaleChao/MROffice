@@ -1,0 +1,575 @@
+{
+ "themes": [
+  {
+   "id": "office",
+   "label": {
+    "en": "MR Note"
+   },
+   "colors": "office",
+   "fonts": "office",
+   "effects": "none",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": null
+   }
+  },
+  {
+   "id": "slate",
+   "label": {
+    "en": "Slate"
+   },
+   "colors": "slate",
+   "fonts": "slate",
+   "effects": "soft",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": "#4a6382"
+   }
+  },
+  {
+   "id": "harbor",
+   "label": {
+    "en": "Harbor"
+   },
+   "colors": "harbor",
+   "fonts": "harbor",
+   "effects": "lifted",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": "#1c6e9c"
+   }
+  },
+  {
+   "id": "meadow",
+   "label": {
+    "en": "Meadow"
+   },
+   "colors": "meadow",
+   "fonts": "meadow",
+   "effects": "none",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": "#5a9a3c"
+   }
+  },
+  {
+   "id": "ember",
+   "label": {
+    "en": "Ember"
+   },
+   "colors": "ember",
+   "fonts": "ember",
+   "effects": "soft",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": "#c8462b"
+   }
+  },
+  {
+   "id": "orchid",
+   "label": {
+    "en": "Orchid"
+   },
+   "colors": "orchid",
+   "fonts": "orchid",
+   "effects": "lifted",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": "#8e4fb0"
+   }
+  },
+  {
+   "id": "graphite",
+   "label": {
+    "en": "Graphite"
+   },
+   "colors": "graphite",
+   "fonts": "graphite",
+   "effects": "none",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": "#4d4d4d"
+   }
+  },
+  {
+   "id": "sunrise",
+   "label": {
+    "en": "Sunrise"
+   },
+   "colors": "sunrise",
+   "fonts": "sunrise",
+   "effects": "soft",
+   "tile": {
+    "background": "#ffffff",
+    "decoration": "#f0a12c"
+   }
+  }
+ ],
+ "colorSchemes": [
+  {
+   "id": "office",
+   "label": {
+    "en": "MR Note"
+   },
+   "schemeName": "MR Note",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#1f2a37",
+    "lt2": "#eef1f4",
+    "accent1": "#2f6fd6",
+    "accent2": "#e07b39",
+    "accent3": "#3a9d6b",
+    "accent4": "#8c5cc9",
+    "accent5": "#d04b6b",
+    "accent6": "#2c9aa8",
+    "hlink": "#2f6fd6",
+    "folHlink": "#7a4fb3"
+   }
+  },
+  {
+   "id": "slate",
+   "label": {
+    "en": "Slate"
+   },
+   "schemeName": "Slate",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#2b3440",
+    "lt2": "#e6e9ed",
+    "accent1": "#4a6382",
+    "accent2": "#8da4bf",
+    "accent3": "#6e8b74",
+    "accent4": "#b08a57",
+    "accent5": "#8a5a6e",
+    "accent6": "#5c7f8f",
+    "hlink": "#3f6ea6",
+    "folHlink": "#6c5a8a"
+   }
+  },
+  {
+   "id": "harbor",
+   "label": {
+    "en": "Harbor"
+   },
+   "schemeName": "Harbor",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#12324a",
+    "lt2": "#e3eef4",
+    "accent1": "#1c6e9c",
+    "accent2": "#35a3c4",
+    "accent3": "#f2a541",
+    "accent4": "#4b8f5e",
+    "accent5": "#c9553d",
+    "accent6": "#6b6fa8",
+    "hlink": "#1c6e9c",
+    "folHlink": "#6b6fa8"
+   }
+  },
+  {
+   "id": "meadow",
+   "label": {
+    "en": "Meadow"
+   },
+   "schemeName": "Meadow",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#263a22",
+    "lt2": "#eef3e6",
+    "accent1": "#5a9a3c",
+    "accent2": "#a7c957",
+    "accent3": "#d9a13b",
+    "accent4": "#3c7f7a",
+    "accent5": "#b5654a",
+    "accent6": "#7c6ba0",
+    "hlink": "#3f7f2a",
+    "folHlink": "#7c6ba0"
+   }
+  },
+  {
+   "id": "ember",
+   "label": {
+    "en": "Ember"
+   },
+   "schemeName": "Ember",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#3a2218",
+    "lt2": "#f6ece4",
+    "accent1": "#c8462b",
+    "accent2": "#e8913a",
+    "accent3": "#f2c14e",
+    "accent4": "#8e3b46",
+    "accent5": "#5c6b73",
+    "accent6": "#a0785a",
+    "hlink": "#b33a22",
+    "folHlink": "#8e3b46"
+   }
+  },
+  {
+   "id": "orchid",
+   "label": {
+    "en": "Orchid"
+   },
+   "schemeName": "Orchid",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#33213f",
+    "lt2": "#f2ecf5",
+    "accent1": "#8e4fb0",
+    "accent2": "#c76ba6",
+    "accent3": "#5a7bc2",
+    "accent4": "#e39a6b",
+    "accent5": "#4fa39a",
+    "accent6": "#b8a04a",
+    "hlink": "#6e4fb0",
+    "folHlink": "#a0527f"
+   }
+  },
+  {
+   "id": "graphite",
+   "label": {
+    "en": "Graphite"
+   },
+   "schemeName": "Graphite",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#222222",
+    "lt2": "#ededed",
+    "accent1": "#4d4d4d",
+    "accent2": "#7a7a7a",
+    "accent3": "#a6a6a6",
+    "accent4": "#2f6fd6",
+    "accent5": "#d04b6b",
+    "accent6": "#3a9d6b",
+    "hlink": "#2f6fd6",
+    "folHlink": "#6b6b6b"
+   }
+  },
+  {
+   "id": "sunrise",
+   "label": {
+    "en": "Sunrise"
+   },
+   "schemeName": "Sunrise",
+   "gallery": true,
+   "colors": {
+    "dk1": "#000000",
+    "lt1": "#ffffff",
+    "dk2": "#3b2a1a",
+    "lt2": "#fbf3e4",
+    "accent1": "#f0a12c",
+    "accent2": "#e5652e",
+    "accent3": "#d9435e",
+    "accent4": "#7e57b5",
+    "accent5": "#3d8fc7",
+    "accent6": "#52a86b",
+    "hlink": "#d9572b",
+    "folHlink": "#7e57b5"
+   }
+  }
+ ],
+ "fontSchemes": [
+  {
+   "id": "office",
+   "label": {
+    "en": "MR Note"
+   },
+   "schemeName": "MR Note",
+   "gallery": true,
+   "major": {
+    "latin": "Arial",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Arial",
+    "ea": "",
+    "scripts": {}
+   }
+  },
+  {
+   "id": "slate",
+   "label": {
+    "en": "Slate"
+   },
+   "schemeName": "Slate",
+   "gallery": true,
+   "major": {
+    "latin": "Verdana",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Verdana",
+    "ea": "",
+    "scripts": {}
+   }
+  },
+  {
+   "id": "harbor",
+   "label": {
+    "en": "Harbor"
+   },
+   "schemeName": "Harbor",
+   "gallery": true,
+   "major": {
+    "latin": "Georgia",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Arial",
+    "ea": "",
+    "scripts": {}
+   }
+  },
+  {
+   "id": "meadow",
+   "label": {
+    "en": "Meadow"
+   },
+   "schemeName": "Meadow",
+   "gallery": true,
+   "major": {
+    "latin": "Trebuchet MS",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Trebuchet MS",
+    "ea": "",
+    "scripts": {}
+   }
+  },
+  {
+   "id": "ember",
+   "label": {
+    "en": "Ember"
+   },
+   "schemeName": "Ember",
+   "gallery": true,
+   "major": {
+    "latin": "Tahoma",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Tahoma",
+    "ea": "",
+    "scripts": {}
+   }
+  },
+  {
+   "id": "orchid",
+   "label": {
+    "en": "Orchid"
+   },
+   "schemeName": "Orchid",
+   "gallery": true,
+   "major": {
+    "latin": "Palatino Linotype",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Arial",
+    "ea": "",
+    "scripts": {}
+   }
+  },
+  {
+   "id": "graphite",
+   "label": {
+    "en": "Graphite"
+   },
+   "schemeName": "Graphite",
+   "gallery": true,
+   "major": {
+    "latin": "Courier New",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Arial",
+    "ea": "",
+    "scripts": {}
+   }
+  },
+  {
+   "id": "sunrise",
+   "label": {
+    "en": "Sunrise"
+   },
+   "schemeName": "Sunrise",
+   "gallery": true,
+   "major": {
+    "latin": "Times New Roman",
+    "ea": "",
+    "scripts": {}
+   },
+   "minor": {
+    "latin": "Arial",
+    "ea": "",
+    "scripts": {}
+   }
+  }
+ ],
+ "effectSchemes": [
+  {
+   "id": "none",
+   "theme": null,
+   "label": {
+    "en": "Flat"
+   },
+   "schemeName": "Flat",
+   "signature": "f8156b9c9e203136",
+   "fills": [
+    "solid",
+    "solid",
+    "solid"
+   ],
+   "lines": [
+    9525,
+    19050,
+    28575
+   ],
+   "effects": [
+    {
+     "shadow": null,
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    },
+    {
+     "shadow": null,
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    },
+    {
+     "shadow": null,
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    }
+   ]
+  },
+  {
+   "id": "soft",
+   "theme": null,
+   "label": {
+    "en": "Soft"
+   },
+   "schemeName": "Soft",
+   "signature": "4d5564ef32aca426",
+   "fills": [
+    "solid",
+    "gradient",
+    "gradient"
+   ],
+   "lines": [
+    12700,
+    19050,
+    25400
+   ],
+   "effects": [
+    {
+     "shadow": null,
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    },
+    {
+     "shadow": null,
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    },
+    {
+     "shadow": {
+      "blur": 50800,
+      "distance": 19050,
+      "direction": 5400000,
+      "alpha": 40000
+     },
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    }
+   ]
+  },
+  {
+   "id": "lifted",
+   "theme": null,
+   "label": {
+    "en": "Lifted"
+   },
+   "schemeName": "Lifted",
+   "signature": "4fb010c9d5be50e5",
+   "fills": [
+    "solid",
+    "gradient",
+    "gradient"
+   ],
+   "lines": [
+    12700,
+    25400,
+    38100
+   ],
+   "effects": [
+    {
+     "shadow": null,
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    },
+    {
+     "shadow": {
+      "blur": 38100,
+      "distance": 12700,
+      "direction": 5400000,
+      "alpha": 35000
+     },
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    },
+    {
+     "shadow": {
+      "blur": 76200,
+      "distance": 25400,
+      "direction": 5400000,
+      "alpha": 45000
+     },
+     "glow": false,
+     "reflection": false,
+     "softEdge": false,
+     "bevel": false
+    }
+   ]
+  }
+ ]
+}

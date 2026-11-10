@@ -1,0 +1,7173 @@
+.professionalShell {
+  /* docs 的开始页双色图标组(DocsHomeIcon)在演示端复用:同一几何,
+     蓝换红 — accent 从 docs 的 #1976b8 映到本面的 PowerPoint 红。
+     ink 保持深墨但由冷转暖;warm/magenta/danger 语义色照旧。 */
+  --docs-home-icon-ink: #35302a;
+  --docs-home-icon-ink-soft: #5d534b;
+  --docs-home-icon-accent: #c43e1c;
+  --docs-home-icon-accent-soft: #d97a5c;
+  --docs-home-icon-warm: #e79a1c;
+  --docs-home-icon-magenta: #b348a7;
+  --docs-home-icon-danger: #e24c35;
+  --docs-home-icon-stroke: 1.35;
+  --docs-home-icon-stroke-emphasis: 1.7;
+   
+  --ppt-accent: #c43e1c;
+  --ppt-accent-strong: #a33417;
+  --ppt-accent-soft: rgba(196, 62, 28, 0.09);
+  /* Shared Office controls use their own interaction and semantic-icon token
+     names. Bind both families at the Presentation boundary so Home, Insert
+     and contextual ribbons cannot inherit the Docs-blue defaults or the
+     surrounding workspace's teal console palette. */
+  --office-ribbon-accent: var(--ppt-accent);
+  --office-ribbon-accent-soft: var(--ppt-accent-soft);
+  --office-ribbon-hover: rgba(196, 62, 28, 0.05);
+  --mrai-office-icon-foreground: var(--docs-home-icon-ink);
+  --mrai-office-icon-foreground-soft: var(--docs-home-icon-ink-soft);
+  --mrai-office-icon-accent: var(--ppt-accent);
+  --mrai-office-icon-accent-soft: var(--ppt-accent-soft);
+  --ppt-canvas: #eef1f1;
+  --ppt-chrome: rgba(255, 255, 255, 0.96);
+  --ppt-border: rgba(15, 23, 42, 0.1);
+  /* Neutral ink, like the document editor — the green-tinted text read as
+     part of the stray green-border problem. */
+  --ppt-text: #1f2937;
+  --ppt-muted: #64748b;
+  /* Opaque surfaces the deck paints itself: the speaker-notes field, the
+     comments column, floating cards over the stage (SmartArt Text Pane) and
+     the slide rail. The light values are the ones these surfaces always had;
+     the theme block near the end of this file gives each its dark value. */
+  --ppt-field: #ffffff;
+  --ppt-surface: #ffffff;
+  --ppt-card: rgba(255, 255, 255, 0.98);
+  --ppt-hover: #e8e8e8;
+  --ppt-rail: #f5f8f7;
+  --ppt-rail-divider: #d8dedd;
+  --ppt-rail-ink: #3f3f3f;
+  --ppt-rail-number: #555555;
+  background: var(--ppt-canvas);
+  color: var(--ppt-text);
+  container-name: presentation-shell;
+  container-type: inline-size;
+  font-family:
+    Inter,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+}
+
+/* Zoom is session-only window chrome. Ribbon/status crowns and both Fit aliases
+   share one Presentation command; this module owns only their PPT surface.
+   The status text size is the bar's, as the shared OfficeStatusBar sets it on
+   its bar: a worded item (Accessibility: Investigate) is a button, and buttons
+   take `font: inherit` from the window, so a size set only on the slide
+   counter left that label at the window's larger body size. */
+.zoomStatusBar {
+  align-items: center;
+  background: var(--ppt-chrome);
+  border-top: 1px solid var(--ppt-border);
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 30px;
+  font-size: 11px;
+  gap: 4px;
+  justify-content: flex-end;
+  min-height: 30px;
+  padding: 3px 8px;
+}
+
+/* "Slide X of Y" at the bar's left edge, PowerPoint's first status item. */
+.statusSlideCounter {
+  color: var(--ppt-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 6px 0 2px;
+  white-space: nowrap;
+}
+
+.sessionStatusGroup {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  margin-right: auto;
+}
+
+.statusNotesPane {
+  align-items: start;
+  background: var(--ppt-chrome);
+  border-top: 1px solid var(--ppt-border);
+  box-sizing: border-box;
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  max-height: min(160px, 28cqh);
+  padding: 7px 10px;
+}
+
+.statusNotesLabel {
+  color: var(--ppt-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 28px;
+  white-space: nowrap;
+}
+
+.statusNotesInput {
+  background: var(--ppt-field, #ffffff);
+  border: 1px solid var(--ppt-border);
+  border-radius: 5px;
+  box-sizing: border-box;
+  color: var(--ppt-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: 132px;
+  min-height: 44px;
+  outline: none;
+  padding: 6px 8px;
+  resize: vertical;
+  width: 100%;
+}
+
+.statusNotesInput:focus-visible {
+  border-color: var(--ppt-accent);
+  box-shadow: 0 0 0 2px var(--ppt-accent-soft);
+}
+
+.zoomStatusControls {
+  /* the zoom slider sits in the status bar at the bar's own height */
+  --continuous-zoom-width: 168px;
+  --continuous-zoom-height: 26px;
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+}
+
+.zoomStatusButton.zoomStatusButton {
+  align-items: center;
+  border: 1px solid var(--office-control-border, transparent);
+  border-radius: 4px;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  min-height: 24px;
+  min-width: 24px;
+  padding: 0 4px;
+  width: auto;
+}
+
+.zoomStatusButton.zoomStatusButton:not(:global(.office-ribbon-control)) {
+  background: transparent;
+  color: var(--ppt-text);
+}
+
+.zoomStatusButton:hover:not(:disabled),
+.zoomStatusButton[aria-pressed="true"] {
+  border-color: var(--office-control-border, color-mix(in srgb, var(--ppt-accent) 26%, transparent));
+}
+
+.zoomStatusButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: var(--ppt-accent-soft);
+}
+
+.zoomStatusButton[aria-pressed="true"]:not(:global(.office-ribbon-control)) {
+  background: var(--ppt-accent-soft);
+}
+
+.zoomStatusButton:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 58%, transparent);
+  outline-offset: 1px;
+}
+
+.zoomStatusButton:disabled {
+  cursor: not-allowed;
+}
+
+.zoomStatusButton:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.45;
+}
+
+.zoomStatusPercent.zoomStatusPercent {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: max-content;
+}
+
+/* The zoom popover is portalled to <body>, outside .professionalShell, so the
+   --ppt-* tokens it maps from are not inherited there. Unset, every mapping
+   below would be invalid and the shared popover would fall back to its
+   white card and teal accent even in dark mode. Declare the handful it needs
+   on the popover itself, light and dark, mirroring .professionalShell. */
+.zoomPopover {
+  --ppt-accent: #c43e1c;
+  --ppt-chrome: rgba(255, 255, 255, 0.96);
+  --ppt-border: rgba(15, 23, 42, 0.1);
+  --ppt-text: #1f2937;
+  --ppt-muted: #64748b;
+  --console-accent: var(--ppt-accent);
+  --console-surface: var(--ppt-chrome);
+  --console-text-primary: var(--ppt-text);
+  --console-text-secondary: var(--ppt-text);
+  --console-text-muted: var(--ppt-muted);
+  --console-shadow-ink: #4a1710;
+  --continuous-zoom-border: color-mix(
+    in srgb,
+    var(--ppt-accent) 28%,
+    var(--ppt-border)
+  );
+  --continuous-zoom-glass: color-mix(
+    in srgb,
+    var(--ppt-chrome) 94%,
+    transparent
+  );
+}
+
+:global([data-theme-mode]) .zoomPopover {
+  --ppt-chrome: var(--bg-surface, #161b22);
+  --ppt-border: var(--border, #30363d);
+  --ppt-text: var(--text-primary, #e6edf3);
+  --ppt-muted: var(--text-secondary, #9da7b3);
+  --console-shadow-ink: #000000;
+}
+
+.zoomDialHost {
+  display: contents;
+}
+
+.zoomDial {
+  color: var(--ppt-text);
+  filter: none;
+}
+
+.zoomRibbonCrown {
+  gap: 0;
+}
+
+.zoomRibbonCrown > :last-child {
+  display: none;
+}
+
+.zoomStatusCrown {
+  gap: 4px;
+}
+
+ 
+.ribbon {
+  padding: 8px 8px 6px;
+}
+
+.ribbon :global(.note-editor-office-toolbar) {
+  --docs-ribbon-accent: var(--ppt-accent);
+  --docs-ribbon-accent-strong: var(--ppt-accent-strong);
+  --docs-ribbon-active: var(--ppt-accent-soft);
+  --docs-ribbon-hover: rgba(196, 62, 28, 0.05);
+  --tb-hover: rgba(196, 62, 28, 0.06);
+  --tb-active-bg: var(--ppt-accent-soft);
+  --tb-active-border: rgba(196, 62, 28, 0.35);
+  --tb-ink-strong: var(--ppt-accent-strong);
+  --office-authoring-tab-face-height: 34px;
+}
+
+.ribbon :global(.presentation-office-ribbon .note-editor-ribbon-tab__face) {
+  height: 34px;
+  min-height: 34px;
+  padding: 5px 12px 6px;
+}
+
+.ribbon
+  :global(.presentation-office-ribbon > .note-editor-ribbon-tabs) {
+  box-sizing: border-box;
+  height: 36px;
+  max-height: 36px;
+  min-height: 36px;
+}
+
+/* The PPT window can be narrower than its contextual tab run (Gallery is a
+   real example). Keep the quick-action head at its full hit-test width and
+   let only the tab list become the native horizontal scroller. Without this
+   local flex boundary the non-shrinking tab list paints over Undo/Redo even
+   though the buttons are still mounted at the right edge. */
+.ribbon
+  :global(
+    .presentation-office-ribbon
+      > .note-editor-ribbon-tabs
+      > .note-editor-ribbon-tabs__list
+  ) {
+  /* As the shared row (note-editor.css): the list fills what the quick
+     actions leave and keeps ~3 tabs. */
+  flex: 1 1 0;
+  max-width: 100%;
+  min-width: min(100%, 200px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+
+.ribbon
+  :global(
+    .presentation-office-ribbon
+      > .note-editor-ribbon-tabs
+      > .note-editor-ribbon-tabs__list
+      > .note-editor-ribbon-tab
+  ) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.ribbon
+  :global(
+    .presentation-office-ribbon
+      > .note-editor-ribbon-tabs
+      > .note-editor-ribbon-tabs__list::-webkit-scrollbar
+  ) {
+  display: none;
+}
+
+.ribbon
+  :global(
+    .presentation-office-ribbon
+      > .note-editor-ribbon-tabs
+      > .note-editor-ribbon-quick
+  ) {
+  /* Format pane + Undo + Redo + collapsed More, including the shared gaps. */
+  min-width: 132px;
+}
+
+.quickLegacyActions {
+  display: none !important;
+}
+
+.quickActionButton.quickActionButton {
+  align-items: center;
+  border: 1px solid var(--office-control-border, color-mix(in srgb, #64748b 24%, transparent)) !important;
+  border-radius: 6px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 12px;
+  gap: 5px;
+  height: 28px;
+  min-height: 28px;
+  min-width: max-content;
+  padding: 0 9px;
+  white-space: nowrap;
+  width: auto;
+}
+
+.quickActionButton.quickActionButton:not(:global(.office-ribbon-control)) {
+  background: #fff;
+  color: #30353a;
+}
+
+.quickActionButton:hover:not(:disabled) {
+  border-color: var(--office-control-border, color-mix(in srgb, #64748b 38%, transparent)) !important;
+}
+
+.quickActionButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: #f7f7f7;
+}
+
+.quickActionButton:disabled {
+  cursor: not-allowed;
+}
+
+.quickActionButton:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.5;
+}
+
+.quickShareButton {
+  border-color: var(--office-control-border, var(--ppt-accent)) !important;
+}
+
+.quickShareButton:not(:global(.office-ribbon-control)) {
+  background: var(--ppt-accent) !important;
+  color: #fff;
+}
+
+.quickShareButton:hover:not(:disabled) {
+  border-color: var(--office-control-border, var(--ppt-accent-strong)) !important;
+}
+
+.quickShareButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: var(--ppt-accent-strong) !important;
+}
+
+.ribbon
+  :global(
+    .note-editor-ribbon-big
+      svg:not([data-docs-home-icon]):not([data-presentation-home-tone="true"])
+  ) {
+  stroke-width: 1.4;
+}
+
+.ribbon
+  :global(
+    .note-editor-ribbon-big
+      svg:not([data-docs-home-icon]):not([data-presentation-home-tone="true"])
+  ):not(:global(.office-ribbon-control)) {
+  color: var(--ppt-accent);
+}
+
+.ribbon :global([data-presentation-home-tone="true"]) {
+  color: var(--ppt-text);
+}
+
+.ribbon :global([data-presentation-home-tone="true"] *) {
+  vector-effect: non-scaling-stroke;
+}
+
+.ribbon :global(.presentation-home-icon__accent) {
+  stroke: var(--ppt-accent);
+}
+
+.ribbon :global(.presentation-home-icon__accentFill) {
+  fill: var(--ppt-accent);
+  stroke: none;
+}
+
+.ribbon :global(.presentation-home-icon__accentSurface) {
+  fill: var(--ppt-accent-soft);
+  stroke: var(--ppt-accent);
+}
+
+.ribbon :global(.presentation-home-icon__detail) {
+  stroke-width: 1;
+}
+
+/* PPT Home consumes the same visual tiers as Docs/XLS: 30px compact command
+   faces with a 20px semantic glyph, 66px large commands with a 24px glyph,
+   and the shared 12px disclosure chevron.  The old 36px/16px pairing made
+   compact buttons look simultaneously oversized and visually underweight. */
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(.note-editor-office-toolbar__button)
+  svg {
+  height: 20px;
+  width: 20px;
+}
+
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(.note-editor-ribbon-big)
+  svg {
+  height: 24px;
+  width: 24px;
+}
+
+/* Arrange and Quick Styles use artwork that fills nearly the entire 24px
+   viewBox, so they read larger than the neighbouring Office glyphs at the
+   same authored size. Keep the 66px command hit area and only normalize the
+   visible drawing footprint. */
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global([data-testid="presentation-ribbon-home-arrange"])
+  svg {
+  height: 22px;
+  width: 22px;
+}
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global([data-testid="presentation-ribbon-quick-styles"])
+  svg {
+  height: 22px;
+  width: 22px;
+}
+
+/* Every disclosure on Home draws the same 12px chevron as the Insert and
+   Review tabs, whether it sits on an integral rail or on the trigger of a
+   split: the 20px compact-command glyph rule above must not reach the arrow
+   inside a large split's trigger. */
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(.note-editor-office-toolbar__split-chevron)
+  svg,
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global([data-testid$="-menu"])
+  > span
+  > svg,
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global([data-office-home-split="true"]:has(> [data-office-home-split-part="primary"] .note-editor-ribbon-big))
+  > :global([data-office-home-split-part="trigger"])
+  svg {
+  height: 12px;
+  width: 12px;
+}
+
+/* `native-page-window.css` historically turns every native-window button
+   into a 36px square.  Reassert the shared Home geometry at the PPT surface,
+   while leaving the deliberately denser 3x21 Clipboard action rail alone.
+   The Clipboard group is named by its own test id: asked as
+   `:not(:has(<the clipboard slot>))` above the buttons, WebKit restyled
+   every node inserted anywhere in the page against it (~400 ms per ribbon
+   tab change on an iPad). */
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(
+    .note-editor-office-toolbar__group:not(
+        [data-testid="presentation-home-clipboard-group"]
+      )
+      .note-editor-office-toolbar__button
+  ) {
+  height: 30px;
+  min-height: 30px;
+}
+
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(
+    .note-editor-office-toolbar__group:not(
+        [data-testid="presentation-home-clipboard-group"]
+      )
+      .note-editor-office-toolbar__button:not(
+        .presentation-home-labeled-command,
+        .note-editor-office-toolbar__split-chevron
+      ):not(:has(> span + span)):not(:has(svg + svg))
+  ) {
+  flex-basis: 30px;
+  min-width: 30px;
+  width: 30px;
+}
+
+/* Four paragraph menu buttons carry a 20px semantic glyph and a separate
+   14px dropdown mark.  Give that honest two-glyph inventory its own compact
+   width instead of clipping the chevron inside a 30px icon-only square. */
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(
+    .note-editor-office-toolbar__group:not(
+        [data-testid="presentation-home-clipboard-group"]
+      )
+      .note-editor-office-toolbar__button:has(svg + svg)
+  ) {
+  flex-basis: 40px;
+  min-width: 40px;
+  width: 40px;
+}
+
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(
+    .note-editor-office-toolbar__group:not(
+        [data-testid="presentation-home-clipboard-group"]
+      )
+      .note-editor-office-toolbar__button:has(> span + span)
+  ) {
+  flex-basis: auto;
+  gap: 5px;
+  min-width: max-content;
+  padding-inline: 6px;
+  width: auto;
+}
+
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(.presentation-home-labeled-command) {
+  font-size: 11px;
+  height: 30px;
+  line-height: 1.15;
+  min-height: 30px;
+}
+
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global(.note-editor-ribbon-value-combobox__trigger) {
+  border-inline-start: 1px solid var(--office-control-border, var(--docs-ribbon-divider));
+  border-radius: 0;
+  height: 30px;
+  min-height: 30px;
+}
+
+.homeRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="home"])
+  :global([data-testid="presentation-home-clipboard-stack"])
+  :global(.note-editor-office-toolbar__button)
+  svg {
+  height: 16px;
+  width: 16px;
+}
+
+.homeRibbonSurface
+  :global([data-testid="presentation-ribbon-new-slide"])
+  span:last-child {
+  line-height: 1.05;
+  white-space: normal;
+}
+
+.homeRibbonSurface
+  :global([data-testid="presentation-ribbon-home-arrange"])
+  span:last-child {
+  line-height: 1.05;
+  white-space: normal;
+}
+
+.homeRibbonSurface
+  :global([data-testid="presentation-ribbon-home-arrange"])
+  span:last-child {
+  font-size: 11px;
+}
+
+/* ── Draw ribbon: the same 100px Office band as Home / Insert ───────────
+   Draw owns pointer authority in PresentationWindow; this layer only gives
+   those real commands the shared Web anatomy. Groups stay intrinsic and the
+   strip scrolls instead of compressing pens, labels or disclosure rails. */
+.drawRibbonSurface {
+  --docs-ribbon-accent: var(--ppt-accent);
+  --docs-ribbon-accent-strong: var(--ppt-accent-strong);
+  --docs-ribbon-active: var(--ppt-accent-soft);
+  --docs-ribbon-hover: rgba(196, 62, 28, 0.05);
+  background: #fff;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Band, group, caption, 66px command and 24px glyph geometry are owned by
+   OfficeInsertRibbon. Draw keeps only Presentation's semantic coral mapping
+   and its command-specific pen/split details below. */
+
+.drawUndoRail {
+  gap: 2px;
+  min-width: 46px;
+}
+
+.drawToolsGroup,
+.drawPensGroup,
+.drawStencilGroup {
+  min-width: max-content;
+}
+
+.drawPensRow {
+  gap: 3px;
+  height: 66px;
+  min-height: 66px;
+}
+
+.drawInkPresetGlyph {
+  align-items: center;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.drawInkPresetGlyph > svg {
+  height: 24px;
+  width: 24px;
+}
+
+/* Select is a true large split: the upper face restores ordinary object
+   selection, while the bottom strip exposes the ink-lasso authority. */
+.drawSelectSplit.drawSelectSplit {
+  border: 0;
+  grid-template-columns: minmax(58px, auto);
+  grid-template-rows: 52px 14px;
+  height: 66px;
+  max-height: 66px;
+  min-height: 66px;
+  min-width: 58px;
+  overflow: hidden;
+}
+
+.drawSelectSplit > :global(div:first-child) > :global(button) {
+  border-radius: 6px 6px 0 0;
+  gap: 2px;
+  height: 52px;
+  max-height: 52px;
+  min-height: 52px;
+  padding: 2px 3px 0;
+  width: 100%;
+}
+
+.drawSelectSplit > :global(div:last-child) {
+  border-inline-start: 0;
+  border-top: 1px solid var(--office-control-border, color-mix(in srgb, var(--ppt-accent) 16%, transparent));
+  border-radius: 0 0 6px 6px;
+  box-sizing: border-box;
+  grid-column: 1;
+  grid-row: 2;
+  height: 14px;
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.drawSelectSplit > :global(div:last-child):not(:global(.office-ribbon-control)) {
+  background: color-mix(in srgb, var(--ppt-accent) 8%, transparent);
+}
+
+.drawSelectSplit > :global(div:last-child) :global(button) {
+  border: 0;
+  border-radius: 0 0 6px 6px;
+  box-sizing: border-box;
+  flex-basis: 100%;
+  height: 13px;
+  margin: 0;
+  max-height: 13px;
+  max-width: none;
+  min-height: 13px;
+  min-width: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.drawSelectSplit > :global(div:last-child) :global(button):not(:global(.office-ribbon-control)) {
+  box-shadow: none;
+}
+
+.drawSelectSplit > :global(div:last-child) :global(svg) {
+  height: 12px;
+  width: 12px;
+}
+
+/* ── Insert ribbon: PowerPoint Web anatomy ───────────────────────────────
+   The shared Insert strip owns the 100px band/caption/divider contract. This
+   Presentation-only layer supplies the warm semantic accent and protects the
+   shared large/menu faces from native-window button geometry. Groups remain
+   intrinsic; unused horizontal space deliberately stays empty. */
+.insertRibbonSurface {
+  --docs-ribbon-accent: var(--ppt-accent);
+  --docs-ribbon-accent-strong: var(--ppt-accent-strong);
+  --docs-ribbon-active: var(--ppt-accent-soft);
+  --docs-ribbon-hover: rgba(196, 62, 28, 0.05);
+  min-width: 0;
+  width: 100%;
+}
+
+/* Design through Help consume the same intrinsic 100px Office strip as Insert.
+   This adapter carries only Presentation's coral semantic accent; shared Office
+   primitives remain the sole band, divider and command-geometry authority. */
+.secondaryRibbonSurface {
+  --docs-ribbon-accent: var(--ppt-accent);
+  --docs-ribbon-accent-strong: var(--ppt-accent-strong);
+  --docs-ribbon-active: var(--ppt-accent-soft);
+  --docs-ribbon-hover: rgba(196, 62, 28, 0.05);
+  min-width: 0;
+  width: 100%;
+}
+
+/* Every overflowing PPT ribbon shares the same fixed 44px right pager. Keep
+   that hit target outside the scrollport so the final real command, field or
+   unit can scroll fully into view instead of sitting under the chevron. The
+   reserve activates only while the shared chassis has mounted an overflow
+   pager, so tabs that already fit do not gain a synthetic empty tail. */
+.ribbon
+  :global(
+    .presentation-office-ribbon
+      .note-editor-ribbon-strip:has(
+        > .note-editor-ribbon-scroll--right
+      )
+  ) {
+  box-sizing: border-box;
+  padding-inline-end: 44px;
+}
+
+/* Shape is a contextual Office-Web band, but it historically fell through to
+   the legacy free-height strip. Keep the shared commands while pinning the same
+   100px band/caption rhythm used by Home, Table and the migrated secondary
+   tabs. This adapter is intentionally Shape-only; shared chassis code stays
+   editor-neutral. */
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="shape-format"])
+  :global(.note-editor-ribbon-track) {
+  align-items: stretch;
+  background: #fff;
+  height: 100px;
+  min-height: 100px;
+  min-width: 100%;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="shape-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding: 2px 8px 0;
+  width: auto;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="shape-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  color: var(--docs-ribbon-muted, #667085);
+  font-size: 11px;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+/* PowerPoint Web stacks Width above Height. Keep the aspect lock beside that
+   two-row desktop stack; coarse pointers switch back to one 44px row below. */
+.shapeSizeGroup {
+  min-width: 164px;
+}
+
+.shapePropertiesGroup {
+  min-width: 72px;
+}
+
+.shapeStylesCommandLane {
+  align-items: stretch;
+  flex-direction: column !important;
+  flex-wrap: nowrap;
+  gap: 2px;
+  height: 50px;
+  min-height: 50px;
+  min-width: 108px;
+  width: 108px;
+}
+
+.shapeStylesCommandLane > * {
+  flex: 0 0 24px;
+  max-height: 24px;
+  max-width: 108px;
+  min-height: 24px;
+  min-width: 108px;
+  width: 108px;
+}
+
+.shapeStylesCommandLane > :global(span) {
+  align-items: center;
+  display: inline-flex;
+  height: 24px;
+  max-width: 108px;
+  min-height: 24px;
+  min-width: 108px;
+  width: 108px;
+}
+
+.shapeStylesCommandLane :global([data-office-home-split="true"]) {
+  /* Fill, Outline and Effects are one Shape Styles command family. The Effects
+     glyph keeps its warm semantic colour, but its disclosure rail must reuse
+     the same ribbon accent as the other two rows. */
+  --office-home-disclosure-accent: var(
+    --mrai-office-icon-accent,
+    #c43e1c
+  ) !important;
+  grid-template-columns: minmax(0, 1fr) 20px !important;
+  grid-template-rows: 24px !important;
+  height: 24px !important;
+  max-height: 24px !important;
+  max-width: 108px !important;
+  min-height: 24px !important;
+  min-width: 108px !important;
+  width: 108px !important;
+}
+
+.shapeStylesCommandLane :global([data-office-home-split-part="primary"]) {
+  box-sizing: border-box;
+  height: 24px !important;
+  max-height: 24px !important;
+  min-height: 24px !important;
+}
+
+.shapeStylesCommandLane :global([data-office-home-split-part="trigger"]) {
+  box-sizing: border-box;
+  height: 24px !important;
+  max-height: 24px !important;
+  min-height: 24px !important;
+}
+
+.shapeStylesCommandLane :global([data-office-home-split-part="primary"]) {
+  max-width: 88px !important;
+  min-width: 88px !important;
+  width: 88px !important;
+}
+
+.shapeStylesCommandLane :global([data-office-home-split-part="trigger"]) {
+  max-width: 20px !important;
+  min-width: 20px !important;
+  width: 20px !important;
+}
+
+.shapeStylesCommandLane :global(button) {
+  box-sizing: border-box;
+  height: 24px !important;
+  min-height: 24px !important;
+}
+
+.shapeStylesCommandLane
+  :global([data-office-home-split-part="primary"])
+  > :global(button) {
+  gap: 2px !important;
+  justify-content: flex-start;
+  max-width: none !important;
+  min-width: 0 !important;
+  padding-inline: 4px !important;
+  width: 100% !important;
+}
+
+.shapeStylesCommandLane > :global(button) {
+  justify-content: flex-start;
+  max-width: 108px !important;
+  width: 108px !important;
+}
+
+.shapeArrangeRow.shapeArrangeRow {
+  display: grid;
+  grid-template-columns: 104px 48px;
+  grid-template-rows: repeat(3, 24px);
+  gap: 2px 6px;
+  height: 76px;
+  min-height: 76px;
+}
+
+.shapeArrangeRow > div { display: contents; }
+.shapeArrangeRow :global(button) { height: 24px !important; min-height: 24px !important; }
+.shapeArrangeRow :global([data-testid="presentation-ribbon-shape-bring-split"]) { grid-area: 1 / 1; }
+.shapeArrangeRow :global([data-testid="presentation-ribbon-shape-send-split"]) { grid-area: 2 / 1; }
+.shapeArrangeRow :global([data-testid="presentation-ribbon-shape-selection-pane"]) { grid-area: 3 / 1; }
+.shapeArrangeRow :global([data-testid="presentation-ribbon-shape-align-menu"]) { grid-area: 1 / 2; }
+.shapeArrangeRow :global([data-testid="presentation-ribbon-shape-group-menu"]) { grid-area: 2 / 2; }
+.shapeArrangeRow :global([data-testid="presentation-ribbon-shape-rotate-menu"]) { grid-area: 3 / 2; }
+.shapeArrangeSplit.shapeArrangeSplit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px !important;
+  grid-template-rows: 24px !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  width: 104px;
+}
+.shapeArrangeSplit :global([data-office-home-split-part]) {
+  height: 24px !important;
+  min-height: 24px !important;
+}
+.shapeArrangeSplit :global([data-office-home-split-part="primary"] > button) {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 3px;
+}
+
+.shapeSelectionCount {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.shapeSizeControl {
+  align-items: center !important;
+  box-sizing: border-box;
+  display: flex !important;
+  height: 25px;
+  line-height: 1;
+  min-height: 25px;
+  position: relative;
+  white-space: nowrap;
+}
+
+.shapeSizeControl > span {
+  color: var(--docs-ribbon-muted, #667085);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.shapeSizeControl > span:first-child {
+  align-items: center;
+  display: inline-flex;
+  height: 16px;
+  justify-content: center;
+  width: 16px;
+}
+
+.shapeSizeControl > span:first-child > :global(svg) {
+  display: block;
+}
+
+.shapeSizeField.shapeSizeField[data-appearance="native-spinner"] {
+  height: 26px;
+  min-height: 26px !important;
+  min-width: 80px;
+  width: 80px;
+}
+
+.shapeSizeField.shapeSizeField[data-appearance="native-spinner"]
+  > :global(input) {
+  box-sizing: border-box;
+  height: 24px !important;
+  min-height: 24px !important;
+}
+
+.shapeSizeRow {
+  align-items: center;
+  column-gap: 6px;
+  height: 66px;
+  min-height: 66px;
+}
+
+.shapeSizeStack.shapeSizeStack {
+  align-items: stretch;
+  flex-direction: column !important;
+  gap: 2px;
+  height: 66px;
+  min-height: 66px;
+  min-width: 126px;
+}
+
+.shapeSizeUnit {
+  align-items: center;
+  display: inline-flex;
+  height: 16px;
+  justify-content: flex-start;
+  min-width: 20px;
+}
+
+.shapeAspectLockSlot {
+  align-items: center;
+  align-self: center;
+  display: inline-flex;
+  height: 66px;
+  justify-content: center;
+  min-width: 44px;
+}
+
+.shapeAspectLockSlot :global(button) {
+  flex: 0 0 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  min-width: 30px !important;
+  overflow: visible;
+  position: relative;
+  width: 30px !important;
+}
+
+/* Shape Format retains its own contextual adapter while the shared Ribbon
+   chassis is repaired independently. Keep disabled commands recognizably
+   inactive without washing their labels and semantic glyphs out of view. */
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="shape-format"])
+  :global(button:disabled):not(:global(.office-ribbon-control)) {
+  color: #667085 !important;
+  opacity: 0.72 !important;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="shape-format"])
+  :global(button:disabled svg):not(:global(.office-ribbon-control)) {
+  color: currentColor;
+  opacity: 0.9;
+}
+
+.shapeOutlineField.shapeOutlineField {
+  min-width: 58px;
+  width: 58px;
+}
+
+/* Picture Format uses the same canonical 100px body, full-height group
+   separators and 14px caption baseline as the shared Office Home surface. */
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="image-format"])
+  :global(.note-editor-ribbon-track) {
+  align-items: stretch;
+  background: #fff;
+  height: 100px;
+  min-height: 100px;
+  min-width: 100%;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="image-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding: 2px 8px 0;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="image-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  color: var(--docs-ribbon-muted, #667085);
+  font-size: 11px;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+/* Picture Format follows the owner-locked PowerPoint Web reference as one
+   intrinsic 1600px strip. These fixed group budgets are Presentation-only:
+   the shared Office band, captions, dividers and native scrolling remain the
+   single chassis used by every editor. */
+.pictureAdjustGroup.pictureAdjustGroup,
+.pictureStylesGroup.pictureStylesGroup,
+.picturePropertiesGroup.picturePropertiesGroup,
+.pictureArrangeGroup.pictureArrangeGroup,
+.pictureCropGroup.pictureCropGroup,
+ 
+.pictureSizeGroup.pictureSizeGroup {
+  box-sizing: border-box;
+  flex-grow: 0;
+  flex-shrink: 0;
+}
+
+/* Desktop Picture Format > Adjust (PPT-A125): Remove Background and Erase as
+   large commands as wide as their labels, Corrections, Color, Artistic
+   Effects, Transparency, Change Picture and Reset Picture as 58px menus. The
+   group is as wide as what it holds: a fixed 504px, sized when Compress
+   Pictures was here too, left an empty band after Reset Picture. */
+.pictureAdjustGroup.pictureAdjustGroup {
+  flex-basis: auto !important;
+  max-width: none;
+  min-width: max-content;
+  padding-inline: 4px !important;
+  width: auto !important;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup > :first-child {
+  box-sizing: border-box;
+  display: flex;
+  gap: 2px;
+  width: max-content;
+}
+
+/* A large command takes its label on one line (删除背景 broke over two in
+   44px) and never less than 44px. */
+.pictureAdjustGroup.pictureAdjustGroup
+  > :first-child
+  > :global(.note-editor-ribbon-big) {
+  flex: 0 0 auto;
+  max-width: none;
+  min-width: 44px;
+  padding-inline: 4px;
+  white-space: nowrap;
+  width: auto;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalMenu.pictureVerticalMenu,
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalSplit.pictureVerticalSplit {
+  box-sizing: border-box;
+  flex-basis: 58px !important;
+  max-width: 58px !important;
+  min-width: 58px !important;
+  width: 58px !important;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalMenu.pictureVerticalMenu
+  > :global(span:first-child) {
+  box-sizing: border-box;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalMenu.pictureVerticalMenu
+  > :global(span:last-child) {
+  box-sizing: border-box;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalSplit.pictureVerticalSplit
+  > :global(div:first-child) {
+  box-sizing: border-box;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalSplit.pictureVerticalSplit
+  > :global(div:last-child) {
+  box-sizing: border-box;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalSplit.pictureVerticalSplit
+  > :global(div:first-child)
+  > :global(button) {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureAdjustGroup.pictureAdjustGroup
+  .pictureVerticalSplit.pictureVerticalSplit
+  > :global(div:last-child)
+  > :global(button) {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureVerticalMenu.pictureVerticalMenu {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-sizing: border-box;
+  display: grid !important;
+  flex: 0 0 58px !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: 52px 14px !important;
+  height: 66px;
+  max-height: 66px;
+  max-width: 58px;
+  min-width: 58px;
+  overflow: hidden;
+  padding: 0;
+  width: 58px !important;
+}
+
+.pictureVerticalMenu.pictureVerticalMenu > :global(span:first-child) {
+  align-items: center;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 52px;
+  justify-content: center;
+  max-height: 52px;
+  min-height: 52px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 2px 3px 0;
+  width: 100%;
+}
+
+.pictureVerticalMenu.pictureVerticalMenu:hover:not(:disabled)
+  > :global(span:first-child),
+.pictureVerticalMenu.pictureVerticalMenu[data-state="open"]
+  > :global(span:first-child),
+.pictureVerticalMenu.pictureVerticalMenu:global(.note-editor-ribbon-big--active)
+  > :global(span:first-child),
+.pictureVerticalMenu.pictureVerticalMenu[aria-pressed="true"]
+  > :global(span:first-child) {
+  border-color: var(--office-control-border, color-mix(in srgb, var(--ppt-accent) 24%, transparent));
+}
+
+.pictureVerticalMenu.pictureVerticalMenu:hover:not(:disabled)
+  > :global(span:first-child):not(:global(.office-ribbon-control)),
+.pictureVerticalMenu.pictureVerticalMenu[data-state="open"]
+  > :global(span:first-child):not(:global(.office-ribbon-control)),
+.pictureVerticalMenu.pictureVerticalMenu:global(.note-editor-ribbon-big--active)
+  > :global(span:first-child):not(:global(.office-ribbon-control)),
+.pictureVerticalMenu.pictureVerticalMenu[aria-pressed="true"]
+  > :global(span:first-child):not(:global(.office-ribbon-control)) {
+  background: color-mix(in srgb, var(--ppt-accent) 8%, transparent);
+}
+
+.pictureVerticalMenu.pictureVerticalMenu > :global(span:last-child) {
+  align-items: center;
+  background: color-mix(in srgb, var(--ppt-accent) 8%, transparent) !important;
+  border-inline-start: 0 !important;
+  border-top: 1px solid
+    color-mix(in srgb, var(--ppt-accent) 16%, transparent) !important;
+  border-radius: 0 0 6px 6px;
+  box-shadow: none !important;
+  display: flex;
+  height: 14px;
+  justify-content: center;
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.pictureVerticalSplit.pictureVerticalSplit {
+  border: 0;
+  display: grid;
+  flex: 0 0 58px !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: 52px 14px !important;
+  height: 66px !important;
+  max-height: 66px;
+  max-width: 58px;
+  min-height: 66px;
+  min-width: 58px;
+  overflow: hidden;
+  width: 58px !important;
+}
+
+.pictureVerticalSplit.pictureVerticalSplit > :global(div:first-child) {
+  height: 52px !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureVerticalSplit.pictureVerticalSplit
+  > :global(div:first-child)
+  > :global(button) {
+  box-sizing: border-box;
+  height: 52px !important;
+  max-height: 52px !important;
+  max-width: 100%;
+  min-height: 52px !important;
+  min-width: 0;
+  padding: 2px 3px 0;
+  width: 100% !important;
+}
+
+.pictureVerticalSplit.pictureVerticalSplit > :global(div:last-child) {
+  border-inline-start: 0 !important;
+  border-top: 1px solid var(--office-control-border, color-mix(in srgb, var(--ppt-accent) 16%, transparent)) !important;
+  border-radius: 0 0 6px 6px;
+  height: 14px !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.pictureVerticalSplit.pictureVerticalSplit > :global(div:last-child):not(:global(.office-ribbon-control)) {
+  background: color-mix(in srgb, var(--ppt-accent) 8%, transparent) !important;
+  box-shadow: none !important;
+}
+
+.pictureVerticalSplit.pictureVerticalSplit
+  > :global(div:last-child)
+  > :global(button) {
+  border: 0 !important;
+  box-sizing: border-box;
+  flex: 1 1 100% !important;
+  height: 13px !important;
+  max-height: 13px !important;
+  max-width: 100% !important;
+  min-height: 13px !important;
+  min-width: 0 !important;
+  padding: 0;
+  width: 100% !important;
+}
+
+.pictureVerticalSplit.pictureVerticalSplit
+  > :global(div:last-child)
+  > :global(button):not(:global(.office-ribbon-control)) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 8 + 388 (gallery) + 2 + 63 (Border split) + 2 + 110 (the Effects /
+   Format Picture stack) + 8. */
+.pictureStylesGroup.pictureStylesGroup {
+  flex-basis: 582px !important;
+  max-width: 582px;
+  min-width: 582px;
+  padding-inline: 8px;
+  width: 582px !important;
+}
+
+.pictureStylesGroup.pictureStylesGroup > :first-child {
+  gap: 2px;
+  width: 100%;
+}
+
+/* 388 is six whole 58px thumbnails on an 8px pitch (6 x 58 + 5 x 8), so
+   the scroll strip never shows a clipped seventh (it was eight -- 520 -- until
+   the desktop Adjust group, PPT-A125, took the width). On the shared gallery's own
+   4px gap the same 520px held eight and a third: 68b47fce43 turned the strip
+   into a scroll viewport over all 28 styles, and the thumbnail width fixed
+   below (4cccd52274) no longer divided it. The shared variables carry the
+   same numbers so the gallery's own width formula agrees with this box. */
+.pictureStylesGroup.pictureStylesGroup
+  :global([data-testid="presentation-picture-style-gallery"]) {
+  --office-gallery-gap: 8px;
+  --office-gallery-item-width: 58px;
+  flex: 0 0 388px;
+  max-width: 388px;
+  min-width: 388px;
+  width: 388px;
+}
+
+.pictureStylesGroup.pictureStylesGroup
+  :global([data-testid="presentation-picture-style-gallery-quick"])
+  > :global(span),
+.pictureStylesGroup.pictureStylesGroup
+  :global([data-testid="presentation-picture-style-gallery-quick"])
+  > :global(span)
+  > :global(button) {
+  max-width: 58px;
+  min-width: 58px;
+  width: 58px;
+}
+
+/* The inline Picture Styles strip is thumbnail-only in PowerPoint Web. Full
+   names remain on aria-label/title and in the expanded gallery menu. */
+.pictureStylesGroup.pictureStylesGroup
+  :global([data-office-style-gallery-preview-item="true"]) {
+  gap: 0;
+  padding-block: 4px;
+}
+
+.pictureStylesGroup.pictureStylesGroup
+  :global([data-office-style-gallery-preview-item="true"] > span:last-child) {
+  display: none;
+}
+
+.pictureStylesGroup.pictureStylesGroup
+  :global([data-office-style-gallery-preview-item="true"] > span:first-child) {
+  height: 38px;
+  width: 56px;
+}
+
+.pictureStylesGroup.pictureStylesGroup
+  :global(
+    [data-office-style-gallery-preview-item="true"] > span:first-child > svg
+  ) {
+  height: 30px;
+  max-height: 30px;
+  max-width: 48px;
+  width: 48px;
+}
+
+.pictureStyleTools {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+  height: 66px;
+}
+
+.pictureStyleTools > :global(.note-editor-ribbon-row) {
+  display: contents;
+}
+
+.pictureStyleTools .pictureVerticalSplit.pictureVerticalSplit {
+  flex-basis: 63px;
+  max-width: 63px;
+  min-width: 63px;
+  width: 63px;
+}
+
+.pictureStyleTools
+  > :global(.note-editor-ribbon-row)
+  > :global(.note-editor-ribbon-big) {
+  flex: 0 0 64px;
+  max-width: 64px;
+  min-width: 64px;
+  padding-inline: 3px;
+  width: 64px;
+}
+
+.picturePropertiesGroup.picturePropertiesGroup {
+  flex-basis: 66px !important;
+  max-width: 66px;
+  min-width: 66px;
+  padding-inline: 5px;
+  width: 66px !important;
+}
+
+.picturePropertiesGroup.picturePropertiesGroup
+  > :global(.note-editor-ribbon-big) {
+  flex: 0 0 55px;
+  max-width: 55px;
+  min-width: 55px;
+  padding-inline: 2px;
+  width: 55px;
+}
+
+ 
+.pictureArrangeGroup.pictureArrangeGroup {
+  flex-basis: 184px !important;
+  gap: 1px;
+  max-width: 184px;
+  min-width: 184px;
+  padding-inline: 6px;
+  width: 184px !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: minmax(0, 120px) 48px;
+  height: 21px !important;
+  max-height: 21px !important;
+  min-height: 21px !important;
+  width: 170px;
+}
+
+.pictureArrangeRow.pictureArrangeRow > :global([data-testid$="-split"]) {
+  grid-template-columns: minmax(0, 1fr) 18px;
+  grid-template-rows: 19px !important;
+  height: 21px !important;
+  max-height: 21px !important;
+  min-height: 21px !important;
+  width: 120px;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid$="-split"])
+  > :global(div) {
+  box-sizing: border-box;
+  height: 19px !important;
+  max-height: 19px !important;
+  min-height: 19px !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid$="-split"])
+  > :global(div)
+  > :global(button) {
+  box-sizing: border-box;
+  height: 19px !important;
+  max-height: 19px !important;
+  min-height: 19px !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid$="-split"])
+  > :global([data-office-home-split-part="primary"])
+  > :global(.note-editor-office-toolbar__button) {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid$="-split"])
+  > :global(div:last-child),
+.pictureArrangeRow.pictureArrangeRow
+  > :global(button[data-office-home-menu-indicator="true"])
+  > :global(span:last-child) {
+  border-inline-start: 1px solid var(--office-control-border, color-mix(in srgb, var(--docs-ribbon-divider, #e5e7eb) 72%, transparent)) !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid$="-split"])
+  > :global(div:last-child):not(:global(.office-ribbon-control)),
+.pictureArrangeRow.pictureArrangeRow
+  > :global(button[data-office-home-menu-indicator="true"])
+  > :global(span:last-child):not(:global(.office-ribbon-control)) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid$="-split"])
+  > :global(div:last-child)
+  > :global(button) {
+  border: 0 !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid$="-split"])
+  > :global(div:last-child)
+  > :global(button):not(:global(.office-ribbon-control)) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  :global(.note-editor-office-toolbar__button) {
+  box-sizing: border-box;
+  gap: 4px;
+  height: 21px !important;
+  max-height: 21px !important;
+  min-height: 21px !important;
+  min-width: 0;
+  padding-block: 0;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  :global(.note-editor-office-toolbar__button)
+  :global([data-office-semantic-icon]) {
+  height: 16px;
+  width: 16px;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global(button[data-office-home-menu-indicator="true"]) {
+  flex-basis: 48px;
+  grid-template-columns: 29px 18px;
+  grid-template-rows: 19px !important;
+  max-width: 48px;
+  min-width: 48px;
+  width: 48px;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global(button[data-office-home-menu-indicator="true"])
+  > :global(span) {
+  box-sizing: border-box;
+  height: 19px !important;
+  max-height: 19px !important;
+  min-height: 19px !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid="presentation-ribbon-image-selection-pane"]) {
+  box-sizing: border-box;
+  justify-content: flex-start;
+  justify-self: stretch;
+  max-width: 120px !important;
+  min-width: 120px !important;
+  padding-inline: 4px;
+  width: 120px !important;
+}
+
+.pictureArrangeRow.pictureArrangeRow
+  > :global([data-testid="presentation-ribbon-image-auto-fix"]) {
+  box-sizing: border-box;
+  justify-content: flex-start;
+  max-width: 78px !important;
+  min-width: 78px !important;
+  padding-inline: 4px;
+  width: 78px !important;
+}
+
+ 
+.pictureCropGroup.pictureCropGroup {
+  flex-basis: 70px !important;
+  max-width: 70px;
+  min-width: 70px;
+  padding-inline: 12px;
+  width: 70px !important;
+}
+
+.pictureCropGroup.pictureCropGroup .pictureVerticalSplit.pictureVerticalSplit {
+  flex-basis: 46px;
+  max-width: 46px;
+  min-width: 46px;
+  width: 46px;
+}
+
+.pictureSizeGroup.pictureSizeGroup {
+  flex-basis: 180px !important;
+  max-width: 180px;
+  min-width: 180px;
+  width: 180px !important;
+}
+
+.pictureSizeControl {
+  align-items: center;
+  display: flex;
+  height: 25px;
+  min-height: 25px;
+  position: relative;
+  white-space: nowrap;
+}
+
+.pictureSizeField.pictureSizeField[data-appearance="native-spinner"] {
+  height: 24px;
+  min-height: 24px !important;
+  min-width: 80px;
+  width: 80px;
+}
+
+.pictureSizeField.pictureSizeField[data-appearance="native-spinner"]
+  > :global(input) {
+  height: 22px !important;
+  min-height: 22px !important;
+}
+
+.pictureSizeLane.pictureSizeLane {
+  align-items: stretch;
+  flex-direction: column !important;
+  gap: 2px;
+  height: 66px;
+  min-height: 66px;
+  min-width: 122px;
+}
+
+/* Chart Design / Format keep the shared Office 100px chassis while their
+   intrinsic group budgets scroll natively at compact desktop widths. */
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="chart-design"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="chart-design"])
+  :global(.note-editor-ribbon-track),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="chart-format"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="chart-format"])
+  :global(.note-editor-ribbon-track),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="camera-format"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="camera-format"])
+  :global(.note-editor-ribbon-track),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="graphic-format"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="graphic-format"])
+  :global(.note-editor-ribbon-track),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="media-format"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="media-format"])
+  :global(.note-editor-ribbon-track),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="media-playback"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="media-playback"])
+  :global(.note-editor-ribbon-track),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="smartart-design"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="smartart-design"])
+  :global(.note-editor-ribbon-track),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="smartart-format"]),
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="smartart-format"])
+  :global(.note-editor-ribbon-track) {
+  box-sizing: border-box;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="chart-design"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="chart-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="camera-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="graphic-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="media-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="media-playback"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="smartart-design"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="smartart-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active^="chart-"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active^="media-"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active^="smartart-"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+.ribbon
+  :global(.note-editor-ribbon-body[data-ribbon-active="graphic-format"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+.chartDesignElementsGroup {
+  min-width: 272px;
+}
+
+.chartDesignElementsGroup :global(.note-editor-ribbon-col) {
+  align-self: center;
+  flex: 0 0 150px;
+  height: 56px;
+  min-height: 0;
+}
+
+.chartDesignDataGroup {
+  min-width: 522px;
+}
+
+.chartDesignDataGroup :global(.note-editor-ribbon-row) {
+  gap: 4px;
+}
+
+.chartDesignDataGroup :global(.note-editor-ribbon-row--fill) {
+  gap: 4px;
+}
+
+.chartDesignDataGroup :global(.note-editor-ribbon-row) {
+  height: 32px;
+  min-height: 32px;
+}
+
+.chartDesignDataGroup :global(.note-editor-ribbon-row--fill) {
+  align-items: center;
+  height: 34px;
+  min-height: 34px;
+}
+
+.chartDesignDataGroup
+  :global([data-testid="presentation-ribbon-chart-ranges"]) {
+  min-width: 240px;
+}
+
+.chartDesignTypeGroup {
+  min-width: 110px;
+}
+
+.chartFormatPropertiesGroup {
+  min-width: 390px;
+  position: relative;
+}
+
+.chartFormatSelection {
+  color: var(--docs-ribbon-muted, #667085);
+  display: flex;
+  flex: 0 0 142px;
+  flex-direction: column;
+  font-size: 10px;
+  gap: 3px;
+  min-width: 142px;
+}
+
+.chartFormatSelection select {
+  background: var(--office-ribbon-surface, #fff);
+  border: 1px solid var(--docs-ribbon-divider, #d9dde3);
+  border-radius: 5px;
+  color: var(--office-ribbon-ink, #1f2937);
+  font: inherit;
+  font-size: 11px;
+  height: 27px;
+  padding-inline: 6px 22px;
+  width: 142px;
+}
+
+.chartFormatSelection select:focus-visible {
+  border-color: var(--office-ribbon-accent, #c43e1c);
+  outline: 2px solid color-mix(
+    in srgb,
+    var(--office-ribbon-accent, #c43e1c) 45%,
+    transparent
+  );
+  outline-offset: 1px;
+}
+
+.chartFormatArrangeGroup {
+  min-width: 450px;
+}
+
+.chartFormatArrangeGroup :global(.note-editor-ribbon-row) {
+  gap: 3px;
+}
+
+.chartFormatArrangeRows {
+  align-self: center;
+  display: grid;
+  gap: 2px;
+  grid-template-rows: repeat(2, 36px);
+  height: 74px;
+  min-height: 74px;
+}
+
+.chartFormatArrangeRows > :global(.note-editor-ribbon-row) {
+  box-sizing: border-box;
+  height: 36px;
+  min-height: 36px;
+}
+
+.chartFormatSizeGroup {
+  min-width: 180px;
+}
+
+.mediaFormatPropertiesGroup {
+  min-width: 96px;
+}
+
+.mediaFormatArrangeGroup {
+  min-width: 250px;
+}
+
+.mediaFormatArrangeGroup :global(.note-editor-ribbon-row) {
+  gap: 3px;
+}
+
+.mediaFormatSizeGroup {
+  min-width: 180px;
+}
+
+.mediaPlaybackPreviewGroup {
+  min-width: 96px;
+  width: max-content;
+}
+
+.mediaPlaybackEditingGroup {
+  min-width: 96px;
+  width: max-content;
+}
+
+.mediaPlaybackOptionsGroup {
+  min-width: max-content;
+  width: max-content;
+}
+
+.mediaPlaybackOptionsRow {
+  gap: 6px;
+  height: 66px;
+  min-height: 66px;
+  min-width: max-content;
+  width: max-content;
+}
+
+/* The Audio/Video Options are check boxes (OfficeHomeCheckbox) laid out by
+   their own stacks; only Start keeps the compact-button sizing. */
+.mediaPlaybackOptionsRow
+  :global([data-testid="presentation-ribbon-media-start"]) {
+  box-sizing: border-box;
+  height: 44px !important;
+  justify-content: flex-start;
+  min-height: 44px !important;
+  min-width: 88px;
+  width: max-content;
+}
+
+.mediaPlaybackAudioStylesGroup {
+  min-width: max-content;
+  width: max-content;
+}
+
+.mediaPlaybackVideoStylesGroup { min-width: 92px; }
+
+.mediaPlaybackAudioStylesRow {
+  gap: 6px;
+  height: 66px;
+  min-height: 66px;
+  min-width: max-content;
+  width: max-content;
+}
+
+.mediaPlaybackAudioStylesRow > :global(button) {
+  box-sizing: border-box;
+  min-width: 88px;
+}
+
+/* Audio keeps Playback and Audio Format as sibling contextual tabs. */
+.mediaAudioOrderPreview {
+  order: 10;
+}
+
+/* PowerPoint's Audio Playback tab: Preview, Bookmarks, Editing, Audio Options,
+   Audio Styles. Editing sits between Preview and Options. */
+.mediaAudioOrderBookmarks {
+  order: 12;
+}
+
+.mediaAudioOrderEditing {
+  order: 15;
+}
+
+.mediaAudioOrderOptions {
+  order: 20;
+}
+
+.mediaAudioOrderAudioStyles {
+  order: 30;
+}
+
+.mediaVideoOrderPreview {
+  order: 10;
+}
+
+/* Video Format > Adjust (Corrections, Color, Poster Frame, Reset) sits
+   between Preview and Video Styles, as desktop PowerPoint lays it out
+   (PPT-A155). */
+.mediaVideoOrderAdjust {
+  order: 15;
+}
+
+.mediaVideoOrderStyles {
+  order: 20;
+}
+
+/* Video Styles' strip: four thumbnails beside Video Shape / Border / Effects. */
+.mediaVideoStylesGallery {
+  min-width: 236px;
+}
+
+/* A styles gallery with its commands in one column to its right: Video
+   Styles (gallery, then Video Shape / Video Border / Video Effects) and
+   Graphics Styles (gallery, then Graphics Fill / Outline / Effects), as
+   PowerPoint lays both out. The row never wraps: a command that wrapped
+   under the gallery fell outside the 66px band. */
+.galleryWithCommandStack.galleryWithCommandStack {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: max-content;
+}
+
+.galleryCommandStack.galleryCommandStack {
+  flex: 0 0 auto;
+  min-width: 96px;
+}
+
+.mediaPlaybackVideoStylesGroup.mediaPlaybackVideoStylesGroup,
+.graphicStylesGroup.graphicStylesGroup,
+.graphicSizeGroup.graphicSizeGroup {
+  flex: 0 0 auto;
+  min-width: max-content;
+  width: max-content;
+}
+
+ 
+.graphicSizeGroup.graphicSizeGroup > :first-child {
+  align-items: center;
+  gap: 4px;
+}
+
+.mediaVideoOrderProperties {
+  order: 30;
+}
+
+.mediaVideoOrderArrange {
+  order: 40;
+}
+
+.mediaVideoOrderSize {
+  order: 50;
+}
+
+.mediaVideoOrderFormatPane {
+  order: 60;
+}
+
+.mediaVideoOrderStyles.mediaVideoOrderStyles { border-inline-end: 1px solid var(--docs-ribbon-divider, #e5e7eb) !important; }
+/* Format Pane is the Video Format tab's last group (Trim and Captions moved
+   to Playback, PPT-A006; Format Pane joined after Size, PPT-A155), so it
+   carries no trailing divider. */
+.mediaVideoOrderFormatPane.mediaVideoOrderFormatPane { border-inline-end: 0 !important; }
+
+.smartArtCreateGroup {
+  min-width: 380px;
+}
+
+.smartArtCreateRow {
+  column-gap: 4px;
+  display: grid;
+  /* Add Shape, Text Pane, Promote / Demote / Right to Left, Move Up / Down:
+     Office's Create Graphic order. */
+  grid-template-columns: 72px 72px minmax(112px, 1fr) minmax(88px, auto);
+  min-width: 360px;
+}
+
+.smartArtCreateHierarchyLane {
+  display: grid;
+  grid-template-rows: repeat(3, 22px);
+  height: 66px;
+  min-width: 0;
+  width: 100%;
+}
+
+.smartArtCreateHierarchyLane > :global(button) {
+  box-sizing: border-box;
+  height: 22px !important;
+  justify-content: flex-start;
+  min-height: 22px !important;
+  min-width: 0;
+  padding-block: 1px !important;
+  width: 100%;
+}
+
+.smartArtCreateRow > :global(button:first-child) {
+  width: 72px;
+}
+
+.smartArtLayoutsGroup {
+  min-width: 424px;
+}
+
+.smartArtStylesGroup {
+  min-width: 360px;
+}
+
+.smartArtLayoutGallery,
+.smartArtStyleGallery {
+  --office-gallery-item-width: 64px;
+  --office-gallery-visible-items: 5;
+  --office-gallery-gap: 0px;
+}
+
+.smartArtLayoutGallery
+  :global(span:has(> button[data-office-style-gallery-preview-item="true"])) {
+  height: 52px;
+  width: 64px;
+}
+
+.smartArtStyleGallery
+  :global(span:has(> button[data-office-style-gallery-preview-item="true"])) {
+  height: 52px;
+  width: 64px;
+}
+
+.smartArtLayoutGallery
+  :global(button[data-office-style-gallery-preview-item="true"]) {
+  border-radius: 0;
+  height: 52px;
+  min-height: 52px;
+  padding: 3px;
+  width: 64px;
+}
+
+.smartArtStyleGallery
+  :global(button[data-office-style-gallery-preview-item="true"]) {
+  border-radius: 0;
+  height: 52px;
+  min-height: 52px;
+  padding: 3px;
+  width: 64px;
+}
+
+.smartArtLayoutGallery
+  :global(
+    button[data-office-style-gallery-preview-item="true"] > span:first-child
+  ) {
+  border: 0;
+  height: 44px;
+  width: 58px;
+}
+
+.smartArtStyleGallery
+  :global(
+    button[data-office-style-gallery-preview-item="true"] > span:first-child
+  ) {
+  border: 0;
+  height: 44px;
+  width: 58px;
+}
+
+.smartArtLayoutGallery
+  :global(
+    button[data-office-style-gallery-preview-item="true"] > span:last-child
+  ) {
+  display: none;
+}
+
+.smartArtStyleGallery
+  :global(
+    button[data-office-style-gallery-preview-item="true"] > span:last-child
+  ) {
+  display: none;
+}
+
+.smartArtLayoutGallery
+  :global(button[data-office-style-gallery-preview-item="true"] svg) {
+  filter: grayscale(1);
+  height: 32px;
+  max-height: 32px;
+  max-width: 54px;
+  width: 54px;
+}
+
+.smartArtLayoutGallery
+  :global(button[data-office-style-gallery-preview-item="true"] svg):not(:global(.office-ribbon-control)) {
+  opacity: 0.78;
+}
+
+.smartArtLayoutPreview {
+  display: block;
+  width: 56px;
+}
+
+.smartArtStyleGallery
+  :global(
+    button[data-office-style-gallery-preview-item="true"]
+      > span:first-child
+      > span
+  ) {
+  width: 54px !important;
+}
+
+.smartArtResetGroup,
+.smartArtPropertiesGroup {
+  min-width: 88px;
+}
+
+.smartArtArrangeGroup {
+  min-width: 230px;
+}
+
+.smartArtSizeGroup {
+  min-width: 210px;
+}
+
+ 
+.cameraStylesGroup {
+  min-width: 0;
+}
+
+.cameraStylesRow {
+  align-items: center;
+  column-gap: 6px;
+  min-width: 0;
+}
+
+.cameraStyleGallery {
+  --office-gallery-item-width: 58px;
+  --office-gallery-visible-items: 9;
+  --office-gallery-gap: 2px;
+}
+
+.cameraStyleGallery
+  :global(span:has(> button[data-office-style-gallery-preview-item="true"])) {
+  height: 48px;
+  width: 58px;
+}
+
+.cameraStyleGallery
+  :global(button[data-office-style-gallery-preview-item="true"]) {
+  border-radius: 4px;
+  height: 48px;
+  min-height: 48px;
+  padding: 2px;
+  width: 58px;
+}
+
+.cameraStyleGallery
+  :global(
+    button[data-office-style-gallery-preview-item="true"] > span:first-child
+  ) {
+  border: 0;
+  display: grid;
+  height: 40px;
+  place-items: center;
+  width: 54px;
+}
+
+.cameraStyleGallery
+  :global(
+    button[data-office-style-gallery-preview-item="true"] > span:last-child
+  ) {
+  display: none;
+}
+
+.cameraStyleGallery :global(svg[data-cameo-style-tile]) {
+  height: 36px !important;
+  max-height: none !important;
+  max-width: none !important;
+  width: 54px !important;
+}
+
+.cameraStyleCommands {
+  min-width: 0;
+  width: max-content;
+}
+
+.cameraStyleCommands :global(button) {
+  box-sizing: border-box;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.cameraPropertiesGroup {
+  min-width: 0;
+}
+
+.cameraArrangeGroup {
+  min-width: 0;
+}
+
+.cameraArrangeRow {
+  column-gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  min-width: 0;
+}
+
+.cameraArrangeStack {
+  display: grid;
+  grid-template-rows: repeat(3, 22px);
+  height: 66px;
+  min-width: 0;
+  width: max-content;
+}
+
+.cameraArrangeStack :global(button) {
+  box-sizing: border-box;
+  height: 22px !important;
+  justify-content: flex-start;
+  min-height: 22px !important;
+  min-width: 0;
+  padding-block: 1px !important;
+  width: 100%;
+}
+
+.cameraCropGroup {
+  min-width: 0;
+}
+
+.cameraSizeGroup {
+  min-width: 0;
+}
+
+.reviewProofingGroup {
+  min-width: 0;
+}
+
+.reviewCommentMarker.reviewCommentMarker {
+  position: absolute;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  padding: 3px;
+  /* Comments wear the user's theme colour in every editor. */
+  border: 1px solid var(--user-theme-accent, #b146bd);
+  border-radius: 6px;
+  background: white;
+  color: var(--user-theme-accent, #b146bd);
+  box-shadow: 0 2px 5px rgb(0 0 0 / 12%);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.reviewCommentMarker:focus-visible {
+  outline: 2px solid var(--user-theme-accent, #b146bd);
+  outline-offset: 2px;
+}
+
+.reviewAccessibilityGroup {
+  min-width: 0;
+}
+
+.reviewActivityGroup {
+  min-width: 0;
+}
+
+.reviewCommentsGroup {
+  min-width: 0;
+}
+
+.ribbon :global([data-ribbon="review"][data-ribbon-label])::after {
+  font-weight: 400;
+}
+
+ 
+
+.reviewAccessibilityGroup :global(button > span:last-child) {
+  display: block;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.reviewActivityGroup :global(button > span:last-child) {
+  display: block;
+  max-width: none;
+  white-space: nowrap;
+}
+
+.chartFormatSizeGroup
+  :global(.note-editor-office-toolbar__field-label) {
+  align-items: center;
+  box-sizing: border-box;
+  display: grid;
+  flex: 0 0 30px !important;
+  gap: 4px;
+  grid-template-columns: 12px 64px 18px;
+  height: 30px;
+  line-height: 1;
+  min-height: 30px;
+  text-align: start;
+  width: 102px;
+}
+
+.mediaFormatSizeGroup
+  :global(.note-editor-office-toolbar__field-label) {
+  align-items: center;
+  box-sizing: border-box;
+  display: grid;
+  flex: 0 0 30px !important;
+  gap: 4px;
+  grid-template-columns: 12px 64px 18px;
+  height: 30px;
+  line-height: 1;
+  min-height: 30px;
+  text-align: start;
+  width: 102px;
+}
+
+.chartFormatSizeGroup
+  :global(.note-editor-ribbon-value-combobox) {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  width: 64px;
+}
+
+.mediaFormatSizeGroup
+  :global(.note-editor-ribbon-value-combobox) {
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  width: 64px;
+}
+
+.chartFormatSizeGroup.chartFormatSizeGroup
+  :global(.note-editor-ribbon-value-combobox__input) {
+  box-sizing: border-box;
+  height: 26px;
+  max-height: 26px;
+  min-height: 26px;
+}
+
+.chartFormatSizeGroup.chartFormatSizeGroup
+  :global(.note-editor-ribbon-value-combobox__trigger) {
+  box-sizing: border-box;
+  height: 26px;
+  max-height: 26px;
+  min-height: 26px;
+}
+
+.mediaFormatSizeGroup.mediaFormatSizeGroup
+  :global(.note-editor-ribbon-value-combobox__input) {
+  box-sizing: border-box;
+  height: 26px;
+  max-height: 26px;
+  min-height: 26px;
+}
+
+.mediaFormatSizeGroup.mediaFormatSizeGroup
+  :global(.note-editor-ribbon-value-combobox__trigger) {
+  box-sizing: border-box;
+  height: 26px;
+  max-height: 26px;
+  min-height: 26px;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body)
+  :global(.note-editor-ribbon-big)
+  :global(svg:not([data-office-semantic-icon])) {
+  height: 24px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 24px;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body)
+  :global(.note-editor-office-toolbar__button)
+  :global(svg:not([data-office-semantic-icon])) {
+  height: 20px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 20px;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body)
+  :global(.note-editor-ribbon-big)
+  > :global(span:last-child:not(:first-child)) {
+  display: -webkit-box;
+  font-size: 11px;
+  line-height: 1.12;
+  max-width: 88px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body)
+  :global(.note-editor-office-toolbar__input) {
+  box-sizing: border-box;
+  height: 30px;
+  min-height: 30px;
+}
+
+.secondaryGallery {
+  --office-gallery-item-width: 76px;
+  --office-gallery-visible-items: 7;
+  --office-gallery-gap: 4px;
+}
+
+.variantGallery {
+  --office-gallery-visible-items: 4;
+}
+
+.animationGallery {
+  --office-gallery-item-width: 62px;
+  --office-gallery-visible-items: 6;
+  --office-gallery-gap: 2px;
+}
+
+/* An effect's star fills its tile, its name right under it, as PowerPoint's
+ * gallery draws them; a 24 px star in a 70 px tile left most of it blank. */
+.animationGallery :global([data-office-gallery-viewport] > button) {
+  gap: 1px !important;
+  height: var(--office-gallery-content-height) !important;
+  justify-content: center !important;
+  min-height: var(--office-gallery-content-height) !important;
+  max-height: var(--office-gallery-content-height) !important;
+  min-width: 0 !important;
+  padding: 2px 1px !important;
+  width: var(--office-gallery-item-width);
+}
+
+.animationGallery :global([data-office-gallery-viewport] > button > span:first-child),
+.animationGallery :global([data-office-gallery-viewport] > button > span:first-child > svg) {
+  flex-shrink: 0;
+  height: 34px !important;
+  width: 34px !important;
+}
+
+ 
+.animationGallery :global([data-office-gallery-viewport] > button > span:last-child) {
+  flex-shrink: 0;
+  font-size: 11px !important;
+  line-height: 12px !important;
+  min-height: 0 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secondaryGallery .secondaryGalleryCard.secondaryGalleryCard {
+  box-sizing: border-box;
+  height: 52px;
+  min-height: 52px;
+  flex: 0 0 var(--office-gallery-item-width);
+  width: 76px;
+  /* 52 = 2 border + 5 padding + 32 picture + 1 gap + 12 name: the name's
+   * line was cut by the tile's bottom edge under a 34 px picture. */
+  padding: 3px 4px 2px;
+  gap: 1px;
+}
+
+.secondaryGallery .secondaryGalleryCard.secondaryGalleryCard :global(.note-style-strip__name) {
+  line-height: 12px;
+  flex: 0 0 auto;
+}
+
+.secondaryGalleryCard.secondaryGalleryCard[data-selected="true"] {
+  background: var(--ppt-accent-soft);
+  border-color: var(--ppt-accent);
+  box-shadow: inset 0 0 0 1px var(--ppt-accent);
+}
+
+.secondaryGalleryCard.secondaryGalleryCard:focus-visible {
+  outline: 2px solid
+    color-mix(in srgb, var(--ppt-accent) 58%, transparent);
+  outline-offset: -2px;
+}
+
+.tableCellRichEditor {
+  cursor: text;
+  overflow-wrap: anywhere;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+.tableCellRichEditor:empty::before {
+  content: "\200b";
+}
+
+
+
+
+
+
+.secondaryExpandedGalleryPreview {
+  align-items: center;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 4px;
+  box-sizing: border-box;
+  display: flex;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 60px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 5px;
+  width: 100%;
+}
+
+
+.secondaryGalleryRow {
+  align-items: center;
+  height: 66px;
+  min-height: 66px;
+  min-width: max-content;
+}
+
+.secondaryFieldLabel {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  min-height: 30px;
+  white-space: nowrap;
+}
+
+.secondaryDurationField {
+  width: 68px;
+}
+
+.secondaryAdvanceField {
+  width: 58px;
+}
+
+
+
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(.note-editor-ribbon-big) {
+  box-sizing: border-box;
+  height: 66px;
+  max-height: 66px;
+  min-height: 66px;
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(.note-editor-ribbon-big)
+  :global(svg:not([data-office-semantic-icon])) {
+  height: 24px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 24px;
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(.note-editor-ribbon-big)
+  :global([data-office-semantic-icon]) {
+  height: 24px;
+  width: 24px;
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(.note-editor-ribbon-big)
+  > :global(span:last-child:not(:first-child)) {
+  display: -webkit-box;
+  font-size: 11px;
+  line-height: 1.12;
+  max-width: 86px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Insert menu commands share the compact vertical face used by Picture:
+   command content above and the PowerPoint disclosure colour below. */
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(
+    .note-editor-ribbon-big[data-office-home-menu-indicator="true"]
+  ) {
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(58px, auto);
+  grid-template-rows: 52px 14px;
+  min-width: 58px;
+  overflow: hidden;
+  padding: 0;
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(
+    .note-editor-ribbon-big[data-office-home-menu-indicator="true"]
+  )
+  > :global(span:first-child) {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  grid-column: 1;
+  grid-row: 1;
+  height: 52px;
+  justify-content: center;
+  max-height: 52px;
+  min-height: 52px;
+  min-width: 58px;
+  overflow: hidden;
+  padding: 2px 3px 0;
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(
+    .note-editor-ribbon-big[data-office-home-menu-indicator="true"]
+  )
+  > :global(span:first-child)
+  > :global(span:last-child) {
+  display: -webkit-box;
+  font-size: 11px;
+  line-height: 1.12;
+  max-width: 84px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(
+    .note-editor-ribbon-big[data-office-home-menu-indicator="true"]
+  )
+  > :global(span:last-child) {
+  align-items: center;
+  align-self: stretch;
+  border-inline-start: 0;
+  border-top: 1px solid var(--office-control-border, color-mix(in srgb, var(--ppt-accent) 16%, transparent));
+  border-radius: 0 0 6px 6px;
+  box-sizing: border-box;
+  display: flex;
+  grid-column: 1;
+  grid-row: 2;
+  height: 14px;
+  justify-content: center;
+  line-height: 1;
+  margin: 0;
+  max-width: none;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  white-space: nowrap;
+  width: 100%;
+  -webkit-box-orient: initial;
+  -webkit-line-clamp: initial;
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(
+    .note-editor-ribbon-big[data-office-home-menu-indicator="true"]
+  )
+  > :global(span:last-child):not(:global(.office-ribbon-control)) {
+  background: color-mix(in srgb, var(--ppt-accent) 8%, transparent);
+}
+
+.insertRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="insert"])
+  :global(
+    .note-editor-ribbon-big[data-office-home-menu-indicator="true"]
+  )
+  > :global(span:last-child)
+  :global(svg) {
+  height: 12px;
+  width: 12px;
+}
+
+/* New Slide and Text Box retain two independent actions while using the same
+   52px command + 14px bottom disclosure anatomy. */
+.insertLargeSplit.insertLargeSplit {
+  border: 0;
+  grid-template-columns: minmax(58px, auto);
+  grid-template-rows: 52px 14px;
+  height: 66px;
+  max-height: 66px;
+  min-height: 66px;
+  min-width: 58px;
+}
+
+.insertLargeSplit > :global(div:first-child) > :global(button) {
+  border-radius: 6px 6px 0 0;
+  gap: 2px;
+  height: 52px;
+  max-height: 52px;
+  min-height: 52px;
+  padding: 2px 3px 0;
+}
+
+.insertLargeSplit > :global(div:last-child) {
+  border-inline-start: 0;
+  border-top: 1px solid var(--office-control-border, color-mix(in srgb, var(--ppt-accent) 16%, transparent));
+  border-radius: 0 0 6px 6px;
+  box-sizing: border-box;
+  grid-column: 1;
+  grid-row: 2;
+  height: 14px;
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.insertLargeSplit > :global(div:last-child):not(:global(.office-ribbon-control)) {
+  background: color-mix(in srgb, var(--ppt-accent) 8%, transparent);
+}
+
+.insertLargeSplit > :global(div:last-child) :global(button) {
+  border: 0;
+  border-radius: 0 0 6px 6px;
+  height: 13px;
+  margin: 0;
+  max-height: 13px;
+  max-width: none;
+  min-height: 13px;
+  min-width: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.insertLargeSplit > :global(div:last-child) :global(button):not(:global(.office-ribbon-control)) {
+  box-shadow: none;
+}
+
+.insertLargeSplit > :global(div:last-child) :global(svg) {
+  height: 12px;
+  width: 12px;
+}
+
+/* A New Slide gallery card's layout name (the cards are the shared
+   OfficeInsertGallery cards). */
+.newSlideLayoutName {
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.insertSymbolGrid {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(8, 30px);
+  padding: 2px 6px 6px;
+}
+
+.insertSymbolGrid :global(button) {
+  font-size: 15px;
+}
+
+.homeSlidesGroup :global(.note-editor-ribbon-hstack) {
+  gap: 3px;
+}
+
+.homeSlidesGroup :global(.note-editor-ribbon-col) {
+  gap: 2px;
+}
+
+.homeSlidesGroup {
+  min-width: 206px;
+}
+
+.homeDrawingGroup,
+.homeEditingGroup,
+.homeCopilotGroup {
+  flex: 0 0 auto;
+}
+
+.homeDrawingGroup :global(.note-editor-ribbon-track) {
+  gap: 2px;
+}
+
+.homeEditingGroup :global(.note-editor-ribbon-track) {
+  gap: 2px;
+}
+
+.homeEditingGroup {
+  min-width: 84px;
+}
+
+.homeCopilotGroup {
+  min-width: 64px;
+}
+
+.ribbonLayoutSelect {
+  max-width: 108px;
+  min-width: 108px !important;
+  width: 108px;
+}
+
+.homeFontGroup :global(.note-editor-ribbon-row) {
+  gap: 1px;
+}
+
+.homeParagraphGroup :global(.note-editor-ribbon-row) {
+  gap: 1px;
+}
+
+.ribbonFontSelect {
+  max-width: 120px;
+  min-width: 120px !important;
+  width: 120px;
+}
+
+.ribbonFontSizeInput {
+  flex: 0 0 46px !important;
+  max-width: 46px;
+  min-width: 46px !important;
+  padding: 0 4px !important;
+  width: 46px;
+}
+
+.ribbonFontSizeInput::placeholder {
+  color: #8a9b98;
+  opacity: 1;
+}
+
+.homeFontGroup :global(.note-editor-office-toolbar__color-input) {
+  inset: 0;
+}
+
+.homeParagraphGroup {
+  min-width: 152px;
+}
+
+.homeParagraphGroup :global(.note-editor-ribbon-row) {
+  justify-content: center;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-layout"])
+  :global(.note-editor-ribbon-track) {
+  align-items: stretch;
+  gap: 0;
+  min-height: 72px;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-design"])
+  :global(.note-editor-ribbon-track) {
+  align-items: stretch;
+  gap: 0;
+  min-height: 72px;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-layout"])
+  :global(.note-editor-office-toolbar__group) {
+  justify-content: flex-start;
+  padding-inline: 6px;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-design"])
+  :global(.note-editor-office-toolbar__group) {
+  justify-content: flex-start;
+  padding-inline: 6px;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-layout"])
+  :global(.note-editor-office-toolbar__button) {
+  border-radius: 5px;
+  font-size: 10.5px;
+  gap: 4px !important;
+  padding-inline: 6px !important;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-design"])
+  :global(.note-editor-office-toolbar__button) {
+  border-radius: 5px;
+  font-size: 10.5px;
+  gap: 4px !important;
+  padding-inline: 6px !important;
+}
+
+.tableStyleGalleryGroup {
+  min-width: 362px;
+}
+
+.tableStyleGallery {
+  align-items: stretch;
+  flex-wrap: nowrap !important;
+  gap: 3px !important;
+}
+
+.tableStylePreset {
+  flex: 0 0 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  padding: 3px !important;
+  width: 48px !important;
+}
+
+.tableStylePreview {
+  border-color: #b8c7c4 !important;
+  border-radius: 2px !important;
+  height: 30px !important;
+  width: 40px !important;
+}
+
+.tableStylePresetLabel {
+  display: none;
+}
+
+.tableStyleGallery :global([data-presentation-table-style-clear="true"]) {
+  flex: 0 0 54px !important;
+  font-size: 10px;
+  height: 48px !important;
+  line-height: 1.15;
+  min-width: 54px !important;
+  padding-inline: 5px !important;
+  width: 54px !important;
+}
+
+.tableStyleOptionsGroup {
+  min-width: 258px;
+}
+
+.tableStyleOptionsGroup :global(.note-editor-ribbon-row) {
+  gap: 2px;
+}
+
+.tableStyleOptionsGroup :global(.note-editor-office-toolbar__button) {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  min-width: 72px;
+}
+
+.tableCellFormatGroup {
+  min-width: 336px;
+}
+
+.tableCellFormatGroup :global(.note-editor-ribbon-row) {
+  gap: 2px;
+}
+
+.tableCellFormatGroup :global(.note-editor-office-toolbar__select) {
+  height: 28px;
+  max-width: 116px;
+  min-width: 72px;
+}
+
+.tableCellFormatGroup input[type="number"] {
+  border: 1px solid rgba(15, 23, 42, 0.13);
+  border-radius: 6px;
+  color: var(--ppt-text);
+  height: 28px;
+  padding-inline: 5px;
+}
+
+.tableCompactColorField {
+  display: inline-flex !important;
+  height: 28px;
+}
+
+.tableColorInput {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 0 0 28px;
+  height: 28px !important;
+  padding: 3px !important;
+  width: 28px !important;
+}
+
+.tableColorInput::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.tableColorInput::-webkit-color-swatch {
+  border: 0;
+  border-radius: 3px;
+}
+
+.tableBorderGroup {
+  min-width: 310px;
+}
+
+.tableBorderGroup :global(.note-editor-ribbon-row) {
+  gap: 3px;
+}
+
+.tableBorderGroup :global(.note-editor-office-toolbar__input) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.tableBorderGroup :global(.note-editor-office-toolbar__control) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.tableSelectionGroup {
+  min-width: 192px;
+}
+
+.tableSelectionGroup :global(.note-editor-ribbon-row) {
+  gap: 2px;
+}
+
+.tableMergeGroup :global(.note-editor-ribbon-row) {
+  gap: 2px;
+}
+
+.tableStructureGroup :global(.note-editor-ribbon-row) {
+  gap: 2px;
+}
+
+.tableAxisGroup :global(.note-editor-ribbon-row) {
+  gap: 2px;
+}
+
+.tableSelectionGroup :global(.note-editor-office-toolbar__button) {
+  flex: 0 0 auto;
+  min-width: 58px;
+}
+
+.tableStructureGroup {
+  min-width: 342px;
+}
+
+.tableStructureGroup :global(.note-editor-office-toolbar__button) {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  min-width: 108px;
+}
+
+.tableMergeGroup {
+  min-width: 150px;
+}
+
+.tableMergeGroup :global(.note-editor-office-toolbar__button) {
+  flex: 0 0 auto;
+  min-width: 68px;
+}
+
+.tableSplitPanel {
+  align-self: center;
+  box-sizing: border-box;
+  display: grid;
+  flex: 0 0 312px;
+  gap: 3px 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: 13px 28px;
+  min-width: 312px;
+  padding: 4px 6px;
+  position: sticky;
+  right: 4px;
+  z-index: 6;
+}
+
+.tableSplitPanel:not(:global(.office-ribbon-control)) {
+  box-shadow: none;
+}
+
+.tableSplitPanel :global(.note-editor-office-toolbar__panel-title) {
+  font-size: 10px;
+  grid-column: 1 / -1;
+  line-height: 13px;
+  white-space: nowrap;
+}
+
+.tableSplitPanel :global(.note-editor-office-toolbar__panel-add) {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tableSplitPanel :global(.note-editor-office-toolbar__panel-actions) {
+  align-self: center;
+  margin: 0;
+}
+
+.tableSplitPanel :global(.note-editor-office-toolbar__panel-field) {
+  align-items: center;
+  display: grid;
+  flex: 0 0 auto;
+  gap: 4px;
+  grid-template-columns: auto 42px;
+  white-space: nowrap;
+}
+
+.tableSplitPanel :global(.note-editor-office-toolbar__input) {
+  flex: 0 0 42px;
+  height: 26px;
+  min-width: 42px;
+  width: 42px;
+}
+
+.tableCellGroup {
+  min-width: 132px;
+}
+
+.tableCellGroup :global(.note-editor-office-toolbar__select) {
+  height: 28px;
+  max-width: 122px;
+}
+
+.tableAxisGroup {
+  min-width: 310px;
+}
+
+.tableAxisGroup :global(.note-editor-office-toolbar__select) {
+  height: 28px;
+  max-width: 126px;
+}
+
+.tableAxisGroup :global(.note-editor-office-toolbar__input) {
+  height: 28px;
+  width: 58px !important;
+}
+
+.tableAxisField {
+  align-items: center !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
+  gap: 4px;
+  height: 28px;
+  white-space: nowrap;
+}
+
+.tableAxisField > span {
+  color: #667572;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.tableAxisGroup :global(.note-editor-office-toolbar__button) {
+  flex: 0 0 auto;
+  min-width: 132px;
+}
+
+.tableFrameGroup {
+  min-width: 174px;
+}
+
+.tableFrameGroup :global(.note-editor-ribbon-row) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.tableFrameGroup :global(.note-editor-office-toolbar__field-label) {
+  height: 28px;
+  min-height: 28px;
+}
+
+.tableFrameGroup :global(.note-editor-office-toolbar__input) {
+  height: 28px;
+  min-height: 28px;
+}
+
+/* Table Layout > Arrange wears the Picture Format Arrange grid (its row is
+   `.pictureArrangeRow`): the five faces are placed two columns by three rows
+   in the order PowerPoint keeps them -- Bring Forward / Send Backward down the
+   first column, Align / Group / Rotate down the second. */
+.tableArrangeGroup {
+  flex-basis: 184px !important;
+  max-width: 184px;
+  min-width: 184px;
+  padding-inline: 6px;
+  width: 184px !important;
+}
+
+.tableArrangeGroup .pictureArrangeRow.pictureArrangeRow {
+  grid-template-rows: repeat(3, 21px);
+  height: 67px !important;
+  max-height: 67px !important;
+  min-height: 67px !important;
+  row-gap: 2px;
+}
+
+.tableArrangeGroup .pictureArrangeRow.pictureArrangeRow > :nth-child(1) { grid-area: 1 / 1; }
+.tableArrangeGroup .pictureArrangeRow.pictureArrangeRow > :nth-child(2) { grid-area: 2 / 1; }
+.tableArrangeGroup .pictureArrangeRow.pictureArrangeRow > :nth-child(3) { grid-area: 1 / 2; }
+.tableArrangeGroup .pictureArrangeRow.pictureArrangeRow > :nth-child(4) { grid-area: 2 / 2; }
+.tableArrangeGroup .pictureArrangeRow.pictureArrangeRow > :nth-child(5) { grid-area: 3 / 2; }
+
+ 
+.tableSelectionGroup :global(.note-editor-ribbon-big[data-testid="presentation-ribbon-table-gridlines"]) {
+  min-width: 72px !important;
+  width: 72px !important;
+}
+
+.tableDeleteGroup {
+  min-width: 74px;
+}
+
+.tableDeleteGroup :global(.note-editor-office-toolbar__button) {
+  flex: 0 0 auto;
+}
+
+.tableDeleteGroup :global(.note-editor-office-toolbar__button):not(:global(.office-ribbon-control)) {
+  color: #b42318;
+}
+
+/* PowerPoint Web table contextual surface.
+ *
+ * The table model keeps its complete command set, but the ribbon exposes only
+ * the two compact Office Web journeys: Design (style/options/shading/borders)
+ * and Layout (select/rows+columns/merge/alignment/sizing). Typography remains
+ * on Home; object arranging remains in the object menu/selection pane. */
+.ribbon
+  :global([data-ribbon-active="table-design"])
+  :global(.note-editor-ribbon-track) {
+  align-items: stretch;
+  min-height: 82px;
+}
+.ribbon
+  :global([data-ribbon-active="table-layout"])
+  :global(.note-editor-ribbon-track) {
+  align-items: stretch;
+  min-height: 82px;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-design"])
+  :global(.note-editor-office-toolbar__group) {
+  flex-shrink: 0;
+  padding-inline: 8px;
+}
+
+.ribbon
+  :global([data-ribbon-active="table-layout"])
+  :global(.note-editor-office-toolbar__group) {
+  flex-shrink: 0;
+  padding-inline: 8px;
+}
+
+/* Table Design and Table Layout use the same fixed Office band as Shape. Their
+   DOM remains in keyboard/accessibility order; this PPT adapter owns only the
+   canonical 100px geometry while the ribbon body keeps intrinsic horizontal
+   overflow. */
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-design"]),
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-design"])
+  :global(.note-editor-ribbon-track),
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-design"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group),
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-layout"]),
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-layout"])
+  :global(.note-editor-ribbon-track),
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-layout"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  box-sizing: border-box;
+  height: 100px;
+  min-height: 100px;
+  max-height: 100px;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-design"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-layout"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group) {
+  align-items: center;
+  overflow: visible;
+  padding-block: 2px 0;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-design"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+.secondaryRibbonSurface
+  :global(.note-editor-ribbon-body[data-ribbon-active="table-layout"])
+  :global(.note-editor-ribbon-track)
+  > :global(.note-editor-office-toolbar__group)[data-ribbon-label]::after {
+  box-sizing: border-box;
+  height: 14px;
+  line-height: 14px;
+  min-height: 14px;
+  padding: 0;
+}
+
+.tableStyleOptionsGroup {
+  min-width: 168px;
+}
+
+.tableStyleOptionsGroup > div {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(max-content, 1fr));
+  height: 20px !important;
+  margin-bottom: 0 !important;
+  min-height: 20px !important;
+}
+
+.tableStyleOptionsGroup :global(button) {
+  box-sizing: border-box;
+  font-size: 10px;
+  height: 20px !important;
+  justify-content: flex-start;
+  min-height: 20px !important;
+  min-width: 78px;
+  padding: 1px 4px !important;
+}
+
+.tableStyleOptionsGroup :global([data-office-semantic-icon]) {
+  height: 16px;
+  width: 16px;
+}
+
+.tableStyleGalleryGroup {
+  min-width: max-content;
+}
+
+.tableStyleGalleryGroup
+  :global([data-testid="presentation-table-style-gallery"]) {
+  --office-gallery-item-width: 72px;
+  --office-gallery-gap: 4px;
+}
+
+.tableStyleGalleryGroup
+  :global([data-testid="presentation-table-style-gallery-quick"] > span) {
+  height: var(--office-gallery-content-height);
+  width: 72px;
+}
+
+.tableStyleGalleryGroup
+  :global([data-office-style-gallery-preview-item="true"]) {
+  gap: 0;
+  height: var(--office-gallery-content-height);
+  min-height: 0;
+  padding: 3px;
+  width: 72px;
+}
+
+.tableStyleGalleryGroup
+  :global([data-office-style-gallery-preview-item="true"] > span:first-child) {
+  height: 44px;
+  width: 64px;
+}
+
+.tableStyleGalleryGroup
+  :global([data-office-style-gallery-preview-item="true"] svg) {
+  height: 100%;
+  max-height: none;
+  max-width: none;
+  width: 100%;
+}
+
+.tableStyleGalleryGroup
+  :global([data-office-style-gallery-preview-item="true"] > span:last-child) {
+  display: none;
+}
+
+.tableCellFormatGroup {
+  min-width: 74px;
+}
+
+.tableCellFormatGroup :global(.note-editor-ribbon-row:nth-of-type(n + 2)),
+.tableCellFormatGroup
+  :global([data-testid="presentation-ribbon-table-cell-bevel"]),
+.tableCellFormatGroup
+  :global([data-testid="presentation-ribbon-table-cell-color"]),
+.tableCellFormatGroup
+  :global([data-testid="presentation-ribbon-table-cell-font-family"]),
+.tableCellFormatGroup
+  :global([data-testid="presentation-ribbon-table-cell-font-size"]) {
+  display: none !important;
+}
+
+/* The Shading group keeps Shading as its one large command, and Table
+   Design > Effects (PPT-A137) beside it: Effects joined this row after the
+   row was trimmed, so the trim hid it and Shadow / Reflection could not be
+   reached (acceptance steps 25/26). */
+.tableCellFormatGroup
+  :global(.note-editor-ribbon-row:first-child > :not(:first-child):not([data-testid="presentation-ribbon-table-effects"])) {
+  display: none !important;
+}
+
+.tableCellFormatGroup
+  :global(.note-editor-ribbon-row:first-child) {
+  align-items: flex-start;
+}
+
+.tableCellFormatGroup
+  :global([data-testid="presentation-ribbon-table-cell-fill"]) {
+  min-width: 58px;
+  width: 58px;
+}
+
+.tableBorderGroup {
+  min-width: 74px;
+}
+
+.tableBorderGroup :global(.note-editor-ribbon-row:nth-of-type(n + 2)) {
+  display: none;
+}
+
+.tableBorderGroup
+  :global(.note-editor-ribbon-row:first-child > :not(:first-child)) {
+  display: none !important;
+}
+
+.tableBorderGroup
+  :global([data-testid="presentation-ribbon-table-cell-border-target"]) {
+  min-width: 58px;
+  width: 58px;
+}
+
+.tableBorderToolsGroup {
+  min-width: max-content;
+}
+
+.tableBorderToolsRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 66px;
+  min-height: 66px;
+}
+
+.tableBorderToolsRow :global(.note-editor-ribbon-row) {
+  align-items: stretch;
+  height: 66px;
+  min-height: 66px;
+}
+
+.tableDrawingSettings {
+  display: grid;
+  grid-template-rows: repeat(3, 22px);
+  width: 136px;
+  min-width: 136px;
+  align-items: stretch;
+}
+
+.tableBorderToolsRow
+  :global([data-testid="presentation-ribbon-table-border-pointer-tools"])
+  > button {
+  justify-content: flex-start !important;
+  padding: 2px 3px 0 !important;
+  font-size: 10.5px !important;
+}
+
+.tableBorderToolsRow
+  :global([data-testid="presentation-ribbon-table-border-pointer-tools"])
+  > button
+  > span:first-child,
+.tableBorderToolsRow :global(svg[data-presentation-ribbon-icon="table-draw"]),
+.tableBorderToolsRow :global(svg[data-presentation-ribbon-icon="table-erase"]) {
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.tableBorderToolsRow
+  :global([data-testid="presentation-ribbon-table-border-pen"])
+  > span:last-child {
+  max-width: 2.8em !important;
+  white-space: normal !important;
+}
+
+.tableDrawingValue.tableDrawingValue {
+  width: 136px !important;
+  min-width: 136px !important;
+  max-width: 136px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  max-height: 22px !important;
+  padding: 0 4px;
+  border: 1px solid var(--office-ribbon-control-border, #d1d5db);
+  border-radius: 3px;
+  font-size: 10.5px !important;
+  font-weight: 400;
+}
+
+.tableDrawingValue > span {
+  width: 100% !important;
+}
+
+.tableDrawingLineValue {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.tableDrawingLineValue > :last-child {
+  flex: 0 0 12px;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.tableDrawingLineValue > :global([data-office-border-line-preview]) {
+  flex: 1 1 auto;
+  min-width: 24px;
+  width: auto;
+}
+
+.tableDrawingLineValue > :global([data-office-border-weight-preview]) {
+  flex: 1 1 auto;
+  min-width: 24px;
+  width: auto;
+}
+
+.tableDrawingSettings
+  :global([data-testid="presentation-ribbon-table-border-pen-color"]) {
+  height: 22px !important;
+  min-height: 22px !important;
+  width: 136px;
+  font-size: 11px;
+}
+
+.tableDrawPreview {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  z-index: 9000;
+}
+
+.professionalShell :global([data-table-draw-armed="true"]) {
+  cursor: crosshair !important;
+}
+
+.professionalShell :global([data-table-draw-armed="true"]) * {
+  cursor: crosshair !important;
+}
+
+.tableSelectionGroup {
+  min-width: 134px;
+  order: 1;
+}
+
+.tableStructureGroup {
+  min-width: 278px;
+  order: 2;
+}
+
+.tableMergeGroup {
+  min-width: 134px;
+  order: 3;
+}
+
+.tableCellGroup {
+  min-width: 190px;
+  order: 5;
+}
+
+.tableCellTypographyRow {
+  display: none !important;
+}
+
+.tableCellAlignmentGrid {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(3, 30px);
+  grid-template-rows: repeat(2, 30px);
+}
+
+.tableCellAlignmentGrid :global(button) {
+  height: 30px;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  width: 30px;
+}
+
+.tableCellAlignmentGrid :global(svg) {
+  height: 18px;
+  width: 18px;
+}
+
+.tableAxisGroup {
+  min-width: 270px;
+  order: 4;
+}
+
+.tableSelectionGroup :global(.note-editor-ribbon-big) {
+  min-width: 58px !important;
+  width: 58px !important;
+}
+
+.tableMergeGroup :global(.note-editor-ribbon-big) {
+  min-width: 58px !important;
+  width: 58px !important;
+}
+
+.tableStructureGroup :global(.note-editor-ribbon-big) {
+  min-width: 64px !important;
+  width: 64px !important;
+}
+
+.tableAxisGroup :global(.note-editor-office-toolbar__button) {
+  min-width: 108px;
+}
+
+.tableCellGroup
+  :global([data-testid="presentation-ribbon-table-cell-margin-preset"]) {
+  min-width: 70px;
+  width: 70px;
+}
+
+.tableAxisNumberField.tableAxisNumberField {
+  min-width: 84px;
+  width: 84px;
+}
+
+.tableAxisNumberField.tableAxisNumberField
+  :global(input[type="number"]) {
+  /* The 84px shell already budgets the 20px Chromium/WebKit native rail.
+     Keep the regular 7px text inset so long values do not pay for the rail
+     twice and remain visually separate from its hit area. */
+  padding-inline: 7px !important;
+}
+
+.tableFrameGroup {
+  min-width: 180px;
+  order: 6;
+}
+
+.tableFrameSizeRow {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 70px;
+}
+
+.tableFrameAspectLock {
+  align-items: center;
+  color: var(--office-ribbon-ink, #1f2937);
+  display: inline-flex;
+  font-size: 11px;
+  gap: 5px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.tableFrameAspectLock input {
+  height: 18px;
+  margin: 0;
+  width: 18px;
+}
+
+/* 80px = max native cm display + 7px start/end text inset + 20px
+   Chromium/WebKit rail + >=8px visual separation + the shell borders. */
+.tableFrameNumberField.tableFrameNumberField {
+  min-width: 80px;
+  width: 80px;
+}
+
+/* Layout > Arrange and Format Pane close the tab, as in PowerPoint (PPT-A148). */
+.tableArrangeGroup {
+  order: 7;
+}
+
+.tableFormatPaneGroup {
+  order: 8;
+}
+
+.tableDeleteGroup {
+  display: none !important;
+}
+
+.stageViewLayer {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+/* The notes PAGE — the layout that prints: slide on top, notes below. */
+.notesPageSheet {
+  align-self: center;
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 760px;
+  padding: 22px;
+  width: 100%;
+}
+
+.notesPageSlide {
+  aspect-ratio: 16 / 9;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+  width: 100%;
+}
+
+.notesPageLabel {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.notesPageInput {
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 220px;
+  padding: 10px 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+/* Reading view: the deck plays INSIDE the window, with a status bar rather than
+   a floating HUD — it is meant to sit beside other windows. */
+.readingStage {
+  align-self: center;
+  aspect-ratio: 16 / 9;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.12);
+  max-width: 1080px;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* 母版视图: every layout of the active master at a readable size, rendered with
+   the SAME slide renderer the canvas uses so imported master content actually
+   shows instead of placeholder rectangles. */
+.masterGrid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  width: 100%;
+}
+
+.masterCard {
+  background: Canvas;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 8px;
+  color: CanvasText;
+  cursor: pointer;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  text-align: left;
+}
+
+.masterCard[aria-selected="true"] {
+  border-color: var(--ppt-accent);
+  box-shadow: 0 0 0 1px var(--ppt-accent);
+}
+
+/* The thumbnail inside owns the frame: the deck's own aspect ratio and a
+   border, whether it draws the layout's blocks or the silhouette. */
+.masterCardPreview {
+  display: block;
+  overflow: hidden;
+  width: 100%;
+}
+
+.masterCardLabel {
+  align-items: baseline;
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.masterCardUsage {
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* The master view's own exit strip. PowerPoint puts Close Master View on the
+   Slide Master ribbon tab; we mount no such tab, so the view carries it. */
+.masterBar {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+/* Master text styles, edited where PowerPoint edits them: on the Home tab
+   while Slide Master view is open. The strip sits at the LEFT of the exit bar
+   so Close Master View keeps its place at the right. */
+.masterStyleGroup {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+.masterStyleLevel {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.masterEmpty {
+  color: #64748b;
+  font-size: 13px;
+  padding: 24px;
+  text-align: center;
+}
+
+.readingBar {
+  align-items: center;
+  align-self: center;
+  color: #334155;
+  display: flex;
+  font-size: 12px;
+  gap: 10px;
+}
+
+.tableGeometryFrame:global(.presentation-window__block--geometry) {
+  /* Native table strokes straddle their frame; clip at the slide, not at the
+     table box. This also keeps deselection from shaving the outside rules. */
+  overflow: visible;
+}
+
+.tableResizeSurface {
+  position: relative;
+}
+
+/* WPS 表格工具 → 查看网格线. `outline` rather than `border` so switching the aid
+   on cannot move a single cell: it paints over the box instead of growing it,
+   and it never touches the exported model. */
+.tableResizeSurface[data-gridlines="true"] td {
+  outline: 1px dashed rgba(15, 108, 189, 0.45);
+  outline-offset: -1px;
+}
+
+.tableColumnBoundary,
+.tableRowBoundary {
+  display: block;
+  position: absolute;
+  touch-action: none;
+  user-select: none;
+  z-index: 7;
+}
+
+/* WPS "Draw Table" / "Eraser": while a pen is held this transparent layer sits
+   above the whole table so the pointer addresses cell EDGES instead of the cell
+   text underneath. It only exists while a tool is armed, so the ordinary table
+   interactions keep their untouched hit areas. */
+.tableBorderPenOverlay {
+  cursor: crosshair;
+  /* Left/top/size are written imperatively from the measured table rect; these
+     are the pre-measurement defaults so the first paint is never mispositioned
+     outside the block. */
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  user-select: none;
+  width: 100%;
+  z-index: 9;
+}
+
+.tableBorderPenOverlay[data-pen-mode="erase"] {
+  cursor: cell;
+}
+
+.tableBorderPenMarker {
+  background: var(--ppt-accent);
+  border-radius: 1px;
+  display: block;
+  opacity: 0.85;
+  pointer-events: none;
+  position: absolute;
+}
+
+.tableBorderPenOverlay[data-pen-mode="erase"] .tableBorderPenMarker {
+  background: #b42318;
+}
+
+/* The gridline a pencil stroke through a cell is about to draw. Dashed while it
+   is still a proposal, so it reads differently from an edge being restyled. */
+.tableBorderPenSplitMarker:not(:global(.office-ribbon-control)) {
+  background: repeating-linear-gradient(
+    var(--ppt-accent) 0 4px,
+    transparent 4px 8px
+  );
+  opacity: 1;
+}
+
+.tableBorderPenSplitMarker[data-split-axis="row"]:not(:global(.office-ribbon-control)) {
+  background: repeating-linear-gradient(
+    to right,
+    var(--ppt-accent) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+.tableColumnBoundary {
+  bottom: 0;
+  cursor: col-resize;
+  right: -4px;
+  top: 0;
+  width: 8px;
+}
+
+.tableRowBoundary {
+  bottom: -4px;
+  cursor: row-resize;
+  height: 8px;
+  left: 0;
+  right: 0;
+}
+
+.tableColumnBoundary::after,
+.tableRowBoundary::after {
+  background: var(--ppt-accent);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity 90ms ease;
+}
+
+.tableColumnBoundary::after {
+  bottom: 0;
+  left: 3px;
+  top: 0;
+  width: 2px;
+}
+
+.tableRowBoundary::after {
+  bottom: 3px;
+  height: 2px;
+  left: 0;
+  right: 0;
+}
+
+.tableColumnBoundary:hover::after,
+.tableRowBoundary:hover::after,
+.tableColumnBoundary[data-active="true"]::after,
+.tableRowBoundary[data-active="true"]::after {
+  opacity: 0.82;
+}
+
+.tableColumnSelector.tableColumnSelector,
+.tableRowSelector.tableRowSelector,
+.tableSelector.tableSelector {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--ppt-muted);
+  line-height: 1;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  opacity: 0;
+  padding: 0;
+  position: absolute;
+  touch-action: none;
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
+  user-select: none;
+  z-index: 8;
+}
+
+ 
+.tableColumnSelector {
+  cursor: default;
+  height: calc(14px * var(--office-drawing-grip-scale, 1));
+  left: 0;
+  right: 0;
+  top: calc(var(--office-drawing-grip-edge, -5px) - 14px * var(--office-drawing-grip-scale, 1));
+}
+
+.tableRowSelector {
+  bottom: 0;
+  cursor: default;
+  left: calc(var(--office-drawing-grip-edge, -5px) - 14px * var(--office-drawing-grip-scale, 1));
+  top: 0;
+  width: calc(14px * var(--office-drawing-grip-scale, 1));
+}
+
+.tableColumnSelector::after,
+.tableRowSelector::after {
+  content: "";
+  opacity: 0.34;
+  pointer-events: none;
+  position: absolute;
+  transition:
+    opacity 90ms ease,
+    transform 90ms ease;
+}
+
+.tableColumnSelector::after {
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+  left: calc(50% - 3px);
+  top: 5px;
+}
+
+.tableRowSelector::after {
+  border-bottom: 3px solid transparent;
+  border-left: 4px solid currentColor;
+  border-top: 3px solid transparent;
+  left: 5px;
+  top: calc(50% - 3px);
+}
+
+.tableColumnSelector.tableColumnSelector:hover,
+.tableRowSelector.tableRowSelector:hover,
+.tableColumnSelector.tableColumnSelector[data-active="true"],
+.tableRowSelector.tableRowSelector[data-active="true"] {
+  background: var(--ppt-accent-soft);
+  box-shadow: none;
+  color: var(--ppt-accent);
+  opacity: 1;
+}
+
+.tableColumnSelector:hover::after,
+.tableRowSelector:hover::after,
+.tableColumnSelector[data-active="true"]::after,
+.tableRowSelector[data-active="true"]::after {
+  opacity: 0.95;
+  transform: scale(1.08);
+}
+
+.tableSelector.tableSelector {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(100, 116, 139, 0.28);
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.15);
+  color: var(--ppt-muted);
+  cursor: grab;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  left: -28px;
+  opacity: 0.94;
+  overflow: visible;
+  top: -28px;
+  width: 24px;
+  z-index: 11;
+}
+
+.tableSelector.tableSelector:hover,
+.tableSelector.tableSelector[data-active="true"] {
+  background: color-mix(in srgb, var(--ppt-accent) 10%, #fff);
+  border-color: var(--ppt-accent);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+  color: var(--ppt-accent);
+  opacity: 1;
+}
+
+.tableSelector.tableSelector:active {
+  cursor: grabbing;
+}
+
+.tableAxisInsert.tableAxisInsert {
+  align-items: center;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  border-radius: 999px;
+  box-sizing: border-box;
+  color: var(--ppt-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  opacity: 0;
+  overflow: visible;
+  padding: 0;
+  position: absolute;
+  touch-action: none;
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
+  width: 18px;
+  z-index: 12;
+}
+
+.tableColumnInsert {
+  right: -9px;
+  top: -30px;
+  transform: translateX(50%);
+}
+
+.tableRowInsert {
+  bottom: -9px;
+  left: -30px;
+  transform: translateY(50%);
+}
+
+/* A right-to-left table (`a:tblPr@rtl`) lays logical column 0 out on the
+   right. Its cells keep their own text direction, and every handle pinned to
+   a cell's start or end edge moves to the mirrored edge with the column. */
+.tableRtl > tbody > tr > td {
+  direction: ltr;
+}
+
+.tableRtl .tableColumnBoundary {
+  left: -4px;
+  right: auto;
+}
+
+.tableRtl .tableColumnInsert {
+  left: -9px;
+  right: auto;
+  transform: translateX(-50%);
+}
+
+.tableRtl .tableRowSelector {
+  left: auto;
+  right: -14px;
+}
+
+.tableRtl .tableRowInsert {
+  left: auto;
+  right: -30px;
+}
+
+.tableRtl .tableSelector.tableSelector {
+  left: auto;
+  right: -28px;
+}
+
+.tableAxisInsert.tableAxisInsert:hover,
+.tableAxisInsert.tableAxisInsert:focus-visible {
+  background: color-mix(in srgb, var(--ppt-accent) 10%, #fff);
+  border-color: var(--ppt-accent);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.14);
+  color: var(--ppt-accent);
+  opacity: 1;
+}
+
+.tableColumnSelector.tableColumnSelector:focus-visible,
+.tableRowSelector.tableRowSelector:focus-visible {
+  background: var(--ppt-accent-soft);
+  color: var(--ppt-accent);
+}
+
+.tableSelector.tableSelector:focus-visible {
+  background: color-mix(in srgb, var(--ppt-accent) 10%, #fff);
+  border-color: var(--ppt-accent);
+  color: var(--ppt-accent);
+}
+
+.tableColumnSelector.tableColumnSelector:focus-visible,
+.tableRowSelector.tableRowSelector:focus-visible,
+.tableSelector.tableSelector:focus-visible,
+.tableAxisInsert.tableAxisInsert:focus-visible {
+  box-shadow: 0 0 0 2px rgba(196, 62, 28, 0.12);
+  opacity: 1;
+  outline: 2px solid var(--ppt-accent);
+  outline-offset: 2px;
+}
+
+/* Touch mode (lib/touch-mode): the table's selectors and insert "+" take
+   finger targets around their faces, and each boundary band widens to a
+   24px target around its 8px strip. */
+:where(:root[data-touch-mode]) .tableColumnSelector::before,
+:where(:root[data-touch-mode]) .tableRowSelector::before,
+:where(:root[data-touch-mode]) .tableAxisInsert::before,
+:where(:root[data-touch-mode]) .tableSelector::before {
+  content: "";
+  position: absolute;
+}
+
+:where(:root[data-touch-mode]) .tableColumnSelector::before {
+  inset: -15px 0;
+}
+
+:where(:root[data-touch-mode]) .tableRowSelector::before {
+  inset: 0 -15px;
+}
+
+:where(:root[data-touch-mode]) .tableAxisInsert::before {
+  inset: -13px;
+}
+
+:where(:root[data-touch-mode]) .tableSelector::before {
+  inset: -10px;
+}
+
+:where(:root[data-touch-mode]) .tableColumnBoundary::before,
+:where(:root[data-touch-mode]) .tableRowBoundary::before {
+  content: "";
+  position: absolute;
+}
+
+:where(:root[data-touch-mode]) .tableColumnBoundary::before {
+  inset: 0 -8px;
+}
+
+:where(:root[data-touch-mode]) .tableRowBoundary::before {
+  inset: -8px 0;
+}
+
+ 
+@media (hover: none) {
+  .tableColumnBoundary::after,
+  .tableRowBoundary::after {
+    opacity: 0.32;
+  }
+
+  .tableColumnSelector.tableColumnSelector,
+  .tableRowSelector.tableRowSelector {
+    opacity: 0.72;
+  }
+
+  .tableAxisInsert.tableAxisInsert {
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tableColumnSelector,
+  .tableRowSelector,
+  .tableSelector,
+  .tableAxisInsert {
+    transition: none;
+  }
+}
+
+.workspace {
+  --ppt-comments-dock-width: clamp(340px, 24vw, 380px);
+
+  background: var(--ppt-canvas);
+  grid-template-columns: clamp(142px, 16%, 196px) minmax(0, 1fr);
+  overflow: hidden;
+  /* The Comments card floats over the stage's right edge. */
+  position: relative;
+}
+
+/* Slide Sorter: the thumbnail pane is not drawn (display: none), so its
+   column must not be either. With it kept, the stage auto-placed into that
+   first 142-196px column and the sorter was one clipped column of slides. */
+.workspace[data-rail="hidden"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+ 
+.commentsDock {
+  bottom: 8px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: var(--ppt-comments-dock-width);
+  z-index: 31;
+}
+
+.commentsDock > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.workspace[data-comments-dock="open"]
+  .stage
+  [data-office-task-pane-edge="right"] {
+  right: calc(var(--ppt-comments-dock-width) + 16px);
+}
+
+/* The pane's New command is the shared Comments pane's own (under the
+   title, in the pane's flow); the draft card and the empty notice follow it
+   in the same flow, so nothing here is pinned at a measured offset. */
+.commentsNewComposerCard {
+  --office-comments-accent: var(--ppt-accent);
+  /* Drawn inside the shared Comments pane, which wears the dialog chrome, so
+     the chrome's tokens are in scope and follow the theme. */
+  background: var(--office-dialog-surface, #fff);
+  border: 2px solid
+    color-mix(in srgb, var(--ppt-accent) 62%, var(--office-dialog-surface, #fff));
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgb(15 23 42 / 10%);
+  flex: 0 0 auto;
+  margin: 10px 12px 2px;
+  max-height: 190px;
+  overflow: auto;
+}
+
+.commentsNewComposerCard :global([data-office-comments-mode="compact"]) {
+  min-height: 0;
+}
+
+.commentsEmpty {
+  color: var(--office-dialog-muted, #707070);
+  flex: 0 0 auto;
+  font-size: 12px;
+  margin: 0;
+  padding: 12px 14px 0;
+}
+
+.commentsIdentityStatus {
+  color: var(--office-dialog-muted, #6b7280);
+  display: block;
+  font-size: 11px;
+  padding: 0 14px 12px;
+}
+
+.commentsThreadFocus {
+  min-height: 0;
+  outline: none;
+}
+
+.commentsMessageMenuTrigger {
+  align-items: center;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  margin-left: auto;
+  min-width: 32px;
+  padding: 0;
+}
+
+.commentsMessageMenuTrigger:not(:global(.office-ribbon-control)) {
+  background: transparent;
+  color: var(--office-dialog-muted, #5f5f5f);
+}
+
+.commentsMessageMenuTrigger:hover:not(:global(.office-ribbon-control)) {
+  background: var(--office-dialog-hover, #f0f0f0);
+  color: var(--office-dialog-ink, #242424);
+}
+
+:where(:root[data-touch-mode]) .commentsMessageMenuTrigger,
+:where(:root[data-touch-mode]) .commentsDock :global(button) {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .commentsDock {
+    scroll-behavior: auto;
+    transition: none !important;
+  }
+  .commentsDock :global(*) {
+    scroll-behavior: auto;
+    transition: none !important;
+  }
+}
+
+.slideRail {
+  background: var(--ppt-rail, #f5f8f7);
+  border-right-color: var(--ppt-border);
+  gap: 8px;
+  overflow: hidden;
+  padding: 8px 8px 10px;
+  position: relative;
+}
+
+.railViewport {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-color: #c3c9c8 transparent;
+  scrollbar-width: thin;
+}
+
+.slideRail > button:not(:global(.presentation-window__rail-action)) {
+  border: 0;
+  border-radius: 4px;
+  gap: 5px;
+  padding: 4px 7px 8px 24px;
+  position: relative;
+}
+
+.slideRail :global(.presentation-window__rail-section) > button {
+  border: 0;
+  border-radius: 4px;
+  gap: 5px;
+  padding: 4px 7px 8px 24px;
+  position: relative;
+}
+
+.slideRail > button:not(:global(.presentation-window__rail-action)):not(:global(.office-ribbon-control)),
+.slideRail :global(.presentation-window__rail-section) > button:not(:global(.office-ribbon-control)) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.slideRail > button:not(:global(.presentation-window__rail-action))::before,
+.slideRail :global(.presentation-window__rail-section) > button::before {
+  content: attr(data-slide-number);
+  font-size: 11px;
+  left: 2px;
+  position: absolute;
+  top: 7px;
+}
+
+.slideRail > button:not(:global(.presentation-window__rail-action)):not(:global(.office-ribbon-control))::before,
+.slideRail :global(.presentation-window__rail-section) > button:not(:global(.office-ribbon-control))::before {
+  color: var(--ppt-rail-number, #555);
+}
+
+/* A slide in a several-slide selection wears the current slide's frame. */
+.slideRail button[data-rail-selected="true"] :global(.presentation-window__rail-mini-preview) {
+  border: 2px solid var(--office-control-border, var(--ppt-accent));
+}
+
+/* Review > Show Changes (E045): a dot by each slide others changed since
+   your last visit, under its number, as PowerPoint marks it. */
+.slideRail > button[data-slide-changed="true"]::after,
+.slideRail :global(.presentation-window__rail-section) > button[data-slide-changed="true"]::after {
+  background: var(--ppt-accent, #2563eb);
+  border-radius: 50%;
+  content: "";
+  height: 7px;
+  left: 8px;
+  pointer-events: none;
+  position: absolute;
+  top: 24px;
+  width: 7px;
+}
+
+/* A hidden slide, as PowerPoint draws one: its number struck through in a
+   box and its miniature faded. The "Hidden" words stay for a screen reader;
+   drawn, they were squeezed into the number's 20px circle and spilled out
+   under the thumbnail. */
+.slideRail > button[data-hidden="true"]::before,
+.slideRail :global(.presentation-window__rail-section) > button[data-hidden="true"]::before {
+  background: linear-gradient(
+    to top right,
+    transparent calc(50% - 0.6px),
+    currentColor calc(50% - 0.6px),
+    currentColor calc(50% + 0.6px),
+    transparent calc(50% + 0.6px)
+  );
+  border: 1px solid currentColor;
+  box-sizing: border-box;
+  left: 0;
+  line-height: 13px;
+  min-width: 15px;
+  padding: 0 1px;
+  text-align: center;
+  top: 5px;
+}
+
+.slideRail button[data-hidden="true"] :global(.presentation-window__rail-mini-preview) {
+  opacity: 0.45;
+}
+
+.slideRail button[data-hidden="true"] :global(.presentation-window__rail-slide-label) {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.slideRail :global(.presentation-window__rail-mini-preview) {
+  background: #fff;
+  border: 1px solid #bdbdbd;
+  border-radius: 1px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 7%);
+}
+
+.slideRail button:global(.is-active) {
+  border: 0;
+}
+
+.slideRail button:global(.is-active):not(:global(.office-ribbon-control)) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.slideRail
+  button:global(.is-active)
+  :global(.presentation-window__rail-mini-preview) {
+  border: 2px solid var(--office-control-border, var(--ppt-accent));
+}
+
+.slideRail
+  button:global(.is-active)
+  :global(.presentation-window__rail-mini-preview):not(:global(.office-ribbon-control)) {
+  box-shadow: 0 0 0 2px rgba(196, 62, 28, 0.12);
+}
+
+.slideRail :global(.presentation-window__rail-slide-label) {
+  padding-inline: 1px;
+}
+
+.slideInsertGap {
+  align-items: center;
+  box-sizing: border-box;
+  cursor: default;
+  display: flex;
+  flex: 0 0 12px;
+  margin: -4px 8px;
+  min-height: 12px;
+  outline: 0;
+  padding: 0;
+  position: relative;
+}
+
+.slideInsertGap > span {
+  background: var(--ppt-accent, #c43e1c);
+  display: block;
+  height: 2px;
+  opacity: 0;
+  transform: scaleX(0.88);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  width: 100%;
+}
+
+.slideInsertGap:hover > span,
+.slideInsertGap:focus-visible > span,
+.slideInsertGap[data-active="true"] > span {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+/* The slide rail's and section header's right-click menus take the one
+   right-click menu specification (office-context-menu,
+   styles/office-context-menu.css); no size of theirs lives here. */
+
+.stage.stage {
+  background: var(--ppt-canvas);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  position: relative;
+}
+
+/* Advanced/native properties are a drawer, never a grid column. Selecting an
+   object therefore keeps the slide at the same scale; opening the drawer only
+   overlays the far-right edge, matching Office format panes. */
+.stage.stage:global(.presentation-window__stage--with-inspector) {
+  column-gap: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stage:global(.presentation-window__stage--with-inspector) > * {
+  grid-column: auto;
+}
+
+.stage :global(.presentation-window__props-toggle-row) {
+  border-bottom-color: var(--office-control-border, #d5d5d5);
+}
+
+.stage :global(.presentation-window__props-toggle-row):not(:global(.office-ribbon-control)) {
+  background: #f7f7f7;
+}
+
+.stage[data-deck-props="closed"]
+  :global(.presentation-window__props-toggle-row) {
+  min-height: 0;
+}
+
+.stage :global(.presentation-window__slide-title--meta) {
+  display: none;
+}
+
+.canvasViewport {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  flex: 1 1 0;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 16px;
+  position: relative;
+  transition: margin-left 160ms ease;
+}
+
+/* An explicit zoom (PowerPoint's Zoom dialog, the slider, a pinch) may grow
+   the slide past the window, as PowerPoint's Normal view does: the canvas
+   then scrolls. The slide's box (.slideZoomBox) is the slide as it is seen,
+   so a slide smaller than the window is
+   still centred and a larger one starts at the scroll origin, where every
+   edge of it can be reached (safe centring). Fit to Window never scrolls. */
+.canvasViewport[data-zoom-scroll="true"] {
+  align-items: safe center;
+  justify-content: safe center;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+ 
+
+@media (prefers-reduced-motion: reduce) {
+  .canvasViewport {
+    transition: none;
+  }
+}
+
+.recordStudioPanel {
+  background: rgba(15, 23, 42, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  bottom: 8px;
+  box-shadow: 0 16px 44px rgba(15, 23, 42, 0.3);
+  color: #ffffff;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
+  left: 8px;
+  outline: none;
+  overflow: hidden;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 56;
+}
+
+.recordStudioPanel:focus-visible {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--ppt-accent) 72%, white),
+    0 16px 44px rgba(15, 23, 42, 0.3);
+}
+
+.recordStudioHeader,
+.recordStudioControls {
+  align-items: center;
+  background: rgba(17, 24, 39, 0.94);
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.recordStudioHeader {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  justify-content: space-between;
+}
+
+.recordStudioHeader strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.recordStudioTimer,
+.recordStudioCounter {
+  align-items: center;
+  display: inline-flex;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.recordStudioStage {
+  align-items: flex-start;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  padding: 12px;
+  pointer-events: none;
+  position: relative;
+}
+
+.recordStudioStage > span {
+  background: rgba(15, 23, 42, 0.72);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+  max-width: min(420px, 80%);
+  overflow: hidden;
+  padding: 5px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  z-index: 3;
+}
+
+.recordStudioInkSurface {
+  overflow: hidden;
+  pointer-events: auto;
+  position: absolute;
+  touch-action: none;
+  z-index: 1;
+}
+
+.recordStudioInkSurface :global(.presentation-present__annotations) {
+  height: 100%;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.recordStudioLayoutPane {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 9px;
+  color: rgba(255, 255, 255, 0.9);
+  display: grid;
+  gap: 7px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: 34%;
+  overflow: hidden;
+  padding: 10px 12px;
+  pointer-events: auto;
+  position: absolute;
+  scrollbar-color: rgba(255, 255, 255, 0.34) transparent;
+  z-index: 2;
+}
+
+.recordStudioLayoutPane[data-layout="teleprompter"] {
+  left: 50%;
+  top: 52px;
+  transform: translateX(-50%);
+  width: min(680px, 72%);
+}
+
+.recordStudioLayoutPane[data-layout="presenter"] {
+  align-content: start;
+  bottom: 16px;
+  left: 16px;
+  max-height: none;
+  top: 16px;
+  width: min(300px, 32%);
+}
+
+.recordStudioLayoutPane:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioLayoutPane strong {
+  font-size: 12px;
+}
+
+.recordStudioLayoutPane p {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.recordStudioLayoutNotes {
+  min-height: 0;
+  overflow: auto;
+  scrollbar-color: rgba(255, 255, 255, 0.34) transparent;
+}
+
+.recordStudioLayoutNotes small {
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.68);
+  display: block;
+  font-size: 10.5px;
+  margin-top: 7px;
+  padding-top: 7px;
+}
+
+.recordStudioTeleprompterControls {
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 7px;
+}
+
+.recordStudioTeleprompterControls button,
+.recordStudioTeleprompterControls label {
+  align-items: center;
+  border: 1px solid var(--office-control-border, rgba(255, 255, 255, 0.24));
+  border-radius: 7px;
+  display: inline-flex;
+  font: inherit;
+  font-size: 11px;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+}
+
+.recordStudioTeleprompterControls button:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+.recordStudioTeleprompterControls label:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+.recordStudioTeleprompterControls button {
+  cursor: pointer;
+}
+
+.recordStudioTeleprompterControls button:hover:not(:disabled),
+.recordStudioTeleprompterControls button[aria-pressed="true"] {
+  border-color: var(--office-control-border, rgba(255, 255, 255, 0.46));
+}
+
+.recordStudioTeleprompterControls button:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.recordStudioTeleprompterControls button[aria-pressed="true"]:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.recordStudioTeleprompterControls button:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioTeleprompterControls input:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioTeleprompterControls button:disabled {
+  cursor: default;
+}
+
+.recordStudioTeleprompterControls button:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.44;
+}
+
+.recordStudioTeleprompterControls input {
+  accent-color: var(--ppt-accent);
+  min-width: 88px;
+}
+
+.recordStudioCamera {
+  bottom: 16px;
+  display: grid;
+  gap: 5px;
+  pointer-events: auto;
+  position: absolute;
+  right: 16px;
+  width: min(240px, 34%);
+  z-index: 2;
+}
+
+.recordStudioCameraFrame {
+  aspect-ratio: 16 / 9;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.34);
+  overflow: hidden;
+  position: relative;
+}
+
+.recordStudioCameraFrame :global(.presentation-cameo) {
+  border-radius: inherit;
+}
+
+.recordStudioCameraFrame :global(button:focus-visible):not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioCameraFrame :global(select:focus-visible):not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioCameraHint {
+  background: rgba(15, 23, 42, 0.78);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 10.5px;
+  line-height: 1.3;
+  padding: 4px 7px;
+  text-align: center;
+}
+
+.recordStudioInkToolbar {
+  align-items: center;
+  background: rgba(17, 24, 39, 0.94);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  gap: 6px;
+  min-height: 54px;
+  overflow-x: auto;
+  padding: 5px 10px;
+  scrollbar-width: thin;
+}
+
+.recordStudioInkTool,
+.recordStudioInkColor {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 44px;
+  height: 44px;
+  justify-content: center;
+  padding: 0;
+  width: 44px;
+}
+
+.recordStudioInkTool {
+  border-radius: 7px;
+}
+
+.recordStudioInkColor {
+  border-radius: 999px;
+}
+
+.recordStudioInkColor > span {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  height: 24px;
+  width: 24px;
+}
+
+.recordStudioInkTool:hover:not(:disabled),
+.recordStudioInkTool[aria-pressed="true"],
+.recordStudioInkColor:hover,
+.recordStudioInkColor[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: color-mix(in srgb, var(--ppt-accent) 72%, white);
+}
+
+.recordStudioInkTool:focus-visible,
+.recordStudioInkColor:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: -3px;
+}
+
+.recordStudioInkTool:disabled {
+  cursor: default;
+  opacity: 0.44;
+}
+
+.recordStudioInkColors {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+}
+
+.recordStudioPreviewBar {
+  align-items: center;
+  background: rgba(17, 24, 39, 0.94);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(120px, 1fr) auto;
+  min-height: 54px;
+  padding: 5px 10px;
+}
+
+.recordStudioPreviewButton {
+  align-items: center;
+  border: 1px solid var(--office-control-border, rgba(255, 255, 255, 0.24));
+  border-radius: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+}
+
+.recordStudioPreviewButton:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+.recordStudioPreviewButton:hover:not(:disabled),
+.recordStudioPreviewButton[aria-pressed="true"] {
+  border-color: var(--office-control-border, rgba(255, 255, 255, 0.46));
+}
+
+.recordStudioPreviewButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.recordStudioPreviewButton[aria-pressed="true"]:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.recordStudioPreviewButton:focus-visible:not(:global(.office-ribbon-control)),
+.recordStudioPreviewBar input:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioPreviewButton:disabled,
+.recordStudioPreviewBar input:disabled {
+  cursor: default;
+}
+
+.recordStudioPreviewButton:disabled:not(:global(.office-ribbon-control)),
+.recordStudioPreviewBar input:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.44;
+}
+
+.recordStudioPreviewBar input {
+  accent-color: var(--ppt-accent);
+  min-width: 0;
+}
+
+.recordStudioPreviewBar output {
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.recordStudioControls {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.recordStudioCounter {
+  margin-left: auto;
+  padding: 0 5px;
+}
+
+.recordStudioButton,
+.recordStudioPrimaryButton {
+  align-items: center;
+  border: 1px solid var(--office-control-border, rgba(255, 255, 255, 0.24));
+  border-radius: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
+}
+
+.recordStudioButton:not(:global(.office-ribbon-control)) {
+  color: inherit;
+}
+
+.recordStudioPrimaryButton:not(:global(.office-ribbon-control)) {
+  color: inherit;
+}
+
+.recordStudioButton:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.recordStudioPrimaryButton {
+  border-color: var(--office-control-border, color-mix(in srgb, var(--ppt-accent) 62%, white));
+  font-weight: 650;
+}
+
+.recordStudioPrimaryButton:not(:global(.office-ribbon-control)) {
+  background: var(--ppt-accent);
+}
+
+.recordStudioButton:hover:not(:disabled),
+.recordStudioButton[aria-pressed="true"] {
+  border-color: var(--office-control-border, rgba(255, 255, 255, 0.46));
+}
+
+.recordStudioButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.recordStudioButton[aria-pressed="true"]:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.recordStudioPrimaryButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: var(--ppt-accent-strong);
+}
+
+.recordStudioButton:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioPrimaryButton:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 70%, white);
+  outline-offset: 2px;
+}
+
+.recordStudioButton:disabled,
+.recordStudioPrimaryButton:disabled {
+  cursor: default;
+}
+
+.recordStudioButton:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.44;
+}
+
+.recordStudioPrimaryButton:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.44;
+}
+
+.recordStudioStatus {
+  background: rgba(17, 24, 39, 0.94);
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 11px;
+  min-height: 24px;
+  padding: 4px 12px 7px;
+  text-align: center;
+}
+
+@container presentation-shell (max-width: 760px) {
+  .recordStudioHeader,
+  .recordStudioControls {
+    padding: 6px 8px;
+  }
+
+  .recordStudioControls {
+    justify-content: flex-start;
+  }
+
+  .recordStudioCounter {
+    flex-basis: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  .recordStudioCamera {
+    bottom: 10px;
+    right: 10px;
+    width: min(180px, 42%);
+  }
+
+  .recordStudioLayoutPane[data-layout="teleprompter"] {
+    max-height: 40%;
+    width: calc(100% - 32px);
+  }
+
+  .recordStudioLayoutPane[data-layout="presenter"] {
+    bottom: 10px;
+    left: 10px;
+    top: 10px;
+    width: min(220px, 42%);
+  }
+
+  .recordStudioPreviewBar {
+    gap: 7px;
+    grid-template-columns: auto minmax(80px, 1fr);
+    padding: 5px 8px;
+  }
+
+  .recordStudioPreviewBar output {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recordStudioPanel,
+  .recordStudioPanel * {
+    transition: none !important;
+  }
+}
+
+.teleprompterPanel {
+  background: rgba(23, 23, 23, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  bottom: 12px;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.32);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  left: 50%;
+  max-height: min(360px, calc(100% - 24px));
+  min-height: 180px;
+  outline: none;
+  overflow: hidden;
+  position: absolute;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 32px));
+  z-index: 64;
+}
+
+.teleprompterPanel:focus-visible {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--ppt-accent) 72%, white),
+    0 14px 40px rgba(15, 23, 42, 0.32);
+}
+
+.teleprompterHeader,
+.teleprompterControls {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.teleprompterHeader {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  justify-content: space-between;
+}
+
+.teleprompterHeading {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.teleprompterHeading > span {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.teleprompterHeading strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.teleprompterHeading small {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 10.5px;
+}
+
+.teleprompterBody {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  font-size: clamp(18px, 2.2cqi, 28px);
+  line-height: 1.55;
+  min-height: 0;
+  outline: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 22px;
+  scrollbar-color: rgba(255, 255, 255, 0.38) transparent;
+  white-space: pre-wrap;
+}
+
+.teleprompterBody:focus-visible {
+  box-shadow: inset 0 0 0 2px
+    color-mix(in srgb, var(--ppt-accent) 72%, white);
+}
+
+.teleprompterBody[data-empty="true"] {
+  align-items: center;
+  color: rgba(255, 255, 255, 0.64);
+  display: flex;
+  font-size: 14px;
+  justify-content: center;
+  text-align: center;
+}
+
+.teleprompterEmpty {
+  margin: 0;
+}
+
+.teleprompterControls {
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.teleprompterAction,
+.teleprompterIconButton {
+  align-items: center;
+  border: 1px solid var(--office-control-border, rgba(255, 255, 255, 0.22));
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 11px;
+}
+
+.teleprompterAction:not(:global(.office-ribbon-control)) {
+  background: transparent;
+  color: inherit;
+}
+
+.teleprompterIconButton:not(:global(.office-ribbon-control)) {
+  background: transparent;
+  color: inherit;
+}
+
+.teleprompterIconButton {
+  min-width: 44px;
+  padding: 0;
+}
+
+.teleprompterAction:hover:not(:disabled),
+.teleprompterIconButton:hover:not(:disabled),
+.teleprompterAction[aria-pressed="true"] {
+  border-color: var(--office-control-border, rgba(255, 255, 255, 0.42));
+}
+
+.teleprompterAction:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.teleprompterIconButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.teleprompterAction[aria-pressed="true"]:not(:global(.office-ribbon-control)) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.teleprompterAction:focus-visible:not(:global(.office-ribbon-control)),
+.teleprompterIconButton:focus-visible:not(:global(.office-ribbon-control)),
+.teleprompterSpeed input:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid color-mix(in srgb, var(--ppt-accent) 72%, white);
+  outline-offset: 2px;
+}
+
+.teleprompterAction:disabled {
+  cursor: default;
+}
+
+.teleprompterAction:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.44;
+}
+
+.teleprompterSpeed {
+  align-items: center;
+  display: inline-flex;
+  font-size: 11px;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.teleprompterSpeed input {
+  accent-color: var(--ppt-accent);
+  cursor: pointer;
+  margin: 0;
+  width: clamp(92px, 16vw, 152px);
+}
+
+@container presentation-shell (max-width: 720px) {
+  .teleprompterPanel {
+    bottom: 8px;
+    max-height: calc(100% - 16px);
+    min-height: 160px;
+    width: calc(100% - 16px);
+  }
+
+  .teleprompterBody {
+    font-size: clamp(16px, 4cqi, 22px);
+    padding: 12px 14px;
+  }
+
+  .teleprompterControls {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teleprompterPanel,
+  .teleprompterPanel * {
+    scroll-behavior: auto;
+    transition: none !important;
+  }
+}
+.slideFrame {
+  flex-shrink: 0;
+  margin: clamp(12px, 2vw, 24px) auto;
+  max-width: min(1180px, calc(100% - 32px));
+  overflow: visible;
+  position: relative;
+  width: calc(100% - 32px);
+}
+
+.canvasViewport .slideFrame {
+  margin: 0;
+}
+
+/* The slide's box as it is seen (the slide laid out at its actual size and
+   scaled into it): what the canvas centres and scrolls. */
+.slideZoomBox {
+  flex: none;
+}
+
+/* The slide's hairline is drawn OUTSIDE the slide and takes no room: as a
+   1px border it shrank the slide's own area to 958 x 538 of its 960 x 540
+   design pixels, so every object on the canvas sat 1px in and 0.2% small,
+   and a line of text that just fitted in the show wrapped here. */
+.stage :global(.presentation-window__slide) {
+  border: 0;
+  box-shadow:
+    0 0 0 1px #cfcfcf,
+    0 2px 5px rgba(15, 23, 42, 0.08),
+    0 18px 46px rgba(15, 23, 42, 0.1);
+  margin: clamp(12px, 2vw, 24px) auto;
+  max-width: min(1180px, calc(100% - 32px));
+  width: calc(100% - 32px);
+}
+
+.stage .slideFrame :global(.presentation-window__slide) {
+  margin: 0;
+  max-width: none;
+  width: 100%;
+}
+
+/* PowerPoint's rulers stand along the slide pane's top and left edges and
+   stay there while the zoomed-in slide scrolls. They are the stage's, laid
+   over the canvas's top and left padding (layoutPresentationRulers places
+   them and moves the scale to where the slide is on screen); the canvas
+   keeps the band free (.canvasViewport[data-ruler]). */
+.rulerCorner,
+.rulerHorizontal,
+.rulerVertical {
+  background-color: #eef1f4;
+  box-sizing: border-box;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  z-index: 3;
+}
+
+.rulerCorner {
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid #b8c0ca;
+  border-right: 1px solid #b8c0ca;
+  color: #334155;
+  cursor: default;
+  display: flex;
+  fill: currentColor;
+  justify-content: center;
+  padding: 0;
+  /* the tab selector (PowerPoint's button at the ruler's left end) */
+  pointer-events: auto;
+}
+
+.rulerCorner:hover {
+  background-color: #e2e8f0;
+}
+
+.rulerCorner:focus-visible {
+  outline: 2px solid var(--office-accent, #c43e1c);
+  outline-offset: -2px;
+}
+
+.rulerHorizontal {
+  border-bottom: 1px solid #b8c0ca;
+}
+
+/* While words are edited the horizontal ruler takes the pointer: its
+   markers and tab stops are dragged, a click sets a stop. */
+.rulerHorizontal[data-editing="true"] {
+  cursor: default;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.rulerVertical {
+  border-right: 1px solid #b8c0ca;
+}
+
+/* The ruler's scale: painted (lib/presentation/ruler-scale). */
+.rulerCanvas {
+  display: block;
+  left: 0;
+  position: absolute;
+  top: 0;
+}
+
+/* The ruler's band is kept free along the canvas's top and left edges. */
+.canvasViewport[data-ruler="true"] {
+  padding-left: calc(16px + 18px);
+  padding-top: calc(16px + 18px);
+}
+
+.gridlinesOverlay {
+  background-image:
+    linear-gradient(to right, rgba(71, 85, 105, 0.22) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(71, 85, 105, 0.22) 1px, transparent 1px);
+  background-size:
+    var(--ppt-grid-step-x) 100%,
+    100% var(--ppt-grid-step-y);
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.guidesOverlay {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 9997;
+}
+
+.guideVertical,
+.guideHorizontal {
+  pointer-events: none;
+  position: absolute;
+}
+
+.guideVertical {
+  border-left: 1px dotted #ec4899;
+  bottom: 0;
+  top: 0;
+  width: 0;
+}
+
+.guideHorizontal {
+  border-top: 1px dotted #ec4899;
+  height: 0;
+  left: 0;
+  right: 0;
+}
+
+@media print {
+  .rulerCorner,
+  .rulerHorizontal,
+  .rulerVertical,
+  .gridlinesOverlay,
+  .guidesOverlay {
+    display: none !important;
+  }
+}
+
+/* The dotted cue marks an empty placeholder at rest only; once selected it
+   wears the shared drawing frame like every other object, never both. */
+.stage
+  :global(
+    .presentation-window__block--geometry[data-placeholder-role][data-placeholder-empty="true"]:not([data-selected="true"]):not([data-multiselected="true"])
+  ) {
+  background: transparent;
+  /* Inside the edge and taking no room, so the prompt and the words sit
+     where the show draws them (styles/native-page-window.css). */
+  outline: 1px dotted #aaa;
+  outline-offset: -1px;
+  border-radius: 0;
+}
+
+.stage
+  :global(
+    .presentation-window__block--geometry[data-placeholder-role]
+      .presentation-window__text-block
+      textarea
+  ),
+.stage
+  :global(
+    .presentation-window__block--geometry[data-placeholder-role]
+      .presentation-window__text-block
+      .presentation-window__paragraph-preview
+  ) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  /* The slide states the value (lib/presentation/slide-ink.ts), so the show
+     draws a placeholder's unstated words in the same ink. */
+  color: var(--presentation-placeholder-ink, #000000);
+  line-height: 1.16;
+  padding: 10px 14px;
+}
+
+/* The title slide's title and subtitle take their alignment from the words
+   (their own, else the box's, which Office theme layouts state as centred):
+   a centring written here was the editor's alone, so a title set to Left
+   stayed centred while it was edited and drew left in the thumbnail and the
+   show. */
+.stage
+  :global(
+    .presentation-window__slide[data-layout-id="title"]
+      .presentation-window__block--geometry[data-placeholder-role="title"]
+      textarea
+  ),
+.stage
+  :global(
+    .presentation-window__slide[data-layout-id="title"]
+      .presentation-window__block--geometry[data-placeholder-role="title"]
+      .presentation-window__paragraph-preview
+  ) {
+  font-size: clamp(34px, 4.25vw, 56px);
+  font-weight: 400;
+  padding-top: 4%;
+}
+
+.stage
+  :global(
+    .presentation-window__slide[data-layout-id="title"]
+      .presentation-window__block--geometry[data-placeholder-role="subtitle"]
+      textarea
+  ),
+.stage
+  :global(
+    .presentation-window__slide[data-layout-id="title"]
+      .presentation-window__block--geometry[data-placeholder-role="subtitle"]
+      .presentation-window__paragraph-preview
+  ) {
+  color: #4b4b4b;
+  font-size: clamp(18px, 2vw, 28px);
+  padding-top: 1.8%;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not([data-layout-id="title"])
+      .presentation-window__block--geometry[data-placeholder-role="title"]
+      textarea
+  ) {
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 400;
+  padding: 12px 18px;
+  text-align: left;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not([data-layout-id="title"])
+      .presentation-window__block--geometry[data-placeholder-role="title"]
+      .presentation-window__paragraph-preview
+  ) {
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 400;
+  padding: 12px 18px;
+  text-align: left;
+}
+
+.stage
+  :global(
+    .presentation-window__block--geometry[data-placeholder-role="content"]
+      textarea
+  ),
+.stage
+  :global(
+    .presentation-window__block--geometry[data-placeholder-role="content"]
+      .presentation-window__paragraph-preview
+  ) {
+  color: #4b4b4b;
+  font-size: clamp(20px, 2.2vw, 30px);
+  padding: 14px 20px;
+}
+
+/* Under a mounted paragraph preview the textarea is a transparent input
+   bridge (color and caret transparent): its native selection must not paint a
+   grey band behind the words the preview draws (the first Bold on a text box
+   left one at the old text position). */
+.stage :global(.presentation-window__text-block textarea[data-rich-bridge="true"])::selection {
+  background: transparent;
+  color: transparent;
+}
+
+/* The frame itself is the shared Office drawing frame on the block
+   (OfficeDrawingSelection `selectedHost`, also worn by every other member of
+   a multi-selection); this rule only lets the grips outside the box show.
+   Selecting an object does not lift it: it stays at its place in the slide's
+   paint order, as PowerPoint keeps it (PPT-B310). */
+.stage :global(.presentation-window__block--geometry[data-selected="true"]) {
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.stage :global(.presentation-window__drag-handle) {
+  display: none;
+}
+
+/* The text box's move border (PowerPoint: the frame is where a text box is
+   grabbed; inside it, a press types). Each band straddles one side, above the
+   text layers and below the grips, so a corner or middle grip still resizes. */
+.stage :global(.presentation-window__text-move-band) {
+  --text-move-band: calc(8px * var(--office-drawing-grip-scale, 1));
+  cursor: move;
+  pointer-events: auto;
+  position: absolute;
+  touch-action: none;
+  z-index: 4;
+}
+
+.stage :global(.presentation-window__text-move-band[data-edge="n"]),
+.stage :global(.presentation-window__text-move-band[data-edge="s"]) {
+  height: var(--text-move-band);
+  left: calc(var(--text-move-band) / -2);
+  right: calc(var(--text-move-band) / -2);
+}
+
+.stage :global(.presentation-window__text-move-band[data-edge="e"]),
+.stage :global(.presentation-window__text-move-band[data-edge="w"]) {
+  bottom: calc(var(--text-move-band) / -2);
+  top: calc(var(--text-move-band) / -2);
+  width: var(--text-move-band);
+}
+
+.stage :global(.presentation-window__text-move-band[data-edge="n"]) {
+  top: calc(var(--text-move-band) / -2);
+}
+
+.stage :global(.presentation-window__text-move-band[data-edge="s"]) {
+  bottom: calc(var(--text-move-band) / -2);
+}
+
+.stage :global(.presentation-window__text-move-band[data-edge="e"]) {
+  right: calc(var(--text-move-band) / -2);
+}
+
+.stage :global(.presentation-window__text-move-band[data-edge="w"]) {
+  left: calc(var(--text-move-band) / -2);
+}
+
+.stage
+  :global(
+    .presentation-window__block--geometry > .presentation-window__block-order
+  ) {
+  display: none !important;
+}
+
+/* Older native decks can still contain document-flow blocks without slide
+   geometry. Keep that compatibility model editable, but present it as a clean
+   slide surface instead of a stack of form cards. Object ordering/deletion
+   remains available after selection; the default canvas stays uncluttered. */
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+  ) {
+  align-content: initial;
+  display: block;
+  overflow: hidden;
+  padding: clamp(34px, 6%, 64px) clamp(42px, 8%, 78px);
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__slide-title
+  ) {
+  background: transparent;
+  border: 1px dotted transparent;
+  border-radius: 0;
+  color: #202020;
+  font-size: clamp(28px, 3.4vw, 46px);
+  font-weight: 400;
+  line-height: 1.12;
+  margin-bottom: clamp(16px, 3%, 30px);
+  min-height: 1.3em;
+  padding: 4px 8px;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__slide-title:focus
+  ) {
+  border-color: #aaa;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__slide-title[data-legacy-title-hidden="true"]
+  ) {
+  display: none;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__block
+  ) {
+  margin-top: 8px;
+  position: relative;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__text-block
+  ) {
+  display: block;
+  position: relative;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__text-block
+      textarea
+  ) {
+  background: transparent;
+  border: 1px dotted transparent;
+  border-radius: 0;
+  color: #454545;
+  font-size: clamp(17px, 2vw, 26px);
+  line-height: 1.28;
+  min-height: clamp(58px, 10vh, 104px);
+  padding: 8px 10px;
+  resize: none;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__text-block
+      .presentation-window__paragraph-preview
+  ) {
+  background: transparent;
+  border: 1px dotted transparent;
+  border-radius: 0;
+  color: #454545;
+  font-size: clamp(17px, 2vw, 26px);
+  line-height: 1.28;
+  min-height: clamp(58px, 10vh, 104px);
+  padding: 8px 10px;
+  resize: none;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__text-block
+      textarea:focus
+  ) {
+  border-color: #aaa;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__block-order
+  ) {
+  display: none !important;
+}
+
+.stage
+  :global(
+    .presentation-window__slide:not(.presentation-window__slide--canvas)
+      .presentation-window__text-block
+      > button
+  ) {
+  display: none;
+}
+
+/* The content placeholder's insert buttons: one glass bar of four quiet
+   tiles at the frame's centre, each icon in its own Office colour (picture,
+   chart, table, media), readable on light and dark slides alike. */
+.contentPlaceholderActions {
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 12px;
+  box-shadow:
+    0 6px 20px rgba(15, 23, 42, 0.16),
+    0 0 0 0.5px rgba(15, 23, 42, 0.12);
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(4, 36px);
+  left: 50%;
+  padding: 4px;
+  position: absolute;
+  top: 60%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  cursor: pointer;
+  display: inline-flex;
+  height: 36px;
+  justify-content: center;
+  padding: 0;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
+  width: 36px;
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button[data-kind="image"] {
+  color: #2f6fd0;
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button[data-kind="chart"] {
+  color: #2f8a46;
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button[data-kind="table"] {
+  color: #c4571c;
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button[data-kind="media"] {
+  color: #7a4fd6;
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button:hover {
+  background: rgba(15, 23, 42, 0.07);
+  transform: translateY(-1px);
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button:active {
+  background: rgba(15, 23, 42, 0.12);
+  transform: none;
+}
+
+.contentPlaceholderActions.contentPlaceholderActions button:focus-visible {
+  outline: 2px solid rgba(47, 111, 208, 0.55);
+  outline-offset: 1px;
+}
+
+.stage :global(.presentation-window__align-toolbar) {
+  display: none !important;
+}
+
+.stage :global(.presentation-window__inspector) {
+  background: var(--office-dialog-glass, rgba(255, 255, 255, 0.98));
+  border: 1px solid var(--office-dialog-glass-edge, rgba(15, 23, 42, 0.11));
+  border-bottom: 0;
+  border-radius: 10px 0 0;
+  bottom: 0;
+  box-shadow: -12px 0 32px rgba(12, 58, 52, 0.12);
+  max-width: min(320px, 38%);
+  overflow: auto;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 320px;
+  z-index: 30;
+}
+
+/* The editor's docked task pane. The chrome -- the column, the title row,
+   the close button, the sections and their field grammar -- is the shared
+   Office task pane (components/office-ribbon/OfficeTaskPane.module.css),
+   which Docs' Format Shape pane and the workbook's chart format pane
+   compose from too; what stays here is what is the deck's own: the
+   PowerPoint accent and the ink of the slide stage. Format Background and
+   the Slide Master editor both draw in it, as PowerPoint's Format
+   Background / Format Shape task panes share one frame. */
+.taskPane {
+  composes: pane dockRight from "../../components/office-ribbon/OfficeTaskPane.module.css";
+
+  --office-pane-tone-accent: var(--ppt-accent);
+  --office-pane-accent-soft: var(--ppt-accent-soft);
+  --office-pane-ink: var(--ppt-text);
+  --office-pane-muted: var(--ppt-muted);
+  --office-pane-border: var(--ppt-border);
+  --office-pane-surface: rgba(255, 255, 255, 0.99);
+}
+
+.taskPaneHeader {
+  composes: header from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneClose {
+  composes: close from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneClose:focus-visible:not(:global(.office-ribbon-control)),
+.backgroundKindButton:focus-visible:not(:global(.office-ribbon-control)),
+.backgroundColorButton:focus-visible:not(:global(.office-ribbon-control)),
+.backgroundUploadButton:focus-visible:not(:global(.office-ribbon-control)),
+.taskPaneFooter button:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid var(--ppt-accent);
+  outline-offset: 2px;
+}
+
+.backgroundGraphicsToggle input:focus-visible:not(:global(.office-ribbon-control)) {
+  outline: 2px solid var(--ppt-accent);
+  outline-offset: 2px;
+}
+
+.taskPaneSection {
+  composes: section from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneSectionLabel {
+  composes: sectionLabel from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneField {
+  composes: field from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneRow {
+  composes: row from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneCheck {
+  composes: check from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneButton {
+  composes: button from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+/* The master's layout gallery inside the pane. */
+.taskPaneGallery {
+  composes: gallery from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+.taskPaneGalleryOption {
+  composes: galleryOption from "../../components/office-ribbon/OfficeTaskPane.module.css";
+}
+
+/* The Selection Pane in the dock: the object list (the shared
+   OfficeSelectionPaneList) scrolls under the title. */
+.selectionPane {
+  overflow: hidden;
+}
+
+/* The Animation Pane in the dock. The host sets its width (the splitter on
+   its left edge resizes it, 280-480px), so it may be wider than a format
+   pane; the pane scrolls as one column under its sticky title row. */
+.animationPane {
+  max-width: min(480px, 70%);
+  overflow: auto;
+}
+
+.animationPaneBody {
+  padding: 8px;
+}
+
+.taskPaneSplitter {
+  background: transparent;
+  bottom: 0;
+  cursor: col-resize;
+  left: 0;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  width: 6px;
+  z-index: 3;
+}
+
+.taskPaneSplitter:hover,
+.taskPaneSplitter:focus-visible {
+  background: color-mix(in srgb, var(--ppt-accent) 28%, transparent);
+  outline: none;
+}
+
+/* A pane-wide notice under the title (an imported timeline this editor
+   keeps but does not rewrite). */
+.taskPaneNotice {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  border-radius: 6px;
+  color: var(--office-dialog-muted, var(--ppt-muted));
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 8px 12px 0;
+  padding: 7px 9px;
+}
+
+.backgroundGraphicsToggle {
+  align-items: flex-start;
+  cursor: pointer;
+  display: grid;
+  gap: 9px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  min-height: 44px;
+}
+
+.backgroundGraphicsToggle:not(:global(.office-ribbon-control)) {
+  color: var(--office-dialog-ink, var(--ppt-text));
+}
+
+.backgroundGraphicsToggle input {
+  accent-color: var(--ppt-accent);
+  cursor: pointer;
+  height: 16px;
+  margin: 2px 0 0;
+  width: 16px;
+}
+
+.backgroundGraphicsToggle > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.backgroundGraphicsToggle strong {
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.backgroundGraphicsToggle small {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.backgroundGraphicsToggle small:not(:global(.office-ribbon-control)) {
+  color: var(--office-dialog-muted, var(--ppt-muted));
+}
+
+.backgroundGraphicsToggle:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.backgroundGraphicsToggle:has(input:disabled):not(:global(.office-ribbon-control)) {
+  opacity: 0.55;
+}
+
+.backgroundGraphicsToggle input:disabled {
+  cursor: not-allowed;
+}
+
+.backgroundKindGrid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.backgroundKindButton {
+  align-items: center;
+  border: 1px solid var(--office-dialog-control-border, var(--office-control-border, #d9dde2));
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 11px;
+  gap: 7px;
+  justify-content: flex-start;
+  min-height: 36px;
+  padding: 6px 8px;
+  text-align: start;
+}
+
+.backgroundKindButton:not(:global(.office-ribbon-control)) {
+  background: var(--office-dialog-button, #fff);
+  color: var(--office-dialog-ink, var(--ppt-text));
+}
+
+.backgroundKindButton svg {
+  flex: 0 0 auto;
+  stroke-width: 1.5;
+}
+
+.backgroundKindButton svg:not(:global(.office-ribbon-control)) {
+  color: var(--ppt-accent);
+}
+
+.backgroundKindButton:hover:not(:disabled) {
+  border-color: var(--office-control-border, rgba(196, 62, 28, 0.3));
+}
+
+.backgroundKindButton:hover:not(:disabled):not(:global(.office-ribbon-control)) {
+  background: rgba(196, 62, 28, 0.05);
+}
+
+.backgroundKindButton[data-selected="true"] {
+  border-color: var(--office-control-border, var(--ppt-accent));
+}
+
+.backgroundKindButton[data-selected="true"]:not(:global(.office-ribbon-control)) {
+  background: var(--office-dialog-accent-soft, var(--ppt-accent-soft));
+  box-shadow: inset 0 0 0 1px var(--ppt-accent);
+}
+
+.backgroundKindButton:disabled,
+.backgroundUploadButton:disabled,
+.taskPaneFooter button:disabled {
+  cursor: not-allowed;
+}
+
+.backgroundKindButton:disabled:not(:global(.office-ribbon-control)),
+.backgroundUploadButton:disabled:not(:global(.office-ribbon-control)),
+.taskPaneFooter button:disabled:not(:global(.office-ribbon-control)) {
+  opacity: 0.48;
+}
+
+.taskPaneHint,
+.backgroundCapabilityNotice {
+  color: var(--office-dialog-muted, var(--ppt-muted));
+  font-size: 11px;
+  line-height: 1.45;
+  margin: 0;
+}
+.backgroundCapabilityNotice {
+  background: var(--office-dialog-warning-soft, #fff7ed);
+  border: 1px solid var(--office-dialog-warning-line, #fed7aa);
+  border-radius: 7px;
+  color: var(--office-dialog-warning, #9a3412);
+  grid-column: 1 / -1;
+  padding: 8px;
+}
+
+.backgroundColorRow {
+  align-items: center;
+  display: flex;
+  font-size: 11px;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.backgroundPaletteAnchor {
+  display: inline-flex;
+  min-width: 0;
+  position: relative;
+}
+
+.backgroundColorButton {
+  align-items: center;
+  border: 1px solid var(--office-dialog-control-border, var(--office-control-border, #d9dde2));
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 11px;
+  gap: 7px;
+  height: 30px;
+  min-width: 106px;
+  padding: 0 8px;
+}
+
+.backgroundColorButton:not(:global(.office-ribbon-control)) {
+  background: var(--office-dialog-button, #fff);
+  color: var(--office-dialog-ink, var(--ppt-text));
+}
+
+.backgroundColorButton > span:first-child {
+  border: 1px solid var(--office-control-border, rgba(15, 23, 42, 0.2));
+  border-radius: 3px;
+  box-sizing: border-box;
+  height: 16px;
+  width: 28px;
+}
+
+.backgroundFieldGrid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.backgroundFieldGrid label {
+  color: var(--office-dialog-muted, var(--ppt-muted));
+  display: grid;
+  font-size: 11px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.backgroundFieldGrid input[type="text"],
+.backgroundFieldGrid input[type="number"],
+.backgroundFieldGrid select {
+  background: var(--office-dialog-surface, #fff);
+  border: 1px solid var(--office-dialog-control-border, #d9dde2);
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--office-dialog-ink, var(--ppt-text));
+  font: inherit;
+  font-size: 12px;
+  height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  width: 100%;
+}
+
+.backgroundFieldGrid input:focus-visible,
+.backgroundFieldGrid select:focus-visible {
+  border-color: var(--ppt-accent);
+  box-shadow: 0 0 0 2px rgba(196, 62, 28, 0.12);
+  outline: none;
+}
+
+.backgroundWideField {
+  grid-column: 1 / -1;
+}
+
+.backgroundUploadButton {
+  align-items: center;
+  border: 1px solid var(--office-dialog-control-border, var(--office-control-border, #d9dde2));
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 11px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.backgroundUploadButton:not(:global(.office-ribbon-control)) {
+  background: var(--office-dialog-button, #fff);
+  color: var(--office-dialog-ink, var(--ppt-text));
+}
+
+.backgroundUploadButton svg {
+  stroke-width: 1.5;
+}
+
+.backgroundUploadButton svg:not(:global(.office-ribbon-control)) {
+  color: var(--ppt-accent);
+}
+
+.backgroundPreview {
+  border: 1px solid #cfd3d8;
+  border-radius: 5px;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+  box-sizing: border-box;
+  display: block;
+  min-height: 112px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.taskPaneFooter {
+  background: var(--office-dialog-surface, #fff);
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding: 12px 14px;
+  position: sticky;
+  bottom: 0;
+}
+
+.taskPaneFooter button {
+  align-items: center;
+  border: 1px solid var(--office-control-border, var(--ppt-accent));
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 11px;
+}
+
+.taskPaneFooter button:not(:global(.office-ribbon-control)):not(:global(.office-dialog__button)) {
+  background: var(--ppt-accent);
+  color: #fff;
+}
+
+.stage :global(.presentation-window__notes) {
+  background: rgba(255, 255, 255, 0.78);
+  border-top: 1px solid var(--ppt-border);
+  margin-top: 0 !important;
+  padding: 4px 12px 5px;
+}
+
+.stage :global(.presentation-window__notes-label) {
+  color: #555;
+  font-size: 11px;
+}
+
+.stage :global(.presentation-window__notes-input) {
+  border-color: #cfcfcf;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 4%);
+}
+
+@media (max-width: 1080px) {
+  .workspace {
+    --ppt-comments-dock-width: 340px;
+
+    grid-template-columns: 184px minmax(0, 1fr);
+  }
+}
+
+@container presentation-shell (max-width: 920px) {
+  .workspace {
+    --ppt-comments-dock-width: 340px;
+
+    grid-template-columns: 142px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The slide takes the column the thumbnails leave: sized to its content,
+     the stage was 32px tall and the slide a sliver under the thumbnail strip
+     (an iPad mini held upright, 744px; Split View on any iPad). */
+  .workspace > .stage.stage {
+    flex: 1 1 auto;
+  }
+
+  .slideRail {
+    border-bottom: 1px solid #cdcdcd;
+    border-right: 0;
+    flex-direction: row;
+    max-height: 142px;
+    min-height: 116px;
+    overflow-x: auto;
+  }
+
+  .slideRail > button:not(:global(.presentation-window__rail-action)) {
+    min-width: 150px;
+  }
+
+  .slideRail :global(.presentation-window__rail-section) > button {
+    min-width: 150px;
+  }
+}
+
+.chartLayoutFrame {
+  align-items: center;
+  display: inline-grid;
+  gap: 4px;
+  grid-template-areas: "plot legend";
+  grid-template-columns: minmax(0, 1fr) auto;
+  justify-items: center;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.chartLayoutFrame[data-legend-position="left"] {
+  grid-template-areas: "legend plot";
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.chartLayoutFrame[data-legend-position="top"] {
+  grid-template-areas: "legend" "plot";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.chartLayoutFrame[data-legend-position="bottom"] {
+  grid-template-areas: "plot" "legend";
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.chartAxisFrame {
+  align-items: center;
+  background: var(--mrai-chart-background, #fff);
+  border: 1px solid var(--mrai-chart-border, #e2e8f0);
+  display: inline-grid;
+  grid-area: plot;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  justify-items: center;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.chartGridlineFrame {
+  align-items: center;
+  background-color: var(--mrai-chart-plot-background, #fff);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(25% - 1px),
+    var(--mrai-chart-gridline, #e2e8f0) calc(25% - 1px),
+    var(--mrai-chart-gridline, #e2e8f0) 25%
+  );
+  display: inline-flex;
+  justify-content: center;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.chartGridlineFrame[data-show-gridlines="false"] {
+  background-image: none;
+}
+
+.chartGridlineFrame > svg {
+  position: relative;
+}
+
+.chartAxisTitleX,
+.chartAxisTitleY {
+  color: var(--mrai-chart-text, #475569);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.chartAxisTitleX {
+  grid-column: 2;
+  grid-row: 2;
+  padding-top: 2px;
+}
+
+.chartAxisTitleY {
+  grid-column: 1;
+  grid-row: 1;
+  padding-right: 2px;
+  transform: rotate(180deg);
+  writing-mode: vertical-rl;
+}
+
+.chartLegend {
+  align-content: center;
+  color: var(--mrai-chart-text, #475569);
+  display: flex;
+  flex-direction: column;
+  font-size: 9px;
+  gap: 3px;
+  grid-area: legend;
+  line-height: 1.2;
+  max-height: 100%;
+  max-width: 112px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.chartLayoutFrame[data-legend-position="top"] .chartLegend,
+.chartLayoutFrame[data-legend-position="bottom"] .chartLegend {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.chartLegend > span {
+  align-items: center;
+  display: inline-flex;
+  gap: 3px;
+  min-width: 0;
+}
+
+.chartLegend i {
+  border-radius: 1px;
+  display: inline-block;
+  flex: 0 0 7px;
+  height: 7px;
+  width: 7px;
+}
+
+.chartLegend > span > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chartStylePreview {
+  border: 1px solid;
+  border-radius: 3px;
+  box-sizing: border-box;
+  display: block;
+  height: 44px;
+  overflow: hidden;
+  padding: 4px;
+  width: 64px;
+}
+
+.chartStylePreview > span:first-child {
+  border-radius: 999px;
+  display: block;
+  height: 2px;
+  margin: 0 auto 2px;
+  width: 28px;
+}
+
+.chartStylePreview > span:last-child {
+  align-items: end;
+  border-bottom: 1px solid;
+  border-left: 1px solid;
+  display: flex;
+  gap: 4px;
+  height: 29px;
+  justify-content: center;
+}
+
+.chartStylePreview i {
+  display: block;
+  width: 7px;
+}
+
+.chartDataTable {
+  border-collapse: collapse;
+  color: var(--mrai-chart-text, #475569);
+  font-size: 9px;
+  line-height: 1.2;
+  margin-top: 2px;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.chartDataTable th,
+.chartDataTable td {
+  border: 1px solid var(--mrai-chart-border, #cbd5e1);
+  overflow: hidden;
+  padding: 1px 3px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chartDataTable th {
+  background: var(--mrai-chart-plot-background, #fff);
+  font-weight: 700;
+}
+
+:global([data-theme-mode]) .professionalShell {
+  --ppt-canvas: var(--bg-canvas, #11151a);
+  --ppt-chrome: var(--bg-surface, #161b22);
+  --ppt-border: var(--border, #30363d);
+  --ppt-text: var(--text-primary, #e6edf3);
+  --ppt-muted: var(--text-secondary, #9da7b3);
+  /* The dark values of the deck's own surfaces (see .professionalShell),
+     taken from the dark dialog/menu material: fields, the docked columns
+     beside the stage and the cards floating over it. */
+  --ppt-field: rgb(0 0 0 / 28%);
+  --ppt-surface: #1f2024;
+  --ppt-card: rgb(38 39 44 / 96%);
+  --ppt-hover: rgb(255 255 255 / 10%);
+  --ppt-rail: #1f2024;
+  --ppt-rail-divider: rgb(255 255 255 / 10%);
+  --ppt-rail-ink: #f2f2f7;
+  --ppt-rail-number: #a1a1a8;
+}
+
+/* Inside the workspace the deck sits under [data-theme="console"], which
+   re-declares --bg-surface / --text-primary / --border with the console's
+   LIGHT values, so the block above resolves --ppt-chrome / --ppt-text to
+   light even in dark mode. The surfaces the deck draws around the stage
+   (slide rail, speaker notes, status bar, comments column, SmartArt Text
+   Pane) re-assert the dark set themselves. They also retarget the two
+   tokens the native window's dark button rule paints loose buttons with
+   (styles/native-page-window.css), so the buttons on these surfaces sit flat
+   on the dark material instead of as light pills. */
+:global([data-theme-mode]) .professionalShell .slideRail {
+  --ppt-chrome: #1f2024;
+  --ppt-border: rgb(255 255 255 / 12%);
+  --ppt-text: #f2f2f7;
+  --ppt-muted: #a1a1a8;
+  --bg-surface: transparent;
+  --text-primary: #f2f2f7;
+  --border: rgb(255 255 255 / 12%);
+  color: #f2f2f7;
+  color-scheme: dark;
+}
+:global([data-theme-mode]) .professionalShell .statusNotesPane {
+  --ppt-chrome: #1f2024;
+  --ppt-border: rgb(255 255 255 / 12%);
+  --ppt-text: #f2f2f7;
+  --ppt-muted: #a1a1a8;
+  --bg-surface: transparent;
+  --text-primary: #f2f2f7;
+  --border: rgb(255 255 255 / 12%);
+  color: #f2f2f7;
+  color-scheme: dark;
+}
+:global([data-theme-mode]) .professionalShell .zoomStatusBar {
+  --ppt-chrome: #1f2024;
+  --ppt-border: rgb(255 255 255 / 12%);
+  --ppt-text: #f2f2f7;
+  --ppt-muted: #a1a1a8;
+  --bg-surface: transparent;
+  --text-primary: #f2f2f7;
+  --border: rgb(255 255 255 / 12%);
+  color: #f2f2f7;
+  color-scheme: dark;
+}
+:global([data-theme-mode]) .professionalShell .commentsDock {
+  --ppt-chrome: #1f2024;
+  --ppt-border: rgb(255 255 255 / 12%);
+  --ppt-text: #f2f2f7;
+  --ppt-muted: #a1a1a8;
+  --bg-surface: transparent;
+  --text-primary: #f2f2f7;
+  --border: rgb(255 255 255 / 12%);
+  color: #f2f2f7;
+  color-scheme: dark;
+}
+/* The status bar's zoom crown draws its face from the console surface. */
+:global([data-theme-mode]) .professionalShell .zoomStatusBar {
+  --console-surface: #1f2024;
+  --console-shadow-ink: #000000;
+}
+:global([data-theme-mode]) .professionalShell .ribbon {
+  background: var(--ppt-chrome);
+}
+
+/* WPS 视图: 备注页 / 阅读. These take over the STAGE while the rail keeps its
+   thumbnails. The editing subtree stays mounted and merely hidden, so returning
+   to 普通视图 restores scroll, zoom, and selection rather than rebuilding it.
+
+   Placed at the END of this file on purpose: `.stage .presentation-window__slide`
+   below carries the same specificity, so source order is what decides which of
+   the two wins. Bumping specificity instead would just start an arms race the
+   next rule wins back. */
+.stage[data-view="sorter"] > *:not([data-presentation-view-layer]),
+.stage[data-view="notes"] > *:not([data-presentation-view-layer]),
+.stage[data-view="reading"] > *:not([data-presentation-view-layer]),
+.stage[data-view="master"] > *:not([data-presentation-view-layer]) {
+  display: none;
+}
+
+/* The master's own controls live in the Slide Master task pane (a
+ * `data-presentation-view-layer` sibling), so nothing here needs an exception. */
+.effectsTimingGroup.effectsTimingGroup {
+  flex: 0 0 auto;
+  min-width: max-content;
+  width: max-content;
+  order: 0;
+}
+
+/* Transitions > Timing: one grid (PresentationTransitionTimingControls),
+   glyph | label | field for Duration and Sound, then the advance column. */
+.transitionTimingGrid.transitionTimingGrid {
+  padding: 2px 6px 0;
+}
+
+.transitionTimingGrid.transitionTimingGrid > span,
+.transitionTimingGrid.transitionTimingGrid > div > span {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.transitionTimingGrid.transitionTimingGrid > svg {
+  justify-self: center;
+}
+
+/* Sound's menu shows its value only: its glyph stands in the row's glyph
+   column, beside the label, as Duration's watch does. */
+.transitionTimingGrid :global([data-testid="presentation-ribbon-transition-sound"]) > span:first-child:empty {
+  display: none;
+}
+
+.effectsTimingRow.effectsTimingRow {
+  flex: 0 0 24px;
+  height: 24px;
+  display: grid;
+  grid-template-columns: 20px minmax(84px, max-content) 78px;
+  align-items: center;
+  column-gap: 6px;
+  min-height: 22px;
+  padding-inline: 6px;
+}
+
+.effectsTimingRow > svg {
+  justify-self: center;
+}
+
+.effectsTimingRow.effectsTimingRow > span {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.effectsTimingRow.effectsTimingRow > :last-child {
+  width: 78px;
+  min-width: 78px;
+  height: 24px;
+  min-height: 24px;
+}
+
+/* A row that ends in a menu (Transitions > Sound) keeps the menu's own
+   width: the 78px is a number field's. */
+.effectsTimingRow.effectsTimingRow > button:last-child {
+  width: auto;
+  min-width: max-content;
+}
+
+.effectsTimingGroup .effectsTimingApplyAll > button {
+  width: auto;
+  min-width: max-content;
+  height: 24px;
+  min-height: 24px;
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  padding-inline: 6px;
+  gap: 6px;
+}
+
+.effectsTimingApplyAll > button > span[aria-hidden] {
+  width: 20px;
+  min-width: 20px;
+  display: flex;
+  justify-content: center;
+}
+.presentShell:global(.presentation-present) {
+  background: #13161c;
+  color: #f5f6f8;
+  overflow: hidden;
+}
+
+.presentHeader {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 6px 12px;
+}
+
+.presentControls {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.presentShell .presentControls > :global(button),
+.presentShell .presentFooter :global(.presentation-present__annot-btn) {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  box-sizing: border-box;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 13px;
+  gap: 5px;
+  height: 36px;
+  justify-content: center;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 7px;
+  position: static;
+  width: auto;
+}
+
+.presentShell .presentControls > :global(button:hover),
+.presentShell .presentFooter :global(.presentation-present__annot-btn:hover),
+.presentShell .presentControls > :global(button[aria-pressed="true"]),
+.presentShell .presentFooter :global(.presentation-present__annot-btn[aria-pressed="true"]) {
+  background: rgb(255 255 255 / 14%);
+}
+
+.presentShell .presentControls > :global(button:focus-visible) {
+  outline: 2px solid #c5d6ff;
+  outline-offset: 2px;
+}
+
+.presentShell .presentFooter :global(button:focus-visible) {
+  outline: 2px solid #c5d6ff;
+  outline-offset: 2px;
+}
+
+.presentShell :global(.presentation-present__stage) {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 12px 20px;
+}
+
+.presentShell :global(.presentation-presenter) {
+  padding: 12px 20px 20px;
+}
+
+.presentShell .presentFooter {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  max-height: none;
+  min-height: 52px;
+  padding: 8px 16px;
+}
+
+.presentFooter:empty {
+  display: none;
+}
+
+.presentShell .presentFooter :global(.presentation-present__annot-toolbar) {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+  position: static;
+  transform: none;
+}
+
+.presentFooter :global(.presentation-present__annot-swatch) {
+  border-radius: 50%;
+  flex: 0 0 18px;
+  height: 18px;
+  min-height: 18px;
+  min-width: 18px;
+  padding: 0;
+  width: 18px;
+}
+
+.presentFooter > :global(input[type="range"]) {
+  max-width: 260px;
+  min-width: 120px;
+}
+
+
+
+
+/* A finger held on the slide stage where nothing has a menu (the grey around
+   the slide, a slide's picture) got the platform's long press: iPad Safari
+   selected the nearest words with blue handles right across the window. A
+   slide's words are objects until they are being typed in, as on a Mac. */
+@media (pointer: coarse) {
+  .stage,
+  .stage * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .stage :is(input, textarea, [contenteditable="true"]) {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}

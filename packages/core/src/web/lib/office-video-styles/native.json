@@ -1,0 +1,1059 @@
+{
+ "styles": [
+  {
+   "id": "simple-beveled-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 1
+  },
+  {
+   "id": "center-shadow-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "63500",
+     "dist": "0",
+     "dir": "0",
+     "algn": "ctr",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.4
+    }
+   ],
+   "index": 2
+  },
+  {
+   "id": "soft-edge-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "softEdge",
+     "rad": "76200"
+    }
+   ],
+   "index": 3
+  },
+  {
+   "id": "beveled-frame-gradient",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "101600",
+    "cap": "rnd",
+    "color": "#8c8c8c",
+    "opacity": 1,
+    "width": 101600,
+    "gradient": {
+     "stops": [
+      {
+       "pos": 0,
+       "color": "#bfbfbf",
+       "opacity": 1
+      },
+      {
+       "pos": 100000,
+       "color": "#595959",
+       "opacity": 1
+      }
+     ],
+     "angle": 5400000
+    }
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 4
+  },
+  {
+   "id": "simple-frame-black",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "38100",
+    "cap": "rnd",
+    "color": "#000000",
+    "opacity": 1,
+    "width": 38100
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 5
+  },
+  {
+   "id": "simple-frame-white",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "38100",
+    "cap": "rnd",
+    "color": "#ffffff",
+    "opacity": 1,
+    "width": 38100
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 6
+  },
+  {
+   "id": "slope-beveled-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "76200",
+     "h": "38100",
+     "prst": "slope"
+    }
+   },
+   "index": 7
+  },
+  {
+   "id": "outer-shadow-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "76200",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "index": 8
+  },
+  {
+   "id": "glow-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "glow",
+     "rad": "101600",
+     "color": "#7f7f7f",
+     "opacity": 0.4
+    }
+   ],
+   "index": 9
+  },
+  {
+   "id": "drop-shadow-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "76200",
+     "dist": "38100",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "index": 10
+  },
+  {
+   "id": "compound-frame-black",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "88900",
+    "cap": "rnd",
+    "color": "#000000",
+    "opacity": 1,
+    "width": 88900,
+    "cmpd": "thickThin"
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 11
+  },
+  {
+   "id": "moderate-frame-black",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "88900",
+    "cap": "rnd",
+    "color": "#000000",
+    "opacity": 1,
+    "width": 88900
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 12
+  },
+  {
+   "id": "glow-rounded-rectangle",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "effects": [
+    {
+     "kind": "glow",
+     "rad": "101600",
+     "color": "#7f7f7f",
+     "opacity": 0.4
+    }
+   ],
+   "index": 13
+  },
+  {
+   "id": "beveled-rounded-rectangle",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 14
+  },
+  {
+   "id": "rounded-diagonal-corner-white",
+   "geometry": "round2DiagRect",
+   "adjustments": {
+    "adj1": 16667,
+    "adj2": 0
+   },
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#ffffff",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 15
+  },
+  {
+   "id": "snip-diagonal-corner-white",
+   "geometry": "snip2DiagRect",
+   "adjustments": {
+    "adj1": 16667,
+    "adj2": 0
+   },
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#ffffff",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 16
+  },
+  {
+   "id": "snip-diagonal-corner-gradient",
+   "geometry": "snip2DiagRect",
+   "adjustments": {
+    "adj1": 16667,
+    "adj2": 0
+   },
+   "index": 17
+  },
+  {
+   "id": "moderate-frame-gradient",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "88900",
+    "cap": "rnd",
+    "color": "#8c8c8c",
+    "opacity": 1,
+    "width": 88900,
+    "gradient": {
+     "stops": [
+      {
+       "pos": 0,
+       "color": "#bfbfbf",
+       "opacity": 1
+      },
+      {
+       "pos": 100000,
+       "color": "#595959",
+       "opacity": 1
+      }
+     ],
+     "angle": 5400000
+    }
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 18
+  },
+  {
+   "id": "moderate-beveled-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 19
+  },
+  {
+   "id": "rotated-white",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#ffffff",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront",
+    "lat": "0",
+    "lon": "0",
+    "rev": "21300000"
+   },
+   "index": 20
+  },
+  {
+   "id": "rotated-gradient",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront",
+    "lat": "0",
+    "lon": "0",
+    "rev": "21300000"
+   },
+   "index": 21
+  },
+  {
+   "id": "beveled-oval-black",
+   "geometry": "ellipse",
+   "adjustments": {},
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#000000",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 22
+  },
+  {
+   "id": "soft-edge-oval",
+   "geometry": "ellipse",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "softEdge",
+     "rad": "76200"
+    }
+   ],
+   "index": 23
+  },
+  {
+   "id": "beveled-perspective-left",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "12600000",
+     "algn": "bl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "perspectiveLeft",
+    "lat": "0",
+    "lon": "1200000",
+    "rev": "0"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 24
+  },
+  {
+   "id": "beveled-rounded-rectangle-2",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 25
+  },
+  {
+   "id": "reflected-rounded-rectangle",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "effects": [
+    {
+     "kind": "reflection",
+     "blurRad": "6350",
+     "stA": "50000",
+     "endPos": "30000",
+     "dist": "0",
+     "dir": "5400000",
+     "sy": "-100000",
+     "algn": "bl",
+     "rotWithShape": "0"
+    }
+   ],
+   "index": 26
+  },
+  {
+   "id": "reflected-bevel-white",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#ffffff",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "reflection",
+     "blurRad": "6350",
+     "stA": "50000",
+     "endPos": "30000",
+     "dist": "0",
+     "dir": "5400000",
+     "sy": "-100000",
+     "algn": "bl",
+     "rotWithShape": "0"
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 27
+  },
+  {
+   "id": "reflected-bevel-black",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#000000",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "reflection",
+     "blurRad": "6350",
+     "stA": "50000",
+     "endPos": "30000",
+     "dist": "0",
+     "dir": "5400000",
+     "sy": "-100000",
+     "algn": "bl",
+     "rotWithShape": "0"
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 28
+  },
+  {
+   "id": "reflected-perspective-right",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "12600000",
+     "algn": "bl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    },
+    {
+     "kind": "reflection",
+     "blurRad": "6350",
+     "stA": "50000",
+     "endPos": "30000",
+     "dist": "0",
+     "dir": "5400000",
+     "sy": "-100000",
+     "algn": "bl",
+     "rotWithShape": "0"
+    }
+   ],
+   "camera": {
+    "prst": "perspectiveRight",
+    "lat": "0",
+    "lon": "20400000",
+    "rev": "0"
+   },
+   "index": 29
+  },
+  {
+   "id": "reflected-perspective-left",
+   "geometry": "rect",
+   "adjustments": {},
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "12600000",
+     "algn": "bl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    },
+    {
+     "kind": "reflection",
+     "blurRad": "6350",
+     "stA": "50000",
+     "endPos": "30000",
+     "dist": "0",
+     "dir": "5400000",
+     "sy": "-100000",
+     "algn": "bl",
+     "rotWithShape": "0"
+    }
+   ],
+   "camera": {
+    "prst": "perspectiveLeft",
+    "lat": "0",
+    "lon": "1200000",
+    "rev": "0"
+   },
+   "index": 30
+  },
+  {
+   "id": "bevel-reflected",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "effects": [
+    {
+     "kind": "reflection",
+     "blurRad": "6350",
+     "stA": "50000",
+     "endPos": "30000",
+     "dist": "0",
+     "dir": "5400000",
+     "sy": "-100000",
+     "algn": "bl",
+     "rotWithShape": "0"
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 31
+  },
+  {
+   "id": "perspective-shadow-white",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#ffffff",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "12600000",
+     "algn": "bl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "perspectiveFront",
+    "lat": "0",
+    "lon": "0",
+    "rev": "0"
+   },
+   "index": 32
+  },
+  {
+   "id": "perspective-shadow-gray",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "76200",
+    "cap": "rnd",
+    "color": "#7f7f7f",
+    "opacity": 1,
+    "width": 76200
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "12600000",
+     "algn": "bl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "perspectiveFront",
+    "lat": "0",
+    "lon": "0",
+    "rev": "0"
+   },
+   "index": 33
+  },
+  {
+   "id": "bevel-perspective",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "12600000",
+     "algn": "bl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "perspectiveFront",
+    "lat": "0",
+    "lon": "0",
+    "rev": "0"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 34
+  },
+  {
+   "id": "canvas-gray",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "152400",
+    "cap": "rnd",
+    "color": "#7f7f7f",
+    "opacity": 1,
+    "width": 152400
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 35
+  },
+  {
+   "id": "canvas-white",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "152400",
+    "cap": "rnd",
+    "color": "#ffffff",
+    "opacity": 1,
+    "width": 152400
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 36
+  },
+  {
+   "id": "relaxed-bevel-perspective",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "12600000",
+     "algn": "bl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "perspectiveRelaxed",
+    "lat": "0",
+    "lon": "0",
+    "rev": "0"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 37
+  },
+  {
+   "id": "monitor-gray",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "152400",
+    "cap": "rnd",
+    "color": "#7f7f7f",
+    "opacity": 1,
+    "width": 152400
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "index": 38
+  },
+  {
+   "id": "bevel-rectangle",
+   "geometry": "rect",
+   "adjustments": {},
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    }
+   },
+   "index": 39
+  },
+  {
+   "id": "metal-rounded-rectangle",
+   "geometry": "roundRect",
+   "adjustments": {
+    "adj": 10000
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    },
+    "prstMaterial": "metal"
+   },
+   "index": 40
+  },
+  {
+   "id": "metal-frame",
+   "geometry": "rect",
+   "adjustments": {},
+   "line": {
+    "w": "190500",
+    "cap": "rnd",
+    "color": "#b8b8b8",
+    "opacity": 1,
+    "width": 190500
+   },
+   "fill": {
+    "color": "#d9d9d9",
+    "opacity": 1
+   },
+   "effects": [
+    {
+     "kind": "outerShdw",
+     "blurRad": "50800",
+     "dist": "19050",
+     "dir": "2700000",
+     "algn": "tl",
+     "rotWithShape": "0",
+     "color": "#000000",
+     "opacity": 0.35
+    }
+   ],
+   "camera": {
+    "prst": "orthographicFront"
+   },
+   "threeD": {
+    "bevel": {
+     "w": "38100",
+     "h": "25400"
+    },
+    "prstMaterial": "metal"
+   },
+   "index": 41
+  }
+ ]
+}

@@ -1,0 +1,97 @@
+/* The reader's Picture Format tab, measured as Docs' (DocumentHomeRibbon
+   .module.css, picture*): 100px groups wide as their content, one 66px
+   command row, the size column as three 22px rows. */
+
+.surface {
+  display: none;
+}
+
+.group.group {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  height: 100px;
+  max-height: 100px;
+  min-height: 100px;
+  min-width: max-content;
+  overflow: visible;
+  width: max-content;
+}
+
+.commandRow.commandRow {
+  gap: 2px;
+  height: 66px;
+  min-height: 66px;
+  width: max-content;
+}
+
+ 
+.borderHost {
+  flex: 0 0 auto;
+  height: 66px;
+  min-width: 58px;
+  position: relative;
+  width: 58px;
+}
+
+.borderHost > :first-child {
+  grid-template-columns: 58px;
+  grid-template-rows: 52px 14px;
+  height: 66px;
+  width: 58px;
+}
+
+.resetSplit.resetSplit {
+  flex: 0 0 auto;
+  height: 66px;
+  min-height: 66px;
+  width: max-content;
+}
+
+.sizeStack.sizeStack {
+  align-items: center;
+  display: grid;
+  gap: 0;
+  grid-template-rows: repeat(3, 22px);
+  height: 66px;
+  min-height: 66px;
+  width: max-content;
+}
+
+.sizeRow.sizeRow {
+  gap: 4px;
+  height: 22px;
+  min-height: 22px;
+  width: max-content;
+}
+
+.sizeField.sizeField,
+.sizeInput.sizeInput {
+  height: 22px;
+  min-height: 22px;
+}
+
+.sizeIcon.sizeIcon,
+.sizeIcon.sizeIcon > :global(svg) {
+  height: 18px;
+  width: 18px;
+}
+
+.aspectTarget.aspectTarget {
+  height: 22px;
+  margin-block: 0;
+  min-height: 22px;
+  min-width: 44px;
+}
+
+/* Position's nine places, three by three (Docs' Position menu). */
+.positionGrid {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, auto);
+  padding: 2px 8px 6px;
+}
+
+.positionCell.positionCell {
+  justify-content: center;
+  padding: 4px;
+}

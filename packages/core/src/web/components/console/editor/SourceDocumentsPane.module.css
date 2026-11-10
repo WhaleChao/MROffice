@@ -1,0 +1,70 @@
+/* Show Source Documents: the compared documents beside the result, original
+   above revised, each in its own scrolling view (Word's review window). */
+
+.body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+
+.source {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.label {
+  overflow: hidden;
+  color: var(--office-pane-ink, #203b38);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scroller {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  border: 1px solid var(--office-pane-border, rgb(15 23 42 / 10%));
+  border-radius: 8px;
+  background: var(--note-editor-canvas, #eef0f3);
+  overscroll-behavior: contain;
+}
+
+/* Dark: the pages sit on a dark well, as the editor's own canvas does, not on
+   a light-grey slab inside the dark pane. */
+:global([data-theme-mode="dark"]) .scroller,
+:global([data-theme-mode="high-contrast"]) .scroller {
+  border-color: rgb(255 255 255 / 12%);
+  background: rgb(0 0 0 / 28%);
+}
+
+/* The page at its own width, scaled to the pane (`zoom` set from the pane's
+   width), as Word's source panes show the pages small. */
+.canvas {
+  width: max-content;
+  padding: 8px;
+}
+
+.editor {
+  min-height: 0;
+  caret-color: transparent;
+  outline: none;
+}
+
+/* One sheet holds the whole source; the paper sheet's fixed page height and
+   `contain: size` (note-editor.css) would cut it to one page. */
+.editor:global(.note-editor-content) > :global(article[data-page-sheet]) {
+  contain: none !important;
+  height: auto !important;
+  min-height: 0;
+  max-height: none !important;
+  margin: 0;
+  overflow: visible !important;
+}
