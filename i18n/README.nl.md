@@ -12,7 +12,7 @@
 > - SmartArt bewerken
 > - Bewerkingen van een pdf terugschrijven in het bestand
 >
-> **[MR Office downloaden via Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [of via mroffice.ai](https://mroffice.ai)
+> **[MR Office downloaden via Releases →](https://github.com/XinaTian/MROffice/releases)** · [of via mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Probeer ze in MR Office →</a></p>
 
@@ -37,10 +37,10 @@ Formules met functies berekenen, grafieken tekenen en SmartArt opmaken doet de e
 
 Word-, Excel- en PowerPoint-bestanden (.docx, .xlsx, .pptx) openen en opslaan, en bewerkingen van een pdf terugschrijven in het bestand, doet de gratis desktop-app van MR Office. Die bevat al deze editors en werkt offline op je eigen computer:
 
-- **MR Office** (gratis desktop-app): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (gratis desktop-app): https://github.com/XinaTian/MROffice/releases
 - **Website**: https://mroffice.ai
 
-[Alle versies →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Alle versies →](https://github.com/XinaTian/MROffice/releases)
 
 ## De editors draaien
 

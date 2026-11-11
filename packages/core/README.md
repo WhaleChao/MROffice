@@ -1,6 +1,6 @@
 # @mrnote/core
 
-> **For the full experience, install the MR Office desktop app (free): https://github.com/dongmingyang2007-pixel/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
+> **For the full experience, install the MR Office desktop app (free): https://github.com/XinaTian/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
 
 The shared layer of the [MR Office](https://mroffice.ai) editors: the Office-style ribbon and its icons, fonts and text measurement, themes, charts, SmartArt, equations, the interface text in 20 languages, and the **host adapter** through which an application embeds the editors.
 

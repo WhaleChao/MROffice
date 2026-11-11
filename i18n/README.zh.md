@@ -12,7 +12,7 @@
 > - SmartArt 编辑
 > - PDF 编辑后写回文件
 >
-> **[从 Releases 下载 MR Office →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
+> **[从 Releases 下载 MR Office →](https://github.com/XinaTian/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">在 MR Office 中体验 →</a></p>
 
@@ -37,10 +37,10 @@ MR Office 是一个集笔记、AI 和真实文件于一体的工作空间。本�
 
 打开和保存 Word、Excel、PowerPoint 文件（.docx、.xlsx、.pptx），以及把 PDF 的修改写回文件，由免费的 MR Office 桌面版提供。桌面版包含以上全部编辑器，在你自己的电脑上离线也能用：
 
-- **MR Office** (免费桌面应用): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (免费桌面应用): https://github.com/XinaTian/MROffice/releases
 - **官网**: https://mroffice.ai
 
-[全部版本 →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[全部版本 →](https://github.com/XinaTian/MROffice/releases)
 
 ## 运行编辑器
 

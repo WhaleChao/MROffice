@@ -12,7 +12,7 @@
 > - Redigering af SmartArt
 > - Gemme ændringer i en PDF tilbage i filen
 >
-> **[Download MR Office fra Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [eller fra mroffice.ai](https://mroffice.ai)
+> **[Download MR Office fra Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller fra mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Prøv dem i MR Office →</a></p>
 
@@ -37,10 +37,10 @@ Beregning af formler med funktioner, tegning af diagrammer og opsætning af Smar
 
 At åbne og gemme Word-, Excel- og PowerPoint-filer (.docx, .xlsx, .pptx) og gemme ændringer i en PDF tilbage i filen klares af MR Offices gratis skrivebordsapp. Den indeholder alle disse editorer og virker offline på din egen computer:
 
-- **MR Office** (gratis computerapp): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (gratis computerapp): https://github.com/XinaTian/MROffice/releases
 - **Websted**: https://mroffice.ai
 
-[Alle versioner →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Alle versioner →](https://github.com/XinaTian/MROffice/releases)
 
 ## Kør editorerne
 

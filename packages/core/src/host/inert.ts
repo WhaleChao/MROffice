@@ -10,7 +10,7 @@
 // member is itself inert.
 //
 // These features are provided by the MR Office desktop app's installer (free:
-// the full service), https://github.com/dongmingyang2007-pixel/MROffice/releases. A control the person uses that needs one says so
+// the full service), https://github.com/XinaTian/MROffice/releases. A control the person uses that needs one says so
 // (host/desktop-app.ts noteDesktopFeature).
 
 export class HostFeatureUnavailableError extends Error {

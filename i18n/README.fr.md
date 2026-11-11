@@ -12,7 +12,7 @@
 > - Modification des SmartArt
 > - Réenregistrer dans le fichier les modifications d'un PDF
 >
-> **[Télécharger MR Office depuis les Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [ou sur mroffice.ai](https://mroffice.ai)
+> **[Télécharger MR Office depuis les Releases →](https://github.com/XinaTian/MROffice/releases)** · [ou sur mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Les essayer dans MR Office →</a></p>
 
@@ -37,10 +37,10 @@ Le calcul des formules avec fonctions, le dessin des graphiques et la mise en pa
 
 L'ouverture et l'enregistrement des fichiers Word, Excel et PowerPoint (.docx, .xlsx, .pptx), et l'enregistrement dans le fichier des modifications d'un PDF, sont assurés par l'application de bureau MR Office (gratuite), qui contient tous ces éditeurs et fonctionne hors ligne sur votre ordinateur :
 
-- **MR Office** (application de bureau gratuite): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (application de bureau gratuite): https://github.com/XinaTian/MROffice/releases
 - **Site web**: https://mroffice.ai
 
-[Toutes les versions →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Toutes les versions →](https://github.com/XinaTian/MROffice/releases)
 
 ## Lancer les éditeurs
 

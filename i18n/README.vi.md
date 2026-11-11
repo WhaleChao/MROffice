@@ -12,7 +12,7 @@
 > - Chỉnh sửa SmartArt
 > - Ghi các chỉnh sửa PDF trở lại tệp
 >
-> **[Tải MR Office từ Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [hoặc từ mroffice.ai](https://mroffice.ai)
+> **[Tải MR Office từ Releases →](https://github.com/XinaTian/MROffice/releases)** · [hoặc từ mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Dùng thử trong MR Office →</a></p>
 
@@ -37,10 +37,10 @@ Việc tính công thức có hàm, vẽ biểu đồ và dàn trang SmartArt do
 
 Mở và lưu tệp Word, Excel và PowerPoint (.docx, .xlsx, .pptx), cũng như ghi các chỉnh sửa PDF trở lại tệp, do ứng dụng máy tính MR Office (miễn phí) cung cấp; ứng dụng có tất cả các trình soạn thảo này và chạy ngoại tuyến trên máy tính của bạn:
 
-- **MR Office** (ứng dụng máy tính miễn phí): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (ứng dụng máy tính miễn phí): https://github.com/XinaTian/MROffice/releases
 - **Trang web**: https://mroffice.ai
 
-[Tất cả phiên bản →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Tất cả phiên bản →](https://github.com/XinaTian/MROffice/releases)
 
 ## Chạy các trình soạn thảo
 

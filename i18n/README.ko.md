@@ -12,7 +12,7 @@
 > - SmartArt 편집
 > - PDF 편집 내용을 파일에 다시 저장
 >
-> **[Releases에서 MR Office 다운로드 →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [또는 mroffice.ai에서](https://mroffice.ai)
+> **[Releases에서 MR Office 다운로드 →](https://github.com/XinaTian/MROffice/releases)** · [또는 mroffice.ai에서](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">MR Office에서 사용해 보기 →</a></p>
 
@@ -37,10 +37,10 @@ MR Office는 노트, AI, 실제 파일을 한곳에 모은 작업 공간입니�
 
 Word, Excel, PowerPoint 파일(.docx, .xlsx, .pptx) 열기와 저장, PDF 편집 내용을 파일에 다시 저장하는 기능은 무료 MR Office 데스크톱 앱이 제공합니다. 데스크톱 앱에는 이 편집기들이 모두 들어 있으며 내 컴퓨터에서 오프라인으로도 작동합니다:
 
-- **MR Office** (무료 데스크톱 앱): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (무료 데스크톱 앱): https://github.com/XinaTian/MROffice/releases
 - **웹사이트**: https://mroffice.ai
 
-[모든 버전 →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[모든 버전 →](https://github.com/XinaTian/MROffice/releases)
 
 ## 편집기 실행
 

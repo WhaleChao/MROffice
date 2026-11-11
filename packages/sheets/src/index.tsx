@@ -70,7 +70,7 @@ export function workbookFromFile(name: string, bytes: Uint8Array): Workbook {
   const text = decoder.decode(bytes);
   if (lower.endsWith(".csv")) return workbookFromDelimited(name, text, ",");
   if (lower.endsWith(".tsv")) return workbookFromDelimited(name, text, "\t");
-  if (lower.endsWith(".xlsx")) throw new Error("Excel files (.xlsx) open in the MR Office desktop app (free, https://github.com/dongmingyang2007-pixel/MROffice/releases); the open-source editor opens .mrsheet, CSV and TSV.");
+  if (lower.endsWith(".xlsx")) throw new Error("Excel files (.xlsx) open in the MR Office desktop app (free, https://github.com/XinaTian/MROffice/releases); the open-source editor opens .mrsheet, CSV and TSV.");
   const parsed = JSON.parse(text) as Workbook;
   if (parsed.type !== MRSHEET_TYPE || !Array.isArray(parsed.sheets)) throw new Error(`${name} is not an MR Note workbook.`);
   return parsed;

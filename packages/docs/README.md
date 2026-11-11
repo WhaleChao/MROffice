@@ -1,6 +1,6 @@
 # @mrnote/docs
 
-> **For the full experience, install the MR Office desktop app (free): https://github.com/dongmingyang2007-pixel/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
+> **For the full experience, install the MR Office desktop app (free): https://github.com/XinaTian/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
 
 The document editor of [MR Office](https://mroffice.ai): a paged word processor (MR Office's NoteEditor on Tiptap/ProseMirror) with the Office-style ribbon, running in the browser on a local file.
 
@@ -14,6 +14,6 @@ The document editor of [MR Office](https://mroffice.ai): a paged word processor 
 | Review: comments and track changes (kept in the document), find and replace, word count | Available |
 | Draw: pens, highlighters, erasers on the page | Available (see @mrnote/handwriting = packages/ink) |
 | Save | Available: writes `.mrdoc` (the editor's own JSON, reopened as it was) |
-| Open or save **Word (.docx)** | Not in the open-source editor: the MR Office desktop app (free, [download](https://github.com/dongmingyang2007-pixel/MROffice/releases)), open and save Word files |
+| Open or save **Word (.docx)** | Not in the open-source editor: the MR Office desktop app (free, [download](https://github.com/XinaTian/MROffice/releases)), open and save Word files |
 | Export PDF, mail merge to .docx, cloud fonts | Need the service; not available |
 | AI (Copilot, AI pictures, rewrite), collaboration, version history | Part of the MR Office service; not included |

@@ -12,7 +12,7 @@
 > - SmartArtin muokkaus
 > - PDF-muokkausten tallentaminen takaisin tiedostoon
 >
-> **[Lataa MR Office Releases-sivulta →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [tai osoitteesta mroffice.ai](https://mroffice.ai)
+> **[Lataa MR Office Releases-sivulta →](https://github.com/XinaTian/MROffice/releases)** · [tai osoitteesta mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Kokeile niitä MR Officessa →</a></p>
 
@@ -37,10 +37,10 @@ Funktioita sisältävien kaavojen laskennan, kaavioiden piirtämisen ja SmartArt
 
 Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaamisen ja tallentamisen sekä PDF-muokkausten tallentamisen takaisin tiedostoon tarjoaa maksuton MR Office -työpöytäsovellus. Se sisältää kaikki nämä editorit ja toimii offline-tilassa omalla tietokoneellasi:
 
-- **MR Office** (ilmainen työpöytäsovellus): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (ilmainen työpöytäsovellus): https://github.com/XinaTian/MROffice/releases
 - **Verkkosivusto**: https://mroffice.ai
 
-[Kaikki versiot →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Kaikki versiot →](https://github.com/XinaTian/MROffice/releases)
 
 ## Editorien ajaminen
 

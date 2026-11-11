@@ -12,7 +12,7 @@
 > - Redigering av SmartArt
 > - Lagre endringer i en PDF tilbake i filen
 >
-> **[Last ned MR Office fra Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [eller fra mroffice.ai](https://mroffice.ai)
+> **[Last ned MR Office fra Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller fra mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Prøv dem i MR Office →</a></p>
 
@@ -37,10 +37,10 @@ Beregning av formler med funksjoner, tegning av diagrammer og oppsett av SmartAr
 
 Å åpne og lagre Word-, Excel- og PowerPoint-filer (.docx, .xlsx, .pptx) og lagre endringer i en PDF tilbake i filen gjøres av MR Offices gratis skrivebordsapp. Den har alle disse redigeringsprogrammene og fungerer frakoblet på din egen datamaskin:
 
-- **MR Office** (gratis skrivebordsapp): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (gratis skrivebordsapp): https://github.com/XinaTian/MROffice/releases
 - **Nettsted**: https://mroffice.ai
 
-[Alle versjoner →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Alle versjoner →](https://github.com/XinaTian/MROffice/releases)
 
 ## Kjør redigeringsverktøyene
 

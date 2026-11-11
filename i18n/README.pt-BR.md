@@ -12,7 +12,7 @@
 > - Edição de SmartArt
 > - Gravar no arquivo as edições feitas em um PDF
 >
-> **[Baixar o MR Office em Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [ou em mroffice.ai](https://mroffice.ai)
+> **[Baixar o MR Office em Releases →](https://github.com/XinaTian/MROffice/releases)** · [ou em mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Experimente no MR Office →</a></p>
 
@@ -37,10 +37,10 @@ O cálculo de fórmulas com funções, o desenho de gráficos e o layout de Smar
 
 Abrir e salvar arquivos do Word, Excel e PowerPoint (.docx, .xlsx, .pptx), e gravar no arquivo as edições feitas em um PDF, são recursos do aplicativo para desktop MR Office (grátis), que traz todos estes editores e funciona offline no seu próprio computador:
 
-- **MR Office** (aplicativo de desktop gratuito): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (aplicativo de desktop gratuito): https://github.com/XinaTian/MROffice/releases
 - **Site**: https://mroffice.ai
 
-[Todas as versões →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Todas as versões →](https://github.com/XinaTian/MROffice/releases)
 
 ## Executar os editores
 

@@ -12,7 +12,7 @@
 > - SmartArt bearbeiten
 > - PDF-Änderungen in die Datei zurückschreiben
 >
-> **[MR Office unter Releases herunterladen →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [oder auf mroffice.ai](https://mroffice.ai)
+> **[MR Office unter Releases herunterladen →](https://github.com/XinaTian/MROffice/releases)** · [oder auf mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">In MR Office ausprobieren →</a></p>
 
@@ -37,10 +37,10 @@ Formeln mit Funktionen berechnen, Diagramme zeichnen und SmartArt anordnen über
 
 Word-, Excel- und PowerPoint-Dateien (.docx, .xlsx, .pptx) öffnen und speichern sowie PDF-Änderungen in die Datei zurückschreiben bietet die kostenlose MR Office Desktop-App. Sie enthält alle diese Editoren und funktioniert offline auf Ihrem eigenen Computer:
 
-- **MR Office** (kostenlose Desktop-App): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (kostenlose Desktop-App): https://github.com/XinaTian/MROffice/releases
 - **Website**: https://mroffice.ai
 
-[Alle Versionen →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Alle Versionen →](https://github.com/XinaTian/MROffice/releases)
 
 ## Die Editoren ausführen
 

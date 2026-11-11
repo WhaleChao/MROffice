@@ -12,7 +12,7 @@
 > - Pengeditan SmartArt
 > - Menyimpan hasil edit PDF kembali ke file
 >
-> **[Unduh MR Office dari Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [atau dari mroffice.ai](https://mroffice.ai)
+> **[Unduh MR Office dari Releases →](https://github.com/XinaTian/MROffice/releases)** · [atau dari mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Coba di MR Office →</a></p>
 
@@ -37,10 +37,10 @@ Penghitungan rumus dengan fungsi, penggambaran bagan, dan tata letak SmartArt di
 
 Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx), serta menyimpan hasil edit PDF kembali ke file, disediakan oleh aplikasi desktop MR Office (gratis), yang berisi semua editor ini dan berjalan offline di komputer Anda sendiri:
 
-- **MR Office** (aplikasi desktop gratis): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (aplikasi desktop gratis): https://github.com/XinaTian/MROffice/releases
 - **Situs web**: https://mroffice.ai
 
-[Semua versi →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Semua versi →](https://github.com/XinaTian/MROffice/releases)
 
 ## Menjalankan editor
 

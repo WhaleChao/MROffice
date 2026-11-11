@@ -12,7 +12,7 @@
 > - การแก้ไข SmartArt
 > - บันทึกการแก้ไข PDF กลับลงในไฟล์
 >
-> **[ดาวน์โหลด MR Office จาก Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [หรือจาก mroffice.ai](https://mroffice.ai)
+> **[ดาวน์โหลด MR Office จาก Releases →](https://github.com/XinaTian/MROffice/releases)** · [หรือจาก mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">ลองใช้ใน MR Office →</a></p>
 
@@ -37,10 +37,10 @@ MR Office คือพื้นที่ทำงานสำหรับโน�
 
 การเปิดและบันทึกไฟล์ Word, Excel และ PowerPoint (.docx, .xlsx, .pptx) และการบันทึกการแก้ไข PDF กลับลงในไฟล์ มีให้ในแอปเดสก์ท็อป MR Office (ฟรี) ซึ่งมีตัวแก้ไขเหล่านี้ทั้งหมดและใช้งานแบบออฟไลน์บนคอมพิวเตอร์ของคุณได้:
 
-- **MR Office** (แอปเดสก์ท็อปฟรี): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (แอปเดสก์ท็อปฟรี): https://github.com/XinaTian/MROffice/releases
 - **เว็บไซต์**: https://mroffice.ai
 
-[ทุกเวอร์ชัน →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[ทุกเวอร์ชัน →](https://github.com/XinaTian/MROffice/releases)
 
 ## รันตัวแก้ไข
 

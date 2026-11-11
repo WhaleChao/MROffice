@@ -1,6 +1,6 @@
 # @mrnote/code
 
-> **For the full experience, install the MR Office desktop app (free): https://github.com/dongmingyang2007-pixel/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
+> **For the full experience, install the MR Office desktop app (free): https://github.com/XinaTian/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
 
 The code editor of [MR Office](https://mroffice.ai): CodeMirror 6 with MR Office's ribbon, syntax highlighting for many languages, an outline, find and replace, formatting, problems, and code that runs right in the browser.
 

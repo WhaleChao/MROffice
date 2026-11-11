@@ -12,7 +12,7 @@
 > - Edición de SmartArt
 > - Guardar en el archivo los cambios hechos en un PDF
 >
-> **[Descargar MR Office desde Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [o desde mroffice.ai](https://mroffice.ai)
+> **[Descargar MR Office desde Releases →](https://github.com/XinaTian/MROffice/releases)** · [o desde mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Pruébalos en MR Office →</a></p>
 
@@ -37,10 +37,10 @@ El cálculo de fórmulas con funciones, el dibujo de gráficos y la composición
 
 Abrir y guardar archivos de Word, Excel y PowerPoint (.docx, .xlsx, .pptx), y guardar en el archivo los cambios hechos en un PDF, lo ofrece la aplicación de escritorio de MR Office (gratis), que incluye todos estos editores y funciona sin conexión en tu propia computadora:
 
-- **MR Office** (aplicación de escritorio gratuita): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (aplicación de escritorio gratuita): https://github.com/XinaTian/MROffice/releases
 - **Sitio web**: https://mroffice.ai
 
-[Todas las versiones →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[Todas las versiones →](https://github.com/XinaTian/MROffice/releases)
 
 ## Ejecutar los editores
 

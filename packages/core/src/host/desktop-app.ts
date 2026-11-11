@@ -13,7 +13,7 @@
 import { editorHost } from "./host";
 
 /** Where the MR Office desktop app (free) is downloaded: this repository's Releases. */
-export const DESKTOP_DOWNLOAD_URL = "https://github.com/dongmingyang2007-pixel/MROffice/releases";
+export const DESKTOP_DOWNLOAD_URL = "https://github.com/XinaTian/MROffice/releases";
 /** MR Office's site. */
 export const WEB_APP_URL = "https://mroffice.ai";
 

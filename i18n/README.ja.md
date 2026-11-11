@@ -12,7 +12,7 @@
 > - SmartArt の編集
 > - PDF の編集内容をファイルに書き戻す
 >
-> **[Releases から MR Office をダウンロード →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [または mroffice.ai から](https://mroffice.ai)
+> **[Releases から MR Office をダウンロード →](https://github.com/XinaTian/MROffice/releases)** · [または mroffice.ai から](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">MR Office で試す →</a></p>
 
@@ -37,10 +37,10 @@ MR Office は、ノート、AI、実際のファイルをひとつにまとめ�
 
 Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保存する機能と、PDF の編集内容をファイルに書き戻す機能は、無料の MR Office デスクトップ版が提供します。デスクトップ版にはこれらのエディターがすべて含まれ、お使いのコンピューターでオフラインでも動作します：
 
-- **MR Office** (無料のデスクトップアプリ): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (無料のデスクトップアプリ): https://github.com/XinaTian/MROffice/releases
 - **公式サイト**: https://mroffice.ai
 
-[すべてのバージョン →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[すべてのバージョン →](https://github.com/XinaTian/MROffice/releases)
 
 ## エディターを動かす
 

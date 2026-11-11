@@ -1,6 +1,6 @@
 # @mrnote/ink
 
-> **For the full experience, install the MR Office desktop app (free): https://github.com/dongmingyang2007-pixel/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
+> **For the full experience, install the MR Office desktop app (free): https://github.com/XinaTian/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
 
 Handwriting, from [MR Office](https://mroffice.ai): a handwritten note is an MR Office document on handwriting paper, opened on the Draw tab. Pressure-sensitive pens, highlighters, pencils, erasers (stroke and point), lasso select, tape, stickers, laser pointer, ruler, ink replay, and ink turned into shapes. The page it writes on is the document editor's (@mrnote/docs).
 

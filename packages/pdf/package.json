@@ -8,7 +8,7 @@
   "homepage": "https://mroffice.ai",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dongmingyang2007-pixel/MROffice.git",
+    "url": "https://github.com/XinaTian/MROffice.git",
     "directory": "packages/pdf"
   },
   "exports": {

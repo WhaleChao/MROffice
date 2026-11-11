@@ -12,7 +12,7 @@
 > - SmartArt editing
 > - Saving PDF edits back into the file
 >
-> **[Download MR Office from Releases →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [or from mroffice.ai](https://mroffice.ai)
+> **[Download MR Office from Releases →](https://github.com/XinaTian/MROffice/releases)** · [or from mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Try them in MR Office →</a></p>
 
@@ -37,10 +37,10 @@ Calculating formulas with functions, drawing charts and laying out SmartArt run 
 
 Opening and saving Word, Excel and PowerPoint files (.docx, .xlsx, .pptx), and saving PDF edits back into the file, are provided by the MR Office desktop app (free), which has all of these editors and works offline on your own computer:
 
-- **MR Office** (free desktop app): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (free desktop app): https://github.com/XinaTian/MROffice/releases
 - **Website**: https://mroffice.ai
 
-[All versions →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[All versions →](https://github.com/XinaTian/MROffice/releases)
 
 ## Run the editors
 

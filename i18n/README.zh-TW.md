@@ -12,7 +12,7 @@
 > - SmartArt 編輯
 > - PDF 編輯後寫回檔案
 >
-> **[從 Releases 下載 MR Office →](https://github.com/dongmingyang2007-pixel/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
+> **[從 Releases 下載 MR Office →](https://github.com/XinaTian/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
 
 <p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">在 MR Office 中體驗 →</a></p>
 
@@ -37,10 +37,10 @@ MR Office 是一個結合筆記、AI 與真實檔案的工作空間。本儲存�
 
 開啟和儲存 Word、Excel、PowerPoint 檔案（.docx、.xlsx、.pptx），以及把 PDF 的修改寫回檔案，由免費的 MR Office 桌面版提供。桌面版包含以上全部編輯器，在你自己的電腦上離線也能用：
 
-- **MR Office** (免費桌面應用程式): https://github.com/dongmingyang2007-pixel/MROffice/releases
+- **MR Office** (免費桌面應用程式): https://github.com/XinaTian/MROffice/releases
 - **官網**: https://mroffice.ai
 
-[所有版本 →](https://github.com/dongmingyang2007-pixel/MROffice/releases)
+[所有版本 →](https://github.com/XinaTian/MROffice/releases)
 
 ## 執行編輯器
 
