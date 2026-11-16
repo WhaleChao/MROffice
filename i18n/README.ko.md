@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev`는 같은 주소에서 개발 서버를 시작하고, `npm run smoke`는 빌드를 점검합니다. 각 패키지의 README에 하는 일과 포함 방법을 자세히 적었습니다.
 
+## 데스크톱 앱
+
+[`apps/desktop`](../apps/desktop)에는 **MR Office Editors**가 있습니다. MR Office 데스크톱 앱 셸(Electron)의 소스 코드이며 고유한 앱 ID를 사용합니다. Releases의 무료 MR Office 구성 요소를 설치하면 MR Office 데스크톱 앱이 되어 Word, Excel, PowerPoint, PDF 파일과 로그인, AI를 쓸 수 있습니다. 구성 요소가 없으면 오픈 소스 편집기만 실행되며 .mrdoc, .mrsheet, .mrslides, .mrink 파일과 CSV, HTML, Markdown, PDF를 엽니다. 셸과 편집기는 AGPL 소스 코드이고, 구성 요소는 컴파일된 것으로 무료로 쓸 수 있지만 오픈 소스가 아닙니다. `npm run build` 후 다음으로 실행합니다:
+
+```bash
+npm run desktop
+```
+
 ## 모든 기능을 사용하려면 MR Office 데스크톱 앱(무료)을 설치하세요
 
 MR Office 데스크톱 앱은 무료이며 이 편집기들과 전체 서비스를 갖추고 있고, 내 컴퓨터에서 오프라인으로도 작동합니다. 오픈 소스 편집기에 없는 다음 기능을 제공합니다:

@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev` は同じアドレスで開発サーバーを起動し、`npm run smoke` はビルドを確認します。各パッケージの README に、できることの詳細と組み込み方を載せています。
 
+## デスクトップアプリ
+
+[`apps/desktop`](../apps/desktop) には **MR Office Editors** があります。MR Office デスクトップアプリのシェル（Electron）のソースコードで、独自のアプリ ID を持ちます。Releases にある無料の MR Office コンポーネントを入れると MR Office デスクトップアプリになり、Word、Excel、PowerPoint、PDF ファイル、サインイン、AI が使えます。コンポーネントがなければ、オープンソースのエディターだけで動き、.mrdoc、.mrsheet、.mrslides、.mrink ファイルと CSV、HTML、Markdown、PDF を開きます。シェルとエディターは AGPL のソースコードで、コンポーネントはコンパイル済みで無料で使えますが、オープンソースではありません。`npm run build` の後、次のコマンドで起動します:
+
+```bash
+npm run desktop
+```
+
 ## すべての機能を使うには MR Office デスクトップ版（無料）をインストールしてください
 
 MR Office デスクトップ版は無料で、これらのエディターとすべてのサービスを備え、お使いのコンピューターでオフラインでも動作します。オープンソース版にない次の機能を利用できます：

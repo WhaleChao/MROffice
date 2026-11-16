@@ -1,0 +1,190 @@
+/*!
+ * MR Office - https://mroffice.ai
+ * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
+ * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+ */
+/**
+ * What MR Note Classic's pages may ask of the app (`window.mraiDesktop`). The
+ * same documents bridge the online app offers (takeOpenFiles, readOpenFile:
+ * apps/web components/open-files), plus saving back to the file a document
+ * came from, files on this computer read where they are and saved back to
+ * (local-files.ts, apps/web lib/desktop-local-files.ts), and the MR Note
+ * sign-in AI uses (apps/web lib/desktop-classic-ai.ts).
+ * The main process answers only the main frame of the app's own pages.
+ */
+
+import { contextBridge, ipcRenderer, webUtils } from "electron";
+
+/**
+ * MR Office (../../products.cjs): the page is on the office surface before
+ * any of its own scripts run. The web app's bootstrap stamps the surface
+ * from `?surface=` and remembers it (apps/web/lib/product-surface.ts); here,
+ * at document start, the address says `surface=office` (a `surface=note`
+ * replaced) and the remembered choice is office, so a page served by the
+ * service worker -- which the shell's request rule never sees (./surface.ts)
+ * -- is on it too. The main process passes the surface as an argument (a
+ * sandboxed preload imports nothing of the app's).
+ */
+function pinSurface(): void {
+  const surface = process.argv.find((arg) => arg.startsWith("--mrai-surface="))?.slice("--mrai-surface=".length);
+  if (surface !== "office" || location.protocol !== "http:" || location.hostname !== "127.0.0.1") return;
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.getAll("surface").join(",") !== surface) {
+      url.searchParams.delete("surface");
+      url.searchParams.set("surface", surface);
+      history.replaceState(history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    localStorage.setItem("mr-surface", surface);
+  } catch {
+    // Storage refused: the address alone stamps the surface for this load.
+  }
+}
+pinSurface();
+
+contextBridge.exposeInMainWorld("mraiDesktop", {
+  classic: true,
+  platform: process.platform,
+  /** The window's instant view (src/classic/instant-view.ts): the page now
+   * shows what it showed ("home": the home with its files; "deck": a deck on
+   * its canvas), so it goes; and the home as it is now, for the next
+   * launch's. */
+  instantDone: (kind: string) => ipcRenderer.invoke("mrai:instant-done", String(kind)),
+  instantSave: (html: string) => ipcRenderer.invoke("mrai:instant-save", String(html)),
+  /** The documents this window was opened for; ``keep`` leaves them for a
+   * later take (the notebook the open page leads to imports them). */
+  takeOpenFiles: (keep?: boolean) => ipcRenderer.invoke("mrai:take-open-files", keep === true),
+  /** A notebook's page takes documents opened from the system where it is:
+   * ``listener`` hears each time some are waiting (take them with
+   * takeOpenFiles). Returns the unsubscribe. */
+  onDocumentsOpened: (listener: (opened?: unknown) => void, options?: { reopens?: unknown; notebookId?: unknown }) => {
+    // ``opened.reopened``: documents opened again, unchanged since each became
+    // a page of the notebook this page shows (``options.reopens``): it shows
+    // those pages where it is, no file waits for it.
+    const handler = (_event: unknown, opened?: unknown) => listener(opened && typeof opened === "object" ? opened : undefined);
+    ipcRenderer.on("mrai:documents-opened", handler);
+    const reopens = options?.reopens === true && typeof options.notebookId === "string" ? options.notebookId : null;
+    void ipcRenderer.invoke("mrai:documents-in-place", true, reopens);
+    return () => {
+      ipcRenderer.removeListener("mrai:documents-opened", handler);
+      void ipcRenderer.invoke("mrai:documents-in-place", false);
+    };
+  },
+  /** Pages handed over as documents opened again that are gone: their
+   * documents are handed over again as new ones (imported). */
+  reopenedPagesMissing: (pageIds: unknown) =>
+    ipcRenderer.invoke("mrai:reopened-pages-missing", Array.isArray(pageIds) ? pageIds.map(String) : []),
+  /** The app quitting or this window closing: ``handler`` settles the page's
+   * edits (saves sent and waited on, recovery copies written) within the time
+   * given, and the app waits for it before it closes. Returns the unsubscribe. */
+  onSettleEdits: (handler: (timeoutMs: number) => Promise<unknown>) => {
+    const listener = (_event: unknown, nonce: unknown, timeoutMs: unknown) => {
+      void Promise.resolve()
+        .then(() => handler(Number(timeoutMs) || 0))
+        .catch(() => null)
+        .then((result) => ipcRenderer.invoke("mrai:edits-settled", String(nonce), result ?? null));
+    };
+    ipcRenderer.on("mrai:settle-edits", listener);
+    void ipcRenderer.invoke("mrai:settles-edits", true);
+    return () => {
+      ipcRenderer.removeListener("mrai:settle-edits", listener);
+      void ipcRenderer.invoke("mrai:settles-edits", false);
+    };
+  },
+  readOpenFile: (token: string, start: number, end: number) =>
+    ipcRenderer.invoke("mrai:read-open-file", String(token), Number(start), Number(end)),
+  defaultAppState: () => ipcRenderer.invoke("mrai:default-app-state"),
+  makeDefaultApp: (extensions?: string[]) =>
+    ipcRenderer.invoke("mrai:make-default-app", Array.isArray(extensions) ? extensions.map(String) : undefined),
+  /** At launch: { supported, missing } when the app should ask to open the
+   * documents by default (at most once per run), else null. */
+  defaultAppOffer: () => ipcRenderer.invoke("mrai:default-app-offer"),
+  /** "No thanks": not asked at launch again (Settings can still make it the default). */
+  declineDefaultApp: () => ipcRenderer.invoke("mrai:default-app-decline"),
+  /** Write an exported file (bytes) next to its original, asking where when
+   * there is none or `saveAs` is set. Resolves to the path, or null. */
+  saveFile: (request: { bytes: ArrayBuffer; filename: string; originalPath?: string | null; saveAs?: boolean }) =>
+    ipcRenderer.invoke("mrai:save-file", {
+      bytes: request?.bytes,
+      filename: String(request?.filename ?? ""),
+      originalPath: request?.originalPath ? String(request.originalPath) : null,
+      saveAs: Boolean(request?.saveAs),
+    }),
+  /** A token for a file the page holds that is on this computer (dropped
+   * or picked), which the app's API reads where it is; null otherwise. */
+  localFileToken: (file: File) => {
+    let filePath = "";
+    try {
+      filePath = webUtils.getPathForFile(file);
+    } catch {
+      filePath = "";
+    }
+    return filePath ? ipcRenderer.invoke("mrai:local-file-token", filePath) : Promise.resolve(null);
+  },
+  /** The page a local file became, so Save writes back to that file. */
+  linkOriginal: (pageId: string, localToken: string, notebookId?: string) =>
+    ipcRenderer.invoke("mrai:link-original", String(pageId), String(localToken), notebookId ? String(notebookId) : undefined),
+  originalOf: (pageId: string) => ipcRenderer.invoke("mrai:original-of", String(pageId)),
+  /** Write a page's file over the file it came from (asking where once when
+   * there is none). Resolves to { path, name }, { error }, or null. */
+  saveToOriginal: (request: { pageId: string; bytes: ArrayBuffer; filename: string; state?: string }) =>
+    ipcRenderer.invoke("mrai:save-to-original", {
+      pageId: String(request?.pageId ?? ""),
+      bytes: request?.bytes,
+      filename: String(request?.filename ?? ""),
+      state: typeof request?.state === "string" ? request.state : undefined,
+    }),
+  /** The app's own LibreOffice (src/classic/libreoffice.ts): what it offers
+   * and holds, download and enable it (resolves when done, cancelled or
+   * failed), remove it, and hear when any of that changes. */
+  libreOffice: {
+    status: () => ipcRenderer.invoke("mrai:libreoffice-status"),
+    install: () => ipcRenderer.invoke("mrai:libreoffice-install"),
+    remove: () => ipcRenderer.invoke("mrai:libreoffice-remove"),
+    onChange: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("mrai:libreoffice-changed", handler);
+      return () => ipcRenderer.removeListener("mrai:libreoffice-changed", handler);
+    },
+  },
+  /** What the AI may do on this computer (src/classic/agent-computer.ts):
+   * give it folders (the system's dialog), take one back, choose the mode
+   * and how its asks are approved (the composer's 权限模式);
+   * the pages read the current state from the API (GET /desktop/computer). */
+  agentComputer: {
+    addFolder: () => ipcRenderer.invoke("mrai:agent-computer-add-folder"),
+    removeFolder: (folder: string) => ipcRenderer.invoke("mrai:agent-computer-remove-folder", String(folder)),
+    setMode: (mode: string, network?: boolean) =>
+      ipcRenderer.invoke("mrai:agent-computer-set-mode", String(mode), typeof network === "boolean" ? network : undefined),
+    /** 权限模式: manual | accept_edits | skip. */
+    setApproval: (approval: string) => ipcRenderer.invoke("mrai:agent-computer-set-approval", String(approval)),
+    onChange: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("mrai:agent-computer-changed", handler);
+      return () => ipcRenderer.removeListener("mrai:agent-computer-changed", handler);
+    },
+  },
+  /** New versions of the app (src/updates.ts): Settings › Software Update
+   * reads the state (telling the shell its language), checks, downloads,
+   * restarts to install, chooses the beta versions, and hears each change. */
+  updates: {
+    status: (locale?: string) => ipcRenderer.invoke("mrai:update-status", typeof locale === "string" ? locale : undefined),
+    check: () => ipcRenderer.invoke("mrai:update-check"),
+    download: () => ipcRenderer.invoke("mrai:update-download"),
+    install: () => ipcRenderer.invoke("mrai:update-install"),
+    setBeta: (on: boolean) => ipcRenderer.invoke("mrai:update-set-beta", on === true),
+    onChange: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("mrai:update-changed", handler);
+      return () => ipcRenderer.removeListener("mrai:update-changed", handler);
+    },
+  },
+  aiAccount: () => ipcRenderer.invoke("mrai:ai-account"),
+  signInForAi: (reason?: string) => ipcRenderer.invoke("mrai:ai-sign-in", String(reason ?? "")),
+  signOutOfAi: () => ipcRenderer.invoke("mrai:ai-sign-out"),
+  onAiAccountChange: (listener: () => void) => {
+    const handler = () => listener();
+    ipcRenderer.on("mrai:ai-account-changed", handler);
+    return () => ipcRenderer.removeListener("mrai:ai-account-changed", handler);
+  },
+});

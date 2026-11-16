@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev` inicia um servidor de desenvolvimento no mesmo endereço e `npm run smoke` verifica uma compilação. O README de cada pacote detalha o que ele faz e como incorporá-lo.
 
+## Aplicativo de desktop
+
+[`apps/desktop`](../apps/desktop) contém o **MR Office Editors**: o código-fonte da camada do aplicativo de desktop do MR Office (Electron), com identidade de aplicativo própria. Com o componente gratuito do MR Office disponível em Releases, ele é o aplicativo de desktop do MR Office, com arquivos Word, Excel, PowerPoint e PDF, login e IA. Sem o componente, executa só os editores de código aberto, que abrem arquivos .mrdoc, .mrsheet, .mrslides e .mrink, além de CSV, HTML, Markdown e PDF. A camada e os editores são código-fonte AGPL; o componente é compilado, gratuito e não é de código aberto. Depois de `npm run build`, inicie com:
+
+```bash
+npm run desktop
+```
+
 ## Para todos os recursos, instale o aplicativo para desktop do MR Office (grátis)
 
 O aplicativo para desktop MR Office é gratuito, traz estes editores e o serviço completo, e funciona offline no seu próprio computador. Ele acrescenta o que os editores de código aberto não têm:

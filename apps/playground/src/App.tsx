@@ -5,18 +5,28 @@
  */
 // The playground: open a file from this computer, edit it in its editor, and
 // save it back as a download. No account and no server: everything stays in
-// this browser tab.
+// this browser tab. Inside the desktop app (apps/desktop) the same page opens
+// files from the computer and Save writes them back where they came from
+// (./desktop.ts).
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { DESKTOP_DOWNLOAD_URL, EDITOR_LOCALES, EditorHostProvider, WEB_APP_URL, browserDownloadHost, noteDesktopFeature, type EditorDefinition, type EditorProps, type LocalFile, type SavedFile } from "@mrnote/core";
 
 import { useToast } from "@mrnote/core/web/hooks/use-toast.ts";
 
+import { desktopBridge, refusedMessage } from "./desktop";
 import { EDITOR_LOADERS, type EditorId } from "./editors.generated";
+
+/** The desktop app's bridge, when the page runs in it. */
+const DESKTOP = desktopBridge();
 
 interface OpenTab {
   readonly file: LocalFile;
   readonly editor: EditorId;
   dirty: boolean;
+  /** In the desktop app: the file on the computer that Save writes to. */
+  readonly handle?: string | null;
+  /** The name of that file, when it is not the one the tab opened with. */
+  readonly title?: string;
 }
 
 const LOCALE_KEY = "mrnote-editors:locale";
@@ -136,6 +146,10 @@ export function App() {
   }, []);
   const savers = useRef(new Map<string, () => Promise<SavedFile> | SavedFile>());
   const input = useRef<HTMLInputElement>(null);
+  const tabsNow = useRef(tabs);
+  tabsNow.current = tabs;
+  const activeNow = useRef(active);
+  activeNow.current = active;
 
   useEffect(() => {
     try {
@@ -146,7 +160,7 @@ export function App() {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  const openFile = useCallback((file: LocalFile, chosen?: EditorId) => {
+  const openFile = useCallback((file: LocalFile, chosen?: EditorId, handle?: string | null) => {
     const editors = editorsFor(file.name);
     const editor = chosen ?? editors[0];
     if (!editor) {
@@ -154,16 +168,17 @@ export function App() {
       else setNotice(`No editor here opens ${file.name}.`);
       return;
     }
-    setTabs((current) => [...current, { file, editor, dirty: false }]);
+    setTabs((current) => [...current, { file, editor, dirty: false, handle: handle ?? null }]);
     setActive(file.id);
     const other = editors.find((id) => id !== editor);
+    // (the other editor's tab saves through the Save dialog: it may write another kind of file)
     setAlternative(other ? { file: { ...file, id: nextId() }, editor: other } : null);
     setNoticeLink(null);
     setNotice(other ? `Opened ${file.name} in the ${EDITOR_LOADERS[editor].label} editor.` : null);
   }, []);
 
   const openFromDisk = useCallback(
-    async (list: FileList | null) => {
+    async (list: FileList | readonly File[] | null) => {
       for (const picked of Array.from(list ?? [])) {
         openFile({ id: nextId(), name: picked.name, bytes: new Uint8Array(await picked.arrayBuffer()) });
       }
@@ -180,7 +195,7 @@ export function App() {
     [openFile],
   );
 
-  const save = useCallback(async (tabId: string | null) => {
+  const save = useCallback(async (tabId: string | null, saveAs = false) => {
     if (!tabId) return;
     const saver = savers.current.get(tabId);
     if (!saver) {
@@ -189,6 +204,17 @@ export function App() {
     }
     try {
       const saved = await saver();
+      if (DESKTOP) {
+        const tab = tabsNow.current.find((entry) => entry.file.id === tabId);
+        const bytes = saved.bytes instanceof Blob ? new Uint8Array(await saved.bytes.arrayBuffer()) : saved.bytes;
+        const result = await DESKTOP.saveFile({ handle: tab?.handle ?? null, name: saved.name, bytes, saveAs });
+        if (!result) return;
+        setTabs((current) => current.map((entry) => (entry.file.id === tabId ? { ...entry, dirty: false, handle: result.handle, title: result.name } : entry)));
+        setAlternative(null);
+        setNoticeLink(null);
+        setNotice(result.written ? `Saved ${result.name}.` : `${result.name} has no changes to write.`);
+        return;
+      }
       const data = saved.bytes instanceof Blob ? saved.bytes : new Blob([saved.bytes as BlobPart], { type: saved.type });
       await browserDownloadHost.saveFile({ name: saved.name, type: saved.type, data });
       setTabs((current) => current.map((tab) => (tab.file.id === tabId ? { ...tab, dirty: false } : tab)));
@@ -201,6 +227,9 @@ export function App() {
   }, []);
 
   const close = useCallback((tabId: string) => {
+    // the desktop app asks before unsaved changes are closed away
+    const closing = tabsNow.current.find((tab) => tab.file.id === tabId);
+    if (DESKTOP && closing?.dirty && !window.confirm(`${closing.title ?? closing.file.name} has unsaved changes. Close it without saving?`)) return;
     savers.current.delete(tabId);
     setTabs((current) => {
       const next = current.filter((tab) => tab.file.id !== tabId);
@@ -208,6 +237,53 @@ export function App() {
       return next;
     });
   }, []);
+
+  // The desktop app: the files it was given, now and whenever more arrive,
+  // and its menu's commands.
+  useEffect(() => {
+    if (!DESKTOP) return;
+    const desktop = DESKTOP;
+    const run = (command: string) => {
+      if (command === "save") void save(activeNow.current);
+      else if (command === "save-as") void save(activeNow.current, true);
+      else if (command.startsWith("new:") && command.slice(4) in EDITOR_LOADERS) void newFile(command.slice(4) as EditorId);
+    };
+    const take = async () => {
+      // (taken once: whatever arrives is opened, even across a remount)
+      const waiting = await desktop.takeOpenFiles();
+      for (const file of waiting.files) openFile({ id: nextId(), name: file.name, bytes: file.bytes }, undefined, file.handle);
+      const refused = refusedMessage(waiting.refused);
+      if (refused) setNotice(refused);
+      waiting.commands.forEach(run);
+    };
+    void take();
+    const stopFiles = desktop.onFilesWaiting(() => void take());
+    const stopCommands = desktop.onCommand(run);
+    return () => {
+      stopFiles();
+      stopCommands();
+    };
+  }, [newFile, openFile, save]);
+
+  // The desktop app: unsaved changes keep the window from closing until the
+  // person says so, and show in its title.
+  const unsaved = tabs.some((tab) => tab.dirty);
+  useEffect(() => {
+    if (!DESKTOP) return;
+    DESKTOP.setEdited(unsaved);
+    if (!unsaved) return;
+    const stay = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", stay);
+    return () => window.removeEventListener("beforeunload", stay);
+  }, [unsaved]);
+  const activeTab = tabs.find((tab) => tab.file.id === active);
+  useEffect(() => {
+    if (!DESKTOP) return;
+    document.title = activeTab ? `${activeTab.title ?? activeTab.file.name}${activeTab.dirty ? " •" : ""} — MR Office Editors` : "MR Office Editors";
+  }, [activeTab]);
 
   const accept = useMemo(() => Object.values(EDITOR_LOADERS).flatMap((entry) => entry.extensions).join(","), []);
 
@@ -226,7 +302,7 @@ export function App() {
                 </button>
               ) : null,
             )}
-            <button type="button" onClick={() => input.current?.click()}>
+            <button type="button" onClick={() => (DESKTOP ? void DESKTOP.showOpenDialog() : input.current?.click())}>
               Open…
             </button>
             <button type="button" disabled={!active} onClick={() => void save(active)}>
@@ -244,11 +320,17 @@ export function App() {
         </header>
         {bannerShown ? (
           <div className="pg-banner" role="note">
-            <span>
-              Use the <strong>MR Office desktop app</strong> for the full service: Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt and saving PDF edits.
-            </span>
+            {DESKTOP ? (
+              <span>
+                Install the free <strong>MR Office component</strong> and this app becomes the MR Office desktop app: Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt, saving PDF edits, and AI.
+              </span>
+            ) : (
+              <span>
+                Use the <strong>MR Office desktop app</strong> for the full service: Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt and saving PDF edits.
+              </span>
+            )}
             <a href={DESKTOP_DOWNLOAD_URL} target="_blank" rel="noreferrer">
-              Download MR Office (free)
+              {DESKTOP ? "Get the MR Office component (free)" : "Download MR Office (free)"}
             </a>
             <a className="pg-banner-web" href={WEB_APP_URL} target="_blank" rel="noreferrer">
               mroffice.ai
@@ -274,10 +356,10 @@ export function App() {
             {tabs.map((tab) => (
               <div key={tab.file.id} className="pg-tab" data-active={tab.file.id === active || undefined}>
                 <button type="button" role="tab" aria-selected={tab.file.id === active} onClick={() => setActive(tab.file.id)}>
-                  {tab.file.name}
+                  {tab.title ?? tab.file.name}
                   {tab.dirty ? " •" : ""}
                 </button>
-                <button type="button" aria-label={`Close ${tab.file.name}`} onClick={() => close(tab.file.id)}>
+                <button type="button" aria-label={`Close ${tab.title ?? tab.file.name}`} onClick={() => close(tab.file.id)}>
                   ×
                 </button>
               </div>
@@ -314,13 +396,16 @@ export function App() {
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
-            void openFromDisk(event.dataTransfer.files);
+            const dropped = Array.from(event.dataTransfer.files);
+            // in the desktop app, files on the disk open from where they are (Save writes them back)
+            if (DESKTOP) void DESKTOP.openDropped(dropped).then((count) => (count ? undefined : openFromDisk(dropped)));
+            else void openFromDisk(event.dataTransfer.files);
           }}
         >
           {tabs.length === 0 ? (
             <div className="pg-empty">
               <h1>Open a file, or start a new one</h1>
-              <p>Everything stays in this browser tab. Save downloads the file back to your computer.</p>
+              <p>{DESKTOP ? "Files open from your computer, and Save writes them back where they came from." : "Everything stays in this browser tab. Save downloads the file back to your computer."}</p>
               <p className="pg-kinds">
                 {Object.values(EDITOR_LOADERS)
                   .map((entry) => `${entry.label}: ${entry.extensions.slice(0, 8).join(" ")}${entry.extensions.length > 8 ? " …" : ""}`)

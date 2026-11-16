@@ -37,3 +37,25 @@ jobs:
         run: npm install --no-save --no-audit --no-fund playwright@1.58.2 && npx playwright install --with-deps chromium
       - name: Smoke test (open, edit, save and reopen a file in each editor)
         run: node scripts/smoke.mjs
+
+  # The desktop app's shell (apps/desktop): typecheck and unit tests, without
+  # Electron's binary (no window is opened). Building and running the app
+  # itself is described in apps/desktop/README.md.
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install
+        run: npm ci --no-audit --no-fund
+        working-directory: apps/desktop
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - name: Typecheck and test
+        run: npm test
+        working-directory: apps/desktop

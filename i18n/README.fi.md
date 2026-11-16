@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev` käynnistää kehityspalvelimen samaan osoitteeseen, ja `npm run smoke` tarkistaa koontiversion. Jokaisen paketin README kertoo tarkemmin, mitä se tekee ja miten sen voi upottaa.
 
+## Työpöytäsovellus
+
+[`apps/desktop`](../apps/desktop) sisältää **MR Office Editorsin**: MR Officen työpöytäsovelluksen kuoren (Electron) lähdekoodin omalla sovellustunnisteellaan. Kun Releases-sivun ilmainen MR Office -komponentti on asennettu, se on MR Officen työpöytäsovellus: Word-, Excel-, PowerPoint- ja PDF-tiedostot, kirjautuminen ja tekoäly. Ilman komponenttia se ajaa vain avoimen lähdekoodin editoreja, jotka avaavat .mrdoc-, .mrsheet-, .mrslides- ja .mrink-tiedostot sekä CSV-, HTML-, Markdown- ja PDF-tiedostot. Kuori ja editorit ovat AGPL-lähdekoodia; komponentti on käännetty, ilmainen käyttää eikä avointa lähdekoodia. Kun olet ajanut `npm run build`, käynnistä se komennolla:
+
+```bash
+npm run desktop
+```
+
 ## Kaikki ominaisuudet: asenna MR Officen työpöytäsovellus (maksuton)
 
 MR Office -työpöytäsovellus on maksuton, sisältää nämä editorit ja koko palvelun ja toimii offline-tilassa omalla tietokoneellasi. Se tuo sen, mitä avoimen lähdekoodin editoreista puuttuu:

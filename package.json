@@ -5,12 +5,14 @@
   "description": "The open-source editors of MR Office (https://mroffice.ai): documents, spreadsheets, presentations, PDF, handwriting and code, in the browser.",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/playground"
   ],
   "scripts": {
     "build": "npm run build -w @mrnote/playground",
     "dev": "npm run dev -w @mrnote/playground",
     "preview": "npm run preview -w @mrnote/playground",
+    "desktop": "npm --prefix apps/desktop install --no-audit --no-fund && npm --prefix apps/desktop start",
+    "desktop:package": "npm --prefix apps/desktop install --no-audit --no-fund && npm --prefix apps/desktop run package",
     "fonts": "node scripts/fetch-office-fonts.mjs",
     "notices": "node scripts/third-party-notices.mjs",
     "smoke": "node scripts/smoke.mjs"

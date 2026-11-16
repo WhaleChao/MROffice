@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev` khởi động máy chủ phát triển tại cùng địa chỉ, và `npm run smoke` kiểm tra một bản dựng. README của mỗi gói mô tả chi tiết gói làm được gì và cách nhúng.
 
+## Ứng dụng máy tính
+
+[`apps/desktop`](../apps/desktop) chứa **MR Office Editors**: mã nguồn lớp vỏ của ứng dụng máy tính MR Office (Electron), với danh tính ứng dụng riêng. Khi có thành phần MR Office miễn phí từ Releases, đây là ứng dụng máy tính MR Office, với tệp Word, Excel, PowerPoint và PDF, đăng nhập và AI. Không có thành phần đó, chỉ các trình soạn thảo nguồn mở chạy; chúng mở các tệp .mrdoc, .mrsheet, .mrslides và .mrink cùng CSV, HTML, Markdown và PDF. Lớp vỏ và các trình soạn thảo là mã nguồn AGPL; thành phần là bản đã biên dịch, dùng miễn phí và không phải nguồn mở. Sau `npm run build`, khởi chạy bằng:
+
+```bash
+npm run desktop
+```
+
 ## Để dùng đầy đủ tính năng, hãy cài ứng dụng máy tính MR Office (miễn phí)
 
 Ứng dụng máy tính MR Office miễn phí, có các trình soạn thảo này cùng toàn bộ dịch vụ và chạy ngoại tuyến trên máy tính của bạn. Ứng dụng bổ sung những gì các trình soạn thảo mã nguồn mở còn thiếu:

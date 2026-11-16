@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev` startar en utvecklingsserver på samma adress och `npm run smoke` kontrollerar ett bygge. Varje pakets README beskriver i detalj vad det gör och hur det bäddas in.
 
+## Skrivbordsapp
+
+[`apps/desktop`](../apps/desktop) innehåller **MR Office Editors**: källkoden till MR Offices skrivbordsappskal (Electron), med en egen appidentitet. Med den kostnadsfria MR Office-komponenten från Releases är det MR Offices skrivbordsapp, med Word-, Excel-, PowerPoint- och PDF-filer, inloggning och AI. Utan komponenten körs bara redigerarna med öppen källkod; de öppnar .mrdoc-, .mrsheet-, .mrslides- och .mrink-filer samt CSV, HTML, Markdown och PDF. Skalet och redigerarna är AGPL-källkod; komponenten är kompilerad, gratis att använda och inte öppen källkod. Efter `npm run build` startar du den med:
+
+```bash
+npm run desktop
+```
+
 ## För alla funktioner: installera MR Offices skrivbordsapp (gratis)
 
 MR Offices skrivbordsapp är kostnadsfri, innehåller de här redigerarna och hela tjänsten och fungerar offline på din egen dator. Den lägger till det som redigerarna med öppen källkod saknar:

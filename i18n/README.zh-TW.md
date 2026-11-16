@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev` 在同一位址啟動開發伺服器，`npm run smoke` 檢查建置結果。各套件的 README 詳列了它能做的事和嵌入方式。
 
+## 桌面應用程式
+
+[`apps/desktop`](../apps/desktop) 是 **MR Office Editors**：MR Office 桌面版外殼（Electron）的原始碼，使用獨立的應用程式身分。裝上 Releases 中免費的 MR Office 元件後，它就是 MR Office 桌面版：可以開啟和儲存 Word、Excel、PowerPoint 和 PDF 檔案，可以登入並使用 AI。不裝元件時，它只執行開源編輯器，開啟 .mrdoc、.mrsheet、.mrslides、.mrink 檔案以及 CSV、HTML、Markdown 和 PDF。外殼和編輯器是 AGPL 原始碼；元件是編譯好的，可以免費使用，但不開源。先執行 `npm run build`，再執行：
+
+```bash
+npm run desktop
+```
+
 ## 完整功能請安裝 MR Office 桌面版（免費）
 
 MR Office 桌面版免費，包含這些編輯器和完整服務，在你自己的電腦上離線可用。開源編輯器沒有的功能，桌面版都提供：

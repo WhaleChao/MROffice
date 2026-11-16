@@ -51,6 +51,14 @@ npm run preview   # http://localhost:5178
 
 `npm run dev` start een ontwikkelserver op hetzelfde adres en `npm run smoke` controleert een build. De README van elk pakket beschrijft in detail wat het doet en hoe je het insluit.
 
+## Desktop-app
+
+[`apps/desktop`](../apps/desktop) bevat **MR Office Editors**: de broncode van de schil van de MR Office-desktop-app (Electron), met een eigen app-identiteit. Met het gratis MR Office-onderdeel uit Releases is het de MR Office-desktop-app, met Word-, Excel-, PowerPoint- en PDF-bestanden, inloggen en AI. Zonder het onderdeel draaien alleen de opensource-editors; die openen .mrdoc-, .mrsheet-, .mrslides- en .mrink-bestanden en CSV, HTML, Markdown en PDF. De schil en de editors zijn AGPL-broncode; het onderdeel is gecompileerd, gratis te gebruiken en niet open source. Start de app na `npm run build` met:
+
+```bash
+npm run desktop
+```
+
 ## Voor alle functies: installeer de desktop-app van MR Office (gratis)
 
 De desktop-app van MR Office is gratis, bevat deze editors en de volledige dienst, en werkt offline op je eigen computer. Hij voegt toe wat de opensource-editors niet hebben:
