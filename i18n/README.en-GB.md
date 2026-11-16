@@ -4,20 +4,20 @@
 
 <p align="center"><b>The open-source editors of MR Office — documents, spreadsheets, presentations, PDF, handwriting and code — running in the browser.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Try the live demo — no install</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Download MR Office from Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/en-GB"><b>▶ Try the live demo — no install</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Download MR Office from Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Documents" width="100%"></a><br><b>Documents</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Spreadsheets" width="100%"></a><br><b>Spreadsheets</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentations" width="100%"></a><br><b>Presentations</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/en-GB"><img src="../docs/screenshots/docs.png" alt="Documents" width="100%"></a><br><b>Documents</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/en-GB"><img src="../docs/screenshots/sheets.png" alt="Spreadsheets" width="100%"></a><br><b>Spreadsheets</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/en-GB"><img src="../docs/screenshots/slides.png" alt="Presentations" width="100%"></a><br><b>Presentations</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Handwriting" width="100%"></a><br><b>Handwriting</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Code" width="100%"></a><br><b>Code</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/en-GB"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/en-GB"><img src="../docs/screenshots/ink.png" alt="Handwriting" width="100%"></a><br><b>Handwriting</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/en-GB"><img src="../docs/screenshots/code.png" alt="Code" width="100%"></a><br><b>Code</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Calculating formulae with functions, drawing charts and laying out SmartArt run 
 
 ## Run the editors
 
-**▶ [Try the live demo — no install](https://demo.mroffice.ai)**
+**▶ [Try the live demo — no install](https://mroffice.ai/en-GB)**
 
 The six editors are in `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, sharing `@mrnote/core`) and run together in `apps/playground`:
 

@@ -4,20 +4,20 @@
 
 <p align="center"><b>MR Offices redigeringsverktøy med åpen kildekode – dokumenter, regneark, presentasjoner, PDF, håndskrift og kode – i nettleseren.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Prøv live-demoen – ingen installasjon</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Last ned MR Office fra Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/no"><b>▶ Prøv live-demoen – ingen installasjon</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Last ned MR Office fra Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Dokumenter" width="100%"></a><br><b>Dokumenter</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Regneark" width="100%"></a><br><b>Regneark</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentasjoner" width="100%"></a><br><b>Presentasjoner</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/no"><img src="../docs/screenshots/docs.png" alt="Dokumenter" width="100%"></a><br><b>Dokumenter</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/no"><img src="../docs/screenshots/sheets.png" alt="Regneark" width="100%"></a><br><b>Regneark</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/no"><img src="../docs/screenshots/slides.png" alt="Presentasjoner" width="100%"></a><br><b>Presentasjoner</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Håndskrift" width="100%"></a><br><b>Håndskrift</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Kode" width="100%"></a><br><b>Kode</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/no"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/no"><img src="../docs/screenshots/ink.png" alt="Håndskrift" width="100%"></a><br><b>Håndskrift</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/no"><img src="../docs/screenshots/code.png" alt="Kode" width="100%"></a><br><b>Kode</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Beregning av formler med funksjoner, tegning av diagrammer og oppsett av SmartAr
 
 ## Kjør redigeringsverktøyene
 
-**▶ [Prøv live-demoen – ingen installasjon](https://demo.mroffice.ai)**
+**▶ [Prøv live-demoen – ingen installasjon](https://mroffice.ai/no)**
 
 De seks verktøyene ligger i `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, som deler `@mrnote/core`) og kjører sammen i `apps/playground`:
 

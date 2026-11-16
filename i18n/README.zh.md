@@ -4,20 +4,20 @@
 
 <p align="center"><b>MR Office 的开源编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ 在线试用，无需安装</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ 从 Releases 下载 MR Office</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/zh"><b>▶ 在线试用，无需安装</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ 从 Releases 下载 MR Office</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="文档" width="100%"></a><br><b>文档</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="表格" width="100%"></a><br><b>表格</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="演示文稿" width="100%"></a><br><b>演示文稿</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/docs.png" alt="文档" width="100%"></a><br><b>文档</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/sheets.png" alt="表格" width="100%"></a><br><b>表格</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/slides.png" alt="演示文稿" width="100%"></a><br><b>演示文稿</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="手写" width="100%"></a><br><b>手写</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="代码" width="100%"></a><br><b>代码</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/ink.png" alt="手写" width="100%"></a><br><b>手写</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/code.png" alt="代码" width="100%"></a><br><b>代码</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ MR Office 是一个集笔记、AI 和真实文件于一体的工作空间。本�
 
 ## 运行编辑器
 
-**▶ [在线试用，无需安装](https://demo.mroffice.ai)**
+**▶ [在线试用，无需安装](https://mroffice.ai/zh)**
 
 六个编辑器在 `packages/` 下（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`ink`、`code`，共用 `@mrnote/core`），在 `apps/playground` 中一起运行：
 

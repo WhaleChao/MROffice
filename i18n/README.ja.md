@@ -4,20 +4,20 @@
 
 <p align="center"><b>MR Office のオープンソースエディター。文書、スプレッドシート、プレゼンテーション、PDF、手書き、コードがブラウザーで動きます。</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ ライブデモを試す（インストール不要）</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases から MR Office をダウンロード</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/ja"><b>▶ ライブデモを試す（インストール不要）</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases から MR Office をダウンロード</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="文書" width="100%"></a><br><b>文書</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="スプレッドシート" width="100%"></a><br><b>スプレッドシート</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="プレゼンテーション" width="100%"></a><br><b>プレゼンテーション</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/docs.png" alt="文書" width="100%"></a><br><b>文書</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/sheets.png" alt="スプレッドシート" width="100%"></a><br><b>スプレッドシート</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/slides.png" alt="プレゼンテーション" width="100%"></a><br><b>プレゼンテーション</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="手書き" width="100%"></a><br><b>手書き</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="コード" width="100%"></a><br><b>コード</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/ink.png" alt="手書き" width="100%"></a><br><b>手書き</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ja"><img src="../docs/screenshots/code.png" alt="コード" width="100%"></a><br><b>コード</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ MR Office は、ノート、AI、実際のファイルをひとつにまとめ�
 
 ## エディターを動かす
 
-**▶ [ライブデモを試す（インストール不要）](https://demo.mroffice.ai)**
+**▶ [ライブデモを試す（インストール不要）](https://mroffice.ai/ja)**
 
 6 つのエディターは `packages/`（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`ink`、`code`。共通部分は `@mrnote/core`）にあり、`apps/playground` でまとめて動きます：
 

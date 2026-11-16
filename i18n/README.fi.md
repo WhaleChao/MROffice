@@ -4,20 +4,20 @@
 
 <p align="center"><b>MR Officen avoimen lähdekoodin editorit – asiakirjat, laskentataulukot, esitykset, PDF, käsiala ja koodi – selaimessa.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Kokeile live-demoa – ei asennusta</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Lataa MR Office Releases-sivulta</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/fi"><b>▶ Kokeile live-demoa – ei asennusta</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Lataa MR Office Releases-sivulta</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Asiakirjat" width="100%"></a><br><b>Asiakirjat</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Laskentataulukot" width="100%"></a><br><b>Laskentataulukot</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Esitykset" width="100%"></a><br><b>Esitykset</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/docs.png" alt="Asiakirjat" width="100%"></a><br><b>Asiakirjat</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/sheets.png" alt="Laskentataulukot" width="100%"></a><br><b>Laskentataulukot</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/slides.png" alt="Esitykset" width="100%"></a><br><b>Esitykset</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Käsiala" width="100%"></a><br><b>Käsiala</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Koodi" width="100%"></a><br><b>Koodi</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/ink.png" alt="Käsiala" width="100%"></a><br><b>Käsiala</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/fi"><img src="../docs/screenshots/code.png" alt="Koodi" width="100%"></a><br><b>Koodi</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Funktioita sisältävien kaavojen laskennan, kaavioiden piirtämisen ja SmartArt
 
 ## Editorien ajaminen
 
-**▶ [Kokeile live-demoa – ei asennusta](https://demo.mroffice.ai)**
+**▶ [Kokeile live-demoa – ei asennusta](https://mroffice.ai/fi)**
 
 Kuusi editoria ovat hakemistossa `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, yhteisenä `@mrnote/core`), ja ne toimivat yhdessä hakemistossa `apps/playground`:
 

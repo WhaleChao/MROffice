@@ -4,20 +4,20 @@
 
 <p align="center"><b>Các trình soạn thảo mã nguồn mở của MR Office — tài liệu, bảng tính, bản trình bày, PDF, viết tay và mã — chạy trong trình duyệt.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Dùng thử bản demo trực tuyến — không cần cài đặt</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Tải MR Office từ Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/vi"><b>▶ Dùng thử bản demo trực tuyến — không cần cài đặt</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Tải MR Office từ Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Tài liệu" width="100%"></a><br><b>Tài liệu</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Bảng tính" width="100%"></a><br><b>Bảng tính</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Bản trình bày" width="100%"></a><br><b>Bản trình bày</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/docs.png" alt="Tài liệu" width="100%"></a><br><b>Tài liệu</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/sheets.png" alt="Bảng tính" width="100%"></a><br><b>Bảng tính</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/slides.png" alt="Bản trình bày" width="100%"></a><br><b>Bản trình bày</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Viết tay" width="100%"></a><br><b>Viết tay</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Mã" width="100%"></a><br><b>Mã</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/ink.png" alt="Viết tay" width="100%"></a><br><b>Viết tay</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/code.png" alt="Mã" width="100%"></a><br><b>Mã</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Việc tính công thức có hàm, vẽ biểu đồ và dàn trang SmartArt do
 
 ## Chạy các trình soạn thảo
 
-**▶ [Dùng thử bản demo trực tuyến — không cần cài đặt](https://demo.mroffice.ai)**
+**▶ [Dùng thử bản demo trực tuyến — không cần cài đặt](https://mroffice.ai/vi)**
 
 Sáu trình soạn thảo nằm trong `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, dùng chung `@mrnote/core`) và chạy cùng nhau trong `apps/playground`:
 

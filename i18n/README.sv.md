@@ -4,20 +4,20 @@
 
 <p align="center"><b>MR Offices redigerare med öppen källkod – dokument, kalkylblad, presentationer, PDF, handskrift och kod – i webbläsaren.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Prova livedemon – ingen installation</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Ladda ned MR Office från Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/sv"><b>▶ Prova livedemon – ingen installation</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Ladda ned MR Office från Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Dokument" width="100%"></a><br><b>Dokument</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Kalkylblad" width="100%"></a><br><b>Kalkylblad</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentationer" width="100%"></a><br><b>Presentationer</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/docs.png" alt="Dokument" width="100%"></a><br><b>Dokument</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/sheets.png" alt="Kalkylblad" width="100%"></a><br><b>Kalkylblad</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/slides.png" alt="Presentationer" width="100%"></a><br><b>Presentationer</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Handskrift" width="100%"></a><br><b>Handskrift</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Kod" width="100%"></a><br><b>Kod</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/ink.png" alt="Handskrift" width="100%"></a><br><b>Handskrift</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/code.png" alt="Kod" width="100%"></a><br><b>Kod</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Att beräkna formler med funktioner, rita diagram och ställa upp SmartArt görs
 
 ## Kör redigerarna
 
-**▶ [Prova livedemon – ingen installation](https://demo.mroffice.ai)**
+**▶ [Prova livedemon – ingen installation](https://mroffice.ai/sv)**
 
 De sex redigerarna finns i `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, som delar `@mrnote/core`) och körs tillsammans i `apps/playground`:
 

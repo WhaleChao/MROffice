@@ -4,20 +4,20 @@
 
 <p align="center"><b>De opensource-editors van MR Office — documenten, spreadsheets, presentaties, pdf, handschrift en code — in de browser.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Probeer de live demo – zonder installatie</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ MR Office downloaden via Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/nl"><b>▶ Probeer de live demo – zonder installatie</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ MR Office downloaden via Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Documenten" width="100%"></a><br><b>Documenten</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Spreadsheets" width="100%"></a><br><b>Spreadsheets</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentaties" width="100%"></a><br><b>Presentaties</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/nl"><img src="../docs/screenshots/docs.png" alt="Documenten" width="100%"></a><br><b>Documenten</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/nl"><img src="../docs/screenshots/sheets.png" alt="Spreadsheets" width="100%"></a><br><b>Spreadsheets</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/nl"><img src="../docs/screenshots/slides.png" alt="Presentaties" width="100%"></a><br><b>Presentaties</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Handschrift" width="100%"></a><br><b>Handschrift</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Code" width="100%"></a><br><b>Code</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/nl"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/nl"><img src="../docs/screenshots/ink.png" alt="Handschrift" width="100%"></a><br><b>Handschrift</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/nl"><img src="../docs/screenshots/code.png" alt="Code" width="100%"></a><br><b>Code</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Formules met functies berekenen, grafieken tekenen en SmartArt opmaken doet de e
 
 ## De editors draaien
 
-**▶ [Probeer de live demo – zonder installatie](https://demo.mroffice.ai)**
+**▶ [Probeer de live demo – zonder installatie](https://mroffice.ai/nl)**
 
 De zes editors staan in `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, die `@mrnote/core` delen) en draaien samen in `apps/playground`:
 

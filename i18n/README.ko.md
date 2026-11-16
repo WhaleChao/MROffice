@@ -4,20 +4,20 @@
 
 <p align="center"><b>MR Office의 오픈 소스 편집기: 문서, 스프레드시트, 프레젠테이션, PDF, 필기, 코드가 브라우저에서 실행됩니다.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ 라이브 데모 체험 (설치 불필요)</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases에서 MR Office 다운로드</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/ko"><b>▶ 라이브 데모 체험 (설치 불필요)</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases에서 MR Office 다운로드</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="문서" width="100%"></a><br><b>문서</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="스프레드시트" width="100%"></a><br><b>스프레드시트</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="프레젠테이션" width="100%"></a><br><b>프레젠테이션</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/docs.png" alt="문서" width="100%"></a><br><b>문서</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/sheets.png" alt="스프레드시트" width="100%"></a><br><b>스프레드시트</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/slides.png" alt="프레젠테이션" width="100%"></a><br><b>프레젠테이션</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="필기" width="100%"></a><br><b>필기</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="코드" width="100%"></a><br><b>코드</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/ink.png" alt="필기" width="100%"></a><br><b>필기</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/code.png" alt="코드" width="100%"></a><br><b>코드</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ MR Office는 노트, AI, 실제 파일을 한곳에 모은 작업 공간입니�
 
 ## 편집기 실행
 
-**▶ [라이브 데모 체험 (설치 불필요)](https://demo.mroffice.ai)**
+**▶ [라이브 데모 체험 (설치 불필요)](https://mroffice.ai/ko)**
 
 여섯 편집기는 `packages/`(`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, 공통 `@mrnote/core`)에 있으며 `apps/playground`에서 함께 실행됩니다:
 

@@ -4,20 +4,20 @@
 
 <p align="center"><b>Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Coba demo langsung — tanpa instalasi</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Unduh MR Office dari Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/id"><b>▶ Coba demo langsung — tanpa instalasi</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Unduh MR Office dari Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Dokumen" width="100%"></a><br><b>Dokumen</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Lembar kerja" width="100%"></a><br><b>Lembar kerja</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentasi" width="100%"></a><br><b>Presentasi</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/docs.png" alt="Dokumen" width="100%"></a><br><b>Dokumen</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/sheets.png" alt="Lembar kerja" width="100%"></a><br><b>Lembar kerja</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/slides.png" alt="Presentasi" width="100%"></a><br><b>Presentasi</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Tulisan tangan" width="100%"></a><br><b>Tulisan tangan</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Kode" width="100%"></a><br><b>Kode</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/ink.png" alt="Tulisan tangan" width="100%"></a><br><b>Tulisan tangan</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/id"><img src="../docs/screenshots/code.png" alt="Kode" width="100%"></a><br><b>Kode</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Penghitungan rumus dengan fungsi, penggambaran bagan, dan tata letak SmartArt di
 
 ## Menjalankan editor
 
-**▶ [Coba demo langsung — tanpa instalasi](https://demo.mroffice.ai)**
+**▶ [Coba demo langsung — tanpa instalasi](https://mroffice.ai/id)**
 
 Keenam editor ada di `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, yang berbagi `@mrnote/core`) dan berjalan bersama di `apps/playground`:
 

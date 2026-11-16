@@ -4,20 +4,20 @@
 
 <p align="center"><b>Gli editor open source di MR Office — documenti, fogli di calcolo, presentazioni, PDF, scrittura a mano e codice — nel browser.</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Prova la demo online, senza installare nulla</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Scarica MR Office dalle Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/it"><b>▶ Prova la demo online, senza installare nulla</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Scarica MR Office dalle Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Documenti" width="100%"></a><br><b>Documenti</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Fogli di calcolo" width="100%"></a><br><b>Fogli di calcolo</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentazioni" width="100%"></a><br><b>Presentazioni</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/it"><img src="../docs/screenshots/docs.png" alt="Documenti" width="100%"></a><br><b>Documenti</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/it"><img src="../docs/screenshots/sheets.png" alt="Fogli di calcolo" width="100%"></a><br><b>Fogli di calcolo</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/it"><img src="../docs/screenshots/slides.png" alt="Presentazioni" width="100%"></a><br><b>Presentazioni</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Scrittura a mano" width="100%"></a><br><b>Scrittura a mano</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Codice" width="100%"></a><br><b>Codice</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/it"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/it"><img src="../docs/screenshots/ink.png" alt="Scrittura a mano" width="100%"></a><br><b>Scrittura a mano</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/it"><img src="../docs/screenshots/code.png" alt="Codice" width="100%"></a><br><b>Codice</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ Il calcolo delle formule con funzioni, il disegno dei grafici e l'impaginazione 
 
 ## Eseguire gli editor
 
-**▶ [Prova la demo online, senza installare nulla](https://demo.mroffice.ai)**
+**▶ [Prova la demo online, senza installare nulla](https://mroffice.ai/it)**
 
 I sei editor sono in `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, che condividono `@mrnote/core`) e girano insieme in `apps/playground`:
 

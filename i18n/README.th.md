@@ -4,20 +4,20 @@
 
 <p align="center"><b>ตัวแก้ไขโอเพนซอร์สของ MR Office ได้แก่ เอกสาร สเปรดชีต งานนำเสนอ PDF การเขียนด้วยมือ และโค้ด ที่ทำงานในเบราว์เซอร์</b></p>
 
-<p align="center"><a href="https://demo.mroffice.ai"><b>▶ ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ ดาวน์โหลด MR Office จาก Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/th"><b>▶ ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ ดาวน์โหลด MR Office จาก Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="เอกสาร" width="100%"></a><br><b>เอกสาร</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="สเปรดชีต" width="100%"></a><br><b>สเปรดชีต</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="งานนำเสนอ" width="100%"></a><br><b>งานนำเสนอ</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/docs.png" alt="เอกสาร" width="100%"></a><br><b>เอกสาร</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/sheets.png" alt="สเปรดชีต" width="100%"></a><br><b>สเปรดชีต</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/slides.png" alt="งานนำเสนอ" width="100%"></a><br><b>งานนำเสนอ</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="การเขียนด้วยมือ" width="100%"></a><br><b>การเขียนด้วยมือ</b></td>
-<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="โค้ด" width="100%"></a><br><b>โค้ด</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/ink.png" alt="การเขียนด้วยมือ" width="100%"></a><br><b>การเขียนด้วยมือ</b></td>
+<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/code.png" alt="โค้ด" width="100%"></a><br><b>โค้ด</b></td>
 </tr>
 </table>
 
@@ -38,7 +38,7 @@ MR Office คือพื้นที่ทำงานสำหรับโน�
 
 ## รันตัวแก้ไข
 
-**▶ [ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง](https://demo.mroffice.ai)**
+**▶ [ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง](https://mroffice.ai/th)**
 
 ตัวแก้ไขทั้งหกอยู่ใน `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code` ใช้ `@mrnote/core` ร่วมกัน) และทำงานร่วมกันใน `apps/playground`:
 
