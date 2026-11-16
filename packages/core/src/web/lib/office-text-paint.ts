@@ -4,13 +4,12 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { ptToPx } from "./office-units";
-import { OFFICE_BEVEL_PRESETS, OFFICE_CAMERA_ROTATIONS } from "./office-picture-effects";
+import { OFFICE_BEVEL_PRESETS, OFFICE_CAMERA_ROTATIONS, officeCameraLonTurn, officeCameraRevTurn } from "./office-picture-effects";
 import type { CSSProperties } from "react";
 import {
   normalizeOfficeShapeGradient,
   officeGradientCss,
-  type OfficeShapeGradient,
-} from "./office-shape-paint";
+  type OfficeShapeGradient, officeGradientAngle, officeGradientDrawnStops } from "./office-shape-paint";
 import {
   normalizeOfficeChartFillPattern,
   officeFillPatternBackground,
@@ -21,6 +20,15 @@ import {
   type OfficeTextPaintStated,
 } from "./office-text-paint-stated";
 import { cssFontFamilyList } from "./css-font-family";
+import {
+  OFFICE_TEXT_OUTLINE_CLEARED,
+  OFFICE_TEXT_OUTLINE_RINGS,
+  officeTextOutlineLineOfStated,
+  officeTextOutlineMarks,
+  officeTextOutlineStroke,
+  officeTextOutlineSvgGlyphs,
+  type OfficeTextOutlineStroke,
+} from "./office-text-outline/office-text-outline-css";
 
 /** `ST_RectAlignment` without the centre, which is said by saying nothing. */
 export const OFFICE_TEXT_SHADOW_ALIGNS = ["tl", "t", "tr", "l", "r", "bl", "b", "br"] as const;
@@ -244,14 +252,34 @@ export function normalizeOfficeTextPaint(
   return next;
 }
 
-/** The CSS turn of a text 3-D rotation camera (the shape painter's table). */
-function officeTextRotationCss(camera: string): CSSProperties {
-  const [x, y, z] = OFFICE_CAMERA_ROTATIONS[camera] ?? [0, 0, 0, 45];
-  if (!x && !y && !z) return {};
-  const perspective = camera.startsWith("perspective") ? "perspective(600px) " : "";
+/**
+ * The CSS turn of the words' 3-D Rotation: the camera preset's (the shape
+ * painter's table), or the X / Y / Z and Perspective Office states on the
+ * camera itself (`a:camera/a:rot`, `@fov`), as Format Text Effects types them.
+ */
+function officeTextRotationCss(paint: OfficeTextPaint): CSSProperties {
+  const scene = paint.stated?.scene3d;
+  const camera = paint.rotation3d?.camera ?? scene?.camera ?? "orthographicFront";
+  const [presetX, presetY, presetZ] = OFFICE_CAMERA_ROTATIONS[camera] ?? [0, 0, 0, 45];
+  const turned = scene?.cameraRotation;
+  const x = turned ? officeCameraLonTurn(turned.longitude) : presetX;
+  const y = turned ? turned.latitude / 60_000 : presetY;
+  const z = turned ? officeCameraRevTurn(turned.revolution) : presetZ;
+  // A stated field of view stands the eye nearer or farther than the 600 px
+  // every preset is drawn from (45 degrees).
+  const fov = Math.min(179, Math.max(1, scene?.fieldOfView !== undefined ? scene.fieldOfView / 60_000 : 45));
+  const eye = Math.round((600 * Math.tan((22.5 * Math.PI) / 180)) / Math.tan((fov * Math.PI) / 360));
+  const perspective = camera.startsWith("perspective") ? `perspective(${eye}px) ` : "";
+  // 3-D Rotation > Distance from ground (`a:sp3d@z`): the words stand that
+  // far off their ground toward the eye -- nearer, and so larger, through a
+  // perspective camera; a parallel one draws them the same size (as a
+  // shape's, `officeShapeEffectsPaint`).
+  const ground = paint.stated?.shape3d?.zEmu;
+  const lift = perspective && ground ? ` translateZ(${Math.round((ground / 9525) * 100) / 100}px)` : "";
+  if (!x && !y && !z && !lift) return {};
   return {
     display: "inline-block",
-    transform: `${perspective}rotateZ(${z}deg) rotateX(${-y}deg) rotateY(${x}deg)`,
+    transform: `${perspective}rotateZ(${z}deg) rotateX(${-y}deg) rotateY(${x}deg)${lift}`,
   };
 }
 
@@ -305,6 +333,20 @@ function officeTextPaintInk(paint: OfficeTextPaint): string | null {
   return paint.outline !== "none" && paint.outlineWidthPt > 0 ? paint.outline : null;
 }
 
+/**
+ * Whether a text shadow is more than a moved copy: scaled or skewed
+ * (Text Effects > Shadow > Perspective). Such a shadow is drawn by the shadow
+ * copy (`office-text-shadow-copy`), not by `drop-shadow`.
+ */
+export function officeTextShadowTransformed(
+  shadow: { scale?: number; scaleY?: number; skewX?: number; skewY?: number } | null | undefined,
+): boolean {
+  if (!shadow) return false;
+  const scale = shadow.scale ?? 100;
+  const scaleY = shadow.scaleY ?? scale;
+  return scale !== 100 || scaleY !== 100 || Boolean(shadow.skewX) || Boolean(shadow.skewY);
+}
+
 export function officeTextPaintCss(value: OfficeTextPaint): CSSProperties {
   const paint = normalizeOfficeTextPaint(value)!;
   const surface: string[] = [];
@@ -342,11 +384,17 @@ export function officeTextPaintCss(value: OfficeTextPaint): CSSProperties {
   const effects: string[] = [];
   let stroke = "0 transparent";
   let paintOrder: string | undefined;
+  let rings: string | undefined;
   if (outlined) {
+    // The outline Office draws (one centred, round stroke of each glyph's
+    // merged outline, over the fill) is the overlay's
+    // (office-text-outline-css.ts); the strokes and rings below stand in
+    // for it until it has drawn, and where it cannot (a textarea).
     if (clipped || seeThrough) {
-      for (const [x, y] of [[width, 0], [-width, 0], [0, width], [0, -width]]) {
-        effects.push(`drop-shadow(${x}pt ${y}pt 0 ${paint.outline})`);
-      }
+      rings = [[width, 0], [-width, 0], [0, width], [0, -width]]
+        .map(([x, y]) => `drop-shadow(${x}pt ${y}pt 0 ${paint.outline})`)
+        .join(" ");
+      effects.push(`var(${OFFICE_TEXT_OUTLINE_RINGS})`);
     } else if (filled) {
       stroke = `${width * 2}pt ${paint.outline}`;
       paintOrder = "stroke fill";
@@ -354,7 +402,9 @@ export function officeTextPaintCss(value: OfficeTextPaint): CSSProperties {
       stroke = `${width}pt ${paint.outline}`;
     }
   }
-  if (paint.shadow) {
+  if (paint.shadow && !officeTextShadowTransformed(paint.shadow)) {
+    // A perspective shadow (scaled or skewed) is the shadow copy's to draw
+    // (`office-text-shadow-copy`): a drop-shadow can only move the words.
     const s = paint.shadow;
     effects.push(`drop-shadow(${s.offsetX}px ${s.offsetY}px ${s.blur}px ${alpha(s.color, s.opacity)})`);
   }
@@ -379,6 +429,10 @@ export function officeTextPaintCss(value: OfficeTextPaint): CSSProperties {
     
     
     ...(effects.length ? { filter: effects.join(" "), willChange: "filter" } : {}),
+    ...(rings ? { [OFFICE_TEXT_OUTLINE_RINGS as string]: rings } : {}),
+    // Words with a paint and no outline say so, so the outline of words
+    // round them does not draw theirs.
+    ...(outlined ? officeTextOutlineMarks(paint.outline, width, officeTextOutlineLineOfStated(paint.stated?.line)) : OFFICE_TEXT_OUTLINE_CLEARED),
     // Marks painted words for the shared caret (`office-painted-caret.ts`),
     // which draws a caret of its own over them: one colour whatever the
     // WordArt, never filtered, never transparent with a clipped fill.
@@ -392,7 +446,9 @@ export function officeTextPaintCss(value: OfficeTextPaint): CSSProperties {
       ? `below ${paint.reflection.distance}px linear-gradient(transparent ${100 - (paint.reflection.size ?? 40)}%, rgba(0,0,0,${paint.reflection.opacity}))`
       : "unset",
     // Text Effects > 3-D Rotation: the words turned as the camera sees them.
-    ...(paint.rotation3d ? officeTextRotationCss(paint.rotation3d.camera) : {}),
+    ...(paint.rotation3d || paint.stated?.scene3d?.cameraRotation || paint.stated?.shape3d?.zEmu
+      ? officeTextRotationCss(paint)
+      : {}),
   } as CSSProperties;
 }
 
@@ -420,6 +476,7 @@ export const OFFICE_TEXT_PAINT_HIDDEN_CSS = {
   [OFFICE_TEXT_PAINT_MARK as string]: "0",
   [OFFICE_TEXT_PAINT_INK as string]: "initial",
   [OFFICE_TEXT_PAINT_CLIPPED_INK as string]: "initial",
+  ...OFFICE_TEXT_OUTLINE_CLEARED,
 } as CSSProperties;
 
 export function sameOfficeTextPaint(a: unknown, b: unknown): boolean {
@@ -431,6 +488,18 @@ export function sameOfficeTextPaint(a: unknown, b: unknown): boolean {
 
 /** Vector title surface for canvas/print hosts that cannot paint gradient text.
  * It is ephemeral display data only; the native document retains real text. */
+
+/** An outline's join, miter limit and cap as SVG stroke attributes. */
+function svgOutlineStroke(line: OfficeTextOutlineStroke): string {
+  return ` stroke-linejoin="${line.join}"${line.join === "miter" ? ` stroke-miterlimit="${line.miterLimit}"` : ""}`
+    + ` stroke-linecap="${line.dash ? line.cap : "round"}"`;
+}
+
+/** A dashed outline's dash array for a line `unit` wide (none when solid). */
+function svgOutlineDash(line: OfficeTextOutlineStroke, unit: number): string {
+  return line.dash ? ` stroke-dasharray="${line.dash.map((length) => +(length * unit).toPrecision(6)).join(" ")}"` : "";
+}
+
 export function officeTextPaintSvg(
   text: string,
   value: OfficeTextPaint,
@@ -479,14 +548,14 @@ export function officeTextPaintSvg(
     const cx = ((rect.l ?? 0) + (100_000 - (rect.r ?? 0))) / 200_000;
     const cy = ((rect.t ?? 0) + (100_000 - (rect.b ?? 0))) / 200_000;
     defs.push(
-      `<radialGradient id="fill" cx="${cx}" cy="${cy}" r="0.75">${p.fillGradient.stops.map((s) => `<stop offset="${s.position}" stop-color="${s.color}"/>`).join("")}</radialGradient>`,
+      `<radialGradient id="fill" cx="${cx}" cy="${cy}" r="0.75">${officeGradientDrawnStops(p.fillGradient.stops).map((s) => `<stop offset="${s.position}" stop-color="${s.color}"/>`).join("")}</radialGradient>`,
     );
   } else if (p.fillGradient) {
-    const angle = ((p.fillGradient.angle - 90) * Math.PI) / 180;
+    const angle = ((officeGradientAngle(p.fillGradient) - 90) * Math.PI) / 180;
     const dx = Math.cos(angle),
       dy = Math.sin(angle);
     defs.push(
-      `<linearGradient id="fill" x1="${(1 - dx) / 2}" y1="${(1 - dy) / 2}" x2="${(1 + dx) / 2}" y2="${(1 + dy) / 2}">${p.fillGradient.stops.map((s) => `<stop offset="${s.position}" stop-color="${s.color}"/>`).join("")}</linearGradient>`,
+      `<linearGradient id="fill" x1="${(1 - dx) / 2}" y1="${(1 - dy) / 2}" x2="${(1 + dx) / 2}" y2="${(1 + dy) / 2}">${officeGradientDrawnStops(p.fillGradient.stops).map((s) => `<stop offset="${s.position}" stop-color="${s.color}"/>`).join("")}</linearGradient>`,
     );
   }
   const shadows: Array<{
@@ -528,10 +597,39 @@ export function officeTextPaintSvg(
     font.weight === "bold" || (typeof font.weight === "number" && font.weight >= 600)
       ? "bold"
       : "normal";
-  // The outline drawn under the fill at twice its width, so overlapping
-  // contours inside a glyph show no stroke (as officeTextPaintCss).
-  const outlineUnderFill = p.fill !== "none" || Boolean(p.fillGradient);
-  const glyph = `<text x="${width / 2}" y="${y}" text-anchor="middle" font-family="${family}" font-size="${fontSize}" font-weight="${weight}"${font.italic ? ' font-style="italic"' : ""} fill="${p.fillGradient ? "url(#fill)" : p.fill}" stroke="${p.outline}"${outlineUnderFill ? ` stroke-width="${(p.outlineWidthPt * 8) / 3}" paint-order="stroke"` : ` stroke-width="${ptToPx(p.outlineWidthPt)}"`}${shadows.length ? ' filter="url(#effects)"' : ""}>${escape(text)}</text>`;
+  // The outline as Office draws it: one centred, round-joined stroke of
+  // each glyph's merged outline, over the fill (office-text-outline-css.ts).
+  // With the glyphs' outlines to hand (the page's served faces), the words
+  // and the band are both drawn from them, so they meet exactly; until then
+  // the picture's text is stroked round, centred, over its fill.
+  const outlined = p.outline !== "none" && p.outlineWidthPt > 0;
+  const widthPx = ptToPx(p.outlineWidthPt);
+  // Its join, cap and dash as Office states them (round, solid where none is).
+  const line = officeTextOutlineStroke(officeTextOutlineLineOfStated(p.stated?.line));
+  const fillPaint = p.fillGradient ? "url(#fill)" : p.fill;
+  const placed = outlined && font.family?.trim()
+    ? officeTextOutlineSvgGlyphs(text, font.family.trim(), weight === "bold" ? 700 : 400, Boolean(font.italic), fontSize)
+    : null;
+  let glyph: string;
+  if (placed) {
+    const start = width / 2 - placed.width / 2;
+    const ids = new Map<string, string>();
+    let uses = "";
+    for (const g of placed.glyphs) {
+      let id = ids.get(g.key);
+      if (!id) {
+        id = `g${ids.size}`;
+        ids.set(g.key, id);
+        defs.push(`<path id="${id}" d="${g.d}"/>`);
+      }
+      uses += `<use href="#${id}" transform="matrix(${+g.scale.toPrecision(6)} 0 ${+(g.skew * g.scale).toPrecision(6)} ${+(-g.scale).toPrecision(6)} ${+(start + g.x).toFixed(2)} ${+y.toFixed(2)})" stroke-width="${+(widthPx / g.scale).toPrecision(6)}"${svgOutlineDash(line, widthPx / g.scale)}/>`;
+    }
+    glyph = `<g class="office-text-glyphs"${shadows.length ? ' filter="url(#effects)"' : ""}>` +
+      (p.fill !== "none" || p.fillGradient ? `<g fill="${fillPaint}">${uses}</g>` : "") +
+      `<g fill="none" stroke="${p.outline}"${svgOutlineStroke(line)}>${uses}</g></g>`;
+  } else {
+    glyph = `<text x="${width / 2}" y="${y}" text-anchor="middle" font-family="${family}" font-size="${fontSize}" font-weight="${weight}"${font.italic ? ' font-style="italic"' : ""} fill="${fillPaint}" stroke="${outlined ? p.outline : "none"}"${outlined ? ` stroke-width="${widthPx}"${svgOutlineStroke(line)}${svgOutlineDash(line, widthPx)}` : ""}${shadows.length ? ' filter="url(#effects)"' : ""}>${escape(text)}</text>`;
+  }
   let reflection = "";
   if (p.reflection) {
     const top = padding + fontSize + p.reflection.distance;

@@ -3,7 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { wordEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
+import { wordDocumentEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
 import substitutionTable from "../../../../lib/office-fonts/substitutes.generated.json";
 import wordLatinFamilies from "../../../../lib/office-fonts/word-latin-families.generated.json";
 import wordLineRatios from "../../../../lib/office-fonts/word-line-ratios.generated.json";
@@ -119,12 +119,38 @@ export function wordFontIsRecordedLatin(family: string): boolean {
   // scripts/measure-word-vertical-metrics.py): Franklin Gothic Book in the
   // `w:eastAsia` slot runs its Latin line, 12.47pt at 11pt, not 1.3x that
   // (corpus R83-D07, word-stops-font-heights).
-  return WORD_LATIN_FAMILIES.has(family.trim().toLowerCase());
+  const key = family.trim().replace(/^["']|["']$/g, "").trim().toLowerCase();
+  return WORD_LATIN_FAMILIES.has(key) || (WORD_CLOUD_LATIN_FAMILIES.has(key) && !wordCloudLatinOff());
 }
 
 const WORD_LATIN_FAMILIES: ReadonlySet<string> = new Set(
   (wordLatinFamilies as readonly string[]).map((name) => name.toLowerCase()),
 );
+
+
+
+
+
+
+
+
+
+const WORD_CLOUD_LATIN_FAMILIES: ReadonlySet<string> = new Set([
+  "abril fatface", "amatic sc", "anton", "assistant", "barlow condensed", "dm sans", "dm serif display", "didact gothic",
+  "eb garamond", "fira sans", "fira sans extra condensed", "frank ruhl libre", "heebo", "hind", "hind light", "hind medium",
+  "hind semibold", "ibm plex sans", "inconsolata", "josefin sans", "karla", "lato", "libre baskerville", "libre franklin",
+  "lobster", "lora", "merriweather", "miriam libre", "montserrat", "montserrat extrabold", "montserrat light",
+  "montserrat medium", "montserrat semibold", "noto serif", "nunito", "nunito sans", "open sans", "open sans extrabold",
+  "open sans light", "open sans semibold", "oswald", "oxygen", "pt mono", "pt sans", "pt serif", "pacifico",
+  "patrick hand", "playfair display", "poiret one", "poppins", "quattrocento sans", "raleway", "roboto condensed",
+  "roboto slab", "source code pro", "source sans pro black", "source sans pro light", "source sans pro semibold",
+  "titillium web", "titillium web black", "titillium web light", "titillium web semibold", "ubuntu", "ubuntu light",
+  "ubuntu medium", "ubuntu mono", "varela round", "work sans", "work sans light", "work sans semibold", "yesteryear",
+]);
+/** `window.__docsCloudLatinOff = true` asks the older reading, for an A/B of one build. */
+function wordCloudLatinOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsCloudLatinOff?: boolean}).__docsCloudLatinOff === true;
+}
 
 /** Recorded East Asian families Word installs as one regular face. */
 const REGULAR_ONLY_FAMILIES = new Set(["simsun", "simhei", "kaiti", "fangsong", "ms mincho", "ms pmincho", "ms gothic", "ms ui gothic", "ms pgothic"]);
@@ -221,8 +247,28 @@ export function wordFileLineMetrics(family: string): { box: number; lineGap: num
   const recordedMetrics = wordFontLineMetrics(family);
   if (recordedMetrics) return recordedMetrics;
   const name = family.trim().replace(/^["']|["']$/g, "").toLowerCase();
-  const ratio = (wordLineRatios as Readonly<Record<string, readonly number[]>>)[name];
+  const ratio = (wordLineRatios as Readonly<Record<string, readonly number[]>>)[name] ??
+    (windowsLinesOff() ? undefined : WORD_WINDOWS_LINE_RATIOS[name]);
   return ratio ? { box: ratio[0], lineGap: ratio[1] } : null;
+}
+
+/**
+ * Lines of faces only Windows ships (no file of them on the measuring Mac,
+ * so word-line-ratios has none), as Windows Word sets them: box, line gap,
+ * East Asian, ascender, per em. Segoe Print, single spacing, 12 pt and 20 pt:
+ * lines 21.18 pt and 35.33 pt apart, the baseline 1.31 em below the line's
+ * top (docx-look/probes/altname segp, truth.sh). Its stand-in Patrick Hand
+ * stood 1.32 em, and corpus R353-D20's equations Word sets in it (KaTeX_Math,
+ * altName Segoe Print) 16.2 pt a line for Word's 18.7.
+ */
+const WORD_WINDOWS_LINE_RATIOS: Readonly<Record<string, readonly number[]>> = {
+  "segoe print": [1.7655, 0, 0, 1.31],
+};
+
+/** `window.__docsWindowsLinesOff = true`: a Windows-only face's line is its
+ * stand-in's, as before (an A/B of one build). */
+function windowsLinesOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsWindowsLinesOff?: boolean }).__docsWindowsLinesOff === true;
 }
 
 
@@ -248,7 +294,7 @@ export function wordFontLineDescent(family: string, eastAsian: boolean): number 
   const descent = -font.descender / font.unitsPerEm;
   if (!eastAsian) return descent;
   const box = (font.ascender - font.descender) / font.unitsPerEm;
-  return descent + (box * (wordEastAsianSingleLineFactor(family) - 1)) / 2;
+  return descent + (box * (wordDocumentEastAsianSingleLineFactor(family) - 1)) / 2;
 }
 
 
@@ -276,11 +322,12 @@ export function wordGridFontVerticals(family: string): { ascent: number; descent
   } else {
     // Word's own file (word-line-ratios: box, line gap, East Asian, ascender).
     const ratios = wordLineRatios as Readonly<Record<string, readonly number[]>>;
-    const ratio = ratios[key] ?? (office ? ratios[office.toLowerCase()] : undefined);
+    const ratio = ratios[key] ?? (office ? ratios[office.toLowerCase()] : undefined) ??
+      (windowsLinesOff() ? undefined : WORD_WINDOWS_LINE_RATIOS[key] ?? (office ? WORD_WINDOWS_LINE_RATIOS[office.toLowerCase()] : undefined));
     if (ratio && ratio.length >= 4) {
       const [box, lineGap, eastAsianFlag, ascender] = ratio;
       if (eastAsianFlag === 1) {
-        const half = (box * (wordEastAsianSingleLineFactor(office ?? name) - 1)) / 2;
+        const half = (box * (wordDocumentEastAsianSingleLineFactor(office ?? name) - 1)) / 2;
         verticals = { ascent: ascender + half, descent: box - ascender + half };
       } else {
         verticals = { ascent: ascender + lineGap, descent: box - ascender };
@@ -297,5 +344,5 @@ export function wordFontLineAscent(family: string, eastAsian: boolean): number |
   const ascent = font.ascender / font.unitsPerEm;
   if (!eastAsian) return ascent + font.lineGap / font.unitsPerEm;
   const box = (font.ascender - font.descender) / font.unitsPerEm;
-  return ascent + (box * (wordEastAsianSingleLineFactor(family) - 1)) / 2;
+  return ascent + (box * (wordDocumentEastAsianSingleLineFactor(family) - 1)) / 2;
 }

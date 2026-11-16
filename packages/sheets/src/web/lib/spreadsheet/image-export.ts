@@ -38,6 +38,7 @@ import {
 import { MAX_IMAGE_SRC_LENGTH } from "@mrnote/core/web/lib/spreadsheet/sheet-image.ts";
 import { pictureObjectDisplaySrc } from "@mrnote/core/web/lib/page-picture-objects.ts";
 import {
+  distributedLineUnits,
   effectiveVerticalAlign,
   indentPaddingPx,
   resolveBorderCss,
@@ -1091,8 +1092,11 @@ function drawSpreadLine(
 ): void {
   const text = line.trim();
   const words = text.split(/\s+/).filter(Boolean);
-  const perCharacter = words.length < 2 && (distributed || !text.includes(" "));
-  const units = perCharacter ? Array.from(text) : words;
+  // Distributed: Excel's words (one centred) or, with CJK, its characters
+  // (distributedLineUnits); Justify: the words, or a single word's characters.
+  const units = distributed
+    ? distributedLineUnits(text).units
+    : words.length < 2 && !text.includes(" ") ? Array.from(text) : words;
   const previousAlign = ctx.textAlign;
   ctx.textAlign = "left";
   if (units.length < 2) {

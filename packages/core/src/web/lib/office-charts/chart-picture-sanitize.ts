@@ -5,6 +5,8 @@
  */
 import DOMPurify from "dompurify";
 
+import { withOfficeFontSubstitutes } from "../office-fonts/substitutes";
+
 /** The marks a picture keeps for the browser's hit-testing and part editing:
  * ECharts' series / point marks and the chart engine's part mark. Values
  * are numbers or one closed word. */
@@ -95,6 +97,7 @@ function sanitizeChartPictureOnce(svg: string, width: number, height: number): s
       }
       inlinePicture = references[0];
     }
+    servedFaces(node);
     for (const attribute of Array.from(node.attributes)) {
       if (attribute === inlinePicture) continue;
       if (
@@ -114,6 +117,34 @@ function sanitizeChartPictureOnce(svg: string, width: number, height: number): s
   doc.documentElement.setAttribute("height", "100%");
   doc.documentElement.setAttribute("preserveAspectRatio", "none");
   return new XMLSerializer().serializeToString(doc.documentElement);
+}
+
+
+
+
+
+
+
+
+
+function servedFaces(node: Element): void {
+  const own = node.getAttribute("font-family");
+  if (own) node.setAttribute("font-family", servedStack(own));
+  const style = node.getAttribute("style");
+  if (style && style.includes("font-family"))
+    node.setAttribute("style", style.replace(/(font-family\s*:\s*)([^;]+)/g, (_, name: string, stack: string) => name + servedStack(stack)));
+}
+
+const servedStacks = new Map<string, string>();
+
+function servedStack(stack: string): string {
+  let served = servedStacks.get(stack);
+  if (served === undefined) {
+    served = withOfficeFontSubstitutes(stack).replace(/"([^"]*)"/g, "'$1'");
+    if (servedStacks.size > 256) servedStacks.clear();
+    servedStacks.set(stack, served);
+  }
+  return served;
 }
 
 /** Each DOM copy owns its clip / gradient ids while sharing one drawing.

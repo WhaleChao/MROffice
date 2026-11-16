@@ -5,6 +5,7 @@
  */
 import {
   inspectMraiNativeContentStream,
+  inspectMraiNativeDocumentPageContentGraphs,
   sha256PdfBytes,
 } from "./engine/native/content-stream-transaction";
 import { isMraiNativeSourceTextShowWindow, type PdfNativeListTextSelectionProof } from "./engine/native/list-text-fidelity";
@@ -45,7 +46,8 @@ export async function bindPdfSourceTextBox(input: {
       // reading the one-show proof can stand in for: that proof hides the
       // same glyphs.
       const code = (error as { code?: string }).code;
-      if (!wholeBox || code === "type3" || code === "glyphs-read-as-blanks") throw error;
+      // (Nor is a line that is another box's hidden source a line to bind.)
+      if (!wholeBox || code === "type3" || code === "glyphs-read-as-blanks" || code === "text-box-source") throw error;
       return bindProvedSourceTextBox(input);
     }
   }
@@ -100,6 +102,24 @@ async function bindProvedSourceTextBox(input: {
   const sha256 = await sha256PdfBytes(raw);
   if (sha256 !== span.sha256)
     throw new Error("The original text operator changed.");
+  // The server proves a one-show binding only on a page drawn by one
+  // content stream, the one bound (source_text_box.py: "source text stream
+  // not isolated"). A show in a form the page draws, or in one stream of
+  // several, bound here was stored as a box the server never writes, and it
+  // refused every later write of the page with it (walk 0515: the PDF left
+  // unwritten, the window unsaved). Such a line is bound by span or not at
+  // all. The page is the one the proof read; one this reader cannot find
+  // or walk is left to the server, as before.
+  const proved = input.proof.evidence.resources?.page;
+  const drawn = !proved ? null : await inspectMraiNativeDocumentPageContentGraphs(input.sourceBytes).then(
+    (pages) => pages.find((page) => page.page.objectNumber === proved.objectNumber &&
+      page.page.generation === proved.generation)?.contentStreams ?? null, () => null);
+  if (drawn && (drawn.length !== 1 || drawn[0].objectNumber !== input.proof.target.objectNumber ||
+    drawn[0].generation !== input.proof.target.generation)) {
+    throw new Error(
+      "This text cannot yet be moved into a transparent text box safely.",
+    );
+  }
   return Object.freeze({
     version: 1,
     resourceId: input.resourceId,

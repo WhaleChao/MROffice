@@ -59,7 +59,13 @@ export interface OfficeShapeGradientStop {
   source?: OfficeColorSource;
 }
 export interface OfficeShapeGradient {
-  angle: number;
+  /**
+   * A linear gradient's direction (`a:lin@ang` plus a quarter turn, CSS's 0 =
+   * upward). A path gradient (`path`: radial, rectangular or path shading)
+   * has none: it states no `a:lin`, so no angle is read, compared or written
+   * (`office_shape_paint.gradient`); one a page stored beside it is dropped.
+   */
+  angle?: number;
   stops: OfficeShapeGradientStop[];
   /** `a:lin@scaled`; absent means the `"1"` this module writes. */
   scaled?: boolean;
@@ -252,6 +258,16 @@ export function officeStopOpacity(
   return Math.max(0, Math.min(1, opacity));
 }
 
+/** The direction a renderer that draws only linear gradients gives a path
+ * gradient, which has none of its own (`a:lin@ang` 0, as a reader of a fill
+ * stating none takes it). Never the model's, never written. */
+export const OFFICE_PATH_GRADIENT_DRAWN_ANGLE = 90;
+
+/** ``g``'s angle, or `OFFICE_PATH_GRADIENT_DRAWN_ANGLE` for a path gradient. */
+export function officeGradientAngle(g: Pick<OfficeShapeGradient, "angle">): number {
+  return g.angle ?? OFFICE_PATH_GRADIENT_DRAWN_ANGLE;
+}
+
 export function normalizeOfficeShapeGradient(
   value: unknown,
 ): OfficeShapeGradient | undefined {
@@ -261,11 +277,10 @@ export function normalizeOfficeShapeGradient(
   if (
     typeof g !== "object" ||
     Object.keys(g).some((key) => !fields.includes(key)) ||
-    !("angle" in g) ||
+    // A path gradient has no angle; one stored beside it is dropped below.
+    (!("angle" in g) && !("path" in g)) ||
     !("stops" in g) ||
-    !Number.isFinite(g.angle) ||
-    g.angle < 0 ||
-    g.angle >= 360 ||
+    (!("path" in g) && (!Number.isFinite(g.angle) || (g.angle as number) < 0 || (g.angle as number) >= 360)) ||
     !Array.isArray(g.stops) ||
     g.stops.length < 2 ||
     g.stops.length > MAX_OFFICE_GRADIENT_STOPS ||
@@ -303,7 +318,7 @@ export function normalizeOfficeShapeGradient(
       throw Error("invalid_shape_gradient");
   }
   return {
-    angle: g.angle,
+    ...(g.path === undefined ? { angle: g.angle } : {}),
     stops: g.stops.map((s) => ({
       position: s.position,
       color: s.color.toLowerCase(),
@@ -381,7 +396,7 @@ export function officeGradientAngleForBox(
   width?: number,
   height?: number,
 ): number {
-  const angle = typeof gradient === "number" ? gradient : gradient.angle;
+  const angle = typeof gradient === "number" ? gradient : officeGradientAngle(gradient);
   const scaled = typeof gradient === "number" ? true : gradient.scaled !== false;
   if (
     !scaled ||
@@ -395,6 +410,92 @@ export function officeGradientAngleForBox(
   const ppt = ((angle - 90) * Math.PI) / 180;
   const turned = Math.atan2(Math.sin(ppt) * width!, Math.cos(ppt) * height!);
   return (((turned * 180) / Math.PI + 90) % 360 + 360) % 360;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const OFFICE_EASED_GRADIENT_STEPS = 16;
+/** How many runs the eased gradient's first and last run are split into. */
+export const OFFICE_EASED_GRADIENT_END_SPLIT = 4;
+
+/** Windows PowerPoint's ease of a two-colour gradient, in linear light. */
+export function officeGradientEase(t: number): number {
+  return t - ((2 / 3) * Math.sin(2 * Math.PI * t)) / (2 * Math.PI);
+}
+
+/** The positions the eased run is laid out at: even runs, the end runs split finer. */
+function officeEasedGradientPositions(): number[] {
+  const steps = OFFICE_EASED_GRADIENT_STEPS;
+  const split = OFFICE_EASED_GRADIENT_END_SPLIT;
+  const out: number[] = [];
+  for (let index = 0; index < split; index += 1) out.push(index / (steps * split));
+  for (let step = 1; step < steps; step += 1) out.push(step / steps);
+  for (let index = split - 1; index >= 0; index -= 1) out.push(1 - index / (steps * split));
+  return out;
+}
+
+const linearLight = (channel: number) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+const encodedLight = (value: number) => {
+  const v = Math.min(1, Math.max(0, value));
+  return v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055;
+};
+
+export function officeGradientDrawnStops<S extends { position: number; color: string; alpha?: number }>(
+  stops: readonly S[],
+): readonly S[] {
+  if (stops.length !== 2) return stops;
+  const [first, last] = stops;
+  if (Math.abs(first.position) > 1e-9 || Math.abs(last.position - 1) > 1e-9) return stops;
+  const from = officeColorChannelsFromHex(first.color);
+  const to = officeColorChannelsFromHex(last.color);
+  if (!from || !to || from.every((channel, index) => Math.abs(channel - to[index]) < 1e-9)) return stops;
+  const fromLight = from.map(linearLight);
+  const toLight = to.map(linearLight);
+  const alphaStated = first.alpha !== undefined || last.alpha !== undefined;
+  const out: S[] = [];
+  const positions = officeEasedGradientPositions();
+  for (const [index, t] of positions.entries()) {
+    const eased = officeGradientEase(t);
+    const channels = fromLight.map((value, at) => encodedLight(value + (toLight[at] - value) * eased)) as [number, number, number];
+    const { source: _source, ...base } = (index === positions.length - 1 ? last : first) as S & { source?: unknown };
+    const stop = { ...base, position: t, color: officeColorHexFromChannels(channels) } as S;
+    if (alphaStated) {
+      const a = first.alpha ?? 1;
+      const b = last.alpha ?? 1;
+      (stop as { alpha?: number }).alpha = a + (b - a) * t;
+    }
+    out.push(stop);
+  }
+  return out;
 }
 
 const stopCss = (s: OfficeShapeGradientStop) => {
@@ -414,12 +515,18 @@ const stopCss = (s: OfficeShapeGradientStop) => {
 
 
 
+
+
+
+
+
+
 export function officePathGradientFocus(
   rect: { l?: number; t?: number; r?: number; b?: number } | undefined,
 ): { x: number; y: number } {
   const axis = (near: number | undefined, far: number | undefined) => {
-    const a = (near ?? 50_000) / 100_000;
-    const b = (far ?? 50_000) / 100_000;
+    const a = (rect ? near ?? 0 : 50_000) / 100_000;
+    const b = (rect ? far ?? 0 : 50_000) / 100_000;
     return a + b > 1e-9 && a + b < 1 - 1e-9 ? a / (a + b) : a;
   };
   return { x: axis(rect?.l, rect?.r), y: axis(rect?.t, rect?.b) };
@@ -435,7 +542,7 @@ export function officeGradientCss(
   width?: number,
   height?: number,
 ) {
-  const stops = g.stops.map(stopCss).join(",");
+  const stops = officeGradientDrawnStops(g.stops).map(stopCss).join(",");
   if (g.path) {
     // From the focus point PowerPoint starts it at (`officePathGradientFocus`).
     const focus = officePathGradientFocus(g.path.fillToRect);

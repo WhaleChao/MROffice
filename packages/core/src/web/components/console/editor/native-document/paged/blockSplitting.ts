@@ -315,6 +315,29 @@ export interface TextCutContext {
  * leading its last line may hang below the page edge, fits that space. The
  * glyph-box search only proposes the row; the rendered head decides.
  */
+/** `window.__docsPictureRowWidowOff = true` asks the older reading (the
+ * widow floor counts rows of text only), for an A/B of one build. */
+function pictureRowWidowOff(win: Window | null): boolean {
+  return (win as (Window & { __docsPictureRowWidowOff?: boolean }) | null)?.__docsPictureRowWidowOff === true;
+}
+
+/** How many rows of in-line pictures `dom` holds wholly below `textBottom`
+ * (block coordinates of the planner: layout px from the block's top). */
+function pictureRowsBelow(dom: HTMLElement, textBottom: number, scaleY: number, blockTop: number): number {
+  if (pictureRowWidowOff(dom.ownerDocument.defaultView)) return 0;
+  const tops: number[] = [];
+  for (const picture of dom.querySelectorAll<HTMLElement>('.note-editor-image-resizable[data-inline-picture="true"]')) {
+    if (picture.hasAttribute("data-float-mode")) continue;
+    const image = picture.querySelector("img") ?? picture;
+    const rect = image.getBoundingClientRect();
+    if (!(rect.height > 0)) continue;
+    const top = rect.top / scaleY - blockTop;
+    if (top < textBottom - 0.5) continue;
+    if (!tops.some((seen) => Math.abs(seen - top) < 1)) tops.push(top);
+  }
+  return tops.length;
+}
+
 export function planTextCutByChars(
   dom: HTMLElement,
   availablePx: number,
@@ -344,9 +367,26 @@ export function planTextCutByChars(
   const rowsAfter = Number.isInteger(context.rowsAfter) && context.rowsAfter! > 0 ? context.rowsAfter! : 0;
   const doc = dom.ownerDocument;
   if (!doc || !(availablePx > 0)) return null;
+  // Text drawn nowhere (deleted words the final view hides, hidden text):
+  // no glyph box, so the searches below -- which take a character without
+  // one for a character past the space -- stopped at the first of them.
+  // Corpus R329-D05 p1: an abstract cut where its first deleted sentence
+  // begins, eight rows of page 1 left empty; Word fills them.
+  // `window.__docsCutHiddenTextOff = true` keeps the older cut (A/B).
+  const undrawn = new Map<Element, boolean>();
+  const hiddenTextOff =
+    (doc.defaultView as (Window & { __docsCutHiddenTextOff?: boolean }) | null)?.__docsCutHiddenTextOff === true;
+  const drawnNowhere = (element: Element | null): boolean => {
+    if (hiddenTextOff || !element || element === dom) return false;
+    const known = undrawn.get(element);
+    if (known !== undefined) return known;
+    const hidden = getComputedStyle(element).display === "none" || drawnNowhere(element.parentElement);
+    undrawn.set(element, hidden);
+    return hidden;
+  };
   const walker = doc.createTreeWalker(dom, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) =>
-      insideInlineAtom(node, dom)
+      insideInlineAtom(node, dom) || drawnNowhere(node.parentElement)
         ? NodeFilter.FILTER_REJECT
         : NodeFilter.FILTER_ACCEPT,
   });
@@ -491,6 +531,53 @@ export function planTextCutByChars(
     const rect = rectAt(lo2);
     return rect && laterRow(rect, rowRect) ? { index: lo2, rect } : null;
   };
+  // A row of nothing but in-line pictures between the row of the character
+  // before `index` and the row `index` opens: a cut may fall right after that
+  // character, sending the pictures down with the tail. Word breaks a page
+  // there (corpus R367-D26 p9: a typed tab on a row of its own, then a
+  // 451 pt picture; Word keeps the tab's row and opens page 10 with the
+  // picture -- probe tabend T1), where cutting only at rows of text took
+  // the tab's row along with the picture.
+  // `window.__docsPictureRowCutOff = true` keeps the older cut (A/B).
+  const pictureRowCutOff =
+    (doc.defaultView as (Window & { __docsPictureRowCutOff?: boolean }) | null)?.__docsPictureRowCutOff === true;
+  let inlinePictures: HTMLElement[] | null = null;
+  const segmentOf = (index: number): { node: Text; start: number } => {
+    let lo6 = 0;
+    let hi6 = segments.length - 1;
+    while (lo6 < hi6) {
+      const mid = (lo6 + hi6 + 1) >> 1;
+      if (segments[mid].start <= index) lo6 = mid;
+      else hi6 = mid - 1;
+    }
+    return segments[lo6];
+  };
+  const picturesBefore = (index: number): { top: number; bottom: number } | null => {
+    if (pictureRowCutOff || index <= 0 || index >= total) return null;
+    const before = segmentOf(index - 1).node;
+    const after = segmentOf(index).node;
+    if (before === after) return null;
+    inlinePictures ??= Array.from(dom.querySelectorAll<HTMLElement>('.note-editor-image-resizable[data-inline-picture="true"]'))
+      .filter((picture) => !picture.hasAttribute("data-float-mode"));
+    const row = rectAt(index - 1);
+    if (!row) return null;
+    let foundTop = Number.POSITIVE_INFINITY;
+    let foundBottom = Number.NEGATIVE_INFINITY;
+    for (const picture of inlinePictures) {
+      if (!(before.compareDocumentPosition(picture) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+      if (!(picture.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+      const image = picture.querySelector("img") ?? picture;
+      const rect = image.getBoundingClientRect();
+      if (!(rect.height > 0)) continue;
+      const top = rect.top / scale.y - blockTop;
+      const bottom = rect.bottom / scale.y - blockTop;
+      // On the character's own row it is no row of its own.
+      if (top < row.glyphBottom - 0.5) return null;
+      foundTop = Math.min(foundTop, top);
+      foundBottom = Math.max(foundBottom, bottom);
+    }
+    return Number.isFinite(foundTop) ? { top: foundTop, bottom: foundBottom } : null;
+  };
   // Start of the row that holds the nearest painted character before
   // `index`: the first character on or after that row's top band.
   const rowStartBefore = (index: number): { index: number; rect: RowRect } | null => {
@@ -530,10 +617,16 @@ export function planTextCutByChars(
   const confirmRenderedHeadRow = (probe: NonNullable<ReturnType<typeof createRenderedTextHeadProbe>>): {
     index: number;
     rect: { top: number; bottom: number };
+    endOfPrevious?: true;
   } | "unmeasured" | null => {
-    const fits = (index: number): boolean | null => {
-      const head = probe.measure(index);
+    const fits = (index: number, endOfPrevious = false): boolean | null => {
+      const head = probe.measure(index, endOfPrevious);
       return head ? head.heightPx - head.creditPx <= availablePx + 1e-6 : null;
+    };
+    // The head that stops before the picture rows ahead of `index`, when it fits.
+    const beforePictures = (index: number): { index: number; rect: { top: number; bottom: number }; endOfPrevious: true } | null => {
+      const pictures = picturesBefore(index);
+      return pictures && fits(index, true) === true ? { index, rect: pictures, endOfPrevious: true } : null;
     };
     let proposal: { index: number; rect: { top: number; bottom: number } } | null;
     if (last.bottom <= availablePx) {
@@ -554,16 +647,22 @@ export function planTextCutByChars(
       proposal = nextRowStart(lo5);
     }
     if (!proposal || proposal.index <= 0) return null;
-    let cut = proposal;
+    let cut: { index: number; rect: { top: number; bottom: number }; endOfPrevious?: true } = proposal;
     const verdict = fits(cut.index);
     if (verdict === null) return "unmeasured";
     if (verdict) {
       for (;;) {
         const further = nextRowStart(cut.index);
-        if (!further || fits(further.index) !== true) break;
+        if (!further) break;
+        if (fits(further.index) !== true) {
+          cut = beforePictures(further.index) ?? cut;
+          break;
+        }
         cut = further;
       }
     } else {
+      const atPictures = beforePictures(cut.index);
+      if (atPictures) return atPictures;
       for (;;) {
         const earlier = rowStartBefore(cut.index);
         if (!earlier || earlier.index <= 0) return null;
@@ -576,7 +675,7 @@ export function planTextCutByChars(
     return cut;
   };
   let lo = 0;
-  let next: { index: number; rect: { top: number; bottom: number } } | null;
+  let next: { index: number; rect: { top: number; bottom: number }; endOfPrevious?: true } | null;
   if (rowsToKeep !== null) {
     // The caller decided how many rows fit (grid slots, or Word's leading
     // rule applied to the row pitch); walk that many row starts. Painted
@@ -633,6 +732,9 @@ export function planTextCutByChars(
       // 3) start of the next row: first char whose top clears the fit row.
       next = nextRowStart(lo);
       if (!next) return null;
+      // Picture rows before it that do not fit stay with the tail.
+      const pictures = picturesBefore(next.index);
+      if (pictures && pictures.bottom > rowSpacePx) next = { index: next.index, rect: pictures, endOfPrevious: true };
     }
   }
   // 4) Word's widow/orphan control: `minLines` rows on each side. A tail
@@ -640,11 +742,21 @@ export function planTextCutByChars(
   // widow to the next page; a head that then falls below the floor keeps
   // the block whole.
   // Rows the paragraph holds in its other fragments count on their side.
-  let cut = next;
-  let tailRows = 1 + rowsAfter;
+  let cut: { index: number; rect: { top: number; bottom: number }; endOfPrevious?: true } = next;
+  // A cut before picture rows: they are the tail's first row.
+  let tailRows = 1 + rowsAfter + (cut.endOfPrevious ? 1 : 0);
+  let pictureRows: number | null = null;
   for (let probe = cut; tailRows < minLines; tailRows += 1) {
     const step = nextRowStart(probe.index);
-    if (!step) break;
+    if (!step) {
+      // Past its last row of text the paragraph may hold a line of nothing
+      // but an in-line picture, a line of Word's: the widow floor counts it
+      // (corpus R430-D07: "(Fig. 4)." and the figure under it went to the
+      // next page together, Word's page keeping the row before them).
+      pictureRows ??= pictureRowsBelow(dom, last.glyphBottom, scale.y, blockTop);
+      if (pictureRows > 0) { pictureRows -= 1; continue; }
+      break;
+    }
     probe = step;
   }
   for (let missing = minLines - tailRows; missing > 0; missing -= 1) {
@@ -661,6 +773,10 @@ export function planTextCutByChars(
   if (headRows < minLines) return null;
   const lo2 = cut.index;
   const cutRect = cut.rect;
+  if (cut.endOfPrevious) {
+    const segment = segmentOf(lo2 - 1);
+    return { node: segment.node, offset: lo2 - segment.start, rowTop: cutRect.top };
+  }
   let lo3 = 0;
   let hi3 = segments.length - 1;
   while (lo3 < hi3) {

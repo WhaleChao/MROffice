@@ -8,6 +8,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import type { FloatPaint } from "../../../../../lib/office-float-anchor-edit";
 
 import { docsLayoutPerfLegacy } from "./layoutPerfLegacy";
+import { paperUnderlayActive } from "./paperUnderlay";
 
 /** Fired when a band layer has drawn (mounted or moved) its elements. */
 export const BAND_LAYER_DRAWN_EVENT = "mrn-band-layer-drawn";
@@ -55,10 +56,48 @@ export function createBandHoles(): BandHoles {
 /** The selection grips stand out of the object; the press on them is the object's too. */
 const HOLE_PAD_PX = 2;
 
+/** A header or footer object placed out of the band's flow (bandRichDom `BAND_FLOAT_ATTR`). */
+const BAND_FLOAT_SELECTOR = "[data-band-float]";
+/** On a page's painted band: one of its objects reaches into the body's area. */
+export const BAND_OVER_BODY_ATTR = "data-band-over-body";
+
 /**
- * The placed objects (the float pass's elements and readings) that reach
- * into their page's top or bottom margin.
+ * The screen boxes of the objects each page's header and footer place out of
+ * their flow (a letterhead's side bar, a picture down the page), by page.
+ * Empty when no band places one: nothing else is read.
  */
+function bandFloatRectsBySheet(view: EditorView): Map<number, DOMRect[]> {
+  const out = new Map<number, DOMRect[]>();
+  const columns = view.dom.closest<HTMLElement>(".note-editor-content-columns");
+  const overlay = columns ? ownOverlayOf(columns) : null;
+  if (!overlay) return out;
+  for (const object of Array.from(overlay.querySelectorAll<HTMLElement>(BAND_FLOAT_SELECTOR))) {
+    const band = object.closest<HTMLElement>("[data-band-sheet-index]");
+    const index = band?.dataset.bandSheetIndex;
+    if (index === undefined || !/^\d+$/.test(index)) continue;
+    const rect = object.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) continue;
+    const rects = out.get(Number(index)) ?? [];
+    rects.push(rect);
+    out.set(Number(index), rects);
+  }
+  return out;
+}
+
+function ownOverlayOf(columns: HTMLElement): HTMLElement | null {
+  for (const child of Array.from(columns.children)) {
+    if (child.classList.contains("sheet-band-overlay")) return child as HTMLElement;
+  }
+  return columns.querySelector<HTMLElement>(".sheet-band-overlay");
+}
+
+
+
+
+
+
+
+
 export function bodyObjectsInBandAreas(
   view: EditorView,
   elements: readonly HTMLElement[],
@@ -66,20 +105,104 @@ export function bodyObjectsInBandAreas(
 ): BandIntruder[] {
   const out: BandIntruder[] = [];
   let sheets: Element[] | null = null;
+  let bandFloats: Map<number, DOMRect[]> | null = null;
+  const sheetIndexOf = (element: HTMLElement): number => {
+    const sheet = element.closest("article[data-page-sheet]");
+    if (!sheet || sheet.parentElement !== view.dom) return -1;
+    sheets ??= Array.from(view.dom.children).filter((child) => child.matches("article[data-page-sheet]"));
+    return sheets.indexOf(sheet);
+  };
   for (const element of elements) {
     const paint = paintOf(element);
     if (!paint || element.closest("td, th")) continue;
     const { marginTopPx, marginBottomPx, pageHeightPx } = paint.geometry;
     const intoHeader = paint.topPx < marginTopPx;
     const intoFooter = paint.topPx + paint.heightPx > pageHeightPx - marginBottomPx;
-    if (!intoHeader && !intoFooter) continue;
-    const sheet = element.closest("article[data-page-sheet]");
-    if (!sheet || sheet.parentElement !== view.dom) continue;
-    sheets ??= Array.from(view.dom.children).filter((child) => child.matches("article[data-page-sheet]"));
-    const sheetIndex = sheets.indexOf(sheet);
+    if (!intoHeader && !intoFooter) {
+      bandFloats ??= bandFloatRectsBySheet(view);
+      if (bandFloats.size === 0) continue;
+      const sheetIndex = sheetIndexOf(element);
+      const floats = sheetIndex >= 0 ? bandFloats.get(sheetIndex) : undefined;
+      if (!floats || !objectRects(element).some((rect) => floats.some((band) => intersects(rect, band)))) continue;
+      out.push({ element, sheetIndex });
+      continue;
+    }
+    const sheetIndex = sheetIndexOf(element);
     if (sheetIndex >= 0) out.push({ element, sheetIndex });
   }
   return out;
+}
+
+
+
+
+
+
+
+function paperIsWhite(sheet: HTMLElement): boolean {
+  const style = getComputedStyle(sheet);
+  const image = style.backgroundImage;
+  if (image && image !== "none") return false;
+  const colour = style.backgroundColor.replace(/\s+/g, "").toLowerCase();
+  if (!colour || colour === "transparent" || colour === "rgba(0,0,0,0)") return true;
+  return colour === "rgb(255,255,255)" || colour === "rgba(255,255,255,1)" || colour === "#ffffff" || colour === "#fff" || colour === "white";
+}
+
+/**
+ * Mark each page's painted band whose placed objects reach into the body's
+ * area (`BAND_OVER_BODY_ATTR`): the band layer is drawn over the pages, and
+ * there it multiplies onto the page (note-editor.css), so the body's text
+ * stands on the header's picture as Word draws it. Unmarked where none does,
+ * and on a page whose paper has a colour: multiplied, the band's picture
+ * took the paper's tint, so it is drawn as it is there, the body's objects
+ * still masking it where they paint (`cutBandsAroundBodyObjects`).
+ */
+export function markBandsOverBody(view: EditorView): void {
+  const columns = view.dom.closest<HTMLElement>(".note-editor-content-columns");
+  const overlay = columns ? ownOverlayOf(columns) : null;
+  if (!overlay) return;
+  const over = new Set<HTMLElement>();
+  // Under the body on its own paper (paperUnderlay.ts), nothing blends.
+  const objects = paperUnderlayActive(columns)
+    ? []
+    : Array.from(overlay.querySelectorAll<HTMLElement>(BAND_FLOAT_SELECTOR));
+  if (objects.length > 0) {
+    const sheets = Array.from(view.dom.children).filter((child) => child.matches("article[data-page-sheet]")) as HTMLElement[];
+    const bodies = new Map<number, DOMRect | null>();
+    const bodyOf = (index: number): DOMRect | null => {
+      if (bodies.has(index)) return bodies.get(index) ?? null;
+      const sheet = sheets[index];
+      let body: DOMRect | null = null;
+      if (sheet) {
+        const rect = sheet.getBoundingClientRect();
+        const scale = sheet.offsetHeight > 0 ? rect.height / sheet.offsetHeight || 1 : 1;
+        const style = getComputedStyle(sheet);
+        const top = (Number.parseFloat(style.paddingTop) || 0) * scale;
+        const bottom = (Number.parseFloat(style.paddingBottom) || 0) * scale;
+        const left = (Number.parseFloat(style.paddingLeft) || 0) * scale;
+        const right = (Number.parseFloat(style.paddingRight) || 0) * scale;
+        body = new DOMRect(rect.left + left, rect.top + top, rect.width - left - right, rect.height - top - bottom);
+      }
+      bodies.set(index, body);
+      return body;
+    };
+    for (const object of objects) {
+      const band = object.closest<HTMLElement>("[data-band-sheet-index]");
+      const index = band?.dataset.bandSheetIndex;
+      if (!band || over.has(band) || index === undefined || !/^\d+$/.test(index)) continue;
+      const sheet = sheets[Number(index)];
+      if (!sheet || !paperIsWhite(sheet)) continue;
+      const body = bodyOf(Number(index));
+      const rect = object.getBoundingClientRect();
+      if (body && body.width > 0 && body.height > 0 && rect.width > 0 && rect.height > 0 && intersects(rect, body)) {
+        over.add(band);
+      }
+    }
+  }
+  for (const band of Array.from(overlay.querySelectorAll<HTMLElement>(`[${BAND_OVER_BODY_ATTR}]`))) {
+    if (!over.has(band)) band.removeAttribute(BAND_OVER_BODY_ATTR);
+  }
+  for (const band of over) if (!band.hasAttribute(BAND_OVER_BODY_ATTR)) band.setAttribute(BAND_OVER_BODY_ATTR, "");
 }
 
 /** What the object paints and the grips it shows, on screen. */
@@ -465,7 +588,12 @@ function bandsBySheetOf(columns: HTMLElement): Map<number, SheetBands> {
  * paint; undo both where no object is over them any more.
  */
 export function cutBandsAroundBodyObjects(view: EditorView, holes: BandHoles): void {
+  markBandsOverBody(view);
   const columns = view.dom.closest<HTMLElement>(".note-editor-content-columns");
+  // The bands drawn under the body (paperUnderlay.ts): the body's objects are
+  // over them as drawn, so the painted bands are not masked; the strips that
+  // take the presses over the margins still are cut.
+  const bandsUnder = paperUnderlayActive(columns);
   const next = new Map<HTMLElement, DOMRect[]>();
   const paints = new Map<HTMLElement, PaintLayer[]>();
   const frames = new Map<HTMLElement, BandFrame>();
@@ -483,7 +611,7 @@ export function cutBandsAroundBodyObjects(view: EditorView, holes: BandHoles): v
           if (over.length > 0) next.set(strip, [...(next.get(strip) ?? []), ...over]);
         }
       }
-      if (bands.painted) {
+      if (bands.painted && !bandsUnder) {
         let frame = frames.get(bands.painted);
         if (!frame) frames.set(bands.painted, (frame = bandFrameOf(bands.painted)));
         const layers = objectPaintLayers(view, intruder.element, frame);

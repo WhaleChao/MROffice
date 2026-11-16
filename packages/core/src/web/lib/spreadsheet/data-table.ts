@@ -49,6 +49,7 @@ import {
 } from "./color-palette";
 
 import { builtInTableCellPaint, tableRecipeCellPaint } from "./table-style-recipes";
+import { normalizeTableOwnBorders, type TableOwnBorders } from "./table-own-borders";
 import {
   findNativeTableStyle,
   type SpreadsheetNativeTableStyle,
@@ -1122,6 +1123,9 @@ export interface DataTable {
   altText?: string;
   /** Office 2010+ x14 table alternate-text summary (the UI's short title). */
   altTextSummary?: string;
+  /** The table's own borders (tableBorderDxfId, headerRowBorderDxfId,
+   *  totalsRowBorderDxfId), drawn over the cells' own edges (table-own-borders). */
+  ownBorders?: TableOwnBorders;
   /**
    * Imported native state the bounded ListObject writer deliberately preserves.
    * Commands that would change `range` must fail before mutating the grid when
@@ -1188,8 +1192,12 @@ export function isAuthorableTableTotalFormula(value: unknown): value is string {
 export const MAX_TABLE_ALT_TEXT_LENGTH = 25_000;
 export const MAX_TABLE_ALT_TEXT_SUMMARY_LENGTH = 50_000;
 
-/** Max data tables a sheet may carry (DoS bound on iteration / overlay render). */
-export const MAX_DATA_TABLES = 64;
+/** Max data tables a sheet may carry (DoS bound on iteration / overlay render).
+ *  Excel sets no count of its own; workbooks with 68 and 123 tables on one
+ *  sheet are in the corpus, and a table past the bound is dropped from the page
+ *  while its file part stays where it was: a row inserted above it moved its
+ *  cells and left the table behind (xlsx-rounds R312-X25: Table65-68 of 68). */
+export const MAX_DATA_TABLES = 1024;
 /** Max length of a table id / name (DoS bound on a hand-edited value). */
 export const MAX_DATA_TABLE_ID_LENGTH = 200;
 export const MAX_DATA_TABLE_NAME_LENGTH = 200;
@@ -1811,6 +1819,8 @@ export function normalizeDataTable(
     MAX_TABLE_ALT_TEXT_SUMMARY_LENGTH,
   );
   if (altTextSummary) out.altTextSummary = altTextSummary;
+  const ownBorders = normalizeTableOwnBorders(r.ownBorders);
+  if (ownBorders) out.ownBorders = ownBorders;
   if (
     typeof r.nativeResizeBlocker === "string" &&
     TABLE_NATIVE_RESIZE_BLOCKERS.has(

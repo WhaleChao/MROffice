@@ -22,6 +22,7 @@
  * with the shared keep-the-format rule ({@link editedRunsKeepingFormat}).
  */
 import { ptToPx } from "@mrnote/core/web/lib/office-units.ts";
+import { officeCaretFontScale, setOfficeCaretFontScale } from "@mrnote/core/web/lib/office-painted-caret.ts";
 import {
   forwardRef,
   useImperativeHandle,
@@ -140,6 +141,22 @@ const SpreadsheetHeaderFooterSectionBox = forwardRef<
 
   const styledRuns = (): HeaderFooterStyledRun[] =>
     headerFooterStyledRuns(latest.current.text, latest.current.runs);
+  // A size held at the caret draws the caret at that size: the browser's
+  
+  // `office-painted-caret.ts`). Read after every change.
+  const syncHeldCaretSize = () => {
+    const host = hostRef.current;
+    if (!host) return;
+    const held = pending.current;
+    const { start, end } = selection.current;
+    setOfficeCaretFontScale(
+      host,
+      held && typeof held.fontSize === "number" && start === end
+        ? officeCaretFontScale(held.fontSize, headerFooterStyleAt(styledRuns(), start)?.fontSize ?? 11)
+        : null,
+    );
+  };
+  useLayoutEffect(syncHeldCaretSize);
 
   /** Read the live selection when it is inside the box. */
   const capture = () => {
@@ -156,6 +173,7 @@ const SpreadsheetHeaderFooterSectionBox = forwardRef<
     if (next.start !== selection.current.start || next.end !== selection.current.end) {
       pending.current = null;
       selection.current = next;
+      syncHeldCaretSize();
     }
   };
 
@@ -221,6 +239,7 @@ const SpreadsheetHeaderFooterSectionBox = forwardRef<
         if (start === end) {
           const base = pending.current ?? headerFooterStyleAt(styledRuns(), start);
           pending.current = patchHeaderFooterStyle(base, patch) ?? {};
+          syncHeldCaretSize();
           return;
         }
         commit(formatHeaderFooterRange(styledRuns(), start, end, patch), {

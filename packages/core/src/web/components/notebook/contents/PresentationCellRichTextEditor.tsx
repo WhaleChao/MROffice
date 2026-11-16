@@ -18,6 +18,7 @@ import {
 } from "react";
 import type { RunStyle, TextRun } from "../../../lib/presentation-runs";
 import type { OfficeTextPaint } from "../../../lib/office-text-paint";
+import { officeCaretFontScale, setOfficeCaretFontScale } from "../../../lib/office-painted-caret";
 import { caretWordRange } from "../../../lib/presentation-text-buttons";
 import {
   CELL_RUNS_CLIPBOARD_TYPE,
@@ -31,6 +32,7 @@ import {
   cellRunSymbolFontFamily,
   cellRunSymbolPieces,
   cellTextRunCss,
+  presentationCellTextRunCss,
   cellTextRunsInRange,
   formatCellTextRange,
   mapCellTextRange,
@@ -183,6 +185,14 @@ type Props = Omit<
    */
   powerPointLineFit?: boolean;
   /**
+   * Draw each run's own face as a slide's run draws it (a slide table's
+   * cell): its open stand-in's own name behind the Office name, then the
+   * cell's faces (`presentationCellTextRunCss`), so its Cyrillic, Greek and
+   * Vietnamese words are not left to the cell's East Asian face or the
+   * system's. Off for the worksheet and Docs hosts.
+   */
+  slideFaces?: boolean;
+  /**
    * The size a superscript / subscript run is drawn at, as a multiple of its
    * own (the host's own scale: a sheet's 0.75, a Docs shape's 0.65). Absent:
    * raised or lowered at full size, as before.
@@ -291,6 +301,12 @@ const LENGTH_PROPERTIES = new Set([
 function paintCss(node: HTMLElement, css: CSSProperties): void {
   for (const [property, value] of Object.entries(css)) {
     if (value === undefined || value === null) continue;
+    // A custom property (a paint's marks: its ink for the caret, its
+    // outline for the outline overlay) is set by name; assigned it is lost.
+    if (property.startsWith("--")) {
+      node.style.setProperty(property, String(value));
+      continue;
+    }
     (node.style as unknown as Record<string, string>)[property] =
       typeof value === "number" && LENGTH_PROPERTIES.has(property)
         ? `${value}px`
@@ -436,6 +452,7 @@ const PresentationCellRichTextEditor = forwardRef<
     paragraphStyles,
     scriptScale,
     powerPointLineFit,
+    slideFaces: _slideFaces,
     lineBreak: _lineBreak,
     caretFormatsWord,
     containerPaint: _containerPaint,
@@ -445,6 +462,7 @@ const PresentationCellRichTextEditor = forwardRef<
     ...attributes
   } = props;
   void _containerPaint;
+  void _slideFaces;
   void _lineBreak;
   void _nativeTyping;
   const hostRef = useRef<PresentationCellTextElement | null>(null);
@@ -495,6 +513,30 @@ const PresentationCellRichTextEditor = forwardRef<
   const paintSignature = useRef("");
   const currentRuns = () =>
     cellCharacterRuns(latest.current.value, latest.current.runs);
+  // A size held at a bare caret (Grow Font with nothing highlighted) draws
+  // the caret at that size: the browser's own caret took the height of the
+  
+  // Read again after every change, since the characters typed there take it.
+  const syncHeldCaretSize = () => {
+    const host = hostRef.current;
+    if (!host) return;
+    const held = pending.current;
+    const range = selection.current;
+    if (!held || typeof held.fontSize !== "number" || range.start !== range.end) {
+      setOfficeCaretFontScale(host, null);
+      return;
+    }
+    const beside =
+      cellCharacterStyleAt(currentRuns(), range.start)?.fontSize ??
+      latest.current.inheritedStyle?.fontSize ??
+      baseCharacterStyle(latest.current.style).fontSize;
+    setOfficeCaretFontScale(host, officeCaretFontScale(held.fontSize, beside));
+  };
+  const holdPending = (next: RunStyle | null) => {
+    pending.current = next;
+    syncHeldCaretSize();
+  };
+  useLayoutEffect(syncHeldCaretSize);
 
   // Whether the keyboard is in the field. While it is elsewhere -- in a
   // ribbon menu, a dialog, the colour palette -- the field's range is the
@@ -589,7 +631,7 @@ const PresentationCellRichTextEditor = forwardRef<
       next.start !== selection.current.start ||
       next.end !== selection.current.end
     ) {
-      if (!restoring.current) pending.current = null;
+      if (!restoring.current) holdPending(null);
       selection.current = next;
       latest.current.onSelectionUpdate?.();
     }
@@ -732,12 +774,13 @@ const PresentationCellRichTextEditor = forwardRef<
       commit(formatCellTextRange(currentRuns(), { start: word[0], end: word[1] }, patch, paint), range);
     } else if (range.start === range.end) {
       const at = pending.current ?? cellCharacterStyleAt(currentRuns(), range.start);
-      pending.current =
+      holdPending(
         patchCellCharacterStyle(
           at,
           typeof patch === "function" ? patch(at) : patch,
           paint,
-        ) ?? {};
+        ) ?? {},
+      );
       latest.current.onSelectionUpdate?.();
     } else commit(formatCellTextRange(currentRuns(), range, patch, paint), range);
     host.focus({ preventScroll: true });
@@ -812,7 +855,7 @@ const PresentationCellRichTextEditor = forwardRef<
     host.setSelectionRange = (start, end) => {
       const changed =
         start !== selection.current.start || end !== selection.current.end;
-      if (changed) pending.current = null;
+      if (changed) holdPending(null);
       restore(start, end);
       if (changed) latest.current.onSelectionUpdate?.();
     };
@@ -1075,7 +1118,7 @@ const PresentationCellRichTextEditor = forwardRef<
       host.removeEventListener("beforeinput", beforeInput);
       host.removeEventListener("focus", onFocus);
       unwatchSelection();
-      pending.current = null;
+      holdPending(null);
     };
     // These mount-owned adapters read live props through latest.current.
     // Rebinding them per keystroke would retire the active IME/typing state.
@@ -1085,7 +1128,7 @@ const PresentationCellRichTextEditor = forwardRef<
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host || composing.current) return;
-    if (readOnly) pending.current = null;
+    if (readOnly) holdPending(null);
     if (expectedText.current !== value) {
       // Words that changed under the caret (a collaborator typing in this
       // cell): the caret keeps its characters, and stays behind this
@@ -1104,7 +1147,7 @@ const PresentationCellRichTextEditor = forwardRef<
         const start = mapCaretThroughTextChange(selection.current.start, before, value);
         selection.current = { start, end: Math.max(start, mapCaretThroughTextChange(selection.current.end, before, value)) };
       }
-      pending.current = null;
+      holdPending(null);
       expectedText.current = value;
       unpainted.current = null;
     }
@@ -1149,23 +1192,30 @@ const PresentationCellRichTextEditor = forwardRef<
     // A run states what it formats; the rest it takes from its paragraph's
     // type (as the paragraph is drawn at rest), then the field's. A raised or
     // lowered run is drawn at the host's script size, as the host draws it.
+    // The host's scale applies to the run's own size once: the CSS a cell
+    // run is read into (`cellTextRunCss`) already draws a raised run at a
+    // slide table's two thirds, and scaling that again drew it a third
+    // smaller while typed than where it rests. Without a host scale, that
+    // table size is the one it is drawn at.
     const runCss = (style: RunStyle | undefined): CSSProperties => {
       const css = baseRunCss(style);
       const scale = latest.current.scriptScale;
       if (!scale || (css.verticalAlign !== "super" && css.verticalAlign !== "sub")) return css;
-      const size = Number.parseFloat(String(css.fontSize ?? ""));
+      const own = baseRunCss({ ...(style ?? {}), superscript: false, subscript: false }).fontSize;
+      const size = Number.parseFloat(String(own ?? ""));
       return {
         ...css,
         fontSize:
-          String(css.fontSize ?? "").endsWith("px") && Number.isFinite(size)
+          String(own ?? "").endsWith("px") && Number.isFinite(size)
             ? `${Math.round(size * scale * 100) / 100}px`
             : `${scale}em`,
       };
     };
+    const cellRunCss = latest.current.slideFaces ? presentationCellTextRunCss : cellTextRunCss;
     const baseRunCss = (style: RunStyle | undefined) => {
       const font = paragraphStyle()?.font;
       if (!font) {
-        return cellTextRunCss(style, latest.current.style, latest.current.inheritedStyle);
+        return cellRunCss(style, latest.current.style, latest.current.inheritedStyle);
       }
       const inherited: RunStyle = { ...latest.current.inheritedStyle };
       const base: CSSProperties = { ...latest.current.style };
@@ -1177,7 +1227,7 @@ const PresentationCellRichTextEditor = forwardRef<
         delete inherited.fontFamily;
         base.fontFamily = font.fontFamily;
       }
-      return cellTextRunCss(style, base, inherited);
+      return cellRunCss(style, base, inherited);
     };
     const appendText = (
       text: string,

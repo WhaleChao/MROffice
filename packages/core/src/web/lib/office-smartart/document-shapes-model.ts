@@ -116,7 +116,14 @@ const PX_PER_EMU = 1 / 9525;
  * the very box the canvas paints in.
  */
 export const DOCUMENT_SMARTART_LABEL_INSET = Object.freeze({ x: 0.14, y: 0.18 });
-export const DOCUMENT_SMARTART_LABEL_LINE_HEIGHT = 1.25;
+/**
+ * A SmartArt label's line, as a multiple of its size: Office's single line
+ * (1.2 x the size, whatever the face: the text engine's `OFFICE_SINGLE_LINE`)
+ * at SmartArt's 90 % (`OFFICE_SCENE_LABEL_LINE_SPACING`), which the layout
+ * engine fits every label at and Word draws. The `.text` rule's 1.25 stood
+ * here, a sixth taller than Word's lines.
+ */
+export const DOCUMENT_SMARTART_LABEL_LINE_HEIGHT = 1.2 * OFFICE_SCENE_LABEL_LINE_SPACING;
 
 /**
  * The one size, in page CSS px, that an authored diagram's member labels are
@@ -170,6 +177,8 @@ export function documentSmartArtLabelFontPx(attrs: {
         member.text.trim() &&
         !member.textBody &&
         !authored(member) &&
+        // Words Office sized take their own size ({@link documentSmartArtMemberLabelPx}).
+        !documentSmartArtOfficeSized(member) &&
         // An item the layout does not draw has no box to fit.
         member.smartArtHidden !== true,
     )
@@ -225,6 +234,110 @@ export function documentSmartArtLabelFontPx(attrs: {
     minScale: 8 / nominal,
   });
   return Math.round(nominal * scale * 10) / 10;
+}
+
+/** A member whose words Office's autofit sized (`smartArtLabelSizePt`) and take the graphic's size. */
+function documentSmartArtOfficeSized(member: DocumentShapeGroupMember): boolean {
+  return (
+    typeof member.smartArtLabelSizePt === "number" &&
+    member.smartArtLabelSizePt > 0 &&
+    member.text.trim() !== "" &&
+    !member.textBody &&
+    member.smartArtHidden !== true &&
+    member.smartArtAuthorTextSize !== true &&
+    !(typeof member.textFontSizePt === "number" && member.textFontSizePt !== DOCUMENT_SHAPE_DEFAULT_TEXT_FONT_SIZE_PT)
+  );
+}
+
+/**
+ * The share (at most 1) of Office's fitted sizes a converted diagram's words
+ * are drawn at in the group's CURRENT frame, or `null` when no member carries
+ * one. The words were sized by the engine, Office's way, for the frame they
+ * were laid out in; a smaller frame takes them down together, as the
+ * worksheet does ({@link smartArtTextFitScale}, its own rule), and a larger
+ * one never grows them past Office's size. Each is measured in its words'
+ * area with Office's insets already off (`smartArtTextBox`), at Office's line.
+ */
+export function documentSmartArtOfficeLabelScale(attrs: {
+  readonly widthEmu: number;
+  readonly heightEmu: number;
+  readonly groupCoordinateWidthEmu?: number | null;
+  readonly groupCoordinateHeightEmu?: number | null;
+  readonly groupMembers?: readonly DocumentShapeGroupMember[] | null;
+}): number | null {
+  const members = attrs.groupMembers?.filter(documentSmartArtOfficeSized);
+  if (!members?.length) return null;
+  const childWidth = attrs.groupCoordinateWidthEmu ?? attrs.widthEmu;
+  const childHeight = attrs.groupCoordinateHeightEmu ?? attrs.heightEmu;
+  if (!(childWidth > 0) || !(childHeight > 0)) return null;
+  // The frame the engine sized the words for is the one the group's
+  // coordinate space was built from ({@link documentSmartArtCoordinateSpace}:
+  // the frame times its multiple). In that frame Office's sizes stand as they
+  // are; a frame resized since takes them down by how much more crowded the
+  // same estimate finds it, and never up.
+  const laidOut = documentSmartArtLaidOutFrame(childWidth, childHeight);
+  if (!laidOut) return null;
+  if (Math.abs(laidOut.widthEmu - attrs.widthEmu) <= 1 && Math.abs(laidOut.heightEmu - attrs.heightEmu) <= 1) return 1;
+  const now = officeLabelFit(members, childWidth, childHeight, attrs.widthEmu, attrs.heightEmu);
+  const then = officeLabelFit(members, childWidth, childHeight, laidOut.widthEmu, laidOut.heightEmu);
+  return Math.min(1, Math.floor((now / then) * 1000) / 1000);
+}
+
+/**
+ * The frame a group's coordinate space was built from, inverting
+ * {@link documentSmartArtCoordinateSpace} (its multiple is 8, stepped down
+ * for a frame too large for the model's edge bound), or `null`.
+ */
+function documentSmartArtLaidOutFrame(
+  childWidth: number,
+  childHeight: number,
+): { widthEmu: number; heightEmu: number } | null {
+  for (let multiple = DOCUMENT_SMARTART_COORDINATE_SCALE; multiple >= 1; multiple -= 1) {
+    const frame = { widthEmu: childWidth / multiple, heightEmu: childHeight / multiple };
+    if (documentSmartArtCoordinateSpace(frame)?.scale === multiple) return frame;
+  }
+  return null;
+}
+
+function officeLabelFit(
+  members: readonly DocumentShapeGroupMember[],
+  childWidth: number,
+  childHeight: number,
+  widthEmu: number,
+  heightEmu: number,
+): number {
+  const scaleX = (widthEmu / childWidth) * PX_PER_EMU;
+  const scaleY = (heightEmu / childHeight) * PX_PER_EMU;
+  const labels = members.map((member) => {
+    const box = member.smartArtTextBox;
+    const spacing = member.smartArtLineSpacing;
+    return {
+      text: member.text,
+      width: (member.widthEmu * scaleX * (box ? box.width : SMARTART_TEXT_BOX_UNIT)) / SMARTART_TEXT_BOX_UNIT,
+      height: (member.heightEmu * scaleY * (box ? box.height : SMARTART_TEXT_BOX_UNIT)) / SMARTART_TEXT_BOX_UNIT,
+      fontSize: ptToPx(member.smartArtLabelSizePt as number),
+      ...(typeof spacing === "number" && Number.isFinite(spacing) && spacing >= 0.05 && spacing <= 9.6
+        ? { lineHeight: (DOCUMENT_SMARTART_LABEL_LINE_HEIGHT * spacing) / OFFICE_SCENE_LABEL_LINE_SPACING }
+        : {}),
+    };
+  });
+  // Read as a ratio between two frames, so measured well below the 8 px
+  // floor the drawn size keeps.
+  return smartArtTextFitScale(labels, { lineHeight: DOCUMENT_SMARTART_LABEL_LINE_HEIGHT, minScale: 0.05 });
+}
+
+/**
+ * The size, in page CSS px, a member's words are drawn at when Office's
+ * autofit sized them (`smartArtLabelSizePt`), at the graphic's
+ * {@link documentSmartArtOfficeLabelScale}; `null` for any other member.
+ */
+export function documentSmartArtMemberLabelPx(
+  member: DocumentShapeGroupMember,
+  scale: number | null,
+): number | null {
+  if (scale === null || !documentSmartArtOfficeSized(member)) return null;
+  const nominal = ptToPx(member.smartArtLabelSizePt as number);
+  return scale >= 1 ? nominal : Math.max(8, Math.round(nominal * scale * 10) / 10);
 }
 
 export type DocumentSmartArtProjectionFailure =

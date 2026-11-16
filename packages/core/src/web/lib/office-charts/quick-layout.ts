@@ -181,6 +181,33 @@ function withCalibratedLayout(
       axisTitleY: Boolean(next.axisTitleY),
     },
   };
+  // The layout states both axes' major tick marks: an axis's own Format Axis
+  // tick, which would win over it (`officeChartLayoutWithAxisTicks`), goes.
+  if (format.axisOptions) {
+    const axes: Record<string, unknown> = { ...format.axisOptions };
+    for (const axis of ["category", "value"] as const) {
+      const own = format.axisOptions[axis];
+      if (!own || own.majorTickMark === undefined) continue;
+      const { majorTickMark: _replaced, ...rest } = own;
+      if (Object.keys(rest).length) axes[axis] = rest;
+      else delete axes[axis];
+    }
+    if (Object.keys(axes).length) format.axisOptions = axes as NonNullable<typeof format.axisOptions>;
+    else delete format.axisOptions;
+  }
+  // ... and its gap width and overlap: the chart's own keys go.
+  delete format.barGapWidth;
+  delete format.barOverlap;
+  // ... and its series' and points' label switches: what Format Data Labels
+  // stated of them goes, the rest of a label's own statement stays
+  // (`officeChartLayoutWithLabelOverrides`).
+  if (format.dataLabelOverrides) {
+    const kept = format.dataLabelOverrides
+      .map(({ dataLabels: _shown, dataLabelValue: _value, dataLabelSeriesName: _name, dataLabelPosition: _position, dataLabelPositionAutomatic: _automatic, ...rest }) => rest)
+      .filter((entry) => Object.keys(entry).some((key) => key !== "seriesIndex" && key !== "pointIndex"));
+    if (kept.length) format.dataLabelOverrides = kept;
+    else delete format.dataLabelOverrides;
+  }
   withoutDataLabelFields(format);
   if (recipe.dataLabels) format.dataLabelValue = true;
   else withoutDataLabelPaint(format);

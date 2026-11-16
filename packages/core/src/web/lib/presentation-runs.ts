@@ -29,8 +29,74 @@
 
 import { sanitizeBlockHref } from "./presentation-block-fx";
 import { normalizeLinkTooltip } from "./presentation-link-settings";
-import type { PresentationUnderlineStyle } from "./presentation-text-decoration";
+import { normalizePresentationUnderlineStyle, type PresentationUnderlineStyle } from "./presentation-text-decoration";
 import { normalizeOfficeTextPaint, type OfficeTextPaint } from "./office-text-paint";
+import { normalizeOfficeShapeShadow, type OfficeShapeShadow } from "./office-shape-paint";
+import { officeTextOutlineLineOfFields, type OfficeTextOutlineLine } from "./office-text-outline/office-text-outline-css";
+import { officeDashUnits } from "./office-stroke-dash";
+
+/** A theme colour on a run: its slot, Office's modifiers, and the RGB it resolved to. */
+export interface RunColorScheme {
+  readonly scheme: string;
+  readonly mods: readonly (readonly [string, number])[];
+  readonly rgb?: string;
+}
+
+const RUN_SCHEME_SLOT = /^(dk1|lt1|dk2|lt2|tx1|bg1|tx2|bg2|accent[1-6]|hlink|folHlink)$/;
+const RUN_SCHEME_MOD = /^(lumMod|lumOff|tint|shade|satMod|satOff|hueMod|hueOff|alpha|alphaMod|alphaOff)$/;
+
+/** A run's theme colour, bounded, or undefined. */
+/** A run outline's width in points: its own (`a:ln@w`), else Office's
+ * 0.75 pt for an outline that states none. */
+export function runOutlineWidthPt(style: { readonly textOutlineWidthPt?: number } | null | undefined): number {
+  const width = style?.textOutlineWidthPt;
+  return typeof width === "number" && Number.isFinite(width) && width > 0 && width <= 1584 ? width : 0.75;
+}
+
+/** A run outline's join, cap and dash (row 725) as an outline's line. */
+export function runOutlineLine(style: {
+  readonly textOutlineJoin?: string;
+  readonly textOutlineMiterLimit?: number;
+  readonly textOutlineCap?: string;
+  readonly textOutlineDash?: string;
+} | null | undefined): OfficeTextOutlineLine | undefined {
+  return officeTextOutlineLineOfFields({
+    outlineJoin: style?.textOutlineJoin,
+    outlineMiterLimit: style?.textOutlineMiterLimit,
+    outlineCap: style?.textOutlineCap,
+    outlineDash: style?.textOutlineDash,
+  });
+}
+
+export function normalizeRunColorScheme(value: unknown): RunColorScheme | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  if (typeof record.scheme !== "string" || !RUN_SCHEME_SLOT.test(record.scheme)) return undefined;
+  const mods = Array.isArray(record.mods) ? record.mods : [];
+  if (mods.length > 8) return undefined;
+  const kept: (readonly [string, number])[] = [];
+  for (const mod of mods) {
+    if (!Array.isArray(mod) || mod.length !== 2) return undefined;
+    const [name, amount] = mod as unknown[];
+    if (typeof name !== "string" || !RUN_SCHEME_MOD.test(name)) return undefined;
+    if (typeof amount !== "number" || !Number.isInteger(amount) || Math.abs(amount) > 1_000_000_000) return undefined;
+    kept.push([name, amount] as const);
+  }
+  const rgb = typeof record.rgb === "string" && /^#[0-9a-f]{6}$/i.test(record.rgb) ? record.rgb.toLowerCase() : undefined;
+  return { scheme: record.scheme, mods: kept, ...(rgb ? { rgb } : {}) };
+}
+
+/** The character formatting a list level gives its words (PPTX reading row 518). */
+export const PRESENTATION_LEVEL_STYLE_KEYS = ["fontSize", "bold", "italic", "color", "fontFamily"] as const;
+export type PresentationLevelStyleKey = (typeof PRESENTATION_LEVEL_STYLE_KEYS)[number];
+
+/** Distinct level keys in their canonical order, or undefined for none / a malformed list. */
+export function normalizeInheritedKeys(value: unknown): readonly PresentationLevelStyleKey[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const named = new Set(value);
+  const kept = PRESENTATION_LEVEL_STYLE_KEYS.filter((key) => named.has(key));
+  return kept.length > 0 ? kept : undefined;
+}
 
 /** A per-run style subset. Every field is optional; an empty style is dropped. */
 export interface RunStyle {
@@ -59,6 +125,15 @@ export interface RunStyle {
   /** DrawingML `a:rPr/@noProof`; true disables checking for this exact run. */
   noProof?: boolean;
   color?: string;
+  
+
+
+
+
+
+
+
+  colorScheme?: RunColorScheme;
   /**
    * Text HIGHLIGHT (background) colour — the "文字高亮底色" run background, a
    * #rrggbb hex. Distinct from the present-mode laser highlighter (an ephemeral
@@ -80,6 +155,31 @@ export interface RunStyle {
    * meaning.
    */
   themeFontRole?: "heading" | "body";
+  /**
+   * Which of its list level's formatting the run's FILE leaves to the level
+   * (PPTX reading row 518): those keys follow Increase / Decrease List Level
+   * to the new level's values, the others stay the run's own
+   * (`presentation-level-styles`). Absent: the run states all it carries.
+   * Setting a key on the run (`applyStylePatch`) makes it the run's own.
+   */
+  inheritedKeys?: readonly PresentationLevelStyleKey[];
+  
+
+
+
+
+
+
+
+
+  colorFromList?: true;
+  /**
+   * The run's colour is the one a Shape Style wrote (its `a:fontRef` colour,
+   * `presentationTextFrameWithStyle`), not one the person picked: the next
+   * Shape Style replaces it. Any colour set on the run otherwise
+   * (`applyStylePatch`) takes the marker away.
+   */
+  recipeColor?: true;
   
 
 
@@ -90,11 +190,23 @@ export interface RunStyle {
   symbolFont?: string;
   /**
    * Character-level text OUTLINE (stroke) colour — the per-run glyph stroke, a
-   * #rrggbb hex. DISTINCT from `color` (the glyph fill): rendered via the
-   * standard `-webkit-text-stroke` at a fixed 1px width. Additive — a run
-   * without it paints no stroke.
+   * #rrggbb hex. DISTINCT from `color` (the glyph fill): drawn as Office
+   * draws it, centred and round over the glyphs' merged outline
+   * (office-text-outline-css.ts), `textOutlineWidthPt` wide. Additive — a
+   * run without it paints no stroke.
    */
   textOutline?: string;
+  /** The outline's width in points (`a:ln@w`, PPTX reading row 721);
+   * absent, Office's 0.75 pt. */
+  textOutlineWidthPt?: number;
+  /** Its join (`a:round` / `a:bevel` / `a:miter`), the miter's limit
+   * (`@lim`, 1000ths of a percent), its cap (`@cap`: flat / round / square)
+   * and dash (`a:prstDash`), as Format Text Effects > Text Outline states
+   * them (PPTX reading row 725); absent, round and solid. */
+  textOutlineJoin?: "round" | "bevel" | "miter";
+  textOutlineMiterLimit?: number;
+  textOutlineCap?: "flat" | "round" | "square";
+  textOutlineDash?: string;
   /**
    * WordArt on these characters: their fill, outline and effects (DrawingML
    * states them on `a:rPr` -- `a:ln`, the fill and effect groups), so one
@@ -105,6 +217,16 @@ export interface RunStyle {
    * 3-D and Transform stay the text body's (`a:bodyPr`).
    */
   textPaint?: OfficeTextPaint;
+  /**
+   * A text shadow on these characters only (`a:rPr/a:effectLst/a:outerShdw`,
+   * PPTX readings row 808): a box only some of whose words cast one states it
+   * on those runs, the box none. Drawn as the box's `textShadow` is
+   * (`presentationTextShadowCss`): Home > Text Shadow's, or as stated in
+   * `textShadowEffect` (the shape shadow model). Text Shadow on the box
+   * replaces it.
+   */
+  textShadow?: true;
+  textShadowEffect?: OfficeShapeShadow;
   /**
    * Character Spacing on these characters, in points (`a:rPr@spc`, hundredths
    * of a point; Home > Character Spacing and the Font dialog's Spacing page
@@ -616,16 +738,48 @@ export function normalizeRunStyle(
   }
   // Mutually-exclusive baselines: never persist both. Superscript wins.
   if (style.superscript && style.subscript) delete style.subscript;
-  if (record.underlineStyle === "double" && style.underline) style.underlineStyle = "double";
+  // Font dialog > Underline Style / Double Strikethrough: every DrawingML
+  // line, by the vocabulary table cells use (`presentation-text-decoration`).
+  {
+    const underlineStyle = style.underline ? normalizePresentationUnderlineStyle(record.underlineStyle) : undefined;
+    if (underlineStyle) style.underlineStyle = underlineStyle;
+    if (style.strike && record.strikeStyle === "double") style.strikeStyle = "double";
+  }
   if (record.caps === "all" || record.caps === "small") style.caps = record.caps;
   if (typeof record.color === "string" && HEX_COLOR_RE.test(record.color)) {
     style.color = record.color.toLowerCase();
+  }
+  {
+    const scheme = normalizeRunColorScheme(record.colorScheme);
+    if (scheme) style.colorScheme = scheme;
   }
   if (typeof record.highlight === "string" && HEX_COLOR_RE.test(record.highlight)) {
     style.highlight = record.highlight.toLowerCase();
   }
   if (typeof record.textOutline === "string" && HEX_COLOR_RE.test(record.textOutline)) {
     style.textOutline = record.textOutline.toLowerCase();
+    if (
+      typeof record.textOutlineWidthPt === "number" && Number.isFinite(record.textOutlineWidthPt) &&
+      record.textOutlineWidthPt > 0 && record.textOutlineWidthPt <= 1584
+    ) {
+      style.textOutlineWidthPt = Math.round(record.textOutlineWidthPt * 100) / 100;
+    }
+    if (record.textOutlineJoin === "round" || record.textOutlineJoin === "bevel" || record.textOutlineJoin === "miter") {
+      style.textOutlineJoin = record.textOutlineJoin;
+      if (
+        record.textOutlineJoin === "miter" && typeof record.textOutlineMiterLimit === "number" &&
+        Number.isInteger(record.textOutlineMiterLimit) && record.textOutlineMiterLimit >= 0 &&
+        record.textOutlineMiterLimit <= 1_000_000_000
+      ) {
+        style.textOutlineMiterLimit = record.textOutlineMiterLimit;
+      }
+    }
+    if (record.textOutlineCap === "flat" || record.textOutlineCap === "round" || record.textOutlineCap === "square") {
+      style.textOutlineCap = record.textOutlineCap;
+    }
+    if (typeof record.textOutlineDash === "string" && officeDashUnits(record.textOutlineDash)) {
+      style.textOutlineDash = record.textOutlineDash;
+    }
   }
   if (typeof record.fontSize === "number" && Number.isFinite(record.fontSize)) {
     const bounded = Math.min(
@@ -659,6 +813,17 @@ export function normalizeRunStyle(
     style.letterSpacing =
       Math.round(Math.min(RUN_LETTER_SPACING_MAX_PT, Math.max(-RUN_LETTER_SPACING_MAX_PT, record.letterSpacing)) * 100) / 100;
   }
+  if (record.textShadow === true) {
+    style.textShadow = true;
+    if (record.textShadowEffect != null) {
+      try {
+        const effect = normalizeOfficeShapeShadow(record.textShadowEffect);
+        if (effect) style.textShadowEffect = effect;
+      } catch {
+        /* not a shadow */
+      }
+    }
+  }
   if (record.textPaint != null) {
     // A malformed paint is dropped, never thrown: a run's style is read at
     // every render and save edge.
@@ -674,6 +839,12 @@ export function normalizeRunStyle(
   const linkTooltip = href ? normalizeLinkTooltip(record.linkTooltip) : undefined;
   if (linkTooltip) style.linkTooltip = linkTooltip;
   if (href && record.linkColor === "text") style.linkColor = "text";
+  // A marker about the other keys: kept only beside formatting of its own.
+  const inheritedKeys = Object.keys(style).length > 0 ? normalizeInheritedKeys(record.inheritedKeys) : undefined;
+  if (inheritedKeys) style.inheritedKeys = inheritedKeys;
+  // Where its colour comes from (reading row 892): beside a colour only.
+  if (style.color && record.colorFromList === true && inheritedKeys?.includes("color")) style.colorFromList = true;
+  if (style.color && record.recipeColor === true) style.recipeColor = true;
   return Object.keys(style).length > 0 ? style : undefined;
 }
 
@@ -687,19 +858,31 @@ export function runStyleEquals(a: RunStyle | undefined, b: RunStyle | undefined)
     
     (left.caps ?? undefined) === (right.caps ?? undefined) &&
     (left.underlineStyle ?? undefined) === (right.underlineStyle ?? undefined) &&
+    (left.strikeStyle ?? undefined) === (right.strikeStyle ?? undefined) &&
     (left.color ?? undefined) === (right.color ?? undefined) &&
+    JSON.stringify(left.colorScheme ?? null) === JSON.stringify(right.colorScheme ?? null) &&
     (left.highlight ?? undefined) === (right.highlight ?? undefined) &&
     (left.fontSize ?? undefined) === (right.fontSize ?? undefined) &&
     (left.fontFamily ?? undefined) === (right.fontFamily ?? undefined) &&
     (left.themeFontRole ?? undefined) === (right.themeFontRole ?? undefined) &&
     (left.symbolFont ?? undefined) === (right.symbolFont ?? undefined) &&
     (left.textOutline ?? undefined) === (right.textOutline ?? undefined) &&
+    (left.textOutlineWidthPt ?? undefined) === (right.textOutlineWidthPt ?? undefined) &&
+    (left.textOutlineJoin ?? undefined) === (right.textOutlineJoin ?? undefined) &&
+    (left.textOutlineMiterLimit ?? undefined) === (right.textOutlineMiterLimit ?? undefined) &&
+    (left.textOutlineCap ?? undefined) === (right.textOutlineCap ?? undefined) &&
+    (left.textOutlineDash ?? undefined) === (right.textOutlineDash ?? undefined) &&
     (left.proofingLanguage ?? undefined) ===
       (right.proofingLanguage ?? undefined) &&
     (left.href ?? undefined) === (right.href ?? undefined) &&
     (left.linkTooltip ?? undefined) === (right.linkTooltip ?? undefined) &&
     (left.linkColor ?? undefined) === (right.linkColor ?? undefined) &&
     (left.letterSpacing ?? undefined) === (right.letterSpacing ?? undefined) &&
+    (left.inheritedKeys ?? []).join() === (right.inheritedKeys ?? []).join() &&
+    !!left.colorFromList === !!right.colorFromList &&
+    !!left.recipeColor === !!right.recipeColor &&
+    (left.textShadow ?? undefined) === (right.textShadow ?? undefined) &&
+    JSON.stringify(left.textShadowEffect ?? null) === JSON.stringify(right.textShadowEffect ?? null) &&
     sameRunTextPaint(left.textPaint, right.textPaint)
   );
 }
@@ -1206,6 +1389,36 @@ export function runProofingAtSelection(
   return { value: values.values().next().value ?? null, mixed: false };
 }
 
+
+
+
+
+
+
+
+
+
+
+export function withChangedLevelKeysOwn<S extends Record<string, unknown>>(before: RunStyle | undefined, after: S): S {
+  const inherited = after.inheritedKeys;
+  if (!Array.isArray(inherited) || inherited.length === 0) return after;
+  const previous = (before ?? {}) as Record<string, unknown>;
+  const own = new Set<string>(
+    PRESENTATION_LEVEL_STYLE_KEYS.filter(
+      (key) => JSON.stringify(previous[key] ?? null) !== JSON.stringify(after[key] ?? null),
+    ),
+  );
+  if (JSON.stringify(previous.themeFontRole ?? null) !== JSON.stringify(after.themeFontRole ?? null)) own.add("fontFamily");
+  const kept = (inherited as readonly string[]).filter((key) => !own.has(key));
+  if (kept.length === inherited.length) return after;
+  const next: Record<string, unknown> = { ...after };
+  if (kept.length > 0) next.inheritedKeys = kept;
+  else delete next.inheritedKeys;
+  // A colour that is the run's own now is no list style's (reading row 892).
+  if (own.has("color")) delete next.colorFromList;
+  return next as S;
+}
+
 /**
  * Merge a style PATCH over a base run style, returning the new (normalized)
  * style or `undefined` when nothing is left. A patch value that is falsy
@@ -1228,12 +1441,33 @@ export function applyStylePatch(
   // A face set by name is the run's own: it no longer follows the theme
   // (a patch that hands the run back to a theme font states its role).
   if (Object.hasOwn(patch, "fontFamily") && !Object.hasOwn(patch, "themeFontRole")) delete next.themeFontRole;
+  // A colour set on the run is its own: no list style's and no Shape Style's
+  // any more (reading row 892), unless the patch says so.
+  if (Object.hasOwn(patch, "color")) {
+    if (!Object.hasOwn(patch, "colorFromList")) delete next.colorFromList;
+    if (!Object.hasOwn(patch, "recipeColor")) delete next.recipeColor;
+  }
   for (const [key, value] of Object.entries(patch)) {
     if (value === false || value === undefined || value === null || value === "") {
       delete next[key];
     } else {
       next[key] = value;
     }
+  }
+  // A level key the patch CHANGES is the run's own from now on (PowerPoint
+  // writes it on the run, and so does the save), unless the patch says which
+  // it leaves to its level. One it leaves as it was stays the level's: the
+  // file is unchanged, and the page says what the file says.
+  if (!Object.hasOwn(patch, "inheritedKeys") && Array.isArray(next.inheritedKeys)) {
+    const own = new Set<string>(
+      Object.keys(patch).filter(
+        (key) => JSON.stringify((base as Record<string, unknown> | undefined)?.[key] ?? null) !== JSON.stringify(next[key] ?? null),
+      ),
+    );
+    if (own.has("themeFontRole")) own.add("fontFamily");
+    const kept = (next.inheritedKeys as readonly string[]).filter((key) => !own.has(key));
+    if (kept.length > 0) next.inheritedKeys = kept;
+    else delete next.inheritedKeys;
   }
   return normalizeRunStyle(next, options);
 }

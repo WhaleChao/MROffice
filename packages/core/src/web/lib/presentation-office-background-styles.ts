@@ -35,7 +35,13 @@ import {
 } from "./presentation-office-master-model";
 import { presentationOfficeThemeVariant } from "./presentation-office-themes";
 import type { BgGradient } from "./presentation-slide-bg";
-import { normalizeTheme, type DeckTheme } from "./presentation-theme";
+import {
+  normalizeTheme,
+  normalizeThemeColorMap,
+  type DeckTheme,
+  type DeckThemeColorMap,
+  type PresentationThemeColorSlot,
+} from "./presentation-theme";
 
 type Transforms = ReadonlyArray<readonly [string, number]>;
 
@@ -161,6 +167,34 @@ export function officeMasterColorMapFlipped(theme: DeckTheme | null | undefined)
   if (index === undefined) return false;
   const style = COLUMNS[(index - 1) % 4];
   return style.dark !== officeThemeMasterIsDark(theme);
+}
+
+const LIGHT_COLOR_MAP: DeckThemeColorMap = Object.freeze({ bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" });
+
+/**
+ * The slot each of Background 1 / Text 1 / Background 2 / Text 2 names on the
+ * deck's slides (`p:clrMap`): the map an imported deck's master states
+ * (`colorMap`, reading row 826), else the Office theme variant's own master
+ * (a dark variant maps tx1 to lt1), else the light map; then flipped when a
+ * Background Styles pick swapped the master's map. One resolution for every
+ * reader of Text 1 -- the slide's ink, the Theme Colors grid.
+ */
+export function presentationThemeColorMap(theme: DeckTheme | null | undefined): DeckThemeColorMap {
+  const identity = theme?.identity;
+  const stated = normalizeThemeColorMap(theme?.colorMap);
+  const own =
+    stated ??
+    (identity?.selectionKind === "office"
+      ? presentationOfficeThemeVariant(identity.themeId, identity.variantId)?.colorMap
+      : undefined) ??
+    LIGHT_COLOR_MAP;
+  if (!officeMasterColorMapFlipped(theme)) return own;
+  return {
+    bg1: flippedColorSlot(own.bg1) as PresentationThemeColorSlot,
+    tx1: flippedColorSlot(own.tx1) as PresentationThemeColorSlot,
+    bg2: flippedColorSlot(own.bg2) as PresentationThemeColorSlot,
+    tx2: flippedColorSlot(own.tx2) as PresentationThemeColorSlot,
+  };
 }
 
 /** The pair slot of a colour slot under the flipped map (dk1 <-> lt1, dk2 <-> lt2). */

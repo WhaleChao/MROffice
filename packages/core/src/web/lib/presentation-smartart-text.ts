@@ -58,6 +58,27 @@ function styleOf(block: PresentationLabelledBlock): LooseStyle {
   return style && typeof style === "object" ? { ...(style as LooseStyle) } : {};
 }
 
+
+
+
+
+
+
+
+
+
+function styleWithout(runStyle: RunStyle, keys: readonly (keyof RunStyle)[]): RunStyle {
+  const style: Record<string, unknown> = { ...runStyle };
+  for (const key of keys) delete style[key];
+  const inherited = style.inheritedKeys;
+  if (Array.isArray(inherited)) {
+    const kept = (inherited as readonly string[]).filter((key) => !(keys as readonly string[]).includes(key));
+    if (kept.length === 0) delete style.inheritedKeys;
+    else if (kept.length !== inherited.length) style.inheritedKeys = kept;
+  }
+  return style as RunStyle;
+}
+
 /** Every run of the block's flat text with `keys` no longer stated on it. */
 function runsWithout(
   block: PresentationLabelledBlock,
@@ -67,8 +88,7 @@ function runsWithout(
   if (!runs) return undefined;
   const stripped = runs.map((run) => {
     if (!run.style) return run;
-    const style = { ...run.style };
-    for (const key of keys) delete style[key];
+    const style = styleWithout(run.style, keys);
     if (Object.keys(style).length) return { ...run, style };
     // The run keeps everything but its style: an equation run's `math`
     // was dropped here, so a colour set on the whole shape turned x^2+1
@@ -98,8 +118,7 @@ function paragraphsWithout(
     if (!runs) return paragraph;
     const stripped = runs.map((run) => {
       if (!run.style) return run;
-      const style = { ...run.style };
-      for (const key of keys) delete style[key];
+      const style = styleWithout(run.style, keys);
       return Object.keys(style).length ? { ...run, style } : { text: run.text };
     });
     if (JSON.stringify(stripped) === JSON.stringify(runs)) return paragraph;

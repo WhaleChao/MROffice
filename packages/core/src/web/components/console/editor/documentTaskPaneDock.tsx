@@ -82,6 +82,7 @@ export type DocumentTaskPaneId =
   | "format-shape"
   | "format-picture"
   | "format-chart"
+  | "format-text-effects"
   | "alt-text";
 
 export const DOCUMENT_TASK_PANE_EDGE: Readonly<
@@ -108,6 +109,8 @@ export const DOCUMENT_TASK_PANE_EDGE: Readonly<
   "format-shape": "right",
   "format-picture": "right",
   "format-chart": "right",
+  // Format Text Effects (Text Effects > 3-D Options…) docks where Word's does.
+  "format-text-effects": "right",
   "alt-text": "right",
 };
 

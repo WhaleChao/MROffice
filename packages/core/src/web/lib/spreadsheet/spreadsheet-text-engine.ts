@@ -105,6 +105,21 @@ export function fontMeasureStamp(): string {
   return stampOfThisTask;
 }
 
+
+
+
+
+
+
+
+
+
+
+function cellWidthFont(fontCss: string): EngineFont | undefined {
+  const font = engineFontFromCss(fontCss);
+  return font ? { ...font, followLocalOnly: true } : undefined;
+}
+
 /**
  * Per-grapheme advances at 1000px (the design widths the native grid rounds
  * to its device pixels), in the font a canvas `font` string names. Segments
@@ -112,7 +127,7 @@ export function fontMeasureStamp(): string {
  */
 export function spreadsheetEngineIdealAdvances(segments: readonly string[], fontCss: string): number[] | undefined {
   if (!spreadsheetTextEngineOn()) return undefined;
-  const font = engineFontFromCss(fontCss);
+  const font = cellWidthFont(fontCss);
   if (!font) return undefined;
   const at1000: EngineFont = { ...font, sizePx: 1000 };
   const out: number[] = [];
@@ -131,7 +146,7 @@ export function spreadsheetEngineIdealAdvances(segments: readonly string[], font
 /** The width of a text in a canvas `font` string, as the engine measures it. */
 export function spreadsheetEngineTextWidth(text: string, fontCss: string): number | undefined {
   if (!spreadsheetTextEngineOn()) return undefined;
-  const font = engineFontFromCss(fontCss);
+  const font = cellWidthFont(fontCss);
   if (!font) return undefined;
   const measured = measureText(text, font);
   return measured.status === "ok" ? measured.width : undefined;
@@ -175,7 +190,7 @@ export function spreadsheetExcelAutoFitTextWidth(
   grid: { readonly normalFont: { readonly family: string; readonly sizePt: number }; readonly digitWidth: number; readonly paddingPx: number },
 ): number | undefined {
   if (!spreadsheetTextEngineOn()) return undefined;
-  const font = engineFontFromCss(fontCss);
+  const font = cellWidthFont(fontCss);
   if (!font) return undefined;
   const at72 = measureText(text, { ...font, sizePx: font.sizePx * 0.75 });
   const drawn = measureText(text, font);
@@ -191,6 +206,21 @@ export function spreadsheetExcelAutoFitTextWidth(
  * measured value, ~1px at 11pt). */
 const ENGINE_FAUX_BOLD_STROKE = "0.06em";
 
+/** The stroke a printed page's faux bold draws with: Windows Excel prints a
+ * face without a bold cut as its regular outlines filled and stroked one
+ * hundredth of an em wide (Microsoft Print to PDF, Tr 2 at w = size / 100 in
+ * all 15 bench workbooks that print one: R121-X08's bold ＭＳ Ｐゴシック "1",
+ * R361-X03's 245 runs, SimSun and MS Mincho alike) -- not the screen's one
+ * pixel of emboldening, 0.06 em, six times as heavy on paper. */
+const PRINTED_FAUX_BOLD_STROKE = "0.01em";
+
+let fauxBoldPrinted = false;
+/** Whether faux bold is drawn as Excel prints it (the print page, set with
+ * the printer's resolution: native-typography setNativeTextPrinterDpi). */
+export function setSpreadsheetFauxBoldPrinted(printed: boolean): void {
+  fauxBoldPrinted = printed;
+}
+
 /**
  * Bold in an Office family with no bold face. Excel keeps the regular
  * advances (synthetic-bold.ts), and so does the engine; WebKit's own
@@ -201,6 +231,7 @@ const ENGINE_FAUX_BOLD_STROKE = "0.06em";
  * stroke stands in only where the browser does not synthesize, as before.
  */
 export function spreadsheetFauxBoldCss(): CSSProperties {
+  if (fauxBoldPrinted) return { WebkitTextStrokeWidth: PRINTED_FAUX_BOLD_STROKE, fontSynthesis: "style" };
   return spreadsheetTextEngineOn()
     ? { WebkitTextStrokeWidth: ENGINE_FAUX_BOLD_STROKE, fontSynthesis: "style" }
     : { WebkitTextStrokeWidth: OFFICE_FAUX_BOLD_STROKE_WIDTH };
@@ -208,7 +239,7 @@ export function spreadsheetFauxBoldCss(): CSSProperties {
 
 /** Whether a stroke width is one {@link spreadsheetFauxBoldCss} set. */
 export function isSpreadsheetFauxBoldStroke(value: unknown): boolean {
-  return value === ENGINE_FAUX_BOLD_STROKE || value === OFFICE_FAUX_BOLD_STROKE_WIDTH;
+  return value === ENGINE_FAUX_BOLD_STROKE || value === PRINTED_FAUX_BOLD_STROKE || value === OFFICE_FAUX_BOLD_STROKE_WIDTH;
 }
 
 /** The height of a laid-out paragraph's lines (`line-height: normal`), each

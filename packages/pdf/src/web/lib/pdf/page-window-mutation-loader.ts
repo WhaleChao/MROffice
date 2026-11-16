@@ -8,6 +8,7 @@ import type { PDFDocument as PdfLibDocument } from "pdf-lib";
 import { pdfPageWindowMutationGuardV2Enabled } from "./pdf-flags";
 import { waitForDecryptedPdfBytes } from "./pdf-password";
 import { PDF_EDITABLE_MAX_BYTES } from "@mrnote/core/web/lib/document-size-limits.ts";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 export interface PdfMutationFetchResponse {
   ok: boolean;
@@ -276,7 +277,7 @@ export async function loadPdfForPageWindowMutation(
 ): Promise<PdfLibDocument> {
   if (!pdfPageWindowMutationGuardV2Enabled()) {
     const { PDFDocument } = await import("pdf-lib");
-    return PDFDocument.load(await fetchPdfBytes(previewUrl, fetcher));
+    return PDFDocument.load(await fetchPdfBytes(previewUrl, fetcher), { parseSpeed: pdfLibParseSpeed() });
   }
 
   const decrypted = await waitForDecryptedPdfBytes(previewUrl);

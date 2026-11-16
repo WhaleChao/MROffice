@@ -91,3 +91,22 @@ export function pdfOrdinaryPeerRefreshPlan(input: {
   if (content) return { kind: "merge", content };
   return reloadedVersion === version ? { kind: "wait" } : { kind: "reload" };
 }
+
+
+
+
+
+
+
+
+
+
+export function pdfReaderCatchUpRoute(input: {
+  /** The revision the reader was given its source under. */
+  readerRevision: number | string | null | undefined;
+  /** The page version whose bytes it is to show. */
+  version: number;
+}): "stage" | "url" {
+  const shown = input.readerRevision;
+  return typeof shown === "number" && Number.isSafeInteger(shown) && shown >= input.version ? "url" : "stage";
+}

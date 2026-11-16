@@ -47,6 +47,14 @@ import {
   officeShapeEffectMenuValue,
 } from "@mrnote/core/web/lib/office-shape-effects.ts";
 import { presentationPictureSizeEmuFromCmDraft } from "@mrnote/core/web/lib/presentation-command-adapters.ts";
+import { presentationShapeEffectPatch, presentationShapeEffects } from "./presentation-shape-effects";
+import { smartArtEffectsOwn3d, smartArtNodeWearsStyleBevel } from "@mrnote/core/web/lib/office-smartart/model.ts";
+import { withSmartArtLabelCameras } from "@mrnote/core/web/lib/office-smartart/member-camera.ts";
+import type {
+  OfficePictureEffectKind,
+  OfficePictureEffects,
+  OfficePictureEffectValues,
+} from "@mrnote/core/web/lib/office-picture-effects.ts";
 import type { PresentationSmartArtFormatState } from "../components/notebook/contents/presentation/PresentationSmartArtFormatTab";
 import type { OfficeShapeStyleRecipe } from "@mrnote/core/web/lib/office-shape-style-catalog.ts";
 import { sameOfficeTextPaint, type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
@@ -389,6 +397,105 @@ export function smartArtShapeEffectPatch(
     shapeShadow: undefined,
     effect: normalizeOfficeShapeEffectPreset(effect) ?? undefined,
   } as Partial<PresentationShapeBlock>;
+}
+
+/**
+ * SmartArt Format > Shape Effects as PowerPoint draws it -- Preset, Shadow,
+ * Reflection, Glow, Soft Edges, Bevel, 3-D Rotation, every variation -- on
+ * the targeted shapes: each node's own Office effects (`shapeEffects`, the
+ * model an ordinary shape and a picture share) after the pick, from what it
+ * already wears (the style's shadow included, as PowerPoint's point keeps
+ * it). The effects are the author's from then on (`smartArtAuthorFormat`),
+ * which the export writes on the item's data point. A pick that gives the
+ * shape a 3-D look of its own takes the style's `shape3d` / `scene3d` off it
+ * (`smartArtEffectsOwn3d`): Office's point-level 3-D replaces the style's,
+ * and the shape's effects then draw its solid alone. Null when nothing
+ * changes or a shape may not.
+ */
+export function presentationSmartArtBlocksWithShapeEffect<K extends OfficePictureEffectKind>(
+  blocks: readonly PresentationBlock[],
+  target: PresentationSmartArtFormatTarget,
+  kind: K,
+  value: OfficePictureEffectValues[K] | null,
+  accent1: string,
+  canManipulate: (block: PresentationBlock) => boolean,
+): PresentationBlock[] | null {
+  return presentationSmartArtBlocksWithNodePatches(
+    blocks,
+    target,
+    (node) => {
+      // No Bevel over a SmartArt Style that bevels the shape: Office states
+      // the point's own `a:sp3d` with no `a:bevelT`, replacing the style's
+      // (`bevel: "none"`; `smartArtShape3dUnderEffects` draws it). A shape
+      // whose own bevel took the style's 3-D off keeps the statement too, so
+      // the style's bevel does not come back where it is opened.
+      const ownBevel = presentationShapeEffects(node, accent1)?.bevel;
+      const noStyleBevel =
+        kind === "bevel" &&
+        value === null &&
+        (smartArtNodeWearsStyleBevel(node) ||
+          (!node.shape3d && ownBevel !== undefined && ownBevel !== "none"));
+      return presentationShapeEffectPatch(node, kind, value, accent1, noStyleBevel);
+    },
+    canManipulate,
+  );
+}
+
+/**
+ * The effects the targeted nodes' SmartArt Style draws (the first node's, as
+ * the menu checks a multi-selection's first shape): its Bevel, so No Bevel
+ * reads unchecked and takes the style's off.
+ */
+export function presentationSmartArtStyleEffects(
+  nodes: readonly PresentationShapeBlock[],
+): ReadonlySet<OfficePictureEffectKind> {
+  return new Set<OfficePictureEffectKind>(
+    nodes[0] && smartArtNodeWearsStyleBevel(nodes[0]) ? ["bevel"] : [],
+  );
+}
+
+/**
+ * Each targeted node after its own patch (Format Shape's pane on the shapes
+ * selected inside the graphic: an effect joins what each already wears).
+ * The shared node writer states the author's authority; a patch whose Office
+ * effects give the shape its own 3-D takes the style's 3-D off it
+ * (`smartArtEffectsOwn3d`). Null when nothing changes or a shape may not.
+ */
+export function presentationSmartArtBlocksWithNodePatches(
+  blocks: readonly PresentationBlock[],
+  target: PresentationSmartArtFormatTarget,
+  patchOf: (node: PresentationShapeBlock) => Partial<PresentationShapeBlock> | null,
+  canManipulate: (block: PresentationBlock) => boolean,
+): PresentationBlock[] | null {
+  const nodes = presentationSmartArtTargetNodes(blocks, target);
+  if (nodes.length === 0 || nodes.some((node) => !canManipulate(node))) return null;
+  const ids = new Set(nodes.map((node) => node.id));
+  let changed = false;
+  const next = blocks.map((block) => {
+    if (!ids.has(block.id)) return block;
+    const node = block as PresentationShapeBlock;
+    const stated = patchOf(node);
+    if (!stated) return block;
+    const patch = { ...stated } as Record<string, unknown>;
+    if ("shapeEffects" in patch && smartArtEffectsOwn3d(patch.shapeEffects)) {
+      patch.shape3d = undefined;
+      patch.scene3d = undefined;
+    }
+    const written = shapeBlockWithPatch(node, patch as Partial<PresentationShapeBlock>);
+    if (written !== block) changed = true;
+    return written as PresentationBlock;
+  });
+  // A shape's own turn moves its words with it (`./office-smartart/member-camera`).
+  return changed ? withSmartArtLabelCameras(next) : null;
+}
+
+/** The Office effects the targeted nodes wear: the first node's, as the
+ * deck's Shape Effects menu checks a multi-selection's first shape. */
+export function presentationSmartArtShapeEffects(
+  nodes: readonly PresentationShapeBlock[],
+  accent1: string,
+): OfficePictureEffects | undefined {
+  return nodes[0] ? presentationShapeEffects(nodes[0], accent1) : undefined;
 }
 
 /**

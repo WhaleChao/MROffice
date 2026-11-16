@@ -16,6 +16,7 @@
  * Click selects (the frame, the move grip, the size handle); Delete takes
  * a selected chart out; Esc or a press elsewhere ends the selection.
  */
+import { pdfAnnotationSlotStyle } from "../../../../lib/pdf/annotation-stack-order";
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
 import { requestChartPicture } from "@mrnote/core/web/lib/office-charts/chart-picture-client.ts";
@@ -46,6 +47,10 @@ export interface PdfChartLayerProps {
   /** A gallery's hovered pick (or the data window's typing), drawn on its
    * chart until it goes. */
   readonly preview?: { readonly id: string; readonly attrs: unknown } | null;
+  /** Each object's place in the page's stack of annotations the reader
+   * draws itself (lib/pdf/annotation-stack-order.ts), back first: the slot
+   * is stacked at it, so the screen keeps the page's /Annots order. */
+  readonly stackRanks?: ReadonlyMap<string, number>;
   readonly t: (key: string, values?: Record<string, string | number>) => string;
 }
 
@@ -59,7 +64,7 @@ function pictureSize(svg: string | null): { width: number; height: number } | nu
 
 export function PdfChartLayer({
   charts, cssWidth, cssHeight, pageWidth, pageHeight, paintedDirectives, themeAccents, fileDrawnIds, writable, selectedId,
-  onSelectionChange, onChange, onDelete, preview = null, t,
+  onSelectionChange, onChange, onDelete, preview = null, t, stackRanks,
 }: PdfChartLayerProps) {
   // Pictures of the charts the file draws, kept here: a chart only read back
   // is never written.
@@ -208,7 +213,9 @@ export function PdfChartLayer({
         const width = Math.max(16, chart.width * cssWidth + (offset?.kind === "size" ? offset.dx : 0));
         const height = Math.max(12, chart.height * cssHeight + (offset?.kind === "size" ? offset.dy : 0));
         return (
-          <div key={chart.id} className="pdf-viewer__chart-slot">
+          <div key={chart.id} className="pdf-viewer__chart-slot"
+            data-stack-rank={stackRanks?.get(`chart:${chart.id}`)}
+            style={pdfAnnotationSlotStyle(stackRanks?.get(`chart:${chart.id}`))}>
             {painted.get(chart.id) && shown ? (
               <div key="cover" className="pdf-viewer__table-cover" aria-hidden="true"
                 style={{ left: chart.x * cssWidth, top: chart.y * cssHeight, width: chart.width * cssWidth, height: chart.height * cssHeight }} />

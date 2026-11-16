@@ -14,6 +14,7 @@ import {
   pivotPlanRequests,
   planPivotRequest,
   type PivotOverlaySheet,
+  type PivotPlanReadOptions,
   type PivotPlanRequest,
 } from "./pivot-overlay";
 import { createValueStoreWorkbook } from "./value-store";
@@ -141,16 +142,18 @@ function contentId(text: string): string {
 /**
  * The workbook's placed PivotTables as the session should hold them, read
  * from a calculation answer (the source cells' values as the grid shows
- * them): null when the workbook has none.
+ * them): null when the workbook has none. A report whose live source rows
+ * are not all in the model (`sourceReadable`) is held, as on the grid: the
+ * session holds no report for it, rather than totals of the rows read.
  */
 export function calculationPivotsFromResults(
   sheets: readonly PivotOverlaySheet[],
   inputs: readonly WorkbookSheetInput[],
   results: ReadonlyMap<string, EngineValue>,
-  options: { date1904?: ExcelDateSystemArg; labels: PivotOutputLabels; collapsed: ReadonlySet<string> },
+  options: { date1904?: ExcelDateSystemArg; labels: PivotOutputLabels; collapsed: ReadonlySet<string> } & PivotPlanReadOptions,
 ): CalculationPivots | null {
   const bootstrap = createValueStoreWorkbook(inputs, { results, date1904: options.date1904 ?? false });
-  const { requests } = pivotPlanRequests(sheets, bootstrap.evaluatorFor);
+  const { requests } = pivotPlanRequests(sheets, bootstrap.evaluatorFor, { sourceReadable: options.sourceReadable });
   const bySheet = new Map<string, PivotPlanRequest[]>();
   for (const request of requests) {
     if (request.chartOnly) continue;

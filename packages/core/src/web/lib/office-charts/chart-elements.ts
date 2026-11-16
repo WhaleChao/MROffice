@@ -102,6 +102,7 @@ import {
 import type { PresentationChartSeriesStyle } from "../presentation-chart-area-style";
 import {
   normalizeOfficeChartLayout,
+  officeChartFormatWithOneLayoutRecord,
   officeChartLayoutOf,
 } from "./chart-layout";
 import { officeTrendlineKindFits } from "./trendline";
@@ -223,7 +224,15 @@ function committed(
 ): ChartBlockAttrsV2 | null {
   // A chart-wide label command reaches every series' and every point's own
   // labels too, as Office's does.
-  const reconciled = chartFormatReconcileDataLabelOverrides(attrs.format, format) ?? format;
+  const labelled = chartFormatReconcileDataLabelOverrides(attrs.format, format) ?? format;
+  // A layout's atoms are one record. A command that wrote the layout wrote it
+  // from what the chart states (`officeChartLayoutOf`): the chart's own
+  // spacing keys go. Any other command keeps the layout as the chart states
+  // it (`officeChartFormatWithOneLayoutRecord`).
+  const reconciled =
+    labelled.layout !== undefined && JSON.stringify(labelled.layout) !== JSON.stringify(attrs.format?.layout)
+      ? (({ barGapWidth: _gap, barOverlap: _overlap, ...rest }) => rest)(labelled)
+      : officeChartFormatWithOneLayoutRecord(attrs.chartType, labelled);
   const next: ChartBlockAttrsV2 = {
     ...attrs,
     format: Object.keys(reconciled).length ? reconciled : undefined,
@@ -481,6 +490,9 @@ export function chartWithDataLabelOverride(
       if (value === undefined) delete entry[key];
       else entry[key] = value;
     }
+    // A position stated or handed back is the label's place: no longer the
+    // chart type's own (`dataLabelPositionAutomatic`).
+    if ("dataLabelPosition" in patch && !("dataLabelPositionAutomatic" in patch)) delete entry.dataLabelPositionAutomatic;
     if (entry.dataLabels === false) {
       entry = {
         seriesIndex: target.seriesIndex,
@@ -1547,7 +1559,8 @@ export function chartWithElementLayoutKept(
 ): ChartBlockAttrsV2 {
   const layout = attrs.format?.elementLayout;
   const hidden = attrs.format?.legendHiddenEntries;
-  if (!layout && !hidden) return attrs;
+  const legendLook = attrs.format?.legendStyle !== undefined || attrs.format?.legendOverlay !== undefined;
+  if (!layout && !hidden && !(legendLook && chartLegendShown(attrs) === "none")) return attrs;
   const next: Record<string, unknown> = { ...(layout ?? {}) };
   if (!attrs.title && attrs.format?.automaticTitle !== true) delete next.title;
   const xRole = officeChartAxisRole(attrs, "X");
@@ -1562,7 +1575,15 @@ export function chartWithElementLayoutKept(
   const kept = normalizeChartElementLayout(next);
   if (kept) format.elementLayout = kept;
   else delete format.elementLayout;
-  if (legend === "none") delete format.legendHiddenEntries;
+  if (legend === "none") {
+    // Legend > None deletes the legend whole, its look with it: shown again,
+    // PowerPoint draws the chart style's own legend, at its place, every
+    
+    
+    delete format.legendHiddenEntries;
+    delete format.legendStyle;
+    delete format.legendOverlay;
+  }
   if (JSON.stringify(format) === JSON.stringify(attrs.format ?? {})) return attrs;
   return { ...attrs, format: Object.keys(format).length ? format : undefined };
 }

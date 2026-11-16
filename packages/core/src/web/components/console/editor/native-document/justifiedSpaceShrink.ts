@@ -36,12 +36,14 @@
  * that no longer stays on the line loses the narrowing. Paint and line
  * breaking only: nothing is saved.
  */
+import { engineDeclinedBlock, textblockOfElement } from "./engineDeclinedBlocks";
 import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 
 import { DOCUMENT_JUSTIFIED_SHRINK_PENDING, LAYOUT_METRICS_FLUSH_EVENT, writeDocumentLayoutStatus } from "./documentLayoutStatus";
+import { projectionFontReach, sheetRangesOf, textblocksIn } from "./projectionFontNews";
 import { normalizeWordCompatibilityMode } from "./documentOverflowPunctuation";
 import { measurementRange } from "./paged/measurementRange";
 import { MEASURE_HORIZON_EVENT, sheetsWithinMeasureHorizon } from "./paged/measureHorizon";
@@ -52,6 +54,7 @@ import { wordKeepsJustifiedWord, wordTrailingPunctuationLength } from "../../../
 import { msSinceTyping, TYPING_IDLE_MS } from "../../../../lib/typing-session";
 import { INITIAL_PAGINATION_SETTLING_ATTR } from "./paged/pageRebalanceExtension";
 import { DOCUMENT_AUTO_LINE_SPACING_PENDING, PAGE_LEDGER_BACKGROUND_ATTR } from "./documentLayoutStatus";
+import { fastRangeMappingOn, mapDecorationsFast, mapRangesFast } from "./fastRangeMapping";
 
 export {
   WORD_JUSTIFY_SPACE_SHARE,
@@ -71,6 +74,14 @@ const SLICE_MS = 8;
 const FLUSH_TURNS = 12;
 /** Whole passes the layout's own settling asks for, per state of the document. */
 const MAX_LOOKS_AFTER_LAYOUT = 4;
+/** A look the layout's settling asks for while the hand types waits until the
+ * hand has rested this long, then runs once. */
+const LOOK_AFTER_TYPING_REST_MS = 10_000;
+
+/** On unless `window.__docsShrinkLooksWhileTyping = true` (development A/B). */
+function shrinkLookWaitsForRest(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsShrinkLooksWhileTyping?: boolean }).__docsShrinkLooksWhileTyping !== true;
+}
 /** Lines are read again once the typing pauses this long: a key's edit keeps the
  * pulls it had, and reading a long paragraph's every character at every key was a
  * large part of the key (corpus R323-D11: 60 ms in a paragraph of 3,000). */
@@ -183,8 +194,15 @@ function textCharacters(view: EditorView, node: ProseMirrorNode, pos: number): A
 type KeepRule = "narrow" | "hang" | "stops";
 
 function keepRule(view: EditorView, element: HTMLElement): KeepRule | null {
-  // The text engine keeps Word's kept words itself (documentEngineLineBreaks).
-  if (textEngineEnabled("docs")) return null;
+  // The text engine keeps Word's kept words itself (documentEngineLineBreaks),
+  // in the paragraphs it lays out: one it leaves to the browser (a face it
+  // cannot read a width from) is kept here, as with the engine off (corpus
+  // R283-D20: "β₁" in Times New Roman, the paragraph the browser's, and
+  // "clusters", 1.15 px over, wrapped where Word narrows the spaces).
+  if (textEngineEnabled("docs")) {
+    const node = textblockOfElement(view, element);
+    if (!node || !engineDeclinedBlock(node)) return null;
+  }
   const mode = normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode);
   if (mode === null) return null;
   const align =
@@ -433,7 +451,11 @@ export const JustifiedSpaceShrink = Extension.create({
             }
             if (!tr.docChanged && !tr.getMeta("justifiedSpaceShrinkRemeasure")) return previous;
             let changed = tr.docChanged ? changedTextblocks(tr) : [];
-            let set = previous.set.map(tr.mapping, tr.doc);
+            // Mapped at the cost of what the transaction touches (fastRangeMapping):
+            // a part appended past every pull keeps the set, and the list of
+            // paragraphs to measure maps only its ranges at or past the change.
+            const fast = fastRangeMappingOn();
+            let set = fast ? mapDecorationsFast(previous.set, tr) : previous.set.map(tr.mapping, tr.doc);
             if (tr.docChanged && tr.getMeta(STRUCTURAL_MOVE_META) === true) {
               // Moved whole: its pulls again, nothing to measure. A paragraph
               // the move cut or joined is a new node: the pulls that followed
@@ -456,7 +478,7 @@ export const JustifiedSpaceShrink = Extension.create({
             const dirty =
               previous.dirty === "all" || !tr.docChanged
                 ? "all"
-                : [
+                : fast ? mapRangesFast(previous.dirty, tr, changed) : [
                     ...previous.dirty.map(([from, to]): [number, number] => [tr.mapping.map(from, -1), tr.mapping.map(to, 1)]),
                     ...changed,
                   ];
@@ -732,9 +754,20 @@ export const JustifiedSpaceShrink = Extension.create({
             full = true;
             schedule();
           };
-          const onFontsLoaded = () => {
-            pullReadings = new WeakMap();
-            lookAgain();
+          const onFontsLoaded = (event?: Event) => {
+            // (projectionFontNews) With the trial, only the paragraphs of the
+            // sheets drawing the arrived face's characters are read again.
+            const reach = projectionFontReach(view, "justified-shrink", event);
+            if (reach === "none") return;
+            if (reach === "all") {
+              pullReadings = new WeakMap();
+              lookAgain();
+              return;
+            }
+            const ranges = sheetRangesOf(view, reach.sheets);
+            textblocksIn(view, ranges, (node) => pullReadings.delete(node));
+            again.push(...ranges);
+            schedule();
           };
           view.dom.ownerDocument.fonts?.addEventListener?.("loadingdone", onFontsLoaded);
           // A whole pass whose pulls draw the lines anew sends the Auto line
@@ -748,12 +781,38 @@ export const JustifiedSpaceShrink = Extension.create({
           // a line box changes no break, and a whole pass after each of a long
           // document's passes was up to 1.5 s of each (R286-D01).
           let lookWaits = false;
+          // The flags an edit's own passes raise (the Auto line spacing over the
+          // typed paragraph, the ledger's background after a key) came down after
+          // every key, and each sent a whole pass: every character of every page
+          // read again, and in WebKit every dormant sheet of a long document woken
+          // and laid out with each key after it (R286-D01 in Safari: 64 of 64
+          // sleeping sheets awake, seconds a key). The edit's own paragraphs are
+          // its dirty ranges; what such a look is for (a line box or face that
+          // landed late) is looked at once the hand has rested.
+          let restTimer: number | null = null;
+          const lookAfterRest = () => {
+            if (restTimer !== null) return;
+            const wait = () => {
+              const rested = msSinceTyping();
+              if (rested < LOOK_AFTER_TYPING_REST_MS) {
+                restTimer = win.setTimeout(wait, LOOK_AFTER_TYPING_REST_MS - rested);
+                return;
+              }
+              restTimer = null;
+              lookAgainAfterLayout();
+            };
+            restTimer = win.setTimeout(wait, Math.max(0, LOOK_AFTER_TYPING_REST_MS - msSinceTyping()));
+          };
           const lookAgainAfterLayout = () => {
             if (view.dom.hasAttribute(INITIAL_PAGINATION_SETTLING_ATTR) || view.dom.hasAttribute(PAGE_LEDGER_BACKGROUND_ATTR)) {
               lookWaits = true;
               return;
             }
             lookWaits = false;
+            if (shrinkLookWaitsForRest() && msSinceTyping() < LOOK_AFTER_TYPING_REST_MS) {
+              lookAfterRest();
+              return;
+            }
             if (looksSinceChange >= MAX_LOOKS_AFTER_LAYOUT) return;
             looksSinceChange += 1;
             lookAgain();
@@ -794,6 +853,7 @@ export const JustifiedSpaceShrink = Extension.create({
               }
             },
             destroy() {
+              if (restTimer !== null) win.clearTimeout(restTimer);
               observer?.disconnect();
               settled?.disconnect();
               view.dom.ownerDocument.fonts?.removeEventListener?.("loadingdone", onFontsLoaded);

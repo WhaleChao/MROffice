@@ -130,6 +130,17 @@ export interface SelectedPdfLinkContext {
   readonly semanticRoute?: PdfSemanticAppearanceSelectionRoute;
 }
 
+/** A Delete pressed on the selected placed object while that object's own
+ * save runs: it waits for the save and is carried out after it, by the frame
+ * that took the key (`frameHeldKey`) or by the viewer (`waiting`). One the
+ * save outlasted is not carried out, and `notCarriedOut` says so. */
+export type PdfPlacedDeleteHold = {
+  waiting: { key: string; at: number } | null;
+  frameHeldKey: string | null;
+  savingAtKey: boolean | null;
+  notCarriedOut: (() => void) | null;
+};
+
 export type PdfPlacedAnnotationSelection = {
   kind:
     | "shape"

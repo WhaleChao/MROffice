@@ -100,6 +100,8 @@ function placedRound(
   width: number,
   height: number,
   widestPx?: number | null,
+  /** Point Explosion, as a share of the radius (the largest asked for). */
+  explosion = 0,
 ) {
   const half = Math.min(width, height) / 2;
   const radius = entry.radius;
@@ -122,10 +124,18 @@ function placedRound(
   // of what is left (Word, STRESS2 page 5: a pie placed at 0.18 + 0.64 / 2
   // was drawn 36px left of its box's middle).
   const { left: _left, right: _right, top: _top, bottom: _bottom, width: _width, height: _height, ...rest } = entry;
+  // Exploded slices stay inside the box: the pie is smaller by the share
+  // they are pulled out, and pulled out by that share of its radius
+  
+  // reaches 195 pt from its middle in PowerPoint; drawn the box's full
+  // 195 pt with an 8 px pull, its slices only parted by their white edges).
+  const exploded = explosion > 0 && entry.selectedOffset !== undefined ? explosion : 0;
+  const ring = outer / (1 + exploded);
   return {
     ...rest,
     center: [chartPercent(box.x + box.w / 2), chartPercent(box.y + box.h / 2)],
-    radius: ratio > 0 ? [outer * ratio, outer] : outer,
+    radius: ratio > 0 ? [ring * ratio, ring] : ring,
+    ...(exploded > 0 ? { selectedOffset: ring * exploded } : {}),
   };
 }
 
@@ -226,11 +236,18 @@ export function optionWithChartPlacement(
           placed.itemGap = pitch - entry;
           placed.padding = [(pitch - entry) / 2, 0, 0, 0];
         } else if (!oneLine && names.length > 1) {
-          // The engine stands a wrapped entry about 0.7 of its size taller than
-          // its lines, and already that much down its box.
+          // Names broken into their lines before the engine sees them (the
+          // side legend's own breaking, `withSideLegendRoom`): the engine
+          // stands each entry as tall as its lines at the line height it is
+          // given, so it is given the one its lines are drawn at. Names the
+          // engine wraps itself (`textStyle.width`): it stands a wrapped entry
+          // about 0.7 of its size taller than its lines, and already that much
+          // down its box.
+          const preBroken = names.some((name) => shown(name).includes("\n"));
+          if (preBroken) placed.textStyle = { ...textStyle, lineHeight };
           const heights = names.map((name) => {
             const lines = shown(name).split("\n").length;
-            return Math.max(entry, lines * lineHeight + (lines > 1 ? fontSize * 0.7 : 0));
+            return Math.max(entry, lines * lineHeight + (!preBroken && lines > 1 ? fontSize * 0.7 : 0));
           });
           const gap = pitch - heights.slice(0, -1).reduce((sum, value) => sum + value, 0) / (names.length - 1);
           if (gap > 0) {
@@ -402,10 +419,13 @@ export function optionWithChartPlacement(
             }),
           )
         : 0;
+      const format = (attrs as { format?: { pieExplosion?: number; sliceStyles?: readonly { explosion?: number }[] } } | null | undefined)?.format;
+      const explosion =
+        Math.max(0, format?.pieExplosion ?? 0, ...(format?.sliceStyles ?? []).map((style) => style?.explosion ?? 0)) / 100;
       next.series = next.series.map((entry) => {
         if (!record(entry)) return entry;
         if (BOXED_SERIES.has(String(entry.type))) return placedBox(entry, plot);
-        if (ROUND_SERIES.has(String(entry.type)) && size) return placedRound(entry, plot, size.width, size.height, widest);
+        if (ROUND_SERIES.has(String(entry.type)) && size) return placedRound(entry, plot, size.width, size.height, widest, explosion);
         return entry;
       });
     }

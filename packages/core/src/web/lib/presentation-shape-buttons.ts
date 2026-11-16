@@ -759,7 +759,7 @@ export function shapeBlockWithPatch(
     : block;
 }
 
-const SMARTART_NODE_EFFECT_KEYS = new Set(["effect", "shadow", "shapeShadow"]);
+const SMARTART_NODE_EFFECT_KEYS = new Set(["effect", "shadow", "shapeShadow", "shapeEffects"]);
 
 const SMARTART_NODE_PAINT_KEYS = new Set([
   "fill",
@@ -1179,7 +1179,7 @@ export function blocksWithShapesChanged(
     ) {
       return block;
     }
-    const patched = shapeBlockWithPatch(block as ShapeBlock, presentationShapeConversionPatch(kind));
+    const patched = shapeBlockWithPatch(block as ShapeBlock, presentationShapeConversionPatch(kind, block as ShapeBlock));
     if (patched !== block) changed = true;
     return patched as PresentationBlock;
   });

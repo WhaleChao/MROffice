@@ -163,7 +163,10 @@ type MutableParagraph = {
 };
 
 type PdfJsNormalizedParagraphItem = PdfNativeListTextSelectionItemEvidence &
-  Readonly<{ sourceItemIndexes?: readonly number[] }>;
+  Readonly<{ sourceItemIndexes?: readonly number[];
+    /** The width of the reader's space folded before the item's text: its
+     * first glyph stands that far in from the item's origin. */
+    foldedLeadWidth?: number }>;
 
 function rawSourceItemIndexes(
   item: PdfNativeListTextSelectionItemEvidence,
@@ -249,12 +252,27 @@ export function pdfJsOverprintItemIndexes(
 
 export function normalizePdfJsNativeParagraphItems(
   items: readonly (PdfNativeListTextSelectionItemEvidence | null)[],
+  /** Where the page's pinned boxes start (pdfNativeBoxOriginsOf): the
+   * reader's space before the first item of a box is the gap between two
+   * boxes, and is folded into neither. */
+  boxOrigins: readonly Readonly<{ x: number; y: number }>[] = [],
 ): readonly (PdfNativeListTextSelectionItemEvidence | null)[] {
   const normalized = [...items];
+  const opensBox = (item: PdfNativeListTextSelectionItemEvidence) => boxOrigins.some((origin) =>
+    Math.abs(item.transform[4] - origin.x) <= PINNED_BOX_ORIGIN_TOLERANCE &&
+    Math.abs(item.transform[5] - origin.y) <= PINNED_BOX_ORIGIN_TOLERANCE);
   for (let index = 0; index + 1 < items.length; index += 1) {
     const previous = index > 0 ? items[index - 1] : null;
     const space = items[index];
     const visible = items[index + 1];
+    // A box the reader read before a write on its page starts at this item
+    // (the page's box map): two e-mail addresses 1.46 em apart, each a box,
+    // stood one after the other in the page's order once the name block
+    // between them was set again -- the reader then read the gap between
+    // them as a space, it was folded before the second address, whose box no
+    // longer found its first item where it was pinned, and the two addresses
+    
+    if (space && visible && /^ +$/u.test(space.str) && space.height === 0 && opensBox(visible)) continue;
     // A space reported on a raised item's baseline and in its size (after an
     // exponent or an isotope's mass number, pdf.js keeps the superscript's
     // transform) still prefixes the item after it, on that item's own
@@ -384,6 +402,7 @@ export function normalizePdfJsNativeParagraphItems(
         ? space.width + visible.width
         : jump + visible.width,
       sourceItemIndexes: Object.freeze([space.itemIndex, visible.itemIndex]),
+      foldedLeadWidth: flush ? space.width : jump,
     });
     normalized[index + 1] = null;
     index += 1;
@@ -794,6 +813,79 @@ function runsOverlayAcrossSizes(
   });
 }
 
+/**
+ * TeX's radical sign hangs from its origin: the sign is drawn downward from
+ * the height of its bar, three quarters of an em above the baseline of the
+ * line it stands on, and the reader reports it up there. The glyph it
+ * stands before -- the first of what it covers -- starts where the sign
+ * ends, half an em to an em lower: that glyph's line is the sign's line.
+ */
+function radicandOf(
+  item: ProjectedNativeItem,
+  items: readonly ProjectedNativeItem[],
+): ProjectedNativeItem | null {
+  if (item.vertical || item.evidence.str.trim() !== "\u221a") return null;
+  const size = item.fontSize;
+  return items.find((other) =>
+    other !== item && !other.vertical && other.evidence.str.trim().length > 0 &&
+    Math.abs(other.angle - item.angle) < UPRIGHT_ANGLE_EPSILON &&
+    other.baselineBlock - item.baselineBlock >= size * 0.5 &&
+    other.baselineBlock - item.baselineBlock <= size &&
+    Math.abs(other.inlineStart - item.inlineEnd) <= size * 0.25) ?? null;
+}
+
+/**
+ * Radical signs the rows left off the line they stand on (visualLines): each
+ * a row, and a box, of its own.
+ */
+const STRAY_RADICALS = new WeakSet<ProjectedNativeItem>();
+
+function lineIsStrayRadical(line: NativeVisualLine): boolean {
+  return line.items.length === 1 && STRAY_RADICALS.has(line.items[0]);
+}
+
+
+
+
+
+
+
+
+
+
+function figuresSetApart(
+  left: readonly ProjectedNativeItem[],
+  right: readonly ProjectedNativeItem[],
+): boolean {
+  let pair: readonly [ProjectedNativeItem, ProjectedNativeItem] | null = null;
+  let nearest = Number.POSITIVE_INFINITY;
+  // Where an item's first glyph stands: after the reader's space folded
+  // before it (normalizePdfJsNativeParagraphItems), which is the gap itself.
+  const inkStart = (item: ProjectedNativeItem) => {
+    const lead = (item.evidence as PdfJsNormalizedParagraphItem).foldedLeadWidth ?? 0;
+    return lead > 0 && item.evidence.width > 0
+      ? item.inlineStart + (item.inlineEnd - item.inlineStart) * Math.min(1, lead / item.evidence.width)
+      : item.inlineStart;
+  };
+  for (const a of left) {
+    for (const b of right) {
+      const gap = Math.max(inkStart(a) - b.inlineEnd, inkStart(b) - a.inlineEnd);
+      if (gap < nearest) {
+        nearest = gap;
+        pair = [a, b];
+      }
+    }
+  }
+  if (pair === null) return false;
+  const size = Math.min(pair[0].fontSize, pair[1].fontSize);
+  // (On one baseline, in one size: a formula's figures -- an exponent, a
+  // fraction's parts -- stand off the line they belong to and stay with it.)
+  return nearest > size * PDFJS_SPACE_IN_FLOW_MAX_EM &&
+    Math.abs(pair[0].baselineBlock - pair[1].baselineBlock) <= size * PDFJS_SPLIT_SPACE_TOLERANCE &&
+    Math.abs(pair[0].fontSize - pair[1].fontSize) <= size * 0.05 &&
+    pair.every((item) => COMPACT_NUMERIC_CHART_LABEL.test(item.evidence.str.trim()));
+}
+
 function visualLines(
   items: readonly ProjectedNativeItem[],
 ): readonly NativeVisualLine[] {
@@ -832,6 +924,7 @@ function visualLines(
         continue;
       }
       if (runsCollideAcrossSizes(row, item) || runsOverlayAcrossSizes(row, item)) continue;
+      if (figuresSetApart(row, [item])) continue;
       if (baselineDistance < bestDistance) {
         bestRow = row;
         bestDistance = baselineDistance;
@@ -881,12 +974,32 @@ function visualLines(
         const gap = Math.max(startA - endB, startB - endA, 0);
         if (gap > Math.min(sizeA, sizeB) * SAME_LINE_GAP_FACTOR) continue;
         if (b.some((entry) => runsCollideAcrossSizes(a, entry) || runsOverlayAcrossSizes(a, entry))) continue;
+        if (figuresSetApart(a, b)) continue;
         a.push(...b);
         a.sort((x, y) => x.baselineInline - y.baselineInline || x.evidence.itemIndex - y.evidence.itemIndex);
         rows.splice(right, 1);
         merged = true;
         break;
       }
+    }
+  }
+  // A radical sign read onto another row than the glyph it stands before.
+  // Its origin is nearer the line above its own than its own (radicandOf),
+  // and rows are told by their baselines: the sign joined the line above,
+  // which then read "…pre-softmax√" and, typed onto, was set again with the
+  // sign after its last word, 250 pt from the "d model" it covers (Attention
+  
+  // the formula's drawing as TeX's taller signs are (UNNAMED_CODE_CHARACTER):
+  // the line it stands on keeps the gap it stands in, and what moves that gap
+  // moves the sign with it (the rewrite's carried gaps).
+  for (const row of [...rows]) {
+    for (const item of [...row]) {
+      const radicand = radicandOf(item, ordered);
+      if (!radicand || row.includes(radicand)) continue;
+      STRAY_RADICALS.add(item);
+      if (row.length < 2) continue;
+      row.splice(row.indexOf(item), 1);
+      rows.push([item]);
     }
   }
   const cells = rows.flatMap((row) => splitRowAtTableCells(row, ordered));
@@ -1466,6 +1579,8 @@ function canAppendLine(
   // TeX builds a tall bracket from extension pieces stacked closer than a
   // line apart, and joining them made a "paragraph" no rewrite can set.
   if (lineIsPrivateUseOnly(previous) || lineIsPrivateUseOnly(line)) return false;
+  // (As is a radical sign left off the line it stands on.)
+  if (lineIsStrayRadical(previous) || lineIsStrayRadical(line)) return false;
   if (Math.abs(previous.angle - line.angle) >= UPRIGHT_ANGLE_EPSILON) {
     return false;
   }
@@ -2136,6 +2251,175 @@ function readsInSourceOrder(paragraph: MutableParagraph): boolean {
   return order.every((index, at) => at === 0 || index > order[at - 1]);
 }
 
+/** The key prefix of the items of a centred stack (centredStacks). */
+const CENTRED_STACK_GROUP_PREFIX = "stack:";
+// How closely the lines of a centred label share their axis: a line centred
+// with a trailing space stands half a space off the others.
+const CENTRED_STACK_AXIS_EM = 0.2;
+const CENTRED_STACK_STEP_TOLERANCE_EM = 0.15;
+// Lines whose left edges differ by less are set flush.
+const CENTRED_STACK_MIN_INSET_EM = 0.1;
+// How far over and under a stack, in its own steps, text that is no stack
+// of its own must keep for the stack to stand alone.
+const CENTRED_STACK_REACH_STEPS = 1.5;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function hangsAfterStackLine(line: ProjectedNativeItem, item: ProjectedNativeItem): boolean {
+  const size = Math.max(line.fontSize, 1);
+  return !line.vertical && !item.vertical && Math.abs(line.angle - item.angle) < UPRIGHT_ANGLE_EPSILON &&
+    item.fontSize <= size * 0.85 &&
+    Math.abs(item.baselineBlock - line.baselineBlock) <= size * 0.6 &&
+    Math.abs(item.baselineBlock - line.baselineBlock) >= size * 0.1 &&
+    item.inlineStart >= line.inlineEnd - size * 0.1 && item.inlineStart - line.inlineEnd <= size * 0.3 &&
+    item.inlineEnd - item.inlineStart <= size * 1.5;
+}
+
+function centredStacks(
+  items: readonly ProjectedNativeItem[],
+  page: readonly ProjectedNativeItem[],
+): ProjectedNativeItem[][] {
+  const ordered = items.filter((item) => item.evidence.str.trim() !== "")
+    .sort((left, right) => left.evidence.itemIndex - right.evidence.itemIndex);
+  const centre = (item: ProjectedNativeItem) => (item.inlineStart + item.inlineEnd) / 2;
+  const sameAngle = (left: ProjectedNativeItem, right: ProjectedNativeItem) =>
+    !left.vertical && !right.vertical && Math.abs(left.angle - right.angle) < UPRIGHT_ANGLE_EPSILON;
+  // The next line down, as close as a paragraph keeps its lines.
+  const stepsUnder = (above: ProjectedNativeItem, below: ProjectedNativeItem) => {
+    const size = Math.max(above.fontSize, below.fontSize, 1);
+    return sameAngle(above, below) &&
+      Math.abs(above.fontSize - below.fontSize) <= size * 0.05 &&
+      below.baselineBlock - above.baselineBlock >= size * 0.75 &&
+      below.blockStart - above.blockEnd <= size * PARAGRAPH_GAP_FACTOR;
+  };
+  type Run = { members: ProjectedNativeItem[]; step: number; centred: boolean; stands: boolean };
+  const runs: Run[] = [];
+  for (let at = 0; at < ordered.length;) {
+    const first = ordered[at];
+    const size = Math.max(first.fontSize, 1);
+    const members = [first];
+    // The stack's lines; its members are those and the marks hanging after them.
+    const lines = [first];
+    let low = centre(first), high = low, step: number | null = null;
+    for (let next = at + 1; next < ordered.length; next += 1) {
+      const previous = lines[lines.length - 1];
+      const item = ordered[next];
+      if (hangsAfterStackLine(previous, item)) {
+        members.push(item);
+        continue;
+      }
+      const middle = centre(item);
+      const ownStep = item.baselineBlock - previous.baselineBlock;
+      if (
+        !stepsUnder(previous, item) ||
+        Math.max(high, middle) - Math.min(low, middle) > size * CENTRED_STACK_AXIS_EM ||
+        (step !== null && Math.abs(ownStep - step) > size * CENTRED_STACK_STEP_TOLERANCE_EM)
+      ) {
+        break;
+      }
+      step ??= ownStep;
+      low = Math.min(low, middle);
+      high = Math.max(high, middle);
+      members.push(item);
+      lines.push(item);
+    }
+    // (A mark read after the stack's last line is that line's only when the
+    // stack is one: a run that ends in marks alone gives them back.)
+    const run = step !== null &&
+      !lines.every((item) => COMPACT_NUMERIC_CHART_LABEL.test(item.evidence.str.trim()));
+    if (run) {
+      const starts = lines.map((item) => item.inlineStart);
+      runs.push({ members, step: step!, stands: true,
+        centred: Math.max(...starts) - Math.min(...starts) >= size * CENTRED_STACK_MIN_INSET_EM });
+    }
+    at += run ? members.length : 1;
+  }
+  if (runs.length === 0) return [];
+  const runOf = new Map(runs.flatMap((run) => run.members.map((member) => [member, run] as const)));
+  const grouped = new Set(items);
+  const others = page.filter((item) => item.evidence.str.trim() !== "");
+  const stands = (run: Run) => {
+    const { members, step } = run;
+    const first = members[0], last = members[members.length - 1];
+    const start = Math.min(...members.map((item) => item.inlineStart));
+    const end = Math.max(...members.map((item) => item.inlineEnd));
+    return !others.some((other) => {
+      const its = runOf.get(other);
+      if (its === run || !sameAngle(other, first)) return false;
+      const em = Math.max(first.fontSize, other.fontSize, 1);
+      const beside = Math.min(...members
+        .filter((member) => Math.abs(other.baselineBlock - member.baselineBlock) < em * 0.8)
+        .map((member) => Math.max(member.inlineStart - other.inlineEnd, other.inlineStart - member.inlineEnd, 0)));
+      // (A line of another centred run may stand that near: three labels of
+      // two rows each, their second rows a third of an em apart, are three
+      // labels -- IPCC SPM's "Limited / Incomplete / Proactive adaptation".)
+      if (beside <= em * PDFJS_SPACE_IN_FLOW_MAX_EM && !its?.centred) return true;
+      // (Text of a box the file names is no line of this one's.)
+      if (!grouped.has(other)) return false;
+      if (beside <= em * SAME_LINE_GAP_FACTOR && !its?.centred) return true;
+      if ((its?.centred && its.stands) || Math.min(other.inlineEnd, end) - Math.max(other.inlineStart, start) <= 0) return false;
+      const over = first.baselineBlock - other.baselineBlock;
+      const under = other.baselineBlock - last.baselineBlock;
+      return (over >= em * 0.25 && over <= step * CENTRED_STACK_REACH_STEPS) ||
+        (under >= em * 0.25 && under <= step * CENTRED_STACK_REACH_STEPS);
+    });
+  };
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const run of runs) {
+      if (run.stands && !stands(run)) {
+        run.stands = false;
+        changed = true;
+      }
+    }
+  }
+  return runs.filter((run) => run.stands).map((run) => run.members);
+}
+
+/** Where the pinned boxes of a page start (a kept block's `origin`), for
+ * normalizePdfJsNativeParagraphItems. */
+export function pdfNativeBoxOriginsOf(
+  keptBlocks: readonly PdfNativeKeptTextBlock[] | undefined,
+  pageNumber: number,
+): readonly Readonly<{ x: number; y: number }>[] {
+  return (keptBlocks ?? []).flatMap((block) => block.pageNumber === pageNumber && block.origin ? [block.origin] : []);
+}
+
 /** How far, in PDF units, a kept block's first item may stand from the
  * origin its record names (a move is written in micro-units). */
 const KEPT_BLOCK_ORIGIN_TOLERANCE = 1;
@@ -2394,7 +2678,8 @@ export function nativeParagraphEditBoxes(
     hardGroups?: readonly (string | null)[] | null;
   }>,
 ): readonly PdfNativeParagraphEditBox[] {
-  const normalizedItems = normalizePdfJsNativeParagraphItems(input.items);
+  const normalizedItems = normalizePdfJsNativeParagraphItems(input.items,
+    pdfNativeBoxOriginsOf(input.keptBlocks, input.pageNumber));
   const overprints = pdfJsOverprintItemIndexes(normalizedItems);
   const spacers: ProjectedNativeItem[] = [];
   const projected = normalizedItems.flatMap((item) => {
@@ -2442,8 +2727,13 @@ export function nativeParagraphEditBoxes(
   // paragraphs) are grouped each on its own: text of two never shares a
   // line or a box, however close it is set. A page without them is one part.
   const parts = new Map<string | null, ProjectedNativeItem[]>();
+  // (A diagram's label, where the file names no box: centredStacks.)
+  const stackOf = new Map<ProjectedNativeItem, string>();
+  for (const stack of centredStacks(free.filter((item) => groupOf(item) === null), projected)) {
+    for (const item of stack) stackOf.set(item, `${CENTRED_STACK_GROUP_PREFIX}${stack[0].evidence.itemIndex}`);
+  }
   for (const item of free) {
-    const key = groupOf(item);
+    const key = stackOf.get(item) ?? groupOf(item);
     const part = parts.get(key);
     if (part) part.push(item);
     else parts.set(key, [item]);
@@ -2465,6 +2755,19 @@ export function nativeParagraphEditBoxes(
         const marked = candidates.find((candidate) => candidate && readsInSourceOrder(candidate[0])) ??
           candidates[1] ?? candidates[2];
         if (marked) return marked;
+      }
+      if (key?.startsWith(CENTRED_STACK_GROUP_PREFIX)) {
+        // One label, one box: each of its items a row, a mark hanging
+        // after a line on that line's row.
+        const rowItems: ProjectedNativeItem[][] = [];
+        for (const item of part) {
+          const row = rowItems[rowItems.length - 1];
+          if (row && hangsAfterStackLine(row[0], item)) row.push(item);
+          else rowItems.push([item]);
+        }
+        const rows = rowItems.map((row) => lineFromItems(row));
+        const stacked = rows.every((line): line is NativeVisualLine => line !== null) ? markedBoxParagraph(rows) : null;
+        if (stacked) return stacked;
       }
       return visualParagraphs(visualLines(part))
         .flatMap((paragraph) => sourceContiguousParagraphs(paragraph, projected));
@@ -2597,7 +2900,8 @@ export function nativeParagraphEditBoxesOfTextContent(input: Readonly<{
   boxes: readonly PdfNativeParagraphEditBox[];
 }> {
   const items = normalizePdfJsNativeParagraphItems(
-    input.content.items.map((item, index) => nativeListTextItemEvidence(item, index)));
+    input.content.items.map((item, index) => nativeListTextItemEvidence(item, index)),
+    pdfNativeBoxOriginsOf(input.keptBlocks, input.pageNumber));
   const boxes = nativeParagraphEditBoxes({
     pageNumber: input.pageNumber,
     items,

@@ -13,10 +13,11 @@ import type { PdfWorkingDisplaySource } from "./working-display-source";
 import { readPdfCompiledTextPreview, type PdfCompiledTextPreview } from "./native-text-compiled-preview";
 import type { PdfNativeListTextReplacementPlan, PdfNativeListTextSelectionEvidence } from "./engine/native/list-text-fidelity";
 import type { PdfNativePreparedContentStreamTransaction } from "./engine/native/content-stream-transaction";
-import { MAX_MRAI_NATIVE_SOURCE_BYTES, sha256PdfBytes } from "./engine/native/transaction-error";
+import { MAX_MRAI_NATIVE_SOURCE_BYTES, PdfNativeTransactionError, sha256PdfBytes } from "./engine/native/transaction-error";
 import { compilePdfNativeTextOffThread } from "./native-text-edit-preparation";
 import { notePdfNativeHeadUnheld, type PdfNativeHeadBase, registerPdfNativeWorkingHead } from "./remote/pdf-native-sources";
 import { readPdfNativeConsolidatedOutputSha256 } from "./engine/native/source-consolidation";
+import { isPdfNativeChainUnavailable, PDF_NATIVE_CHAIN_MAX } from "./native-chain-save";
 
 type Prepared = PdfNativePreparedContentStreamTransaction;
 type Plan = PdfNativeListTextReplacementPlan;
@@ -66,6 +67,11 @@ export interface PdfWorkingEngineRecipe {
   readonly options?: JsonValue;
   /** What the reader sees it as, for history and notices. */
   readonly label?: string;
+  /** What the edit changes, as it stood when the edit was made, where its
+   * command does not say enough to find it again on other bytes (a shape's
+   * geometry, the matrix a picture was drawn at). Kept with the recipe; the
+   * queue itself never reads it. */
+  readonly target?: JsonValue;
 }
 export interface PdfWorkingEngineOperationInput {
   readonly id: string;
@@ -107,6 +113,14 @@ export interface PdfWorkingRecovery {
     id: string; baseWorkingRevision: number; baseSha256: string; outputSha256: string;
     kind: "engine"; recipe: PdfWorkingEngineRecipe;
   }>)[];
+  /** The first queued edit stands on other bytes than the saved version's:
+   * `held` (its base) is what this copy showed when the saved version became
+   * another file -- the same content, which the server rewrote as one
+   * revision (`sameContent`), or the version another writer saved (not). A
+   * reload plans the queue again on the saved version from here, as the
+   * flush would have (`restorePdfNativeWorkingSession`). Absent: the queue
+   * stands on the saved version itself. */
+  readonly standsOn?: Readonly<{ held: string; sameContent: boolean }>;
 }
 export interface PdfWorkingSessionOptions {
   readonly pageId: string;
@@ -130,8 +144,24 @@ export interface PdfWorkingSessionOptions {
     label?: string }) => Promise<PdfSharedStateRecord | null>;
   /** Plans a recovered engine edit again on the bytes it was planned on
    * (after a reload). Without it a recovered engine edit is not restored. */
+  
+
+
+
+
+
+  readonly relocateTextSelection?: (input: { sourceBytes: Uint8Array; sourceSha256: string;
+    selection: PdfNativeListTextSelectionEvidence }) => Promise<PdfNativeListTextSelectionEvidence | null>;
   readonly prepareEngineRecipe?: (input: { recipe: PdfWorkingEngineRecipe; id: string; sourceBytes: Uint8Array;
-    sourceSha256: string; savedSource: PdfEngineSourceIdentity }) => Promise<PdfWorkingEngineOperationInput>;
+    sourceSha256: string; savedSource: PdfEngineSourceIdentity;
+    /** `sourceBytes` hold exactly the content the edit was first planned on,
+     * as another file: the server rewrote the saved chain as one revision
+     * (never a version another writer made). The edit names that file. */
+    sameContent?: boolean;
+    /** The bytes this edit wrote when it was first planned (a copy, the
+     * caller's to zero): what the page looked like with it, for an edit
+     * planned again on a version another window saved. Not after a reload. */
+    copyPlannedOutput?: () => Uint8Array }) => Promise<PdfWorkingEngineOperationInput>;
   /** The bytes of a saved version (checked against its digest), or null.
    * With it, an edit queued behind a save the server rewrote (one revision,
    * the same content as another file) is planned again on the rewritten
@@ -145,10 +175,43 @@ export interface PdfWorkingSessionOptions {
    * had (a plan the server makes again, never byte for byte the same):
    * the edits after it are then checked against what it came back as. */
   readonly recipeReplannable?: (recipe: PdfWorkingEngineRecipe) => boolean;
+  /** Saves the queue's leading edits together (lib/pdf/native-chain-save):
+   * `records` are their bytes-publish records, oldest first, the first on
+   * the saved version and each later one on the bytes the one before it
+   * makes (its source naming the saved version's ids: the server names the
+   * version it stores it on). Answers the acknowledgement of each record the
+   * server stored, in order -- at least one; the edits it did not store stay
+   * queued and go as ordinary saves. Throws PDF_NATIVE_CHAIN_UNAVAILABLE when
+   * nothing was written and the edits may go one at a time instead. */
+  readonly persistChain?: (input: { records: readonly PdfSharedStateRecord[]; baseSource: PdfEngineSourceIdentity;
+    operationIds: readonly string[] }) => Promise<readonly PdfWorkingSaveAcknowledgement[]>;
+  /** Whether a queued engine edit may go in a chain: its record is its
+   * bytes alone, and its history is the plain one of an engine edit. */
+  readonly chainEligible?: (operationId: string) => boolean;
 }
 
 /** Verified local edits and durable publication have distinct revisions.
  * The queue never reports an unacknowledged working source as a server version. */
+/** An edit the saved version cannot take: what it changes is not there as
+ * the edit was planned on (another window changed or removed it first). An
+ * engine edit's `bindRecord` throws it for the engine's own conflict or
+ * refusal -- never for a planner that could not be reached, which is tried
+ * again. The flush names the queue's oldest edit with it (snapshot
+ * `unplannableHeadId`) once the saved version turned it away twice. */
+export class PdfWorkingUnplannableError extends Error {
+  /** `alreadyThere`: the saved version holds exactly what the edit writes
+   * (the other window made the same change): nothing is lost with it. */
+  constructor(message: string, readonly alreadyThere = false) { super(message); this.name = "PdfWorkingUnplannableError"; }
+}
+
+
+
+
+
+
+export class PdfWorkingPlannerUnavailableError extends Error {
+  constructor(message: string) { super(message); this.name = "PdfWorkingPlannerUnavailableError"; }
+}
 async function createWorkingSession(options: PdfWorkingSessionOptions, initialRevision = 0) {
   const authority = options.readAuthority();
   const displayAuthority = options.readDisplayAuthority?.() ?? { readable: true, key: authority.key };
@@ -178,12 +241,25 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
   let displaySource: PdfWorkingDisplaySource | null = null;
   let failure: string | null = null;
   let flight: Promise<void> | null = null;
+  /** The queue's leading edits a chain save is sending now (0: none): none
+   * of them is taken back by an Undo, as the one being written never is. */
+  let chainInFlight = 0;
   const pending: PdfLocalTextOperation[] = [];
   /** The bytes this copy holds that the saved version has the content of,
    * as another file: the server rewrote its revision chain as one revision
    * when it saved them (near the parser's ceiling, every ~24 saves). The
    * edits queued after them are planned again on the saved version. */
   let rewritten: { held: string; saved: string } | null = null;
+  /** The queue was stood on a version another writer saved (rebaseSaved
+   * `keepPending`): until it is empty, the saved version is not the content
+   * its edits were planned on. */
+  let onPeerVersion = false;
+  /** The queue's oldest edit, when the saved version cannot take it (see
+   * PdfWorkingUnplannableError): planned there twice and turned away twice.
+   * The window lets it go (letGoLeading) so the edits behind it are written. */
+  let unplannableHeadId: string | null = null;
+  /** That edit's work is on the saved version already (PdfWorkingUnplannableError `alreadyThere`). */
+  let unplannableHeadDone = false;
   const onSavedBase = (operation: PdfLocalTextOperation) =>
     operation.baseSha256 === savedSource.sourceSha256 ||
     (rewritten !== null && rewritten.held === operation.baseSha256 && rewritten.saved === savedSource.sourceSha256);
@@ -214,6 +290,12 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
           ? Object.freeze({ ...operation, kind: "engine" as const, recipe: data.recipe })
           : Object.freeze({ ...operation, selection: data.plan.evidence.selection!, replacementText: data.plan.evidence.replacementDisplayText });
       })),
+      // Behind a save the server rewrote, or moved onto a peer's version:
+      // the baseline is no longer the bytes the first edit was planned on.
+      // Without this a reload found "lineage is invalid" and the whole
+      
+      ...(operations[0] && operations[0].baseSha256 !== baseline.sourceSha256
+        ? { standsOn: Object.freeze({ held: operations[0].baseSha256, sameContent: !onPeerVersion }) } : {}),
     });
   const acknowledge = (operation: PdfLocalTextOperation, record: PdfSharedStateRecord, ack: PdfWorkingSaveAcknowledgement,
     /** What the record writes (the edit's own output, or a rebased plan's). */
@@ -249,14 +331,18 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
     registerHead(savedSource.sourceSha256);
     if (workingSha256 !== savedSource.sourceSha256) registerHead(workingSha256);
     pending.shift(); clearOperation(operation);
+    if (!pending.length) onPeerVersion = false;
     // workingBytes/revision and the UI draft deliberately remain untouched.
-    failure = null; options.onChange?.();
+    failure = null; unplannableHeadId = null; options.onChange?.();
   };
   /** An edit planned again on the saved version's own bytes (a rewrite of
    * the chain gave them a new digest, the same content): their candidate
    * extends what the server holds, so it publishes as bytes. The saved bytes
    * this session keeps become those bytes. */
-  const replanOnSaved = async (operation: PdfLocalTextOperation, data: OwnedOperation):
+  const replanOnSaved = async (operation: PdfLocalTextOperation, data: OwnedOperation,
+    /** `reached`: the saved version's bytes were in hand and the planner was
+     * asked (a plan it then did not give is its answer, not a missing file). */
+    verdict?: { reached: boolean; turnedAway: PdfWorkingUnplannableError | null }):
     Promise<Readonly<{ candidate: Uint8Array; sha256: string }> | null> => {
     // The saved bytes this session holds already, when they are the saved
     // version's (after the first edit planned again); else loaded.
@@ -268,14 +354,24 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
       let candidate: Uint8Array, sha256: string;
       if (data.kind === "engine") {
         if (!options.prepareEngineRecipe) return null;
+        if (verdict) verdict.reached = true;
         const prepared = await options.prepareEngineRecipe({ recipe: data.recipe, id: operation.id,
-          sourceBytes: Uint8Array.from(saved), sourceSha256: savedSource.sourceSha256, savedSource });
+          sourceBytes: Uint8Array.from(saved), sourceSha256: savedSource.sourceSha256, savedSource,
+          copyPlannedOutput: () => Uint8Array.from(data.candidateBytes),
+          // Behind a save the server rewrote (and no other writer's version).
+          ...(operation.baseSha256 !== savedSource.sourceSha256 && !onPeerVersion ? { sameContent: true } : {}) });
         candidate = prepared.candidateBytes; sha256 = prepared.outputSha256;
       } else {
         const selection = data.plan.evidence.selection;
         if (!selection) return null;
+        if (verdict) verdict.reached = true;
+        // (On another window's version the line is found again by its words.)
+        const found = onPeerVersion && options.relocateTextSelection
+          ? await options.relocateTextSelection({ sourceBytes: Uint8Array.from(saved),
+              sourceSha256: savedSource.sourceSha256, selection }).catch(() => null)
+          : null;
         const compiled = await compilePdfNativeTextOffThread({ sourceBytes: Uint8Array.from(saved),
-          selection: { ...selection, sourceSha256: savedSource.sourceSha256 },
+          selection: found ?? { ...selection, sourceSha256: savedSource.sourceSha256 },
           replacementText: data.plan.evidence.replacementDisplayText, signal: new AbortController().signal,
           engineSource: { pageId: options.pageId, resourceId: savedSource.resourceId,
             resourceVersionId: savedSource.resourceVersionId } });
@@ -297,6 +393,11 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
         firstPendingOutputSha256: pending[0]?.outputSha256 ?? null,
         undoneOperationIds: Object.freeze(undone.map(item => item.id)),
         saving: flight !== null, failure, disposed,
+        /** The oldest queued edit, when the saved version cannot take it
+         * and it waits to be let go (letGoLeading). */
+        unplannableHeadId: unplannableHeadId !== null && pending[0]?.id === unplannableHeadId ? unplannableHeadId : null,
+        /** Its work is on the saved version already: let go without a word. */
+        unplannableHeadDone: unplannableHeadId !== null && pending[0]?.id === unplannableHeadId && unplannableHeadDone,
         /** The copy shows bytes whose content the saved version holds as
          * another file (the server rewrote the chain). */
         rewritten: rewritten !== null && workingSha256 !== savedSource.sourceSha256 });
@@ -331,7 +432,7 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
       return Object.freeze({
         baseSha256: operation.baseSha256, baseLength: base.length,
         outputSha256: operation.outputSha256, outputLength: candidateOf(data).length,
-        inFlight: flight !== null && index === 0,
+        inFlight: flight !== null && index < Math.max(1, chainInFlight),
         kind: data.kind,
         label: data.kind === "engine" ? data.recipe.label ?? null : "text",
       });
@@ -422,7 +523,7 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
      * here: it is the oldest, and any later one can be. */
     unstageLast(): string | null {
       checkAuthority();
-      if (preparing || !pending.length || (flight && pending.length < 2)) return null;
+      if (preparing || !pending.length || (flight && pending.length <= Math.max(1, chainInFlight))) return null;
       const operation = pending[pending.length - 1];
       const previous = pending.length > 1 ? owned.get(pending[pending.length - 2]) : null;
       const before = pending.length > 1 ? previous && candidateOf(previous) : savedBytes;
@@ -432,7 +533,7 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
       workingBytes.fill(0); workingBytes = Uint8Array.from(before);
       workingSha256 = operation.baseSha256; workingRevision = operation.baseWorkingRevision;
       displaySessionId = crypto.randomUUID(); displaySource = null;
-      if (!pending.length) failure = null;
+      if (!pending.length) { failure = null; onPeerVersion = false; unplannableHeadId = null; }
       options.onChange?.();
       return operation.id;
     },
@@ -472,10 +573,37 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
       for (const operation of undone.splice(0)) clearOperation(operation);
       workingBytes.fill(0); workingBytes = Uint8Array.from(bytes);
       savedBytes.fill(0); savedBytes = Uint8Array.from(bytes);
-      workingSha256 = savedSource.sourceSha256; rewritten = null;
+      workingSha256 = savedSource.sourceSha256; rewritten = null; onPeerVersion = false;
       registerHead(workingSha256);
       displaySessionId = crypto.randomUUID(); displaySource = null;
       options.writeRecovery(recovery([]));
+      options.onChange?.();
+      return true;
+    },
+    
+
+
+
+
+
+
+
+
+    letGoLeading(operationIds: readonly string[]): boolean {
+      if (disposed || preparing || flight || !operationIds.length || operationIds.length > pending.length ||
+        operationIds.some((id, index) => pending[index].id !== id) ||
+        options.readAuthority().key !== authority.key) return false;
+      const gone = pending.splice(0, operationIds.length);
+      // The saved revision passes over them: the next edit's is the one after.
+      savedRevision = gone[gone.length - 1].baseWorkingRevision + 1;
+      // The copy still shows them; the saved version never will.
+      rewritten = { held: pending[0]?.baseSha256 ?? workingSha256, saved: savedSource.sourceSha256 };
+      onPeerVersion = true;
+      for (const operation of gone) clearOperation(operation);
+      // (A Redo of an edit taken back earlier was planned on what is let go.)
+      for (const operation of undone.splice(0)) clearOperation(operation);
+      failure = null; unplannableHeadId = null;
+      options.writeRecovery(recovery(pending, savedSource, savedRevision));
       options.onChange?.();
       return true;
     },
@@ -507,8 +635,9 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
         // The queue's head was planned on the version before: the flush reads
         // it as behind a rewritten save and plans it again on this one.
         rewritten = { held: pending[0].baseSha256, saved: savedSource.sourceSha256 };
+        onPeerVersion = true;
         registerHead(savedSource.sourceSha256);
-        failure = null;
+        failure = null; unplannableHeadId = null;
         options.writeRecovery(recovery(pending, savedSource, savedRevision));
         checkAuthority();
         options.onChange?.();
@@ -552,9 +681,88 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
       if (flight) return flight;
       checkAuthority();
       if (failure) return Promise.reject(new Error("PDF save requires reconciliation before retry."));
+      // The queue's leading edits that may go as one chain: engine edits
+      // standing on the saved version's own bytes, each the bytes before it
+      // with one revision appended, none needing to be planned again.
+      const chainRun = (): PdfLocalTextOperation[] => {
+        const found: PdfLocalTextOperation[] = [];
+        if (!options.persistChain || !options.publishBytes || !options.chainEligible) return found;
+        let previous: Uint8Array = savedBytes, previousSha256 = savedSource.sourceSha256;
+        for (const operation of pending) {
+          const data = owned.get(operation);
+          if (found.length >= PDF_NATIVE_CHAIN_MAX || !data || data.kind !== "engine" ||
+            operation.baseSha256 !== previousSha256 || options.replanBeforePublish?.(operation.id) === true ||
+            options.chainEligible(operation.id) !== true ||
+            !appendedTo(previous, previousSha256, data.candidateBytes)) break;
+          found.push(operation);
+          previous = data.candidateBytes; previousSha256 = operation.outputSha256;
+        }
+        return found.length >= 2 ? found : [];
+      };
+      /** Sends that run as one chain and acknowledges what the server
+       * stored of it. False: nothing was sent or stored, and the edits go
+       * one at a time. */
+      const publishChain = async (found: readonly PdfLocalTextOperation[]): Promise<boolean> => {
+        chainInFlight = found.length;
+        try {
+          const records: PdfSharedStateRecord[] = [];
+          const base = savedSource;
+          let source: PdfEngineSourceIdentity = base, sourceBytes: Uint8Array = savedBytes;
+          for (const operation of found) {
+            const data = owned.get(operation);
+            if (!data || data.kind !== "engine" || pending[records.length] !== operation) break;
+            const record = await options.publishBytes!({ operationId: operation.id, source, sourceBytes,
+              output: data.candidateBytes, outputSha256: operation.outputSha256,
+              baseWorkingRevision: operation.baseWorkingRevision, label: data.recipe.label });
+            checkAuthority();
+            if (!record || savedSource !== base) break;
+            records.push(record);
+            // The saved version's ids: the server names the version it makes.
+            source = Object.freeze({ resourceId: base.resourceId, resourceVersionId: base.resourceVersionId,
+              sourceSha256: operation.outputSha256 });
+            sourceBytes = data.candidateBytes;
+          }
+          if (records.length < 2 || savedSource !== base) return false;
+          let acknowledgements: readonly PdfWorkingSaveAcknowledgement[];
+          try {
+            acknowledgements = await options.persistChain!({ records, baseSource: base,
+              operationIds: found.slice(0, records.length).map(operation => operation.id) });
+          } catch (error) {
+            if (isPdfNativeChainUnavailable(error)) return false;
+            throw error;
+          }
+          checkAuthority();
+          if (!acknowledgements.length || acknowledgements.length > records.length) {
+            throw new Error("PDF chain save acknowledgement does not match the queued operations.");
+          }
+          acknowledgements.forEach((ack, index) => {
+            const operation = found[index], data = owned.get(operation);
+            if (pending[0] !== operation || !data) {
+              throw new Error("PDF chain save acknowledgement does not match the queued operations.");
+            }
+            data.sent = ack.record;
+            acknowledge(operation, ack.record, ack);
+          });
+          // What the server did not store goes as ordinary saves.
+          return acknowledgements.length === records.length;
+        } finally { chainInFlight = 0; options.onChange?.(); }
+      };
       const run = async () => {
+        // One chain at a time while it takes everything sent: an edit the
+        // server stopped at is sent as itself, as before.
+        let chain = true;
+        // The edit the saved version turned away once in this flush: planned
+        // there once more, from the bytes read again, before it is named.
+        let turnedAway: string | null = null;
         while (pending.length) {
           checkAuthority();
+          if (chain && !rewritten) {
+            const found = chainRun();
+            if (found.length) {
+              chain = await publishChain(found);
+              continue;
+            }
+          }
           const operation = pending[0], data = owned.get(operation)!;
           if (!onSavedBase(operation)) throw new Error("PDF queued source conflicts with the saved baseline.");
           const rebased = operation.baseSha256 !== savedSource.sourceSha256;
@@ -566,19 +774,32 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
           // and the copy stopped writing until a reload, 24 saves into any
           
           let replanned: Readonly<{ candidate: Uint8Array; sha256: string }> | null = null;
+          const verdict = { reached: false, turnedAway: null as PdfWorkingUnplannableError | null };
+          let plannedAgain = false;
+          /** The saved version does not take this edit. Null the first time
+           * (it is planned once more); the error that names it the second. */
+          const unplannable = (detail: string): PdfWorkingUnplannableError | null => {
+            if (turnedAway !== operation.id) { turnedAway = operation.id; return null; }
+            unplannableHeadId = operation.id;
+            unplannableHeadDone = verdict.turnedAway?.alreadyThere === true;
+            return new PdfWorkingUnplannableError(detail, unplannableHeadDone);
+          };
           if (options.publishBytes && options.loadSavedBytes && replan) {
             if (process.env.NODE_ENV !== "production") {
               console.debug("[pdf-working] replan start " + JSON.stringify({ id: operation.id.slice(0, 8), rebased,
                 kind: data.kind, label: data.kind === "engine" ? data.recipe.label : "text" }));
             }
-            replanned = await replanOnSaved(operation, data).catch((error) => {
+            replanned = await replanOnSaved(operation, data, verdict).catch((error) => {
               if (process.env.NODE_ENV !== "production") console.debug("[pdf-working] replan threw", error);
+              // (The planner's own answer on the saved bytes, kept.)
+              if (error instanceof PdfWorkingUnplannableError) verdict.turnedAway = error;
               return null;
             });
             if (process.env.NODE_ENV !== "production") {
               console.debug("[pdf-working] replan " + JSON.stringify({ id: operation.id.slice(0, 8), planned: Boolean(replanned) }));
             }
             checkAuthority();
+            plannedAgain = Boolean(replanned);
             if (replanned) {
               record = await options.publishBytes({ operationId: operation.id, source: savedSource,
                 sourceBytes: savedBytes, output: replanned.candidate, outputSha256: replanned.sha256,
@@ -612,13 +833,39 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
           if (record) {
             // Published as its bytes.
           } else if (data.kind === "engine") {
-            record = await data.bindRecord(savedSource, operation.baseWorkingRevision, rebased);
+            // The planner read the saved version's bytes and turned the edit
+            // away itself: no record is made for the server to plan. (It
+            // refuses such a record from a browser that plans, and the whole
+            
+            if (rebased && verdict.reached && verdict.turnedAway) {
+              const named = unplannable(verdict.turnedAway.message);
+              if (!named) continue;
+              throw named;
+            }
+            try {
+              record = await data.bindRecord(savedSource, operation.baseWorkingRevision, rebased);
+            } catch (error) {
+              // The engine's own answer on the saved version, whose bytes
+              // were in hand when it was planned there: not a planner or a
+              // file out of reach.
+              if (!rebased || !verdict.reached || !(error instanceof PdfWorkingUnplannableError)) throw error;
+              const named = unplannable(error.message);
+              if (!named) continue;
+              throw named;
+            }
             checkAuthority();
             data.sent = record;
           } else {
             // A typed line's bytes were prepared on the file before the
             // rewrite: it cannot be written on the rewritten one.
-            if (rebased) throw new Error("PDF typed text queued behind a rewritten save must be typed again.");
+            if (rebased) {
+              const detail = "PDF typed text queued behind a rewritten save must be typed again.";
+              // The line was looked for on the saved version's own bytes and
+              // is not there as it was typed on.
+              const named = verdict.reached && !plannedAgain ? unplannable(detail) : new Error(detail);
+              if (!named) continue;
+              throw named;
+            }
             if (!Number.isSafeInteger(data.prepared.sourceXrefSections)) throw new Error("PDF queued source has no revision depth.");
             data.checkpoint = Object.freeze({ source: savedSource, xrefSections: data.prepared.sourceXrefSections! });
             checkAuthority();
@@ -626,6 +873,7 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
               workingRevision: operation.baseWorkingRevision, selectionRevision: data.plan.evidence.selection!.selectionRevision,
               prepared: data.prepared, fidelity: data.plan.evidence, sourceCheckpoint: data.checkpoint });
           }
+          unplannableHeadId = null;
           const ack = await options.persist({ record: record!, baseSource: savedSource });
           const derived = (record as { derivedCandidate?: { sha256?: unknown } }).derivedCandidate?.sha256;
           checkAuthority();
@@ -640,6 +888,17 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
         throw error;
       }).finally(() => { flight = null; options.onChange?.(); });
       options.onChange?.(); return flight;
+    },
+    /** The queue's save was failing for a reason of its own (offline, a
+     * request that never left) when another window saved the page: the
+     * failure is named for what the queue now faces, and the window stands
+     * the queue on that version (rebaseSaved `keepPending`). False when no
+     * queue waits, or its save is running. */
+    namePeerVersion(): boolean {
+      // (Also a queue held unsent, AutoSave off: nothing of it is in flight.)
+      if (disposed || flight || preparing || !pending.length) return false;
+      failure = PDF_WORKING_PEER_VERSION_FAILURE; unplannableHeadId = null; options.onChange?.();
+      return true;
     },
     requireReconciliation(reason: string) {
       if (flight) throw new Error("PDF publication is still in flight.");
@@ -673,6 +932,23 @@ async function createWorkingSession(options: PdfWorkingSessionOptions, initialRe
         workingRevision: operation.baseWorkingRevision, selectionRevision: data.plan.evidence.selection!.selectionRevision,
         prepared: data.prepared, fidelity: data.plan.evidence, sourceCheckpoint: data.checkpoint });
       acknowledge(operation, record, ack);
+    },
+    /** A chain save whose answer came after the queue stopped waiting for
+     * it (read from the server's page): each record it stored acknowledges
+     * the queue's oldest edit, in order. */
+    reconcileChain(acks: readonly PdfWorkingSaveAcknowledgement[]) {
+      checkAuthority();
+      if (flight || !failure || !acks.length || acks.length > pending.length) {
+        throw new Error("PDF save is not awaiting reconciliation.");
+      }
+      for (const ack of acks) {
+        const operation = pending[0], data = operation && owned.get(operation);
+        if (!operation || !data || ack.record.id !== operation.id) {
+          throw new Error("PDF chain save acknowledgement does not match the queued operations.");
+        }
+        data.sent = ack.record;
+        acknowledge(operation, ack.record, ack);
+      }
     },
     dispose() {
       disposed = true; workingBytes.fill(0); savedBytes.fill(0); undone.length = 0;
@@ -713,7 +989,23 @@ export function advancePdfWorkingRecovery(recovery: PdfWorkingRecovery, source: 
     savedRevision: operation.baseWorkingRevision + 1, operations: recovery.operations.slice(landed + 1) });
 }
 
-export async function restorePdfNativeWorkingSession(options: PdfWorkingSessionOptions, recovery: PdfWorkingRecovery) {
+/** An edit of a kept queue that the page's version does not take as the
+ * queue comes back on it (see restorePdfNativeWorkingSession `onOtherVersion`). */
+export type PdfWorkingRecoveryLostEdit = Readonly<{
+  id: string; reason: string;
+  /** A typed line: what was typed, and the line it was typed on. */
+  text?: Readonly<{ selection: PdfNativeListTextSelectionEvidence; replacementText: string }>;
+}>;
+
+export async function restorePdfNativeWorkingSession(options: PdfWorkingSessionOptions, recovery: PdfWorkingRecovery,
+  /** The queue comes back on a version it was not planned on (the page was
+   * saved by another window, or put back, while this tab's edits waited
+   * across a reload): each edit is planned again there, and one the version
+   * does not take goes alone (`lost`), the edits after it standing on what
+   * is there without it. `any`: whatever the reason; otherwise only the
+   * planner's own verdict (PdfWorkingUnplannableError), any other failure
+   * failing the restore as before. A planner out of reach always fails it. */
+  onOtherVersion?: Readonly<{ tolerate: "verdict" | "any"; lost: (edit: PdfWorkingRecoveryLostEdit) => void }>) {
   if (recovery.schemaVersion !== "mrai.pdf-working-recovery.v1" || recovery.pageId !== options.pageId ||
     !Number.isSafeInteger(recovery.savedRevision) || recovery.savedRevision < 0 ||
     !jsonEquals(recovery.savedSource as unknown as JsonValue, options.source as unknown as JsonValue) ||
@@ -727,37 +1019,99 @@ export async function restorePdfNativeWorkingSession(options: PdfWorkingSessionO
   try {
     // A replannable edit's output as recorded -> as it came back.
     const cameBackAs = new Map<string, string>();
+    // The recorded bytes whose content came back as another file with the
+    // same content (behind a save the server rewrote): an edit planned on
+    // them names that file, as the flush tells it (`sameContent`).
+    const sameContentAs = new Set<string>();
+    const standsOn = recovery.standsOn;
+    const standsOnOtherContent = standsOn !== undefined && standsOn !== null && standsOn.sameContent === false;
+    if (standsOn !== undefined) {
+      const first = recovery.operations[0];
+      if (!standsOn || typeof standsOn.sameContent !== "boolean" || typeof standsOn.held !== "string" ||
+        !/^[a-f0-9]{64}$/.test(standsOn.held) || !first || first.baseSha256 !== standsOn.held ||
+        standsOn.held === recovery.savedSource.sourceSha256)
+        throw new Error("PDF working recovery identity is invalid.");
+      // The queue's head was planned on bytes the saved version replaced: it
+      // comes back on the saved version, planned again there.
+      cameBackAs.set(standsOn.held, recovery.savedSource.sourceSha256);
+      if (standsOn.sameContent) sameContentAs.add(standsOn.held);
+    }
+    // (Edits let go on the way: the revisions recorded after them count one less.)
+    let gone = 0;
+    const letGo = (recipe: PdfWorkingRecovery["operations"][number], error: unknown, standsOn: string): boolean => {
+      const name = error instanceof Error ? error.name : "";
+      // (A worker that could not be reached decided nothing either.)
+      if (!onOtherVersion || standsOnOtherContent !== true || error instanceof PdfWorkingPlannerUnavailableError ||
+        name === "PdfNativeTextWorkerUnavailable") return false;
+      // The planner's own answer: the engine's conflict, or a line that is
+      // not in these bytes as it was typed on.
+      const verdict = error instanceof PdfWorkingUnplannableError || error instanceof PdfNativeTransactionError ||
+        name === "PdfNativeListTextLifecycleError";
+      if (onOtherVersion.tolerate !== "any" && !verdict) return false;
+      gone += 1;
+      // What came after it stands on the bytes there without it.
+      cameBackAs.set(recipe.outputSha256, standsOn);
+      onOtherVersion.lost(Object.freeze({ id: recipe.id,
+        reason: error instanceof Error ? error.message.slice(0, 160) : "unknown",
+        ...(recipe.kind === "engine" ? {} : { text: Object.freeze({ selection: recipe.selection, replacementText: recipe.replacementText }) }) }));
+      return true;
+    };
     for (const recipe of recovery.operations) {
       const snapshot = session.snapshot();
       const base = cameBackAs.get(recipe.baseSha256) ?? recipe.baseSha256;
-      if (snapshot.workingRevision !== recipe.baseWorkingRevision || snapshot.workingSha256 !== base)
+      if (snapshot.workingRevision !== recipe.baseWorkingRevision - gone || snapshot.workingSha256 !== base)
         throw new Error("PDF recovered operation lineage is invalid.");
       // An edit made on bytes that came back otherwise comes back otherwise too.
       const onOtherBytes = base !== recipe.baseSha256;
+      const sameContent = onOtherBytes && sameContentAs.has(recipe.baseSha256);
       if (recipe.kind === "engine") {
         if (!options.prepareEngineRecipe) throw new Error("PDF recovered engine edit cannot be planned here.");
         const bytes = session.copyWorkingBytes();
         try {
           const prepared = await options.prepareEngineRecipe({ recipe: recipe.recipe, id: recipe.id, sourceBytes: bytes,
-            sourceSha256: snapshot.workingSha256, savedSource: snapshot.savedSource });
+            sourceSha256: snapshot.workingSha256, savedSource: snapshot.savedSource,
+            ...(sameContent ? { sameContent: true } : {}) });
           if (prepared.outputSha256 !== recipe.outputSha256) {
-            if (!onOtherBytes && !options.recipeReplannable?.(recipe.recipe)) {
-              throw new Error("PDF recovered operation no longer reproduces its exact candidate.");
-            }
+            // Other bytes for the same edit on the same file: the planner is
+            // not the one that planned it (the app was updated, and the
+            // update's own banner asked for this reload). It is the edit as
+            // this build writes it; the edits after it stand on that. Thrown
+            // as "no longer reproduces its exact candidate", it let the
+            
             cameBackAs.set(recipe.outputSha256, prepared.outputSha256);
+            if (sameContent) sameContentAs.add(recipe.outputSha256);
           }
           session.stageEngine(prepared);
+        } catch (error) {
+          if (!letGo(recipe, error, snapshot.workingSha256)) throw error;
         } finally { bytes.fill(0); }
         continue;
       }
-      const operation = await session.prepareText({ id: recipe.id, selection: recipe.selection, replacementText: recipe.replacementText });
-      if (operation.outputSha256 !== recipe.outputSha256) {
-        if (!onOtherBytes) throw new Error("PDF recovered operation no longer reproduces its exact candidate.");
-        cameBackAs.set(recipe.outputSha256, operation.outputSha256);
+      // (On other bytes the line is proved again there, as the flush plans a
+      // typed line behind a rewritten save: its evidence names those bytes.)
+      try {
+        let selection = recipe.selection;
+        if (onOtherBytes) {
+          const bytes = session.copyWorkingBytes();
+          try {
+            selection = (!sameContent && options.relocateTextSelection
+              ? await options.relocateTextSelection({ sourceBytes: bytes, sourceSha256: snapshot.workingSha256,
+                  selection: recipe.selection }).catch(() => null)
+              : null) ?? { ...recipe.selection, sourceSha256: snapshot.workingSha256 };
+          } finally { bytes.fill(0); }
+        }
+        const operation = await session.prepareText({ id: recipe.id, selection,
+          replacementText: recipe.replacementText });
+        if (operation.outputSha256 !== recipe.outputSha256) {
+          cameBackAs.set(recipe.outputSha256, operation.outputSha256);
+          if (sameContent) sameContentAs.add(recipe.outputSha256);
+        }
+        session.stage(operation);
+      } catch (error) {
+        if (!letGo(recipe, error, snapshot.workingSha256)) throw error;
       }
-      session.stage(operation);
     }
-    if (recovery.operations.length) session.requireReconciliation("Recovered PDF edits require publication reconciliation.");
+    if (session.snapshot().pendingOperationIds.length) session.requireReconciliation("Recovered PDF edits require publication reconciliation.");
     options.writeRecovery(session.recovery()); opened = true;
     return session;
   } catch (error) { session.dispose(); throw error; }

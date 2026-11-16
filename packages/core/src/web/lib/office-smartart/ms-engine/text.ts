@@ -11,6 +11,7 @@
  */
 
 /** A line's height as a multiple of its font, by what the line holds. */
+import { OFFICE_SCENE_LABEL_LINE_SPACING } from "../model";
 import { splitBehind } from "../../regexp-behind";
 
 // After a hyphen (`(?<=-)`, tested in code: Safari before 16.4 cannot
@@ -283,8 +284,7 @@ export function smartArtEastAsianLinePitch(face: string | null | undefined): num
  */
 export const FALLBACK_CJK_LINES: LineFactors = { cjk: 1.6, cjkEastAsian: 1.6, latin: 1.1, latinBesideCjk: 1.1 };
 
-/** The line spacing PowerPoint gives SmartArt text (90%), which the line factors already hold. */
-const SMARTART_LINE_SPACING = 0.9;
+const SMARTART_LINE_SPACING = OFFICE_SCENE_LABEL_LINE_SPACING;
 
 export type FitParagraph = {
   text: string;

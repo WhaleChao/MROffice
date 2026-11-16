@@ -81,6 +81,10 @@ export interface OfficeEffectsPaneLabels {
   readonly zRotation: string;
   /** 3-D Rotation > Perspective (a perspective camera's field of view). */
   readonly perspective?: string;
+  /** 3-D Rotation > Keep Text Flat (`a:flatTx`, a host whose shape has text). */
+  readonly keepTextFlat?: string;
+  /** 3-D Rotation > Distance from ground (`format3d.z`, `a:sp3d@z`). */
+  readonly distanceFromGround?: string;
   readonly unitPt: string;
 }
 
@@ -97,6 +101,9 @@ export interface OfficeEffectsPaneArgs {
     kind: K,
     value: OfficePictureEffectValues[K] | null,
   ) => void;
+  /** 3-D Rotation > Keep Text Flat: the shape's words stay out of its 3-D
+   * scene (its body's `a:flatTx`); a host whose shape holds words. */
+  readonly keepTextFlat?: { readonly checked: boolean; readonly onChange: (checked: boolean) => void };
 }
 
 const round = (value: number, places = 2) => Math.round(value * 10 ** places) / 10 ** places;
@@ -439,7 +446,9 @@ export function officeEffectsPaneSections(args: OfficeEffectsPaneArgs): OfficeSh
     // one axis turned the picture away from the preset's other two).
     const [x, y, z] = OFFICE_CAMERA_ROTATIONS[rotation.camera] ?? [0, 0, 0];
     const shown = (value: number) => Math.round(((((value ?? 0) % 360) + 360) % 360) * 10) / 10 % 360;
-    return { x: shown(x), y: shown(y), z: shown(z) };
+    // The table's x is the turn the other way round from Office's X Rotation
+    // (`officeCameraLonTurn`): Perspective: Left reads X 20, as in PowerPoint.
+    return { x: shown(-x), y: shown(y), z: shown(z) };
   })();
   const setAngle = (axis: "x" | "y" | "z", degrees: number) => {
     const next = { ...rotationAngles, [axis]: degrees };
@@ -458,7 +467,15 @@ export function officeEffectsPaneSections(args: OfficeEffectsPaneArgs): OfficeSh
       id: `${id}-rotation-preset`,
       label: labels.presets,
       value: rotation?.camera ?? "none",
-      options: [{ value: "none", label: labels.menu.none("rotation3d") }, ...cameras],
+      options: [
+        { value: "none", label: labels.menu.none("rotation3d") },
+        ...cameras,
+        // The front camera turned by its own X / Y / Z, which no preset names:
+        // shown as the pane's Custom, its angles in the boxes below.
+        ...(rotation && !cameras.some((camera) => camera.value === rotation.camera)
+          ? [{ value: rotation.camera, label: labels.custom, disabled: true }]
+          : []),
+      ],
       ...gate,
       onChange: (next) => args.onChange("rotation3d", next === "none" ? null : { camera: next }),
     },
@@ -475,6 +492,27 @@ export function officeEffectsPaneSections(args: OfficeEffectsPaneArgs): OfficeSh
       0.1),
     );
   }
+  if (labels.keepTextFlat && args.keepTextFlat) {
+    const keep = args.keepTextFlat;
+    rotationFields.push({
+      kind: "checkbox",
+      id: `${id}-rotation-keep-text-flat`,
+      label: labels.keepTextFlat,
+      checked: keep.checked,
+      ...gate,
+      onChange: (checked) => keep.onChange(checked),
+    });
+  }
+  // Distance from ground: the shape off its ground along its own normal
+  // (`a:sp3d@z`), -4000..4000 pt as PowerPoint's box takes it; it lives in
+  // the 3-D Format the shape's `sp3d` states.
+  if (labels.distanceFromGround) {
+    rotationFields.push(
+      number("rotation-distance", labels.distanceFromGround, (format3d.z ?? 0) / EMU_PER_PT, -4000, 4000, labels.unitPt, (value) =>
+        write3d({ z: Math.round(value * EMU_PER_PT) || null }),
+      0.1),
+    );
+  }
 
   return [
     { id: "effects-shadow", testId: `${id}-shadow`, title: labels.menu.category("shadow"), fields: shadowFields },
@@ -485,3 +523,60 @@ export function officeEffectsPaneSections(args: OfficeEffectsPaneArgs): OfficeSh
     { id: "effects-rotation", testId: `${id}-rotation`, title: labels.menu.category("rotation3d"), fields: rotationFields },
   ];
 }
+
+/**
+ * How much of the words' 3-D a host's Text Effects page edits:
+ * - `full`: Format Text Effects as PowerPoint and Excel show it for text in a
+ *   shape -- the whole 3-D Format (top and bottom bevels, depth, contour,
+ *   material, lighting and its angle) and the whole 3-D Rotation (presets,
+ *   X / Y / Z, Perspective, Keep text flat, Distance from ground); a host
+ *   whose words carry Office's statement (`office-text-3d`);
+ * - `format`: the whole 3-D Format and no 3-D Rotation, as Word shows it for
+ *   the words of a document (its run's camera states a preset alone);
+ * - `top`: the top bevel and the rotation preset, all a display paint holds.
+ */
+export type OfficeText3dReach = "full" | "format" | "top";
+
+/**
+ * Text Effects' sections for words (a WordArt paint, lib/office-text-effects):
+ * the shared sections less what text does not hold -- Soft Edges always, and
+ * what `threeD` (`OfficeText3dReach`) leaves out of 3-D Format and 3-D
+ * Rotation.
+ */
+export function officeTextEffectsPaneSections(
+  args: OfficeEffectsPaneArgs,
+  options: { readonly threeD?: OfficeText3dReach } = {},
+): OfficeShapeFormatPaneSection[] {
+  const id = args.testIdPrefix;
+  const reach = options.threeD ?? "top";
+  const kept: Record<string, readonly string[] | null> = {
+    "effects-shadow": null,
+    "effects-reflection": null,
+    "effects-glow": null,
+    ...(reach === "top"
+      ? {
+          "effects-bevel": [`${id}-bevel-top`, `${id}-bevel-width`, `${id}-bevel-height`],
+          "effects-rotation": [`${id}-rotation-preset`],
+        }
+      : reach === "format"
+        ? { "effects-bevel": null }
+        : { "effects-bevel": null, "effects-rotation": null }),
+  };
+  // Text Options > Text Effects > 3-D Rotation shows the shape's very
+  // controls (PowerPoint, measured: Keep text flat and Distance from ground
+  // under both tabs): the words' own ground (`a:sp3d@z` on their body) and
+  // the one Keep text flat of the shape (`a:flatTx`, the host's
+  // `keepTextFlat`). A host whose 3-D Rotation is the preset alone shows
+  // neither.
+  const shapeOnly = new Set(
+    reach === "full" ? [] : [`${id}-rotation-distance`, `${id}-rotation-keep-text-flat`],
+  );
+  return officeEffectsPaneSections({ ...args, keepTextFlat: reach === "full" ? args.keepTextFlat : undefined })
+    .filter((section) => section.id in kept)
+    .map((section) => {
+      const fields = kept[section.id];
+      const own = section.fields.filter((field) => !shapeOnly.has(field.id));
+      return fields ? { ...section, fields: own.filter((field) => fields.includes(field.id)) } : { ...section, fields: own };
+    });
+}
+

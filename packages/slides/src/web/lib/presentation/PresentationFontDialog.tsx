@@ -32,6 +32,7 @@ import {
 import { ribbonFontFamilyLabel } from "@mrnote/core/web/components/office-ribbon/RibbonFontFamilyPicker.tsx";
 import {
   changePresentationFontDialogDraft,
+  PRESENTATION_FONT_DIALOG_UNDERLINES,
   PRESENTATION_MAX_CHARACTER_SPACING_PT,
   presentationFontDialogDraft,
   presentationFontDialogResult,
@@ -41,6 +42,7 @@ import {
   type PresentationFontDialogResult,
   type PresentationFontDialogSource,
   type PresentationFontDialogSpacingKind,
+  type PresentationFontDialogUnderline,
 } from "../presentation-font-dialog";
 
 export type PresentationFontDialogTab = "font" | "spacing";
@@ -218,7 +220,12 @@ function PresentationFontDialogBody({
                 change("color", (value as string | null) || "");
                 break;
               case "underline":
-                change("underline", (value === "double" ? "double" : value && value !== "none" ? "single" : "none"));
+                change(
+                  "underline",
+                  PRESENTATION_FONT_DIALOG_UNDERLINES.includes(value as PresentationFontDialogUnderline)
+                    ? (value as PresentationFontDialogUnderline)
+                    : "none",
+                );
                 break;
               case "superscript":
               case "subscript":
@@ -228,13 +235,14 @@ function PresentationFontDialogBody({
           }}
           effects={{
             strike: draft.strike,
-            doubleStrike: false,
+            doubleStrike: draft.doubleStrike,
             smallCaps: draft.caps === "small",
             allCaps: draft.caps === "all",
             hidden: false,
           }}
           onEffectChange={(effect, checked) => {
             if (effect === "strike") change("strike", checked);
+            if (effect === "doubleStrike") change("doubleStrike", checked);
             if (effect === "smallCaps") change("caps", checked ? "small" : "none");
             if (effect === "allCaps") change("caps", checked ? "all" : "none");
           }}
@@ -250,8 +258,8 @@ function PresentationFontDialogBody({
             reason: unavailable,
             asianFamily: true,
             underlineColor: true,
-            underlineStyles: ["none", "single", "double"],
-            effectNames: ["doubleStrike", "offset", "equalizeHeight"],
+            underlineStyles: PRESENTATION_FONT_DIALOG_UNDERLINES,
+            effectNames: ["offset", "equalizeHeight"],
           }}
           latinFamilies={familyOptions}
           asianFamilies={[]}
@@ -298,7 +306,7 @@ function PresentationFontDialogBody({
               ]),
             ) as Record<FontDialogStyle, string>,
             underlineValue: Object.fromEntries(
-              (["none", "single", "double"] as const).map((style) => [
+              PRESENTATION_FONT_DIALOG_UNDERLINES.map((style) => [
                 style,
                 word(`toolbar.underlineStyleValue.${style}`),
               ]),

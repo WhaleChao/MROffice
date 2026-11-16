@@ -144,6 +144,35 @@ export function officeLuminanceMap(brightness: number, contrast: number): { slop
   return { slope: round(slope), intercept: round(0.5 * (1 - slope) + (brightness * (1 + slope)) / 2) };
 }
 
+const biLevelTables = new Map<number, number[]>();
+
+/**
+ * The `feFunc` discrete table of Black and White at `fraction` (a:biLevel
+ * thresh / 100 000): white where the Rec. 709 luma reaches L = round(255 ×
+ * fraction) of 255, black below. PowerPoint, Word and Excel for Windows all
+ * turn white from 64 / 128 / 191 at 25 / 50 / 75 % (ppt-pictures probes duo
+ * and bilevel-word, 11-14/15) -- 191, not the 192 four equal bins give.
+ * A discrete table of n entries maps value v to entry floor(n·v); the
+ * shortest n whose step lies within half a level below L gives L exactly
+ * where the browser quantises to bytes before the table (Chromium) and
+ * within half a level where it does not (25 %: 4 entries, 50 %: 2, 75 %: 87).
+ */
+export function officeBiLevelTable(fraction: number): number[] {
+  const level = Math.min(255, Math.max(1, Math.round(255 * fraction)));
+  const cached = biLevelTables.get(level);
+  if (cached) return cached;
+  let table = [0, 1];
+  for (let n = 2; n <= 256; n += 1) {
+    const black = Math.floor((n * level) / 255);
+    if (black >= 1 && black < n && (255 * black) / n >= level - 0.5) {
+      table = Array.from({ length: n }, (_, entry) => (entry < black ? 0 : 1));
+      break;
+    }
+  }
+  biLevelTables.set(level, table);
+  return table;
+}
+
 /**
  * The filter steps for a blip's Color then Corrections; empty when neither
  * changes the picture.
@@ -156,10 +185,9 @@ export function officeAdjustFilterSteps(
   const recolor = input.recolor && isOfficeRecolorPreset(input.recolor) ? input.recolor : null;
   const threshold = recolor ? /^blackWhite(\d\d)$/.exec(recolor) : null;
   if (threshold) {
-    // Luma, then black below the threshold and white from it (equal bins).
+    // Luma, then black below the threshold and white from it.
     steps.push({ type: "matrix", values: [...LUMA, 0, 0, ...LUMA, 0, 0, ...LUMA, 0, 0, 0, 0, 0, 1, 0] });
-    const bins: Record<string, number[]> = { "25": [0, 1, 1, 1], "50": [0, 1], "75": [0, 0, 0, 1] };
-    steps.push({ type: "discrete", table: bins[threshold[1]] ?? [0, 1] });
+    steps.push({ type: "discrete", table: officeBiLevelTable(Number(threshold[1]) / 100) });
   } else if ((recolor && recolor !== "washout") || (!recolor && input.duotone)) {
     const pair = recolor ? officeRecolorDuotone(recolor, theme) : (input.duotone ?? null);
     if (pair) {

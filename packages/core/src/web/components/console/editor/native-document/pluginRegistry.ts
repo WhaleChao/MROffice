@@ -19,6 +19,7 @@ import { StableNodeViews } from "./stableNodeViews";
 import { DocumentScrollAnchor } from "./scrollAnchor";
 import {DocumentExactLineBaseline} from "./documentExactLineBaseline";
 import { JustifiedLineBreaks } from "./justifiedLineBreaks";
+import { BalancedSpaces } from "./balancedSpaces";
 import { DistributedLastLines } from "./distributedLastLines";
 import { OverflowPunctuationHang } from "./overflowPunctuationHang";
 import { DocumentInlineAtomCaret } from "./inlineAtomCaret";
@@ -245,6 +246,7 @@ import ListDefinitionMarkers from "./listDefinitionMarkers";
 import TableStructure from "./tableStructureExtension";
 import DocumentTableGridFiller from "./tableGridFillerExtension";
 import DocumentTableHideMark from "./tableHideMark";
+import DocumentTableNoWrap from "./tableNoWrap";
 import DocumentStyleSeparator from "./styleSeparator";
 import DocumentSectionMarkParagraph from "./sectionMarkParagraph";
 import DocumentTrailingBlankLineHeight from "./trailingBlankLineHeight";
@@ -299,6 +301,8 @@ import {
   tableRowHeightAttributes,
 } from "./tableRowStyle";
 import {
+  materializedColumnWidths,
+  materializedColumnWidthsTwips,
   readTableColumnWidthsTwipsFromElement,
   tableColumnWidthsTwipsAttributes,
 } from "./tableStructure";
@@ -376,6 +380,7 @@ import { officeEditPointsLabels } from "../../../../lib/office-drawing-overlays"
 import { documentPictureDisplaySrc } from "../../../../lib/document-picture-references";
 import { pictureObjectTokenSha } from "../../../../lib/page-picture-objects";
 import { normalizePictureEffectExtent, normalizePictureShadow } from "./pictureLayoutEffects";
+import { normalizeOfficeShadowEffect } from "../../../../lib/office-shadow-effects";
 import { SectionChainHistoryRepair } from "./sectionChainHistoryRepair";
 
 // A transaction made on an earlier document is rebased, not refused
@@ -656,6 +661,29 @@ function createGridFillerRefusalNotice(
       ),
     });
   };
+}
+
+/**
+ * The grid widths (live px and, where the table carries them, native twips)
+ * of the columns a CellSelection is about to merge across, read before the
+ * merge. Null when the selection is no cell rectangle or spans one column.
+ */
+function mergedRegionGridWidths(
+  state: EditorState,
+): { span: number; px: number[] | null; twips: number[] | null } | null {
+  if (!(state.selection instanceof CellSelection)) return null;
+  let rect: ReturnType<typeof selectedRect>;
+  try {
+    rect = selectedRect(state);
+  } catch {
+    return null;
+  }
+  const span = rect.right - rect.left;
+  if (span < 2) return null;
+  const table = rect.table.toJSON() as Parameters<typeof materializedColumnWidths>[0];
+  const px = materializedColumnWidths(table)?.slice(rect.left, rect.right) ?? null;
+  const twips = materializedColumnWidthsTwips(table)?.slice(rect.left, rect.right) ?? null;
+  return px || twips ? { span, px, twips } : null;
 }
 
 function positiveNumericAttr(value: unknown): number | null {
@@ -1549,6 +1577,17 @@ function createDocumentImageExtension(
               ? { "data-picture-3d-editable": "true" }
               : {},
         },
+        // Reading row 545: the import read the picture's own glow, reflection
+        // and soft edges whole, and a change of them is saved (else they stay
+        // the file's: pictureLookEffectsBlocker).
+        pictureEffectsEditable: {
+          default: false,
+          parseHTML: (element) => element.getAttribute("data-picture-effects-editable") === "true",
+          renderHTML: (attrs) =>
+            (attrs as { pictureEffectsEditable?: unknown }).pictureEffectsEditable === true
+              ? { "data-picture-effects-editable": "true" }
+              : {},
+        },
         pictureOpacity: {
           default: 100,
           parseHTML: (element) => {
@@ -1614,6 +1653,33 @@ function createDocumentImageExtension(
             );
             return value ? { "data-picture-shadow": JSON.stringify(value) } : {};
           },
+        },
+        // Reading row 547: the picture's own shadow -- outer, inner or
+        // perspective -- in the shared shadow model (lib/office-shadow-effects),
+        // edited in Format Picture > Effects > Shadow and written back on its
+        // effect list where `pictureShadowEditable` says the import read it
+        // whole (else the file's: pictureShadowBlocker).
+        pictureShadowEffect: {
+          default: null,
+          parseHTML: (element) => {
+            try {
+              return normalizeOfficeShadowEffect(JSON.parse(element.getAttribute("data-picture-shadow-effect") ?? "null"));
+            } catch {
+              return null;
+            }
+          },
+          renderHTML: (attrs) => {
+            const value = normalizeOfficeShadowEffect((attrs as { pictureShadowEffect?: unknown }).pictureShadowEffect);
+            return value ? { "data-picture-shadow-effect": JSON.stringify(value) } : {};
+          },
+        },
+        pictureShadowEditable: {
+          default: false,
+          parseHTML: (element) => element.getAttribute("data-picture-shadow-editable") === "true",
+          renderHTML: (attrs) =>
+            (attrs as { pictureShadowEditable?: unknown }).pictureShadowEditable === true
+              ? { "data-picture-shadow-editable": "true" }
+              : {},
         },
         // A picture's glow / reflection / soft edges (pictureEffects.ts):
         // display facts the DOCX writers state back as Word's own effects.
@@ -2544,6 +2610,9 @@ export function createNativeDocumentPluginRegistry({
         DocumentExactLineBaseline,
         // A justified line a manual break ends is stretched, as in Word.
         JustifiedLineBreaks,
+        // Spaces Word balances to half an East Asian cell
+        // (w:balanceSingleByteDoubleByteWidth), as in Word.
+        BalancedSpaces,
         // A distributed Latin last line is spread letter by letter, as in Word.
         DistributedLastLines,
         // A stop or comma hangs past the right edge where the paragraph
@@ -3084,19 +3153,30 @@ export function createNativeDocumentPluginRegistry({
                   if (formulaPlan.kind === "refuse") return false;
                   const carry = formulaPlan.kind === "carry" ? formulaPlan : null;
                   const outer = mergedRegionCellBorders(props.state);
+                  const grid = mergedRegionGridWidths(props.state);
                   // Word applies Merge Cells untracked ("This action will not
                   // be marked as a change"): no row or property revision, and
                   // the merged words are not struck and inserted again.
                   props.tr.setMeta(TRACK_CHANGES_SKIP_META, true);
                   const merge = (parent as { mergeCells?: () => (p: typeof props) => boolean }).mergeCells;
                   const merged = merge ? merge()(props) : false;
-                  if (!merged || (!outer && !carry) || !props.dispatch) return merged;
+                  if (!merged || (!outer && !carry && !grid) || !props.dispatch) return merged;
                   const selection = props.tr.selection;
                   if (!(selection instanceof CellSelection)) return merged;
                   const pos = selection.$anchorCell.pos;
                   const node = props.tr.doc.nodeAt(pos);
                   if (!node) return merged;
                   const attrs: Record<string, unknown> = { ...node.attrs };
+                  // Word keeps the table grid: the merged cell spans the grid
+                  // columns it covers, each as wide as before. The table
+                  // plugin pads the live widths with zeros and leaves the
+                  // native twips of the top-left cell alone, a grid no save
+                  // could state (DQ-0023, corpus R455-D86 E17).
+                  if (grid && (Number(node.attrs.colspan) || 1) === grid.span) {
+                    if (grid.px) attrs.colwidth = grid.px;
+                    if (grid.twips) attrs.colwidthTwips = grid.twips;
+                    else if (node.attrs.colwidthTwips != null) attrs.colwidthTwips = null;
+                  }
                   if (outer) {
                     const current = normalizeDocumentTableBorders(node.attrs.cellBorders, "cell") ?? {};
                     const next: Record<string, unknown> = { ...current };
@@ -3386,6 +3466,9 @@ export function createNativeDocumentPluginRegistry({
         // Word `w:hideMark`: an empty cell's end mark takes no row height
         // (view-only decoration from the import's receipt).
         DocumentTableHideMark,
+        // Word `w:noWrap`: a cell's words do not wrap (view-only decoration
+        // from the import's receipt).
+        DocumentTableNoWrap,
         // Word's style separator (w:specVanish paragraph mark): the next
         // paragraph runs on the separator's line (view-only decoration).
         DocumentStyleSeparator,
@@ -3499,7 +3582,11 @@ export function createNativeDocumentPluginRegistry({
         ReferenceBlock.configure({ guestMode }),
         TaskBlock.configure({ guestMode }),
         FlashcardBlock.configure({ guestMode }),
-        TableOfContents,
+        // A table of contents asked for in a table cell goes after the table
+        // (referencesButtons.insertTableOfContentsCommand): said, never silent.
+        TableOfContents.configure({
+          onPlacedAfterTable: () => toast({ title: translate("document.toc.placedAfterTable") }),
+        }),
         DocumentCoverPage,
         WikiLink,
         Frontmatter,

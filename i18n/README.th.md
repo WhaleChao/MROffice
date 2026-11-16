@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ หากต้องการใช้งานครบทุกฟีเจอร์ โปรดติดตั้งแอปเดสก์ท็อป MR Office (ฟรี)
->
-> แอปเดสก์ท็อป MR Office ใช้ได้ฟรี มีตัวแก้ไขเหล่านี้และบริการครบถ้วน และใช้งานแบบออฟไลน์บนคอมพิวเตอร์ของคุณได้ โดยเพิ่มสิ่งที่ตัวแก้ไขโอเพนซอร์สไม่มี:
->
-> - เปิดและบันทึกไฟล์ Word, Excel และ PowerPoint (.docx, .xlsx, .pptx)
-> - คำนวณสูตรที่มีฟังก์ชัน (SUM, IF, VLOOKUP …)
-> - แผนภูมิ
-> - การแก้ไข SmartArt
-> - บันทึกการแก้ไข PDF กลับลงในไฟล์
->
-> **[ดาวน์โหลด MR Office จาก Releases →](https://github.com/XinaTian/MROffice/releases)** · [หรือจาก mroffice.ai](https://mroffice.ai)
+<p align="center"><b>ตัวแก้ไขโอเพนซอร์สของ MR Office ได้แก่ เอกสาร สเปรดชีต งานนำเสนอ PDF การเขียนด้วยมือ และโค้ด ที่ทำงานในเบราว์เซอร์</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">ลองใช้ใน MR Office →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ ดาวน์โหลด MR Office จาก Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> ตัวแก้ไขโอเพนซอร์สของ MR Office ได้แก่ เอกสาร สเปรดชีต งานนำเสนอ PDF การเขียนด้วยมือ และโค้ด ที่ทำงานในเบราว์เซอร์
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="เอกสาร" width="100%"></a><br><b>เอกสาร</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="สเปรดชีต" width="100%"></a><br><b>สเปรดชีต</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="งานนำเสนอ" width="100%"></a><br><b>งานนำเสนอ</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="การเขียนด้วยมือ" width="100%"></a><br><b>การเขียนด้วยมือ</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="โค้ด" width="100%"></a><br><b>โค้ด</b></td>
+</tr>
+</table>
 
 MR Office คือพื้นที่ทำงานสำหรับโน้ต AI และไฟล์จริง ที่เก็บนี้เผยแพร่ซอร์สโค้ดของตัวแก้ไข ซึ่งเป็นชุดเดียวกับที่ทำงานใน MR Office คุณสามารถบิลด์ รัน และฝังใช้งานเองได้ นี่คือตัวแก้ไขโอเพนซอร์ส ไม่ใช่ชุดโปรแกรมสำนักงานโอเพนซอร์สที่ครบถ้วน การอ่านและเขียนไฟล์ Microsoft Office ยังอยู่ใน MR Office (ดูด้านล่าง)
 
@@ -33,16 +36,9 @@ MR Office คือพื้นที่ทำงานสำหรับโน�
 
 การคำนวณสูตรที่มีฟังก์ชัน การวาดแผนภูมิ และการจัดวาง SmartArt ทำงานด้วยเอนจินของ MR Office เองในแอปเดสก์ท็อป MR Office: ตัวแก้ไขโอเพนซอร์สจะเก็บสูตร แผนภูมิ และ SmartArt ในไฟล์ไว้ และแสดง SmartArt ตามที่บันทึกไว้
 
-## ไฟล์ Word, Excel, PowerPoint และ PDF
-
-การเปิดและบันทึกไฟล์ Word, Excel และ PowerPoint (.docx, .xlsx, .pptx) และการบันทึกการแก้ไข PDF กลับลงในไฟล์ มีให้ในแอปเดสก์ท็อป MR Office (ฟรี) ซึ่งมีตัวแก้ไขเหล่านี้ทั้งหมดและใช้งานแบบออฟไลน์บนคอมพิวเตอร์ของคุณได้:
-
-- **MR Office** (แอปเดสก์ท็อปฟรี): https://github.com/XinaTian/MROffice/releases
-- **เว็บไซต์**: https://mroffice.ai
-
-[ทุกเวอร์ชัน →](https://github.com/XinaTian/MROffice/releases)
-
 ## รันตัวแก้ไข
+
+**▶ [ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง](https://demo.mroffice.ai)**
 
 ตัวแก้ไขทั้งหกอยู่ใน `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code` ใช้ `@mrnote/core` ร่วมกัน) และทำงานร่วมกันใน `apps/playground`:
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` เริ่มเซิร์ฟเวอร์สำหรับพัฒนาที่ที่อยู่เดียวกัน และ `npm run smoke` ตรวจสอบผลการบิลด์ README ของแต่ละแพ็กเกจอธิบายโดยละเอียดว่าทำอะไรได้และฝังใช้งานอย่างไร
+
+## หากต้องการใช้งานครบทุกฟีเจอร์ โปรดติดตั้งแอปเดสก์ท็อป MR Office (ฟรี)
+
+แอปเดสก์ท็อป MR Office ใช้ได้ฟรี มีตัวแก้ไขเหล่านี้และบริการครบถ้วน และใช้งานแบบออฟไลน์บนคอมพิวเตอร์ของคุณได้ โดยเพิ่มสิ่งที่ตัวแก้ไขโอเพนซอร์สไม่มี:
+
+- เปิดและบันทึกไฟล์ Word, Excel และ PowerPoint (.docx, .xlsx, .pptx)
+- คำนวณสูตรที่มีฟังก์ชัน (SUM, IF, VLOOKUP …)
+- แผนภูมิ
+- การแก้ไข SmartArt
+- บันทึกการแก้ไข PDF กลับลงในไฟล์
+
+**[ดาวน์โหลด MR Office จาก Releases →](https://github.com/XinaTian/MROffice/releases)** · [หรือจาก mroffice.ai](https://mroffice.ai)
+
+### ไฟล์ Word, Excel, PowerPoint และ PDF
+
+การเปิดและบันทึกไฟล์ Word, Excel และ PowerPoint (.docx, .xlsx, .pptx) และการบันทึกการแก้ไข PDF กลับลงในไฟล์ มีให้ในแอปเดสก์ท็อป MR Office (ฟรี) ซึ่งมีตัวแก้ไขเหล่านี้ทั้งหมดและใช้งานแบบออฟไลน์บนคอมพิวเตอร์ของคุณได้:
 
 ## สัญญาอนุญาต
 

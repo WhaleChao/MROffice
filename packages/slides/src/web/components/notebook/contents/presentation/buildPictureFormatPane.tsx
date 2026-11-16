@@ -29,6 +29,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { canEditBlockContent } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import { presentationPictureFormatPaneTabs } from "./presentationPictureFormatPaneTabs";
+import { presentationModel3dPaneSections } from "./presentationModel3dPane";
 import { inspectorChipStyle } from "../../../../lib/presentation/window-chrome-styles";
 import {
   normalizeImageBorderColor,
@@ -107,7 +108,7 @@ export interface BuildPictureFormatPaneCtl {
   pictureTransparencyOptionsRef: RefObject<HTMLInputElement | null>;
   formatPaneOpen: boolean;
   setFormatPaneOpen: Dispatch<SetStateAction<boolean>>;
-  formatPaneRequestedTab: { readonly id: string; readonly serial: number; } | null;
+  formatPaneRequestedTab: { readonly id: string; readonly serial: number; readonly section?: string } | null;
   slides: SlideModel[];
   blockHrefDraft: { blockId: string; text: string; } | null;
   setBlockHrefDraft: Dispatch<SetStateAction<{ blockId: string; text: string; } | null>>;
@@ -142,6 +143,10 @@ export interface BuildPictureFormatPaneCtl {
   invokePictureCrop: (blockId: string, mode: "crop" | "fill" | "fit", trigger?: HTMLElement | null) => void;
   updateBlockHref: (blockId: string, value: string, tooltip?: string | null) => void;
   updateImageEffects: (blockId: string, patch: Partial<Pick<PresentationImageBlock, "shadow" | "borderColor" | "borderWidth" | "borderStyle" | "cornerRadius" | "opacity" | "recolor" | "brightness" | "contrast" | "blendMode">>) => void;
+  /** The page the deck is (a 3-D model's part is served by it). */
+  pageId?: string | null;
+  /** Replace a block as the live slide holds it (a change that lands later than it was asked). */
+  commitLiveBlock?: (blockId: string, change: (live: PresentationBlock) => PresentationBlock | null) => boolean;
 }
 
 export function buildPictureFormatPane(ctl: BuildPictureFormatPaneCtl) {
@@ -185,6 +190,8 @@ export function buildPictureFormatPane(ctl: BuildPictureFormatPaneCtl) {
     invokePictureColor,
     invokePictureCrop,
     updateBlockHref,
+    pageId = null,
+    commitLiveBlock,
   } = ctl;
   const renderPictureFormatPane = (block: PresentationImageBlock): ReactNode => (
     <OfficeShapeFormatPane
@@ -307,6 +314,23 @@ export function buildPictureFormatPane(ctl: BuildPictureFormatPaneCtl) {
       </> : null,
           // Format Picture > Effects, as PowerPoint draws it: the picture's
           // combinable `pictureEffects`, the Picture Effects menu's model.
+          model3d: presentationModel3dPaneSections({
+            block,
+            pageId,
+            writable: canEditBlockContent(block),
+            labels: {
+              title: t("pictureFormatPane.model3dRotation"),
+              x: t("office.chartElements.xRotation"),
+              y: t("office.chartElements.yRotation"),
+              z: t("office.effectsPane.zRotation"),
+              failed: t("pictureFormatPane.model3dTurnFailed"),
+            },
+            replaceBlock,
+            commitLiveBlock,
+            onFailed: (message) => {
+              if (typeof window !== "undefined") window.alert(message);
+            },
+          }),
           effects: officeEffectsPaneSections({
             effects: block.pictureEffects,
             accentColors: deckAccentColors,
@@ -676,6 +700,7 @@ export function buildPictureFormatPane(ctl: BuildPictureFormatPaneCtl) {
           color: t("pictureFormatPane.pictureColor"),
           transparency: t("pictureFormatPane.transparencySection"),
           crop: t("pictureFormatPane.crop"),
+          model3d: t("pictureFormatPane.tab_model3d"),
         },
       )}
     />

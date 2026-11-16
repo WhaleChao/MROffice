@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { officeEmptyRowHeight, officeRowMetricsKnown } from "./grid-sizing";
+import { expandLineStyleRuns, type LineStyleMap } from "./line-styles";
 import { resolveNativeRowHeights, type NativeGrid } from "./native-typography";
 
 const EMU_PER_PX = 9525;
@@ -84,15 +86,23 @@ export interface DrawingBoxSheet {
   defaultColumnWidth?: number;
   defaultRowHeight?: number;
   nativeGrid?: NativeGrid;
+  columnStyles?: LineStyleMap;
 }
 
 /** The sheet's column and row axes as the page draws them (and the save
  * measures them): a row paired with its point height at that height. */
 export function sheetDrawingBoxAxes(sheet: DrawingBoxSheet): { columns: DrawingBoxAxis; rows: DrawingBoxAxis } {
+  // A default row the file states without customHeight stands at the grid
+  // font's own row, as the page draws it (resolveNativeGrid's
+  // automaticDefaultRow; lookwin probe p26).
+  const gridFont = sheet.nativeGrid?.metricsFont ?? sheet.nativeGrid?.font;
   const exact = resolveNativeRowHeights(
     sheet.nativeGrid?.rowMetrics,
     sheet.rowHeights as Record<string, number> | undefined,
     sheet.defaultRowHeight,
+    gridFont && officeRowMetricsKnown(gridFont.family, gridFont.sizePt)
+      ? officeEmptyRowHeight(gridFont, expandLineStyleRuns(sheet.columnStyles))
+      : undefined,
   );
   const rowDefault = exact ? exact.defaultHeight : sheet.defaultRowHeight;
   return {

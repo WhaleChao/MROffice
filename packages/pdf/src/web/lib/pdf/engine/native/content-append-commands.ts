@@ -301,6 +301,9 @@ export function readContent(value: unknown): PdfNativeContentAppendContent {
     }
     const shapedLines = record.shapedLines === undefined ? undefined
       : readShapedLines(record.shapedLines, record.text);
+    if (record.bold !== undefined && typeof record.bold !== "boolean") {
+      invalid("Content append text weight is invalid.");
+    }
     return Object.freeze({
       kind: "text" as const,
       text: record.text,
@@ -310,6 +313,7 @@ export function readContent(value: unknown): PdfNativeContentAppendContent {
       top: finite(record.top, "text top"),
       rotation,
       lineHeightPoints,
+      ...(record.bold === true ? { bold: true as const } : {}),
       ...(shapedLines ? { shapedLines } : {}),
     });
   }

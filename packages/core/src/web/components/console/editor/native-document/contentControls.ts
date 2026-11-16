@@ -399,6 +399,21 @@ export interface ContentControlMeta {
    * type; Word sees a check box drawn ◉/○). "" when it is a plain check box.
    */
   radioGroup: string;
+  /**
+   * The store node a data-bound control maps (Word's `w:dataBinding`), as
+   * the import names it: a token, never the XPath. Every control of one
+   * token shows the node's value, so an edit of one is an edit of all of
+   * them (Word refreshes them from the node; see `boundControlSync.ts`).
+   * A trailing "p": the control is its whole paragraph (a block-level
+   * `w:sdt`). "" (or absent) when the control is not bound.
+   */
+  binding?: string;
+}
+
+/** A data-bound control's store node token (the API's
+ * `data_binding.binding_token`), or "" when the value is not one. */
+export function normalizeControlBinding(value: unknown): string {
+  return typeof value === "string" && /^b[0-9a-f]{24}p?$/.test(value) ? value : "";
 }
 
 /** A group name's longest form (the Properties dialog's limit). */
@@ -455,6 +470,7 @@ export function normalizeControlMeta(attrs: unknown): ContentControlMeta {
     uncheckedState: normalizeCheckboxGlyph(a.uncheckedState),
     required: a.required === true,
     radioGroup: normalizeControlType(a.controlType) === "checkbox" ? normalizeRadioGroup(a.radioGroup) : "",
+    binding: normalizeControlBinding(a.binding),
   };
 }
 
@@ -492,6 +508,7 @@ export function controlMetaToAttrs(meta: ContentControlMeta): Record<string, unk
     if (meta.docPartUnique) out.docPartUnique = true;
   }
   if (meta.temporary) out.temporary = true;
+  if (meta.binding) out.binding = meta.binding;
   return out;
 }
 

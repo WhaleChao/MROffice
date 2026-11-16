@@ -152,7 +152,7 @@ function buildCellStyleCss(
       ? nativeDefault?.headingFamily && !nativeDefault.currentTheme ? spreadsheetFontStackWithAssets(nativeDefault.headingFamily,fontAliases,style) : (themeHeadingFontFamily ?? themeFontFamily)
       // An explicit default face does not follow the theme: a styled cell
       // that states no font keeps it, exactly as an unstyled one does.
-      : style.themeFontRole !== "body" && nativeDefault && !nativeDefault.themeRole ? spreadsheetFontStackWithAssets(nativeDefault.family,fontAliases,style)
+      : style.themeFontRole !== "body" && nativeDefault && !nativeDefault.themeRole ? spreadsheetFontStackWithAssets(nativeDefault.family,fontAliases,{ bold: style.bold, italic: style.italic, record: nativeDefault.record })
       : nativeDefault && !nativeDefault.currentTheme ? spreadsheetFontStackWithAssets(nativeDefault.bodyFamily ?? nativeDefault.family,fontAliases,style) : themeFontFamily,fontAliases);
   // Strikethrough composes with underline: Excel lets a cell be both, so the
   // text-decoration line list carries whichever flags are set.
@@ -687,9 +687,13 @@ export function fittedCellNumberText(
   effectiveFontStyle?: CSSProperties,
   /** The workbook grid's maximum digit width (its Normal font's), px. */
   gridDigitPx?: number,
+  /** How wide a candidate is drawn, px, where the caller knows (the print
+   * page: at the printer's advances); else Excel's digits and the browser's
+   * reading of the rest. */
+  drawnWidthPx?: (text: string) => number | undefined,
 ): string {
   const key = [
-    Math.floor(availablePx), general ? "g" : "f", value, display, gridDigitPx ?? "",
+    Math.floor(availablePx), general ? "g" : "f", value, display, gridDigitPx ?? "", drawnWidthPx ? "drawn" : "",
     effectiveFontStyle?.fontFamily ?? style?.fontFamily ?? "", effectiveFontStyle?.fontSize ?? style?.fontSize ?? "",
     effectiveFontStyle?.fontWeight ?? (style?.bold ? 700 : 400), effectiveFontStyle?.fontStyle ?? (style?.italic ? "i" : ""),
     spreadsheetTextEngineEpoch(),
@@ -707,6 +711,8 @@ export function fittedCellNumberText(
     general,
     availablePx,
     measure: (candidate) => {
+      const drawn = drawnWidthPx?.(candidate);
+      if (drawn !== undefined && Number.isFinite(drawn)) return drawn;
       const digits = (candidate.match(/[0-9]/g) ?? []).length;
       const rest = candidate.replace(/[0-9]/g, "");
       return digits * digitPx + (rest ? spillTextWidthPx(rest, style, fontAliases, effectiveFontStyle) : 0);
@@ -844,6 +850,9 @@ export function cellInputExtraCss(
   // starts. A sheet on the default padding keeps the stylesheet's value, so
   // its inputs render byte-for-byte as before.
   basePaddingPx: number = CELL_BASE_PADDING_X_PX,
+  // One indent level, px: an imported grid's is its Normal font's three
+  // spaces (ResolvedNativeGrid.indentStepPx).
+  indentStepPx?: number,
 ): CSSProperties {
   const out: CSSProperties = {};
   if (basePaddingPx !== CELL_BASE_PADDING_X_PX) {
@@ -852,7 +861,7 @@ export function cellInputExtraCss(
   }
   if (!style) return out;
   // The indent sits on the side the text is aligned to (XLS-A039).
-  const indent = cellIndentInsetsPx(style);
+  const indent = cellIndentInsetsPx(style, indentStepPx);
   if (indent.left > 0) out.paddingLeft = basePaddingPx + indent.left;
   if (indent.right > 0) out.paddingRight = basePaddingPx + indent.right;
   Object.assign(out, shrinkToFitCss(style));

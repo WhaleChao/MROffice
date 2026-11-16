@@ -34,6 +34,7 @@ import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { normalizeWordDocumentSettings } from "./wordDocumentSettings";
 import { touchedRanges } from "./touchedTextblocks";
+import { SPLIT_CONTINUES_ATTR } from "./paged/paginationProjectionKeys";
 
 export const JUSTIFIED_BREAK_FILLER_CLASS = "mrnote-justified-break-filler";
 /** The break the filler precedes: no line height on the filler's line. */
@@ -60,7 +61,18 @@ function filler(): HTMLElement {
 
 function blockFillers(doc: ProseMirrorNode, node: ProseMirrorNode, pos: number, out: Decoration[]): void {
   if (!["paragraph", "heading"].includes(node.type.name) || !justified(node, doc)) return;
-  const end = node.content.size;
+  const expands = expandsShiftReturn(doc);
+  // The head of a paragraph the page cut ends on a line that is not the
+  // paragraph's last: Word justifies it (corpus R283-D20: page 13's last
+  // line, "...whether municipal institutions convert", stood ragged). A
+  // head holding a line break keeps its break lines unstretched where the
+  // document says so (doNotExpandShiftReturn).
+  if (node.attrs[SPLIT_CONTINUES_ATTR] === true &&
+      (expands || !node.textContent.includes("\n")) &&
+      (expands || !node.content.content.some((child) => child.type.name === "hardBreak"))) {
+    out.push(Decoration.node(pos, pos + node.nodeSize, { style: "text-align-last: justify" }, { justifiedSplitHead: true }));
+  }
+  if (!expands) return;
   const breaks: { at: number; node: boolean }[] = [];
   node.forEach((child, offset) => {
     if (child.type.name === "hardBreak") breaks.push({ at: offset, node: true });
@@ -74,10 +86,15 @@ function blockFillers(doc: ProseMirrorNode, node: ProseMirrorNode, pos: number, 
   });
   breaks.forEach((entry, index) => {
     const { at } = entry;
-    // A break that ends the paragraph ends its last line anyway; one that
-    // starts a line (the paragraph's, or right after another break) ends an
-    // empty line, which is not stretched and keeps the break's own height.
-    if (at >= end - 1 || at === 0 || (index > 0 && breaks[index - 1]!.at === at - 1)) return;
+    // A break that ends the paragraph is followed by the paragraph mark's own
+    // line, so the line it ends is stretched too (Word 16 for Mac,
+    // probe-jbr/jbr-end.docx: a justified paragraph ending in one w:br sets
+    // its last text line 90-522pt, the same line with no break 90-467pt, and
+    // an empty line under it; corpus R436-D09's "dirección a investigaciones
+    // futuras."). One that starts a line (the paragraph's, or right after
+    // another break) ends an empty line, which is not stretched and keeps the
+    // break's own height.
+    if (at === 0 || (index > 0 && breaks[index - 1]!.at === at - 1)) return;
     out.push(
       Decoration.widget(pos + 1 + at, filler, {
         side: 1,
@@ -98,7 +115,6 @@ function blockFillers(doc: ProseMirrorNode, node: ProseMirrorNode, pos: number, 
 }
 
 export function justifiedLineBreakDecorations(doc: ProseMirrorNode): DecorationSet {
-  if (!expandsShiftReturn(doc)) return DecorationSet.empty;
   const decorations: Decoration[] = [];
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
@@ -115,7 +131,6 @@ function updatedDecorations(
   tr: Transaction,
 ): DecorationSet {
   const doc = tr.doc;
-  if (!expandsShiftReturn(doc)) return DecorationSet.empty;
   let set = previous.map(tr.mapping, doc);
   // Every range a step reached, an attribute step (an alignment set without
   // moving a position) included.

@@ -3,7 +3,9 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { officeNormalLineHeightPx } from "@mrnote/core/web/lib/office-fonts/substitutes.ts";
 import type { FontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
+import { fontMeasureContext } from "@mrnote/core/web/lib/spreadsheet/font-measure-context.ts";
 
 /**
  * The grid's canvas text layer (on by default; `?gridCanvas=off`): the text of a cell at rest
@@ -133,12 +135,6 @@ export function setGridCanvasTextEnabledForTests(value: boolean | undefined) {
   flag = value;
 }
 
-let measureContext: CanvasRenderingContext2D | null | undefined;
-function context(): CanvasRenderingContext2D | null {
-  if (measureContext !== undefined) return measureContext;
-  measureContext = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
-  return measureContext;
-}
 
 const metricCache = new Map<string, { ascent: number; descent: number }>();
 const normalLineCache = new Map<string, number>();
@@ -224,9 +220,12 @@ export function gridCanvasTextWidth(runs: GridCanvasText["runs"], font: string, 
   const key = `${font}\u0000${kerning}\u0000${runs.map((run) => `${run.spacing}\u0001${run.text}`).join("\u0002")}`;
   const known = widthCache.get(key);
   if (known !== undefined) return known;
-  const ctx = context();
+  // A context kept in this font (fontMeasureContext): cells of different
+  // fonts interleave on every row, and setting one shared context's font made
+  // each new text resolve the family list again -- about 0.5 ms a text on the
+  
+  const ctx = fontMeasureContext(font, kerning);
   if (!ctx) return null;
-  applyFont(ctx, font, kerning);
   let width = 0;
   for (const run of runs) {
     const runKey = `${font}\u0000${kerning}\u0000${run.text}`;
@@ -266,9 +265,8 @@ export function gridCanvasFontMetrics(font: string): { ascent: number; descent: 
   const at = zoomedFont(font, zoom);
   const known = metricCache.get(at);
   if (known) return known;
-  const ctx = context();
+  const ctx = fontMeasureContext(at, "normal");
   if (!ctx) return null;
-  applyFont(ctx, at, "normal");
   const metrics = ctx.measureText("Hg");
   if (!Number.isFinite(metrics.fontBoundingBoxAscent) || !Number.isFinite(metrics.fontBoundingBoxDescent)) return null;
   const answer = { ascent: Math.round(metrics.fontBoundingBoxAscent) / zoom, descent: Math.round(metrics.fontBoundingBoxDescent) / zoom };
@@ -316,6 +314,11 @@ function baselineInLine(lineHeight: number, metrics: { ascent: number; descent: 
  * probe line, since a canvas reports no line gap.
  */
 export function gridCanvasNormalLineHeight(font: string): number | null {
+  // WebKit sets a normal line in the stand-in's own metrics: the layer is
+  // given the Office face's line there (officeNormalLineHeightPx), and so is
+  // the canvas.
+  const office = officeNormalLineOfFont(font);
+  if (office !== null) return office;
   const zoom = metricZoom;
   const at = zoomedFont(font, zoom);
   const known = normalLineCache.get(at);
@@ -336,6 +339,13 @@ export function gridCanvasNormalLineHeight(font: string): number | null {
   if (!(height > 0)) return null;
   normalLineCache.set(at, height / zoom);
   return height / zoom;
+}
+
+/** The Office face's normal line for a canvas `font` ("[style] [weight] SIZEpx family, ..."), where the engine ignores its overrides. */
+function officeNormalLineOfFont(font: string): number | null {
+  const match = /(\d*\.?\d+)px\s+(.+)$/.exec(font);
+  if (!match) return null;
+  return officeNormalLineHeightPx(match[2], Number(match[1]));
 }
 
 /** A cell's padding box in the canvas tile's pixels. */

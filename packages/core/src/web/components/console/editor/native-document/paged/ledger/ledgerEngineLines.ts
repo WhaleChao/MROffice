@@ -23,6 +23,7 @@ import { blockFormulaBoxes } from "./ledgerEngineMath";
 import { katexBox } from "../../../../../../lib/text-engine/katex-box";
 import type { KinsokuList } from "../../../../../../lib/text-engine/kinsoku";
 import { normalizeWordCompatibilityMode } from "../../documentOverflowPunctuation";
+import { wordSetsIdeographsAsLetters } from "../../wordFarEastDefaults";
 import { textEngineAnswerEpoch, textEngineEpoch } from "../../../../../../lib/text-engine/measure";
 
 const SAME_HEIGHT_PX = 0.5;
@@ -308,7 +309,7 @@ export function unlaidEngineBlock(
     // draws it: laid out on the paragraph's strut.
     if (!paragraph.unsupported && !paragraph.pending && (paragraph.pieces.length > 0 || paragraph.strut)) {
       const kinsoku: KinsokuList | null = CJK.test(node.textContent) ? "zh-CN" : null;
-      const rules = { compatibilityMode: normalizeWordCompatibilityMode(docAttrs.wordCompatibilityMode), kinsoku };
+      const rules = { compatibilityMode: normalizeWordCompatibilityMode(docAttrs.wordCompatibilityMode), kinsoku, ideographsAsLetters: kinsoku !== null && wordSetsIdeographsAsLetters(docAttrs) };
       const starts = normalizeStarts(paragraph, docsEngineLineStarts(paragraph, rules));
       const rule = docsBlockLineRule(node, element);
       const layout = layoutDocsBlockLines(paragraph, starts, rule, paragraph.pieces.length === 0 ? paragraph.strut?.font ?? null : null);
@@ -526,6 +527,8 @@ export function unlaidEngineTable(
     if (failed) return;
     let column = 0;
     let rowPx = 0;
+    let rowPadTop = 0;
+    let rowPadBottom = 0;
     row.forEach((cell, cellOffset) => {
       if (failed) return;
       const span = Number(cell.attrs.colspan) || 1;
@@ -545,6 +548,8 @@ export function unlaidEngineTable(
         return;
       }
       const [pl, pr, bl, br, pt, pb, bt, bb] = box as number[];
+      rowPadTop = Math.max(rowPadTop, pt);
+      rowPadBottom = Math.max(rowPadBottom, pb);
       const spanWidths = widths.slice(column, column + span) as number[];
       column += span;
       if (spanWidths.length !== span) {
@@ -573,10 +578,14 @@ export function unlaidEngineTable(
     });
     if (failed) return;
     // The row's declared height (px, as the page ledger reads it): its exact
-    // height, or the floor of an at-least one.
+    // height, or the floor of an at-least one. Word adds the cells' margins
+    // to it, both to an at-least floor and the bottom one to an exact height
+    // (tableBorders atLeastRowRuleDecorations).
     const declared = Number(row.attrs.rowHeight);
     const stated = declared > 0 ? declared : null;
-    const rowHeight = stated !== null && row.attrs.rowHeightRule === "exact" ? stated : Math.max(rowPx, stated ?? 0);
+    const rowHeight = stated !== null && row.attrs.rowHeightRule === "exact"
+      ? stated + rowPadBottom
+      : Math.max(rowPx, stated !== null && row.attrs.rowHeightRule === "atLeast" ? stated + rowPadTop + rowPadBottom : stated ?? 0);
     rowHeights.push(rowHeight);
     total += rowHeight;
   });

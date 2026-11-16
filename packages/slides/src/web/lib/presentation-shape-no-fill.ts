@@ -26,12 +26,42 @@ import { readPresentationNativeThemePaint } from "@mrnote/core/web/lib/presentat
 import { resolveShapeStyle } from "@mrnote/core/web/lib/presentation-shapes.ts";
 
 export function presentationShapeHasNoFill(block: PresentationBlock): boolean {
-  if (block.type !== "shape" || isPresentationCameoBlock(block)) return false;
+  const style = paintedStyleOf(block);
+  return style !== null && style.fill === "none" && style.fillTo === null && !style.fillGradient && !style.fillImage && !style.fillPattern;
+}
+
+/** Lines, connectors and ink are picked by their stroke already (their own
+ * hit paths, or a box no wider than the line). */
+const STROKE_PICKED_KINDS = /(^|-)line$|connector|^ink$/;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationShapeHasNoInterior(block: PresentationBlock): boolean {
+  const style = paintedStyleOf(block);
+  if (style === null || style.fill !== null || style.fillTo !== null || style.fillGradient || style.fillImage || style.fillPattern) return false;
+  return !STROKE_PICKED_KINDS.test(String((block as unknown as { shape?: unknown }).shape ?? ""));
+}
+
+function paintedStyleOf(block: PresentationBlock): ReturnType<typeof resolveShapeStyle> | null {
+  if (block.type !== "shape" || isPresentationCameoBlock(block)) return null;
   const raw = block as unknown as Record<string, unknown>;
   const ownsFill =
     raw.fill !== undefined || raw.fillImage !== undefined || raw.fillPattern !== undefined || raw.fillGradient !== undefined;
   const themePaint = ownsFill ? undefined : readPresentationNativeThemePaint(block);
-  const style = resolveShapeStyle({
+  return resolveShapeStyle({
     shape: raw.shape,
     fill: ownsFill ? raw.fill : themePaint?.fill,
     fillTo: raw.fillTo ?? themePaint?.fillTo,
@@ -42,5 +72,4 @@ export function presentationShapeHasNoFill(block: PresentationBlock): boolean {
     customPath: raw.customPath,
     openPathFilled: raw.openPathFilled,
   });
-  return style.fill === "none" && style.fillTo === null && !style.fillGradient && !style.fillImage && !style.fillPattern;
 }

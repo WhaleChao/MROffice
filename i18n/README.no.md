@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ For alle funksjoner: installer MR Offices skrivebordsapp (gratis)
->
-> MR Offices skrivebordsapp er gratis, har disse redigeringsprogrammene og hele tjenesten, og fungerer frakoblet på din egen datamaskin. Den legger til det redigeringsprogrammene med åpen kildekode mangler:
->
-> - Åpne og lagre Word-, Excel- og PowerPoint-filer (.docx, .xlsx, .pptx)
-> - Beregne formler med funksjoner (SUMMER, HVIS, FINN.RAD …)
-> - Diagrammer
-> - Redigering av SmartArt
-> - Lagre endringer i en PDF tilbake i filen
->
-> **[Last ned MR Office fra Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller fra mroffice.ai](https://mroffice.ai)
+<p align="center"><b>MR Offices redigeringsverktøy med åpen kildekode – dokumenter, regneark, presentasjoner, PDF, håndskrift og kode – i nettleseren.</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Prøv dem i MR Office →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Prøv live-demoen – ingen installasjon</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Last ned MR Office fra Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> MR Offices redigeringsverktøy med åpen kildekode – dokumenter, regneark, presentasjoner, PDF, håndskrift og kode – i nettleseren.
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Dokumenter" width="100%"></a><br><b>Dokumenter</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Regneark" width="100%"></a><br><b>Regneark</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentasjoner" width="100%"></a><br><b>Presentasjoner</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Håndskrift" width="100%"></a><br><b>Håndskrift</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Kode" width="100%"></a><br><b>Kode</b></td>
+</tr>
+</table>
 
 MR Office er et arbeidsområde for notater, KI og ekte filer. Dette repositoriet publiserer kildekoden til redigeringsverktøyene: de samme som MR Office bruker, og som du selv kan bygge, kjøre og bygge inn. Dette er redigeringsverktøy med åpen kildekode, ikke en komplett kontorpakke med åpen kildekode: lesing og skriving av Microsoft Office-filer blir værende i MR Office (se nedenfor).
 
@@ -33,16 +36,9 @@ Hva hvert verktøy gjør i dette repositoriet:
 
 Beregning av formler med funksjoner, tegning av diagrammer og oppsett av SmartArt gjøres av MR Offices egen motor i MR Offices skrivebordsapp: redigeringsprogrammene med åpen kildekode beholder formlene, diagrammene og SmartArt i en fil og viser SmartArt slik det ble lagret.
 
-## Word-, Excel-, PowerPoint- og PDF-filer
-
-Å åpne og lagre Word-, Excel- og PowerPoint-filer (.docx, .xlsx, .pptx) og lagre endringer i en PDF tilbake i filen gjøres av MR Offices gratis skrivebordsapp. Den har alle disse redigeringsprogrammene og fungerer frakoblet på din egen datamaskin:
-
-- **MR Office** (gratis skrivebordsapp): https://github.com/XinaTian/MROffice/releases
-- **Nettsted**: https://mroffice.ai
-
-[Alle versjoner →](https://github.com/XinaTian/MROffice/releases)
-
 ## Kjør redigeringsverktøyene
+
+**▶ [Prøv live-demoen – ingen installasjon](https://demo.mroffice.ai)**
 
 De seks verktøyene ligger i `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, som deler `@mrnote/core`) og kjører sammen i `apps/playground`:
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` starter en utviklingsserver på samme adresse, og `npm run smoke` kontrollerer et bygg. README-filen for hver pakke beskriver i detalj hva den gjør og hvordan den bygges inn.
+
+## For alle funksjoner: installer MR Offices skrivebordsapp (gratis)
+
+MR Offices skrivebordsapp er gratis, har disse redigeringsprogrammene og hele tjenesten, og fungerer frakoblet på din egen datamaskin. Den legger til det redigeringsprogrammene med åpen kildekode mangler:
+
+- Åpne og lagre Word-, Excel- og PowerPoint-filer (.docx, .xlsx, .pptx)
+- Beregne formler med funksjoner (SUMMER, HVIS, FINN.RAD …)
+- Diagrammer
+- Redigering av SmartArt
+- Lagre endringer i en PDF tilbake i filen
+
+**[Last ned MR Office fra Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller fra mroffice.ai](https://mroffice.ai)
+
+### Word-, Excel-, PowerPoint- og PDF-filer
+
+Å åpne og lagre Word-, Excel- og PowerPoint-filer (.docx, .xlsx, .pptx) og lagre endringer i en PDF tilbake i filen gjøres av MR Offices gratis skrivebordsapp. Den har alle disse redigeringsprogrammene og fungerer frakoblet på din egen datamaskin:
 
 ## Lisens
 

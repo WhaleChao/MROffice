@@ -5,7 +5,7 @@
  */
 import { lineBlankAt } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import { storedFilterHiddenRows } from "@mrnote/core/web/lib/spreadsheet/filter-result.ts";
-import { filterVisibilityGroups, prepareFilterVisibilitySteps, filterVisibilitySteps, exhaustFilterVisibility, type FilterVisibilityGroup } from "../../../../lib/spreadsheet/filter-visibility";
+import { filterVisibilityGroups, prepareFilterVisibilitySteps, filterVisibilitySteps, exhaustFilterVisibility, filterMatchText, type FilterVisibilityGroup } from "../../../../lib/spreadsheet/filter-visibility";
 import { FilterVisibilityClient, drainFilterVisibility } from "../../../../lib/spreadsheet/filter-visibility-client";
 import { yieldCalculationTask } from "@mrnote/core/web/lib/spreadsheet/background-calculation-protocol.ts";
 import { type CellMap } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
@@ -326,6 +326,7 @@ export function prepareOrdinaryFilterVisibility(
         fill: colors ? colors.fill : cell?.style?.backgroundColor,
         font: colors ? colors.font : cell?.style?.color,
         text: cell?.kind === "text" && !(cell as { formula?: unknown }).formula && !String(cell?.value ?? "").startsWith("="),
+        ...(needsValues.has(col) && filterMatchText(cell) !== undefined ? { match: filterMatchText(cell) } : {}),
       };
     });
   })();
@@ -666,6 +667,8 @@ export function buildWorkbookSheetInput(
     columnWidths?: boolean;
     /** The workbook's sheets still placeholders (deferred-sheets). */
     pendingSheetNames?: ReadonlySet<string>;
+    /** The workbook sets precision as displayed (calcPr@fullPrecision="0"). */
+    precisionAsDisplayed?: boolean;
   },
 ): WorkbookSheetInput {
   const date1904 = opts?.date1904;
@@ -679,6 +682,7 @@ export function buildWorkbookSheetInput(
       : {}),
     ...(columnWidths ? { columnWidths: sheetColumnWidthReading(sheet) } : {}),
     ...(opts?.pendingSheetNames?.size ? { pendingSheetNames: opts.pendingSheetNames } : {}),
+    ...(opts?.precisionAsDisplayed ? { precisionAsDisplayed: true } : {}),
   });
 }
 

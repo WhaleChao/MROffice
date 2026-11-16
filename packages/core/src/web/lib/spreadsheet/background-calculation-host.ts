@@ -122,7 +122,7 @@ function prepare(binding: BackgroundCalculationHostBinding): PreparedBinding | B
   // spillAnchors and isSpillTargetOccupied need no data of their own: the
   // worker derives both from the cells it holds and the covered cells the
   // context names.
-  const supported = new Set(["usedRange", "resolveName", "resolveTableRef", "isRowHiddenByFilter", "isRowManuallyHidden", "isTextCell", "cellPicture", "cellPhonetic", "keptFormulaResult", "isFormulaHidden", "legacyArrayExtent", "spillAnchors", "isSpillTargetOccupied", "whatIfTables", "columnWidth", "columnWidthIsDefault"]);
+  const supported = new Set(["usedRange", "resolveName", "resolveTableRef", "isRowHiddenByFilter", "isRowManuallyHidden", "isTextCell", "cellPicture", "cellPhonetic", "keptFormulaResult", "keptFormulaInputs", "isFormulaHidden", "legacyArrayExtent", "spillAnchors", "isSpillTargetOccupied", "whatIfTables", "columnWidth", "columnWidthIsDefault"]);
   if (Object.keys(options ?? {}).some((key) => !supported.has(key))) return { ok: false, reason: "unsupported-resolver" };
   const pairs = [
     [options?.resolveName, context.namedRanges], [options?.resolveTableRef, context.tables],
@@ -136,6 +136,8 @@ function prepare(binding: BackgroundCalculationHostBinding): PreparedBinding | B
     [options?.whatIfTables, context.whatIfTables],
   ] as const;
   if (pairs.some(([callback, data]) => callback ? !Array.isArray(data) : Boolean(data?.length))) return { ok: false, reason: "missing-context" };
+  // A held result's inputs travel in its kept-result entry.
+  if (options?.keptFormulaInputs && !options.keptFormulaResult) return { ok: false, reason: "missing-context" };
   // Both width readers come from the one column width reading (columnWidthOption).
   if (Boolean(options?.columnWidth) !== Array.isArray(context.columnWidths?.columns)) return { ok: false, reason: "missing-context" };
   if (Boolean(options?.columnWidthIsDefault) !== Boolean(options?.columnWidth)) return { ok: false, reason: "missing-context" };

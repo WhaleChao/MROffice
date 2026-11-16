@@ -7,6 +7,8 @@
  */
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 
+import { OfficeTextAlignmentField } from "@mrnote/core/web/components/office-ribbon/OfficeTextAlignmentField.tsx";
+
 import type { ParagraphTextAlignment } from "@mrnote/core/web/components/console/editor/extensions/DocumentFormatting.ts";
 
 /**
@@ -135,24 +137,12 @@ export default function DocumentParagraphAsianTypography({
         </div>
       </section>
       <section className="office-dialog__group">
-        <label className="office-dialog__field">
-          <span>{t("toolbar.paragraphAsianTextAlignment")}</span>
-          <select
-            data-testid="document-paragraph-text-alignment"
-            value={values.textAlignment}
-            onChange={(event) =>
-              handlers.onTextAlignment(
-                event.target.value as ParagraphTextAlignment | "inherit",
-              )
-            }
-          >
-            {TEXT_ALIGNMENT_OPTIONS.map((value) => (
-              <option key={value} value={value}>
-                {t(`toolbar.paragraphAsianTextAlign_${value}`)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <OfficeTextAlignmentField
+          testId="document-paragraph-text-alignment"
+          value={values.textAlignment}
+          choices={TEXT_ALIGNMENT_OPTIONS}
+          onChange={handlers.onTextAlignment}
+        />
       </section>
     </>
   );

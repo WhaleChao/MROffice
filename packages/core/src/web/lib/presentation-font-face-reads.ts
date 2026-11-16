@@ -227,6 +227,35 @@ function buildPresentationFontFamily(family: string, aliases: PresentationFontAl
   return withScriptFallbacks(withOfficeFontSubstitutes(withPowerPointMissingFace(mapped, family, aliases)));
 }
 
+
+
+
+
+
+
+
+
+
+export function presentationServedBodyFontStyle(style: Record<string, string>): Record<string, string> {
+  const stack = style["--presentation-body-font"];
+  if (!stack) return style;
+  const served = presentationFontFamilyWithAssets(stack, EMPTY_PRESENTATION_FONT_ALIASES);
+  return served ? { ...style, "--presentation-body-font": served } : style;
+}
+
+/**
+ * Two CSS font stacks one after the other: a run's own face (served as
+ * `presentationFontFamilyWithAssets` serves it) and, behind it, its cell's.
+ * The first stack's generic families go last: one in the middle would end the
+ * list there, and the cell's faces behind it would never be reached.
+ */
+export function presentationFontStacksJoined(first: string, second: string | undefined): string {
+  if (!second || second === first) return first;
+  const generic = (item: string) => CSS_GENERIC_FAMILIES.has(item.replace(/^["']|["']$/g, "").trim().toLowerCase());
+  const own = first.split(",").map((item) => item.trim()).filter(Boolean);
+  return [...own.filter((item) => !generic(item)), second, ...own.filter(generic)].join(", ");
+}
+
 /**
  * The CSS weight that draws the regular style of an Office "light" family
  * ("等线 Light", "Calibri Light", "Aptos Light", "Segoe UI Semilight", ...)

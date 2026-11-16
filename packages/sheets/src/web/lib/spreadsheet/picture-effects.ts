@@ -10,7 +10,10 @@
  * editor's shapes keep (lib/office-picture-effects; the server reads and
  * writes it on `xdr:pic/xdr:spPr`, reading row 543 `xlsxPictureEffects`).
  * The Shadow stays the sheet's own shadow preset (`object.shadow`, the
- * Shadow presets Excel's pane names), so the picture has one shadow.
+ * Shadow presets Excel's pane names), so the picture has one shadow -- except
+ * on a picture whose reading put its Shadow and Preset in its Picture
+ * Effects (readings row 570, `spreadsheetPictureShadowInEffects`): Excel's
+ * gallery shadows (Outer, Inner, Perspective) and Presets 1-12 there.
  */
 
 import {
@@ -37,12 +40,46 @@ export const SPREADSHEET_PICTURE_EFFECT_KINDS: readonly OfficePictureEffectKind[
   "format3d",
 ];
 
-/** A worksheet picture's `pictureEffects`, validated; undefined for none. */
-export function normalizeSpreadsheetPictureEffects(value: unknown): OfficePictureEffects | undefined {
+/**
+ * The Picture Effects menu's categories on a picture that keeps its Shadow
+ * and Preset in its Picture Effects (readings row 570): Excel's whole menu,
+ * Preset 1-12 and Shadow (Outer / Inner / Perspective) first.
+ */
+export const SPREADSHEET_PICTURE_EFFECT_MENU_KINDS_WITH_SHADOW = [
+  "preset",
+  "shadow",
+  ...SPREADSHEET_PICTURE_EFFECT_MENU_KINDS,
+] as const satisfies readonly OfficePictureEffectKind[];
+
+const KINDS_WITH_SHADOW: readonly OfficePictureEffectKind[] = [...SPREADSHEET_PICTURE_EFFECT_KINDS, "preset", "shadow"];
+
+/**
+ * Whether the picture's Shadow and Preset are its Picture Effects' (the
+ * server read them so, `source.pictureShadowInEffects`, readings row 570)
+ * rather than the sheet's own shadow preset (`object.shadow`): one shadow.
+ */
+export function spreadsheetPictureShadowInEffects(object: object): boolean {
+  const fields = object as { source?: unknown; shadow?: unknown };
+  const source = fields.source && typeof fields.source === "object" ? (fields.source as Record<string, unknown>) : null;
+  return source?.pictureShadowInEffects === true && !fields.shadow;
+}
+
+/** The effects the picture keeps in `pictureEffects`. */
+export function spreadsheetPictureEffectKinds(object: object): readonly OfficePictureEffectKind[] {
+  return spreadsheetPictureShadowInEffects(object) ? KINDS_WITH_SHADOW : SPREADSHEET_PICTURE_EFFECT_KINDS;
+}
+
+/**
+ * A worksheet picture's `pictureEffects`, validated; undefined for none.
+ * `object` (the picture) keeps its Shadow and Preset where they are its
+ * Picture Effects'.
+ */
+export function normalizeSpreadsheetPictureEffects(value: unknown, object?: object): OfficePictureEffects | undefined {
   const effects = normalizeOfficePictureEffects(value);
   if (!effects) return undefined;
+  const kinds = object ? spreadsheetPictureEffectKinds(object) : SPREADSHEET_PICTURE_EFFECT_KINDS;
   const kept = Object.fromEntries(
-    Object.entries(effects).filter(([kind]) => SPREADSHEET_PICTURE_EFFECT_KINDS.includes(kind as OfficePictureEffectKind)),
+    Object.entries(effects).filter(([kind]) => kinds.includes(kind as OfficePictureEffectKind)),
   );
   return Object.keys(kept).length ? (kept as OfficePictureEffects) : undefined;
 }
@@ -70,12 +107,13 @@ export function spreadsheetPictureEffectPatch<K extends OfficePictureEffectKind>
   kind: K,
   value: OfficePictureEffectValues[K] | null,
 ): { pictureEffects: OfficePictureEffects | undefined } | null {
-  if (!SPREADSHEET_PICTURE_EFFECT_KINDS.includes(kind)) return null;
+  if (!spreadsheetPictureEffectKinds(object).includes(kind)) return null;
   if (spreadsheetPictureEffectsBlocker(object)) return null;
   const fields = object as { pictureEffects?: unknown; pictureStyle?: unknown };
-  const current = normalizeSpreadsheetPictureEffects(fields.pictureEffects);
+  const current = normalizeSpreadsheetPictureEffects(fields.pictureEffects, object);
   const next = normalizeSpreadsheetPictureEffects(
     withOfficePictureEffect(current, kind, value, officePictureStyleEffectKinds(fields.pictureStyle).has(kind)),
+    object,
   );
   if (JSON.stringify(next ?? null) === JSON.stringify(current ?? null)) return null;
   return { pictureEffects: next };
@@ -92,7 +130,9 @@ export function spreadsheetPictureEffectFromParameter(
 ): { kind: OfficePictureEffectKind; value: unknown } | null {
   try {
     const parsed = JSON.parse(parameter) as { kind?: unknown; value?: unknown };
-    if (typeof parsed?.kind !== "string" || !SPREADSHEET_PICTURE_EFFECT_KINDS.includes(parsed.kind as OfficePictureEffectKind)) {
+    // Which kinds the picture takes is the patch's to decide (a Shadow or a
+    // Preset only where they are its Picture Effects').
+    if (typeof parsed?.kind !== "string" || !KINDS_WITH_SHADOW.includes(parsed.kind as OfficePictureEffectKind)) {
       return null;
     }
     if (parsed.value !== null && !normalizeOfficePictureEffects({ [parsed.kind]: parsed.value })) return null;

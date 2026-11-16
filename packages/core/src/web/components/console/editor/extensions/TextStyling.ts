@@ -65,6 +65,8 @@ import {
 } from "../native-document/symbolCharMark";
 export * from "./cssColor";
 import { normalizeColor } from "./cssColor";
+import { normalizeEastAsianFontFamilies } from "../../../../lib/document-word-line-metrics";
+import { wordFontIsEastAsian, wordFontIsRecordedLatin } from "../native-document/wordFontMetrics";
 
 /** Re-exported beside the other run-mark names the toolbar reads. */
 export { SYMBOL_CHAR_MARK };
@@ -1531,17 +1533,78 @@ export interface DocumentFontScriptRange {
 }
 const fontScriptPlanCache = new WeakMap<
   ProseMirrorNode,
-  readonly DocumentFontScriptRange[]
+  { readonly defaultEastAsia: string | null; readonly plan: readonly DocumentFontScriptRange[] }
 >();
+/** `window.__docsDefaultEastAsianOff = true` asks the older reading (the
+ * defaults' East Asian text in their stack's first face), for an A/B of one build. */
+function defaultEastAsianSlotOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsDefaultEastAsianOff?: boolean}).__docsDefaultEastAsianOff === true;
+}
+/**
+ * The face the document's defaults set their East Asian text in where their
+ * stack's first face is an East Asian face of the ascii slot
+ * (`defaultEastAsianFontFamily`, the eastAsia slot of Normal/docDefaults).
+ * Word picks a character's face by the character (17.3.2.26): R313-D27 names
+ * 宋体 for ascii over the theme's ＭＳ 明朝, and Word sets its Han text in MS
+ * Mincho (YaHei where it lacks a glyph), not in the stack's first face.
+ */
+export function documentDefaultEastAsianFontFamily(doc: ProseMirrorNode): string | null {
+  if (defaultEastAsianSlotOff()) return null;
+  return normalizeFontFamily(doc.attrs.defaultEastAsianFontFamily);
+}
+/** `window.__docsLatinRunEastAsianOff = true` asks the older reading (a run
+ * naming only a Latin face sets its East Asian text in that face's stack),
+ * for an A/B of one build. */
+function latinRunInheritedEastAsianOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsLatinRunEastAsianOff?: boolean}).__docsLatinRunEastAsianOff === true;
+}
+const latinRunEastAsianFaces = new WeakMap<object, (stack: unknown) => string | null>();
+/**
+ * The East Asian face a family stack the document states carries behind its
+ * first face, or null: the first token the document declares East Asian
+ * (its font table's signed faces) or Word records as one. The page's own CJK
+ * render fallbacks are not in the stacks the document states.
+ */
+function stackEastAsianFace(doc: ProseMirrorNode): (stack: unknown) => string | null {
+  const key = doc.attrs as object;
+  let read = latinRunEastAsianFaces.get(key);
+  if (!read) {
+    const declared = new Set(
+      (normalizeEastAsianFontFamilies(doc.attrs.eastAsianFontFamilies) ?? [])
+        .filter((family) => !wordFontIsRecordedLatin(family))
+        .map((family) => family.toLowerCase()),
+    );
+    const isEastAsian = (name: string) => declared.has(name.toLowerCase()) || wordFontIsEastAsian(name);
+    read = (stack: unknown) => {
+      if (typeof stack !== "string") return null;
+      const tokens = stack.split(",").map(unquotedFontFamilyToken).filter(Boolean);
+      return tokens.find(isEastAsian) ?? null;
+    };
+    latinRunEastAsianFaces.set(key, read);
+  }
+  return read;
+}
 export function documentFontScriptRanges(
   state: EditorState,
   from = 0,
   to = state.doc.content.size,
 ): DocumentFontScriptRange[] {
   const result: DocumentFontScriptRange[] = [];
+  const defaultEastAsia = documentDefaultEastAsianFontFamily(state.doc);
+  // A run that names only its Latin face (w:rFonts w:ascii/w:hAnsi, no
+  // w:eastAsia) inherits the eastAsia slot slot by slot (17.3.2.26): from its
+  // paragraph's face, else from the defaults. Word sets its East Asian text
+  // there: corpus R382-D30, Japanese in Times New Roman runs under a ja-JP
+  // theme, is Yu Mincho in Word, 20.08 pt a 12 pt line; drawn in the run's
+  // Latin stack it ran 13.8 pt, a page short.
+  const eastAsianOf = stackEastAsianFace(state.doc);
+  const inheritedOff = latinRunInheritedEastAsianOff();
+  const defaultsEastAsia = inheritedOff ? null : defaultEastAsia ?? eastAsianOf(state.doc.attrs.defaultFontFamily);
+  const memoKey = `${defaultEastAsia ?? ""}\u0000${defaultsEastAsia ?? ""}`;
   state.doc.nodesBetween(from, to, (block, blockPos) => {
     if (!block.isTextblock) return true;
-    const cached = fontScriptPlanCache.get(block);
+    const memo = fontScriptPlanCache.get(block);
+    const cached = memo && memo.defaultEastAsia === memoKey ? memo.plan : null;
     if (cached) {
       for (const range of cached)
         result.push({
@@ -1583,6 +1646,15 @@ export function documentFontScriptRanges(
       }
       entries = [];
     };
+    // The eastAsia face a run naming only a Latin face inherits: its
+    // paragraph's, else the defaults'. Not for a run hinted East Asian or
+    // complex script (its "Latin" mark is that slot's face) nor one whose own
+    // stack already names an East Asian face.
+    const blockEastAsia = block.attrs.fontFamily ? eastAsianOf(block.attrs.fontFamily) : defaultsEastAsia;
+    const inheritedEastAsia = (latin: { attrs: Record<string, unknown> }): string | null => {
+      if (inheritedOff || !blockEastAsia || normalizeWordFontHint(latin.attrs.hint)) return null;
+      return eastAsianOf(latin.attrs.family) ? null : blockEastAsia;
+    };
     block.descendants((node, localPos) => {
       if (!node.isText) {
         flush();
@@ -1621,7 +1693,10 @@ export function documentFontScriptRanges(
           latin?.attrs.face,
         ),
         eastAsia: documentFontDescriptor(
-          cjk?.attrs.family ?? block.attrs.fontCjkFamily,
+          cjk?.attrs.family ?? block.attrs.fontCjkFamily ??
+            // A run that names no face takes the defaults' eastAsia slot.
+            (!latin && !block.attrs.fontFamily ? defaultEastAsia : null) ??
+            (latin ? inheritedEastAsia(latin) : null),
           cjk?.attrs.face,
         ),
         complexScript: documentFontDescriptor(
@@ -1632,7 +1707,7 @@ export function documentFontScriptRanges(
       return false;
     });
     flush();
-    fontScriptPlanCache.set(block, plan);
+    fontScriptPlanCache.set(block, { defaultEastAsia: memoKey, plan });
     for (const range of plan)
       result.push({
         ...range,
@@ -4201,9 +4276,17 @@ const TextStyling = Extension.create({
         ({ commands, editor }) => {
           if (!editor.isEditable) return false;
           const normalized = normalizeCharSpacing(pt);
-          return normalized !== null
-            ? commands.setMark(CHAR_SPACING_MARK, { spacing: normalized })
-            : false;
+          if (normalized === null) return false;
+          // Word keeps the spacing in twentieths of a point (w:spacing
+          // w:val): Font > Advanced > Spacing By 44.71 pt is 894 twips, 44.7
+          // pt. A finer value is no DOCX spacing and the full export refused
+          // the whole document over it (character_spacing_not_natively_representable,
+          // corpus R458-D77 WALK1); one under half a twip is Normal spacing.
+          const twips = Math.round(normalized * 20);
+          if (twips === 0) {
+            return commands.unsetMark(CHAR_SPACING_MARK, { extendEmptyMarkRange: false });
+          }
+          return commands.setMark(CHAR_SPACING_MARK, { spacing: twips / 20 });
         },
       unsetCharSpacing:
         () =>

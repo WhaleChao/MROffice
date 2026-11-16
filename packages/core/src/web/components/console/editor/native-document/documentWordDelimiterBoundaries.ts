@@ -204,6 +204,45 @@ export function documentHangulWordRanges(block: PmNode, contentFrom: number): Ar
   return ranges;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function documentKoreanWholeWordRanges(
+  block: PmNode,
+  contentFrom: number,
+  documentLanguage: unknown,
+): "paragraph" | Array<{ from: number; to: number }> {
+  const ranges: Array<{ from: number; to: number }> = [];
+  let other = false;
+  block.forEach((child, childOffset) => {
+    if (!child.isText) return;
+    const proofing = child.marks.find((mark) => mark.type.name === "proofingLanguage")?.attrs;
+    const own = typeof proofing?.eastAsia === "string" && proofing.eastAsia ? proofing.eastAsia : null;
+    const language = own ?? documentLanguage;
+    if (typeof language !== "string" || wordKinsokuList(language) !== "ko") {
+      other = true;
+      return;
+    }
+    const from = contentFrom + childOffset;
+    const last = ranges[ranges.length - 1];
+    if (last && last.to === from) last.to = from + child.nodeSize;
+    else ranges.push({ from, to: from + child.nodeSize });
+  });
+  return !other && ranges.length > 0 ? "paragraph" : ranges;
+}
+
 const KINSOKU_ALLOWED_ANY = new RegExp(
   `[${[...new Set(Object.values(WORD_KINSOKU_ALLOWED).flatMap(({ start, end }) => [...start, ...end]))]
     .map((character) => `\\u{${character.codePointAt(0)!.toString(16)}}`).join("")}]`,

@@ -32,6 +32,7 @@ import {
   MAX_DATA_TABLES,
   normalizeDataTables,
   normalizeTableColumnNames,
+  renameDataTableColumnReferences,
   renameDataTableReferences,
   tableCellRole,
   tableColumnNumberFormat,
@@ -169,6 +170,191 @@ export function tableHeadersForCells(
   return normalized.every((name, index) => name === raw[index])
     ? normalized
     : null;
+}
+
+/** A table column a header edit renamed. */
+export interface TableColumnRename {
+  readonly tableName: string;
+  readonly previousName: string;
+  readonly nextName: string;
+}
+
+/**
+ * The table columns a Replace touched through their header cells: the tables
+ * get their column identities from the replaced headers (normalised the way a
+ * header edit is) and every renamed column is reported so structured
+ * references follow, as they do when the header is edited by hand (live
+ * audit B165). The header cells are rewritten to the normalised names.
+ */
+export function tableHeaderRenamesAfterReplace<S extends TableButtonSheet>(
+  sheet: S,
+  nextCells: CellMap,
+  replacedKeys: readonly string[],
+): {
+  dataTables: DataTable[] | undefined;
+  renames: { tableName: string; previousName: string; nextName: string }[];
+} {
+  const tables = sheet.dataTables;
+  if (!tables || tables.length === 0 || replacedKeys.length === 0) {
+    return { dataTables: tables, renames: [] };
+  }
+  const replaced = new Set(replacedKeys);
+  const renames: { tableName: string; previousName: string; nextName: string }[] = [];
+  let changed = false;
+  const nextTables = tables.map((table) => {
+    if (!table.headerRow) return table;
+    const { r1, c1, c2 } = table.range;
+    let touched = false;
+    for (let col = c1; col <= c2 && !touched; col += 1) {
+      if (replaced.has(`${r1}:${col}`)) touched = true;
+    }
+    if (!touched) return table;
+    const width = c2 - c1 + 1;
+    const previous =
+      tableHeadersForCells(table, sheet.cells) ??
+      Array.from({ length: width }, (_, index) => `Column${index + 1}`);
+    const raw: string[] = [];
+    for (let col = c1; col <= c2; col += 1) {
+      const key = `${r1}:${col}`;
+      raw.push(
+        replaced.has(key)
+          ? String(nextCells[key]?.value ?? "").trim()
+          : previous[col - c1],
+      );
+    }
+    // An emptied header takes the first free "Column1" ("列1" in Chinese),
+    // left to right, not its position: Clear Contents on B1 "H2" of T A1:C4
+    // reads 列1 in Excel (Mac Excel 16, excel-formats/xprobe-rounds1113 A;
+    // xlsx-rounds R379-X23, R380-X18 -- Text to Columns writing an empty
+    // piece into a header).
+    raw.forEach((name, index) => {
+      if (name !== "" || !replaced.has(`${r1}:${c1 + index}`)) return;
+      raw[index] = defaultTableColumnName(
+        raw.filter((other, at) => at !== index && other !== ""),
+        (number) => `${spreadsheetDefaultNames().column}${number}`,
+      );
+    });
+    // Headers not replaced keep their names (S-124's rule, as when typed).
+    const normalized = normalizeTableColumnNames(raw, {
+      keep: raw.map((_name, index) => !replaced.has(`${r1}:${c1 + index}`)),
+    });
+    for (let col = c1; col <= c2; col += 1) {
+      const key = `${r1}:${col}`;
+      if (!replaced.has(key)) continue;
+      const cell = nextCells[key];
+      // A header cleared (Clear Contents, Delete) is no cell any more: it
+      // takes the name its column now has ("Column1"), as Excel writes one
+      // into an emptied header. Left blank, the table kept a name no cell
+      // showed (sheet model fuzz).
+      if (!cell) nextCells[key] = { value: normalized[col - c1], kind: "text" };
+      else if (cell.value !== normalized[col - c1]) {
+        nextCells[key] = { ...cell, value: normalized[col - c1] };
+      }
+    }
+    normalized.forEach((name, index) => {
+      if (name !== previous[index]) {
+        renames.push({ tableName: table.name, previousName: previous[index], nextName: name });
+      }
+    });
+    changed = true;
+    return {
+      ...table,
+      columns: normalized.map((name, index) => ({
+        id: table.columns?.[index]?.id ?? index + 1,
+        name,
+      })),
+    };
+  });
+  return { dataTables: changed ? nextTables : tables, renames };
+}
+
+/**
+ * A table's header cells written by any command that does not name tables
+ * itself (Paste, Fill, Clear, a script): the header row IS the columns'
+ * names in Excel, so a changed header renames its column and its structured
+ * references follow, exactly as typing it does. Keyboard Paste over two
+ * headers left the columns and their formulas on the old names and the new
+ * ones read #REF! (live audit S-123). `previous` is the sheet before the
+ * write; returns the sheet with its tables and references brought along and
+ * the renames for the other sheets, or null when no header changed.
+ */
+export function reconcileTableHeaderWrites<S extends TableButtonSheet>(
+  previous: S,
+  next: S,
+): { sheet: S; renames: TableColumnRename[] } | null {
+  const tables = previous.dataTables;
+  if (!tables || tables.length === 0 || next.cells === previous.cells || next.dataTables !== tables) return null;
+  const changed: string[] = [];
+  for (const table of tables) {
+    if (!table.headerRow) continue;
+    const { r1, c1, c2 } = table.range;
+    for (let col = c1; col <= c2; col += 1) {
+      const key = `${r1}:${col}`;
+      if (String(next.cells[key]?.value ?? "") !== String(previous.cells[key]?.value ?? "")) changed.push(key);
+    }
+  }
+  if (changed.length === 0) return null;
+  const cells: CellMap = { ...next.cells };
+  const { dataTables, renames } = tableHeaderRenamesAfterReplace(previous, cells, changed);
+  if (dataTables === tables && renames.length === 0) return null;
+  return {
+    sheet: renameTableColumnsInSheet({ ...next, cells, dataTables }, renames),
+    renames,
+  };
+}
+
+/**
+ * Several renamed table columns at once. They take effect together: two
+ * headers that trade names (A to B, B to A) swap their references instead of
+ * the second rename sweeping up the first one's.
+ */
+export function renameTableColumnsInSheet<S extends TableButtonSheet>(
+  candidate: S,
+  renames: readonly TableColumnRename[],
+): S {
+  if (renames.length <= 1) {
+    return renames.reduce(
+      (current, rename) =>
+        renameTableColumnReferencesInSheet(current, rename.tableName, rename.previousName, rename.nextName),
+      candidate,
+    );
+  }
+  const stand = (index: number) => `MRAIRENAME${index}X${renames.length}`;
+  const parked = renames.reduce(
+    (current, rename, index) =>
+      renameTableColumnReferencesInSheet(current, rename.tableName, rename.previousName, stand(index)),
+    candidate,
+  );
+  return renames.reduce(
+    (current, rename, index) =>
+      renameTableColumnReferencesInSheet(current, rename.tableName, stand(index), rename.nextName),
+    parked,
+  );
+}
+
+/**
+ * Follow one renamed table column through a sheet (Excel: renaming a column
+ * updates every structured reference to it in the workbook). Explicit
+ * `Table[Col]` references are renamed wherever they sit; the in-table
+ * `[@Col]` / `[Col]` forms only where the renamed table owns the formula, so
+ * the calculated-column template and the physical cells it filled stay equal.
+ */
+export function renameTableColumnReferencesInSheet<S extends TableButtonSheet>(
+  candidate: S,
+  tableName: string,
+  oldColumnName: string,
+  newColumnName: string,
+): S {
+  const tableLower = tableName.toLowerCase();
+  return rewriteTableReferencesInSheet(candidate, (formula, owner) =>
+    renameDataTableColumnReferences(
+      formula,
+      tableName,
+      oldColumnName,
+      newColumnName,
+      { shortFormOwnedByTable: owner?.name.toLowerCase() === tableLower },
+    ),
+  );
 }
 
 /**

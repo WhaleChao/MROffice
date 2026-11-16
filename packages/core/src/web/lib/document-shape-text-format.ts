@@ -27,7 +27,11 @@ import {
 } from "./office-smartart/text-format";
 import type { TextRun } from "./presentation-runs";
 import { officeTextPaintWithFontColor, type OfficeTextPaint } from "./office-text-paint";
-import { documentSmartArtLabelFontPx } from "./office-smartart/document-shapes-model";
+import {
+  documentSmartArtLabelFontPx,
+  documentSmartArtMemberLabelPx,
+  documentSmartArtOfficeLabelScale,
+} from "./office-smartart/document-shapes-model";
 import {
   documentShapeRunFontSizePt,
   documentShapeTextRunsWithout,
@@ -81,6 +85,8 @@ export function documentShapeTextLeaves(
     // steps that drawn size, as Word's size box does, not the stored default.
     const fittedPx = documentSmartArtLabelFontPx(attrs);
     const fittedPt = fittedPx === null ? null : pxToPtRounded(fittedPx, 1);
+    // A converted Word diagram's words read at the sizes Office gave them.
+    const officeScale = documentSmartArtOfficeLabelScale(attrs);
     return members
       .filter(
         (member) =>
@@ -88,6 +94,7 @@ export function documentShapeTextLeaves(
       )
       .map((member) => {
         const leaf = memberLeaf(member);
+        const officePx = documentSmartArtMemberLabelPx(member, officeScale);
         const fitted =
           fittedPt !== null &&
           member.text.trim().length > 0 &&
@@ -110,7 +117,11 @@ export function documentShapeTextLeaves(
           memberId: member.memberId,
           leaf: {
             ...leaf,
-            ...(fitted ? { textFontSizePt: fittedPt } : {}),
+            ...(officePx !== null
+              ? { textFontSizePt: pxToPtRounded(officePx, 1) }
+              : fitted
+                ? { textFontSizePt: fittedPt }
+                : {}),
             ...(themed ? { textFontFamily: themeBodyFace } : {}),
           },
         };

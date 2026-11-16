@@ -5,6 +5,8 @@
  */
 import { officeMenuDashFields, officeMenuDashOf } from "./office-stroke-dash";
 import { MAX_SHAPE_TEXT_LENGTH } from "./presentation-text-format";
+import { withChangedLevelKeysOwn, type RunStyle } from "./presentation-runs";
+import { presentationLevelStylesOf } from "./presentation-level-styles";
 import type {
   PresentationShapeBlock,
   PresentationTextBlock,
@@ -21,6 +23,7 @@ import {
 } from "./office-line-weight";
 import { nativePictureStyle } from "./office-picture-styles/native";
 import { normalizeOfficePictureEffects } from "./office-picture-effects";
+import { resolveImageEffects } from "./presentation-image-effects";
 import { officeVideoStyle } from "./office-video-styles/catalog";
 import {
   officeShapeStyleRecipes,
@@ -28,6 +31,8 @@ import {
 } from "./office-shape-style-catalog";
 import { officeShapeStylePresetRecipes } from "./office-shape-style-presets";
 import { presentationShapeCatalogEntry } from "./presentation-shape-catalog";
+import { presentationChangeShapeAutofitFrame } from "./presentation-change-shape-fit";
+import { officeDefaultShapeNameAfterChange } from "./office-shape-default-names";
 import { presentationThemeGridColors } from "./presentation-theme-color-binding";
 import {
   DEFAULT_SHAPE_STROKE,
@@ -236,10 +241,17 @@ export function presentationCanChangeToShape(kind: ShapeKind): boolean {
 
 export function presentationShapeConversionPatch(
   kind: ShapeKind,
+  // The shape as it stands: an autofit one (`a:spAutoFit`) takes the frame
+  // the new geometry's text rectangle needs (`presentationChangeShapeAutofitFrame`).
+  block?: PresentationShapeBlock,
 ): Partial<PresentationShapeBlock> {
   const noFill = isLineCalloutShapeKind(kind) || isOpenBasicShapeKind(kind);
+  const fitted = block && block.shape !== kind ? presentationChangeShapeAutofitFrame(block, kind) : null;
+  const renamed = block ? presentationDefaultNameAfterShapeChange(block, kind) : null;
   return {
     shape: kind,
+    ...(fitted ?? {}),
+    ...(renamed !== null ? { name: renamed } : {}),
     points: undefined,
     customPath: undefined,
     ...(noFill
@@ -252,6 +264,83 @@ export function presentationShapeConversionPatch(
         }
       : {}),
   };
+}
+
+/**
+ * The name a shape takes from Change Shape: PowerPoint's own default name
+ * ("Rectangle 1", by its cNvPr id) becomes the new shape's ("Oval 1"); any
+ * other name stays (`officeDefaultShapeNameAfterChange`). A text frame keeps
+ * its name ("TextBox 5" changed to an oval is still "TextBox 5"), so only a
+ * shape's conversion asks. A shape not yet in the file (no `shpN`) has no id
+ * to number it by: the writer names it.
+ */
+function presentationDefaultNameAfterShapeChange(
+  block: PresentationShapeBlock,
+  kind: ShapeKind,
+): string | null {
+  const shapeId = (block.source as { shapeId?: unknown } | undefined)?.shapeId;
+  const number = typeof shapeId === "string" && /^shp[1-9][0-9]*$/.test(shapeId) ? Number(shapeId.slice(3)) : NaN;
+  const preset = (shapeKind: unknown) => {
+    const entry = typeof shapeKind === "string" ? presentationShapeCatalogEntry(shapeKind as ShapeKind) : null;
+    return entry?.geometry === "preset" ? (entry as { drawingMlPreset: string }).drawingMlPreset : null;
+  };
+  return officeDefaultShapeNameAfterChange((block as { name?: unknown }).name, number, preset(block.shape), preset(kind));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationRunTakesShapeStyleColor(
+  style: RunStyle | undefined,
+  block: { readonly source?: unknown; readonly style?: { readonly color?: string } },
+): boolean {
+  if (!style?.color) return true;
+  if (style.inheritedKeys?.includes("color")) return !style.colorFromList;
+  if (style.recipeColor) return true;
+  const native = typeof (block.source as { shapeId?: unknown } | undefined)?.shapeId === "string";
+  return !native && style.color === block.style?.color;
+}
+
+/** Whether the box's own colour (the default of its words) takes the style's: not where a list style states its first level's colour. */
+function boxTakesShapeStyleColor(block: unknown): boolean {
+  return !presentationLevelStylesOf(block)?.[0]?.colorFromList;
+}
+
+/** `runs` with the style's colour on each run it replaces, marked as the style's. */
+function runsWithShapeStyleColor<R extends { style?: RunStyle }>(
+  runs: readonly R[],
+  block: { readonly source?: unknown; readonly style?: { readonly color?: string } },
+  color: string | undefined,
+): R[] {
+  return runs.map((run) =>
+    presentationRunTakesShapeStyleColor(run.style, block)
+      ? ({ ...run, style: withShapeStyleColor(run.style, color) } as R)
+      : run,
+  );
+}
+
+function withShapeStyleColor(style: RunStyle | undefined, color: string | undefined): RunStyle {
+  const next: Record<string, unknown> = { ...(style ?? {}) };
+  if (color) {
+    next.color = color;
+    next.recipeColor = true;
+  } else {
+    delete next.color;
+    delete next.recipeColor;
+  }
+  delete next.colorFromList;
+  // The colour is the run's now (written on it), no longer its level's.
+  return withChangedLevelKeysOwn(style, next) as RunStyle;
 }
 
 /** Preserve each object's text and formatting except the style's text colour. */
@@ -275,15 +364,8 @@ export function presentationShapeStylePatch(
     strokeWidth: recipe.strokeWidth,
     strokeStyle: "solid",
     shadow: recipe.shadow || undefined,
-    style: { ...block.style, color: recipe.textColor },
-    ...(block.runs
-      ? {
-          runs: block.runs.map((run) => ({
-            ...run,
-            style: { ...run.style, color: recipe.textColor },
-          })),
-        }
-      : {}),
+    style: boxTakesShapeStyleColor(block) ? { ...block.style, color: recipe.textColor } : block.style,
+    ...(block.runs ? { runs: runsWithShapeStyleColor(block.runs, block, recipe.textColor) } : {}),
   };
 }
 
@@ -373,6 +455,11 @@ export function presentationTextFrameToShapeBlock(
   }
   next.type = "shape";
   next.shape = kind;
+  // A box that resizes to its words takes the height the new geometry's text
+  // rectangle needs for them, as PowerPoint's Change Shape does (its width,
+  // top edge, `txBox` and `bodyPr` stay).
+  const fitted = presentationChangeShapeAutofitFrame(block, kind);
+  if (fitted) Object.assign(next, fitted);
   if (isLineCalloutShapeKind(kind) || isOpenBasicShapeKind(kind)) {
     // An open shape draws no interior, so a fill carried over from the box
     // would be paint nothing renders -- the same clearing the autoshape
@@ -436,26 +523,13 @@ const TEXTBOX_OUTLINE_KEYS: ReadonlySet<string> = new Set([
 /** Recolour every run a text frame carries -- flat and per paragraph. */
 function textFrameRunsRecoloured(
   block: PresentationTextBlock,
-  color: string,
+  color: string | undefined,
 ): Partial<PresentationTextBlock> {
   const patch: Partial<PresentationTextBlock> = {};
-  if (block.runs) {
-    patch.runs = block.runs.map((run) => ({
-      ...run,
-      style: { ...run.style, color },
-    }));
-  }
+  if (block.runs) patch.runs = runsWithShapeStyleColor(block.runs, block, color);
   if (block.paragraphs) {
     patch.paragraphs = block.paragraphs.map((paragraph) =>
-      paragraph.runs
-        ? {
-            ...paragraph,
-            runs: paragraph.runs.map((run) => ({
-              ...run,
-              style: { ...run.style, color },
-            })),
-          }
-        : paragraph,
+      paragraph.runs ? { ...paragraph, runs: runsWithShapeStyleColor(paragraph.runs, block, color) } : paragraph,
     );
   }
   return patch;
@@ -496,7 +570,7 @@ export function presentationTextFrameWithStyle(
   return presentationBlockWithMaterializedPlaceholder({
     ...base,
     ...paint,
-    style: { ...block.style, color: recipe.textColor },
+    style: boxTakesShapeStyleColor(block) ? { ...block.style, color: recipe.textColor } : block.style,
     ...textFrameRunsRecoloured(block, recipe.textColor),
   } as unknown as PresentationTextBlock);
 }
@@ -513,16 +587,20 @@ export function presentationTextFrameMatchesStyle(
       (current as Record<string, unknown>)[key] ===
       (written as Record<string, unknown>)[key],
   );
-  if (!sameBox) return false;
+  // The style's fill transparency is the box's too: a Semitransparent preset
+  
+  // "Semitransparent, Accent 3" where the old scheme's Accent 3 was white).
+  if (!sameBox || ((current as { fillTransparency?: number }).fillTransparency ?? undefined) !== recipe.fillTransparency) return false;
   const paragraphRuns = (block.paragraphs ?? []).flatMap(
     (paragraph) => paragraph.runs ?? [],
   );
   const runs = [...(block.runs ?? []), ...paragraphRuns];
+  // Words whose colour the style leaves (a list style's, the person's) say
+  // nothing about which style the frame wears.
+  const styled = runs.filter((run) => presentationRunTakesShapeStyleColor(run.style, block) || run.style?.recipeColor);
   return runs.length
-    ? runs.every(
-        (run) => (run.style?.color ?? block.style?.color) === recipe.textColor,
-      )
-    : block.style?.color === recipe.textColor;
+    ? styled.every((run) => (run.style?.color ?? block.style?.color) === recipe.textColor)
+    : !boxTakesShapeStyleColor(block) || block.style?.color === recipe.textColor;
 }
 
 /**
@@ -754,6 +832,12 @@ export function presentationShapeObjectOutlineStyle(
  * line callout), so the ellipse a title was re-shaped into fell through both.
  * Every shape answers the same way, from one place.
  */
+/** Whether a picture's own line (Picture Border) is drawn, by the rule the
+ * picture draws it by (`resolveImageEffects`). */
+function presentationPictureLineDrawn(block: { readonly borderWidth?: unknown; readonly borderStyle?: unknown }): boolean {
+  return resolveImageEffects({ borderWidth: block.borderWidth, borderStyle: block.borderStyle }).borderWidth > 0;
+}
+
 export function presentationBlockPaintsOutsideFrame(
   block:
     | {
@@ -763,6 +847,8 @@ export function presentationBlockPaintsOutsideFrame(
         readonly shadow?: unknown;
         readonly kind?: unknown;
         readonly videoStyle?: unknown;
+        readonly borderWidth?: unknown;
+        readonly borderStyle?: unknown;
       }
     | null
     | undefined,
@@ -776,6 +862,11 @@ export function presentationBlockPaintsOutsideFrame(
     if (style?.effects?.some((effect) => ["reflection", "glow", "outerShdw"].includes(String(effect.kind)))) {
       return true;
     }
+    // A flat picture's line lies outside it (`lib/office-picture-line`, as
+    // PowerPoint draws it): a frame cutting at the picture's edge drew none of
+    
+    if (style?.line && style.line.width > 0) return true;
+    if (presentationPictureLineDrawn(block)) return true;
     // Picture Format > Picture Effects (a shadow, a reflection, a glow, a
     // 3-D rotation turning the picture past its frame) and the older shadow
     // switch paint around the frame the same way. The effects that stay
@@ -810,10 +901,9 @@ export function presentationShapeMatchesStyle(
       Math.abs((block.strokeWidth ?? 2) - recipe.strokeWidth) < 0.01) &&
     Boolean(block.shadow) === recipe.shadow &&
     (block.runs?.length
-      ? block.runs.every(
-          (run) =>
-            (run.style?.color ?? block.style?.color) === recipe.textColor,
-        )
-      : block.style?.color === recipe.textColor)
+      ? block.runs
+          .filter((run) => presentationRunTakesShapeStyleColor(run.style, block) || run.style?.recipeColor)
+          .every((run) => (run.style?.color ?? block.style?.color) === recipe.textColor)
+      : !boxTakesShapeStyleColor(block) || block.style?.color === recipe.textColor)
   );
 }

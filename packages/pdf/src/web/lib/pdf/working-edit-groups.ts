@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { pdfRowStepRunJoined, type PdfRowStepRowsAndCompanions } from "./row-step-target";
+
 export interface PdfWorkingEditGroup<P, A extends string = string, I = unknown> {
   readonly id: string;
   /** The command the action ran under (its history step's source action). */
@@ -149,3 +151,115 @@ export function createPdfWorkingEditGroups<P extends { readonly id?: string }, A
 
 export type PdfWorkingEditGroups<P extends { readonly id?: string }, A extends string = string, I = unknown> =
   ReturnType<typeof createPdfWorkingEditGroups<P, A, I>>;
+
+/**
+ * A record written after the edit it goes with -- too late to be an edit of
+ * that edit's action (links set again after the move of what they stand on;
+ * a text box only the text-box writer keeps, written once the delete of the
+ * line that became it is saved) -- joins that edit's step when it is saved
+ * itself: the step on top of the history, nothing undone above it, which
+ * the edit opened or is a record of. One Undo then takes both back.
+ */
+export function pdfFollowingRecordJoinsStep(input: Readonly<{
+  top: Readonly<{ id: string; restoreOrigin?: string | null; restoreOrigins?: readonly string[] | null }> | null | undefined;
+  /** Nothing of the history is undone. */
+  atEnd: boolean;
+  /** The edit it follows. */
+  anchorOpId: string;
+  /** The entry that edit's action opened, when the action has several edits. */
+  anchorEntryId?: string | null;
+}>): boolean {
+  const { top, anchorOpId, anchorEntryId } = input;
+  return Boolean(top && input.atEnd && (top.id === anchorOpId || (anchorEntryId && top.id === anchorEntryId) ||
+    top.restoreOrigin === anchorOpId || top.restoreOrigins?.includes(anchorOpId)));
+}
+
+/** Why a write of a run does not join the run's step (pdfRunStepJoin). */
+export type PdfRunStepJoinRefusal =
+  /** No run's step is open: this write opens one. */
+  | "no-run-open"
+  /** The open step is another run's (other boxes). */
+  | "another-run"
+  /** Another step is the newest of the history (a move, a format, another box). */
+  | "step-not-newest"
+  /** A step is undone above it. */
+  | "undone-above"
+  /** The history stands on another revision than the run's last write left
+   * (an Undo and its Redo, a write that is no step). */
+  | "another-revision"
+  /** One of the two is a row edit of the working copy, the other a page save. */
+  | "rows-on-one-side"
+  /** A row edit whose rows the window no longer holds. */
+  | "rows-unknown"
+  /** Rows, or page collections changed with them, that do not join
+   * (pdfRowStepRunJoined). */
+  | "rows-not-joined";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function pdfRunStepJoin<Rows extends PdfRowStepRowsAndCompanions>(input: Readonly<{
+  /** The run's step so far: its key, its entry and the revision it left. */
+  run: Readonly<{ key: string; entryId: string;
+    receipt: Readonly<{ resourceVersionId: string; outputSha256: string }> | null }> | null | undefined;
+  /** The run this write is of. */
+  key: string;
+  top: Readonly<{ id: string; restoreOrigin?: string | null }> | null | undefined;
+  /** Nothing of the history is undone. */
+  atEnd: boolean;
+  /** The revision the history stands on. */
+  receipt: Readonly<{ resourceVersionId: string; outputSha256: string }> | null | undefined;
+  /** This write's own record (`rows:<id>` for a row edit of the copy). */
+  restoreOrigin?: string | null;
+  /** The rows a row edit's record holds, by its id. */
+  rowsOf: (id: string) => Rows | undefined;
+  /** The page collections the run's action changes beside its rows. */
+  collections?: readonly string[];
+}>): Readonly<{ joined: true; rows: Rows | null }> | Readonly<{ joined: false; reason: PdfRunStepJoinRefusal }> {
+  const { run, top, receipt } = input;
+  const no = (reason: PdfRunStepJoinRefusal) => ({ joined: false as const, reason });
+  if (!run) return no("no-run-open");
+  if (run.key !== input.key) return no("another-run");
+  if (!top || top.id !== run.entryId) return no("step-not-newest");
+  if (!input.atEnd) return no("undone-above");
+  if (!run.receipt || !receipt || run.receipt.resourceVersionId !== receipt.resourceVersionId ||
+    run.receipt.outputSha256 !== receipt.outputSha256) return no("another-revision");
+  const runIsRows = top.restoreOrigin === `rows:${run.entryId}`;
+  const ownRowsId = input.restoreOrigin?.startsWith("rows:") ? input.restoreOrigin.slice(5) : null;
+  if (!runIsRows && !ownRowsId) return { joined: true, rows: null };
+  if (!runIsRows || !ownRowsId) return no("rows-on-one-side");
+  const runRows = input.rowsOf(run.entryId);
+  const ownRows = input.rowsOf(ownRowsId);
+  if (!runRows || !ownRows) return no("rows-unknown");
+  const rows = pdfRowStepRunJoined(runRows, ownRows, input.collections);
+  return rows ? { joined: true, rows } : no("rows-not-joined");
+}
+
+/**
+ * Until it is saved, Undo does not take such a record off the working copy
+ * alone once the edit it follows is saved: that took back half a step (the
+ * new box gone, the line it replaced still deleted). The press waits for
+ * its save and takes the whole step. While both are still on the copy they
+ * are one press there already.
+ */
+export function pdfFollowingEditWaitsForItsStep(newestOpId: string | undefined,
+  follows: ReadonlyMap<string, string>, pendingOpIds: readonly string[]): boolean {
+  const anchor = newestOpId ? follows.get(newestOpId) : undefined;
+  return anchor !== undefined && !pendingOpIds.includes(anchor);
+}

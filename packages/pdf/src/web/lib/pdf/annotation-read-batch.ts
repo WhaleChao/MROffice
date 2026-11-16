@@ -44,6 +44,20 @@ export function notePdfAnnotationWrite(dataItemId: string): void {
   const next = (writeGenerations.get(dataItemId) ?? 0) + 1;
   writeGenerations.set(dataItemId, Number.isSafeInteger(next) ? next : 1);
 }
+
+let rowWrites = 0;
+
+
+
+
+
+
+
+
+
+export function notePdfAnnotationRowWrite(): void {
+  rowWrites += 1;
+}
 interface MountedPdfAnnotationScope {
   readonly scope: PdfAnnotationReadScope;
   retainCount: number;
@@ -142,7 +156,7 @@ function readAllPdfAnnotations(
   if (options.scope && !scopedReads.has(options.scope)) {
     scopedReads.set(options.scope, reads);
   }
-  const writeGeneration = writeGenerations.get(dataItemId) ?? 0;
+  const writeGeneration = (writeGenerations.get(dataItemId) ?? 0) + rowWrites;
   const current = reads.get(dataItemId);
   if (
     current &&

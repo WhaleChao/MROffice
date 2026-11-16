@@ -246,28 +246,6 @@ export function documentTextBoxWrapPatch(
   return { floatAnchor: next, frameExtent: null };
 }
 
-/** Bring Forward / Send Backward on the document's one floating stack. */
-export function documentTextBoxZOrderHeight(
-  current: number,
-  heights: readonly number[],
-  action: "bringForward" | "bringToFront" | "sendBackward" | "sendToBack",
-): number | null {
-  const others = heights.filter((height) => height !== current);
-  if (others.length === 0) return null;
-  const above = others.filter((height) => height > current);
-  const below = others.filter((height) => height < current);
-  switch (action) {
-    case "bringToFront":
-      return above.length ? Math.max(...above) + 1 : null;
-    case "bringForward":
-      return above.length ? Math.min(...above) + 1 : null;
-    case "sendToBack":
-      return below.length ? Math.max(0, Math.min(...below) - 1) : null;
-    case "sendBackward":
-      return below.length ? Math.max(0, Math.max(...below) - 1) : null;
-  }
-}
-
 /** `bodyPr/@vert` for the Shape Format Text Direction choice, and back. */
 export function documentTextBoxVertFor(direction: "horizontal" | "rotate90" | "rotate270" | "stacked"): FloatFrameBody["vert"] {
   return direction === "rotate90" ? "vert" : direction === "rotate270" ? "vert270" : direction === "stacked" ? "wordArtVert" : "horz";

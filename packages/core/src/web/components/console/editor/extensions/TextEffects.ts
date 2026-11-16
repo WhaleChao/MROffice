@@ -6,6 +6,12 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { EMU_PER_PT, EMU_PER_PX } from "../../../../lib/office-units";
+import { officeTextOutlineLineOfStated, officeTextOutlineMarks } from "../../../../lib/office-text-outline/office-text-outline-css";
+import {
+  officeTextStated3dEffects,
+  withOfficeTextStated3d,
+  type OfficeText3dValues,
+} from "../../../../lib/office-text-3d";
 import { Mark as TiptapMark } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Mark as ProseMirrorMark } from "@tiptap/pm/model";
@@ -473,6 +479,35 @@ function withTextEffectAxis<K extends keyof TextEffectAttributes>(
   return next;
 }
 
+/** The kinds of the words' 3-D a Word run states: Format Text Effects >
+ * 3-D Format (Word offers no 3-D Rotation for a document's words; its
+ * `w14:camera` states a preset alone). */
+export type TextEffect3dKind = "bevel" | "format3d";
+
+/**
+ * The mark with one 3-D Format pick on the source's statement (`value` null:
+ * "No Bevel", Reset): the depth, contour, material, light and bevels it does
+ * not name stay as Word stated them, as do the gallery axes.
+ */
+export function withTextEffect3d<K extends TextEffect3dKind>(
+  attrs: TextEffectMarkAttributes,
+  kind: K,
+  value: OfficeText3dValues[K] | null,
+): TextEffectMarkAttributes {
+  const paint = withOfficeTextStated3d(attrs.stated?.paint, kind, value, "word");
+  const readAs = attrs.stated?.readAs ?? {};
+  const stated = paint ? normalizeTextEffectStatement({ paint, readAs }) : null;
+  if (paint && !stated) return attrs;
+  return { ...attrs, stated };
+}
+
+/** The words' 3-D Format as the shared effects model reads it. */
+export function textEffect3dEffects(value: unknown): Partial<OfficeText3dValues> {
+  const attrs = normalizeTextEffectMarkAttributes(value);
+  const { bevel, format3d } = officeTextStated3dEffects(attrs.stated?.paint);
+  return { ...(bevel ? { bevel } : {}), ...(format3d ? { format3d } : {}) };
+}
+
 function textEffectMarkHasValues(attrs: TextEffectMarkAttributes): boolean {
   return hasTextEffects(attrs) || attrs.stated !== null;
 }
@@ -730,16 +765,38 @@ function wordFillCss(fill: OfficeStatedFill): string[] {
   ];
 }
 
+/** A colour as #rrggbb, with its opacity as a last byte when it has one. */
+function wordHexAlpha(color: OfficeColorSource): string | null {
+  const hex = resolveOfficeStopColor(color);
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return null;
+  let transparency = 0;
+  for (const [kind, raw] of color.transforms ?? []) {
+    if (kind === "alpha") transparency = (raw ?? 0) / 100_000;
+  }
+  const alpha = Math.round(Math.max(0, Math.min(1, 1 - transparency)) * 255);
+  return alpha >= 255 ? hex.toLowerCase() : `${hex.toLowerCase()}${alpha.toString(16).padStart(2, "0")}`;
+}
+
 function wordOutlineCss(line: NonNullable<OfficeTextPaintStated["line"]>): string[] {
   // A gradient outline is stroked in its first stop's colour: CSS has no
   // gradient text stroke.
   const source = officeStatedLineColor(line);
   const color = source ? wordRgba(source) : null;
-  if (!color) return [];
-  // Word strokes the glyph edge centred (pen alignment ctr) over the fill,
-  // as -webkit-text-stroke does; a zero width is a hairline.
+  const hex = source ? wordHexAlpha(source) : null;
+  if (!color || !hex) return [];
+  // Word strokes each glyph's merged outline once, centred (pen alignment
+  // ctr) and round, over the fill (office-text-outline-css.ts): the
+  // overlay draws that; -webkit-text-stroke (every contour, mitred) stands
+  // in until it has. A zero width is a hairline.
   const width = line.widthEmu ?? EMU_PER_PX;
-  return [`-webkit-text-stroke: ${width ? `${css(width / EMU_PER_PT)}pt` : "0.5px"} ${color}`];
+  const widthPt = width ? width / EMU_PER_PT : 0.375;
+  const declarations = [`-webkit-text-stroke: ${width ? `${css(widthPt)}pt` : "0.5px"} ${color}`];
+  // Its join, cap and dash too, as Word draws them (round, solid where none
+  // is stated).
+  for (const [key, value] of Object.entries(officeTextOutlineMarks(hex, widthPt, officeTextOutlineLineOfStated(line)))) {
+    declarations.push(`${key.startsWith("--") ? key : key.replace(/[A-Z]/g, (letter) => "-" + letter.toLowerCase())}: ${value}`);
+  }
+  return declarations;
 }
 
 function wordShadowCss(
@@ -817,6 +874,18 @@ export function textEffectsCss(value: unknown): string {
   if (paint?.shape3d?.bevelTop) {
     // A 3-D bevel, as the shared WordArt paint draws one: lit top-left edges.
     shadows.push("-0.6px -0.6px 0 rgba(255, 255, 255, 0.5)", "0.6px 0.6px 0 rgba(0, 0, 0, 0.31)");
+  }
+  const contourWidth = paint?.shape3d?.contourWidthEmu ?? 0;
+  if (contourWidth > 0) {
+    // 3-D Format > Contour: a raised rim round the glyphs in its colour (the
+    // text's own where none is stated), seen from the front as a ring.
+    const rim = paint?.shape3d?.contourColor ? wordRgba(paint.shape3d.contourColor) : "currentColor";
+    const width = css(Math.min(contourWidth / EMU_PER_PX, 12));
+    if (rim) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) {
+        shadows.push(`${css(dx * width)}px ${css(dy * width)}px 0 ${rim}`);
+      }
+    }
   }
   if (shadows.length && transparentFill) {
     const layers = shadows.flatMap((shadow) => shadow.split(/,\s*(?![^()]*\))/));
@@ -942,6 +1011,8 @@ declare module "@tiptap/core" {
       setTextGlowEffect: (value: string) => ReturnType;
       /** Word's Font dialog Emboss / Engrave (w:emboss / w:imprint). */
       setTextReliefEffect: (value: string) => ReturnType;
+      /** Format Text Effects > 3-D Format (`withTextEffect3d`). */
+      setTextEffect3d: (kind: TextEffect3dKind, value: unknown) => ReturnType;
       unsetTextEffects: () => ReturnType;
     };
     openTypeFeatures: {
@@ -953,6 +1024,31 @@ declare module "@tiptap/core" {
       unsetOpenTypeFeatures: () => ReturnType;
     };
   }
+}
+
+/** The span a text-effect mark renders: its data attributes and its CSS. */
+function textEffectsRendered(value: unknown): Record<string, string> {
+  const attrs = normalizeTextEffectMarkAttributes(value);
+  const rendered: Record<string, string> = {};
+  if (textEffectMarkHasValues(attrs)) {
+    rendered["data-text-effects"] = "";
+    // Copy and paste carry the source's own effects (validated on parse).
+    if (attrs.stated) {
+      rendered["data-text-effects-stated"] = JSON.stringify(attrs.stated);
+    }
+    if (attrs.outline !== "none") {
+      rendered["data-text-outline"] = attrs.outline;
+    }
+    if (attrs.shadow !== "none") rendered["data-text-shadow"] = attrs.shadow;
+    if (attrs.reflection !== "none") {
+      rendered["data-text-reflection"] = attrs.reflection;
+    }
+    if (attrs.glow !== "none") rendered["data-text-glow"] = attrs.glow;
+    if (attrs.relief !== "none") rendered["data-text-relief"] = attrs.relief;
+    const style = textEffectsCss(attrs);
+    if (style) rendered.style = style;
+  }
+  return rendered;
 }
 
 /** Text outline, shadow, reflection and glow stored as one composable mark. */
@@ -983,27 +1079,25 @@ export const TextEffectsMark = TiptapMark.create({
   },
 
   renderHTML({ mark }) {
-    const attrs = normalizeTextEffectMarkAttributes(mark.attrs);
-    const rendered: Record<string, string> = {};
-    if (textEffectMarkHasValues(attrs)) {
-      rendered["data-text-effects"] = "";
-      // Copy and paste carry the source's own effects (validated on parse).
-      if (attrs.stated) {
-        rendered["data-text-effects-stated"] = JSON.stringify(attrs.stated);
-      }
-      if (attrs.outline !== "none") {
-        rendered["data-text-outline"] = attrs.outline;
-      }
-      if (attrs.shadow !== "none") rendered["data-text-shadow"] = attrs.shadow;
-      if (attrs.reflection !== "none") {
-        rendered["data-text-reflection"] = attrs.reflection;
-      }
-      if (attrs.glow !== "none") rendered["data-text-glow"] = attrs.glow;
-      if (attrs.relief !== "none") rendered["data-text-relief"] = attrs.relief;
-      const style = textEffectsCss(attrs);
-      if (style) rendered.style = style;
-    }
-    return ["span", rendered, 0];
+    return ["span", textEffectsRendered(mark.attrs), 0];
+  },
+
+  /**
+   * In the editor the span takes the outline overlay's picture in its own
+   * style (office-text-outline-overlay.ts): that is no change to the
+   * document, so the view does not read the span again for it.
+   */
+  addMarkView() {
+    return ({ mark }) => {
+      const dom = document.createElement("span");
+      for (const [name, value] of Object.entries(textEffectsRendered(mark.attrs))) dom.setAttribute(name, value);
+      return {
+        dom,
+        contentDOM: dom,
+        ignoreMutation: (mutation) =>
+          mutation.type === "attributes" && mutation.target === dom && mutation.attributeName === "style",
+      };
+    };
   },
 
   addCommands() {
@@ -1175,6 +1269,30 @@ export const TextEffectsMark = TiptapMark.create({
               "relief",
               value as TextReliefValue,
             ),
+          );
+        },
+      setTextEffect3d:
+        (kind, value) =>
+        ({ commands, editor, state, tr, dispatch }) => {
+          if (!editor.isEditable) return false;
+          if (kind !== "bevel" && kind !== "format3d") return false;
+          const update = (attrs: TextEffectMarkAttributes) =>
+            withTextEffect3d(attrs, kind, value as OfficeText3dValues[typeof kind] | null);
+          if (!state.selection.empty) {
+            return updateSelectedCompositeMark({
+              state,
+              tr,
+              dispatch,
+              markName: TEXT_EFFECTS_MARK,
+              normalize: normalizeTextEffectMarkAttributes,
+              isCanonical: textEffectAttributesAreCanonical,
+              hasValues: textEffectMarkHasValues,
+              update,
+            });
+          }
+          return apply(
+            commands,
+            update(normalizeTextEffectMarkAttributes(editor.getAttributes(TEXT_EFFECTS_MARK))),
           );
         },
       unsetTextEffects:

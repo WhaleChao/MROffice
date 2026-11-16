@@ -45,7 +45,7 @@ import {
 } from "../blockSplitting";
 import { isClosedBoxRowSlicedAtomType, isRowSliceTail, isRowSlicedAtomType, rowSliceRange } from "../atomRowSlices";
 import { isOverTallTextNode } from "../pageSpanExtension";
-import { HEAD_PIECE_OVERRUN_PX } from "../paginationProjectionKeys";
+import { HEAD_PIECE_OVERRUN_PX, PAGE_EDGE_FIRST_ATTR, PAGE_EDGE_LAST_ATTR } from "../paginationProjectionKeys";
 import { planRowSliceHead, rowSliceClosedSeamJoinPx, rowSliceRestPx, rowSliceSeamGapPx } from "../rowSliceSplitting";
 import {
   containerContinuationJoinMargin,
@@ -67,6 +67,9 @@ import {
   TABLE_ROW_CONTINUATION_ATTR,
   TABLE_ROW_CONTINUES_ATTR,
   TABLE_SOURCE_ROW_ATTR,
+  TABLE_BLOCK_CONTINUATION_ATTR,
+  TABLE_CELL_EMPTY_HEAD_ATTR,
+  TABLE_CELL_EMPTY_TAIL_ATTR,
   fragmentTableWithinRow,
   mergeAdjacentTableFragmentsJson,
   type TableCellTextCut,
@@ -76,7 +79,7 @@ import { continuousBreaksStartingPage, isForcedBreakBlock, trailingBreakOf } fro
 import { DOMSerializer } from "@tiptap/pm/model";
 import { estimatedBlockFlow, estimatedBlockHeightPx } from "../provisionalEstimate";
 import { measureOutsideEditorObservation } from "../../documentLayoutStatus";
-import { blockLinePitchPx, COLUMN_REGIONS_ATTR, sheetNoteColumns, unequalColumnPlacementForBlock, unequalColumnProjectionForSheet } from "../unequalColumnProjection";
+import { blockLinePitchPx, COLUMN_REGIONS_ATTR, COLUMN_TABLE_FRAME, columnPagePlacedTable, sheetNoteColumns, unequalColumnPlacementForBlock, unequalColumnProjectionForSheet } from "../unequalColumnProjection";
 
 /** The text blocks balanced by lines in a multi-column section. */
 const TEXT_PITCH_BLOCKS = "p, h1, h2, h3, h4, h5, h6";
@@ -88,7 +91,7 @@ import { HOLLOW_SHEET_ATTR } from "../pageSheetView";
 import { countEngineCut, engineBlockHeightPx, engineBlockLineCount, engineCutCompare, engineTextCut, unlaidEngineBlock, unlaidEngineList, unlaidEngineKatexMathBlock, unlaidEngineMathBlock, unlaidEnginePicture, unlaidEngineReason, unlaidEngineTable, unlaidEngineTableRows, unlaidEngineTextCut, freezeEngineLineStarts } from "./ledgerEngineLines";
 import { collapseMargins, collapsedInnerMarginPx, type AuthoredMarginPx } from "../marginCollapse";
 import { paginationLayoutRect, paginationLayoutScale } from "../paginationGeometry";
-import { FLOAT_PAGE_ROOM_ATTR } from "../../../../../../lib/office-float-anchor";
+import { BAND_RUN_RIDE_ATTR, BAND_RUN_ROOM_ATTR, FLOAT_PAGE_ROOM_ATTR } from "../../../../../../lib/office-float-anchor";
 import { normalizeWordCompatibilityMode } from "../../documentOverflowPunctuation";
 import { SheetMeasureMemo, querySheetsAll, sheetsOf } from "../sheetMeasureMemo";
 import { LINE_GRID_FIT_TOLERANCE_PX } from "../pageRebalance";
@@ -106,6 +109,7 @@ import {
   planRenderedTableFragment,
   planRenderedTableTail,
   renderedTableRowsForPlan,
+  rowFloorPx,
   type RenderedTableRows,
   type TableCellTail,
   tableFragmentPair,
@@ -118,6 +122,7 @@ import {
   sheetedDocHasFootnoteRefs,
   structuralFootnoteReservations,
 } from "../structuralFootnotes";
+import { footnotesAllowProgressiveLayout } from "../footnoteRefs";
 import type {
   LedgerAtom,
   LedgerAtomKind,
@@ -240,6 +245,11 @@ export interface LogicalBlock {
    * no longer show where the paragraph would break, so the planner cuts it
    * again from the joined text (planTextHeadOnce). */
   editedSeams?: ReadonlySet<number>;
+  /** Seams of a table row cut across pages (by the index of the part after
+   * them) whose head cell row now has room for its tail's first word: how far
+   * from the head piece's top (layout px) the stale row starts. The planner
+   * cuts the head again above it (staleRowSeamKeepPx). */
+  staleRowKeepPx?: ReadonlyMap<number, number>;
 }
 
 export interface LedgerBuild {
@@ -251,6 +261,9 @@ export interface LedgerBuild {
    * another section than its sheet's takes that section's capacity. */
   sheetSections: number[];
   sectionCapacities: ReadonlyMap<number, number>;
+  /** The newspaper columns of the sheet each section's capacity was read
+   * on: that capacity is its column height times these. */
+  sectionCapacityColumns?: ReadonlyMap<number, number>;
   /** Newspaper columns per sheet (1 when not columned); `capacities` is
    * already the flow capacity across them. */
   columns: number[];
@@ -283,6 +296,37 @@ export interface LedgerBuild {
     guessed?: number;
     reads: () => number;
   } | null;
+}
+
+/**
+ * The capacity a planned page takes when it opens with another section than
+ * the sheet drawn at its index (planLedgerPages' `sectionCapacityFor`), in
+ * the planner's terms: it divides the value by the columns of the sheet at
+ * that index to get one column's height. A section's capacity is read on one
+ * of its own sheets, times THAT sheet's columns, so it is rescaled to the
+ * columns of the sheet at the index. Taken as it is, a two-column section's
+ * 1636 px opening a page where a one-column sheet stood was read as columns
+ * of 1636 px (3272 px of flow), and a one-column section's 818 px on a
+ * two-column sheet as a 409 px page: R280-D01's capacities changed with
+ * whichever sheet each pass had drawn at an index, and the plan never settled
+ * (15, 16 or 17 pages; Word 17). `columnPage: false` keeps the old reading.
+ */
+export function sectionCapacityForPlan(
+  source: Pick<LedgerBuild, "sheetSections" | "sectionCapacities" | "sectionCapacityColumns" | "columns">,
+  columnPage = true,
+): (index: number, section: number) => number | null {
+  return (index, section) => {
+    const sheets = source.sheetSections ?? [];
+    const sheetSection = sheets[Math.min(index, sheets.length - 1)];
+    if (sheetSection === undefined || sheetSection === section) return null;
+    const capacity = source.sectionCapacities?.get(section);
+    if (capacity === undefined) return null;
+    if (!columnPage) return capacity;
+    const readOn = source.sectionCapacityColumns?.get(section);
+    const here = source.columns[Math.min(index, source.columns.length - 1)];
+    if (!readOn || !here || readOn === here) return capacity;
+    return (capacity / readOn) * here;
+  };
 }
 
 /**
@@ -455,6 +499,9 @@ function drawsNoNotes(part: LedgerPart): boolean {
  */
 function isOutOfVerticalFlow(dom: HTMLElement): boolean {
   if (dom.dataset.floatMode === "overlay") return true;
+  // A floating table drawn at its page point on a page of columns
+  // (tablePageFrame placeColumnPageTable): the column flow does not charge it.
+  if (dom.dataset.tablePageFrame === COLUMN_TABLE_FRAME || columnPagePlacedTable(dom)) return true;
   // Unequal-width columns place EVERY block of the sheet absolutely in its
   // Word track; that position is the flow, not an anchor. Reading it as out
   // of flow charged each block zero height, so the ledger always pulled the
@@ -826,7 +873,134 @@ function repeatedHeaderHeightPx(node: PmNode, dom: HTMLElement): number {
   return repeated;
 }
 
+/**
+ * What joining a split row's two pieces takes off: the piece a split row
+ * ends with stands at least the row's "At least" height on its own page, as
+ * Word draws it there (pluginRegistry rowHeight), but the row joined is that
+ * height only once, at least: max(both pieces' lines, the height). Read as
+ * the two pieces' sum, a row that a late face had split never fitted its
+ * page again (corpus R436-D23: a 465pt floor under 683 px of abstract,
+ * joined 696 px on a page with 715 px, charged 683 + 620; its last line, and
+ * the section after it, a page late). A negative join, 0 when nothing joins.
+ */
+export function splitRowFloorJoinPx(previous: Pick<LedgerPart, "node" | "dom">, part: Pick<LedgerPart, "node" | "dom">): number {
+  const head = previous.node.lastChild;
+  if (part.node.type.name !== "table" || head?.attrs?.[TABLE_ROW_CONTINUES_ATTR] !== true) return 0;
+  // Only a seam the reconciler can join: charged joined, a seam it refuses
+  // would be planned onto one page and pushed off again.
+  if (!tableSeamJoins(previous.node, part.node)) return 0;
+  let tailIndex = -1;
+  part.node.forEach((row, _offset, index) => {
+    if (tailIndex < 0 && row.attrs?.[TABLE_REPEATED_HEADER_ATTR] !== true) tailIndex = index;
+  });
+  const tail = tailIndex >= 0 ? part.node.child(tailIndex) : null;
+  if (!tail || tail.attrs?.rowHeightRule === "exact" || tail.attrs?.[TABLE_SOURCE_ROW_ATTR] !== head.attrs?.[TABLE_SOURCE_ROW_ATTR]) return 0;
+  const twips = Number(tail.attrs?.rowHeightTwips);
+  const floorPx = twips > 0 ? twips / 15 : Number(tail.attrs?.rowHeight);
+  if (!(floorPx > 0)) return 0;
+  const tableOf = (dom: HTMLElement) => (dom instanceof HTMLTableElement ? dom : dom.querySelector<HTMLTableElement>("table"));
+  const headTr = tableOf(previous.dom)?.rows[previous.node.childCount - 1];
+  const tailTr = tableOf(part.dom)?.rows[tailIndex];
+  if (!headTr || !tailTr) return 0;
+  const scale = paginationLayoutScale(part.dom).y || 1;
+  const headPx = headTr.getBoundingClientRect().height / (paginationLayoutScale(previous.dom).y || 1);
+  const tailBox = tailTr.getBoundingClientRect();
+  const tailPx = tailBox.height / scale;
+  // The tail's own lines: each cell's content to its bottom padding.
+  let linesPx = 0;
+  for (const cell of Array.from(tailTr.cells)) {
+    const last = cell.lastElementChild;
+    const style = getComputedStyle(cell);
+    const bottom = last ? last.getBoundingClientRect().bottom : cell.getBoundingClientRect().top + (Number.parseFloat(style.paddingTop) || 0) * scale;
+    const contentPx = (bottom - tailBox.top) / scale + (Number.parseFloat(style.paddingBottom) || 0) + (Number.parseFloat(style.borderBottomWidth) || 0);
+    linesPx = Math.max(linesPx, contentPx);
+  }
+  const joinedPx = Math.max(headPx + linesPx, floorPx);
+  const overstatedPx = headPx + tailPx - joinedPx;
+  traceOracle({ kind: "split-row-join", headPx: Math.round(headPx * 10) / 10, tailPx: Math.round(tailPx * 10) / 10, linesPx: Math.round(linesPx * 10) / 10, floorPx: Math.round(floorPx * 10) / 10 });
+  return overstatedPx > 0.5 ? -overstatedPx : 0;
+}
+
+/**
+ * What a split row's two pieces, joined back, take off their sum: the row
+ * whole is its two pieces' lines, its cells' padding drawn once (the head's
+ * bottom and the rest's top padding go), at least its "At least" height. The
+ * head piece stands taller than its lines where its cut left room, and both
+ * pieces draw their own padding (R291-D02: pieces of 61.4 + 44.6 px for a row
+ * of 94.9 whole). Negative, 0 unless `part` opens with the rest of the row
+ * `previous` ends with.
+ */
+function splitRowWholeJoinPx(previous: Pick<LedgerPart, "node" | "dom"> | undefined, part: Pick<LedgerPart, "node" | "dom">): number {
+  const head = previous?.node.lastChild;
+  if (!previous || part.node.type.name !== "table" || head?.attrs?.[TABLE_ROW_CONTINUES_ATTR] !== true) return 0;
+  if (!tableSeamJoins(previous.node, part.node)) return 0;
+  let tailIndex = -1;
+  part.node.forEach((row, _offset, index) => {
+    if (tailIndex < 0 && row.attrs?.[TABLE_REPEATED_HEADER_ATTR] !== true) tailIndex = index;
+  });
+  const tail = tailIndex >= 0 ? part.node.child(tailIndex) : null;
+  if (!tail || tail.attrs?.rowHeightRule === "exact" || tail.attrs?.[TABLE_SOURCE_ROW_ATTR] !== head.attrs?.[TABLE_SOURCE_ROW_ATTR]) return 0;
+  const tableOf = (dom: HTMLElement) => (dom instanceof HTMLTableElement ? dom : dom.querySelector<HTMLTableElement>("table"));
+  const headTr = tableOf(previous.dom)?.rows[previous.node.childCount - 1];
+  const tailTr = tableOf(part.dom)?.rows[tailIndex];
+  if (!headTr || !tailTr) return 0;
+  // A row's own lines: each cell's content, its first block's space before
+  // to its last line, with its padding and borders, whatever its vertical
+  // alignment (a middle-aligned cell's lines stand lower in a taller row).
+  const read = (tr: HTMLTableRowElement, scale: number) => {
+    const box = tr.getBoundingClientRect();
+    const cells = Array.from(tr.cells).map((cell) => {
+      const style = getComputedStyle(cell);
+      // Each edge is its padding and border, drawn once in the row whole.
+      const padTopPx = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.borderTopWidth) || 0);
+      const padBottomPx = (Number.parseFloat(style.paddingBottom) || 0) + (Number.parseFloat(style.borderBottomWidth) || 0);
+      const first = cell.firstElementChild;
+      const last = cell.lastElementChild;
+      if (!first || !last) return { linesPx: padTopPx + padBottomPx, padTopPx, padBottomPx, leadPx: 0 };
+      const leadPx = Number.parseFloat(getComputedStyle(first).marginTop) || 0;
+      const linesPx = padTopPx + padBottomPx + leadPx + (last.getBoundingClientRect().bottom - first.getBoundingClientRect().top) / scale;
+      return { linesPx, padTopPx, padBottomPx, leadPx };
+    });
+    return { heightPx: box.height / scale, cells };
+  };
+  const headRow = read(headTr, paginationLayoutScale(previous.dom).y || 1);
+  const tailRow = read(tailTr, paginationLayoutScale(part.dom).y || 1);
+  const twips = Number(tail.attrs?.rowHeightTwips);
+  const floorPx = twips > 0 ? twips / 15 : Number(tail.attrs?.rowHeight) || 0;
+  // Cell by cell when the pieces have the same cells (one cell's lines may
+  // stand mostly in the head, another's in the rest: R291-D02 table 682,
+  // pieces of 44.6 + 120 px for a row of 95); the tallest of each otherwise.
+  // A cell whose rest is only its empty shell joins as its head (and the
+  // other way round); a paragraph the cut carried on draws its space before
+  // again on the rest, once in the row whole (R291-D02 table 682: a five-line
+  // label cut 3 + 2 lines stood 61 + 45 px for a row of 95; each piece also
+  // draws the cut edges' padding and border).
+  const most = (values: number[]) => Math.max(0, ...values);
+  const sameCells = headRow.cells.length === tailRow.cells.length &&
+    head.childCount === headRow.cells.length && tail.childCount === tailRow.cells.length;
+  const linesPx = sameCells
+    ? most(headRow.cells.map((cell, index) => {
+      const rest = tailRow.cells[index]!;
+      const headCell = head.child(index);
+      const restCell = tail.child(index);
+      if (restCell.attrs?.[TABLE_CELL_EMPTY_TAIL_ATTR] === true) return cell.linesPx;
+      if (headCell.attrs?.[TABLE_CELL_EMPTY_HEAD_ATTR] === true) return rest.linesPx;
+      const carried = restCell.firstChild?.attrs?.[TABLE_BLOCK_CONTINUATION_ATTR] === true ? rest.leadPx : 0;
+      return cell.linesPx + rest.linesPx - cell.padBottomPx - rest.padTopPx - carried;
+    }))
+    : most(headRow.cells.map((cell) => cell.linesPx)) + most(tailRow.cells.map((cell) => cell.linesPx)) -
+      most(headRow.cells.map((cell) => cell.padBottomPx)) - most(tailRow.cells.map((cell) => cell.padTopPx));
+  const wholePx = Math.max(linesPx, floorPx);
+  const overstatedPx = headRow.heightPx + tailRow.heightPx - wholePx;
+  traceOracle({ kind: "split-row-whole", headPx: Math.round(headRow.heightPx * 10) / 10, tailPx: Math.round(tailRow.heightPx * 10) / 10, wholePx: Math.round(wholePx * 10) / 10 });
+  return overstatedPx > 0.5 ? -overstatedPx : 0;
+}
+
 /** Authored margins in px, free of page-edge suppression. */
+/** A block's own margins as last read where nothing suppressed them (the
+ * page-edge probe, or the block standing inside its sheet), by node. */
+const authoredOwnMargins = new WeakMap<PmNode, { before: number; after: number }>();
+
 function authoredMarginsPx(
   part: LedgerPart,
   edgeMargins: ReadonlyMap<HTMLElement, { before: number; after: number }>,
@@ -835,7 +1009,21 @@ function authoredMarginsPx(
     // A sheet-edge block paints with the page-edge margin rules; its authored
     // margins come from the batched interior-child probe.
     const probed = edgeMargins.get(part.dom);
-    if (probed) return probed;
+    if (probed) {
+      authoredOwnMargins.set(part.node, probed);
+      return probed;
+    }
+    // Not probed (past what the pass measures, read for an estimate), a block
+    // at its sheet's edge draws there with the space Word drops at a page's
+    // top or foot: its computed margin on that side is 0. Planned from that
+    // 0 on a page where it no longer stands at the edge, a long book's page
+    // 474 took one more block, the pass that measured it found it 13 px over
+    // and gave it back, and the two layouts alternated until the ledger
+    // stopped (the 333 pages after it left in the face before the last one
+    // came). The side the rule drops is the one last read without it.
+    const edgeFirst = part.dom.hasAttribute(PAGE_EDGE_FIRST_ATTR);
+    const edgeLast = part.dom.hasAttribute(PAGE_EDGE_LAST_ATTR);
+    const known = edgeFirst || edgeLast ? authoredOwnMargins.get(part.node) : undefined;
     const css = getComputedStyle(part.dom);
     // A paragraph that draws the space after of the one before it on top of
     // its own (`paragraphSpacingAddsUp`) is charged its own: the ledger adds
@@ -843,9 +1031,17 @@ function authoredMarginsPx(
     const added = Number.parseFloat(part.dom.getAttribute(GAP_ADDS_AFTER_ATTR) ?? "");
     const addedPx = Number.isFinite(added) && added > 0 ? (added * 96) / 72 : 0;
     const marginTop = Number.parseFloat(css.marginTop) || 0;
-    return {
+    const read = {
       before: marginTop < 0 && drawsIntoSpaceAbove(part.dom) ? marginTop : Math.max(0, marginTop - addedPx),
       after: Number.parseFloat(css.marginBottom) || 0,
+    };
+    if (!edgeFirst && !edgeLast) {
+      authoredOwnMargins.set(part.node, read);
+      return read;
+    }
+    return {
+      before: edgeFirst && known ? known.before : read.before,
+      after: edgeLast && known ? known.after : read.after,
     };
   })();
   const authored = authoredMarginResolver(edgeMargins);
@@ -1257,6 +1453,26 @@ export function buildLedger(
     // eight rows of a number box and a text box, Word's one page drawn on four).
     const bandLiftPx = hidden || floatAdvancePx !== undefined ? 0 : shapeBandLiftPx(part.dom);
     const groupFoot = hidden ? NO_GROUP_FOOT : borderGroupFootPx(part.dom);
+    // A run of Top and Bottom objects laid out whole is charged as one
+    // block (floatingTextBoxLayout's `layoutMixedBandRuns`): its first
+    // object down to the run's lowest object, the blocks after it nothing.
+    if (!hidden && floatAdvancePx === undefined) {
+      if (part.dom.hasAttribute(BAND_RUN_RIDE_ATTR)) {
+        return { heightPx: 0, repeatedHeaderPx: 0, creditPx: 0, hidden: false, outOfFlow: false, marginBeforePx: 0, marginAfterPx: 0 };
+      }
+      const runRoom = Number.parseFloat(part.dom.getAttribute(BAND_RUN_ROOM_ATTR) ?? "");
+      if (Number.isFinite(runRoom) && runRoom >= 0) {
+        return {
+          heightPx: Math.max(0, readLedgerBlockHeight(part, sheet, columns[part.sheet] > 1, docAttrs) + bandLiftPx) + runRoom,
+          repeatedHeaderPx: 0,
+          creditPx: 0,
+          hidden: false,
+          outOfFlow: false,
+          marginBeforePx: margins.before,
+          marginAfterPx: 0,
+        };
+      }
+    }
     const fresh: LedgerFragmentMeasure = {
       heightPx: floatAdvancePx ?? Math.max(0, readLedgerBlockHeight(part, sheet, columns[part.sheet] > 1, docAttrs) + bandLiftPx - groupFoot.drawnPx),
       repeatedHeaderPx: repeatedHeaderHeightPx(part.node, part.dom),
@@ -1337,6 +1553,15 @@ export function buildLedger(
   // instead of stopping at the first block not measured: a long document
   // was planned a few pages a pass, each pass laying those pages out.
   const engineLaid = textEngineEnabled("docs-layout");
+  // A document with footnotes laid out a window at a time
+  // (`__docsFootnoteProgressive`) reads its tables in the page, never from the
+  // engine: a plan to the end over the engine's rows cut R291-D02's tables
+  // inside rows where the rendered rows (and Word) break between them, and the
+  // seams it left stood once the pages were read (a fixed point of their own).
+  // `window.__docsNotesEngineTables = true` reads them from the engine as any.
+  const notesWin = view.dom.ownerDocument.defaultView as (Window & { __docsNotesEngineTables?: boolean }) | null;
+  const notesReadTables = sheetedDocHasFootnoteRefs(doc) && footnotesAllowProgressiveLayout(doc, notesWin) &&
+    notesWin?.__docsNotesEngineTables !== true;
   const engineKnown = new Set<LedgerPart>();
   // Engine heights the plan may go past but the page must still check.
   const engineApprox = new Set<LedgerPart>();
@@ -1467,6 +1692,7 @@ export function buildLedger(
     const table = part.node.type.name === "table";
     const math = part.node.type.name === "mathBlock";
     const picture = part.node.type.name === "image" && !part.node.isInline;
+    if (table && notesReadTables) return null;
     if (!part.node.isTextblock && !list && !table && !math && !picture) {
       // An object out of the vertical flow (a floating shape, an absolutely
       // placed box) moves the flow by nothing: planned past as an estimate
@@ -1588,6 +1814,7 @@ export function buildLedger(
     let heightPx = 0;
     let noteFlexPx = 0;
     let notePitchPx = 0;
+    let noteChromePx = 0;
     const openingSheet = block.parts[0].sheet;
     if (horizon && firstEstimated === null && openingSheet > horizon.fromSheet &&
         (horizonUsedPx >= horizon.budgetPx || openingSheet > horizon.maxSheet)) {
@@ -1676,6 +1903,9 @@ export function buildLedger(
           ? 0
           : own.repeatedHeaderPx;
       part.creditPx = own.creditPx;
+      if (previous && block.kind === "table" && !pastHorizon && !part.hollow && !previous.hollow) {
+        part.joinBeforePx = splitRowFloorJoinPx(previous, part);
+      }
       if (previous && block.kind === "container" && !pastHorizon && !part.hollow && !previous.hollow) {
         const join = containerContinuationJoinMargin(previous.dom, previous.node, part.dom, part.node, authoredMargin);
         part.joinBeforePx = Number.isFinite(join) ? Math.max(0, join) : 0;
@@ -1714,7 +1944,10 @@ export function buildLedger(
           return true;
         });
         part.noteChromePx = reservation.chromePx;
-        if (reservedPx > 0) reservedPx += reservation.chromePx;
+        if (reservedPx > 0) {
+          reservedPx += reservation.chromePx;
+          noteChromePx += reservation.chromePx;
+        }
       }
       // The whole logical atom (what a merge would render) carries no header
       // clones but does carry the spacing its seams currently drop. A note's
@@ -1786,14 +2019,17 @@ export function buildLedger(
     // first fragment, where it starts. An object drawn from the paragraph
     // before it asks nothing: that paragraph is placed already. Past the
     // measurement horizon nothing asks yet (the next pass reaches it).
-    const roomPx = pastHorizon || hostBefore ? 0 : rooms.get(first.dom) ?? 0;
+    // A block riding on its run's first object asks nothing, of its page or
+    // its paragraph's: the run's room is its first object's.
+    const riding = first.dom.hasAttribute(BAND_RUN_RIDE_ATTR);
+    const roomPx = pastHorizon || hostBefore || riding ? 0 : rooms.get(first.dom) ?? 0;
     // An object drawn from the paragraph before it asks its room of that
     // paragraph, measured from the paragraph's top as the float pass
     // publishes it: with too little room left, Word opens the next page with
     // the paragraph and its objects (Word 16.86, corpus R75-D10: a 346 pt
     // text box below an empty paragraph 593 px down the page moves that
     // paragraph to page 2).
-    const hostAtom = hostBefore && !pastHorizon ? atoms[hostOrdinal] : undefined;
+    const hostAtom = hostBefore && !pastHorizon && !riding ? atoms[hostOrdinal] : undefined;
     const hostRoomPx = hostAtom ? rooms.get(first.dom) ?? 0 : 0;
     if (hostAtom && !hostAtom.anchored && hostRoomPx > (hostAtom.roomPx ?? 0)) hostAtom.roomPx = hostRoomPx;
     if (horizon && openingSheet >= horizon.fromSheet && !pastHorizon) horizonUsedPx += heightPx;
@@ -1869,6 +2105,7 @@ export function buildLedger(
       breakTail: block.parts.length === 1 && first.dom.getAttribute("data-mrnote-source-break-tail") === "true",
       ...(noteFlexPx > 0 && notePitchPx > 0 ? { noteFlexPx, notePitchPx } : {}),
       ...(block.parts.some((part) => part.notes.length > 0) ? { hasNotes: true } : {}),
+      ...(noteChromePx > 0 ? { noteChromePx } : {}),
     });
     if (estimated) {
       const atom = atoms[atoms.length - 1];
@@ -1901,8 +2138,12 @@ export function buildLedger(
     if (sheetSections[sheet] === -1) sheetSections[sheet] = sheet > 0 ? sheetSections[sheet - 1] : 0;
   }
   const sectionCapacities = new Map<number, number>();
+  const sectionCapacityColumns = new Map<number, number>();
   sheetSections.forEach((section, sheet) => {
-    if (capacities[sheet] > 0) sectionCapacities.set(section, capacities[sheet]);
+    if (capacities[sheet] > 0) {
+      sectionCapacities.set(section, capacities[sheet]);
+      sectionCapacityColumns.set(section, columns[sheet] ?? 1);
+    }
   });
   // A sheet whose every part the engine laid out.
   const engineSheets = new Set<HTMLElement>();
@@ -1914,7 +2155,7 @@ export function buildLedger(
     for (const part of engineKnown) if (!mixed.has(part.sheet) && sheets[part.sheet]) engineSheets.add(sheets[part.sheet]);
   }
   return {
-    atoms, logical, capacities, sheetSections, sectionCapacities, columns, sheets, changedSheets: changed, changedWhy,
+    atoms, logical, capacities, sheetSections, sectionCapacities, sectionCapacityColumns, columns, sheets, changedSheets: changed, changedWhy,
     engineSheets,
     hollowMissing: [...hollowMissing],
     hollowMissingWhy,
@@ -2565,6 +2806,9 @@ function walkFragments(
   block: LogicalBlock,
   request: LedgerSplitRequest,
   inner: (part: LedgerPart, partIndex: number, availablePx: number, startPart: number) => LedgerCut | null,
+  /** Whether a split row's rest ("atom:row") may be joined back whole when
+   * the page has the room for it joined (rejoinedSplitRowCut); null never. */
+  rejoinRow: SplitRowRejoins | null = null,
 ): LedgerCut | null {
   const startPart = chainedStartPart(block, request);
   if (startPart === null) return null;
@@ -2580,10 +2824,36 @@ function walkFragments(
     // header clones: they belong to a fresh page only.
     const joinedHeightPx = part.heightPx - (partIndex > startPart ? part.repeatedHeaderPx : 0);
     if (join + joinedHeightPx - part.creditPx <= remaining + 1e-6) {
+      // A row cut whose head cell row has room for its tail's first word
+      // since (markStaleSeams): the head is cut again above that row, which
+      // joins it to the tail; the next plan takes back the lines that fit.
+      const keepPx = block.kind === "table" ? block.staleRowKeepPx?.get(partIndex + 1) : undefined;
+      if (keepPx !== undefined && block.parts[partIndex + 1]?.sheet !== part.sheet) {
+        const room = Math.min(remaining - (partIndex > startPart ? Math.max(0, join) : 0), keepPx);
+        const recut = room > 0 ? inner(part, partIndex, room, startPart) : null;
+        const plan = (recut?.payload as TableCutPayload | undefined)?.planned?.plan;
+        traceOracle({ atom: block.index, kind: "stale-row-recut", partIndex, keepPx: Math.round(keepPx * 10) / 10, roomPx: Math.round(room * 10) / 10, result: recut?.key ?? null });
+        if (recut && plan?.kind === "withinRow" && recut.key !== existingSeamKey(block, partIndex)) return recut;
+      }
       remaining -= join + joinedHeightPx;
       continue;
     }
-    remaining -= join;
+    // A split row's join gives back its tail's floor only when the tail fits
+    // whole; cut, its lines stand where they are drawn.
+    const seamBefore = partIndex > startPart ? existingSeamKey(block, partIndex - 1) ?? "" : "";
+    const splitRow = /^table:row:(\d+):within/.exec(seamBefore);
+    if (rejoinRow && block.kind === "table" && partIndex > startPart &&
+        (join < 0 || splitRow) && rejoinRow.may(`${block.index}:${splitRow?.[1] ?? "?"}`)) {
+      // Joined, the row is its lines once (splitRowWholeJoinPx).
+      const giveBack = Math.min(join, splitRowWholeJoinPx(block.parts[partIndex - 1], part));
+      const rejoined = rejoinedSplitRowCut(part, remaining - giveBack, giveBack, (room) => inner(part, partIndex, room, startPart));
+      traceOracle({ atom: block.index, kind: "rejoin", join: Math.round(giveBack * 10) / 10, roomPx: Math.round((remaining - giveBack) * 10) / 10, result: rejoined?.key ?? null });
+      if (rejoined) {
+        rejoinRow.joined(`${block.index}:${splitRow?.[1] ?? "?"}`);
+        return rejoined;
+      }
+    }
+    remaining -= block.kind === "table" ? Math.max(0, join) : join;
     // What is left under a row's head piece is no room for more of the row:
     // cut there the head paints taller than the plan by its own stand-ins,
     // the next plan takes the cut back, and the two alternate (corpus
@@ -2628,6 +2898,29 @@ function walkFragments(
   }
   traceOracle({ atom: block.index, kind: block.kind, parts: block.parts.map((p) => Math.round(p.heightPx * 10) / 10), availablePx: Math.round(request.availablePx * 10) / 10, failedPart: -1, remaining: Math.round(remaining * 10) / 10, inner: null, result: null });
   return null;
+}
+
+/**
+ * A table cut within a row whose rest, joined back, now fits the page: the cut
+ * the tail plans in the room left (with a split row's overstated floor given
+ * back, splitRowFloorJoinPx), when it falls past the rest of the row (the row
+ * whole on this page). Without it the walk stopped at the seam whenever little
+ * room was left under the head piece (HEAD_PIECE_OVERRUN_PX), and a cut made
+ * once from a page with less room never came back (R291-D02 under
+ * `__docsFootnoteProgressive`: page 88's table cut in its fifth row from a
+ * list block read 17 px too tall on a provisional sheet; read right, 45.1 px
+ * were left for the row's 44.6 px rest; laid out whole, and in Word, the cut
+ * falls between rows). Null otherwise.
+ */
+function rejoinedSplitRowCut(part: LedgerPart, roomPx: number, joinPx: number, plan: (roomPx: number) => LedgerCut | null): LedgerCut | null {
+  if (!(roomPx > 0)) return null;
+  const cut = plan(roomPx);
+  const planned = (cut?.payload as TableCutPayload | undefined)?.planned?.plan;
+  if (!cut || !planned) return null;
+  const rest = firstBodyRow(part.node);
+  const past = planned.kind === "betweenRows" ? planned.cutBeforeRow > rest : planned.kind === "withinRow" && planned.rowIndex > rest;
+  if (!past) return null;
+  return { ...cut, headHeightPx: cut.headHeightPx + joinPx };
 }
 
 /** Harness-only oracle trace (`window.__pageLedgerOracle` pre-created). */
@@ -2876,6 +3169,8 @@ function ledgerCutRefused(view: EditorView, opening: string): boolean {
 function planTableHeadCut(view: EditorView, block: LogicalBlock, request: LedgerSplitRequest): LedgerCut | null {
   if (request.from && chainedStartPart(block, request) === null) return planTableTailCut(view, block, request);
   if (splitRowFloorMovesTable(block, request)) return null;
+  const rejoinRows = notesRejoinSplitRows(view) ? splitRowRejoins(view) : null;
+  const recutWhole = notesRecutSplitRowsWhole(view);
   return walkFragments(block, request, (part, partIndex, availablePx, startPart) => {
   // A continuation fragment's repeated header clones are its first rows, and
   // the row planner charges them before any body row. Joined onto this page
@@ -2883,9 +3178,11 @@ function planTableHeadCut(view: EditorView, block: LogicalBlock, request: Ledger
   // the planner is given their height back; the head keeps the real space.
   const joinedHeaderPx = partIndex > startPart ? part.repeatedHeaderPx : 0;
   const engineRows = engineTableParts.has(part) ? unlaidEngineTableRows(part.node) : null;
-  const planned = engineRows
+  const plannedAsDrawn = engineRows
     ? planEngineTableFragment(part.node, engineRows.rowHeightsPx, engineRows.chromePx, availablePx + joinedHeaderPx, request.fullCapacityPx, wordTableRowOptions(view))
     : planRenderedTableFragment(part.dom, part.node, availablePx + joinedHeaderPx, request.fullCapacityPx, 0, wordTableRowOptions(view));
+  if (!plannedAsDrawn) return null;
+  const planned = recutWhole && partIndex === startPart ? splitRowRecutFromWhole(view, block, partIndex, part.node, plannedAsDrawn) : plannedAsDrawn;
   if (!planned) return null;
   const plan = planned.plan;
   const table = part.dom.tagName === "TABLE" ? part.dom : part.dom.querySelector("table");
@@ -2933,7 +3230,139 @@ function planTableHeadCut(view: EditorView, block: LogicalBlock, request: Ledger
     headHeightPx: partHeightsBetween(block, startPart, partIndex) + availablePx,
     tailHeightPx: Math.max(leftTail, rowsTail) + repeatedPx + partHeightsAfter(block, partIndex),
   };
-  });
+  }, rejoinRows);
+}
+
+/**
+ * A head piece that ends inside row R (a cut within it standing), planned
+ * again with less room, cut within row R once more: the cut is made before row
+ * R instead, and the next plan cuts the row from its whole drawing. Read from
+ * the head piece, the row's lines are the piece's (its paragraphs end at the
+ * seam), and the same room cut the row where the whole row is not cut
+ * (R286-D01 under `__docsFootnoteProgressive`: 142 px for table 1170, row 3
+ * cut one line in from the piece a window left, kept between rows by the
+ * whole layout). A row R opening the fragment (no row before it) is cut as
+ * drawn.
+ */
+type PlannedTableFragmentLike = NonNullable<ReturnType<typeof planRenderedTableFragment>>;
+
+function splitRowRecutFromWhole(view: EditorView, block: LogicalBlock, partIndex: number, node: PmNode, planned: PlannedTableFragmentLike): PlannedTableFragmentLike {
+  const plan = planned.plan;
+  if (plan.kind !== "withinRow") return planned;
+  const seam = existingSeamKey(block, partIndex) ?? "";
+  const standing = /^table:row:(\d+):within/.exec(seam);
+  const source = node.maybeChild(plan.rowIndex)?.attrs?.[TABLE_SOURCE_ROW_ATTR];
+  const row = Number.isInteger(source) ? (source as number) : plan.rowIndex;
+  if (!standing || Number(standing[1]) !== row) return planned;
+  if (plan.rowIndex <= firstBodyRow(node)) return planned;
+  if (!recutRowOnce(view, `${block.index}:${row}`)) return planned;
+  return {
+    plan: { kind: "betweenRows", cutBeforeRow: plan.rowIndex, repeatHeaderRows: plan.repeatHeaderRows },
+    cuts: [],
+    headRowsPx: planned.headRowsPx,
+  };
+}
+
+/**
+ * Rows a head piece was cut before once (splitRowRecutFromWhole), until an
+ * author's edit. Cut from the whole row, a row's head can paint a little
+ * taller than its plan (its own stand-ins), and planned again it is cut
+ * within the same row: recut each time, the row went back and forth between
+ * its pages and the pages after it with it (R286-D01 under
+ * `__docsFootnoteProgressive`: pages 37-50 alternated for six passes, and a
+ * cut made in one of them stood). The second time it is cut as drawn.
+ */
+const recutRows = new WeakMap<EditorView, { stillCurrent: () => boolean; keys: Set<string>; pass: number }>();
+
+/** Each ledger pass opens (or goes on with) the recut and rejoin record of
+ * its edit, and counts itself. */
+export function holdRecutRows(view: EditorView, stillCurrent: () => boolean): void {
+  const held = recutRows.get(view);
+  if (!held?.stillCurrent()) recutRows.set(view, { stillCurrent, keys: new Set(), pass: 0 });
+  else held.pass += 1;
+}
+
+/** Whether row `key` ("atom:row") may be recut now (its first time this
+ * edit); `window.__docsNotesRecutOnce = false` recuts every time. */
+function recutRowOnce(view: EditorView, key: string): boolean {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsNotesRecutOnce?: boolean }) | null;
+  if (win?.__docsNotesRecutOnce === false) return true;
+  const held = recutRows.get(view);
+  if (!held || !held.stillCurrent()) return true;
+  if (held.keys.has(key)) return false;
+  held.keys.add(key);
+  return true;
+}
+
+/**
+ * Split rows joined back (rejoinedSplitRowCut), until an author's edit. The
+ * room a join is judged by is read from the two pieces, the row cut again
+ * from its whole drawing: where the two disagree the row went back and forth
+ * (2a6f8d2e under `__docsFootnoteProgressive`: table 531's row 1 joined, cut
+ * again at the same seam, joined, five times, the pages after it with it). A
+ * row joined once and found cut again after a pass that did not find it cut
+ * (it stood whole) stays cut, as the whole layout cuts it.
+ * `window.__docsNotesRejoinOnce = false` joins it every time.
+ */
+interface SplitRowRejoins {
+  may(row: string): boolean;
+  joined(row: string): void;
+}
+
+const rejoinedRows = new WeakMap<EditorView, { stillCurrent: () => boolean; rows: Map<string, { joined: boolean; seenPass: number }> }>();
+
+function splitRowRejoins(view: EditorView): SplitRowRejoins {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsNotesRejoinOnce?: boolean }) | null;
+  const once = win?.__docsNotesRejoinOnce !== false;
+  const record = () => {
+    const held = recutRows.get(view);
+    if (!once || !held || !held.stillCurrent()) return null;
+    let entry = rejoinedRows.get(view);
+    if (!entry || !entry.stillCurrent()) {
+      entry = { stillCurrent: held.stillCurrent, rows: new Map() };
+      rejoinedRows.set(view, entry);
+    }
+    return { rows: entry.rows, pass: held.pass };
+  };
+  return {
+    may(row) {
+      const known = record();
+      if (!known) return true;
+      const seen = known.rows.get(row);
+      if (seen?.joined && known.pass - seen.seenPass > 1) return false;
+      known.rows.set(row, { joined: seen?.joined ?? false, seenPass: known.pass });
+      return true;
+    },
+    joined(row) {
+      const known = record();
+      if (known) known.rows.set(row, { joined: true, seenPass: known.pass });
+    },
+  };
+}
+
+/** `window.__docsNotesRecutWhole = true` (trial, off): a split row's head
+ * piece planned again is cut before the row (splitRowRecutFromWhole), for a
+ * document with footnotes laid out a window at a time. Off because each
+ * recut lays the pages after it out once with the row whole on the next
+ * page, and a within-row cut made in that pass stood (R286-D01: pages 44-52
+ * differ from the whole layout with it, only 103-104 without). */
+function notesRecutSplitRowsWhole(view: EditorView): boolean {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsNotesRecutWhole?: boolean }) | null;
+  if (win?.__docsNotesRecutWhole !== true) return false;
+  return sheetedDocHasFootnoteRefs(view.state.doc) && footnotesAllowProgressiveLayout(view.state.doc, win);
+}
+
+/**
+ * A document with footnotes laid out a window at a time
+ * (`__docsFootnoteProgressive`) joins a split row back when its page has the
+ * room for it joined (rejoinedSplitRowCut): its windows plan a page from cuts
+ * an earlier window made with other room, which a document laid out whole
+ * plans again. `window.__docsNotesRejoinRows = false` keeps the split as before.
+ */
+function notesRejoinSplitRows(view: EditorView): boolean {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsNotesRejoinRows?: boolean }) | null;
+  if (win?.__docsNotesRejoinRows === false) return false;
+  return sheetedDocHasFootnoteRefs(view.state.doc) && footnotesAllowProgressiveLayout(view.state.doc, win);
 }
 
 /** The first row of table fragment `table` from row `from` on that starts a
@@ -3035,8 +3464,13 @@ function splitRowFloorMovesTable(block: LogicalBlock, request: LedgerSplitReques
   if (part.node.childCount !== 1) return false;
   const row = part.node.firstChild;
   if (row?.attrs?.[TABLE_ROW_CONTINUES_ATTR] !== true || row.attrs?.rowHeightRule === "exact") return false;
-  const floor = Number(row.attrs?.rowHeight);
-  return floor > 0 && floor > request.availablePx + 0.5;
+  const declared = Number(row.attrs?.rowHeight);
+  if (!(declared > 0)) return false;
+  // Its height and its cells' margins, as the cut reads the row whole
+  // (rowFloorPx; corpus R417-D03 page 35).
+  const tr = (part.dom instanceof HTMLTableElement ? part.dom : part.dom.querySelector<HTMLTableElement>("table"))?.rows[0];
+  const floor = tr ? rowFloorPx(tr, row, declared) : declared;
+  return floor > request.availablePx + 0.5;
 }
 
 /** The tallest row of the table that cannot break where it stands (see
@@ -3263,7 +3697,7 @@ function createSplitOracle(
       const key = splitRequestKey(block, request);
       // An edited seam is cut again from the joined text once: that answer
       // is not the block's lasting one.
-      const edited = Boolean(block.editedSeams?.size);
+      const edited = Boolean(block.editedSeams?.size) || Boolean(block.staleRowKeepPx?.size);
       const unchanged = !edited && block.parts.every((part) => !memo.changed.has(memo.sheets[part.sheet]));
       if (unchanged) {
         const known = memo.cache.oracleAnswer(parts, key);

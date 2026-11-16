@@ -20,7 +20,37 @@ export const PT_PER_PX = 0.75;
 
 
 
-const SYNTHETIC_BOLD_EXTRA_EM = 0.02;
+
+
+
+
+
+
+
+const SYNTHETIC_BOLD_STEP_PT = 0.12;
+const SYNTHETIC_BOLD_STEP_FROM_PT = 16;
+const SYNTHETIC_BOLD_EM_BY_FAMILY: ReadonlyMap<string, number> = new Map([
+  ["batang", -0.0086],
+  ["batangche", -0.0086],
+  ["바탕", -0.0086],
+  ["바탕체", -0.0086],
+  ["gulim", -0.0086],
+  ["gulimche", -0.0086],
+  ["굴림", -0.0086],
+  ["굴림체", -0.0086],
+  ["calibri light", -0.0063],
+  ["segoe ui light", 0],
+  ["pmingliu", 0],
+  ["新細明體", 0],
+]);
+
+/** The extra advance (pt) PowerPoint for Windows gives a grapheme of `stack`'s face set in a bold it synthesizes. */
+export function powerPointSyntheticBoldExtraPt(stack: string, sizePt: number): number {
+  const family = (splitFamilyList(stack)[0] ?? "").trim().replace(/^["']|["']$/g, "").toLowerCase();
+  const em = SYNTHETIC_BOLD_EM_BY_FAMILY.get(family);
+  if (em !== undefined) return em * sizePt;
+  return sizePt >= SYNTHETIC_BOLD_STEP_FROM_PT ? SYNTHETIC_BOLD_STEP_PT : 0;
+}
 
 /**
  * An Office family the page declares behind a local()-only face (Arial's
@@ -80,6 +110,18 @@ const OFFICE_WIN_BOX: Readonly<Record<string, { readonly unitsPerEm: number; rea
 };
 
 /**
+ * The Office files' external leading (hhea ascender - descender + line gap
+ * beyond the win box), em, where the served stand-in's differs or is not
+ * known to match: Office for Mac's arial.ttf 67/2048, times.ttf and
+ * Calibri.ttf none (Liberation Serif / Tinos state an 87/2048 hhea gap).
+ */
+const OFFICE_EXTERNAL_LEADING: Readonly<Record<string, number>> = {
+  arial: 67 / 2048,
+  "times new roman": 0,
+  calibri: 0,
+};
+
+/**
  * Whether the face drawn for this family is a stand-in of another design
  * (catalog metric "style" or looser): its own USE_TYPO_METRICS says nothing
  * of the Office file's, so its win box stays the estimate.
@@ -105,11 +147,12 @@ export const pageOfficeTextMeasurer: OfficeTextMeasurer = {
   graphemes(text, font): OfficeMeasureAnswer<readonly OfficeMeasuredGrapheme[]> {
     const measured = measureText(text, engineFont(font));
     if (measured.status !== "ok") return measured;
+    const boldExtra = measured.graphemes.some((grapheme) => grapheme.syntheticBold) ? powerPointSyntheticBoldExtraPt(font.stack, font.sizePt) : 0;
     return {
       status: "ok",
       value: measured.graphemes.map((grapheme) => ({
         text: grapheme.text,
-        advance: grapheme.advance * PT_PER_PX + (grapheme.syntheticBold && !/^\s+$/u.test(grapheme.text) ? SYNTHETIC_BOLD_EXTRA_EM * font.sizePt : 0),
+        advance: grapheme.advance * PT_PER_PX + (grapheme.syntheticBold ? boldExtra : 0),
       })),
     };
   },
@@ -130,7 +173,19 @@ export const pageOfficeTextMeasurer: OfficeTextMeasurer = {
       const typo = os2 !== null && os2.useTypoMetrics && !drawnByOtherDesign(font.stack);
       const ascent = office ? office.ascent : (os2 ? (typo ? os2.typoAscender : os2.winAscent) : metrics.hhea.ascender) * unit;
       const descent = office ? office.descent : (os2 ? (typo ? -os2.typoDescender : os2.winDescent) : -metrics.hhea.descender) * unit;
-      answer = { status: "ok", value: { ascent, descent } };
+      // External leading: the Office file's where known, else the served
+      // file's -- its typo line gap where it lays in its typo box, else what
+      // its hhea line stands beyond its win box.
+      const known = OFFICE_EXTERNAL_LEADING[(splitFamilyList(font.stack)[0] ?? "").trim().toLowerCase()];
+      const hheaLine = (metrics.hhea.ascender - metrics.hhea.descender + metrics.hhea.lineGap) * unit;
+      const lineGap = known !== undefined
+        ? known
+        : typo && os2
+          ? Math.max(0, os2.typoLineGap * unit)
+          : os2
+            ? Math.max(0, hheaLine - (os2.winAscent + os2.winDescent) * unit)
+            : Math.max(0, metrics.hhea.lineGap * unit);
+      answer = { status: "ok", value: { ascent, descent, lineGap } };
     }
     if (verticalsCache.size > 2_000) verticalsCache.clear();
     verticalsCache.set(key, answer);

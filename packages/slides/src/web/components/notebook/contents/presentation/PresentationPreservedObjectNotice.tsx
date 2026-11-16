@@ -16,6 +16,12 @@ import type { PreservedObjectNotice } from "@mrnote/core/web/lib/presentation-pr
  * Inert to the pointer — the block underneath stays selectable, movable and
  * deletable exactly as before.
  */
+/** The caption's colours: near-black on near-white. */
+export const NOTICE_TEXT = "#1f1f1f";
+export const NOTICE_BACKGROUND = "#fafafa";
+const NOTICE_LINE = "rgba(0, 0, 0, 0.6)";
+const NOTICE_LINE_INNER = "rgba(255, 255, 255, 0.7)";
+
 export function PresentationPreservedObjectNotice({
   notice,
   label,
@@ -38,18 +44,28 @@ export function PresentationPreservedObjectNotice({
         justifyContent: "center",
         padding: 8,
         boxSizing: "border-box",
-        border: "1px dashed currentColor",
+        // Over any slide content (a black screen, a white page): a dark
+        // dashed line with a light one inside it shows on both.
+        border: `1px dashed ${NOTICE_LINE}`,
+        boxShadow: `inset 0 0 0 1px ${NOTICE_LINE_INNER}`,
         borderRadius: 2,
-        opacity: 0.55,
         pointerEvents: "none",
         overflow: "hidden",
       }}
     >
       <span
+        data-testid="presentation-preserved-object-label"
         style={{
           font: "500 11px/1.35 system-ui, sans-serif",
           textAlign: "center",
           maxWidth: "100%",
+          // Its own colours, not the window's: the caption lies over the
+          // slide, whose colours are the document's in every app theme
+          // (light, dark, high contrast). 16.1:1 (WCAG AA asks 4.5:1).
+          color: NOTICE_TEXT,
+          background: NOTICE_BACKGROUND,
+          padding: "2px 6px",
+          borderRadius: 3,
         }}
       >
         {label}

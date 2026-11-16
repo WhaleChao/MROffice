@@ -39,6 +39,15 @@ export type PageExportFormat =
   | "wordxml"
   // Excel 97-2003 workbook, written by the server from the page's xlsx export.
   | "xls"
+  // Excel Template (a macro workbook's: .xltm) and OpenDocument Spreadsheet
+  // Flat XML, written by the server from the page's xlsx export.
+  | "xltx"
+  | "fods"
+  // Excel's XML Spreadsheet 2003 (one SpreadsheetML file, downloaded as .xml).
+  | "excelxml"
+  // Excel's SYLK and DIF: the active sheet, in the reader's ANSI code page.
+  | "slk"
+  | "dif"
   // PowerPoint's other Save As types, written by the server from the deck's
   // own pptx export: PowerPoint 97-2003 Presentation, PowerPoint Design
   // Template and PowerPoint Show.
@@ -120,6 +129,21 @@ export interface PageExportRequest {
    * print notes "As displayed on sheet" learns it from the request. PDF only.
    */
   showAllNotes?: boolean;
+  /**
+   * The workbook PDF is the editor's Print: made as Windows Excel's File >
+   * Print makes it (every spilled text's tail carried onto a later page
+   * prints there), not as its Save as PDF. Kept apart from the export's PDF
+   * on the server. PDF only.
+   */
+  printRoute?: boolean;
+  /**
+   * A deck PDF's hidden slides (`hidden_slides`). Absent, the export's
+   * default: left out, as PowerPoint's Save as PDF / Export > Create PDF/XPS
+   * leaves them out (Options > Include hidden slides, off). The editor's
+   * Print says `include` when its print falls back to this PDF (Print Hidden
+   * Slides is on by default in PowerPoint). PDF only.
+   */
+  hiddenSlides?: "include" | "exclude";
   /** Explicit user consent for a server-declared lossy retry of this format. */
   lossyConsent?: boolean;
   /** Cancels request setup/fetch without becoming part of the export URL. */
@@ -170,6 +194,11 @@ const EXPORT_LOSS_CONFIRMATION_CODE: Partial<
   dotx: DOCX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
   wordxml: DOCX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
   xls: XLSX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
+  xltx: XLSX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
+  fods: XLSX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
+  excelxml: XLSX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
+  slk: XLSX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
+  dif: XLSX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
   ppt: PPTX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
   potx: PPTX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
   ppsx: PPTX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE,
@@ -310,6 +339,11 @@ const FORMAT_EXTENSION: Record<PageExportFormat, string> = {
   dotx: "dotx",
   wordxml: "xml",
   xls: "xls",
+  xltx: "xltx",
+  fods: "fods",
+  excelxml: "xml",
+  slk: "slk",
+  dif: "dif",
   ppt: "ppt",
   potx: "potx",
   ppsx: "ppsx",
@@ -330,6 +364,8 @@ const SERVER_ALTERNATE_EXTENSIONS: Readonly<Record<string, readonly string[]>> =
   // A Design Template or Show of a deck holding macros is its macro-enabled twin.
   potx: ["potm"],
   ppsx: ["ppsm"],
+  // An Excel Template of a workbook holding macros is Excel's macro-enabled template.
+  xltx: ["xltm"],
 };
 
 function safeDownloadFilename(
@@ -666,6 +702,12 @@ function pageExportRequest(
   }
   if (request.showAllNotes === true && request.format === "pdf") {
     query.set("show_all_notes", "true");
+  }
+  if (request.printRoute === true && request.format === "pdf") {
+    query.set("print_route", "true");
+  }
+  if (request.hiddenSlides && request.format === "pdf") {
+    query.set("hidden_slides", request.hiddenSlides);
   }
   if (delivery === "bytes") query.set("delivery", "bytes");
   // The caller's word that this file is encrypted before it is saved.

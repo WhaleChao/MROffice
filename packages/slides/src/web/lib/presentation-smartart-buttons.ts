@@ -28,9 +28,11 @@ import {
   readSmartArtGroupDirection,
   readSmartArtGroupFrame,
   readSmartArtGroupMembers,
+  smartArtMembersWithItemScale,
   smartArtToggledDirection,
   type OfficeSmartArtFrame,
 } from "@mrnote/core/web/lib/office-smartart/design-model.ts";
+import { smartArtBlockBox } from "@mrnote/core/web/lib/office-smartart/custom-geometry.ts";
 import { DEFAULT_SMARTART_STYLE, readSmartArtBlockMarker, type SmartArtKind } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import { readSmartArtOutline, type SmartArtOutlineItem } from "@mrnote/core/web/lib/office-smartart/outline.ts";
 import { DEFAULT_SMARTART_STYLE_ID } from "@mrnote/core/web/lib/office-smartart/styles-model.ts";
@@ -211,9 +213,46 @@ export function smartArtLayoutPlan(
 }
 
 /**
+ * Larger / Smaller, a resize handle or SmartArt Format's Height / Width on one
+ * item: PowerPoint keeps the change as the shape's `custScaleX/Y` against its
+ * layout box and lays the WHOLE graphic out again at once -- the other shapes
+ * move and resize around it (the golden deck's Basic Block List, one block
+ * dragged to 1.71 x 1.50: a 2-2-1 grid became 2 over 3, every other block
+ * 0.94 of its size, to the EMU in the engine's own layout). The item's shapes
+ * carry their scale times `factor` (`smartArtMembersWithItemScale`); the
+ * rebuild lays the diagram out with it. `factor` is a scale (Larger / Smaller,
+ * a handle's or a typed size's ratio to the shape as it is).
+ * Null when refused (a member may not change, no such item, no size to change: a
+ * factor clamped to Office's bounds that leaves the shape as it was).
+ */
+export function smartArtResizePlan(
+  blocks: readonly PresentationBlock[],
+  primary: PresentationBlock | null | undefined,
+  itemId: string,
+  factor: number | { readonly x: number; readonly y: number },
+  canManipulate: (block: PresentationBlock) => boolean,
+  minEdge = 12_700,
+): { plan: SmartArtRebuildPlan; sent: PresentationBlock[] } | null {
+  const diagram = writableDiagram(blocks, primary, canManipulate);
+  if (!diagram || !diagram.outline.some((item) => item.id === itemId)) return null;
+  // No frame: the relayout fits the graphic to its frame itself, so the shape
+  // is not pushed back inside it (which would state a move PowerPoint does not
+  // write).
+  const sent = smartArtMembersWithItemScale(diagram.members, itemId, factor, smartArtBlockBox, minEdge);
+  if (!sent) return null;
+  return {
+    plan: rebuildPlan(diagram, { kind: diagram.kind, frame: diagram.frame, outline: diagram.outline }),
+    sent,
+  };
+}
+
+/**
  * Reset Graphic: the diagram rebuilt with the catalog's colours and quick
  * style, discarding the shapes' own fills and lines and every move and
- * resize, then handed back to the catalog palette (`resetPaint`). A Right to
+ * resize, then handed back to the catalog palette (`resetPaint`). As
+ * PowerPoint's Reset does (SmartArt probe B10b / B10c), the colour variation
+ * goes back to Office's default (`colorsId: null`) and the words lose the
+ * character formatting the author gave them (`keepTextFormat: false`). A Right to
  * Left applied to the whole graphic and its background colour are NOT
  * removed (Microsoft Support, "Restore the default layout and color of your
  * SmartArt graphic", Customizations not removed; live Word audit WUA 260):
@@ -235,6 +274,8 @@ export function smartArtResetPlan(
     styleId: DEFAULT_SMARTART_STYLE_ID,
     keepAuthorPaint: false,
     resetCustomGeometry: true,
+    keepTextFormat: false,
+    colorsId: null,
     resetPaint: true,
   });
 }

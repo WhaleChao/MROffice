@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { loadPinnedAssetBytes } from "./pinned-asset-cache";
+
 export const PDF_UNICODE_FALLBACK_FONT_URL =
   "/fonts/NotoSansSC-Regular.ttf" as const;
 export const PDF_UNICODE_FALLBACK_FONT_BYTE_LENGTH = 10_595_916;
@@ -55,6 +57,17 @@ async function loadVerifiedPdfUnicodeFallbackFont(fetcher: FontFetch, signal?: A
   }
 }
 
+/** The page's own load: the face kept in this browser once verified
+ * (lib/pdf/pinned-asset-cache), where every open downloaded it again. */
+async function loadKeptPdfUnicodeFallbackFont(fetcher: FontFetch): Promise<ArrayBuffer | null> {
+  const bytes = await loadPinnedAssetBytes({
+    url: PDF_UNICODE_FALLBACK_FONT_URL,
+    byteLength: PDF_UNICODE_FALLBACK_FONT_BYTE_LENGTH,
+    sha256: PDF_UNICODE_FALLBACK_FONT_SHA256,
+  }, fetcher);
+  return bytes?.buffer ?? null;
+}
+
 
 
 
@@ -71,7 +84,7 @@ export async function fetchVerifiedPdfUnicodeFallbackFont(options?: {
   const fetcher = globalThis.fetch;
   if (typeof fetcher !== "function") return null;
   if (!verifiedFallbackFont) {
-    const loading = loadVerifiedPdfUnicodeFallbackFont(fetcher.bind(globalThis));
+    const loading = loadKeptPdfUnicodeFallbackFont(fetcher.bind(globalThis));
     verifiedFallbackFont = loading;
     void loading.then((buffer) => { if (!buffer && verifiedFallbackFont === loading) verifiedFallbackFont = null; });
   }

@@ -51,6 +51,42 @@ export function normalizePresentationUnderlineStyle(
 }
 
 /**
+ * The Font page's (Word-spelled) underline names for the DrawingML kinds, as
+ * the shared Font dialog page lists them (`DocumentFontDialogFontPage`,
+ * `UNDERLINE_STYLE_VALUES`), in PowerPoint's Font dialog order. One table for
+ * every DrawingML host's dialog: a slide's text, a table cell's, a chart's.
+ * `words` and `single` are the chart text's own kinds; a slide's runs keep
+ * `single` as the plain underline flag.
+ */
+export const PRESENTATION_UNDERLINE_FONT_PAGE = {
+  words: "words",
+  single: "single",
+  double: "double",
+  heavy: "thick",
+  dotted: "dotted",
+  dottedHeavy: "dottedHeavy",
+  dash: "dash",
+  dashHeavy: "dashedHeavy",
+  dashLong: "dashLong",
+  dashLongHeavy: "dashLongHeavy",
+  dotDash: "dotDash",
+  dotDashHeavy: "dashDotHeavy",
+  dotDotDash: "dotDotDash",
+  dotDotDashHeavy: "dashDotDotHeavy",
+  wavy: "wavy",
+  wavyHeavy: "wavyHeavy",
+  wavyDouble: "wavyDouble",
+} as const satisfies Record<OfficeChartTextUnderline, string>;
+
+export type PresentationUnderlineFontPageName =
+  (typeof PRESENTATION_UNDERLINE_FONT_PAGE)[keyof typeof PRESENTATION_UNDERLINE_FONT_PAGE];
+
+/** The DrawingML kind a Font page underline name stands for. */
+export const PRESENTATION_UNDERLINE_FROM_FONT_PAGE = Object.fromEntries(
+  Object.entries(PRESENTATION_UNDERLINE_FONT_PAGE).map(([kind, page]) => [page, kind]),
+) as Record<PresentationUnderlineFontPageName, OfficeChartTextUnderline>;
+
+/**
  * How CSS draws a kind. One element carries ONE `text-decoration-style`, so
  * a cell whose underline and strikethrough differ draws both in the
  * underline's kind. CSS has no double wavy, dot-dash or long-dash line: those

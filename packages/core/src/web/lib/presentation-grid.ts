@@ -18,6 +18,39 @@ export interface PresentationViewSettings {
   readonly showGuides?: boolean;
   /** Display smart guides when shapes are aligned. Page only. */
   readonly smartGuides?: boolean;
+  /**
+   * Normal view's pane sizes as the file left them (ECMA-376 §19.2.2.6
+   * `p:normalViewPr`): `leftPct` is `p:restoredLeft@sz`, the thumbnail
+   * pane's width as a percentage of the window; `topPct` is
+   * `p:restoredTop@sz`, the slide region's height as a percentage of what
+   * the slide and the Notes pane share; `notesHidden` is
+   * `@horzBarState="maximized"` (the slide region takes it all: the Notes
+   * pane is closed). Read by the import only; the writers leave the part's
+   * own values as they are.
+   */
+  readonly normalView?: PresentationNormalViewSizes;
+}
+
+export interface PresentationNormalViewSizes {
+  readonly leftPct?: number;
+  readonly topPct?: number;
+  readonly notesHidden?: boolean;
+}
+
+/** A `normalView` as the page states it, valid fields only. */
+export function normalizePresentationNormalView(value: unknown): PresentationNormalViewSizes | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const pct = (entry: unknown) =>
+    typeof entry === "number" && Number.isFinite(entry) && entry > 0 && entry <= 100 ? entry : undefined;
+  const leftPct = pct(raw.leftPct);
+  const topPct = pct(raw.topPct);
+  const out = {
+    ...(leftPct !== undefined ? { leftPct } : {}),
+    ...(topPct !== undefined ? { topPct } : {}),
+    ...(raw.notesHidden === true ? { notesHidden: true } : {}),
+  };
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** The dialog's boolean options, in its order. */
@@ -98,6 +131,8 @@ export function normalizePresentationViewSettings(
   ) {
     out.gridSpacingEmu = raw.gridSpacingEmu;
   }
+  const normalView = normalizePresentationNormalView(raw.normalView);
+  if (normalView) out.normalView = normalView;
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -232,13 +267,22 @@ function gridDefaultsStorage(): Storage | null {
   }
 }
 
+function withoutNormalView(
+  settings: PresentationViewSettings | undefined,
+): PresentationViewSettings | undefined {
+  if (!settings?.normalView) return settings;
+  const rest: { -readonly [K in keyof PresentationViewSettings]: PresentationViewSettings[K] } = { ...settings };
+  delete rest.normalView;
+  return Object.keys(rest).length > 0 ? rest : undefined;
+}
+
 /** The stored defaults, valid fields only; undefined when none. */
 export function readPresentationGridDefaults(): PresentationViewSettings | undefined {
   const store = gridDefaultsStorage();
   if (!store) return undefined;
   try {
     const raw = store.getItem(PRESENTATION_GRID_DEFAULTS_STORAGE_KEY);
-    return raw ? normalizePresentationViewSettings(JSON.parse(raw)) : undefined;
+    return raw ? withoutNormalView(normalizePresentationViewSettings(JSON.parse(raw))) : undefined;
   } catch {
     return undefined;
   }
@@ -247,7 +291,9 @@ export function readPresentationGridDefaults(): PresentationViewSettings | undef
 /** Store every option of the dialog as the default; false when it cannot. */
 export function writePresentationGridDefaults(settings: PresentationViewSettings): boolean {
   const store = gridDefaultsStorage();
-  const next = normalizePresentationViewSettings(settings);
+  // The panes' sizes are the deck's own (its file's view part), never a
+  // default for the next deck.
+  const next = withoutNormalView(normalizePresentationViewSettings(settings));
   if (!store || !next) return false;
   try {
     store.setItem(PRESENTATION_GRID_DEFAULTS_STORAGE_KEY, JSON.stringify(next));

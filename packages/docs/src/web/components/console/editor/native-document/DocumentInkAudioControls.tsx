@@ -35,6 +35,7 @@ import {
   type InkRecording,
   type InkRecordingSession,
 } from "@mrnote/ink/web/lib/ink-audio-recording.ts";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 
 function clock(seconds: number): string {
   const whole = Math.max(0, Math.floor(seconds));
@@ -227,7 +228,7 @@ export function DocumentInkAudioControls({
                 onSelect={() => void play(item)}
               >
                 <OfficeSemanticIcon semanticId="media.play" size={16} />
-                {item.createdAt ? new Date(item.createdAt).toLocaleString() : item.recordingId.slice(0, 8)}
+                {item.createdAt ? new Date(item.createdAt).toLocaleString(pageInterfaceLocale()) : item.recordingId.slice(0, 8)}
               </DropdownMenuItem>
             ))
           )}

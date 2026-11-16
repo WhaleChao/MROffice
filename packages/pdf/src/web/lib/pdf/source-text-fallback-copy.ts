@@ -16,3 +16,10 @@ export function pdfFallbackType3Copy(t: (key: string) => string): string {
 
 
 export const PDF_FALLBACK_NOT_FOUND_MESSAGE = "The page content draws no glyph where this text stands.";
+
+/** A line that paints nothing because a text box of the page draws its
+ * words: the line is that box's hidden source, not text of its own. Said
+ * when the box could not be read as a box (its record is damaged or was
+ * written by something else), so the line is not offered as plain text. */
+export const PDF_FALLBACK_TEXT_BOX_SOURCE_MESSAGE =
+  "This text is drawn by a text box of the page whose record cannot be read; the line under it is not edited on its own.";

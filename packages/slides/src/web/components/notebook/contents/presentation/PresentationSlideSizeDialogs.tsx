@@ -41,6 +41,7 @@ import {
   normalizePrintScale,
   normalizeSlidesPerPage,
   type PresentationPrintSettings,
+  type ResolvedPresentationPrintSettings,
 } from "@mrnote/core/web/lib/presentation-print-settings.ts";
 import {
   PRESENTATION_EMU_PER_INCH,
@@ -483,7 +484,7 @@ export function PresentationPrintSettingsDialog({
   onClose,
   t,
 }: {
-  current: Required<PresentationPrintSettings>;
+  current: ResolvedPresentationPrintSettings;
   onApply: (settings: PresentationPrintSettings) => void;
   onReset: () => void;
   onClose: () => void;
@@ -509,6 +510,8 @@ export function PresentationPrintSettingsDialog({
           // Stated either way: the deck merges the dialog's answer over what
           // it holds, and an unchecked box left out kept the old "on"
           
+          // (`printHiddenSlidesAnswer`): off is `false`, on is PowerPoint's
+          // default (checked when the deck states nothing).
           printHiddenSlides,
         })
       }

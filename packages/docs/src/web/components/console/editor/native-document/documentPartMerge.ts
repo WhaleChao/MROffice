@@ -13,7 +13,7 @@
  * member wrote into a part's live room (lib/document-page-parts): both sides
  * are then the room's words, before and after.
  */
-import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { Fragment, type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 
 import { SPLIT_CONTINUATION_ATTR, splitPieceRoot } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionKeys.ts";
@@ -386,4 +386,118 @@ export function changedBlockPieces(
   }
   const pick = (blocks: readonly ProseMirrorNode[]) => blocks.filter((block) => roots.has(splitPieceRoot(block.attrs) ?? ""));
   return { before: pick(was), after: pick(now) };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function partSheetsOfView(
+  doc: ProseMirrorNode,
+  owner: ReadonlyMap<string, number>,
+  loaded: number,
+  index: number,
+): ProseMirrorNode[] | null {
+  if (index < 0 || index > loaded) return null;
+  return allPartSheetsOfView(doc, owner, loaded)?.[index] ?? null;
+}
+
+/** Every part's sheets at once (`partSheetsOfView` for each part 0..loaded), in one walk of the view. */
+export function allPartSheetsOfView(
+  doc: ProseMirrorNode,
+  owner: ReadonlyMap<string, number>,
+  loaded: number,
+): ProseMirrorNode[][] | null {
+  if (loaded < 0) return null;
+  const counts = new Array<number>(loaded + 1).fill(0);
+  const out: ProseMirrorNode[][] = Array.from({ length: loaded + 1 }, () => []);
+  const partOf = new Map<string, number>();
+  let current = 0;
+  const partOfPiece = (piece: ProseMirrorNode): number => {
+    const root = splitPieceRoot(piece.attrs);
+    if (root !== null && partOf.has(root)) return partOf.get(root)!;
+    if (root !== null) {
+      const known = owner.get(root);
+      if (known !== undefined && known > current && known <= loaded) current = known;
+      partOf.set(root, current);
+    }
+    counts[current] += 1;
+    return current;
+  };
+  doc.forEach((sheet) => {
+    if (sheet.type.name !== "pageBlock") {
+      out[partOfPiece(sheet)].push(sheet);
+      return;
+    }
+    const byPart = new Map<number, ProseMirrorNode[]>();
+    sheet.forEach((piece) => {
+      const part = partOfPiece(piece);
+      const list = byPart.get(part);
+      if (list) list.push(piece);
+      else byPart.set(part, [piece]);
+    });
+    for (const [part, pieces] of byPart) {
+      out[part].push(pieces.length === sheet.childCount ? sheet : sheet.copy(Fragment.fromArray(pieces)));
+    }
+  });
+  if (counts.some((count) => count === 0)) return null;
+  return out;
+}
+
+/** What `serializeViewParts` keeps of each part between calls: its pieces (the
+ * very nodes) and what they serialized to. */
+export type PartSerializations = Array<{ readonly pieces: readonly ProseMirrorNode[]; readonly blocks: readonly unknown[] } | undefined>;
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function serializeViewParts(
+  doc: ProseMirrorNode,
+  owner: ReadonlyMap<string, number>,
+  loaded: number,
+  serializePart: (sheets: readonly ProseMirrorNode[]) => unknown[] | null,
+  kept: PartSerializations,
+): unknown[][] | null {
+  const all = allPartSheetsOfView(doc, owner, loaded);
+  if (!all) return null;
+  const out: unknown[][] = [];
+  for (let index = 0; index < all.length; index += 1) {
+    const sheets = all[index];
+    const pieces: ProseMirrorNode[] = [];
+    for (const sheet of sheets) {
+      if (sheet.type.name === "pageBlock") sheet.forEach((piece) => { pieces.push(piece); });
+      else pieces.push(sheet);
+    }
+    const before = kept[index];
+    if (before && before.pieces.length === pieces.length && before.pieces.every((piece, at) => piece === pieces[at])) {
+      out.push([...before.blocks]);
+      continue;
+    }
+    const blocks = serializePart(sheets);
+    if (!blocks) return null;
+    kept[index] = { pieces, blocks };
+    out.push([...blocks]);
+  }
+  kept.length = all.length;
+  return out;
 }

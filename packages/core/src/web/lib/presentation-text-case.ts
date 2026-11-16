@@ -626,7 +626,34 @@ export function isBlockKeptReadOnly(block: { locked?: unknown; source?: unknown 
   if (!source || typeof source !== "object" || Array.isArray(source)) return false;
   const native = source as Record<string, unknown>;
   if (native.nativeAddInFallback !== undefined || native.nativeNarrationIcon === true) return true;
+  if (isTextKeptReadOnly(block)) return true;
   return typeof native.shapeId !== "string" || native.shapeId === "";
+}
+
+/**
+ * Whether the object is a text shape whose words the import could not make
+ * editable and keeps read-only (PPTX reading row 814,
+ * `source.nativeTextKeptReadOnly`): drawn from the file's runs, sizes and
+ * frame, never written back -- its shape stays as the file has it. Before
+ * the row such a shape was not on the page at all. PURE.
+ */
+export function isTextKeptReadOnly(block: { locked?: unknown; source?: unknown } | null | undefined): boolean {
+  if (!block || block.locked !== true) return false;
+  const source = block.source;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return false;
+  const kept = (source as Record<string, unknown>).nativeTextKeptReadOnly;
+  return !!kept && typeof kept === "object" && !Array.isArray(kept);
+}
+
+/**
+ * Whether a read-only text shape's words were cut at the page's bound (PPTX
+ * reading row 824, `source.nativeTextKeptReadOnly.truncated`): only their
+ * first part is drawn, the file keeps them all. PURE.
+ */
+export function isTextKeptReadOnlyTruncated(block: { locked?: unknown; source?: unknown } | null | undefined): boolean {
+  if (!isTextKeptReadOnly(block)) return false;
+  const kept = (block!.source as Record<string, unknown>).nativeTextKeptReadOnly as Record<string, unknown>;
+  return kept.truncated === true;
 }
 
 /**

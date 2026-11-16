@@ -822,9 +822,14 @@ function blockNeighbour(
  * paragraph. MRAI spells that as the block node (`image` with `dataFloat`,
  * `chart` with a floating `documentChart.layout`, `documentShape` with that
  * `wrapMode`) placed right before its anchor paragraph.
- * A paragraph left without any content goes away with it (the floating
- * object's own paragraph is its anchor on export). `blockAttrs` is the
- * placement patch for the block node.
+ * A paragraph the page made, left without any content, goes away with it
+ * (the floating object's own paragraph is its anchor on export). A
+ * paragraph read from a Word file stays, empty: it is the `w:p` that holds
+ * the object, as Word keeps it when the wrap changes, and the shape the
+ * page reads such a paragraph back as (the object, then its empty host).
+ * Taken away, the edited page had one block fewer than the same file read
+ * again (FIXQUEUE 246, corpus R426-D13 E37: a picture alone in p[75] set
+ * to Square). `blockAttrs` is the placement patch for the block node.
  */
 export function convertInlineDrawingToBlock(
   view: EditorView,
@@ -867,7 +872,8 @@ export function convertInlineDrawingToBlock(
   }
   const remaining = host.content.size - node.nodeSize;
   const tr = state.tr;
-  if (remaining <= 0) {
+  const readFromWord = typeof (host.attrs.source as { sourceAnchor?: unknown } | null | undefined)?.sourceAnchor === "string";
+  if (remaining <= 0 && !readFromWord) {
     tr.replaceWith(hostPos, hostPos + host.nodeSize, block);
   } else {
     tr.delete(pos, pos + node.nodeSize).insert(hostPos, block);

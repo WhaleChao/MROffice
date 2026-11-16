@@ -81,6 +81,9 @@ export const PICTURE_STYLE_LEGACY_FIELDS = [
   "borderColor",
   "borderWidth",
   "borderStyle",
+  // A frame's compound line and corners are the recipe's under a style.
+  "borderCompound",
+  "borderJoin",
 ] as const;
 
 

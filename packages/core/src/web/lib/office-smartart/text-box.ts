@@ -48,6 +48,13 @@ export interface SmartArtTextBox {
   readonly top: number;
   readonly width: number;
   readonly height: number;
+  /**
+   * Drawn only, never stored: the words are set at a size the author fixed
+   * (Office's `custT`), so Office breaks them by its own measures exactly,
+   * with no room past the box (`SMARTART_LABEL_WRAP_SLACK` is for words the
+   * engine fitted).
+   */
+  readonly exact?: true;
 }
 
 const FIELDS = ["left", "top", "width", "height"] as const;

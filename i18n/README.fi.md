@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ Kaikki ominaisuudet: asenna MR Officen työpöytäsovellus (maksuton)
->
-> MR Office -työpöytäsovellus on maksuton, sisältää nämä editorit ja koko palvelun ja toimii offline-tilassa omalla tietokoneellasi. Se tuo sen, mitä avoimen lähdekoodin editoreista puuttuu:
->
-> - Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaaminen ja tallentaminen
-> - Funktioita sisältävien kaavojen (SUMMA, JOS, PHAKU …) laskenta
-> - Kaaviot
-> - SmartArtin muokkaus
-> - PDF-muokkausten tallentaminen takaisin tiedostoon
->
-> **[Lataa MR Office Releases-sivulta →](https://github.com/XinaTian/MROffice/releases)** · [tai osoitteesta mroffice.ai](https://mroffice.ai)
+<p align="center"><b>MR Officen avoimen lähdekoodin editorit – asiakirjat, laskentataulukot, esitykset, PDF, käsiala ja koodi – selaimessa.</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Kokeile niitä MR Officessa →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Kokeile live-demoa – ei asennusta</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Lataa MR Office Releases-sivulta</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> MR Officen avoimen lähdekoodin editorit – asiakirjat, laskentataulukot, esitykset, PDF, käsiala ja koodi – selaimessa.
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Asiakirjat" width="100%"></a><br><b>Asiakirjat</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Laskentataulukot" width="100%"></a><br><b>Laskentataulukot</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Esitykset" width="100%"></a><br><b>Esitykset</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Käsiala" width="100%"></a><br><b>Käsiala</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Koodi" width="100%"></a><br><b>Koodi</b></td>
+</tr>
+</table>
 
 MR Office on työtila muistiinpanoille, tekoälylle ja oikeille tiedostoille. Tämä tietovarasto julkaisee sen editorien lähdekoodin: samat editorit, joita MR Office käyttää ja jotka voit itse koota, ajaa ja upottaa. Nämä ovat avoimen lähdekoodin editoreja, eivät täydellinen avoimen lähdekoodin toimisto-ohjelmisto: Microsoft Office -tiedostojen lukeminen ja kirjoittaminen jäävät MR Officeen (katso alla).
 
@@ -33,16 +36,9 @@ Mitä kukin editori tekee tässä tietovarastossa:
 
 Funktioita sisältävien kaavojen laskennan, kaavioiden piirtämisen ja SmartArtin asettelun hoitaa MR Officen oma moottori MR Office -työpöytäsovelluksessa: avoimen lähdekoodin editorit säilyttävät tiedoston kaavat, kaaviot ja SmartArtin ja näyttävät SmartArtin sellaisena kuin se tallennettiin.
 
-## Word-, Excel-, PowerPoint- ja PDF-tiedostot
-
-Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaamisen ja tallentamisen sekä PDF-muokkausten tallentamisen takaisin tiedostoon tarjoaa maksuton MR Office -työpöytäsovellus. Se sisältää kaikki nämä editorit ja toimii offline-tilassa omalla tietokoneellasi:
-
-- **MR Office** (ilmainen työpöytäsovellus): https://github.com/XinaTian/MROffice/releases
-- **Verkkosivusto**: https://mroffice.ai
-
-[Kaikki versiot →](https://github.com/XinaTian/MROffice/releases)
-
 ## Editorien ajaminen
+
+**▶ [Kokeile live-demoa – ei asennusta](https://demo.mroffice.ai)**
 
 Kuusi editoria ovat hakemistossa `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, yhteisenä `@mrnote/core`), ja ne toimivat yhdessä hakemistossa `apps/playground`:
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` käynnistää kehityspalvelimen samaan osoitteeseen, ja `npm run smoke` tarkistaa koontiversion. Jokaisen paketin README kertoo tarkemmin, mitä se tekee ja miten sen voi upottaa.
+
+## Kaikki ominaisuudet: asenna MR Officen työpöytäsovellus (maksuton)
+
+MR Office -työpöytäsovellus on maksuton, sisältää nämä editorit ja koko palvelun ja toimii offline-tilassa omalla tietokoneellasi. Se tuo sen, mitä avoimen lähdekoodin editoreista puuttuu:
+
+- Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaaminen ja tallentaminen
+- Funktioita sisältävien kaavojen (SUMMA, JOS, PHAKU …) laskenta
+- Kaaviot
+- SmartArtin muokkaus
+- PDF-muokkausten tallentaminen takaisin tiedostoon
+
+**[Lataa MR Office Releases-sivulta →](https://github.com/XinaTian/MROffice/releases)** · [tai osoitteesta mroffice.ai](https://mroffice.ai)
+
+### Word-, Excel-, PowerPoint- ja PDF-tiedostot
+
+Word-, Excel- ja PowerPoint-tiedostojen (.docx, .xlsx, .pptx) avaamisen ja tallentamisen sekä PDF-muokkausten tallentamisen takaisin tiedostoon tarjoaa maksuton MR Office -työpöytäsovellus. Se sisältää kaikki nämä editorit ja toimii offline-tilassa omalla tietokoneellasi:
 
 ## Lisenssi
 

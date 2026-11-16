@@ -13,6 +13,7 @@
  */
 
 import { flushDeferredInkPaints } from "@mrnote/core/web/components/console/editor/native-document/deferredInkPaint.ts";
+import { PAPER_UNDERLAY_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/paperUnderlay.ts";
 import { flushInkLightLayers, INK_LIGHT_HOST_ATTR, printInkLightLayer } from "@mrnote/core/web/components/console/editor/native-document/paged/inkLightLayer.ts";
 import type { RichBandsConfig, SectionBandEntry } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import {
@@ -43,7 +44,7 @@ import {
   resolveRichPageBands,
   resolveSectionSheetBands,
 } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
-import { buildBandRichDom, keepBandObjectsOnPaper } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
+import { buildBandRichDom, keepBandObjectsOnPaper, wrapBandTextAroundObjects } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 import { stripFormattingMarks } from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
 import {
   buildFootnoteZoneDom,
@@ -79,6 +80,8 @@ interface MeasuredPrintLineNumber {
   left: number;
   top: number;
   value: number;
+  /** A right-to-left section's number, left-aligned from `left`. */
+  rightSide?: boolean;
 }
 
 function measuredLineNumberError(detail?: unknown): PrintReadinessError {
@@ -175,7 +178,7 @@ function measuredLineNumbersBySheet(
     }
     identities.add(identity);
     const entries = bySheet.get(sheetIndex) ?? [];
-    entries.push({ left, top, value });
+    entries.push({ left, top, value, ...(child.getAttribute("data-line-number-side") === "right" ? { rightSide: true } : {}) });
     bySheet.set(sheetIndex, entries);
   }
   return bySheet;
@@ -198,6 +201,7 @@ function appendMeasuredLineNumbers(
     const number = doc.createElement("span");
     number.className = LINE_NUMBER_CLASS;
     number.setAttribute("data-line-number-value", String(entry.value));
+    if (entry.rightSide) number.setAttribute("data-line-number-side", "right");
     number.style.left = `${entry.left}px`;
     number.style.top = `${entry.top}px`;
     number.textContent = String(entry.value);
@@ -322,6 +326,8 @@ export interface StructuralPrintOptions {
   bandStyleDefinitions?: unknown;
   /** The document's `wordCompatibilityMode` for the bands (`BandTokenContext`). */
   bandWordCompatibilityMode?: number | null;
+  /** Word's replacements for the faces the page cannot draw (`BandTokenContext`). */
+  bandMissingFontSubstitutes?: Readonly<Record<string, readonly string[]>> | null;
   /** Automatic PAGE field settings persisted on the document root. */
   showPageNumbers?: boolean;
   pageNumberFormat?: PageNumberFormat | null;
@@ -1017,6 +1023,9 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
     const hostStyle = columnsHost.getAttribute("style");
     if (hostStyle) hostClone.setAttribute("style", hostStyle);
     for (const attr of Array.from(columnsHost.attributes)) {
+      // The copy's sheets keep their own paper, its bands drawn inside each
+      // one under the lines (no paper layer is copied: paperUnderlay.ts).
+      if (attr.name === PAPER_UNDERLAY_ATTR) continue;
       if (attr.name.startsWith("data-")) hostClone.setAttribute(attr.name, attr.value);
     }
     surfaceClone.appendChild(hostClone);
@@ -1163,6 +1172,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       totalPages: numbering.total,
       styleDefinitions: options.bandStyleDefinitions,
       wordCompatibilityMode: options.bandWordCompatibilityMode ?? null,
+      missingFontSubstitutes: options.bandMissingFontSubstitutes ?? null,
     };
     const footerContext = {
       pageLabel: labels
@@ -1172,6 +1182,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       totalPages: numbering.total,
       styleDefinitions: options.bandStyleDefinitions,
       wordCompatibilityMode: options.bandWordCompatibilityMode ?? null,
+      missingFontSubstitutes: options.bandMissingFontSubstitutes ?? null,
     };
     // Bands live in an overlay on screen (outside the ProseMirror DOM), so
     // the clone re-injects them per sheet with the same builders.
@@ -1315,6 +1326,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
     () => {
       // Laid out with its fonts: the bands' objects Word keeps on the paper.
       keepBandObjectsOnPaper(surfaceClone);
+      wrapBandTextAroundObjects(surfaceClone);
       // A table of contents' leaders are measured in the editor when a row
       // first shows; on a sheet the browser skipped (a print's far sheets, never
       // scrolled to) that is never, and a page of the table printed none. Here

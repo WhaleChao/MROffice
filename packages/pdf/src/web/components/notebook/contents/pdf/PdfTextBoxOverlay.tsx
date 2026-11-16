@@ -5,6 +5,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { holdOfficeTextBoxForChrome } from "@mrnote/core/web/lib/office-inactive-selection.ts";
+import { officeCaretFontScale, setOfficeCaretFontScale } from "@mrnote/core/web/lib/office-painted-caret.ts";
 import type { PdfTextBoxTabStop, PdfTextBoxTypographyFields } from "@mrnote/core/web/lib/pdf/text-box-typography.ts";
 import {
   applyPdfTextBoxBarRules,
@@ -66,6 +67,7 @@ import {
 import { OfficeRibbonNumberField } from "@mrnote/core/web/components/office-ribbon/OfficeRibbonNumberField.tsx";
 import { officeDrawingSelectionStyles } from "@mrnote/core/web/components/office-ribbon/OfficeDrawingSelection.tsx";
 import type { TextBox } from "../../../../lib/pdf/text-boxes";
+import { pdfTextBoxDrawnOrderIs, pdfTextBoxesInDrawnOrder } from "../../../../lib/pdf/text-box-drawn-order";
 import {
   normalizePdfTextLineLayout,
   reconcilePdfTextLineLayout,
@@ -359,9 +361,15 @@ export interface PdfTextBoxEditEmitOptions {
   fold?: "fontSize" | "color" | "text";
 }
 
+const NO_DRAWN_TEXT_BOXES: readonly string[] = Object.freeze([]);
+
 export interface PdfTextBoxOverlayProps {
   /** Extracted text boxes for the current page (page-relative fractions). */
   boxes: TextBox[];
+  /** Each box's place, back first, among the annotations the reader draws
+   * in its own layers (lib/pdf/annotation-stack-order.ts): a box not being
+   * edited is stacked at it, so the screen keeps the page's /Annots order. */
+  stackRanks?: ReadonlyMap<string, number>;
   /** The current page index these boxes belong to. */
   page: number;
   /** Rendered page size in CSS px (the boxes are positioned within it). */
@@ -3463,7 +3471,8 @@ function createTextBoxContentHeightMeasurer({
  * moving/resizing a box emits a persisted PdfTextBoxEdit.
  */
 export default function PdfTextBoxOverlay({
-  boxes,
+  boxes: givenBoxes,
+  stackRanks,
   page,
   pageWidth,
   pageHeight,
@@ -3488,6 +3497,16 @@ export default function PdfTextBoxOverlay({
 }: PdfTextBoxOverlayProps) {
   const t = useTranslations("console-notebooks");
   const locale = useLocale();
+  // A box that is drawn keeps its place among the boxes drawn with it: given
+  // in another order (a box passing from one of the host's lists to another),
+  // the element of the box being typed in was moved in the document, and
+  // the caret went to its start (text-box-drawn-order.ts).
+  const [drawnOrder, setDrawnOrder] = useState<readonly string[]>(NO_DRAWN_TEXT_BOXES);
+  const boxes = useMemo(
+    () => pdfTextBoxesInDrawnOrder(givenBoxes, drawnOrder),
+    [drawnOrder, givenBoxes],
+  );
+  if (!pdfTextBoxDrawnOrderIs(boxes, drawnOrder)) setDrawnOrder(boxes.map((box) => box.id));
   // The fonts from readers' computers the page window keeps (Browse).
   const pageFontsInWindow = usePdfPageFontsInWindow();
   const findMarkByBoxId = useMemo(() => {
@@ -5384,6 +5403,34 @@ export default function PdfTextBoxOverlay({
     const keys = Object.keys(pendingTypingFormatsRef.current);
     for (const key of keys) if (key !== selectedId) putPendingTypingFormat(key, null);
   }, [putPendingTypingFormat, selectedId]);
+  // A size held at the caret draws the caret at that size, on the box being
+  // typed in: the browser's own caret kept the height of the words already
+  
+  // `office-painted-caret.ts`). Beside the words typed with it the two agree
+  // and the browser's caret is back.
+  useLayoutEffect(() => {
+    for (const [key, node] of textBoxRefs.current) {
+      const held = pendingTypingFormats[key];
+      const box = boxesByKey[key];
+      let scale: number | null = null;
+      if (held && typeof held.patch.fontSize === "number" && box) {
+        const edit = editsById[box.id];
+        const runs = edit?.runs ?? (edit?.text === undefined || edit.text === box.text ? box.runs : undefined);
+        // The character before the caret (at the start, the first one).
+        let beside: number | undefined;
+        let offset = 0;
+        for (const run of runs ?? []) {
+          offset += run.text.length;
+          if (offset >= Math.max(1, held.caret)) {
+            beside = run.fontSize;
+            break;
+          }
+        }
+        scale = officeCaretFontScale(held.patch.fontSize, beside ?? edit?.fontSize ?? box.fontSize);
+      }
+      setOfficeCaretFontScale(node, scale);
+    }
+  }, [boxesByKey, editsById, pendingTypingFormats]);
 
   const effectiveColor = useCallback(
     (box: TextBox) => editsById[box.id]?.color ?? box.color ?? "#000000",
@@ -6378,22 +6425,28 @@ export default function PdfTextBoxOverlay({
         if (box) emitGeometry(box, drag.startRect, angleFor(event));
       } else if (box) {
         const next = rectFor(event);
+        // The frame clicked, not dragged (the pointer let go within the few
+        // pixels a hand moves while it clicks).
+        const frameClicked =
+          drag.mode === "move" &&
+          Math.abs(event.clientX - drag.startX) <= 3 &&
+          Math.abs(event.clientY - drag.startY) <= 3;
         // A resize the content refused (pulled shorter than the text) changes
         // nothing; writing the same rect back would still turn an untouched
-        // line into an edit and cover its canvas glyphs.
+        // line into an edit and cover its canvas glyphs. So does a click on
+        // the frame: it selects the box and moves nothing, as in Word. It
+        // used to write the box where it stood (or a pixel off) -- a save of
+        // the page and a step of Undo that changed nothing to see, for every
+        // box selected by its frame.
         if (
-          drag.mode === "move" ||
+          !frameClicked &&
           !boxRectsNearlyEqual(next, drag.startRect, BOX_RECT_EPSILON)
         ) {
           emitGeometry(box, next);
         }
-        // The frame clicked, not dragged: the box is selected as an object
-        // (the caret leaves its words), so Delete removes the box itself.
-        if (
-          drag.mode === "move" &&
-          Math.abs(event.clientX - drag.startX) <= 3 &&
-          Math.abs(event.clientY - drag.startY) <= 3
-        ) {
+        // The box is selected as an object (the caret leaves its words), so
+        // Delete removes the box itself.
+        if (frameClicked) {
           const node = textBoxRefs.current.get(drag.key);
           if (node && document.activeElement === node) node.blur();
           setObjectSelectedKey(drag.key);
@@ -6578,6 +6631,7 @@ export default function PdfTextBoxOverlay({
         const kind = effectiveTextBoxKind(box, edit);
         const isFormula = kind === "formula";
         const isSelected = selectedId === boxKey;
+        const boxStackZ = 1 + 2 * (stackRanks?.get(box.id) ?? 0);
         // A deleted extracted line renders ONLY its opaque cover (below) — no
         // editable box, hit area, or selection chrome — so the line reads as
         // removed while the original glyphs stay hidden. Undo restores it.
@@ -6926,7 +6980,7 @@ export default function PdfTextBoxOverlay({
           justifyContent: isFormula ? "center" : undefined,
           borderRadius: 2,
           boxSizing: "border-box",
-          zIndex: isSelected ? TEXTBOX_SELECTED_Z_INDEX : 1,
+          zIndex: isSelected ? TEXTBOX_SELECTED_Z_INDEX : boxStackZ,
           ...(sourceOpacity !== undefined ? { opacity: sourceOpacity } : {}),
           // The author's inner text area (/RD): the text sits inside it, the
           
@@ -7002,7 +7056,7 @@ export default function PdfTextBoxOverlay({
                   pointerEvents: "none",
                   // Above the box's own fill, which used to paint over it the
                   
-                  zIndex: (isSelected ? TEXTBOX_SELECTED_Z_INDEX : 1) + 1,
+                  zIndex: (isSelected ? TEXTBOX_SELECTED_Z_INDEX : boxStackZ) + 1,
                 }}
               />
             ) : null}

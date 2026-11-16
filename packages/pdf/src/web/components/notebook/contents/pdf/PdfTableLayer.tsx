@@ -17,6 +17,7 @@
  * the next / previous cell (Tab in the last cell adds a row, as in Word);
  * Esc leaves the cell; Delete with the table selected takes it out.
  */
+import { pdfAnnotationSlotStyle } from "../../../../lib/pdf/annotation-stack-order";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 import { FONT_STACK } from "../../../../lib/pdf/font-resolve";
@@ -57,6 +58,10 @@ export interface PdfTableLayerProps {
   readonly onSelectionChange: (selection: PdfTableCellAddress | { readonly tableId: string } | null) => void;
   readonly onChange: (table: PdfTable) => void;
   readonly onDelete: (table: PdfTable) => void;
+  /** Each object's place in the page's stack of annotations the reader
+   * draws itself (lib/pdf/annotation-stack-order.ts), back first: the slot
+   * is stacked at it, so the screen keeps the page's /Annots order. */
+  readonly stackRanks?: ReadonlyMap<string, number>;
   readonly t: (key: string, values?: Record<string, string | number>) => string;
 }
 
@@ -79,11 +84,16 @@ function adjacentCell(table: PdfTable, row: number, column: number, back: boolea
 
 export function PdfTableLayer({
   tables, cssWidth, cssHeight, pxPerPoint, paintedDirectives, writable, selection, onSelectionChange, onChange, onDelete, t,
+  stackRanks,
 }: PdfTableLayerProps) {
   const [editing, setEditing] = useState<PdfTableCellAddress | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<{ id: string; kind: "move" | "size" | "column"; column?: number; dx: number; dy: number; startX: number; startY: number } | null>(null);
-  useEffect(() => { void ensurePdfEastAsianFace(); }, []);
+  // The cells' East Asian face, for a page that has a table: every page of
+  // every PDF mounts this layer, and loaded for all of them the face (10.6 MB)
+  // was downloaded, hashed and parsed by each PDF that opened, tables or not.
+  const hasTables = tables.length > 0;
+  useEffect(() => { if (hasTables) void ensurePdfEastAsianFace(); }, [hasTables]);
   const selectedId = selection?.tableId ?? null;
   const gridRefs = useRef(new Map<string, HTMLTableElement>());
   // The frame follows the rows as laid out (a cell's words wrapping, a row
@@ -253,7 +263,9 @@ export function PdfTableLayer({
         // the page's copy is covered where it stands (on the page's paper).
         const shown = !style.painted || selected || offset !== null;
         return (
-          <div key={table.id} className="pdf-viewer__table-slot">
+          <div key={table.id} className="pdf-viewer__table-slot"
+            data-stack-rank={stackRanks?.get(`table:${table.id}`)}
+            style={pdfAnnotationSlotStyle(stackRanks?.get(`table:${table.id}`))}>
             {style.painted && shown ? (
               <div
                 key="cover"

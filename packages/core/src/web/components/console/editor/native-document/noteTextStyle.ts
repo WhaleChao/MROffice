@@ -20,7 +20,7 @@ import {
   measureOfficeFontBoundingBox,
   measureOfficeFontLineBox,
 } from "../../../office-ribbon/officeFontLineBox";
-import { wordEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
+import { wordDocumentEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
 import {
   fontFamilyWithCjkRenderFallback,
   normalizeFontFamily,
@@ -208,7 +208,7 @@ function singleLineRatio(
     const metrics = wordFontLineMetrics(unquoted(token));
     if (!metrics) continue;
     const ratio = eastAsian
-      ? metrics.box * wordEastAsianSingleLineFactor(unquoted(token))
+      ? metrics.box * wordDocumentEastAsianSingleLineFactor(unquoted(token))
       : metrics.box + metrics.lineGap;
     recordedRatios.set(key, ratio);
     return ratio;
@@ -218,7 +218,7 @@ function singleLineRatio(
     const box = measureOfficeFontBoundingBox(doc, font);
     return box === undefined
       ? null
-      : (box * wordEastAsianSingleLineFactor(unquoted(tokens[0] ?? ""))) / REFERENCE_PX;
+      : (box * wordDocumentEastAsianSingleLineFactor(unquoted(tokens[0] ?? ""))) / REFERENCE_PX;
   }
   const line = measureOfficeFontLineBox(doc, {
     font,

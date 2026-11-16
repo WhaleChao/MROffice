@@ -21,6 +21,8 @@
  * Only the paragraphs a transaction touched are measured again (typing
  * re-reads one paragraph); a font landing re-reads them all.
  */
+import { noteEngineDeclinedBlock, takeEngineDeclinedNews } from "./engineDeclinedBlocks";
+import { drawnLinesWidth, engineLinesKeptOn, forgetDrawnLines, noteDrawnLines, retireSeededLines, seededLinesFor, spansAt } from "./engineLinesKept";
 import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
@@ -38,6 +40,9 @@ import {
   type DocsFloatCache,
   docsDrawnWidths,
   docsEngineLineStarts,
+  docsLastLineOverhangs,
+  engineBreakStrutOff,
+  docsLineOpensWithSpace,
   normalizeStarts,
   planDocsLineCorrections,
   readDocsParagraph,
@@ -50,13 +55,18 @@ import { textEngineEnabled } from "../../../../lib/text-engine/flags";
 import { textEngineOn } from "../../../../lib/text-engine/page-adapter";
 import { docsBlockLineRule, noteEngineBlockLines } from "./paged/ledger/ledgerEngineLines";
 import { normalizeWordCompatibilityMode } from "./documentOverflowPunctuation";
+import { wordSetsIdeographsAsLetters } from "./wordFarEastDefaults";
 import { touchedTextblockRanges } from "./touchedTextblocks";
 import { isImeCompositionActive, onImeCompositionSettled } from "./imeCompositionGuard";
 import { DOCUMENT_ENGINE_LINES_PENDING, LAYOUT_METRICS_FLUSH_EVENT, writeDocumentLayoutStatus } from "./documentLayoutStatus";
+import { projectionFontReach, sheetRangesOf } from "./projectionFontNews";
 import { recordProjectedHorizon, sheetsWithinMeasureHorizon } from "./paged/measureHorizon";
 import { createEngineLineCache, familyNews, type EngineLineCache, type EngineLineKey, type FamilyNews } from "./engineLineCache";
 import { PAGE_BLOCK_NODE } from "./paged/paginationProjectionKeys";
-import { textEngineEpoch } from "../../../../lib/text-engine/measure";
+import { fastRangeMappingOn, mapDecorationsFast, mapRangesFast, mergeRanges } from "./fastRangeMapping";
+import { ENGINE_WORD_EXTRA_VAR } from "./balancedSpaces";
+import { textEngineAnswerEpoch, textEngineEpoch } from "../../../../lib/text-engine/measure";
+import { msSinceTyping, TYPING_IDLE_MS } from "../../../../lib/typing-session";
 
 export const documentEngineLineBreaksKey = new PluginKey<EngineLinesState>("documentEngineLineBreaks");
 const META = "documentEngineLineBreaks";
@@ -71,6 +81,19 @@ const FACE_HOLD_MS = 4000;
  * are looked at for the engine's answer (the ledger is not held for this). */
 const FACE_WATCH_MS = 60_000;
 const FACE_WATCH_STEP_MS = 250;
+
+
+
+
+
+
+
+
+
+
+
+
+const TYPING_PAUSE_MS = 2 * TYPING_IDLE_MS;
 const CJK = /[぀-ヿ㐀-鿿가-힯＀-￯]/;
 
 /** Whether `transaction` publishes the engine's line corrections only. */
@@ -78,7 +101,7 @@ export function isDocumentEngineLineBreaksTransaction(transaction: { getMeta(key
   return transaction.getMeta(META) !== undefined;
 }
 
-interface Span {
+export interface Span {
   from: number;
   to: number;
   /** Extra letter spacing, px. */
@@ -118,11 +141,81 @@ function tabBreakElement(): HTMLElement {
   return br;
 }
 
+/**
+ * The tabs of a paragraph the browser breaks that hang at a line's end while
+ * what follows them opens the next line. Word takes such a tab to the next
+ * line with what follows it (docs-lines: "a tab stays with what follows
+ * it"); the browser lets it hang, and a reference list indented by typed
+ * tabs set its continuation lines at the margin (corpus R283-D12, Times New
+ * Roman installed on the Mac: the engine leaves those paragraphs to the
+ * browser). A tab a break of ours already opens a line with keeps it.
+ */
+export function hangingTabBreaks(view: EditorView, element: HTMLElement): Span[] {
+  const doc = element.ownerDocument;
+  const texts: Text[] = [];
+  const walker = doc.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+    acceptNode: (node) => (node.parentElement?.closest('[contenteditable="false"]') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+  });
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text);
+  const range = doc.createRange();
+  const boxOf = (text: Text, index: number): DOMRect | null => {
+    range.setStart(text, index);
+    range.setEnd(text, index + 1);
+    const rects = Array.from(range.getClientRects()).filter((rect) => rect.height > 0);
+    return rects[0] ?? null;
+  };
+  const spans: Span[] = [];
+  for (let t = 0; t < texts.length; t += 1) {
+    const data = texts[t]!.data;
+    for (let index = data.indexOf("\t"); index >= 0; index = data.indexOf("\t", index + 1)) {
+      const tab = boxOf(texts[t]!, index);
+      if (!tab) continue;
+      // Already opened by our break: kept.
+      const before = texts[t]!.previousSibling;
+      const opened = index === 0 && before instanceof HTMLElement && before.classList.contains(DOCS_ENGINE_TAB_BREAK_CLASS);
+      let hangs = opened;
+      if (!opened) {
+        // The first character after the tab that draws something.
+        let found: DOMRect | null = null;
+        for (let u = t, at = index + 1; u < texts.length && !found; u += 1, at = 0) {
+          const text = texts[u]!.data;
+          for (let i = at; i < text.length; i += 1) {
+            if (/\s/.test(text[i]!)) continue;
+            found = boxOf(texts[u]!, i);
+            break;
+          }
+        }
+        hangs = found !== null && found.top > tab.top + tab.height / 2;
+      }
+      if (!hangs) continue;
+      try {
+        const at = view.posAtDOM(texts[t]!, index);
+        spans.push({ from: at, to: at, extra: 0, base: 0, wordExtra: 0, wordBase: 0, tabBreak: true });
+      } catch { /* a node outside the editor's content */ }
+    }
+  }
+  return spans;
+}
+
 function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoration[] {
   return spans.map((span) => {
-    if (span.tabBreak) return Decoration.widget(span.from, tabBreakElement, { side: -1, key: DOCS_ENGINE_TAB_BREAK_CLASS, engineLine: true, ignoreSelection: true });
+    // The break ends a line and owns no line box of its own: it stands in
+    // the paragraph's wrappers, which take no line height where the
+    // paragraph's leaves own it (documentAutoLineSafety). Taken for a
+    
+    // of its paragraph: an 8 pt cell under an 11 pt Normal drew 10.5 pt lines
+    // for Word's 9.77 (tables/probes/narrow, corpus R417-D03's "ID" column).
+    if (span.tabBreak) {
+      return Decoration.widget(span.from, tabBreakElement, {
+        side: -1, key: DOCS_ENGINE_TAB_BREAK_CLASS, engineLine: true, ignoreSelection: true,
+        ...(engineBreakStrutOff() ? {} : { zeroLayoutFormattingMark: true }),
+      });
+    }
     const total = Number((span.base + span.extra).toFixed(4));
-    const words = span.wordExtra ? `;word-spacing:${Number((span.wordBase + span.wordExtra).toFixed(4))}px` : "";
+    // The extra alone too: a balanced space's own width on the same text adds it (balancedSpaces.ts).
+    const words = span.wordExtra
+      ? `;word-spacing:${Number((span.wordBase + span.wordExtra).toFixed(4))}px;${ENGINE_WORD_EXTRA_VAR}:${Number(span.wordExtra.toFixed(4))}px`
+      : "";
     return Decoration.inline(
       span.from,
       span.to,
@@ -139,7 +232,8 @@ function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoratio
 
 function rulesFor(view: EditorView, node: ProseMirrorNode): DocsLayoutRules {
   const kinsoku: KinsokuList | null = CJK.test(node.textContent) ? "zh-CN" : null;
-  return { compatibilityMode: normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode), kinsoku };
+  const attrs = view.state.doc.attrs;
+  return { compatibilityMode: normalizeWordCompatibilityMode(attrs.wordCompatibilityMode), kinsoku, ideographsAsLetters: kinsoku !== null && wordSetsIdeographsAsLetters(attrs) };
 }
 
 /** Pieces' natural drawn widths; a justified paragraph is read left-aligned
@@ -188,33 +282,101 @@ function lineContentOffset(view: EditorView, paragraph: DocsParagraph, start: nu
   }
 }
 
+/**
+ * The text blocks of `doc` among `waiting` (paragraphs a pass found waiting
+ * for a face file), with their positions, wherever they stand: read again once
+ * the faces move, whatever sheets the page ledger's horizon holds then.
+ */
+export function blocksWaitingForFaces(doc: ProseMirrorNode, waiting: ReadonlySet<ProseMirrorNode>): Array<{ node: ProseMirrorNode; pos: number }> {
+  const found: Array<{ node: ProseMirrorNode; pos: number }> = [];
+  if (!waiting.size) return found;
+  let left = waiting.size;
+  doc.descendants((node, pos) => {
+    if (!left) return false;
+    if (!node.isTextblock) return true;
+    if (waiting.has(node)) {
+      found.push({ node, pos });
+      left -= 1;
+    }
+    return false;
+  });
+  return found;
+}
+
 /** Counts for probes (`window.__docsEngineLineCache`). */
-interface EngineLineCacheStats { measured: number; reused: number; kept: number; missed?: Record<string, number> }
+interface EngineLineCacheStats { measured: number; reused: number; kept: number; missed?: Record<string, number>; seeded?: number }
 
 /** What a block's lines depend on besides itself (engineLineCache). */
 function lineKeyOf(view: EditorView, element: HTMLElement, pos: number): EngineLineKey {
   const parent = view.state.doc.resolve(pos).parent;
   return {
     width: element.getBoundingClientRect().width,
-    epoch: textEngineEpoch(),
+    // Lines are kept only from answers the engine gave (a paragraph still
+    // waiting for a face is not kept), and a given answer moves only with
+    // the faces declared (textEngineAnswerEpoch); the faces a block's
+    // families gained since are its entry's own check (familyNews). Keyed on
+    // every face file loading, R286-D01's cold opening read 12,565 blocks
+    // again for that alone, of 34,449; with this, 25,620 readings in all
+    
+    // every face file again.
+    epoch: (view.dom.ownerDocument.defaultView as (Window & { __docsEngineLinesAnswerEpoch?: boolean }) | null)?.__docsEngineLinesAnswerEpoch === false
+      ? textEngineEpoch() : textEngineAnswerEpoch(),
     docAttrs: view.state.doc.attrs,
     parent: parent.type.name === PAGE_BLOCK_NODE ? PAGE_BLOCK_NODE : parent.attrs,
   };
 }
 
+type EngineLinesCache = { lines: EngineLineCache; news: FamilyNews; stats: EngineLineCacheStats | null };
+
+/** What a reading drew, for the layout a row keeps (engineLinesKept). */
+interface DrawnReading { read: boolean; width: number | null; declined: boolean }
+
+/** A paragraph's spans now (readBlockLines), what it drew noted for a kept
+ * layout, or taken back from the one restored. */
 function measureBlock(
   view: EditorView, node: ProseMirrorNode, pos: number, round: number, floats: DocsFloatCache,
-  cache?: { lines: EngineLineCache; news: FamilyNews; stats: EngineLineCacheStats | null },
+  cache?: EngineLinesCache,
+): { spans: Span[]; agrees: boolean } | null | undefined {
+  if (!engineLinesKeptOn(view.dom.ownerDocument.defaultView)) return readBlockLines(view, node, pos, round, floats, cache, null);
+  const drew: DrawnReading = { read: false, width: null, declined: false };
+  const result = readBlockLines(view, node, pos, round, floats, cache, drew);
+  if (result === undefined || !drew.read) forgetDrawnLines(node);
+  else noteDrawnLines(node, pos, drew.width ?? drawnLinesWidth(node), result?.spans ?? [], drew.declined);
+  return result;
+}
+
+function readBlockLines(
+  view: EditorView, node: ProseMirrorNode, pos: number, round: number, floats: DocsFloatCache,
+  cache: EngineLinesCache | undefined, drew: DrawnReading | null,
 ): { spans: Span[]; agrees: boolean } | null | undefined {
   const element = view.nodeDOM(pos);
   if (!(element instanceof HTMLElement) || !element.isConnected) return null;
   // A cell of an auto-layout table sizes its column from its content's
   // widths, which a correction would change: the browser keeps it.
   const table = element.closest("table");
-  if (table && element.ownerDocument.defaultView?.getComputedStyle(table).tableLayout !== "fixed") return null;
+  if (table && element.ownerDocument.defaultView?.getComputedStyle(table).tableLayout !== "fixed") {
+    noteEngineDeclinedBlock(node);
+    return null;
+  }
   // A block measured as it is now (moved to another sheet by the page
   // ledger, unchanged) takes its corrections back without a reading.
   const key = cache && round === 0 ? lineKeyOf(view, element, pos) : null;
+  if (drew) {
+    drew.read = true;
+    drew.width = key?.width ?? null;
+    // Restored pages draw what they drew when they were kept.
+    // A paragraph with corrections beside a float is read again: a float a
+    // layout drew late (a text box placed after its first pass) was not there
+    // when its corrections were kept, and the browser wraps beside one.
+    const seededKept = key ? seededLinesFor(node, key.width) : null;
+    const kept = seededKept && (!seededKept.spans.length || !docsParagraphBesideFloat(element, floats)) ? seededKept : null;
+    if (kept) {
+      if (cache?.stats) cache.stats.seeded = (cache.stats.seeded ?? 0) + 1;
+      drew.declined = kept.declined;
+      if (kept.declined) noteEngineDeclinedBlock(node);
+      return kept.declined && !kept.spans.length ? null : { spans: spansAt<Span>(kept, pos), agrees: true };
+    }
+  }
   if (cache && key) {
     const kept = cache.lines.lookup<Span>(node, key, pos, cache.news);
     if (kept) {
@@ -241,7 +403,20 @@ function measureBlock(
   const paragraph = readDocsParagraph(element);
   // undefined: a face is still loading (the ledger may wait for it).
   if (paragraph.pending) return undefined;
-  if (paragraph.unsupported || !paragraph.pieces.length) return null;
+  if (paragraph.unsupported || !paragraph.pieces.length) {
+    // Left to the browser: its lines take the Word rules the browser's
+    // projections keep (justifiedSpaceShrink), and a tab hanging at a line's
+    // end goes to the next line with what follows it (hangingTabBreaks).
+    if (paragraph.unsupported) {
+      noteEngineDeclinedBlock(node);
+      if (drew) drew.declined = true;
+      if (element.textContent?.includes("\t")) {
+        const spans = hangingTabBreaks(view, element);
+        if (spans.length) return { spans, agrees: true };
+      }
+    }
+    return null;
+  }
   const rules = rulesFor(view, node);
   const raw = docsEngineLineStarts(paragraph, rules);
   const engine = normalizeStarts(paragraph, raw);
@@ -261,7 +436,12 @@ function measureBlock(
   // or the tab hangs at the end of the line before (R283-D12 on: the links
   // stayed at the margin, the lines read as agreeing). Such a paragraph is
   // always planned, so its break is drawn and kept.
-  const tabOpened = engine.some((start, line) => line > 0 && paragraph.pieces[start]?.kind === "tab");
+  // So is a line the engine opens with a space (mode 14, a cell narrower
+  // than a letter): the browser reads no space's box at all.
+  // And a paragraph whose last line is one letter wider than the measure:
+  // that letter is narrowed so the closing widgets stay on its line.
+  const tabOpened = engine.some((start, line) => line > 0 && paragraph.pieces[start]?.kind === "tab") ||
+    raw.some((_start, line) => docsLineOpensWithSpace(paragraph, raw, line)) || docsLastLineOverhangs(paragraph, raw);
   if (!current && !tabOpened && docsBrowserAgreesQuickly(element, paragraph, engine)) {
     keep([]);
     return { spans: [], agrees: true };
@@ -349,9 +529,18 @@ export const DocumentEngineLineBreaks = Extension.create({
               return { set: added.length ? set.add(tr.doc, added) : set, dirty: meta.dirty, retry: meta.retry };
             }
             if (!tr.docChanged) return previous;
+            if (tr.getMeta("addToHistory") !== false) retireSeededLines();
             // An edited paragraph keeps its mapped corrections until it is
             // measured again: no frame of browser lines in between.
             const changed = touchedTextblockRanges(tr);
+            // At the cost of what the transaction touches (fastRangeMapping).
+            if (fastRangeMappingOn()) {
+              return {
+                set: mapDecorationsFast(previous.set, tr),
+                dirty: previous.dirty === "all" ? "all" : mapRangesFast(previous.dirty, tr, changed),
+                retry: previous.retry.length ? mapRangesFast(previous.retry, tr, [], false) : previous.retry,
+              };
+            }
             const set = previous.set.map(tr.mapping, tr.doc);
             const dirty = previous.dirty === "all" ? "all" : [...mapRanges(previous.dirty, tr), ...changed];
             return { set, dirty, retry: mapRanges(previous.retry, tr) };
@@ -373,6 +562,11 @@ export const DocumentEngineLineBreaks = Extension.create({
           let idle: number | null = null;
           let waitTimer: number | null = null;
           let full = true;
+          /** Sheets a face arrived for (projectionFontNews): read with the dirty ones. */
+          const fontSheets = new Set<Element>();
+          /** What a pass read a frame at a time took to read (every paragraph,
+           * the sheets of an arrived face): given back if it is cut short. */
+          let inFlight: (() => void) | null = null;
           const rounds = new Map<number, number>();
           const lineCache = createEngineLineCache();
           const cacheStats = (): EngineLineCacheStats | null => {
@@ -382,6 +576,19 @@ export const DocumentEngineLineBreaks = Extension.create({
           /** Since when paragraphs wait for a face file (the page ledger
            * waits with them, at most FACE_HOLD_MS). */
           let facesPendingSince: number | null = null;
+          // Paragraphs a pass found waiting for a face file, by node. They are
+          // read again once the engine's faces move, wherever they are: the
+          // pass that answers runs long after the page ledger laid them out,
+          // its horizon on other sheets, and a face file read by the engine
+          // alone (its metrics, the browser's face long loaded) brings the
+          // ledger no font news to widen it. R284-D30's Malgun Gothic Latin
+          // 8 s late: page 7's cell paragraph kept the browser's lines for
+          // good ("동/일한" where the engine squeezes "동일한").
+          // `window.__docsEnginePendingAnywhereOff = true`: horizon only, as before.
+          const waitingForFaces = new Set<ProseMirrorNode>();
+          let facesLanded = false;
+          const pendingAnywhereOff = () =>
+            (win as Window & { __docsEnginePendingAnywhereOff?: boolean }).__docsEnginePendingAnywhereOff === true;
           // The page ledger lays pages out from the drawn lines: while lines
           // are about to be corrected it waits (and asks for them at once,
           // LAYOUT_METRICS_FLUSH_EVENT), so its cuts are made on the engine's
@@ -389,6 +596,12 @@ export const DocumentEngineLineBreaks = Extension.create({
           const markPending = (pending: boolean) => writeDocumentLayoutStatus(view.dom, DOCUMENT_ENGINE_LINES_PENDING, pending ? "true" : null, view);
           const cancelScheduled = () => {
             if (frame !== null) { win.cancelAnimationFrame(frame); frame = null; }
+            // A pass under way, cut short by the ledger's flush: what it took
+            // to read is read by the flush instead. Taken and dropped, the
+            // paragraphs waiting for a face that had just answered stayed the
+            // browser's lines through the pages' release and were corrected
+            
+            if (inFlight) { inFlight(); inFlight = null; }
             if (idle !== null) {
               const cancel = (win as Window & { cancelIdleCallback?: (handle: number) => void }).cancelIdleCallback;
               if (cancel) cancel.call(win, idle);
@@ -434,6 +647,18 @@ export const DocumentEngineLineBreaks = Extension.create({
           // After an edit the paragraph is measured once the keystroke has
           // been painted: typing never waits for it (iPad, Safari), unless
           // the page ledger asks for the lines first.
+          let typingTimer: number | null = null;
+          const typingHolds = () =>
+            (win as Window & { __docsEngineLinesPerKey?: boolean }).__docsEngineLinesPerKey !== true && msSinceTyping() < TYPING_PAUSE_MS;
+          /** Measure the edits once the typing has paused: nothing pending meanwhile. */
+          const afterTyping = () => {
+            if (typingTimer !== null) return;
+            typingTimer = win.setTimeout(() => {
+              typingTimer = null;
+              if (typingHolds()) afterTyping();
+              else scheduleAfterPaint();
+            }, Math.max(16, TYPING_PAUSE_MS - msSinceTyping()));
+          };
           const scheduleAfterPaint = () => {
             markPending(true);
             if (idle !== null || frame !== null) return;
@@ -465,13 +690,28 @@ export const DocumentEngineLineBreaks = Extension.create({
                 }
                 return false;
               });
-            const wanted: Array<[number, number]> = all ? [[0, doc.content.size]] : state.dirty === "all" ? [] : state.dirty;
+            const takenSheets = [...fontSheets];
+            const fromFonts = takenSheets.length ? sheetRangesOf(view, takenSheets) : [];
+            fontSheets.clear();
+            const wanted: Array<[number, number]> = all ? [[0, doc.content.size]] : [...(state.dirty === "all" ? [] : state.dirty), ...fromFonts];
             if (all) rounds.clear();
+            // A long list read sheet by sheet from its merged, ordered form:
+            // every range against every sheet was sheets x ranges a round (a
+            // document held as parts lists a part's paragraphs with each part).
+            const ordered = fastRangeMappingOn() && wanted.length > 64 ? mergeRanges(wanted) : null;
+            let cursor = 0;
+            const clip = (ranges: readonly [number, number][], sheetFrom: number, sheetTo: number) => ranges
+              .map(([from, to]): [number, number] => [Math.max(from, sheetFrom), Math.min(to, sheetTo)])
+              .filter(([from, to]) => to > from || (to === from && from > sheetFrom && from < sheetTo));
             doc.forEach((sheet, offset) => {
               const sheetFrom = offset, sheetTo = offset + sheet.nodeSize;
-              const parts = wanted
-                .map(([from, to]): [number, number] => [Math.max(from, sheetFrom), Math.min(to, sheetTo)])
-                .filter(([from, to]) => to > from || (to === from && from > sheetFrom && from < sheetTo));
+              let parts: Array<[number, number]>;
+              if (ordered) {
+                while (cursor < ordered.length && ordered[cursor]![1] < sheetFrom) cursor += 1;
+                let end = cursor;
+                while (end < ordered.length && ordered[end]![0] <= sheetTo) end += 1;
+                parts = clip(ordered.slice(cursor, end), sheetFrom, sheetTo);
+              } else parts = clip(wanted, sheetFrom, sheetTo);
               if (!parts.length) return;
               const dom = horizon ? view.nodeDOM(offset) : null;
               if (horizon && dom && !horizon.has(dom as Element)) {
@@ -481,7 +721,16 @@ export const DocumentEngineLineBreaks = Extension.create({
               for (const [from, to] of parts) collect(from, to);
             });
             for (const [from, to] of state.retry) collect(from, to);
-            return { doc, blocks, all, later, dirty: state.dirty === "all" || state.dirty.length > 0 || state.retry.length > 0 };
+            if (facesLanded && waitingForFaces.size && !pendingAnywhereOff()) {
+              facesLanded = false;
+              for (const { node, pos } of blocksWaitingForFaces(doc, waitingForFaces)) {
+                if (seen.has(pos)) continue;
+                seen.add(pos);
+                blocks.push({ node, pos, retry: false });
+              }
+              waitingForFaces.clear();
+            }
+            return { doc, blocks, all, later, takenSheets, dirty: state.dirty === "all" || state.dirty.length > 0 || state.retry.length > 0 || fromFonts.length > 0 };
           };
           /** Measure; `sync`: every block now, the retry rounds too (the
            * ledger is waiting). Otherwise a slice per frame. */
@@ -500,10 +749,12 @@ export const DocumentEngineLineBreaks = Extension.create({
               return;
             }
             let anyFacesPending = false;
+            let readAll = false;
             for (let round = 0; round <= MAX_ROUNDS; round += 1) {
               const collected = collectBlocks();
               if (!collected) return;
-              const { doc, blocks, all, dirty, later } = collected;
+              readAll ||= collected.all;
+              const { doc, blocks, all, dirty, later, takenSheets } = collected;
               if (!blocks.length) {
                 // Nothing within the horizon: dispatch only if that changes
                 // the state (a flush that finds the same ranges left does
@@ -512,7 +763,7 @@ export const DocumentEngineLineBreaks = Extension.create({
                 const unchanged = state && state.retry.length === 0 && state.dirty !== "all" &&
                   state.dirty.length === later.length && state.dirty.every(([from, to], at) => later[at][0] === from && later[at][1] === to);
                 if (dirty && !unchanged) view.dispatch(view.state.tr.setMeta(META, { spans: [], ranges: [], retry: [], dirty: later } satisfies EngineLinesMeta).setMeta("addToHistory", false));
-                settle(anyFacesPending);
+                settle(anyFacesPending, readAll);
                 return;
               }
               let index = 0;
@@ -523,7 +774,11 @@ export const DocumentEngineLineBreaks = Extension.create({
               const measured: Array<[number, number]> = [];
               const retry: Array<[number, number]> = [];
               const finish = () => {
-                view.dispatch(view.state.tr.setMeta(META, { spans, ranges: measured, retry, dirty: later } satisfies EngineLinesMeta).setMeta("addToHistory", false));
+                const tr = view.state.tr.setMeta(META, { spans, ranges: measured, retry, dirty: later } satisfies EngineLinesMeta).setMeta("addToHistory", false);
+                // Paragraphs newly left to the browser are read again by the
+                // projections that keep Word's rules for the browser's lines.
+                if (takeEngineDeclinedNews()) tr.setMeta("justifiedSpaceShrinkRemeasure", true);
+                view.dispatch(tr);
                 return retry.length > 0;
               };
               const slice = (count: number) => {
@@ -534,7 +789,10 @@ export const DocumentEngineLineBreaks = Extension.create({
                   const result = measureBlock(view, node, pos, done, floats, cache);
                   measured.push([pos, pos + node.nodeSize]);
                   if (!result) {
-                    if (result === undefined) facesPending = true;
+                    if (result === undefined) {
+                      facesPending = true;
+                      waitingForFaces.add(node);
+                    }
                     continue;
                   }
                   spans.push(...result.spans);
@@ -549,33 +807,40 @@ export const DocumentEngineLineBreaks = Extension.create({
                 const more = finish();
                 anyFacesPending ||= facesPending;
                 if (!more) {
-                  settle(anyFacesPending);
+                  settle(anyFacesPending, readAll);
                   return;
                 }
                 continue;
               }
+              const giveBack = () => {
+                if (all) full = true;
+                for (const sheet of takenSheets) fontSheets.add(sheet);
+              };
               const step = () => {
                 frame = null;
-                if (!view.dom.isConnected) return;
+                inFlight = null;
+                if (!view.dom.isConnected) { giveBack(); return; }
                 if (view.state.doc !== doc) {
                   // Edited meanwhile: what is left is measured next time.
-                  if (all) full = true;
-                  schedule();
+                  giveBack();
+                  if (typingHolds()) afterTyping();
+                  else schedule();
                   return;
                 }
                 slice(BLOCKS_PER_SLICE);
                 if (index < blocks.length) {
                   frame = win.requestAnimationFrame(step);
+                  inFlight = giveBack;
                   return;
                 }
                 const more = finish();
-                settle(facesPending);
+                settle(facesPending, all);
                 if (more) schedule();
               };
               step();
               return;
             }
-            settle(anyFacesPending);
+            settle(anyFacesPending, readAll);
           };
           /** A pass ended: the ledger may lay pages out unless faces are
            * still coming (held a few seconds at most). */
@@ -598,6 +863,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               if (textEngineEpoch() !== facesEpoch) {
                 // Read again, every paragraph; still pending, the pass watches on.
                 full = true;
+                facesLanded = true;
                 schedule();
                 return;
               }
@@ -605,13 +871,21 @@ export const DocumentEngineLineBreaks = Extension.create({
             };
             facesWatch = win.setTimeout(look, FACE_WATCH_STEP_MS);
           };
-          const settle = (facesPending: boolean) => {
+          
+
+
+
+
+
+          const settle = (facesPending: boolean, readAll = false) => {
             const state = documentEngineLineBreaksKey.getState(view.state);
             // Dirty ranges past the measure horizon hold nothing: the ledger
             // asks for them (its flush) when its horizon reaches them.
             const work = frame !== null || idle !== null || Boolean(state && (state.dirty === "all" || state.retry.length));
+            // A wait past its hold holds nothing and is ended by any pass (a
+            // later wait starts its own hold).
             if (facesPending) facesPendingSince ??= performance.now();
-            else facesPendingSince = null;
+            else if (readAll || (facesPendingSince !== null && performance.now() - facesPendingSince >= FACE_HOLD_MS)) facesPendingSince = null;
             if (facesPending) watchFaces();
             const holding = facesPendingSince !== null && performance.now() - facesPendingSince < FACE_HOLD_MS;
             markPending(work || holding);
@@ -621,6 +895,8 @@ export const DocumentEngineLineBreaks = Extension.create({
             const state = documentEngineLineBreaksKey.getState(view.state);
             const dirty = Boolean(state && (state.dirty === "all" || state.dirty.length || state.retry.length));
             if (!view.dom.hasAttribute(DOCUMENT_ENGINE_LINES_PENDING) && !dirty) return;
+            // Ranges a hand is still typing in wait for the pause (afterTyping).
+            if (!view.dom.hasAttribute(DOCUMENT_ENGINE_LINES_PENDING) && typingHolds()) return;
             flushes += 1;
             cancelScheduled();
             pass(true);
@@ -628,7 +904,16 @@ export const DocumentEngineLineBreaks = Extension.create({
           view.dom.addEventListener(LAYOUT_METRICS_FLUSH_EVENT, onFlush);
           // Faces landing (the engine's answers move from pending) and a
           // width change re-read every paragraph.
-          const onFonts = () => { full = true; schedule(); };
+          const onFonts = (event?: Event) => {
+            // (projectionFontNews) With the trial, only the paragraphs of the
+            // sheets drawing the arrived face's characters are read again.
+            const reach = projectionFontReach(view, "engine-lines", event);
+            if (reach === "none") return;
+            facesLanded = true;
+            if (reach === "all") full = true;
+            else for (const sheet of reach.sheets) fontSheets.add(sheet);
+            schedule();
+          };
           view.dom.ownerDocument.fonts?.addEventListener?.("loadingdone", onFonts);
           let lastWidth = view.dom.getBoundingClientRect().width;
           const observer = "ResizeObserver" in win
@@ -651,7 +936,10 @@ export const DocumentEngineLineBreaks = Extension.create({
               // ranges left past the horizon) schedule nothing, or the ledger
               // would see lines pending after every flush and never lay
               // pages out.
-              if (updated.state.doc !== previousState.doc) scheduleAfterPaint();
+              if (updated.state.doc !== previousState.doc) {
+                if (typingHolds()) afterTyping();
+                else scheduleAfterPaint();
+              }
             },
             destroy() {
               stopImeSettled();
@@ -661,6 +949,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               cancelScheduled();
               if (waitTimer !== null) win.clearTimeout(waitTimer);
               if (facesWatch !== null) win.clearTimeout(facesWatch);
+              if (typingTimer !== null) win.clearTimeout(typingTimer);
               markPending(false);
             },
           };

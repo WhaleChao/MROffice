@@ -80,13 +80,14 @@ export function trailingAutoLeadingCreditPx(block: Element | null | undefined): 
   if (last.hasAttribute("data-line-height-pt") || last.hasAttribute("data-line-height-rule")) return 0;
   // Word 文档网格 (`<w:docGrid w:type="lines">`): every line's advance IS a whole
   // grid slot, so there is no Auto leading hanging below the last line for the
-  // page edge to absorb — Word places a fixed number of slots per page and moves
-  // the next line whole. A block that opted out of the grid keeps the Auto rule.
+  // page edge to absorb. A line of several slots is its text centred in them:
+  // the room under the text may cross the edge (gridFootCreditPx). A block
+  // that opted out of the grid keeps the Auto rule.
   if (
     last.closest('[data-doc-grid="lines"]') &&
     last.getAttribute("data-snap-to-grid") !== "false"
   ) {
-    return 0;
+    return gridFootCreditPx(last, Number.parseFloat(getComputedStyle(last).lineHeight));
   }
   const multiplier = readMultiplier(last);
   if (!(multiplier > 1)) return 0;
@@ -135,7 +136,9 @@ export function trailingAutoLeadingCreditPx(block: Element | null | undefined): 
 export function trailingAutoLeadingCreditUnlaidPx(block: HTMLElement): number {
   if (!block.matches(TEXT_BLOCK) || block.querySelector(INLINE_PICTURE)) return 0;
   if (block.hasAttribute("data-line-height-pt") || block.hasAttribute("data-line-height-rule")) return 0;
-  if (block.closest('[data-doc-grid="lines"]') && block.getAttribute("data-snap-to-grid") !== "false") return 0;
+  if (block.closest('[data-doc-grid="lines"]') && block.getAttribute("data-snap-to-grid") !== "false") {
+    return gridFootCreditPx(block, Number.parseFloat(getComputedStyle(block).lineHeight));
+  }
   const multiplier = readMultiplier(block);
   if (!(multiplier > 1)) return 0;
   const line = Number.parseFloat(getComputedStyle(block).lineHeight);
@@ -143,6 +146,32 @@ export function trailingAutoLeadingCreditUnlaidPx(block: HTMLElement): number {
 }
 
 const INLINE_PICTURE = '[data-inline-picture="true"], img[data-inline-picture]';
+
+/** `window.__docsGridFootCreditOff = true` asks the older reading (no grid
+ * line hangs anything past the foot), for an A/B of one build. */
+function gridFootCreditOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsGridFootCreditOff?: boolean }).__docsGridFootCreditOff === true;
+}
+
+/**
+ * The room under a grid line's text the page's foot may take. Windows Word
+ * centres a line's text in the whole slots it takes and keeps the line on its
+ * page when the text fits: the padding under it may cross the bottom margin
+ * (docx-look/probes/gridfit, 15.6 pt grid, A4 with 72 pt margins: a 14 pt
+ * bold heading, two slots over a 16.1 pt single line, stays on page 1 4.1 pt
+ * past the foot (gf43), goes on 19.7 pt past (gf44); a 24 pt one, 1.8 pt of
+ * padding, goes on 4.1 pt past (gh43); a single 12 pt line goes on 4.1 pt
+ * past (gs45)). Corpus R393-D04's "1. Introduction" ended page 1 in Word
+ * and opened page 2 here. Read from a block whose every line is the same
+ * whole slots of one single line (`data-docs-word-grid-natural`, written by
+ * DocumentPageSetup); any other grid block keeps the strict fit.
+ */
+function gridFootCreditPx(block: HTMLElement, lineHeightPx: number): number {
+  if (gridFootCreditOff() || block.querySelector(INLINE_PICTURE)) return 0;
+  const natural = Number.parseFloat(block.getAttribute("data-docs-word-grid-natural") ?? "");
+  if (!(natural > 0) || !(lineHeightPx > natural)) return 0;
+  return (lineHeightPx - natural) / 2;
+}
 
 /** The bottom of the lowest in-line picture on `block`'s last line, or null. */
 function lastLinePictureBottom(block: HTMLElement): number | null {

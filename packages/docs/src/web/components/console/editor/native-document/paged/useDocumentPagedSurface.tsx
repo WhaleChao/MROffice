@@ -36,7 +36,7 @@ import { PAGED_BULK_FILL_ATTR, writeDocumentLayoutStatus } from "@mrnote/core/we
 import { restyleFromRecipeStyleSets } from "@mrnote/core/web/components/console/editor/native-document/documentDesignRestyle.ts";
 import { type CSSProperties, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { type Editor } from "@tiptap/core";
-import { NodeSelection } from "@tiptap/pm/state";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { effectiveDocumentCharacterSpacingControl } from "@mrnote/core/web/components/console/editor/extensions/DocumentPageSetup.ts";
 import { useChangedState } from "@mrnote/core/web/hooks/useChangedState.ts";
 import { captureSavedPaginationProjection, readDocumentLayoutSnapshot, runtimeDocumentJson } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
@@ -47,6 +47,7 @@ import { normalizeSectionLayouts, sectionLayoutBandCss, sectionLayoutSheetCss, w
 import { bandHasFieldTokens, bandStoriesOwnPageNumber, cssBandString, normalizeBandRichBlocks, normalizeSectionBands, resolveRichPageBands, resolveSectionSheetBands, sanitizeHeaderFooterText, type BandFieldToken, type BandRichBlock, type BandVariant, type RichBandsConfig } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import SheetBandBoxView from "./SheetBandBoxView";
 import { normalizeWordCompatibilityMode } from "@mrnote/core/web/components/console/editor/native-document/documentOverflowPunctuation.ts";
+import { documentMissingFontSubstitutes } from "@mrnote/core/web/components/console/editor/native-document/documentDisplayFonts.ts";
 import { NAVIGATE_BAND_EDITOR_EVENT, OPEN_BAND_EDITOR_EVENT, type BandKind, type HeaderFooterEditingContext, type HeaderFooterNavigationTarget, type SheetBandBox } from "./SheetBandEditLayer";
 import { formattingMarksPresentation } from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
 import { normalizeSectionStoryGraph, sectionStoryBandEditMode, sectionStoryEditableBlocks, sectionStoryNativeCommit } from "@mrnote/core/web/components/console/editor/native-document/sectionStoryGraph.ts";
@@ -66,6 +67,7 @@ import { documentAuthoredEditSeq } from "@mrnote/core/web/components/console/edi
 import { PAGE_BANDS_MEASUREMENT_PENDING_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionKeys.ts";
 import { inkLayoutSettlesInMs } from "@mrnote/core/web/lib/ink-writing-session.ts";
 import { bandsFirst, PAGE_BANDS_REBALANCE_REASON } from "@mrnote/core/web/components/console/editor/native-document/paged/bandsFirst.ts";
+import { publishBandOverflowSections } from "@mrnote/core/web/components/console/editor/native-document/paged/bandOverflowSections.ts";
 import { paginationBoxRelativeTo, paginationTransformScale } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationGeometry.ts";
 import { measureFooterBandOverflowBySheet, measureHeaderBandOverflow, measureHeaderBandOverflowBySheet } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 import { computePhysicalPageStarts, documentEvenAndOddHeaders, endingSheetParityBreak, measureSheetSpan, sectionRestartNumbers, type PageParityBreak } from "@mrnote/core/web/components/console/editor/native-document/paged/sheetPageSpans.ts";
@@ -88,6 +90,20 @@ export interface UseDocumentPagedSurfaceInputs {
   shellEventMayStart: () => boolean;
   t: ReturnType<typeof useTranslations<"console-notebooks">>;
   wrapperRef: RefObject<HTMLDivElement | null>;
+}
+
+/** Where the caret goes back to in the body when a header or footer of the
+ * sheet at `sheetIndex` closes: where it is when that is on the sheet, else
+ * the sheet's first text position; null keeps it where it is. */
+export function bodyCaretOnSheet(state: Editor["state"], sheetIndex: number | null): number | null {
+  if (sheetIndex === null || sheetIndex < 0 || sheetIndex >= state.doc.childCount) return null;
+  let start = 0;
+  for (let index = 0; index < sheetIndex; index += 1) start += state.doc.child(index).nodeSize;
+  const end = start + state.doc.child(sheetIndex).nodeSize;
+  const { from } = state.selection;
+  if (from > start && from < end) return null;
+  const near = TextSelection.near(state.doc.resolve(Math.min(start + 1, state.doc.content.size)));
+  return near.from > start && near.from < end ? near.from : null;
 }
 
 export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
@@ -570,6 +586,9 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
   // The same at the foot: a footer taller than the bottom margin lifts the
   // body's end on its own page (measureFooterBandOverflowBySheet).
   const [bandExtraBottomBySheet, setBandExtraBottomBySheet] = useChangedState<Readonly<Record<number, number>>>({});
+  // The section each index's overflow above was measured for: a page a pass
+  // moved to another section reads its section's (bandOverflowSections).
+  const [bandOverflowSections, setBandOverflowSections] = useChangedState<readonly number[]>([]);
   useLayoutEffect(() => {
     const root = editorDom(editor);
     // A vertical or manuscript-grid page shows its detached preview and hides
@@ -600,6 +619,9 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
       const footBySheet = overlay ? measureFooterBandOverflowBySheet(overlay) : {};
       setBandExtraBottomBySheet((prev) =>
         JSON.stringify(prev) === JSON.stringify(footBySheet) ? prev : footBySheet);
+      const sectionsBySheet = sheetBandBoxes.map((box) => box.sectionIndex);
+      setBandOverflowSections((prev) =>
+        prev.length === sectionsBySheet.length && prev.every((section, index) => section === sectionsBySheet[index]) ? prev : sectionsBySheet);
       if (extra === bandExtraTop) {
         writeDocumentLayoutStatus(root, PAGE_BANDS_MEASUREMENT_PENDING_ATTR, null, editor);
       } else {
@@ -609,6 +631,10 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
     raf = window.requestAnimationFrame(measure);
     return () => window.cancelAnimationFrame(raf);
   }, [richBands, sectionBands, sheetBandBoxes, editor, bandExtraTop, editorHydrated, detachedPagePreviewActive, wrapperRef]);
+  // Published with the overflow it names, in the commit that carries it.
+  useLayoutEffect(() => {
+    publishBandOverflowSections(editorDom(editor), bandOverflowSections);
+  }, [editor, bandOverflowSections, bandExtraTopBySheet, bandExtraBottomBySheet]);
   
   // notes anchored on that sheet, recomputed per doc update with a cheap
   // signature compare so unchanged zones never re-render. Endnotes stay in
@@ -762,6 +788,7 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
               physicalStart: sheetPageNumbering.starts[index],
               span: box.pageSpan,
               sectionIndex: box.sectionIndex,
+              sectionContinues: box.sectionContinues,
             })),
             sectionPageNumberSchemes,
             {
@@ -810,6 +837,18 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
   // stands for several printed pages): the header speaks for the span's
   // first page, the footer for its last -- matching the CSS counter, which
   // increments by the sheet's stamped span.
+  // Word's replacements for the faces the page cannot draw arrive with the
+  // display-font plan, after the bands may have been drawn.
+  const [bandMissingFonts, setBandMissingFonts] = useState<Readonly<Record<string, readonly string[]>> | null>(null);
+  useEffect(() => {
+    if (!isUsableEditor(editor)) return;
+    const read = () => setBandMissingFonts(documentMissingFontSubstitutes(editor.state));
+    read();
+    editor.on("transaction", read);
+    return () => {
+      editor.off("transaction", read);
+    };
+  }, [editor]);
   const sheetBandContext = useCallback(
     (index: number, kind: "header" | "footer") => {
       const labels = sheetPageNumberLabels?.[index];
@@ -827,9 +866,10 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
         totalPages: sheetPageNumbering.total,
         styleDefinitions: styleDefinitionsRaw,
         wordCompatibilityMode: normalizeWordCompatibilityMode(wordCompatibilityModeRaw),
+        ...(bandMissingFonts ? { missingFontSubstitutes: bandMissingFonts } : {}),
       };
     },
-    [sheetBandBoxes, sheetPageNumberLabels, sheetPageNumbering, styleDefinitionsRaw, wordCompatibilityModeRaw],
+    [sheetBandBoxes, sheetPageNumberLabels, sheetPageNumbering, styleDefinitionsRaw, wordCompatibilityModeRaw, bandMissingFonts],
   );
   // Each page's own header overflow re-plans its page too: a page whose
   // band was measured after the last pass (the maximum unchanged) kept the
@@ -870,6 +910,7 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
   // Close Header and Footer returns the insertion point to the body, as in
   // Word. The ribbon button that closed it unmounts with its contextual tab,
   // which would otherwise leave the keyboard on <body>.
+  const headerFooterSheetRef = useRef<number | null>(null);
   const changeHeaderFooterEditing = useCallback(
     (context: HeaderFooterEditingContext | null) => {
       setHeaderFooterContext(context);
@@ -877,12 +918,20 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
       // focus the body as a document opened, scrolling to wherever its caret was.
       const closed = headerFooterOpenRef.current && context === null;
       headerFooterOpenRef.current = context !== null;
+      if (context) headerFooterSheetRef.current = context.sheetIndex;
       if (!closed || !editor) return;
+      const sheetIndex = headerFooterSheetRef.current;
+      headerFooterSheetRef.current = null;
       window.requestAnimationFrame(() => {
         if (editor.isDestroyed) return;
         const active = document.activeElement;
         if (!active || active === document.body || !active.isConnected) {
-          editor.commands.focus();
+          // Word goes back to the body of the page whose header or footer
+          // closed, the view where it is: the caret stays where it was on
+          // that page, else it starts that page's body. Focused as it was
+          // (scrolled to the caret), closing a header on page 9 brought the
+          // reader back to page 1, where a caret never placed stands.
+          editor.commands.focus(bodyCaretOnSheet(editor.state, sheetIndex), { scrollIntoView: false });
         }
       });
     },
@@ -1491,6 +1540,17 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
     const keep = () => {
       idle = undefined;
       if (editor.isDestroyed) return;
+      // A print or a picture of the pages (PagePreviewRender) keeps nothing
+      // of its own: its layout goes back through the API
+      // (__MRAI_PAGE_PREVIEW_LAYOUT, printLayoutToKeep), and the page has no
+      // reader to store for. Reading it through here took R286's print 3 s of
+      // the main thread while it was recorded (21 segments, never stored).
+      // `window.__docsPrintKeepsOwn = true` keeps it as before.
+      const host = view as Window & { __MRAI_PAGE_PREVIEW_SHOW?: unknown; __docsPrintKeepsOwn?: boolean };
+      if (typeof host.__MRAI_PAGE_PREVIEW_SHOW === "function" && host.__docsPrintKeepsOwn !== true) {
+        trace("print: kept by the API");
+        return;
+      }
       const pending = PENDING.filter((name) => root.hasAttribute(name));
       if (pending.length) {
         trace(`pending ${pending.join(",")}`);

@@ -30,6 +30,7 @@ import {
   splitEveryN,
   type RangeGroup,
 } from "./range-spec";
+import { pdfLibObjectsPerTick } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 /** One step in an insert plan: pull a page from a given source by 0-based index. */
 export interface InsertPlanStep {
@@ -175,7 +176,7 @@ export async function mergePdfs(
     throw new Error("No readable PDF sources to merge");
   }
 
-  const bytes = await out.save();
+  const bytes = await out.save({ objectsPerTick: pdfLibObjectsPerTick() });
   return { bytes: toBlobBytes(bytes), skipped, pageCount: out.getPageCount() };
 }
 
@@ -251,7 +252,7 @@ export async function insertPagesFromSource(
     if (page) out.addPage(page);
   }
 
-  const bytes = await out.save();
+  const bytes = await out.save({ objectsPerTick: pdfLibObjectsPerTick() });
   return {
     bytes: toBlobBytes(bytes),
     pageCount: out.getPageCount(),
@@ -277,7 +278,7 @@ export async function buildDocFromIndices(
   const out = await PDFDocument.create();
   const copied = await out.copyPages(source, inBounds);
   for (const page of copied) out.addPage(page);
-  const bytes = await out.save();
+  const bytes = await out.save({ objectsPerTick: pdfLibObjectsPerTick() });
   return toBlobBytes(bytes);
 }
 

@@ -10,14 +10,15 @@ import { PDF_JS_DOCUMENT_ASSETS, loadCompatiblePdfJs } from "@mrnote/core/web/li
 import { createPdfSessionDestroyer, releasePdfCanvasBackingStore } from "./render-lifecycle";
 import { rotatedBoundingBox } from "@mrnote/core/web/lib/pdf/rotated-box.ts";
 import { readPdfPortableTextLayout, type PdfPortableTextLayout } from "./portable-text-layout";
-import { readPortablePdfSourceTextBoxBinding } from "./source-text-box";
+import { readPortablePdfSourceTextBoxBinding, type PdfSourceTextBoxBinding } from "./source-text-box";
 import type { PdfNativePlanners } from "./remote/pdf-native-planners";
-import { managedNativeTextBoxAnnotationName, sanitizeManagedNativeTextBoxImage,
+import { managedNativeTextBoxAnnotationName, managedNativeTextBoxStyleKey, sanitizeManagedNativeTextBoxImage,
   MAX_MANAGED_NATIVE_TEXT_BOX_IMAGE_TOTAL_CHARS, type ManagedNativeTextBoxAnnotation } from "./native-text-box-roundtrip";
 import type { TextBoxEditLike } from "./text-box-flatten";
 import { decodePdfTextBoxRunsField, pdfTextStyleRunsFromDrawnRuns } from "./text-box-runs";
 import { sha256PdfBytes } from "./engine/native/transaction-error";
 import { PDF_EDITABLE_MAX_BYTES } from "@mrnote/core/web/lib/document-size-limits.ts";
+import { pdfLibObjectsPerTick, pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 const MAX_BYTES = PDF_EDITABLE_MAX_BYTES;
 const MAX_BOXES = 400;
@@ -49,7 +50,7 @@ export async function importPortableSourceTextBoxes(input: {
   if (input.signal.aborted) throw abort();
   if (!input.sourceBytes.length || input.sourceBytes.length > MAX_BYTES ||
     await sha256PdfBytes(input.sourceBytes) !== input.sourceSha256) throw Error("PDF import source changed");
-  const pdf = await PDFDocument.load(input.sourceBytes, { updateMetadata: false });
+  const pdf = await PDFDocument.load(input.sourceBytes, { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
   if (pdf.isEncrypted || pdf.getPageCount() > 10_000 ||
     !Number.isSafeInteger(input.pageNumber) || input.pageNumber < 1 ||
     input.pageNumber > pdf.getPageCount()) throw Error("PDF import source is unavailable");
@@ -126,12 +127,16 @@ export async function importPortableSourceTextBoxes(input: {
         [spec.bold, spec.italic, spec.underline].some(value => typeof value !== "boolean") ||
         !(await input.planners.verifyPdfSourceTextBox({ sourceBytes: input.sourceBytes, binding })))
         throw Error("PDF portable text metadata does not match its source");
-      const pageIdentity = binding.originalProof.evidence.resources.page;
+      // One show's binding names the page and its one content stream. A
+      // span binding (version 3) names the spans it hides, which may stand
+      // in any stream the page draws (one of several, a form of its own):
+      // that they are hidden on this page is what was just verified.
+      const pageIdentity = binding.pieces ? null : binding.originalProof.evidence.resources.page;
       const contents = sourcePage.node.get(PDFName.of("Contents"));
-      if (pageIdentity.objectNumber !== sourcePage.ref.objectNumber ||
+      if ((pageIdentity !== null && (pageIdentity.objectNumber !== sourcePage.ref.objectNumber ||
         pageIdentity.generation !== sourcePage.ref.generationNumber ||
         !(contents instanceof PDFRef) || contents.objectNumber !== binding.object ||
-        contents.generationNumber !== binding.generation ||
+        contents.generationNumber !== binding.generation)) ||
         (dict.has(PDFName.of("P")) && dict.get(PDFName.of("P"))?.toString() !== sourcePage.ref.toString()))
         throw Error("PDF portable text page identity changed");
       ids.add(binding.boxId);
@@ -161,19 +166,11 @@ export async function importPortableSourceTextBoxes(input: {
       imageCharacters += image.length;
       if (!sanitizeManagedNativeTextBoxImage(image) || imageCharacters > MAX_MANAGED_NATIVE_TEXT_BOX_IMAGE_TOTAL_CHARS)
         throw Error("PDF portable appearance image budget exceeded");
-      const font = spec.font as "sans" | "serif" | "mono";
-      const edit = { id: binding.boxId, page: input.pageNumber - 1, x, y, width, height, text,
-        fontSize: spec.fontSize, color: `#${spec.color}`, angle: spec.angle,
-        align: spec.align as "left" | "center" | "right", bold: spec.bold as boolean,
-        italic: spec.italic as boolean, underline: spec.underline as boolean,
-        sourceFontName: font === "mono" ? "Courier" : font === "serif" ? "Times-Roman" : "Helvetica",
-        ...(runs ? { runs: pdfTextStyleRunsFromDrawnRuns(runs) } : {}),
-        created: true, sourceText: binding, nativeAppearanceImage: image };
-      const record: ManagedNativeTextBoxAnnotation = { id: binding.boxId, page: input.pageNumber,
-        x, y, width, height, text, fontSize: spec.fontSize, color: `#${spec.color}`, angle: spec.angle,
-        align: edit.align, font, bold: edit.bold, italic: edit.italic, underline: edit.underline,
-        styleKey, nativeAppearanceImage: image, portableLayout: layout as PdfPortableTextLayout, sourceText: binding,
-        ...(runs ? { runs } : {}) };
+      const { edit, record } = portableSourceTextBoxProjection({ binding, pageNumber: input.pageNumber,
+        box: [x, y, width, height], text, image, runs, layout: layout as PdfPortableTextLayout,
+        font: spec.font as "sans" | "serif" | "mono", fontSize: spec.fontSize, color: spec.color, angle: spec.angle,
+        align: spec.align as "left" | "center" | "right", bold: spec.bold as boolean, italic: spec.italic as boolean,
+        underline: spec.underline as boolean });
       imports.push({ edit, record, annotationRef: { objectNumber: ref.objectNumber, generation: ref.generationNumber } });
     }
     return imports;
@@ -181,6 +178,52 @@ export async function importPortableSourceTextBoxes(input: {
     input.signal.removeEventListener("abort", onAbort);
     await destroySource();
   }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function portableSourceTextBoxProjection(input: {
+  binding: PdfSourceTextBoxBinding;
+  pageNumber: number;
+  box: readonly [number, number, number, number];
+  text: string;
+  image: string;
+  runs: ReturnType<typeof decodePdfTextBoxRunsField>;
+  layout: PdfPortableTextLayout;
+  font: "sans" | "serif" | "mono";
+  fontSize: number;
+  color: string;
+  angle: number;
+  align: "left" | "center" | "right";
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+}): Pick<PortableSourceTextBoxImport, "edit" | "record"> {
+  const { binding, text, image, runs, font } = input;
+  const [x, y, width, height] = input.box;
+  const edit = { id: binding.boxId, page: input.pageNumber - 1, x, y, width, height, text,
+    fontSize: input.fontSize, color: `#${input.color}`, angle: input.angle,
+    align: input.align, bold: input.bold, italic: input.italic, underline: input.underline,
+    sourceFontName: font === "mono" ? "Courier" : font === "serif" ? "Times-Roman" : "Helvetica",
+    ...(runs ? { runs: pdfTextStyleRunsFromDrawnRuns(runs) } : {}),
+    created: true, sourceText: binding, nativeAppearanceImage: image };
+  const record: ManagedNativeTextBoxAnnotation = { id: binding.boxId, page: input.pageNumber,
+    x, y, width, height, text, fontSize: input.fontSize, color: `#${input.color}`, angle: input.angle,
+    align: edit.align, font, bold: edit.bold, italic: edit.italic, underline: edit.underline,
+    styleKey: managedNativeTextBoxStyleKey(edit), nativeAppearanceImage: image, portableLayout: input.layout,
+    sourceText: binding, ...(runs ? { runs } : {}) };
+  return { edit, record };
 }
 
 /** Render the actual retained AP into a cache image. No fabricated preview or
@@ -194,7 +237,7 @@ async function renderOwnedAppearance(pdf: PDFDocument, pageNumber: number, annot
   page.node.set(PDFName.of("Annots"), scratch.context.obj([annotations.get(annotationIndex)]));
   page.node.set(PDFName.of("Contents"), scratch.context.register(scratch.context.flateStream(new Uint8Array())));
   page.setCropBox(rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]);
-  const bytes = await scratch.save({ useObjectStreams: false, addDefaultPage: false });
+  const bytes = await scratch.save({ objectsPerTick: pdfLibObjectsPerTick(), useObjectStreams: false, addDefaultPage: false });
   if (signal.aborted) throw abort();
   const api = await loadCompatiblePdfJs();
   const task = api.getDocument({ data: bytes, ...PDF_JS_DOCUMENT_ASSETS });

@@ -29,7 +29,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/officeChartFillLinePage.tsx";
 import { officeFillPatternOf, type OfficeChartLineEnds } from "@mrnote/core/web/lib/office-chart-shape-paint.ts";
 import type { OfficeLineEndsState } from "@mrnote/core/web/lib/office-line-ends.ts";
-import { normalizeOfficeShapeGradient, type OfficeShapeGradient } from "@mrnote/core/web/lib/office-shape-paint.ts";
+import { normalizeOfficeShapeGradient, officeGradientAngle, type OfficeShapeGradient } from "@mrnote/core/web/lib/office-shape-paint.ts";
 import type { OfficeStrokeCap, OfficeStrokeCompound, OfficeStrokeJoin } from "@mrnote/core/web/lib/office-stroke-detail.ts";
 import type { OfficeMenuDash } from "@mrnote/core/web/lib/office-stroke-dash.ts";
 import {
@@ -197,7 +197,7 @@ export function presentationShapeFillLineChange(
         patch.stroke = stops[0]?.color ?? DEFAULT_SHAPE_STROKE;
         patch.strokeGradient = after.lineGradient;
         patch.strokeTo = stops[stops.length - 1]?.color ?? patch.stroke;
-        patch.strokeGradientAngle = after.lineGradient.angle;
+        patch.strokeGradientAngle = officeGradientAngle(after.lineGradient);
       } else {
         patch.stroke = normalizeShapeColor(next.outline, DEFAULT_SHAPE_STROKE) ?? DEFAULT_SHAPE_STROKE;
         patch.outlineTransparency = transparencyOf(after.lineAlpha);

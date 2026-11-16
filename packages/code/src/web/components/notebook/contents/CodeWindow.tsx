@@ -3408,7 +3408,15 @@ export default function CodeWindow({
   useEffect(() => {
     const onRenamed = (event: Event) => {
       const rename = pageRenameFromEvent(event);
-      if (!rename || rename.pageId !== pageId || rename.title === titleRef.current) return;
+      if (!rename || rename.pageId !== pageId) return;
+      // The shared buffer's held draft takes the name as well: it is what a
+      // hydration (an own save's answer) and a collaborator's change in the
+      // room hand this window back, and with the old name in it this window
+      // took the replaced name again and saved it over the rename (a run on
+      
+      const lease = codePageBufferLeaseRef.current;
+      if (lease?.pageId === pageId) lease.followTitle(rename.title);
+      if (rename.title === titleRef.current) return;
       titleRef.current = rename.title;
       setWorkspaceCurrentTitle(rename.title || pageId);
       if (windowId) windowManagerActions?.renameWindow(windowId, rename.title);
@@ -4382,8 +4390,12 @@ export default function CodeWindow({
       void diagnosticCount;
       void problemsSnapshotRevision;
       const registeredEntry = registeredCodeWindowEntryRef.current;
+      // A draft under review has no page yet: `registeredEntry?.pageId ===
+      // pageId` then held for no entry at all (undefined === undefined) and
+      // the window crashed reading its windowId.
       const entries = guestMode
-        ? registeredEntry?.pageId === pageId &&
+        ? registeredEntry &&
+          registeredEntry.pageId === pageId &&
           registeredEntry.windowId === windowId
           ? [registeredEntry]
           : []

@@ -86,7 +86,7 @@ export function PresentationVideoPoster({
           src={poster.url}
           alt={title}
           draggable={false}
-          style={keep ? { ...cropToCss(keep), display: "block", maxWidth: "none" } : { width: "100%", height: "100%", objectFit: "fill", display: "block" }}
+          style={keep ? { ...cropToCss(keep), display: "block", maxWidth: "none", maxHeight: "none" } : { width: "100%", height: "100%", objectFit: "fill", display: "block" }}
         />
       </span>
     );

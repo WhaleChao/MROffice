@@ -54,6 +54,45 @@ export interface OfficeThemeColorRef {
   readonly slot: OfficeThemeGridSlot;
   readonly lumMod?: number;
   readonly lumOff?: number;
+  
+
+
+
+
+
+  readonly transforms?: readonly (readonly [OfficeThemeColorStepKind, number])[];
+}
+
+/** The transforms a theme reference may carry, with ECMA-376's ranges
+ * (the server's `theme_color_refs.STEP_KINDS`). */
+export const OFFICE_THEME_COLOR_STEP_KINDS = {
+  shade: [0, 100_000],
+  tint: [0, 100_000],
+  lumMod: [0, 10_000_000],
+  lumOff: [-100_000, 100_000],
+  satMod: [0, 10_000_000],
+  satOff: [-100_000, 100_000],
+  hueMod: [0, 10_000_000],
+  hueOff: [-21_600_000, 21_600_000],
+} as const;
+export type OfficeThemeColorStepKind = keyof typeof OFFICE_THEME_COLOR_STEP_KINDS;
+const MAX_THEME_COLOR_STEPS = 8;
+
+/** A stored reference's `transforms`, validated; `null` for anything else. */
+export function normalizeOfficeThemeColorSteps(
+  value: unknown,
+): readonly (readonly [OfficeThemeColorStepKind, number])[] | null {
+  if (!Array.isArray(value) || !value.length || value.length > MAX_THEME_COLOR_STEPS) return null;
+  const steps: (readonly [OfficeThemeColorStepKind, number])[] = [];
+  for (const item of value) {
+    if (!Array.isArray(item) || item.length !== 2) return null;
+    const [kind, raw] = item as [unknown, unknown];
+    if (typeof kind !== "string" || !Object.prototype.hasOwnProperty.call(OFFICE_THEME_COLOR_STEP_KINDS, kind)) return null;
+    const [low, high] = OFFICE_THEME_COLOR_STEP_KINDS[kind as OfficeThemeColorStepKind];
+    if (typeof raw !== "number" || !Number.isInteger(raw) || raw < low || raw > high) return null;
+    steps.push([kind as OfficeThemeColorStepKind, raw]);
+  }
+  return steps;
 }
 
 export interface OfficeThemeColorGrid {
@@ -89,6 +128,7 @@ export function officeThemeStepRef(
 /** The step a reference names (0 for the plain colour), or `null` when its
  * transform is not one a picker swatch writes. */
 export function officeThemeRefStep(ref: OfficeThemeColorRef): number | null {
+  if (ref.transforms?.length) return null;
   const lumMod = ref.lumMod ?? PERCENT;
   const lumOff = ref.lumOff ?? 0;
   if (lumOff === 0) return lumMod === PERCENT ? 0 : -(PERCENT - lumMod) / PERCENT;
@@ -102,6 +142,7 @@ export function officeThemeRefHex(
 ): string | null {
   const base = normalizeHexColor(colors[ref.slot]);
   if (!base) return null;
+  if (ref.transforms?.length) return officeTransformedHex(base, ref.transforms)?.toLowerCase() ?? null;
   const transforms: (readonly [string, number])[] = [];
   if (ref.lumMod !== undefined && ref.lumMod !== PERCENT) {
     transforms.push(["lumMod", ref.lumMod]);
@@ -147,6 +188,11 @@ export function normalizeOfficeThemeColorRef(
       ? raw
       : null;
   };
+  if (record.transforms !== undefined) {
+    const transforms = normalizeOfficeThemeColorSteps(record.transforms);
+    if (!transforms || record.lumMod !== undefined || record.lumOff !== undefined) return null;
+    return { slot: record.slot, transforms };
+  }
   const lumMod = percent(record.lumMod);
   const lumOff = percent(record.lumOff);
   if (lumMod === null || lumOff === null) return null;
@@ -165,7 +211,8 @@ export function sameOfficeThemeColorRef(
   return (
     left.slot === right.slot &&
     (left.lumMod ?? PERCENT) === (right.lumMod ?? PERCENT) &&
-    (left.lumOff ?? 0) === (right.lumOff ?? 0)
+    (left.lumOff ?? 0) === (right.lumOff ?? 0) &&
+    JSON.stringify(left.transforms ?? []) === JSON.stringify(right.transforms ?? [])
   );
 }
 

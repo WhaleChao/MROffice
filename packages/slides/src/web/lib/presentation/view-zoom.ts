@@ -145,6 +145,22 @@ export function presentationCanvasScrollsToward(
     : scrollTop > 0;
 }
 
+
+
+
+
+
+
+export const PRESENTATION_FIT_ROOM_PX = 48;
+
+export function presentationFitViewportInset(viewportWidth: number, viewportHeight: number): number {
+  const side = Math.min(viewportWidth, viewportHeight);
+  // A canvas too small for the room keeps the old padding's.
+  return Number.isFinite(side) && side > PRESENTATION_FIT_ROOM_PX * 4
+    ? PRESENTATION_FIT_ROOM_PX
+    : PRESENTATION_FIT_VIEWPORT_INSET_PX;
+}
+
 /** The canvas's breathing room around the slide at Fit (its padding, a side). */
 export const PRESENTATION_CANVAS_PADDING_PX = PRESENTATION_FIT_VIEWPORT_INSET_PX / 2;
 /** The ruler's band, fixed along the canvas's top and left edges. */

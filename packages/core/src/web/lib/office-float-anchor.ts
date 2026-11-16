@@ -762,9 +762,21 @@ export function placeFloatOnPage(anchor: FloatAnchor, geometry: FloatPageGeometr
 export const FLOAT_PAGE_ROOM_ATTR = "data-float-page-room";
 
 /**
- * How far below its paragraph's top a floating object reaches, in px, when
- * Word moves that paragraph to the next page rather than leave the object
- * past the bottom margin: a body object the text wraps around, placed from
+ * A run of Top and Bottom objects laid out whole (floatingTextBoxLayout's
+ * `layoutMixedBandRuns`) is charged to the paginator as one block: its first
+ * object asks, besides its own height, the room from its own foot down to the
+ * lowest object of the run (px, `BAND_RUN_ROOM_ATTR`), and every block after
+ * it in the run rides on it (`BAND_RUN_RIDE_ATTR`) at no height. Charged one
+ * by one in their stacked order, the run's later objects were sent to the
+ * next page before the run could set them beside the first (R308-D01).
+ */
+export const BAND_RUN_ROOM_ATTR = "data-band-run-room";
+export const BAND_RUN_RIDE_ATTR = "data-band-run-ride";
+
+/**
+ * The room below its paragraph's top a floating object needs on that page,
+ * in px, past which Word moves the paragraph to the next page rather than
+ * leave the object past the bottom margin: a body object the text wraps around, placed from
  * its paragraph or line -- in compatibility mode 15 any such object
  * (measured: a 2" picture anchored 0" or 0.5" below a paragraph 1.5" above
  * the bottom margin opens the next page with its paragraph), in mode 14 and
@@ -786,10 +798,28 @@ export function floatPageRoomPx(anchor: FloatAnchor, geometry: FloatPageGeometry
   const frameTop = placement.topPx - (group ? emuToPx(group.offsetYEmu) : 0);
   const frameWidth = group ? emuToPx(group.frameWidthEmu) : placement.widthPx;
   const frameHeight = group ? emuToPx(group.frameHeightEmu) : placement.heightPx;
-  if (!floatLayoutIsModern(keep) && floatTextRoomBesidePx(anchor, frameLeft, frameWidth, geometry) >= FLOAT_TEXT_BESIDE_MIN_PX) {
+  const modern = floatLayoutIsModern(keep);
+  if (!modern && floatTextRoomBesidePx(anchor, frameLeft, frameWidth, geometry) >= FLOAT_TEXT_BESIDE_MIN_PX) {
     return null;
   }
-  return Math.max(0, frameTop - geometry.flowTopPx + frameHeight);
+  // Word keeps the object on the page by raising it -- inside the margins
+  // (mode 15) or the paper (14 and earlier) -- but never above its own
+  // paragraph's top: the paragraph moves on only when the object does not
+  // fit below that top. Windows Word, docx-look/probes room_probe.py (a box
+  // anchored 7.9" down an A4 page, 1" margins): 2" tall at 2" or 3" below the
+  // paragraph stays on the page, raised to end on the bottom margin; 3" tall
+  // 1" below it, or 4" tall at 0", moves on in mode 15; the same 3" box stays
+  // in modes 12 and 14, raised to end on the paper's edge. Counted from the
+  // drawn offset (offset plus height), every such box pushed its paragraph
+  // on (corpus R372-D01: a cover's credits box 8.7" below an empty paragraph
+  // took the cover to page 2).
+  // `window.__docsFloatRoomFromOffset = true` asks the older room (offset plus
+  // height) for an A/B of one build.
+  if (typeof window !== "undefined" && (window as Window & { __docsFloatRoomFromOffset?: boolean }).__docsFloatRoomFromOffset === true) {
+    return Math.max(0, frameTop - geometry.flowTopPx + frameHeight);
+  }
+  const below = Math.min(frameTop - geometry.flowTopPx, 0) + frameHeight;
+  return Math.max(0, modern ? below : below - geometry.marginBottomPx);
 }
 
 
@@ -962,8 +992,21 @@ export function floatStackZIndex(
   anchor: Pick<FloatAnchor, "relativeHeight" | "behindDoc">,
   allRelativeHeights: readonly number[],
 ): number {
-  const rank = (floatStackRanks(allRelativeHeights).get(anchor.relativeHeight) ?? 0) + 1;
-  return anchor.behindDoc ? -rank : rank;
+  const ranks = floatStackRanks(allRelativeHeights);
+  const rank = (ranks.get(anchor.relativeHeight) ?? 0) + 1;
+  if (!anchor.behindDoc) return rank;
+  // Under the text layer the stack keeps its order: the higher of two
+  // behind-text frames still paints over the lower one. Negated, the order
+  // ran backwards (corpus R308-D01: a journal masthead of nine behind-text
+  // VML shapes painted its backmost pale rectangle over the orange banner
+  // in front of it). `window.__docsBehindStackOrderOff = true` keeps the
+  // older order (A/B).
+  if (behindStackOrderOff()) return -rank;
+  return rank - Math.max(ranks.size, rank) - 1;
+}
+
+function behindStackOrderOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBehindStackOrderOff?: boolean }).__docsBehindStackOrderOff === true;
 }
 
 /** Whether a height of `before` still in `after` stands at another rank there. */

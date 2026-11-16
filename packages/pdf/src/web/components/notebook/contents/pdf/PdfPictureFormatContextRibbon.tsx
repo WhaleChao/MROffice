@@ -62,6 +62,12 @@ export interface PdfPictureFormatContextRibbonModel {
   extractOriginalDisabledReason?: string;
   arrangeEnabled?: boolean;
   arrangeDisabledReason?: string;
+  /** Painted last (first) on its page: Office greys Bring Forward (Send
+   * Backward) with both its moves, saying why. */
+  arrangeAtFront?: boolean;
+  arrangeAtBack?: boolean;
+  arrangeAtFrontReason?: string;
+  arrangeAtBackReason?: string;
   /** Last picture-edit message, so a refusal is visible on this surface. */
   status?: string;
   /** The picture's own size in points (the reader's WPS layout shows its
@@ -523,8 +529,12 @@ export function PdfPictureFormatContextRibbon({
         ).map(([key, stepDirection, endDirection, stepLabel, endLabel, stepIcon, endIcon]) => {
           const stepId = stepDirection === "forward" ? "bring-forward" : "send-backward";
           const endId = endDirection === "front" ? "bring-to-front" : "send-to-back";
-          const disabled = mutationDisabled || model.arrangeEnabled === false;
-          const reason = model.arrangeDisabledReason ?? mutationTitle;
+          const atEnd = key === "layer" ? model.arrangeAtFront === true : model.arrangeAtBack === true;
+          const blocked = mutationDisabled || model.arrangeEnabled === false;
+          const disabled = blocked || atEnd;
+          const reason = !blocked && atEnd
+            ? (key === "layer" ? model.arrangeAtFrontReason : model.arrangeAtBackReason)
+            : (model.arrangeDisabledReason ?? mutationTitle);
           const controlId = `PDFCTL.CONTEXT.IMAGE.${stepId.toUpperCase().replace(/-/g, "_")}`;
           return (
             <OfficeHomeSplitLayout

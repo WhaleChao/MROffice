@@ -53,7 +53,7 @@ export interface RenderedTextHead {
 export interface RenderedTextHeadProbe {
   /** The head that keeps the block's text before `offset` characters, or
    * null when that head cannot be laid out. */
-  measure(offset: number): RenderedTextHead | null;
+  measure(offset: number, endOfPrevious?: boolean): RenderedTextHead | null;
   dispose(): void;
 }
 
@@ -396,8 +396,11 @@ export function createRenderedTextHeadProbe(
     return lo;
   };
 
-  const layOut = (task: TaskHost, offset: number): RenderedTextHead | null => {
-    const index = segmentIndexAt(offset);
+  // `endOfPrevious`: the head ends right after the character before
+  // `offset`, in that character's own text node, so what stands between it
+  // and the next text (an in-line picture's row) goes with the tail.
+  const layOut = (task: TaskHost, offset: number, endOfPrevious: boolean): RenderedTextHead | null => {
+    const index = segmentIndexAt(endOfPrevious ? offset - 1 : offset);
     const copy = block.cloneNode(true) as HTMLElement;
     copy.removeAttribute("id");
     clearPageEdgeMarks(copy);
@@ -427,7 +430,9 @@ export function createRenderedTextHeadProbe(
   };
 
   return {
-    measure(offset) {
+    measure(offset, endOfPrevious = false) {
+      if (endOfPrevious && offset <= 0) return null;
+      const key = endOfPrevious ? -offset - 0.5 : offset;
       const state = rootState(root);
       const task = taskHost(root, state);
       if (!task) return null;
@@ -446,14 +451,14 @@ export function createRenderedTextHeadProbe(
       }
       let cached = contextKey === null ? undefined : state.heads.get(block);
       if (cached && cached.context !== contextKey) cached = undefined;
-      if (cached?.byOffset.has(offset)) return cached.byOffset.get(offset)!;
-      const head = layOut(task, offset);
+      if (cached?.byOffset.has(key)) return cached.byOffset.get(key)!;
+      const head = layOut(task, offset, endOfPrevious);
       if (contextKey !== null) {
         if (!cached) {
           cached = { context: contextKey, byOffset: new Map() };
           state.heads.set(block, cached);
         }
-        cached.byOffset.set(offset, head);
+        cached.byOffset.set(key, head);
       }
       return head;
     },

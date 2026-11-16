@@ -74,6 +74,20 @@ export function documentSmartArtConvertsOnEdit(attrs: Readonly<Record<string, un
   );
 }
 
+/**
+ * A file's diagram that holds no cached drawing (Word 2007 as released,
+ * LibreOffice and python-docx write none): Word lays it out from its data and
+ * layout parts as it opens the file, and the page holds only its frame
+ * (`project_drawingless_diagram`). There is no drawing of Word's to show, so
+ * its conversion -- the one its first real edit writes -- is what is drawn,
+ * for display only, until then (the deck's absent-cache scene, as Docs has it).
+ */
+export function documentSmartArtDrawingAbsent(attrs: Readonly<Record<string, unknown>>): boolean {
+  if (!documentShapeIsPreservedNativeSmartArt(attrs)) return false;
+  const source = attrs.source as { nativeSmartArtView?: { drawingCache?: unknown } } | null | undefined;
+  return source?.nativeSmartArtView?.drawingCache === "absent";
+}
+
 /** What the tab can say of a diagram whose conversion is on its way, from its own view. */
 export function documentSmartArtPreparingState(attrs: Readonly<Record<string, unknown>>): {
   readonly kind: SmartArtKind;
@@ -197,10 +211,15 @@ export function documentSmartArtPreparedMemberId(
   prepared: ProseMirrorNode,
   memberId: string,
 ): string | null {
-  const pointId = drawnMemberItemId(preserved.attrs, memberId);
-  const index = pointId ? outlineIndexOfPoint(preserved.attrs, pointId) : -1;
-  if (index < 0) return null;
   const members = (prepared.attrs.groupMembers ?? []) as readonly DocumentShapeGroupMember[];
+  // A diagram with no drawing of Word's is drawn as its conversion: a press
+  // is on the conversion's own shape already.
+  const shown = documentSmartArtDrawingAbsent(preserved.attrs)
+    ? members.find((member) => member.memberId === memberId)?.smartArtItemIndex
+    : undefined;
+  const pointId = shown === undefined ? drawnMemberItemId(preserved.attrs, memberId) : null;
+  const index = typeof shown === "number" ? shown : pointId ? outlineIndexOfPoint(preserved.attrs, pointId) : -1;
+  if (index < 0) return null;
   const ofItem = members.filter((member) => member.smartArtItemIndex === index);
   return (
     ofItem.find((member) => member.smartArtRole === "node") ??
@@ -313,10 +332,16 @@ async function askForConversion(
     undefined,
     editor.state.doc.attrs.documentThemeColors,
     editor.state.doc.attrs.documentDesign,
+    editor.state.doc.attrs.defaultFontFamily,
   );
   // A conversion that no longer looks like the drawing Word saved (the author's
   // hand changes the engine does not reproduce) keeps the diagram as Word drew it.
-  if (!converted || !documentConversionLooksLikeDrawing(node.attrs, converted)) {
+  // One with no drawing at all is laid out as Word lays it out on open, from
+  // its data: there is nothing for the conversion to look like.
+  if (
+    !converted ||
+    (!documentSmartArtDrawingAbsent(node.attrs) && !documentConversionLooksLikeDrawing(node.attrs, converted))
+  ) {
     return { refusal: smartArtConvertRefusal() };
   }
   return {
@@ -336,6 +361,22 @@ export function prepareDocumentSmartArt(
 ): SmartArtPreparation<ProseMirrorNode> | null {
   if (!documentSmartArtConvertsOnEdit(node.attrs)) return null;
   return preparations.prepare(node, () => askForConversion(editor, node, pageId));
+}
+
+/**
+ * The conversion a diagram with no cached drawing is drawn as, asked for as
+ * soon as it is on screen (selected or not): reads only, like
+ * {@link prepareDocumentSmartArt}, and the very answer its first real edit
+ * then writes. `null` for every other diagram, and until it is ready.
+ */
+export function documentSmartArtAbsentDrawingScene(
+  editor: Editor,
+  node: ProseMirrorNode,
+  pageId: string | undefined,
+): ProseMirrorNode | null {
+  if (!documentSmartArtDrawingAbsent(node.attrs)) return null;
+  const entry = prepareDocumentSmartArt(editor, node, pageId);
+  return entry?.state === "ready" ? entry.value : null;
 }
 
 /** Ask again now: the author pressed something that needs the answer. */

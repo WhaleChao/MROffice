@@ -524,11 +524,45 @@ export interface PivotSourceSnapshot {
   dataRowCount: number;
 }
 
+/** A source range as the dialog's Table/Range box writes it: sheet-qualified
+ * and absolute (Sheet1!$A$1:$D$10). */
+export function pivotSourceReference(
+  sheetName: string,
+  range: PivotRange,
+  sheetRefPrefix: (name: string) => string,
+  columnLabel: (index: number) => string,
+): string {
+  return `${sheetRefPrefix(sheetName)}$${columnLabel(range.c1)}$${range.r1 + 1}:$${columnLabel(range.c2)}$${range.r2 + 1}`;
+}
+
+/**
+ * Why Create PivotTable cannot summarise a source range, or null when it can:
+ * - "partial": the sheet is a large tiled one holding only the rows around the
+ *   screen (`TiledSheets.isWhollyResident` is false). Its totals would be of
+ *   the rows read so far, not of the range, so nothing is summarised.
+ * - "tooLarge": more than `MAX_PIVOT_SOURCE_CELLS` cells.
+ * A range that is simply unusable (outside the sheet, one row high) is not a
+ * refusal here: `pivotSourceSnapshot` answers null for it.
+ */
+export type PivotSourceRefusal = "partial" | "tooLarge";
+
+export function pivotSourceRefusal(
+  range: PivotRange,
+  whollyResident: boolean,
+): PivotSourceRefusal | null {
+  if (!whollyResident) return "partial";
+  const cells = (range.r2 - range.r1 + 1) * (range.c2 - range.c1 + 1);
+  return cells > MAX_PIVOT_SOURCE_CELLS ? "tooLarge" : null;
+}
+
 /**
  * The source of a PivotTable as Create PivotTable reads it: the header row as
  * the grid shows it, every data cell as its typed value (a formula's result, a
  * dynamic array's spilled element), and the fields inferred from them. Null
- * for a range outside the sheet, one row high, or past the source bound.
+ * for a range outside the sheet, one row high, past the source bound, or on a
+ * sheet whose cells are not all in the model (`whollyResident: false`, a large
+ * tiled sheet read around the screen): a snapshot of the rows read so far
+ * would total part of the source as if it were all of it.
  */
 export function pivotSourceSnapshot(
   sheet: Pick<PivotButtonSheet, "id" | "name" | "cells" | "rowCount" | "columnCount">,
@@ -539,8 +573,11 @@ export function pivotSourceSnapshot(
     overlay: SpillOverlay;
     sheetRefPrefix: (name: string) => string;
     columnLabel: (index: number) => string;
+    /** False while the sheet holds only some of its rows (default true). */
+    whollyResident?: boolean;
   },
 ): PivotSourceSnapshot | null {
+  if (read.whollyResident === false) return null;
   const coords = [range.r1, range.c1, range.r2, range.c2];
   if (
     !coords.every(Number.isInteger) ||
@@ -579,7 +616,7 @@ export function pivotSourceSnapshot(
   // absolute (Sheet1!$A$1:$D$10). The stored config keeps the plain A1
   // form the pivot model persists; this is the editable reference only,
   // and normalizePivotRange reads the prefix and the $ back off.
-  const sourceRef = `${read.sheetRefPrefix(sheet.name)}$${read.columnLabel(range.c1)}$${range.r1 + 1}:$${read.columnLabel(range.c2)}$${range.r2 + 1}`;
+  const sourceRef = pivotSourceReference(sheet.name, range, read.sheetRefPrefix, read.columnLabel);
   const inference = profilePivotFieldsFromRange(
     matrix,
     scalarMatrix,

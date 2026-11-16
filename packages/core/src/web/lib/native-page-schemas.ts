@@ -54,6 +54,7 @@ import { officePictureStyle } from "./office-picture-styles/catalog";
 import { normalizeSpreadsheetChartFormat, type SpreadsheetChartFormat } from "./spreadsheet/chart-format";
 import type { SpreadsheetChartBinding } from "./spreadsheet/chart";
 import { normalizeChartNativeLook, type ChartNativeLook } from "./office-chart-native-look";
+import { newSheetPrintSettings } from "./spreadsheet/print-settings";
 import { parseDataQueryState, type DataQueryState } from "./spreadsheet/data-queries";
 import { readPresentationChartV2 } from "./presentation-chart-v2";
 import { readPresentationChartWorkbook } from "./presentation-chart-desktop";
@@ -261,6 +262,7 @@ import {
 import { normalizeLinkTooltip } from "./presentation-link-settings";
 import {
   MAX_TEXT_BLOCK_TEXT_LENGTH,
+  BLOCK_BULLET_CHARS,
   BULLET_CHARS,
   MAX_PARAGRAPH_LEVEL,
   MAX_PARAGRAPH_TEXT_LENGTH,
@@ -356,7 +358,7 @@ import {
   OFFICE_STROKE_MAX_MITER_LIMIT,
 } from "./office-stroke-detail";
 export * from "./native-spreadsheet-schemas";
-import { PRESENTATION_GEOMETRY_EMU_LIMIT, PRESENTATION_OBJECT_GEOMETRY_EMU_LIMIT, imageSourceSchema, presentationBgHexSchema, presentationBgImageSchema, presentationBgPatternSchema, presentationBlockAnimationSchema, presentationBlockHrefSchema, presentationCropRectSchema, presentationGroupIdSchema, presentationLinkTooltipSchema, presentationParagraphsSchemaWithin, presentationRelativeClickActionSchema, presentationRunsSchema, presentationShapeBlockSchema, presentationTextPaintSchema, presentationTextWarpSchema, presentationThemeColorRefSchema, presentationThemeColorsSchema, smartArtColorsIdSchema, smartArtLayoutUrnSchema, smartArtStyleIdSchema, smartArtTextShape3dSchema, spreadsheetPageContentSchema } from "./native-spreadsheet-schemas";
+import { PRESENTATION_GEOMETRY_EMU_LIMIT, PRESENTATION_OBJECT_GEOMETRY_EMU_LIMIT, imageSourceSchema, presentationBgHexSchema, presentationBgImageSchema, presentationBgPatternSchema, presentationBlockAnimationSchema, presentationBlockHrefSchema, presentationCropRectSchema, presentationGroupIdSchema, presentationLinkTooltipSchema, presentationParagraphsSchemaWithin, presentationRelativeClickActionSchema, presentationRunsSchema, presentationShapeBlockSchema, presentationTextPaintSchema, presentationTextWarpSchema, presentationThemeColorRefSchema, presentationThemeColorsSchema, presentationThemeColorsTransformedSchema, smartArtColorsIdSchema, smartArtLayoutUrnSchema, smartArtStyleIdSchema, smartArtTextShape3dSchema, spreadsheetPageContentSchema } from "./native-spreadsheet-schemas";
 
 export {
   CODE_CONTENT_TYPE,
@@ -868,7 +870,7 @@ export const presentationTextBlockSchema = z
     // allowed sets so a hand-edited deck cannot inject an arbitrary glyph; the
     // render edge (`renderParagraphs`) re-normalizes via `normalizeBulletChar` /
     // `normalizeNumberFormat`, so this is a structural guard only.
-    bulletChar: z.enum(BULLET_CHARS).optional(),
+    bulletChar: z.enum(BLOCK_BULLET_CHARS).optional(),
     numberFormat: z.enum(NUMBER_FORMATS).optional(),
     // Optional character-level (per-run) inline formatting for the flat block
     // text (when there are no `paragraphs`); see `presentationRunsSchema`.
@@ -900,6 +902,7 @@ export const presentationTextBlockSchema = z
     gradientAngle: z.number().min(0).max(360).optional(),
     outlineColor: z.union([presentationBgHexSchema, z.literal("none")]).optional(),
     themeColors: presentationThemeColorsSchema.optional(),
+    themeColorsTransformed: presentationThemeColorsTransformedSchema.optional(),
     outlineColorTo: presentationBgHexSchema.optional(),
     outlineGradientAngle: z.number().min(0).max(360).optional(),
     outlineWidth: z.number().min(0).max(MAX_STROKE_WIDTH).optional(),
@@ -911,6 +914,14 @@ export const presentationTextBlockSchema = z
     // nothing" rule (audit 68).
     outlineAlign: z.enum(["center", "inset"]).optional(),
     shadow: z.boolean().optional(),
+    // Format Shape > Effects on the box (a text box is a shape): the shape's
+    // one combinable model (`presentationShapeBlockSchema.shapeEffects`), and
+    // 3-D Rotation > Keep text flat (`a:flatTx`), only when checked.
+    shapeEffects: z
+      .record(z.string(), z.unknown())
+      .refine((value) => normalizeOfficePictureEffects(value) !== null, "Unsupported shape effects")
+      .optional(),
+    keepTextFlat: z.literal(true).optional(),
     // Optional BODY MULTI-COLUMN count (PowerPoint "Text Options → Columns"),
     // additive + optional: a one-column block omits it and validates byte-for-
     // byte. Bounded to the editor's Columns range (`MAX_TEXT_COLUMNS`, the
@@ -1024,6 +1035,9 @@ export const presentationImageBlockSchema = z
       .record(z.string(), z.unknown())
       .refine((value) => normalizeOfficePictureEffects(value) !== null, "Unsupported picture effects")
       .optional(),
+    // The camera of the group the picture sits in (`p:grpSpPr/a:scene3d`):
+    // the group turns as one object, its pictures with it.
+    scene3d: z.custom<SmartArtScene3d>(isNativeScene3d).optional(),
     // Picture Format > Animate as Background (PPT-A134).
     animatedBackground: z
       .unknown()
@@ -1039,6 +1053,9 @@ export const presentationImageBlockSchema = z
         originalSha256: z.string().regex(/^[a-f0-9]{64}$/),
         previewSha256: z.string().regex(/^[a-f0-9]{64}$/),
         previewMimeType: z.literal("image/webp"),
+        // A copy fitted to the deck's share of the page (readings row 860):
+        // the long side it was made at, below the standard copy's 2048.
+        previewMaxSide: z.number().int().min(16).max(2047).optional(),
       }).strict(),
     }).strict().optional(),
     src: imageSourceSchema,
@@ -1172,6 +1189,10 @@ export const presentationImageBlockSchema = z
       .optional(),
     borderWidth: z.number().min(0).max(24).optional(),
     borderStyle: z.enum(["none", "solid", "dashed", "dotted"]).optional(),
+    // The frame's compound line and corner join (`a:ln@cmpd`, `a:miter` /
+    // `a:bevel`; the server's readings row 856): absent, one line, round corners.
+    borderCompound: z.enum(OFFICE_STROKE_COMPOUNDS).optional(),
+    borderJoin: z.enum(["miter", "bevel"]).optional(),
     cornerRadius: z.number().min(0).max(64).optional(),
     // Crop to Shape > Oval: the bitmap is clipped to the ellipse of its frame
     // (`a:prstGeom prst="ellipse"`, PPT-B364).
@@ -3039,6 +3060,13 @@ export const presentationSlideSchema = z
       .max(MAX_TRANSITION_ADVANCE_AFTER_MS)
       .optional(),
     transitionSound: presentationTransitionSoundSchema.optional(),
+    // Read only: PowerPoint's rehearsed click timings (the slide's tag
+    // TIMING), ms each after the click before; at most 1,000 clicks, each at
+    // most `advTm`'s own bound.
+    rehearsedClickTimingsMs: z
+      .array(z.number().int().min(0).max(MAX_TRANSITION_ADVANCE_AFTER_MS))
+      .max(1000)
+      .optional(),
     // Optional master-slide layout id (Title / Title+Content / Two-Content /
     // Section Header / Blank), or a custom layout Slide Master view's Insert
     // Layout made on an Office theme deck (`custom-<letters>`, PPT-B030).
@@ -3317,6 +3345,13 @@ const presentationThemeIdentitySchema = z
           .max(64)
           .optional(),
         baseTheme: presentationThemeTokenSnapshotSchema.optional(),
+        // The Effects-gallery entry the theme's own scheme is (row 851).
+        effectSchemeMatch: z
+          .string()
+          .min(1)
+          .max(80)
+          .regex(/^[a-z0-9][a-z0-9-]*$/)
+          .optional(),
       })
       .strict()
       .optional(),
@@ -3490,6 +3525,17 @@ export const presentationThemeSchema = z
           typeof presentationThemeHexSchema
         >,
       )
+      .strict()
+      .optional(),
+    // The first master's colour map (reading row 826, lib/presentation-theme
+    // `colorMap`): bg1 / tx1 / bg2 / tx2 each to one of the twelve slots.
+    colorMap: z
+      .object({
+        bg1: z.enum(PRESENTATION_THEME_COLOR_SLOTS),
+        tx1: z.enum(PRESENTATION_THEME_COLOR_SLOTS),
+        bg2: z.enum(PRESENTATION_THEME_COLOR_SLOTS),
+        tx2: z.enum(PRESENTATION_THEME_COLOR_SLOTS),
+      })
       .strict()
       .optional(),
     fontScheme: z
@@ -3681,12 +3727,13 @@ export const presentationPrintSettingsSchema = z
       .optional(),
     // Print scale percentage 10–400 (100 = unscaled).
     scale: z.number().min(10).max(400).optional(),
-    // Print Hidden Slides (PowerPoint's Print dialog; stored only when on).
-    printHiddenSlides: z.literal(true).optional(),
+    // Print Hidden Slides (PowerPoint's Print dialog): absent = on (its
+    // default); an explicit on / off as the user or the file stated it.
+    printHiddenSlides: z.boolean().optional(),
   })
   .passthrough();
 
-export const presentationPageContentSchema = z
+export const presentationPageContentObjectSchema = z
   .object({
     type: z.literal(PRESENTATION_CONTENT_TYPE),
     fontFaces: z.array(z.custom<OfficeFontFace>((raw) => {
@@ -3711,8 +3758,14 @@ export const presentationPageContentSchema = z
     // Additive — existing decks omit it and still validate byte-for-byte.
     printSettings: presentationPrintSettingsSchema.optional(),
   })
-  .passthrough()
-  .superRefine((content, ctx) => {
+  .passthrough();
+export type PresentationPageContentParsed = z.infer<typeof presentationPageContentObjectSchema>;
+
+/** The deck-wide rules of a presentation page's content (ids, comment
+ * authority, links between slides…), over its parsed fields. A reader that
+ * parses the deck's slides one by one (`normalizeSlides`) applies them to the
+ * whole deck so read, exactly as `presentationPageContentSchema` does. */
+export function refinePresentationPageContent(content: PresentationPageContentParsed, ctx: z.RefinementCtx): void {
     if (content.fontFaces) {
       const faces = content.fontFaces.map(normalizeOfficeFontFace);
       const files = faces.flatMap(face => face?.asset?.files ?? []);
@@ -3845,7 +3898,9 @@ export const presentationPageContentSchema = z
         }
       });
     });
-  });
+}
+
+export const presentationPageContentSchema = presentationPageContentObjectSchema.superRefine(refinePresentationPageContent);
 
 // One reply in an annotation comment THREAD (Acrobat / WPS PDF "Reply"). Additive
 // + optional — an annotation without a thread validates byte-for-byte as before.
@@ -4408,6 +4463,8 @@ export function createDefaultPageContent(
           // Excel's 8.43-character default column (XLS-A095).
           defaultColumnWidth: NEW_SHEET_DEFAULT_COLUMN_WIDTH_PX,
           cells: {},
+          // A new workbook prints on A4 (print-settings newSheetPrintSettings).
+          printSettings: newSheetPrintSettings(),
         },
       ],
     };

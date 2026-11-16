@@ -23,7 +23,7 @@ import {
   deletedLinesSheet,
   insertedLinesSheet,
 } from "./row-column-buttons";
-import type { StructuralSheet } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
+import { structuralEditMovesThreeDReference, type StructuralSheet } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
 
 interface GroupTab {
   readonly id: string;
@@ -269,6 +269,19 @@ export function replayEditOnGroup<S extends StructuralSheet & { id: string }>(pa
     if (!lineEdit) return { ok: false, reason: "unsupported" };
     for (const { index } of targets) {
       const target = workbook[index];
+      // Grouped sheets move together, so a 3-D reference over them would have
+      // to move with them; not modelled, the group edit is still refused.
+      if (
+        structuralEditMovesThreeDReference(
+          workbook,
+          target,
+          lineEdit.axis,
+          lineEdit.at,
+          lineEdit.op === "insert" ? lineEdit.count : -lineEdit.count,
+        )
+      ) {
+        return { ok: false, reason: "three-d" };
+      }
       if (lineEdit.op === "insert") {
         const result = insertedLinesSheet(target, workbook, lineEdit.axis, lineEdit.at, lineEdit.count);
         if (result === "three-d") return { ok: false, reason: "three-d" };

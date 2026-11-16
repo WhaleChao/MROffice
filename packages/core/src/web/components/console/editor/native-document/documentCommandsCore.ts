@@ -234,6 +234,14 @@ export type PresentationTextBlock = PresentationBlockFx & {
   outlineStyle?: "solid" | "dashed" | "dotted";
   shadow?: boolean;
   /**
+   * Format Shape > Effects on the box (a text box is a shape): the shape's
+   * one combinable model, which states the shadow too when present
+   * (`lib/presentation-shape-effects`).
+   */
+  shapeEffects?: import("../../../../lib/office-picture-effects").OfficePictureEffects;
+  /** Format Shape > 3-D Rotation > Keep text flat (`a:flatTx`), only when checked. */
+  keepTextFlat?: true;
+  /**
    * Optional TEXT AUTOFIT mode (PowerPoint "Shrink text on overflow" →
    * `<a:normAutofit>`; WPS parity). `shrink` shrinks the body font uniformly so
    * the text fits the box height; absent / `none` renders at the nominal size
@@ -581,6 +589,10 @@ export type PresentationShapeBlock = PresentationBlockFx & {
    * and `effect` below are legacy and are not drawn beside it.
    */
   shapeEffects?: import("../../../../lib/office-picture-effects").OfficePictureEffects;
+  /** Format Shape > 3-D Rotation > Keep text flat (PPTX `a:bodyPr/a:flatTx`):
+   * the label stays flat on the shape's front instead of turning with its
+   * 3-D rotation. Stated only when checked. */
+  keepTextFlat?: true;
   /** Shape Format > Shape Effects preset beside `shadow`
    * (`lib/office-shape-effects`; PPTX `a:effectLst` / `a:sp3d`). */
   effect?: "reflection" | "glow" | "softEdge" | "bevel" | "threeD";
@@ -1327,6 +1339,19 @@ export type NativeDocumentOperation =
       bold?: boolean;
       italic?: boolean;
       underline?: boolean;
+      /** The Office family a text box someone made is set in (its font
+       * menu's "more fonts"); null sets it back to a face of its own five. */
+      officeFamily?: string | null;
+      /** The size in points, as a Copilot's text-format result names it
+       * (lib/pdf/copilot-text-font turns it into `fontSize` or a native
+       * line format). */
+      fontSizePt?: number;
+      /** `fontSize` is a size this command sets, not the box's own read
+       * back: the Copilot placement keeps it. */
+      fontSizeSet?: boolean;
+      /** Only the look changes: the box keeps the words it has (the
+       * context a model answers from carries a long box's first words). */
+      keepText?: boolean;
     }
   | {
       op: "set_pdf_image_overlay";
@@ -1460,7 +1485,7 @@ export interface NativeDocumentCommand {
     page: number;
     text: string;
     new_text?: string;
-    format?: { color?: string; bold?: boolean; italic?: boolean };
+    format?: { color?: string; bold?: boolean; italic?: boolean; font?: string; font_size?: number };
     delete?: true;
   }[];
   /** A PDF Copilot 插入下方: the new box as the server's pdf.text.add_box

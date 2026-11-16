@@ -21,6 +21,8 @@ import { useAutofitMeasureVersion } from "../../../../lib/presentation/autofit-m
 import { isTextBoxBlock } from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
 import { textBoxFillCss, resolveTextBoxFill, textBoxNativeGeometry } from "@mrnote/core/web/lib/presentation-text-fill.ts";
 import { PresentationTextBoxGeometry } from "./PresentationTextBoxGeometry";
+import { PresentationTextBoxEffectLayers, presentationTextBoxHostCss } from "./PresentationTextBoxEffects";
+import { presentationTextBoxEffectsLook } from "../../../../lib/presentation-text-box-effects";
 import type { PresentationTextBlock, PresentationBlock, PresentationTextBoxBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import {
   browserSpellcheckForTextBlock,
@@ -67,8 +69,8 @@ import { presentationSmartArtLabelLineHeight, presentationTextVisualLayout, Pres
 import { useRichTextSelectionFollower } from "./useRichTextSelectionFollower";
 import { PresentationTypingTextarea } from "./PresentationTypingTextarea";
 import { inputIsLetterInPlace, usePresentationRichTypingKey } from "./usePresentationRichTypingKey";
-import { isTextEditLocked } from "@mrnote/core/web/lib/presentation-text-case.ts";
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { isTextEditLocked, isTextKeptReadOnly, isTextKeptReadOnlyTruncated } from "@mrnote/core/web/lib/presentation-text-case.ts";
+import { useCallback, useId, useLayoutEffect, useRef } from "react";
 import type {
   PointerEvent as ReactPointerEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -87,7 +89,7 @@ import { normalizeColumnCount, anchorCssForColumns } from "@mrnote/core/web/lib/
 import { balanceOverflowingColumns } from "../../../../lib/presentation/text-columns-overflow";
 import { verticalAnchorWrapperCss, readVerticalAnchor } from "@mrnote/core/web/lib/presentation-vertical-anchor.ts";
 import { readSpacingFromStyle } from "@mrnote/core/web/lib/presentation-line-spacing.ts";
-import { textBodyRotationCss } from "../../../../lib/presentation-shape-text-rect";
+import { textBodyRotationCss } from "@mrnote/core/web/lib/presentation-shape-text-rect.ts";
 import { hasLayoutGeometry } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import { presentationEquationBoxSpan } from "../../../../lib/presentation-equation-buttons";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
@@ -150,6 +152,8 @@ export interface PresentationCanvasTextBlockCtl {
   restoreImportedPreviewSelectionAfterCommit: (blockId: string, start: number, end: number) => void;
   /** The caret a local commit is putting back in this block, if one is. */
   pendingImportedPreviewCaret: (blockId: string) => { start: number; end: number } | null;
+  /** The words of a body the window's typing burst holds and has not drawn, else null. */
+  heldBlockWords: (blockId: string) => string | null;
   commitImportedPreviewText: (blockId: string, preview: HTMLElement, paragraphs?: readonly SlideParagraphWithRuns[], letterTyped?: boolean) => void;
   replaceImportedPreviewSelection: (blockId: string, preview: HTMLElement, insertedText: string, paragraphs?: readonly SlideParagraphWithRuns[], softLineBreaks?: boolean) => number;
   clearLiveRibbonList: () => boolean;
@@ -368,6 +372,7 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
     followImportedRichTextSelection,
     restoreImportedPreviewSelectionAfterCommit,
     pendingImportedPreviewCaret,
+    heldBlockWords,
     commitImportedPreviewText,
     replaceImportedPreviewSelection,
     clearLiveRibbonList,
@@ -412,14 +417,16 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
     [handoverRef],
   );
   // contentEditable lets the browser mutate descendants before React sees
-  // the input: the selected host is keyed by its words, and every committed
-  // edit but a letter typed in place replaces it whole.
-  const richTypingKey = usePresentationRichTypingKey({
+  // the input: the selected host keeps its key while its words change, the
+  // browser's own edits put back before React draws the words
+  // (`usePresentationRichTypingKey`, its commit guard rendered below).
+  const { key: richTypingKey, commitGuard: richTypingCommitGuard } = usePresentationRichTypingKey({
     blockId: block.id,
     text: ((previewBlock ?? block) as PresentationTextBlock).text,
     enabled: importedTextHasPreview && isSelected,
     host: richPreviewHost.host,
     pendingCaret: pendingImportedPreviewCaret,
+    heldWords: heldBlockWords,
   });
   // The words being typed in their drawn body: their selection is followed
   // however it was made (a drag released past the box's edge included), so
@@ -438,6 +445,18 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
   // typing, and Delete or Backspace removes the box whole, as PowerPoint
   // deletes a selected equation box.
   const equationBox = presentationEquationBoxSpan(block) !== null;
+  // Format Shape > Effects on the box (a text box is a shape): drawn on the
+  // box, its words lying flat while they are typed into, as PowerPoint edits
+  // them (`lib/presentation-text-box-effects`).
+  const effectsFilterId = `presentation-textbox-effects-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const boxFill = resolveTextBoxFill(block as PresentationTextBlock);
+  const boxGeometry = textBoxNativeGeometry(block) !== null;
+  const boxFrameCss = textBoxFillCss(boxFill, { onGeometry: boxGeometry });
+  const boxEffects = presentationTextBoxEffectsLook(block, {
+    filterUrl: `url(#${effectsFilterId})`,
+    hasFrame: boxFill.hasBox,
+    editing: isSelected,
+  });
   return (
                     // At rest the box's words are laid out by the text engine,
                     // as the thumbnails and the printed slide draw them
@@ -455,15 +474,18 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                           ? "presentation-textbox-block"
                           : undefined
                       }
+                      // Words drawn turned in 3-D: a host hit-tested where they
+                      // are drawn finds them here (`data-hit-where-drawn`).
+                      data-words-turned={boxEffects?.hostTurn ? "" : undefined}
                       // The text-box FILL / OUTLINE shows through in the editor so
                       // the author sees the background + border they applied. An
                       // un-styled block adds nothing (byte-stable render).
                       style={{
-                        ...textBoxFillCss(
-                          resolveTextBoxFill(block as PresentationTextBlock),
-                          { onGeometry: textBoxNativeGeometry(block) !== null },
-                        ),
-                        ...(textBoxNativeGeometry(block) !== null ? { position: "relative" } : {}),
+                        ...presentationTextBoxHostCss(boxEffects, boxFrameCss),
+                        ...(boxEffects?.hostTurn
+                          ? { transform: boxEffects.hostTurn, transformStyle: "preserve-3d" }
+                          : {}),
+                        ...(boxGeometry || boxEffects?.frameLayer ? { position: "relative" } : {}),
                         ...(importedPptxText
                           ? {
                               position: "relative",
@@ -479,10 +501,13 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                           : {}),
                       }}
                     >
-                      <PresentationTextBoxGeometry
-                        block={block}
-                        fill={resolveTextBoxFill(block as PresentationTextBlock)}
-                      />
+                      <PresentationTextBoxEffectLayers
+                        look={boxEffects}
+                        filterId={effectsFilterId}
+                        frameCss={boxFrameCss}
+                      >
+                        <PresentationTextBoxGeometry block={block} fill={boxFill} />
+                      </PresentationTextBoxEffectLayers>
                       <PresentationTypingTextarea
                         // After each commit of this box: a collaborator's
                         // delivery's caret, if this commit rewrote the words
@@ -1645,7 +1670,7 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                           </div>
                         );
                       })()}
-                      {!hasLayoutGeometry(block) ? (
+                      {!hasLayoutGeometry(block) && !isTextKeptReadOnly(block) ? (
                         <button
                           type="button"
                           onClick={() => deleteBlock(block.id)}
@@ -1655,7 +1680,37 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                           {t("presentation.deleteBlock")}
                         </button>
                       ) : null}
+                      {isSelected && isTextKeptReadOnly(block) ? (
+                        // Words the import could not make editable (PPTX
+                        // reading row 814): drawn as the file has them and
+                        // kept unchanged; selecting them says so.
+                        <div
+                          role="note"
+                          data-testid="presentation-text-kept-read-only"
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            top: "100%",
+                            marginTop: 4,
+                            zIndex: 4,
+                            maxWidth: 360,
+                            padding: "4px 8px",
+                            borderRadius: 4,
+                            fontSize: 12,
+                            lineHeight: 1.4,
+                            background: "var(--popover, #fff)",
+                            color: "var(--popover-foreground, #222)",
+                            border: "1px solid var(--border, #d0d0d0)",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                            pointerEvents: "none",
+                            whiteSpace: "normal",
+                          }}
+                        >
+                          {t(isTextKeptReadOnlyTruncated(block) ? "presentation.textKeptReadOnlyTruncated" : "presentation.textKeptReadOnly")}
+                        </div>
+                      ) : null}
                     </div>
+                    {richTypingCommitGuard}
                     </PresentationTextEngineSurfaceContext.Provider>
   );
 }

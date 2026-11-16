@@ -6,6 +6,8 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { EMU_PER_PT, EMU_PER_PX, PX_PER_PT } from "../../../../lib/office-units";
+import { OFFICE_CHART_MAX_SOFT_EDGE_PT } from "../../../../lib/office-chart-shape-paint";
+import { OFFICE_GLOW_ACCENTS, OFFICE_GLOW_SIZES_PT, officeGlowVariation } from "../../../../lib/office-picture-effects";
 import { useState, type ReactNode, type RefObject } from "react";
 import { OfficeHomeMenuTrigger } from "../../../office-ribbon/OfficeHomeRibbon";
 import { OfficeSemanticIcon } from "../../../office-ribbon/icons/OfficeSemanticIcon";
@@ -36,6 +38,7 @@ import type { ChartMarkerSymbol } from "../../../../lib/presentation-chart-area-
 import type { OfficeShapeShadow } from "../../../../lib/office-shape-paint";
 import {
   officeEffectsPaneSections,
+  type OfficeEffectsPaneArgs,
   type OfficeEffectsPaneLabels,
 } from "../../../office-ribbon/officeEffectsPaneSections";
 import {
@@ -143,6 +146,12 @@ interface Props {
    * Contour, Material, Lighting) in the shapes' own section.
    */
   effectsLabels?: OfficeEffectsPaneLabels;
+  /**
+   * The chart's theme accents, accent 1 to 6: the Glow presets paint in
+   * them (Office's "Glow: 5 point; Blue, Accent color 1" is the chart's
+   * theme's accent 1). Absent: Office's own theme.
+   */
+  accentColors?: readonly string[];
   chartType?: string;
   /** The colours the element draws while its paint is automatic. */
   automaticFill?: string;
@@ -153,6 +162,18 @@ interface Props {
   marker?: { symbol?: ChartMarkerSymbol; size?: number };
   /** The chart area's Rounded corners and their writer. */
   roundedCorners?: { checked: boolean; onChange: (checked: boolean) => void };
+}
+
+/** Office's own theme's accents, the Effects presets' when the host states none. */
+const OFFICE_EFFECT_ACCENTS = ["#4472c4", "#ed7d31", "#a5a5a5", "#ffc000", "#5b9bd5", "#70ad47"] as const;
+
+/** The six accents the Effects presets paint in, by name. */
+function chartEffectAccents(accents: readonly string[] | undefined): OfficeEffectsPaneArgs["accentColors"] {
+  const valid = accents?.length === 6 && accents.every((color) => /^#[0-9a-f]{6}$/i.test(color));
+  const six = valid ? accents : OFFICE_EFFECT_ACCENTS;
+  return Object.fromEntries(
+    six.map((color, index) => [`accent${index + 1}`, color.toLowerCase()]),
+  ) as OfficeEffectsPaneArgs["accentColors"];
 }
 
 /** The outer shadow Office's Shadow presets start from (Outer, Offset:
@@ -1066,11 +1087,103 @@ export function DocumentChartFormatPane(props: Props) {
           ],
         }
       : null;
-  // Effects ▸ 3-D Format of a series, a data point, the chart area or the
-  // plot area (what the chart's picture draws it on), the shapes' own section and model
-  // (`shapePaint.bevel` / `.format3d`). A stated 3-D Format takes the place
-  // of a bevel or 3-D preset, as a stated shadow takes the shadow preset's.
-  const takesThreeD = /^(?:series|slice|point):|^(?:chartAreaStyle|plotAreaStyle)$/.test(props.area);
+  // Effects ▸ 3-D Format of a series, a data point, the chart area, the
+  // plot area, the walls and floor of a 3-D chart, the title, the legend and
+  // an axis (Format <element> ▸ Effects in Excel, Word and PowerPoint), the
+  // shapes' own section and model (`shapePaint.bevel` / `.format3d`). A
+  // stated 3-D Format takes the place of a bevel or 3-D preset, as a stated
+  // shadow takes the shadow preset's.
+  const effectAccents = chartEffectAccents(props.accentColors);
+  const takesThreeD =
+    /^(?:series|slice|point|axis):|^(?:chartAreaStyle|plotAreaStyle|backWallStyle|sideWallStyle|floorStyle|chartTitleStyle|legendStyle)$/.test(
+      props.area,
+    );
+  // Effects ▸ Glow of the same elements (`shapePaint.glow`, `a:glow`): its
+  // colour, size and transparency, the shared section every shape shows.
+  const glowSection: OfficeShapeFormatPaneSection | null =
+    onStyle && !props.paintless && props.effectsLabels && takesThreeD
+      ? (() => {
+          const glow = props.style?.shapePaint?.glow;
+          const stated = glow
+            ? {
+                radius: Math.round(glow.radiusPt * EMU_PER_PT),
+                color: glow.color.toLowerCase(),
+                alpha: Math.round((glow.opacity ?? 1) * 100_000),
+              }
+            : null;
+          // The chart keeps a glow's drawn colour, not its theme slot: one that
+          // is a Glow Variation in this chart's own accents reads as that
+          // variation (it showed Custom right after it was picked).
+          const variation = stated
+            ? OFFICE_GLOW_SIZES_PT.flatMap((sizePt) =>
+                OFFICE_GLOW_ACCENTS.map((accent) => officeGlowVariation(sizePt, accent, effectAccents[accent])),
+              ).find((item) => item.radius === stated.radius && item.alpha === stated.alpha && item.color === stated.color)
+            : undefined;
+          const section = officeEffectsPaneSections({
+            effects: stated ? { glow: variation ?? stated } : {},
+            accentColors: effectAccents,
+            labels: props.effectsLabels!,
+            disabled,
+            disabledReason: reason,
+            testIdPrefix: "chart-effects",
+            onChange: (kind, value) => {
+              if (disabled || kind !== "glow") return;
+              const picked = value as { radius: number; color: string; alpha: number } | null;
+              const record: Record<string, unknown> = { ...(props.style ?? {}) };
+              if (record.effect === "glow") delete record.effect;
+              const next: Record<string, unknown> = { ...(props.style?.shapePaint ?? {}) };
+              if (picked && picked.radius > 0) {
+                const opacity = Math.round(picked.alpha / 1000) / 100;
+                next.glow = {
+                  color: picked.color.toLowerCase(),
+                  radiusPt: Math.min(150, Math.round((picked.radius / EMU_PER_PT) * 100) / 100),
+                  ...(opacity < 1 ? { opacity } : {}),
+                };
+              } else delete next.glow;
+              if (Object.keys(next).length) record.shapePaint = next;
+              else delete record.shapePaint;
+              onStyle(record as OfficeChartPaintStyle);
+            },
+          }).find((item) => item.id === "effects-glow");
+          return section ?? null;
+        })()
+      : null;
+  // Effects ▸ Soft Edges of the same elements (`shapePaint.softEdge`,
+  // `a:softEdge`): its presets and its size, the shared section every shape
+  // shows. A stated soft edge takes the place of the "softEdge" preset.
+  const softEdgeSection: OfficeShapeFormatPaneSection | null =
+    onStyle && !props.paintless && props.effectsLabels && takesThreeD
+      ? (() => {
+          const softEdge = props.style?.shapePaint?.softEdge;
+          const section = officeEffectsPaneSections({
+            effects: softEdge ? { softEdge: { radius: Math.round(softEdge.radiusPt * EMU_PER_PT) } } : {},
+            accentColors: effectAccents,
+            labels: props.effectsLabels!,
+            disabled,
+            disabledReason: reason,
+            testIdPrefix: "chart-effects",
+            onChange: (kind, value) => {
+              if (disabled || kind !== "softEdge") return;
+              const picked = value as { radius: number } | null;
+              const record: Record<string, unknown> = { ...(props.style ?? {}) };
+              if (record.effect === "softEdge") delete record.effect;
+              const next: Record<string, unknown> = { ...(props.style?.shapePaint ?? {}) };
+              if (picked && picked.radius > 0)
+                next.softEdge = {
+                  radiusPt: Math.min(
+                    OFFICE_CHART_MAX_SOFT_EDGE_PT,
+                    Math.round((picked.radius / EMU_PER_PT) * 100) / 100,
+                  ),
+                };
+              else delete next.softEdge;
+              if (Object.keys(next).length) record.shapePaint = next;
+              else delete record.shapePaint;
+              onStyle(record as OfficeChartPaintStyle);
+            },
+          }).find((item) => item.id === "effects-soft-edge");
+          return section ?? null;
+        })()
+      : null;
   const threeDSection: OfficeShapeFormatPaneSection | null =
     onStyle && !props.paintless && props.effectsLabels && takesThreeD
       ? (() => {
@@ -1080,10 +1193,7 @@ export function DocumentChartFormatPane(props: Props) {
               ...(paint?.bevel ? { bevel: paint.bevel } : {}),
               ...(paint?.format3d ? { format3d: paint.format3d } : {}),
             },
-            accentColors: {
-              accent1: "#4472c4", accent2: "#ed7d31", accent3: "#a5a5a5",
-              accent4: "#ffc000", accent5: "#5b9bd5", accent6: "#70ad47",
-            },
+            accentColors: effectAccents,
             labels: props.effectsLabels,
             disabled,
             disabledReason: reason,
@@ -1148,6 +1258,8 @@ export function DocumentChartFormatPane(props: Props) {
             ],
           },
           ...(shadowSection ? [shadowSection] : []),
+          ...(glowSection ? [glowSection] : []),
+          ...(softEdgeSection ? [softEdgeSection] : []),
           ...(threeDSection ? [threeDSection] : []),
         ],
       }

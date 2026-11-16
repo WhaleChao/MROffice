@@ -43,6 +43,7 @@ import {
   officeLineEnd,
 } from "./OfficeLineEndMarkers";
 import type { OfficeStrokeAlign } from "../../lib/office-shape-line-align";
+import { officeGradientAngle, officeGradientDrawnStops } from "../../lib/office-shape-paint";
 import type { OfficeStrokeCompound } from "../../lib/office-stroke-detail";
 
 import styles from "./OfficeShapeCatalogPanel.module.css";
@@ -149,6 +150,13 @@ export interface OfficeShapePreviewProps {
   readonly headEndLength?: PresentationConnectorEndSize;
   readonly tailEndWidth?: PresentationConnectorEndSize;
   readonly tailEndLength?: PresentationConnectorEndSize;
+  /**
+   * A drawing at its real size (`boxWidthPx` / `boxHeightPx`): its ends are
+   * multiples of its line's weight, as Office draws them (`a:ST_LineEndWidth`),
+   * not the gallery tile's fixed box (a sheet's dimension arrows, lookwin
+   * probe p13). A gallery tile leaves it off.
+   */
+  readonly lineEndsAtLineWeight?: boolean;
   readonly fill?: string;
   readonly stroke?: string;
   readonly strokeWidth?: number;
@@ -364,7 +372,7 @@ export const OfficeShapePreview = memo(function OfficeShapePreview({
           : undefined
       }
     >
-      {fillGradient?<defs><linearGradient id={`${instanceId}-fill`} {...gradientVector(fillGradient.angle)}>{fillGradient.stops.map(s=><stop key={s.position} offset={s.position} stopColor={s.color}/>)}</linearGradient></defs>:null}
+      {fillGradient?<defs><linearGradient id={`${instanceId}-fill`} {...gradientVector(officeGradientAngle(fillGradient))}>{officeGradientDrawnStops(fillGradient.stops).map(s=><stop key={s.position} offset={s.position} stopColor={s.color}/>)}</linearGradient></defs>:null}
       {graphic}
     </svg>
   );

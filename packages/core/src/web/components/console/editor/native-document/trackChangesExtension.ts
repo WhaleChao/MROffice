@@ -39,6 +39,7 @@ import {
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { paginationLayoutScale, paginationTransformScale } from "./paged/paginationGeometry";
 import { positionOnHollowPage } from "./paged/pageHollowSheets";
+import { sectionBandsWithRevisionsSettled } from "./bandStoryRevisions";
 import {
   isDocumentTrackingLocked,
   normalizeDocumentProtection,
@@ -758,11 +759,15 @@ function markInsertedParagraphMarks(
  * `w:pPr/w:rPr/w:del`. Accepting then joins the paragraphs as the untracked
  * deletion would have; rejecting keeps them apart (WUA 061: only the words
  * were struck, so Accept left the original breaks and an empty paragraph).
- * A mark the reviewer's own pending insertion put in is left as it is.
+ * A mark the reviewer's own pending insertion put in is left as it is, and
+ * so are the marks inside an object deleted as one (a text box's story):
+ * the object's own revision is the change, and its paragraphs are not
+ * joined by accepting it or left struck by rejecting it.
  */
 function markDeletedParagraphMarks(tr: Transaction, from: number, to: number): void {
   const author = stampedAttrs();
   tr.doc.nodesBetween(from, to, (node, pos) => {
+    if (node.attrs[OBJECT_DELETION_REVISION_ATTR] != null) return false;
     if (!node.isTextblock) return true;
     const markAt = pos + node.nodeSize - 1;
     if (
@@ -1589,11 +1594,24 @@ function applyMarkToSlice(
     fragment.forEach((child) => {
       if (child.isText) {
         sawAny = true;
-        const isInsertion =
-          hasInsertionMark &&
-          child.marks.some((m) => m.type.name === INSERTION_MARK_NAME);
-        if (isInsertion) return;
+        const insertion = hasInsertionMark
+          ? child.marks.find((m) => m.type.name === INSERTION_MARK_NAME)
+          : undefined;
+        if (insertion && !insertionIsAnotherReviewers(insertion, deletionMark)) return;
         sawInsertionOnly = false;
+        if (insertion) {
+          // Another reviewer's insertion, in the file: Word strikes the words
+          // inside it (`w:ins > w:del`, ECMA-376 17.13.5.14) and they stay
+          // until one of the two is decided. Taken out as one's own, Replace
+          // All over a word someone else inserted left no trace of it
+          // (corpus R456-D10 / R455-D56 E51).
+          children.push(
+            child.marks.some((m) => m.type.name === DELETION_MARK_NAME)
+              ? child
+              : child.mark(deletionMark.addToSet(child.marks)),
+          );
+          return;
+        }
         // Text already struck through stays exactly as it was: deleting it
         // again changes nothing (re-stamping its revision was an invisible
         // edit and an undo step that seemed to do nothing).
@@ -1668,6 +1686,23 @@ function applyMarkToSlice(
   // Pure deletion of one's own un-accepted insertion: nothing to tombstone.
   if (sawAny && sawInsertionOnly) return null;
   return new Slice(content, slice.openStart, slice.openEnd);
+}
+
+/**
+ * Whether deleting these inserted words strikes them rather than taking them
+ * out: they are another author's insertion the file holds (it has its
+ * `w:id`). Deleting one's own pending insertion takes it out, as Word does;
+ * an insertion not yet saved has no revision to nest the deletion in.
+ */
+function insertionIsAnotherReviewers(
+  insertion: ProseMirrorMark,
+  deletionMark: ProseMirrorMark,
+): boolean {
+  const revisionId: unknown = insertion.attrs.revisionId;
+  if (typeof revisionId !== "string" || !/^[0-9]{1,10}$/.test(revisionId)) return false;
+  if (insertion.attrs.moveId != null || insertion.attrs.moveRole != null) return false;
+  const author = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  return author(insertion.attrs.author) !== author(deletionMark.attrs.author);
 }
 
 /** Whether an inline node carries any tracked-change mark. */
@@ -2809,7 +2844,13 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
         ({ editor, tr, dispatch }) => {
           if (!editor.isEditable || trackingIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
-          const did = acceptAllChanges(tr);
+          // Word's command settles the headers and footers with the body.
+          const bands = sectionBandsWithRevisionsSettled(tr.doc.attrs, "accept");
+          const did = acceptAllChanges(tr) || bands !== null;
+          if (bands) {
+            tr.setDocAttribute("sectionStoryGraph", bands.sectionStoryGraph);
+            tr.setDocAttribute("sectionBands", bands.sectionBands);
+          }
           if (did && dispatch) dispatch(tr);
           return did;
         },
@@ -2818,7 +2859,13 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
         ({ editor, tr, dispatch }) => {
           if (!editor.isEditable || trackingIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
-          const did = rejectAllChanges(tr);
+          // Word's command settles the headers and footers with the body.
+          const bands = sectionBandsWithRevisionsSettled(tr.doc.attrs, "reject");
+          const did = rejectAllChanges(tr) || bands !== null;
+          if (bands) {
+            tr.setDocAttribute("sectionStoryGraph", bands.sectionStoryGraph);
+            tr.setDocAttribute("sectionBands", bands.sectionBands);
+          }
           if (did && dispatch) dispatch(tr);
           return did;
         },

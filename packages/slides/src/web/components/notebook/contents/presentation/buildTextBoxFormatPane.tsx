@@ -12,6 +12,7 @@
  * No hooks run here.
  */
 
+import type { OfficeGroupCameraControl } from "@mrnote/core/web/lib/office-group-camera.ts";
 import type { PresentationTextBlock, PresentationBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import type { ReactNode, Dispatch, SetStateAction } from "react";
 import { OfficeShapeFormatPane, type OfficeShapeFormatPaneField, type OfficeShapeFormatPaneTab } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
@@ -21,13 +22,17 @@ import { canEditBlockContent } from "@mrnote/core/web/lib/presentation-text-case
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import type { PresentationTaskPaneDock } from "../../../../lib/presentation/presentationTaskPaneDock";
 import type { PresentationTextFrameBlock } from "../../../../lib/presentation-text-frame-options";
+import {
+  presentationShapeEffectsPaneSections,
+  type PresentationShapeEffectsPanePatch,
+} from "./presentationShapeEffectsPane";
 
 /** The window bindings this reads, passed through unchanged. */
 export interface BuildTextBoxFormatPaneCtl {
   t: ReturnType<typeof useTranslations<"console-notebooks">>;
   formatPaneOpen: boolean;
   setFormatPaneOpen: Dispatch<SetStateAction<boolean>>;
-  formatPaneRequestedTab: { readonly id: string; readonly serial: number; } | null;
+  formatPaneRequestedTab: { readonly id: string; readonly serial: number; readonly section?: string } | null;
   taskPaneDock: PresentationTaskPaneDock;
   taskPaneTabsLabel: string;
   formatPaneInFront: boolean;
@@ -38,6 +43,12 @@ export interface BuildTextBoxFormatPaneCtl {
   renderTextBoxFillLine: (inspectorBlock: PresentationBlock) => ReactNode;
   renderTextBoxTextTools: (inspectorBlock: PresentationBlock) => ReactNode;
   deleteBlock: (blockId: string) => void;
+  /** The deck's six accents (Effects presets draw in them). */
+  themeAccentColors: string[];
+  /** Format Shape > Effects on the box: the shape's own fields, one undo step. */
+  updateTextBoxEffects: (blockId: string, patch: PresentationShapeEffectsPanePatch) => boolean;
+  /** The camera of the group the box is in (Format Shape > 3-D Rotation edits the group's). */
+  groupCameraFor?: (block: PresentationTextBlock) => OfficeGroupCameraControl | undefined;
 }
 
 export function buildTextBoxFormatPane(ctl: BuildTextBoxFormatPaneCtl) {
@@ -56,10 +67,28 @@ export function buildTextBoxFormatPane(ctl: BuildTextBoxFormatPaneCtl) {
     renderTextBoxFillLine,
     renderTextBoxTextTools,
     deleteBlock,
+    themeAccentColors,
+    updateTextBoxEffects,
+    groupCameraFor,
   } = ctl;
   const renderTextBoxFormatPane = (block: PresentationTextBlock): ReactNode => {
     const record = block as Record<string, unknown>;
     const textOptions = textOptionsTabFor(block);
+    // Format Shape > Effects: a text box is a shape, and PowerPoint gives it
+    // the shape's whole Effects page (Shadow, Reflection, Glow, Soft Edges,
+    // 3-D Format, 3-D Rotation with Keep text flat), the same builder.
+    const officeEffects = presentationShapeEffectsPaneSections({
+      block,
+      themeAccentColors,
+      t,
+      disabled: !canEditBlockContent(block),
+      update: (patchOf) => {
+        const patch = patchOf(block);
+        return patch ? updateTextBoxEffects(block.id, patch) : false;
+      },
+      holdsWords: true,
+      groupCamera: groupCameraFor?.(block),
+    });
     return (
       <OfficeShapeFormatPane
         testIdPrefix="presentation-textbox"
@@ -106,6 +135,11 @@ export function buildTextBoxFormatPane(ctl: BuildTextBoxFormatPaneCtl) {
                 fields: [{ kind: "custom", id: "fill-line", render: renderTextBoxFillLine(block) }],
               },
             ],
+          },
+          {
+            id: "office-effects",
+            label: t("presentation.ui.shapeFormatPane.effects"),
+            sections: officeEffects,
           },
           {
             id: "size",

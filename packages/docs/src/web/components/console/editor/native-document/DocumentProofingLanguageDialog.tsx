@@ -79,7 +79,7 @@ export function DocumentProofingLanguageDialog({
   initialValue,
   mixed,
   noProofMixed = false,
-  productName = "MRNote",
+  productName = "MR Note",
   returnFocusRef,
   onSubmit,
   onClose,

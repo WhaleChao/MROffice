@@ -206,6 +206,19 @@ export function resolvePassScope(
   if (!block) return null;
   const previous = from ? null : build.atoms[block.index - 1];
   const openedByForcedBreak = previous ? previous.forcedBreakAfter || previous.columnBreakAfter : false;
+  // The last paragraph in the flow of the page before, as the planner closes
+  // a page (an anchored object or a break marker is none).
+  let leadingAfterPx = 0;
+  if (!from && startPage > 0) {
+    const floor = openingOf(build, startPage - 1)?.block.index ?? 0;
+    for (let index = block.index - 1; index >= floor; index -= 1) {
+      const atom = build.atoms[index];
+      if (atom && !atom.hidden && !atom.anchored) {
+        leadingAfterPx = Math.max(0, atom.spaceAfterPx || 0);
+        break;
+      }
+    }
+  }
   // The window reaches past the reader's pages and past the first pending
   // page it starts at or before: a pass that stopped at page P must lay P
   // out and go on from it, or every pass would end where the last one did.
@@ -244,7 +257,7 @@ export function resolvePassScope(
     // in between.
     windowEnd = sheets.length > PLAN_TO_END_MAX_SHEETS ? Math.max(windowEnd, startPage + LONG_DOCUMENT_PLAN_PAGES) : Number.POSITIVE_INFINITY;
   }
-  return { start: { atom: block.index, page: startPage, openedByForcedBreak, from }, windowEnd, pendingPages, resyncLeaves: [] };
+  return { start: { atom: block.index, page: startPage, openedByForcedBreak, from, ...(leadingAfterPx > 0 ? { leadingAfterPx } : {}) }, windowEnd, pendingPages, resyncLeaves: [] };
 }
 
 const plannedToTheEnd = new WeakSet<Element>();
@@ -313,6 +326,9 @@ export function scopedStopAt(
   currentStarts: readonly string[],
   /** A document with footnotes: the sheets footnote rows are carried into. */
   carriedInto: ((page: number) => boolean) | null = null,
+  /** Whether the page standing at an index is one a pass laid out (null:
+   * every page counts as laid out). */
+  laidOut: ((page: number) => boolean) | null = null,
 ): NonNullable<LedgerCutOptions["stopAt"]> {
   const sheets = build.sheets;
   const changedWithin = (from: number, to: number): number[] => {
@@ -325,7 +341,12 @@ export function scopedStopAt(
   return (page, atom, from) => {
     // (The planner asks only at a page it carries no footnote rows into; the
     // page as it stands must carry none in either.)
-    if (page < currentStarts.length && currentStarts[page] === `${atom}${from ? "+" + from.key : ""}` && !carriedInto?.(page)) {
+    // Nor at a page no pass has laid out: a provisional sheet as the document
+    // came (a part's own pagination) opens with the same block and may hold
+    // less than the plan would put on it (R282-D07 under
+    // `__docsFootnoteProgressive`: a resync on its provisional sheet 5, the
+    // block after a table left on the next page, 56 pages for 55).
+    if (page < currentStarts.length && currentStarts[page] === `${atom}${from ? "+" + from.key : ""}` && !carriedInto?.(page) && laidOut?.(page) !== false) {
       // The pages from here on were composed from this same opening: they
       // are the answer already, up to the next pending page, or up to a
       // sheet that changed since (the pages a previous pass moved content
@@ -389,6 +410,33 @@ function seamIndexForKey(block: LogicalBlock, key: string): number | null {
 }
 
 /**
+ * A document with footnotes: the page a standing sheet was laid out as (its
+ * note rows carried in and out, the flexible note room its fragments took)
+ * and the note-only pages after the last one. A standing page drawn without
+ * them published its notes as if nothing were carried across it: a note
+ * continued from the page before a pass's start was dropped from the zones
+ * (R205-D04 under `__docsFootnoteProgressive`).
+ */
+export interface StandingNotes {
+  page(index: number): LedgerPage | undefined;
+  notePages(): LedgerPage[] | undefined;
+}
+
+function withStandingNotes(page: LedgerPage, laidOut: LedgerPage | undefined): LedgerPage {
+  if (!laidOut) return page;
+  if (laidOut.noteCarryInPx) page.noteCarryInPx = laidOut.noteCarryInPx;
+  if (laidOut.noteCarryOutPx) page.noteCarryOutPx = laidOut.noteCarryOutPx;
+  // The same page node holds the same fragments, in order (atom indexes may
+  // have moved with an edit before it).
+  if (laidOut.placements.length === page.placements.length) {
+    laidOut.placements.forEach((placement, index) => {
+      if (placement.noteFlexTakenPx !== undefined) page.placements[index] = { ...page.placements[index]!, noteFlexTakenPx: placement.noteFlexTakenPx };
+    });
+  }
+  return page;
+}
+
+/**
  * The whole-document plan of a scoped pass: the pages before its start as
  * they stand, the pages it planned, and after a stop the rest as it stands.
  * After a `yield` the page it stopped at takes every fragment from the one
@@ -396,15 +444,25 @@ function seamIndexForKey(block: LogicalBlock, key: string): number | null {
  * stands on (or of the sheet at its own index, when that is later), so no
  * page after it is touched by this pass.
  */
-export function composeScopedPlan(build: LedgerBuild, planned: LedgerPlan, start: LedgerCutStart): LedgerPlan {
+export function composeScopedPlan(
+  build: LedgerBuild,
+  planned: LedgerPlan,
+  start: LedgerCutStart,
+  /** A document with footnotes: what the pass that laid out each standing
+   * page planned for it (StandingNotes). */
+  standingNotes: StandingNotes | null = null,
+): LedgerPlan {
   const current = currentPlacements(build);
   const capacities = build.capacities;
-  const pageAt = (index: number, placements: LedgerPlacement[]): LedgerPage => ({
-    placements,
-    usedPx: 0,
-    capacityPx: capacities[Math.min(index, capacities.length - 1)] ?? 0,
-    preserveLeadingSpace: false,
-  });
+  const pageAt = (index: number, placements: LedgerPlacement[]): LedgerPage => {
+    const page: LedgerPage = {
+      placements,
+      usedPx: 0,
+      capacityPx: capacities[Math.min(index, capacities.length - 1)] ?? 0,
+      preserveLeadingSpace: false,
+    };
+    return standingNotes ? withStandingNotes(page, standingNotes.page(index)) : page;
+  };
   const pages: LedgerPage[] = [];
   for (let i = 0; i < start.page && i < current.length; i += 1) pages.push(pageAt(i, current[i]));
   pages.push(...planned.pages);
@@ -422,7 +480,9 @@ export function composeScopedPlan(build: LedgerBuild, planned: LedgerPlan, start
   if (stop.kind === "resync") {
     for (let i = stop.page; i < current.length; i += 1) pages.push(pageAt(i, current[i]));
     const resyncPage = stop.page;
-    return { ...planned, pages, standing: (page) => page < firstPage || page >= resyncPage };
+    // The note-only pages after the last one stand with it.
+    const notePages = standingNotes?.notePages() ?? null;
+    return { ...planned, ...(notePages?.length ? { notePages } : {}), pages, standing: (page) => page < firstPage || page >= resyncPage };
   }
   const block = build.logical[stop.atom];
   if (!block) return { ...planned, pages };

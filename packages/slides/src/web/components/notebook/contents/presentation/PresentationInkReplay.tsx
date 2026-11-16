@@ -43,11 +43,11 @@ export function usePresentationInkReplay(
       | ((current: PresentationInkReplayState | null) => PresentationInkReplayState | null),
   ) => void,
 ) {
+  // The timeline is the strokes'; the clock moving does not rebuild it.
+  const replaying = state !== null;
   const timeline = useMemo<InkReplayTimeline | null>(
-    () => (strokes && state ? inkReplayTimeline(presentationInkReplayTimelineInput(strokes)) : null),
-    // The timeline is the strokes'; the clock moving does not rebuild it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [strokes, state !== null],
+    () => (strokes && replaying ? inkReplayTimeline(presentationInkReplayTimelineInput(strokes)) : null),
+    [strokes, replaying],
   );
   const playing = state?.playing === true;
   const duration = timeline?.duration ?? 0;

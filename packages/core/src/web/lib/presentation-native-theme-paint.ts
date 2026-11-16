@@ -5,7 +5,7 @@
  */
 import { isNativePresentationThemePartPath } from "./presentation-theme";
 import { readNativeDrawingGeometry } from "./native-drawing-geometry";
-import { normalizeOfficeShapeGradient, normalizeOfficeShapeShadow, type OfficeShapeGradient } from "./office-shape-paint";
+import { normalizeOfficeShapeGradient, normalizeOfficeShapeShadow, type OfficeShapeGradient, officeGradientAngle } from "./office-shape-paint";
 
 const record = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -46,7 +46,7 @@ export function readPresentationNativeThemePaint(value: unknown): PresentationNa
   if (paint.strokeWidth !== undefined && (typeof paint.strokeWidth !== "number" || !Number.isFinite(paint.strokeWidth) || paint.strokeWidth < 0 || paint.strokeWidth > 1000)) return undefined;
   try {
     const gradient = normalizeOfficeShapeGradient(paint.fillGradient);
-    if (gradient && (paint.fill !== gradient.stops[0].color || paint.fillTo !== gradient.stops.at(-1)?.color || paint.gradientAngle !== gradient.angle)) return undefined;
+    if (gradient && (paint.fill !== gradient.stops[0].color || paint.fillTo !== gradient.stops.at(-1)?.color || paint.gradientAngle !== officeGradientAngle(gradient))) return undefined;
     if (!gradient && (paint.fillTo !== undefined || paint.gradientAngle !== undefined)) return undefined;
     return { ...paint, ...(gradient ? { fillGradient: gradient } : {}) } as PresentationNativeThemePaint;
   } catch { return undefined; }

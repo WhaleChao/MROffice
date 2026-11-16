@@ -16,7 +16,9 @@
 
 .left > [data-office-task-pane-slot] > * {
   position: absolute !important;
-  inset: 8px auto 8px 8px;
+  /* 8px above the pages' horizontal scroll bar where it takes room of its
+     own (--pdf-pages-bar-x, pdfTaskPaneDock.tsx). */
+  inset: 8px auto calc(8px + var(--pdf-pages-bar-x, 0px)) 8px;
   min-height: 0;
 }
 
@@ -39,7 +41,10 @@
 
 .right > [data-office-task-pane-slot] > * {
   position: absolute !important;
-  inset: 8px 8px 8px auto;
+  /* 8px in from the pages' scroll bars where they take room of their own
+     (Windows; --pdf-pages-bar, pdfTaskPaneDock.tsx): the bar under the card
+     could not be pressed. */
+  inset: 8px calc(8px + var(--pdf-pages-bar, 0px)) calc(8px + var(--pdf-pages-bar-x, 0px)) auto;
   min-height: 0;
 }
 

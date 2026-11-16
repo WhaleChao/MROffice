@@ -219,7 +219,13 @@ export interface OfficeFormat3dEffect {
   readonly material?: OfficeMaterialPreset;
   /** `angle`: 60000ths of a degree. */
   readonly lighting?: { readonly rig: OfficeLightRig; readonly direction?: OfficeLightDirection; readonly angle?: number };
+  /** 3-D Rotation > Distance from ground (`a:sp3d@z`): EMU toward the
+   * viewer, -4000..4000 pt; absent is the ground. */
+  readonly z?: number;
 }
+
+/** Distance from ground's bound either way (PowerPoint's box), EMU. */
+export const OFFICE_MAX_DISTANCE_FROM_GROUND = 4000 * 12_700;
 
 export interface OfficePictureEffectValues {
   /** PowerPoint's Preset 1-12 (`lib/office-picture-effect-presets`). */
@@ -252,6 +258,35 @@ const DEFAULT_BEVEL = 76_200;
  * view; PowerPoint for Mac, `probe_out.txt`). Legacy cameras are accepted
  * from a file and drawn unrotated.
  */
+/**
+ * A camera's longitude (`a:rot@lon`, 60000ths of a degree; Format > 3-D
+ * Rotation > X Rotation) as the turn the camera table and the hosts' CSS
+ * take (`rotateY`, OFFICE_CAMERA_ROTATIONS' x): the other way round. Office
+ * shows the right wall of a solid at X 20 degrees (wall-brightness-probe p1,
+ * lon 1200000) as under Perspective: Left, whose turn here is -20; its Y
+ * (`lat`) is the table's y as it stands (lat 340 and Perspective: Above
+ * both show the bottom wall).
+ */
+export function officeCameraLonTurn(lon: number): number {
+  const turn = -lon / 60_000;
+  return turn === 0 ? 0 : turn;
+}
+
+/**
+ * A camera's revolution (`a:rot@rev`, 60000ths of a degree; Format > 3-D
+ * Rotation > Z Rotation) as the turn the camera table and the hosts' CSS
+ * take (`rotateZ`, OFFICE_CAMERA_ROTATIONS' z): the other way round, as the
+ * table's own presets are (Isometric: Top Up, Z 59.7 in PowerPoint's pane,
+ * is the table's -60.16). PowerPoint's own PDF of text3d-flip-probe p4
+ * (perspectiveFront X 320 Y 10 Z 15): the plain rectangle stands turned the
+ * way the one with `rot` 30 stood when Z was taken clockwise (its corners
+ * within 2 px of the counter-clockwise turn's).
+ */
+export function officeCameraRevTurn(rev: number): number {
+  const turn = -rev / 60_000;
+  return turn === 0 ? 0 : turn;
+}
+
 export const OFFICE_CAMERA_ROTATIONS: Readonly<
   Record<string, readonly [x: number, y: number, z: number, fov: number]>
 > = cameraTable.cameras as unknown as Record<string, readonly [number, number, number, number]>;
@@ -449,9 +484,13 @@ function normalizeEffect<K extends OfficePictureEffectKind>(
     return format3d as OfficePictureEffectValues[K] | null;
   }
   const raw = record(value, ["camera"], ["lat", "lon", "rev", "fov"]);
-  if (!raw || !isOfficeCameraPreset(raw.camera)) return null;
+  // The front camera turned by its own X / Y / Z (`orthographicFront` with
+  // an `a:rot`): a parallel turn, its angles stated (the server's rule).
+  const front = raw?.camera === "orthographicFront";
+  if (!raw || (!front && !isOfficeCameraPreset(raw.camera))) return null;
   const angles = (["lat", "lon", "rev"] as const).filter((axis) => axis in raw);
   if (angles.length !== 0 && angles.length !== 3) return null;
+  if (front && (angles.length !== 3 || angles.every((axis) => !raw[axis]))) return null;
   const rotation: Record<string, unknown> = { camera: raw.camera };
   for (const axis of angles) {
     const angle = int(raw[axis], 0, 21_599_999);
@@ -473,7 +512,7 @@ function normalizeEffect<K extends OfficePictureEffectKind>(
  * so a value may come out empty (no 3-D format: write "none").
  */
 export function normalizeOfficeFormat3d(value: unknown): OfficeFormat3dEffect | null {
-  const raw = record(value, [], ["bottom", "depth", "contour", "material", "lighting"]);
+  const raw = record(value, [], ["bottom", "depth", "contour", "material", "lighting", "z"]);
   if (!raw) return null;
   const hex = (color: unknown): string | null | undefined =>
     color === undefined ? undefined : typeof color === "string" && /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : null;
@@ -498,6 +537,11 @@ export function normalizeOfficeFormat3d(value: unknown): OfficeFormat3dEffect | 
   if ("material" in raw) {
     if (!(OFFICE_MATERIAL_PRESETS as readonly unknown[]).includes(raw.material)) return null;
     if (raw.material !== "warmMatte") next.material = raw.material as OfficeMaterialPreset;
+  }
+  if ("z" in raw) {
+    const z = int(raw.z, -OFFICE_MAX_DISTANCE_FROM_GROUND, OFFICE_MAX_DISTANCE_FROM_GROUND);
+    if (z === null) return null;
+    if (z) next.z = z;
   }
   if ("lighting" in raw) {
     const lighting = record(raw.lighting, ["rig"], ["direction", "angle"]);
@@ -604,6 +648,18 @@ function px(emu: number): number {
   return Math.round((emu / EMU_PER_PX) * 100) / 100;
 }
 
+// Office's camera distance (absolute, whatever the size): its own module, so
+// the picture presets' camera reads it without importing this one.
+import { OFFICE_CAMERA_DISTANCE_EMU_AT_45, officeCameraEyePx } from "./office-camera-distance";
+export { OFFICE_CAMERA_DISTANCE_EMU_AT_45, officeCameraEyePx };
+
+/**
+ * How far a picture's Soft Edges ramp in from each side, in px: the radius,
+ * at most half the picture's shorter side.
+ */
+export function officeSoftEdgeRampPx(radiusEmu: number, size: { readonly width: number; readonly height: number }): number {
+  return Math.max(0, Math.min(px(radiusEmu), size.width / 2, size.height / 2));
+}
 
 
 
@@ -612,13 +668,81 @@ function px(emu: number): number {
 
 
 
-export function officeCameraEyePx(size: { readonly width: number; readonly height: number }, fovDegrees: number): number {
-  return Math.round((2 * Math.max(size.width, size.height)) / Math.tan((Math.min(179, Math.max(1, fovDegrees)) * Math.PI) / 360));
+
+
+
+
+export const OFFICE_SOFT_EDGE_INSET = 0.9;
+export const OFFICE_SOFT_EDGE_SIGMA = 1 / 3;
+
+/** The standard normal distribution (Abramowitz & Stegun 26.2.17, error below 7.5e-8). */
+function normalCdf(z: number): number {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const tail = 0.3989422804014327 * Math.exp((-z * z) / 2) * t * (0.31938153 + t * (-0.356563782 + t * (1.781477937 + t * (-1.821255978 + t * 1.330274429))));
+  return z >= 0 ? 1 - tail : tail;
+}
+
+/**
+ * The Soft Edges alpha `x` px into a side `length` px long, both of its edges
+ * fading by `radiusPx` (the drawn-in span blurred: exact for a rectangle).
+ */
+export function officeSoftEdgeAlpha(x: number, length: number, radiusPx: number): number {
+  if (!(radiusPx > 0)) return 1;
+  const inset = OFFICE_SOFT_EDGE_INSET * radiusPx;
+  const sigma = OFFICE_SOFT_EDGE_SIGMA * radiusPx;
+  return Math.max(0, Math.min(1, normalCdf((x - inset) / sigma) - normalCdf((x - (length - inset)) / sigma)));
+}
+
+/** The fade across one side as gradient stops (offset as a share of the side, alpha), both edges, in order. */
+function softEdgeStops(length: number, radiusPx: number): (readonly [number, number])[] {
+  const side = Math.max(1, length);
+  const reach = Math.min(side / 2, (OFFICE_SOFT_EDGE_INSET + 3 * OFFICE_SOFT_EDGE_SIGMA) * radiusPx);
+  const steps = 16;
+  const near: number[] = [];
+  for (let step = 0; step <= steps; step += 1) near.push((reach * step) / steps);
+  const at = [...near, ...near.slice().reverse().map((x) => side - x)].filter((x, index, all) => index === 0 || x > all[index - 1] + 1e-6);
+  return at.map((x) => [x / side, Math.round(officeSoftEdgeAlpha(x, side, radiusPx) * 10_000) / 10_000] as const);
+}
+
+/**
+ * Soft Edges as a CSS mask over a picture `size` px: PowerPoint's fade
+ * (`officeSoftEdgeAlpha`) in from every side, `rampPx` the radius.
+ */
+export function officeSoftEdgeMaskCss(rampPx: number, size: { readonly width: number; readonly height: number }): CSSProperties {
+  const gradient = (direction: string, length: number) =>
+    `linear-gradient(${direction}, ${softEdgeStops(length, rampPx).map(([offset, alpha]) => `rgb(0 0 0 / ${alpha}) ${(offset * 100).toFixed(3)}%`).join(", ")})`;
+  const mask = `${gradient("to right", size.width)}, ${gradient("to bottom", size.height)}`;
+  return { maskImage: mask, WebkitMaskImage: mask, maskComposite: "intersect", WebkitMaskComposite: "source-in" };
+}
+
+/**
+ * The same Soft Edges fade as an image for an SVG filter's `feImage` (an
+ * element that cannot hold the masked layer inside it -- a Docs `<img>` --
+ * keeps its soft edges in its filter, which its reflection mirrors, where a
+ * mask would hide the reflection).
+ */
+export function officeSoftEdgeMaskImage(size: { readonly width: number; readonly height: number }, rampPx: number): string {
+  const stops = (length: number) =>
+    softEdgeStops(length, rampPx).map(([offset, alpha]) => `<stop offset="${offset.toFixed(5)}" stop-color="#fff" stop-opacity="${alpha}"/>`).join("");
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.max(1, Math.round(size.width))}" height="${Math.max(1, Math.round(size.height))}" preserveAspectRatio="none">` +
+    `<defs><linearGradient id="x" x2="1">${stops(size.width)}</linearGradient>` +
+    `<linearGradient id="y" x2="0" y2="1">${stops(size.height)}</linearGradient>` +
+    `<mask id="m"><rect width="100%" height="100%" fill="url(#y)"/></mask></defs>` +
+    `<rect width="100%" height="100%" fill="url(#x)" mask="url(#m)"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
 export interface OfficePictureEffectsCss {
-  /** On a wrapper around the picture: glow, reflection, soft edges, 3-D rotation, an outer shadow. */
+  /** On a wrapper around the picture: glow, reflection, 3-D rotation, an outer shadow. */
   readonly wrapper: CSSProperties;
+  /**
+   * Soft edges, on a layer INSIDE the wrapper that draws the picture: a mask
+   * on the wrapper itself would also take away the reflection and the glow it
+   * draws outside its box (Word and PowerPoint show a soft-edged picture's
+   * reflection, softened as the picture is).
+   */
+  readonly softEdge?: CSSProperties;
   /** An overlay over the picture for the bevel's lit and shaded rims, if any. */
   readonly bevel?: CSSProperties;
   /** A layer under the picture for a perspective shadow, if any. */
@@ -693,24 +817,16 @@ export function officePictureEffectsCss(
       `rgb(0 0 0 / ${reflection.endA / 100_000}) ${start}%, rgb(0 0 0 / ${reflection.stA / 100_000}) 100%)`;
   }
   const softEdge = effects.softEdge;
-  if (softEdge && softEdge !== "none") {
-    const ramp = Math.min(px(softEdge.radius), size.width / 2, size.height / 2);
-    const mask =
-      `linear-gradient(to right, transparent, #000 ${ramp}px, #000 calc(100% - ${ramp}px), transparent), ` +
-      `linear-gradient(to bottom, transparent, #000 ${ramp}px, #000 calc(100% - ${ramp}px), transparent)`;
-    wrapper.maskImage = mask;
-    wrapper.WebkitMaskImage = mask;
-    wrapper.maskComposite = "intersect";
-    wrapper.WebkitMaskComposite = "source-in";
-  }
+  const softEdgeCss =
+    softEdge && softEdge !== "none" ? officeSoftEdgeMaskCss(officeSoftEdgeRampPx(softEdge.radius, size), size) : undefined;
   const rotation = effects.rotation3d;
   if (rotation && rotation !== "none") {
     const [cameraX, cameraY, cameraZ] = OFFICE_CAMERA_ROTATIONS[rotation.camera] ?? [0, 0, 0, 45];
     // Format Picture > 3-D Rotation's X / Y / Z (`a:rot` on the camera)
     // override the camera's own, as on a shape (office-shape-effects-paint).
-    const x = typeof rotation.lon === "number" ? rotation.lon / 60_000 : cameraX;
+    const x = typeof rotation.lon === "number" ? officeCameraLonTurn(rotation.lon) : cameraX;
     const y = typeof rotation.lat === "number" ? rotation.lat / 60_000 : cameraY;
-    const z = typeof rotation.rev === "number" ? rotation.rev / 60_000 : cameraZ;
+    const z = typeof rotation.rev === "number" ? officeCameraRevTurn(rotation.rev) : cameraZ;
     const perspective = rotation.camera.startsWith("perspective")
       ? `perspective(${officeCameraEyePx(size, officeCameraFieldOfView(rotation))}px) `
       : "";
@@ -734,9 +850,10 @@ export function officePictureEffectsCss(
   const rim = bevelCss ?? preset?.bevel;
   const under = shadow?.under ?? preset?.shadowUnder;
   const over = shadow?.over ?? preset?.shadowOver;
-  if (!Object.keys(wrapper).length && !rim && !under && !over) return null;
+  if (!Object.keys(wrapper).length && !rim && !under && !over && !softEdgeCss) return null;
   return {
     wrapper,
+    ...(softEdgeCss ? { softEdge: softEdgeCss } : {}),
     ...(rim ? { bevel: rim } : {}),
     ...(under ? { shadowUnder: under } : {}),
     ...(over ? { shadowOver: over } : {}),

@@ -1024,6 +1024,11 @@ export interface CodePageBufferLease {
     expectedContent: string,
   ): CodePageCommandHistory | null;
   replaceDraft(draft: PageDocumentDraft): void;
+  /** The page was renamed outside the editor (a collaborator, the titlebar,
+   * a refused name handed back): the draft the buffer holds takes the name,
+   * so a hydration or a room delivery never hands a window the old one. No
+   * save: the name is already the server's. */
+  followTitle(title: string): void;
   publishTextareaText(content: string): void;
   registerEditorOrigin(origin: unknown): void;
   updateHolder(options: {
@@ -1237,6 +1242,10 @@ export function acquireCodePageBuffer(
         undo: () => moveHistory("undo"),
         redo: () => moveHistory("redo"),
       };
+    },
+    followTitle(title) {
+      if (!requireLive() || !entry.latestDraft || entry.latestDraft.title === title) return;
+      entry.latestDraft = { ...entry.latestDraft, title };
     },
     replaceDraft(draft) {
       if (requireLive() && entryMayWrite(entry)) {

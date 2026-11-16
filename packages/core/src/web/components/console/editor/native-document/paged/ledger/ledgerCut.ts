@@ -225,7 +225,7 @@ export function planLedgerPages(
       bandTopsPx: options.columnBandTopsFor?.(pageIndex()) ?? null,
     };
   };
-  let closingAfterPx = 0;
+  let closingAfterPx = Math.max(0, options.start?.leadingAfterPx ?? 0);
   // Continued footnotes: rows a page's note area could not hold run on at
   // the head of the next page's note area, taken off its capacity (Word's
   // continuation), in whole rows of their own pitch, and so on page after
@@ -440,9 +440,13 @@ export function planLedgerPages(
     const tailScale = trackHeights && fromColumn !== null && fromColumn !== columnIndex && trackHeights[fromColumn] > EPSILON_PX
       ? trackHeights[columnIndex] / trackHeights[fromColumn]
       : 1;
+    // A page's note zone has one separator: a block with notes below others
+    // on the page adds its rows only (corpus R433-D10: two references in two
+    // paragraphs, the chrome charged twice, a 21 px line that fits moved on).
+    const sharedChromePx = !continuing && page.notesBelow && atom.noteChromePx ? atom.noteChromePx : 0;
     const height = continuing
       ? from!.tailHeightPx * tailScale
-      : trackHeights ? trackHeights[columnIndex] : atom.heightPx;
+      : (trackHeights ? trackHeights[columnIndex] : atom.heightPx) - sharedChromePx;
     const noteFlexPx = continuing ? (from!.tailNoteFlexPx ?? 0) : (atom.noteFlexPx ?? 0);
     const notePitchPx = atom.notePitchPx ?? 0;
     // A floating table opening a page or column keeps its drop there.

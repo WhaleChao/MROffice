@@ -10,13 +10,31 @@ import { useId, type ReactNode } from "react";
 import { normalizePictureClipShape, pictureClipShapeOutline } from "../../../../lib/presentation-picture-crop-shape";
 import { PRESENTATION_CUSTOM_PATH_GRID, presentationCustomPathToSvgPath } from "@mrnote/core/web/lib/presentation-freeform.ts";
 import { officeLineFamilyDash } from "@mrnote/core/web/lib/office-stroke-dash.ts";
+import { officePictureLineRectPath, type OfficePictureLineJoin } from "@mrnote/core/web/lib/office-picture-line.ts";
+import type { OfficeStrokeCompound } from "@mrnote/core/web/lib/office-stroke-detail.ts";
+import { OfficePictureLinePath } from "@mrnote/core/web/components/office-ribbon/OfficePictureLinePath.tsx";
 
 /** A border drawn along the shape: design px, its colour and its dash. */
 export interface ClipShapeStroke {
   width: number;
   color: string;
   style: "solid" | "dashed" | "dotted";
+  /** The two or three lines a compound line is (`borderCompound`). */
+  compound?: OfficeStrokeCompound;
+  /** The line's corners (`borderJoin`); round when absent. */
+  join?: OfficePictureLineJoin;
+  /**
+   * How far outside the outline the line is stroked, design px
+   * (`officePictureLineOutset`): a flat picture's line lies outside it, as
+   * PowerPoint draws it; 0 centres it (a video's, a 3-D picture's).
+   */
+  outset?: number;
+  /** A rectangle's rounded corners (`cornerRadius`), design px. */
+  radius?: number;
 }
+
+
+
 
 
 
@@ -60,24 +78,39 @@ export function PresentationClipShapeFrame({
   const customD = !preset && customPath ? presentationCustomPathToSvgPath(customPath) : null;
   // The path is on its own 100000 grid; the outline is that grid stretched
   // to the frame, in design px (the stroke's unit).
-  const outline =
-    customD && widthEmu > 0 && heightEmu > 0
+  const outlineOf = (frameWidthEmu: number, frameHeightEmu: number) =>
+    customD && frameWidthEmu > 0 && frameHeightEmu > 0
       ? {
           // `presentationCustomPathToSvgPath` writes the grid in thousandths.
           d: scaleSvgPath(
             customD,
-            (widthEmu / 9525) / (PRESENTATION_CUSTOM_PATH_GRID / 1000),
-            (heightEmu / 9525) / (PRESENTATION_CUSTOM_PATH_GRID / 1000),
+            (frameWidthEmu / 9525) / (PRESENTATION_CUSTOM_PATH_GRID / 1000),
+            (frameHeightEmu / 9525) / (PRESENTATION_CUSTOM_PATH_GRID / 1000),
           ),
-          width: widthEmu / 9525,
-          height: heightEmu / 9525,
+          width: frameWidthEmu / 9525,
+          height: frameHeightEmu / 9525,
         }
       : preset && (includeEllipse || stroke || preset !== "ellipse")
-      ? pictureClipShapeOutline(preset, widthEmu, heightEmu, adjustments)
+      ? pictureClipShapeOutline(preset, frameWidthEmu, frameHeightEmu, adjustments)
       : null;
-  if (!outline) return <>{children}</>;
+  const outline = outlineOf(widthEmu, heightEmu);
+  const visibleStroke = stroke && stroke.width > 0 && widthEmu > 0 && heightEmu > 0 ? stroke : null;
+  const outset = visibleStroke ? Math.max(0, visibleStroke.outset ?? 0) : 0;
+  // The line's path, in the frame's design px: the outline of the frame grown
+  // by the outset each side (a rectangle's: its corners' centres kept).
+  const lineD = !visibleStroke
+    ? null
+    : outline
+      ? outset > 0
+        ? (() => {
+            const grown = outlineOf(widthEmu + 2 * outset * 9525, heightEmu + 2 * outset * 9525);
+            return grown ? translateSvgPath(grown.d, -outset, -outset) : null;
+          })()
+        : outline.d
+      : officePictureLineRectPath(widthEmu / 9525, heightEmu / 9525, visibleStroke.radius ?? 0, outset);
+  if (!outline && !lineD) return <>{children}</>;
   const domId = `presentation-clip-shape-${reactId.replace(/[^A-Za-z0-9_-]/g, "")}`;
-  const clipDefs = (
+  const clipDefs = outline ? (
     <svg aria-hidden="true" width="0" height="0" style={{ position: "absolute" }}>
       <defs>
         <clipPath id={domId} clipPathUnits="objectBoundingBox">
@@ -85,15 +118,13 @@ export function PresentationClipShapeFrame({
         </clipPath>
       </defs>
     </svg>
-  );
+  ) : null;
   const frameStyle = {
     position: "relative" as const,
     display: fillParent ? "block" : "inline-block",
     ...(fillParent ? { width: "100%", height: "100%" } : {}),
   };
-  // The outline is in design px, the stroke's unit.
-  const line = stroke && stroke.width > 0 ? outline : null;
-  if (!line || !stroke) {
+  if (!lineD || !visibleStroke) {
     return (
       <span
         data-testid="presentation-picture-clip-shape"
@@ -105,37 +136,75 @@ export function PresentationClipShapeFrame({
       </span>
     );
   }
+  const frameWidth = widthEmu / 9525;
+  const frameHeight = heightEmu / 9525;
+  const reach = outset + visibleStroke.width * 2;
+  
+  const dash = officeLineFamilyDash(visibleStroke.style, visibleStroke.width);
   return (
     <span data-testid="presentation-picture-clip-shape-frame" style={frameStyle}>
-      <span
-        data-testid="presentation-picture-clip-shape"
-        data-clip-shape={preset ?? undefined}
-        style={{ ...frameStyle, display: "block", width: "100%", height: "100%", clipPath: `url(#${domId})` }}
-      >
-        {clipDefs}
-        {children}
-      </span>
+      {outline ? (
+        <span
+          data-testid="presentation-picture-clip-shape"
+          data-clip-shape={preset ?? undefined}
+          style={{ ...frameStyle, display: "block", width: "100%", height: "100%", clipPath: `url(#${domId})` }}
+        >
+          {clipDefs}
+          {children}
+        </span>
+      ) : (
+        children
+      )}
       <svg
         aria-hidden="true"
-        data-testid="presentation-picture-clip-shape-line"
-        viewBox={`0 0 ${line.width} ${line.height}`}
+        data-testid={outline ? "presentation-picture-clip-shape-line" : "presentation-picture-line"}
+        data-line-outset={outset > 0 ? outset : undefined}
+        viewBox={`0 0 ${frameWidth} ${frameHeight}`}
         preserveAspectRatio="none"
         overflow="visible"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}
       >
-        <path
-          d={line.d}
-          fill="none"
-          stroke={stroke.color}
-          strokeWidth={stroke.width}
-          strokeLinejoin="round"
-          
-          strokeDasharray={officeLineFamilyDash(stroke.style, stroke.width)?.dashArray}
-          strokeLinecap={officeLineFamilyDash(stroke.style, stroke.width)?.linecap}
+        <OfficePictureLinePath
+          d={lineD}
+          color={visibleStroke.color}
+          width={visibleStroke.width}
+          compound={visibleStroke.compound}
+          join={visibleStroke.join}
+          dashArray={dash?.dashArray}
+          dashCap={dash?.linecap}
+          bounds={{ x: -reach, y: -reach, width: frameWidth + 2 * reach, height: frameHeight + 2 * reach }}
         />
       </svg>
     </span>
   );
+}
+
+/** An SVG path moved by `dx`, `dy` (the commands `scaleSvgPath` reads). */
+function translateSvgPath(d: string, dx: number, dy: number): string {
+  const tokens = d.match(/[MLQCAZ]|-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? [];
+  const out: string[] = [];
+  let command = "";
+  let index = 0;
+  for (const token of tokens) {
+    if (/^[A-Za-z]$/.test(token)) {
+      command = token.toUpperCase();
+      index = 0;
+      out.push(token);
+      continue;
+    }
+    const value = Number(token);
+    let moved = value;
+    if (command === "A") {
+      // rx ry rotation large-arc sweep x y: only the end point moves.
+      const slot = index % 7;
+      moved = slot === 5 ? value + dx : slot === 6 ? value + dy : value;
+    } else {
+      moved = index % 2 === 0 ? value + dx : value + dy;
+    }
+    index += 1;
+    out.push(String(Math.round(moved * 1000) / 1000));
+  }
+  return out.join(" ");
 }
 
 /**

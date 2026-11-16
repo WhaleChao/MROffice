@@ -1954,7 +1954,8 @@ export interface MergedShapeResult {
   height: number;
 }
 
-import {normalizeOfficeShapeGradient,normalizeOfficeShapeShadow,officeGradientAngleForBox,officeGradientCss,officeShadowCss,officeShadowOffset,type OfficeShapeGradient,type OfficeShapeShadow} from "./office-shape-paint";
+import {normalizeOfficeShapeGradient,normalizeOfficeShapeShadow,officeGradientAngleForBox,officeGradientCss,officeGradientDrawnStops,officeShadowCss,officeShadowOffset,type OfficeShapeGradient,type OfficeShapeShadow} from "./office-shape-paint";
+import { officeRectPathGradientBackground } from "./office-path-gradient";
 import { officeStrokeAlign, type OfficeStrokeAlign } from "./office-shape-line-align";
 import { officeLineFamilyDash, officeStrokeDash, officeStrokeDashArray, type OfficeStrokeDash } from "./office-stroke-dash";
 import { officeStrokeDetail, type OfficeStrokeCap, type OfficeStrokeJoin } from "./office-stroke-detail";
@@ -2200,10 +2201,24 @@ export function shapeFillBackground(
 ): string {
   if (style.fill === null) return "transparent";
   if (style.fillPattern) return officeFillPatternCss(style.fillPattern);
+  // A rectangular path gradient: rectangular contours over the box, as
+  // PowerPoint prints a shape's (`officeRectPathGradientBackground`; look-fit
+  // truth-probes/lookfit-rect-shape-probe.pptx), not the ellipse CSS's radial one is.
+  if (style.fillGradient?.path?.kind === "rect")
+    return officeRectPathGradientBackground(
+      officeGradientDrawnStops(style.fillGradient.stops),
+      style.fillGradient.path.fillToRect,
+      style.fillGradient.tileRect,
+    );
   if (style.fillGradient)
     return officeGradientCss(style.fillGradient, box?.width, box?.height);
   if (style.fillTo === null) return style.fill;
-  return `linear-gradient(${style.gradientAngle}deg, ${style.fill}, ${style.fillTo})`;
+  // Two colours end to end: drawn as PowerPoint draws them (`officeGradientDrawnStops`).
+  const stops = officeGradientDrawnStops([
+    { position: 0, color: style.fill },
+    { position: 1, color: style.fillTo },
+  ]);
+  return `linear-gradient(${style.gradientAngle}deg, ${stops.map((stop) => `${stop.color} ${stop.position * 100}%`).join(", ")})`;
 }
 
 /**
@@ -2241,11 +2256,12 @@ export function shapeStrokeGradientAngle(
 export function shapeStrokeGradientStops(
   style: ResolvedShapeStyle,
 ): readonly { position: number; color: string; alpha?: number }[] {
-  if (style.strokeGradient) return style.strokeGradient.stops;
-  return [
+  // Drawn as PowerPoint draws a fill's (`officeGradientDrawnStops`).
+  if (style.strokeGradient) return officeGradientDrawnStops(style.strokeGradient.stops);
+  return officeGradientDrawnStops([
     { position: 0, color: style.stroke },
     { position: 1, color: style.strokeTo ?? style.stroke },
-  ];
+  ]);
 }
 
 

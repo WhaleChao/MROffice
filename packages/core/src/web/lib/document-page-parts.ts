@@ -22,7 +22,9 @@ const DOCUMENT_PARTS_SOURCE_KINDS: ReadonlySet<string> = new Set(["docx", "markd
 const MAX_DOCUMENT_PARTS = 2_000;
 /** Layout receipts describe the whole loaded document, never the body alone. */
 const PRIVATE_LAYOUT_ATTRS = ["pageBlockSizes", "pageBlockLayoutKey", "pageRegionLayoutReceipt"] as const;
-const PART_SAVE_DEBOUNCE_MS = 700;
+
+
+const PART_SAVE_DEBOUNCE_MS = 400;
 const PART_SAVE_RETRY_MS = 3_000;
 /** The longest wait between tries of a part's save that does not go through. */
 const PART_SAVE_RETRY_MOST_MS = 30_000;
@@ -523,6 +525,29 @@ function fillEmptyParts(parts: unknown[][]): unknown[][] {
   return parts;
 }
 
+/**
+ * The editor root's `data-document-parts-loading` / `data-document-parts-left`
+ * (read by the pages' ledger, which holds its structural rebalance while parts
+ * come in): a later part being read, and how many are not in the view yet.
+ * Null -- no attributes -- for a page not held as parts, and once every part
+ * is in and none is being read.
+ */
+export function documentPartsArrivingAttrs(
+  partsPage: boolean,
+  state: Pick<DocumentPartsState, "count" | "loaded" | "loading" | "eager">,
+): { loading: "true" | "false"; left: string; eager: "true" | "false" } | null {
+  if (!partsPage) return null;
+  const left = Math.max(0, state.count - 1 - state.loaded);
+  if (left === 0 && !state.loading) return null;
+  return { loading: state.loading ? "true" : "false", left: String(left), eager: state.eager ? "true" : "false" };
+}
+
+/** Whether a part coming in is read part by part (`serializeParts`):
+ * `window.__documentPartsScopedLoad = true` (off until measured on R397-D28). */
+function scopedPartsLoad(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __documentPartsScopedLoad?: boolean }).__documentPartsScopedLoad === true;
+}
+
 /** How far at once a part's block count may move with no hand behind it. */
 const PART_JUMP_BLOCKS = 20;
 /** How long a gesture that can take or bring many blocks at once answers for such a move. */
@@ -800,6 +825,8 @@ export interface DocumentPartsState {
   readonly importing?: "pending" | "failed" | null;
   /** Typed in a view the save gate stopped, offered back and never applied. */
   readonly refusedText?: string | null;
+  /** Every part is being read at once (loadsPartsAtOnce). */
+  readonly eager?: boolean;
 }
 
 export interface UseDocumentPagePartsOptions {
@@ -818,6 +845,15 @@ export interface UseDocumentPagePartsOptions {
   /** The pages kept for a part (paged/layoutSnapshot), asked before it is
    * appended, handed to `appendBlocks`. */
   readonly keptLayoutOf?: (blocks: readonly unknown[], partIndex: number) => Promise<KeptPartLayout | null>;
+  /** The editor's pages are still being laid out (the first layout, the
+   * background's, a pass waiting for typing to pause): a read-ahead part waits
+   * for them rather than for the end of what is loaded to hold still twice. */
+  readonly layoutBusy?: () => boolean;
+  /** The editor's first screen is still to come (its first layout settling,
+   * or the display font plan still to answer): the parts read at once
+   * (loadsPartsAtOnce) are read and go in after it, unless the reader goes
+   * further first. */
+  readonly firstScreenPending?: () => boolean;
   /** The whole document as a save serializes it, or null. */
   readonly serialize: () => Record<string, unknown> | null;
   /** The view serialized for the part rooms alone: its blocks as `serialize`
@@ -825,6 +861,12 @@ export interface UseDocumentPagePartsOptions {
    * long document for a receipt the rooms never carry). Falls back to
    * `serialize`. */
   readonly serializeForRooms?: () => Record<string, unknown> | null;
+  
+
+
+
+
+  readonly serializeParts?: (owner: ReadonlyMap<string, number>, loaded: number) => unknown[][] | null;
   /** Stored blocks as this editor serializes them (what `serialize` would
    * give for them), or null. */
   readonly editorFormOf?: (blocks: readonly unknown[]) => unknown[] | null;
@@ -877,6 +919,11 @@ export interface DocumentPartRoomsView {
    * around them the same in both. Null when that cannot be told cheaply (the
    * whole view is serialized then). */
   readonly changedBlocks?: (previous: unknown, next: unknown) => { before: unknown[]; after: unknown[] } | null;
+  
+
+
+
+  readonly partBlocks?: (index: number, owner: ReadonlyMap<string, number>, loaded: number) => unknown[] | null;
 }
 
 /** One live room this view holds. */
@@ -1207,6 +1254,61 @@ export const PART_BACKGROUND_CAP_TOUCH = 16;
 
 
 
+
+
+
+
+
+
+
+
+
+
+export const PART_EAGER_MAX = 12;
+
+/** Whether stored blocks hold a footnote reference (`footnoteRef`): a document
+ * that does is laid out whole on every pass (footnotesAllowProgressiveLayout),
+ * so its parts coming in at once made each pass the whole document's
+ * (R286-D01: one task of 9.4 s where the parts one by one held 2.8 s at most). */
+export function storedBlocksHoldFootnoteRef(blocks: readonly unknown[]): boolean {
+  const stack: unknown[] = [...blocks];
+  while (stack.length > 0) {
+    const item = stack.pop();
+    if (Array.isArray(item)) {
+      for (const child of item) stack.push(child);
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const node = item as { type?: unknown; content?: unknown };
+    if (node.type === "footnoteRef") return true;
+    if (Array.isArray(node.content)) stack.push(node.content);
+  }
+  return false;
+}
+
+/** Whether a document of `count` parts reads all of them at once on opening.
+ * `window.__docsPartsAtOnce = false` keeps the one-after-another reading (A/B). */
+/** How often a part held for the first screen looks again, and the longest
+ * it waits for it (a font plan that never answers, a layout that never
+ * settles): after that the parts go on as before. */
+const FIRST_SCREEN_LOOK_MS = 200;
+const FIRST_SCREEN_WAIT_MAX_MS = 20_000;
+
+export function loadsPartsAtOnce(count: number, touch: boolean): boolean {
+  if (typeof window !== "undefined" && (window as Window & { __docsPartsAtOnce?: boolean }).__docsPartsAtOnce === false) return false;
+  return !touch && count > 1 && count <= PART_EAGER_MAX;
+}
+
+
+
+
+
+
+
+
+
+
+
 export function shouldLoadPartInBackground(reading: {
   readonly stillLooks: number;
   readonly quietMs: number;
@@ -1247,6 +1349,19 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
   const owner = useRef(new Map<string, number>());
   const records = useRef(new Map<number, PartRecord>());
   const loadedRef = useRef(0);
+  /** Every part loads at once (loadsPartsAtOnce), decided per hydration. */
+  const eagerRef = useRef(false);
+  /** The later parts read ahead when they load at once, by index. */
+  const prefetched = useRef(new Map<number, Promise<DocumentPartResponse | null>>());
+  /** The hydration (generation) whose parts were all asked for at once. */
+  const eagerStarted = useRef(-1);
+  /** The hydration (generation) whose parts' reads went out. */
+  const eagerReadsStarted = useRef(-1);
+  /** Runs `then` once the first screen is in, the reader goes further, or
+   * FIRST_SCREEN_WAIT_MAX_MS have gone by (afterFirstScreen below). */
+  const afterFirstScreenRef = useRef<(started: number, then: () => void) => void>((_started, then) => then());
+  /** A look at the sentinel is held for the first screen (lookAtSentinel). */
+  const lookHeld = useRef(false);
   const loadingRef = useRef(false);
   const blockedRef = useRef<DocumentPartsState["blocked"]>(null);
   const pending = useRef(new Map<number, string>());
@@ -1458,6 +1573,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     loadedRef.current = 0;
     loadingRef.current = false;
     blockedRef.current = null;
+    prefetched.current.clear();
     const stored = optionsRef.current.body;
     if (isRecord(stored) && Array.isArray(stored.content)) {
       partCounts.current.set(0, stored.content.length);
@@ -1466,7 +1582,9 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         if (id) owner.current.set(id, 0);
       }
     }
-    publish({ count: documentPartsCount(stored), loaded: 0, loading: false, saving: false, blocked: null, retrying: false, refusedText: pageId ? readRefusedPartText(pageId) : null });
+    eagerRef.current = typeof window !== "undefined"
+      && loadsPartsAtOnce(documentPartsCount(stored), window.matchMedia?.("(pointer: coarse)").matches ?? false);
+    publish({ count: documentPartsCount(stored), loaded: 0, loading: false, saving: false, blocked: null, retrying: false, refusedText: pageId ? readRefusedPartText(pageId) : null, eager: eagerRef.current });
     // The body as saved is read once per hydration, as the editor holds it.
   }, [closeRooms, pageId, hydration, publish]);
 
@@ -1901,15 +2019,44 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     const current = optionsRef.current;
     const view = current.partRooms;
     if (!view || blockedRef.current || !current.editorFormOf || !current.mergePartIntoView) return;
-    const serialized = (current.serializeForRooms ?? current.serialize)();
+    // The part as the view shows it: read by itself (a later part), else from
+    // the whole view. Each later part's reading serialized the whole view
+    // until then, a document of 43 parts 43 times, each longer than the last
+    
+    const own = live.index > 0 ? view.partBlocks?.(live.index, owner.current, loadedRef.current) ?? null : null;
+    const serialized = own ? null : (current.serializeForRooms ?? current.serialize)();
     const split = serialized ? splitDocumentParts(serialized, owner.current, loadedRef.current) : null;
     const remote = current.editorFormOf(live.room.blocks());
-    if (!split?.ok || !remote || !split.parts[live.index]) {
+    const shownBlocks = own ?? (split?.ok ? split.parts[live.index] : undefined);
+    if (!shownBlocks || !remote) {
       block("unreadable");
       return;
     }
     // The view's own blocks (what it shows), and as read against the room.
-    const shown = split.parts[live.index] as MergeBlock[];
+    const shown = shownBlocks as MergeBlock[];
+    // Nobody changed the part since it and the room last agreed: the room
+    // holds the stored part (no member's change, saved or not, the view has
+    // not got) and the view shows it as it came in. Nothing to merge, draw,
+    // publish or save -- a document only opened read each part, often wrote
+    // a block back that differed only in how it was written, published that
+    // and so saved the part (the same comparison a save makes:
+    // sameAuthoredBlock).
+    const sameAs = (blocks: readonly unknown[]) => blocks.length === live.base.length &&
+      blocks.every((item, at) => sameAuthoredBlock(item, live.base[at]));
+    if (live.index > 0 && !pending.current.has(live.index) && !pendingBlocks.current.has(live.index) &&
+      (sameAs(live.room.blocks()) || sameAs(remote)) && sameAs(shown)) {
+      partCounts.current.delete(live.index);
+      for (const item of shown) {
+        const id = blockId(item);
+        if (id) owner.current.set(id, live.index);
+      }
+      const json = JSON.stringify(shown);
+      live.viewJson = json;
+      live.viewBlocks = shown;
+      live.viewPlaces = blockPlaces(shown);
+      noteRoomsState();
+      return;
+    }
     const local = withStoredIdsForEmptyBlocks(live.base as MergeBlock[], shown);
     const merged = mergeCanonicalBlocks(live.base as MergeBlock[], local, remote as MergeBlock[], { typedIntoBoth: true, mergeText: true });
     const mergedWords = tracedWords(merged.blocks);
@@ -2423,7 +2570,11 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       rooms.current.delete(index);
     };
     try {
-      const part = await readDocumentPart(pageId, index, { cache: "no-store" });
+      // Read ahead with the others when every part loads at once (loadsPartsAtOnce);
+      // a read that failed there is made again here.
+      const ahead = prefetched.current.get(index);
+      prefetched.current.delete(index);
+      const part = (ahead ? await ahead : null) ?? await readDocumentPart(pageId, index, { cache: "no-store" });
       if (generation.current !== started || !viewIsThisReading()) return;
       if (part.status === "pending" || part.status === "failed") {
         // A long document opened from its first part: the import has yet to
@@ -2512,9 +2663,15 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         return;
       }
       // The part as this editor serializes it: what its later saves compare
-      // with (the stored form may differ in defaults the editor fills).
-      const serialized = optionsRef.current.serialize();
-      const split = serialized ? splitDocumentParts(serialized, owner.current, index) : null;
+      // with (the stored form may differ in defaults the editor fills). Read
+      // part by part where that is on: the whole view serialized for each part
+      // that came in, its pages measured, was 43 serializations of a longer and
+      
+      // way (serializeViewParts), so the count check below reads the same.
+      const byParts = scopedPartsLoad() ? optionsRef.current.serializeParts?.(owner.current, index) ?? null : null;
+      const serialized = byParts ? null : optionsRef.current.serialize();
+      const split: DocumentPartsSplit | null = byParts ? { ok: true, parts: byParts }
+        : serialized ? splitDocumentParts(serialized, owner.current, index) : null;
       if (!split || !split.ok) {
         block(split && !split.ok ? split.reason : "unreadable");
         return;
@@ -2568,6 +2725,14 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         // chaining it here loaded part after part while the sentinel still
         // read near, before the appended part was laid out.
         nearEnd.current = false;
+        // A part read ahead (loadsPartsAtOnce) is not chained on at once
+        // either: it goes in at the pace of any part loading by itself (two
+        // still looks 1.5 s apart, the reader quiet for 2 s). Each part going in
+        // is its blocks and its room's state (a 1.0-2.3 s task, mostly the
+        // room's sync), then its pages laid out: back to back, or one per
+        // still look 300 ms apart, a book's 7 later parts took the 20 s after
+        
+        
       }
     }
   }, [block, pageId, partsReadRight, publish, roomRead, scheduleSaves, startRoom, viewIsThisReading]);
@@ -2580,6 +2745,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
   const stillLooks = useRef(0);
   const lastDocumentEnd = useRef<number | null>(null);
   const lastInputAt = useRef(0);
+  const lookAtSentinelRef = useRef<(() => void) | null>(null);
   /** One look at the sentinel: the next part loads when shouldLoadNextPart says so. */
   const lookAtSentinel = useCallback(() => {
     const element = sentinel.current;
@@ -2606,11 +2772,24 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       touch: window.matchMedia?.("(pointer: coarse)").matches ?? false,
       kept: Boolean(pageId) && layoutSnapshotRows(pageId!, loadedRef.current + 1).length > 0,
     })) {
+      // Parts read all at once go in after the first screen (afterFirstScreen),
+      // unless the reader goes further first.
+      if (eagerRef.current && (optionsRef.current.firstScreenPending?.() ?? false)) {
+        if (!lookHeld.current) {
+          lookHeld.current = true;
+          afterFirstScreenRef.current(generation.current, () => {
+            lookHeld.current = false;
+            lookAtSentinelRef.current?.();
+          });
+        }
+        if (!(lastInputAt.current > 0)) return;
+      }
       stillLooks.current = 0;
       nearEnd.current = true;
       void loadNext();
     }
   }, [loadNext, pageId]);
+  lookAtSentinelRef.current = lookAtSentinel;
   // Anything the reader does holds the next unasked part back.
   useEffect(() => {
     const note = () => { lastInputAt.current = Date.now(); };
@@ -2637,6 +2816,53 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
   useEffect(() => {
     if (hydrated) lookAtSentinel();
   }, [hydrated, hydration, lookAtSentinel]);
+
+  // Every part read ahead at once (loadsPartsAtOnce) the moment the first is
+  // in the view; they go in from the first later part on (loadNext's chain).
+  // What waits for the first screen: the parts read all at once and their
+  // going in. The reader going further (a scroll, a key, a jump to a later
+  // heading) does not wait.
+  const afterFirstScreen = useCallback((started: number, then: () => void) => {
+    const since = Date.now();
+    const look = () => {
+      if (generation.current !== started) return;
+      const pending = optionsRef.current.firstScreenPending?.() ?? false;
+      if (!pending || lastInputAt.current > since || Date.now() - since >= FIRST_SCREEN_WAIT_MAX_MS) {
+        then();
+        return;
+      }
+      setTimeout(look, FIRST_SCREEN_LOOK_MS);
+    };
+    look();
+  }, []);
+  afterFirstScreenRef.current = afterFirstScreen;
+  // The parts read ahead, all at once (loadsPartsAtOnce).
+  const readAllAhead = useCallback((started: number) => {
+    const id = pageId;
+    if (!id || eagerReadsStarted.current === started || generation.current !== started) return;
+    eagerReadsStarted.current = started;
+    const total = documentPartsCount(optionsRef.current.body);
+    // A part already in, or being read by the reader going on (loadNext), is
+    // not asked for twice.
+    for (let index = 1; index < total; index += 1) {
+      if (index <= loadedRef.current || (loadingRef.current && index === loadedRef.current + 1)) continue;
+      prefetched.current.set(index, readDocumentPart(id, index, { cache: "no-store", priority: "low" } as RequestInit).catch(() => null));
+    }
+  }, [pageId]);
+  // Every part read ahead at once (loadsPartsAtOnce) once the first is in the
+  // view and its first screen is in; each goes in at the pace of a part
+  // loading by itself (shouldLoadPartInBackground). Read with the first screen, a book's 7 later parts
+  // (each a request and a parse, then each part's pages) took the thread its
+  // font plan was waiting for: answered at 17-18 s instead of 5.6 s, the pages
+  // shown in the fallback faces and laid out again (a 865-page book of 8
+  
+  // further (a scroll, a jump to a later heading) reads them at once.
+  useEffect(() => {
+    if (!hydrated || !pageId || !eagerRef.current || loadedRef.current !== 0 || eagerStarted.current === generation.current) return;
+    const started = generation.current;
+    eagerStarted.current = started;
+    afterFirstScreen(started, () => readAllAhead(started));
+  }, [afterFirstScreen, hydrated, hydration, pageId, readAllAhead]);
 
   // The observer reports a change of intersection only: the end of what is
   // loaded already in view when the page opens (or brought there by a

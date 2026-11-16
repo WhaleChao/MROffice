@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ すべての機能を使うには MR Office デスクトップ版（無料）をインストールしてください
->
-> MR Office デスクトップ版は無料で、これらのエディターとすべてのサービスを備え、お使いのコンピューターでオフラインでも動作します。オープンソース版にない次の機能を利用できます：
->
-> - Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保存
-> - 関数を使う数式（SUM、IF、VLOOKUP など）の計算
-> - グラフ
-> - SmartArt の編集
-> - PDF の編集内容をファイルに書き戻す
->
-> **[Releases から MR Office をダウンロード →](https://github.com/XinaTian/MROffice/releases)** · [または mroffice.ai から](https://mroffice.ai)
+<p align="center"><b>MR Office のオープンソースエディター。文書、スプレッドシート、プレゼンテーション、PDF、手書き、コードがブラウザーで動きます。</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">MR Office で試す →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ ライブデモを試す（インストール不要）</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases から MR Office をダウンロード</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> MR Office のオープンソースエディター。文書、スプレッドシート、プレゼンテーション、PDF、手書き、コードがブラウザーで動きます。
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="文書" width="100%"></a><br><b>文書</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="スプレッドシート" width="100%"></a><br><b>スプレッドシート</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="プレゼンテーション" width="100%"></a><br><b>プレゼンテーション</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="手書き" width="100%"></a><br><b>手書き</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="コード" width="100%"></a><br><b>コード</b></td>
+</tr>
+</table>
 
 MR Office は、ノート、AI、実際のファイルをひとつにまとめたワークスペースです。このリポジトリでは、そのエディターのソースコードを公開しています。MR Office で動いているものと同じエディターで、自分でビルド、実行、組み込みができます。これはオープンソースのエディターであり、完全なオープンソースの Office スイートではありません。Microsoft Office ファイルの読み書きは MR Office が提供します（下記参照）。
 
@@ -33,16 +36,9 @@ MR Office は、ノート、AI、実際のファイルをひとつにまとめ�
 
 関数を使う数式の計算、グラフの描画、SmartArt のレイアウトは MR Office 独自のエンジンで行われ、MR Office デスクトップ版で利用できます。オープンソースのエディターはファイル内の数式・グラフ・SmartArt を保持し、SmartArt は保存時の見た目で表示します。
 
-## Word、Excel、PowerPoint、PDF ファイル
-
-Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保存する機能と、PDF の編集内容をファイルに書き戻す機能は、無料の MR Office デスクトップ版が提供します。デスクトップ版にはこれらのエディターがすべて含まれ、お使いのコンピューターでオフラインでも動作します：
-
-- **MR Office** (無料のデスクトップアプリ): https://github.com/XinaTian/MROffice/releases
-- **公式サイト**: https://mroffice.ai
-
-[すべてのバージョン →](https://github.com/XinaTian/MROffice/releases)
-
 ## エディターを動かす
+
+**▶ [ライブデモを試す（インストール不要）](https://demo.mroffice.ai)**
 
 6 つのエディターは `packages/`（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`ink`、`code`。共通部分は `@mrnote/core`）にあり、`apps/playground` でまとめて動きます：
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` は同じアドレスで開発サーバーを起動し、`npm run smoke` はビルドを確認します。各パッケージの README に、できることの詳細と組み込み方を載せています。
+
+## すべての機能を使うには MR Office デスクトップ版（無料）をインストールしてください
+
+MR Office デスクトップ版は無料で、これらのエディターとすべてのサービスを備え、お使いのコンピューターでオフラインでも動作します。オープンソース版にない次の機能を利用できます：
+
+- Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保存
+- 関数を使う数式（SUM、IF、VLOOKUP など）の計算
+- グラフ
+- SmartArt の編集
+- PDF の編集内容をファイルに書き戻す
+
+**[Releases から MR Office をダウンロード →](https://github.com/XinaTian/MROffice/releases)** · [または mroffice.ai から](https://mroffice.ai)
+
+### Word、Excel、PowerPoint、PDF ファイル
+
+Word・Excel・PowerPoint ファイル（.docx、.xlsx、.pptx）を開いて保存する機能と、PDF の編集内容をファイルに書き戻す機能は、無料の MR Office デスクトップ版が提供します。デスクトップ版にはこれらのエディターがすべて含まれ、お使いのコンピューターでオフラインでも動作します：
 
 ## ライセンス
 

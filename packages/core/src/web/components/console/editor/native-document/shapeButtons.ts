@@ -20,8 +20,10 @@ import { documentSmartArtPreparedMemberId, documentSmartArtPreparedNode } from "
 import { documentSmartArtHostColorTheme } from "./documentSmartArtOpenConversion";
 import type { SmartArtColorTheme } from "../../../../lib/office-smartart/colors";
 import { NodeSelection } from "@tiptap/pm/state";
-import { documentShapeAspectRatioLockPatch, documentShapeAlignPatch, documentShapeExactRotationPatch, documentShapeFlipPatch, documentShapeFormatPatch, documentShapeGroupIsEditable, documentShapeIsPreservedNativeSmartArt, documentShapeSmartArtIdentity, normalizeDocumentShapeAltText, documentShapeLinkedTextBoxPatches, documentShapePositionPatch, documentShapePaintPatch, documentShapeGroupMemberPatch, documentShapePresetPatch, documentShapeRotationPatch, documentShapeSizeEmuPatch, documentShapeSizePatch, documentShapeZOrderPatches, documentShapeStackReorderPatches, documentShapeReroutedConnectorMembers, documentPictureStackHeight, documentShapeRelativeHeight, documentStackPatchAttrs, nextDocumentFloatingHeight, normalizeDocumentShapeAttrs, resolveDocumentShapeStack, type DocumentShapeAttrs, type DocumentShapeAttrsInput, type DocumentShapePictureFill, type DocumentShapeAlignAction, type DocumentShapeFlipAxis, type DocumentShapePositionAction, type DocumentShapePaintRequest, type DocumentShapeFormatRequest, type DocumentShapePreset, type DocumentShapeRotationAction, type DocumentShapeSizeAxis, type DocumentShapeZOrderAction } from "../../../../lib/document-shapes";
-import { DOCUMENT_SHAPE_EDIT_POINTS_EVENT, documentShapeEditPointsAvailable, type DocumentShapeEditPointsDetail } from "./documentShapeExtension";
+import { documentShapeAspectRatioLockPatch, documentShapeAlignPatch, documentShapeExactRotationPatch, documentShapeFlipPatch, documentShapeFormatPatch, documentShapeGroupIsEditable, documentShapeIsPreservedNativeSmartArt, documentShapeSmartArtIdentity, normalizeDocumentShapeAltText, documentShapeLinkedTextBoxPatches, documentShapePositionPatch, documentShapePaintPatch, documentShapeGroupMemberPatch, documentShapePresetPatch, documentShapeRotationPatch, documentShapeSizeEmuPatch, documentShapeSizePatch, documentShapeStackReorderPatches, documentShapeReroutedConnectorMembers, documentPictureStackHeight, documentShapeRelativeHeight, documentStackPatchAttrs, nextDocumentFloatingHeight, normalizeDocumentShapeAttrs, resolveDocumentShapeStack, type DocumentShapeAttrs, type DocumentShapeAttrsInput, type DocumentShapeGroupMember, type DocumentShapePictureFill, type DocumentShapeAlignAction, type DocumentShapeFlipAxis, type DocumentShapePositionAction, type DocumentShapePaintRequest, type DocumentShapeFormatRequest, type DocumentShapePreset, type DocumentShapeRotationAction, type DocumentShapeSizeAxis, type DocumentShapeZOrderAction } from "../../../../lib/document-shapes";
+import { DOCUMENT_SHAPE_EDIT_POINTS_EVENT, documentShapeEditPointsAvailable, documentShapeMultiSelection, documentShapePickedGroupMember, type DocumentShapeEditPointsDetail } from "./documentShapeExtension";
+import { documentGroupMembersReorderable, documentGroupMembersStepped, type DocumentGroupStep } from "../../../../lib/document-shape-group-tree";
+import { applyFloatingStackZOrder, floatingStackZOrderAtBoundary } from "./floatingStackOrder";
 import { convertInlineDrawingToBlock } from "../extensions/objectPlacement";
 import { normalizeFloatAnchor, type FloatAnchor } from "../../../../lib/office-float-anchor";
 import {
@@ -818,16 +820,70 @@ export function liveDocumentStackMemberPos(editor: Editor): number | null {
   if (node.isInline || doc.nodeAt(selection.from) !== node) return null;
   // A picture floated in the editor, or an imported anchored picture or a
   // floating text box frame the page may reorder (its import saw the whole
-  // stack): any member `resolveDocumentShapeStack` counts.
-  const member =
-    (node.type.name === "image" || node.type.name === "textBox") &&
-    (documentPictureStackHeight(node.attrs) !== null ||
-      (node.attrs.zOrderStackComplete === true &&
-        Boolean(node.attrs.floatAnchor) &&
-        documentShapeRelativeHeight(
+  // stack), or a floating chart: any member `resolveDocumentShapeStack` counts.
+  const anchorHeight =
+    node.attrs.floatAnchor && typeof node.attrs.floatAnchor === "object"
+      ? documentShapeRelativeHeight(
           (node.attrs.floatAnchor as { relativeHeight?: unknown }).relativeHeight,
-        ) !== null));
+        )
+      : null;
+  const member =
+    ((node.type.name === "image" || node.type.name === "textBox") &&
+      (documentPictureStackHeight(node.attrs) !== null ||
+        (node.attrs.zOrderStackComplete === true && anchorHeight !== null))) ||
+    (node.type.name === "chart" && anchorHeight !== null);
   return member ? selection.from : null;
+}
+
+/**
+ * The members the z-order commands move: the Shift / Ctrl + clicked set when
+ * there is one (with the member selected last), else the selected member.
+ */
+export function liveDocumentStackSelection(editor: Editor): readonly number[] {
+  const targetPos = liveDocumentStackMemberPos(editor);
+  if (targetPos === null) return [];
+  const several = documentShapeMultiSelection(editor.state);
+  if (several.length < 2) return [targetPos];
+  return [...new Set([...several, targetPos])];
+}
+
+const GROUP_MEMBER_STEP: Record<DocumentShapeZOrderAction, DocumentGroupStep> = {
+  bringToFront: "front",
+  bringForward: "forward",
+  sendBackward: "backward",
+  sendToBack: "back",
+};
+
+/**
+ * The group's members once the z-order command moved the object picked in
+ * it, when one is (Microsoft Support, "Manage objects with the Selection
+ * pane": "For an object that's in a group, you can only move it within the
+ * group"): `undefined` when no object is picked (the command moves the
+ * selection in the page's stack), null when the picked one cannot move that
+ * way (at its group's edge, or a group whose order is not written here).
+ */
+function pickedGroupMemberZOrder(
+  editor: Editor,
+  action: DocumentShapeZOrderAction,
+): { pos: number; node: ProseMirrorNode; groupMembers: DocumentShapeGroupMember[] } | null | undefined {
+  const picked = documentShapePickedGroupMember(editor);
+  if (!picked) return undefined;
+  if (!documentGroupMembersReorderable(picked.node)) return null;
+  const members = picked.node.attrs.groupMembers as readonly DocumentShapeGroupMember[];
+  const groupMembers = documentGroupMembersStepped(members, picked.memberId, GROUP_MEMBER_STEP[action]);
+  return groupMembers ? { pos: picked.pos, node: picked.node, groupMembers } : null;
+}
+
+/** Whether the z-order command has nothing to do on the selection. */
+export function liveDocumentShapeZOrderAtBoundary(
+  editor: Editor,
+  action: DocumentShapeZOrderAction,
+): boolean {
+  if (editor.isDestroyed) return true;
+  const member = pickedGroupMemberZOrder(editor, action);
+  if (member !== undefined) return member === null;
+  const positions = liveDocumentStackSelection(editor);
+  return positions.length === 0 || floatingStackZOrderAtBoundary(editor.state.doc, positions, action);
 }
 
 /**
@@ -839,29 +895,22 @@ export function setLiveDocumentShapeZOrder(
   action: DocumentShapeZOrderAction,
 ): boolean {
   if (editor.isDestroyed || !editor.isEditable) return false;
+  // An object picked in its group moves among its group's objects only,
+  // and stays picked; the group keeps its place in the page's stack.
+  const member = pickedGroupMemberZOrder(editor, action);
+  if (member !== undefined) {
+    if (member === null) return false;
+    const transaction = closeHistory(
+      editor.state.tr.setNodeMarkup(member.pos, undefined, { ...member.node.attrs, groupMembers: member.groupMembers }, member.node.marks),
+    );
+    editor.view.dispatch(transaction.setSelection(NodeSelection.create(transaction.doc, member.pos)));
+    return true;
+  }
   const targetPos = liveDocumentStackMemberPos(editor);
   if (targetPos === null) return false;
-  const patches = documentShapeZOrderPatches(
-    resolveDocumentShapeStack(editor.state.doc),
-    targetPos,
-    action,
-  );
-  if (!patches?.length) return false;
-
-  let transaction = editor.state.tr;
-  for (const patch of patches) {
-    const node = transaction.doc.nodeAt(patch.pos);
-    const attrs = node ? documentStackPatchAttrs(node, patch.relativeHeight) : null;
-    if (!node || !attrs) return false;
-    transaction = transaction.setNodeMarkup(patch.pos, undefined, attrs, node.marks);
-  }
-  transaction = closeHistory(transaction).setSelection(
-    NodeSelection.create(transaction.doc, targetPos),
-  );
-  if (!transaction.docChanged) return false;
-  editor.view.dispatch(transaction);
-  editor.view.focus();
-  return true;
+  const positions = liveDocumentStackSelection(editor);
+  // One member: it stays selected. Several: the set stays as it is.
+  return applyFloatingStackZOrder(editor, positions, action, positions.length === 1 ? targetPos : null);
 }
 
 /**

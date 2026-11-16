@@ -111,6 +111,42 @@ export function insertPdfNativeTextTypeAhead(input: HTMLTextAreaElement, text: s
   const caret = start + text.length;
   input.setSelectionRange(caret, caret);
 }
+/** The clicks the window makes itself to open a line again with the caret
+ * in it: a click of the reader's own selects the box as a block (WPS), and
+ * a line the reader's caret was in, its keys kept for it, opened that way
+ * took them after its last word -- or, 键盘输入触发编辑 unticked, not at all. */
+const caretClicks = new WeakSet<Event>();
+export function pdfNativeTextCaretClick(point: Readonly<{ clientX: number; clientY: number }>): MouseEvent {
+  const click = new MouseEvent("click", { bubbles: true, cancelable: true, ...point, detail: 1 });
+  caretClicks.add(click);
+  return click;
+}
+export function isPdfNativeTextCaretClick(event: Event): boolean {
+  return caretClicks.has(event);
+}
+/** What PDF_NATIVE_TEXT_ABANDONED_EVENT carries: the keys kept for a line
+ * that did not open, and how the line is known again. */
+export type PdfNativeTextAbandonedKeys = Readonly<{
+  /** The line's box where it is now; null while its layer is built again. */
+  target: HTMLElement | null;
+  pageRect: Readonly<{ x: number; y: number; width: number; height: number }> | null;
+  /** The line's words when it was pressed, and the words being written
+   * into it then (a line written while the reader stays in it). */
+  text: string;
+  stagedText: string | null;
+  lineId: string | null;
+  typed: string;
+  /** Home or End pressed before the keys. */
+  caretMove: "start" | "end" | null;
+  /** Where in its box the line was pressed (the reader's caret, for a line
+   * they were typing in): fractions of the box. */
+  x: number;
+  y: number;
+  /** The reader's caret was in the line; false for a box pressed once
+   * (selected as a block, its keys going after its words). */
+  caret: boolean;
+  pageNumber: number;
+}>;
 function samePageRelativeRect(left: PageRelativeRect, right: PageRelativeRect | null): boolean {
   // Allow small CSS rounding differences across zoom and Ribbon layout. This
   // is target intent only; current activation still independently proves it.
@@ -405,9 +441,10 @@ export function usePdfNativeTextContinuation({
           const found = root ? findPdfNativeTextIntentTarget(root, intent, true) : null;
           if (root && (found || intent.pageRect)) {
             if (process.env.NODE_ENV !== "production") markPdfTextLatency("open.typeahead-abandoned", { found: Boolean(found) });
-            root.dispatchEvent(new CustomEvent(PDF_NATIVE_TEXT_ABANDONED_EVENT, { bubbles: true, detail: Object.freeze({
-              target: found?.target ?? null, pageRect: intent.pageRect, text: intent.text, typed: intent.typed,
-              x: intent.x, pageNumber: intent.pageNumber,
+            root.dispatchEvent(new CustomEvent<PdfNativeTextAbandonedKeys>(PDF_NATIVE_TEXT_ABANDONED_EVENT, { bubbles: true, detail: Object.freeze({
+              target: found?.target ?? null, pageRect: intent.pageRect, text: intent.text, stagedText: intent.stagedText,
+              lineId: intent.lineId, typed: intent.typed, caretMove: intent.caretMove,
+              x: intent.x, y: intent.y, caret: intent.caret, pageNumber: intent.pageNumber,
             }) }));
             intent.typed = "";
           }
@@ -450,7 +487,12 @@ export function usePdfNativeTextContinuation({
           event.target.getAttribute(INLINE_INPUT) === "true" && event.target.readOnly;
         if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey ||
           (isEditable(event.target) && !leavingInput)) return;
-        if (event.key === "Escape") { nativeTextContinuationRef.current = null; stopTypeAhead(); return; }
+        // Escape gives up the opening. Keys already typed for the line are
+        // the reader's words all the same -- Escape in an open line keeps
+        // what was typed there -- and the window writes them in it: typed
+        // into a line being written under the caret and followed by Escape,
+        // they were dropped with nothing said.
+        if (event.key === "Escape") { nativeTextContinuationRef.current = null; stopTypeAhead(intent.typed ? "abandon" : undefined); return; }
         if (event.key === "Backspace") {
           if (intent.typed) { intent.typed = intent.typed.slice(0, -1); event.preventDefault(); }
           return;

@@ -105,6 +105,10 @@ export interface SmartArtPresentationRebuildRequest extends SmartArtLayoutDefini
   nodePaint?: (SmartArtNodePaint | null)[];
   keepAuthorPaint?: boolean;
   resetCustomGeometry?: boolean;
+  /** `false`: the words drop the author's character formatting (Reset Graphic). */
+  keepTextFormat?: boolean;
+  /** The colour variation to rebuild in; `null` is Office's default, omitted keeps the members'. */
+  colorsId?: string | null;
   /** Reset Graphic: restyle the rebuilt members at the catalog default after. */
   resetPaint?: boolean;
   /** The deck's theme colours, so a colour variation re-spreads over the new outline. */
@@ -165,6 +169,8 @@ export interface SmartArtNativeConvertRequest extends SmartArtLayoutDefinitionFi
   colorTheme?: Partial<SmartArtColorTheme> | null;
   /** The author's hand changes the projection read off the data part (checked by the engine). */
   customizations?: unknown;
+  /** The graphic's own 3-D Rotation (`nativeSmartArtView.graphicScene3d`), checked by the engine. */
+  graphicScene3d?: unknown;
 }
 
 export interface SmartArtSheetRebuildRequest extends SmartArtLayoutDefinitionFields {

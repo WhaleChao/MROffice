@@ -28,8 +28,10 @@ export function presentationEffectsMenuLabels(t: T, button: string): OfficePictu
     preset: (preset) => t("office.pictureEffects.preset", { number: preset }),
     noPresets: t("office.pictureEffects.noPresets"),
     threeDOptions: t("office.pictureEffects.threeDOptions"),
-    threeDOptionsUnavailable: t("office.pictureEffects.threeDOptionsUnavailable"),
+    optionsUnavailable: t("office.pictureEffects.optionsUnavailable"),
     threeDRotationOptions: t("office.pictureEffects.threeDRotationOptions"),
+    effectOptions: (kind) =>
+      t(`office.pictureEffects.options.${kind}` as "office.pictureEffects.options.glow"),
     category: (kind) =>
       kind === "rotation3d"
         ? t("office.shapeEffects.threeDRotation")
@@ -103,6 +105,8 @@ export function presentationEffectsPaneLabels(t: T): OfficeEffectsPaneLabels {
     yRotation: t("office.chartElements.yRotation"),
     zRotation: t("office.effectsPane.zRotation"),
     perspective: t("office.chartElements.perspective"),
+    keepTextFlat: t("office.effectsPane.keepTextFlat"),
+    distanceFromGround: t("office.effectsPane.distanceFromGround"),
     unitPt: t("presentation.pointsShort"),
   };
 }

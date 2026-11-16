@@ -68,6 +68,7 @@ import type { PdfPictureFormat } from "../../../../../lib/pdf/picture-format";
 import { DropdownMenuItem } from "@mrnote/core/web/components/ui/dropdown-menu.tsx";
 import type { PercentBox } from "../../../../../lib/pdf/annotation-transform";
 import { pdfNativeEmbeddedImagePaintMatrixMatches } from "../../../../../lib/pdf/engine/native/embedded-image-model";
+import { nativeVectorLayerBoundary } from "../../../../../lib/pdf/native-vector-layer-boundary";
 import { buildPdfFromImages } from "../../../../../lib/pdf/images-to-pdf";
 import { enhancePicturePixels } from "../../../../../lib/pdf/picture-enhance";
 import {
@@ -240,6 +241,15 @@ export interface UseReaderPictureEditingInput {
   readonly documentWriteBusy?: boolean;
   /** The UI locale: the Picture Format tab's length unit, its dialogs. */
   readonly locale?: string;
+  /**
+   * Each page's paint stops (`pdfPagePaintStops`), read from the operator
+   * list the targets came from: Office greys Bring Forward / Bring to Front
+   * once the picture is painted last on its page and Send Backward / Send to
+   * Back once it is painted first, as the source vectors' arrange does. A
+   * page whose stops are not known leaves every move live; the planner stays
+   * the authority on the write.
+   */
+  readonly paintStopsByPage?: ReadonlyMap<number, readonly number[]>;
 }
 
 export interface ReaderPictureEditing {
@@ -490,6 +500,7 @@ export function useReaderPictureEditing(
     carry,
     documentWriteBusy = false,
     locale = "en",
+    paintStopsByPage,
   } = input;
   const documentWriteBusyRef = useRef(documentWriteBusy);
   useLayoutEffect(() => {
@@ -582,6 +593,20 @@ export function useReaderPictureEditing(
           : null))
       : null;
   const selectedRef = useRef(selected);
+  // Where the selected picture stands among what its page paints.
+  const selectedPaintStops = selected ? paintStopsByPage?.get(selected.pageNumber) : undefined;
+  const selectedOperatorIndex = selected?.operatorIndex;
+  const layerBoundary = useMemo(
+    () =>
+      selectedPaintStops && typeof selectedOperatorIndex === "number"
+        ? nativeVectorLayerBoundary(selectedPaintStops, selectedOperatorIndex)
+        : { atFront: false, atBack: false },
+    [selectedOperatorIndex, selectedPaintStops],
+  );
+  const layerBoundaryRef = useRef(layerBoundary);
+  useLayoutEffect(() => {
+    layerBoundaryRef.current = layerBoundary;
+  });
   // The picture format, read by commands declared before it (Delete, Arrange).
   const pictureFormatRef = useRef<ReaderPictureFormat | null>(null);
   useLayoutEffect(() => {
@@ -981,6 +1006,11 @@ export function useReaderPictureEditing(
     (direction: "front" | "back" | "forward" | "backward") => {
       const target = selectedRef.current;
       if (!target || refuseWhenReadOnly()) return;
+      // A move to the end the picture already stands at is greyed, and
+      // answers nothing when it is reached another way (a menu kept open).
+      const boundary = layerBoundaryRef.current;
+      if ((direction === "front" || direction === "forward") && boundary.atFront) return;
+      if ((direction === "back" || direction === "backward") && boundary.atBack) return;
       void runWrite({ kind: "arrange", target, direction }, null).then((outcome) => {
         if (outcome?.ok && typeof outcome.imageOrder === "number") {
           pictureFormatRef.current?.moved(target.pageNumber, target.order, outcome.imageOrder);
@@ -1833,8 +1863,20 @@ export function useReaderPictureEditing(
       { id: "extract-text", label: t("pdf.viewer.picture.extractText"), icon: <ScanText size={16} />, writes: false },
       { id: "extract-picture", label: t("pdf.viewer.picture.extractPicture"), icon: <ImageDown size={16} />, writes: false },
       { separator: "picture-extract-separator" },
-      { id: "bring-to-front", label: t("pdf.viewer.picture.bringToFront"), icon: officeContextMenuIcon("bringForward"), writes: true },
-      { id: "send-to-back", label: t("pdf.viewer.picture.sendToBack"), icon: officeContextMenuIcon("sendBackward"), writes: true },
+      {
+        id: "bring-to-front",
+        label: t("pdf.viewer.picture.bringToFront"),
+        icon: officeContextMenuIcon("bringForward"),
+        writes: true,
+        ...(layerBoundary.atFront ? { disabledReason: t("pdf.annotationFormat.alreadyAtFront") } : {}),
+      },
+      {
+        id: "send-to-back",
+        label: t("pdf.viewer.picture.sendToBack"),
+        icon: officeContextMenuIcon("sendBackward"),
+        writes: true,
+        ...(layerBoundary.atBack ? { disabledReason: t("pdf.annotationFormat.alreadyAtBack") } : {}),
+      },
       { separator: "picture-arrange-separator" },
       { id: "save-picture", label: t("pdf.viewer.picture.saveImage"), icon: <ImageDown size={16} />, writes: false },
       { id: "save-as-pdf", label: t("pdf.viewer.picture.saveAsPdf"), icon: <FileImage size={16} />, writes: false },
@@ -1854,7 +1896,7 @@ export function useReaderPictureEditing(
         onSelect: () => runMenuCommand(row.id),
       };
     });
-  }, [canWrite, clipboard, pending, runMenuCommand, selected, t, writeDisabledReason]);
+  }, [canWrite, clipboard, layerBoundary, pending, runMenuCommand, selected, t, writeDisabledReason]);
 
   // ---- Ribbon ------------------------------------------------------------------
   const ribbonModel = useMemo<PdfPictureFormatContextRibbonModel | null>(() => {
@@ -1880,8 +1922,12 @@ export function useReaderPictureEditing(
       ...(canWrite ? {} : { disabledReason: writeDisabledReason }),
       extractOriginalEnabled: true,
       arrangeEnabled: true,
+      arrangeAtFront: layerBoundary.atFront,
+      arrangeAtBack: layerBoundary.atBack,
+      arrangeAtFrontReason: t("pdf.annotationFormat.alreadyAtFront"),
+      arrangeAtBackReason: t("pdf.annotationFormat.alreadyAtBack"),
     };
-  }, [canWrite, cropRefusal, frameInfo, pending, selected, shownFrame, writeDisabledReason]);
+  }, [canWrite, cropRefusal, frameInfo, layerBoundary, pending, selected, shownFrame, t, writeDisabledReason]);
   const ribbonCommands = useMemo(
     () => ({
       ...(insertPicture ? { onInsertPicture: insertPicture } : {}),
@@ -2120,8 +2166,10 @@ export function useReaderPictureEditing(
       formatPaneOpen: pane?.kind === "format",
       altPaneOpen: pane?.kind === "alt",
       hasAlt: Boolean(altShown?.alt),
+      arrangeAtFront: layerBoundary.atFront,
+      arrangeAtBack: layerBoundary.atBack,
     };
-  }, [altShown, canWrite, cropRefusal, formatTarget, frameInfo, pane, pending, pictureFormat, shownFrame,
+  }, [altShown, canWrite, cropRefusal, formatTarget, frameInfo, layerBoundary, pane, pending, pictureFormat, shownFrame,
     writeDisabledReason]);
   /** Position / Align: the picture moved as a drop of its frame there is:
    * the frame stands there at once while the page paints the write. (The

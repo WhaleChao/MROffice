@@ -31,6 +31,8 @@
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
+   
+  scrollbar-gutter: stable;
   border: 1px solid var(--office-pane-border, rgb(15 23 42 / 10%));
   border-radius: 8px;
   background: var(--note-editor-canvas, #eef0f3);

@@ -7,6 +7,10 @@ import { ptToPx, pxToPt } from "../office-units";
 import OFFICE_DIGIT_ADVANCES from "./office-digit-advances.json";
 import OFFICE_DIGIT_WHOLE_EM from "./office-digit-whole-em.json";
 import OFFICE_ROW_METRICS from "./office-row-metrics.json";
+import OFFICE_ROW_HEIGHTS from "./office-row-heights.json";
+import OFFICE_ROW_PARTS from "./office-row-parts.json";
+import { excelFontRecordOf, excelWindowsFaceKey, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
+import { advancesOf } from "./office-hinted-wrap";
 
 /**
  * Pure helpers for spreadsheet column-width / row-height resizing (Excel/WPS
@@ -310,25 +314,48 @@ export function columnCharactersToPixels(
 const WHOLE_EM_DIGIT_FACES: ReadonlySet<string> = new Set(OFFICE_DIGIT_WHOLE_EM as readonly string[]);
 
 export function officeDigitWidth(
-  font: { readonly family?: string; readonly sizePt?: number } | undefined,
+  font: { readonly family?: string; readonly sizePt?: number; readonly record?: ExcelFontRecordClass | null } | undefined,
 ): number {
   const size = font?.sizePt;
   if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) {
     return DEFAULT_MAX_DIGIT_WIDTH_PX;
   }
   const advances = OFFICE_DIGIT_ADVANCES as Readonly<Record<string, number>>;
-  const key = (font?.family ?? "").trim().toLowerCase();
+  // Read under the face Windows Excel draws the name in: one it lacks
+  // (Helvetica Neue) is Arial's digits, or its record's class's (lookwin
+  // faces probe).
+  const own = (font?.family ?? "").trim().toLowerCase();
+  const key = excelWindowsFaceKey(font?.family, font?.record);
   // The East Asian fixed-pitch faces whose digits are half the em (宋体,
   // ＭＳ Ｐゴシック ...) carry no hinted widths: GDI draws them at the whole-
   // pixel em, half of which rounds up -- 宋体 11 is a 15-pixel em with 8-pixel
   // digits, Chinese Excel 2007's "8.38 (72 像素)" default column (X-090). The
   // API's office_digit_width reads the same list.
-  if (WHOLE_EM_DIGIT_FACES.has(key)) {
+  if (WHOLE_EM_DIGIT_FACES.has(own) || WHOLE_EM_DIGIT_FACES.has(key)) {
     const em = Math.floor((size * 96) / 72 + 0.5);
     return Math.max(1, Math.floor(em / 2 + 0.5));
   }
   const ratio = advances[key] ?? advances.calibri;
   return Math.max(1, Math.round((ratio * size * 96) / 72));
+}
+
+/**
+ * One indent level of an imported grid on the screen, px: Windows Excel's is
+ * three spaces of the Normal font, each its whole-pixel hinted advance
+ * (lookwin p87-lw; the API's office_indent_step, printed=False). Calibri 11
+ * is 9 px a level, Arial 10 is 12, Times New Roman 14 is 15. A face the
+ * hinted table lacks takes half its digit advance for the space.
+ */
+export function officeIndentStepPx(
+  font: { readonly family?: string; readonly sizePt?: number; readonly record?: ExcelFontRecordClass | null } | undefined,
+): number {
+  const size = font?.sizePt;
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return 3 * 3;
+  const hinted = advancesOf({ family: font?.family ?? "", sizePt: size, record: font?.record })?.(" ");
+  if (hinted !== undefined && hinted > 0) return 3 * hinted;
+  const advances = OFFICE_DIGIT_ADVANCES as Readonly<Record<string, number>>;
+  const ratio = advances[excelWindowsFaceKey(font?.family, font?.record)] ?? advances.calibri;
+  return 3 * Math.max(1, Math.round((ratio / 2) * size * 96 / 72));
 }
 
 /**
@@ -341,12 +368,12 @@ export function officeDigitWidth(
  * 8 / 7.33. A number's fit is judged at Excel's widths.
  */
 export function officeDigitWidthScale(
-  font: { readonly family?: string; readonly sizePt?: number } | undefined,
+  font: { readonly family?: string; readonly sizePt?: number; readonly record?: ExcelFontRecordClass | null } | undefined,
 ): number {
   const size = font?.sizePt;
   if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return 1;
   const advances = OFFICE_DIGIT_ADVANCES as Readonly<Record<string, number>>;
-  const ratio = advances[(font?.family ?? "").trim().toLowerCase()] ?? advances.calibri;
+  const ratio = advances[excelWindowsFaceKey(font?.family, font?.record)] ?? advances.calibri;
   const plain = (ratio * size * 96) / 72;
   return plain > 0 ? officeDigitWidth(font) / plain : 1;
 }
@@ -363,14 +390,73 @@ export function officeDigitWidthScale(
  * 맑은 고딕 11 is 22. The integers come from office-row-metrics.json (the API
  * keeps an identical copy); a face missing from it measures like Calibri.
  */
+/** Whether `family` is a face office-row-metrics.json has Excel's own metrics
+ * for (officeRowHeight measures any other one like Calibri). */
+export function officeRowMetricsKnown(family: string | null | undefined, sizePt?: number, record?: ExcelFontRecordClass | null): boolean {
+  const key = excelWindowsFaceKey(family, record);
+  if (key === "" || key.startsWith("_")) return false;
+  return Object.prototype.hasOwnProperty.call(OFFICE_ROW_METRICS, key) ||
+    (sizePt !== undefined && (officeRowHeightMeasured(key, sizePt) !== undefined || officeRowPartsMeasured(key, sizePt, false) !== undefined));
+}
+
+/** A grid font as the row rules read it: its face, size and weight. */
+export interface OfficeRowFont {
+  readonly family?: string;
+  readonly sizePt?: number;
+  readonly bold?: boolean;
+  /** The font record's class where Windows lacks its face (excelFontRecordOf). */
+  readonly record?: ExcelFontRecordClass | null;
+}
+
+/** Windows Excel's own split of a line, [ascent, descent] px with the height
+ * ascent + descent + 1, where its printed rows were measured
+ * (office-row-parts.json, lookwin probes p44/p44d): Verdana 10 is 17 px (the
+ * formula 19), Arial 11 is 19 and bold 20, Calibri 10 is 13 + 3. The API's
+ * office_row_parts.json is the same table. */
+function officeRowPartsMeasured(key: string, sizePt: number, bold: boolean): readonly [number, number] | undefined {
+  const faces = (OFFICE_ROW_PARTS as { faces: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>> }).faces;
+  const size = String(Math.round(sizePt * 2) / 2);
+  const parts = (bold ? faces[`${key} bold`]?.[size] : undefined) ?? faces[key]?.[size];
+  return parts && parts.length === 2 ? [parts[0], parts[1]] : undefined;
+}
+
+function officeRowPartsOf(font: OfficeRowFont | undefined): readonly [number, number] | undefined {
+  const size = font?.sizePt;
+  if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return undefined;
+  const own = (font?.family ?? "").trim().toLowerCase();
+  // Measured under the name itself first (a table name the face key aliases), then the face Excel draws it in.
+  return officeRowPartsMeasured(own, size, font?.bold === true) ?? officeRowPartsMeasured(excelWindowsFaceKey(font?.family, font?.record), size, font?.bold === true);
+}
+
+/** Windows Excel's own row height for `family` at `sizePt` where real files
+ * say the metric formula is off (office-row-heights.json): ＭＳ Ｐゴシック 11
+ * is 18 px (13.5 pt, the formula 16), Arial 12 is 20, Times New Roman 12 is
+ * 21. The API's office_row_heights.json is the same table. A size arrives
+ * from a cell's pixels (14.67 px is 11.0025 pt), so it is read to the half
+ * point Excel's sizes come in: as "11.0025" it never met the table's "11". */
+function officeRowHeightMeasured(key: string, sizePt: number): number | undefined {
+  const sizes = (OFFICE_ROW_HEIGHTS as Readonly<Record<string, unknown>>)[key];
+  if (!sizes || typeof sizes !== "object") return undefined;
+  const pixels = (sizes as Readonly<Record<string, unknown>>)[String(Math.round(sizePt * 2) / 2)];
+  return typeof pixels === "number" ? pixels : undefined;
+}
+
 export function officeRowHeight(
-  font: { readonly family?: string; readonly sizePt?: number } | undefined,
+  font: OfficeRowFont | undefined,
 ): number {
+  const split = officeRowPartsOf(font);
+  if (split) return split[0] + split[1] + 1;
   const size = font?.sizePt;
   const metrics = OFFICE_ROW_METRICS as Readonly<Record<string, readonly number[]>>;
-  const [ascent, descent, leading, unitsPerEm] =
-    metrics[(font?.family ?? "").trim().toLowerCase()] ?? metrics.calibri;
+  // The face Windows Excel draws the name in: a Normal font it lacks rows
+  // like Arial (lookwin faces probe), not like Calibri.
+  const key = excelWindowsFaceKey(font?.family, font?.record);
+  const [ascent, descent, leading, unitsPerEm] = metrics[key] ?? metrics.calibri;
   if (typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return 20;
+  // A height Windows Excel was measured at under the name itself (its real
+  // files' charset in it: 明朝, Osaka) before the substitute's.
+  const measured = officeRowHeightMeasured((font?.family ?? "").trim().toLowerCase(), size) ?? officeRowHeightMeasured(key, size);
+  if (measured !== undefined) return measured;
   const em = Math.ceil((size * 96) / 72 - 1e-9);
   return (
     Math.ceil((ascent * em) / unitsPerEm) +
@@ -378,6 +464,164 @@ export function officeRowHeight(
     Math.floor((leading * em) / unitsPerEm) +
     1
   );
+}
+
+/**
+ * The two halves of {@link officeRowHeight}'s line, px: the descent (with the
+ * line gap below it) from the face's metrics, and the ascent the rest of the
+ * height (where the measured table corrects the formula, the correction is
+ * the ascent's). Undefined for a face the metrics do not know.
+ */
+export function officeRowParts(
+  font: OfficeRowFont,
+): { ascent: number; descent: number } | undefined {
+  const split = officeRowPartsOf(font);
+  if (split) return { ascent: split[0], descent: split[1] };
+  const key = excelWindowsFaceKey(font.family, font.record);
+  const metrics = (OFFICE_ROW_METRICS as Readonly<Record<string, readonly number[]>>)[key];
+  const size = font.sizePt;
+  if (!metrics || typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return undefined;
+  const [, descent, leading, unitsPerEm] = metrics;
+  const em = Math.ceil((size * 96) / 72 - 1e-9);
+  const below = Math.floor((2 * descent * em + unitsPerEm) / (2 * unitsPerEm)) + Math.floor((leading * em) / unitsPerEm);
+  return { ascent: officeRowHeight(font) - 1 - below, descent: below };
+}
+
+/**
+ * Windows Excel's automatic height of one line set in several faces at once:
+ * the tallest ascent over the deepest descent, not the tallest of their
+ * heights. A row fits its cells' faces and the face of its positions with no
+ * cell (the row's format, else the columns', else the workbook's font): an
+ * Arial 12 row of a Calibri 11 workbook is 21 px, though each alone is 20
+ * (7,417 rows of Windows-written files; 20 px where every empty position is
+ * formatted in another face). Undefined when a face is one the metrics do not
+ * know.
+ */
+/**
+ * The automatic default row of a sheet whose file states its default without
+ * customHeight, px: one line set in the faces of a row's empty positions,
+ * each formatted column's font and, while a column is left unformatted, the
+ * grid font (Windows Excel recomputes it on open: lookwin probe p26 draws a
+ * Calibri 11 sheet stating 14.4 pt at 15 pt; R79-X23, every column Verdana 8,
+ * stays 10.5 pt). Undefined when a face is one the metrics do not know.
+ * Column styles carry their size in px, as the model stores them.
+ */
+export function officeEmptyRowHeight(
+  font: { readonly family: string; readonly sizePt: number; readonly record?: ExcelFontRecordClass | null },
+  columnStyles: Readonly<Record<string, { readonly fontFamily?: unknown; readonly fontSize?: unknown; readonly fontRecord?: unknown } | undefined>> | undefined,
+): number | undefined {
+  const faces = new Map<string, { family: string; sizePt: number; record?: ExcelFontRecordClass | null }>();
+  let styled = 0;
+  for (const key in columnStyles ?? {}) {
+    if (!/^\d+$/.test(key)) continue;
+    styled += 1;
+    const style = columnStyles?.[key];
+    const own = typeof style?.fontFamily === "string" && style.fontFamily.trim() ? style.fontFamily.trim() : undefined;
+    const family = own ?? font.family;
+    const record = own ? excelFontRecordOf(style?.fontRecord) : font.record;
+    const sizePt = typeof style?.fontSize === "number" && style.fontSize > 0 ? style.fontSize * 0.75 : font.sizePt;
+    faces.set(`${family}\u0000${sizePt}\u0000${JSON.stringify(record ?? null)}`, { family, sizePt, record });
+  }
+  if (styled < 16_384) faces.set(`${font.family}\u0000${font.sizePt}\u0000${JSON.stringify(font.record ?? null)}`, { family: font.family, sizePt: font.sizePt, record: font.record });
+  for (const face of faces.values()) if (!officeRowMetricsKnown(face.family, face.sizePt, face.record)) return undefined;
+  return officeCombinedRowHeight([...faces.values()]);
+}
+
+export function officeCombinedRowHeight(
+  fonts: readonly OfficeRowFont[],
+): number | undefined {
+  const parts = officeCombinedRowParts(fonts);
+  return parts ? parts.ascent + parts.descent + 1 : undefined;
+}
+
+/** The ascent and descent of one line set in several faces at once
+ * ({@link officeCombinedRowHeight}'s halves). */
+export function officeCombinedRowParts(
+  fonts: readonly OfficeRowFont[],
+): { ascent: number; descent: number } | undefined {
+  let ascent = 0;
+  let descent = 0;
+  for (const font of fonts) {
+    const parts = officeRowParts(font);
+    if (!parts) return undefined;
+    ascent = Math.max(ascent, parts.ascent);
+    descent = Math.max(descent, parts.descent);
+  }
+  return fonts.length ? { ascent, descent } : undefined;
+}
+
+/**
+ * The automatic height of a cell's wrapped lines in its row, px, as Windows
+ * Excel stands them (lookwin probes p44b/p44c). `own` is the lines' own
+ * height (each line at its faces), `last` the halves of its last line and
+ * `floor` the halves of the row's other faces (its empty positions'). A
+ * bottom-aligned cell (Excel's default) stands its lines on the row's
+ * baseline: the row is the lines' height above that last line's baseline
+ * over the deepest descent of them all -- two lines of Calibri 8 (15 px
+ * each) in a Calibri 11 workbook are 31 px, not 30. A top, center, justify
+ * or distributed cell keeps its lines' height, never less than one line of
+ * the row's other faces (R75-X01: two top-aligned lines of Calibri 10 are 34).
+ */
+export function officeStackedLinesHeight(
+  own: number,
+  last: { ascent: number; descent: number },
+  floor: { ascent: number; descent: number } | undefined,
+  baseline: boolean,
+): number {
+  if (!floor) return own;
+  if (!baseline) return Math.max(own, floor.ascent + floor.descent + 1);
+  const above = own - last.descent - 1;
+  return Math.max(above, floor.ascent) + Math.max(last.descent, floor.descent) + 1;
+}
+
+/**
+ * Windows Excel's extra automatic height of the rows its heavy lines touch: a
+ * thick or double line on a row's top edge adds a pixel, a medium or heavier
+ * one on its bottom edge another (the rows Excel marks thickTop / thickBot;
+ * 7,400 Windows-written rows, xlsx-rounds rowborder_edges.py: both 3 px +2 in
+ * 257 of 260, a 2 px bottom alone +1 in 1,989 of 2,166). An edge is shared: a
+ * row's top edge carries its cells' top lines and the row above's bottom lines.
+ * `lines` are cells' top and bottom line widths (borderLineWidthPx) by row.
+ */
+/**
+ * The extra automatic height of the rows a file marks thickTop (1) / thickBot
+ * (2) (`sheet.rowThickEdges`, row -> marks, the import's reading
+ * xlsxRowThickEdges): Windows Excel grows a row a pixel for each mark,
+ * whatever lines its cells draw (lookwin p80-lw: a medium bottom on an
+ * unmarked row adds nothing, the mark alone a pixel; R105-X05). Null when the
+ * sheet carries no marks (a page imported before): officeBorderRowExtras.
+ */
+export function officeRowThickMarkExtras(marks: unknown): Record<string, number> | undefined | null {
+  if (!marks || typeof marks !== "object" || Array.isArray(marks)) return null;
+  let extras: Record<string, number> | undefined;
+  for (const [row, flags] of Object.entries(marks as Record<string, unknown>)) {
+    if (!/^\d+$/.test(row) || typeof flags !== "number" || !Number.isInteger(flags)) continue;
+    const extra = (flags & 1) + ((flags >> 1) & 1);
+    if (extra) (extras ??= {})[row] = extra;
+  }
+  return extras;
+}
+
+export function officeBorderRowExtras(
+  lines: Iterable<{ readonly row: number; readonly top: number; readonly bottom: number }>,
+): Record<string, number> | undefined {
+  const topEdge = new Map<number, number>();
+  const bottomEdge = new Map<number, number>();
+  const widen = (edges: Map<number, number>, row: number, width: number) => {
+    if (row >= 0 && width > (edges.get(row) ?? 0)) edges.set(row, width);
+  };
+  for (const { row, top, bottom } of lines) {
+    widen(topEdge, row, top);
+    widen(bottomEdge, row - 1, top);
+    widen(bottomEdge, row, bottom);
+    widen(topEdge, row + 1, bottom);
+  }
+  let extras: Record<string, number> | undefined;
+  for (const row of new Set([...topEdge.keys(), ...bottomEdge.keys()])) {
+    const extra = Number((topEdge.get(row) ?? 0) >= 3) + Number((bottomEdge.get(row) ?? 0) >= 2);
+    if (extra) (extras ??= {})[String(row)] = extra;
+  }
+  return extras;
 }
 
 /**
@@ -939,4 +1183,19 @@ export function setLineSizes(
     if (clamped !== fallback) next[index] = clamped;
   }
   return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/**
+ * The letter spacing that stacks Vertical Text (textRotation 255) a character
+ * to a line as Excel does: each character's advance down the cell is the
+ * automatic row height Excel gives its face (officeRowHeight), not its em --
+ * measured on R20-X14's survey headers, a character's pitch is a row of that
+ * font. `fontSizePx` at 96 dpi. The browser's own line box when the face is
+ * one the tables do not know.
+ */
+export function stackedTextLetterSpacing(fontFamily: unknown, fontSizePx: unknown): string {
+  const family = typeof fontFamily === "string" ? fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim() : "";
+  const size = typeof fontSizePx === "number" ? fontSizePx : Number.parseFloat(String(fontSizePx ?? ""));
+  if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return "calc(1lh - 1em)";
+  return `${Math.max(0, officeRowHeight({ family, sizePt: size * 0.75 }) - size)}px`;
 }

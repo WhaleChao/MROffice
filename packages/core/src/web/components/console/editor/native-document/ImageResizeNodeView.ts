@@ -118,7 +118,9 @@ import {
   officeShapeEffectsFilterRegion,
   type OfficeShapeEffectPrimitive,
 } from "../../../../lib/office-shape-effects-paint";
-import { officePictureEffectsCss } from "../../../../lib/office-picture-effects";
+import { officePictureEffectsCss, officeSoftEdgeMaskImage } from "../../../../lib/office-picture-effects";
+import { normalizeOfficeShadowEffect } from "../../../../lib/office-shadow-effects";
+import type { CSSProperties } from "react";
 import { pictureDisplayLookCss } from "./pictureDisplayLook";
 import { isPictureRecolorPreset, pictureRecolorFilterCss } from "./pictureRecolorFilter";
 import { syncDraftPicturePending } from "./draftPicturePending";
@@ -757,6 +759,69 @@ export function createImageResizeNodeView(
     threeDSvg.replaceChildren(defs);
     return `url(#${threeDFilterId})`;
   };
+  // Its Soft Edges (`a:softEdge`): the shared ramp (`officeSoftEdgeMaskImage`)
+  // as the first filter on the raster, so its reflection, shadow and glow
+  // draw the softened picture (a CSS mask here hid the reflection).
+  const softEdgeFilterId = `document-picture-soft-edge-${Math.random().toString(36).slice(2, 10)}`;
+  let softEdgeSvg: SVGSVGElement | null = null;
+  let softEdgeKey = "";
+  const applySoftEdge = (rampPx: number, widthPx: number, heightPx: number): string => {
+    if (!(rampPx > 0)) {
+      softEdgeSvg?.remove();
+      softEdgeSvg = null;
+      softEdgeKey = "";
+      return "";
+    }
+    const size = { width: Math.max(1, widthPx), height: Math.max(1, heightPx) };
+    const key = `${rampPx}:${size.width}:${size.height}`;
+    if (!softEdgeSvg) {
+      softEdgeSvg = document.createElementNS(SVG_NS, "svg");
+      softEdgeSvg.setAttribute("width", "0");
+      softEdgeSvg.setAttribute("height", "0");
+      softEdgeSvg.setAttribute("aria-hidden", "true");
+      softEdgeSvg.setAttribute("data-picture-soft-edge", "");
+      softEdgeSvg.style.position = "absolute";
+      softEdgeSvg.style.overflow = "hidden";
+      wrapper.appendChild(softEdgeSvg);
+    }
+    if (key !== softEdgeKey) {
+      softEdgeKey = key;
+      const filter = document.createElementNS(SVG_NS, "filter");
+      filter.setAttribute("id", softEdgeFilterId);
+      for (const [name, value] of Object.entries({
+        x: "0",
+        y: "0",
+        width: "1",
+        height: "1",
+        filterUnits: "objectBoundingBox",
+        primitiveUnits: "objectBoundingBox",
+        "color-interpolation-filters": "sRGB",
+      })) {
+        filter.setAttribute(name, value);
+      }
+      const ramp = document.createElementNS(SVG_NS, "feImage");
+      for (const [name, value] of Object.entries({
+        href: officeSoftEdgeMaskImage(size, rampPx),
+        x: "0",
+        y: "0",
+        width: "1",
+        height: "1",
+        preserveAspectRatio: "none",
+        result: "softEdgeRamp",
+      })) {
+        ramp.setAttribute(name, value);
+      }
+      const keep = document.createElementNS(SVG_NS, "feComposite");
+      keep.setAttribute("in", "SourceGraphic");
+      keep.setAttribute("in2", "softEdgeRamp");
+      keep.setAttribute("operator", "in");
+      filter.append(ramp, keep);
+      const defs = document.createElementNS(SVG_NS, "defs");
+      defs.appendChild(filter);
+      softEdgeSvg.replaceChildren(defs);
+    }
+    return `url(#${softEdgeFilterId})`;
+  };
   // Office Picture Style drawing (shared renderer), painted over the raster.
   const pictureStyleLayer = createDocumentPictureStyleLayer(wrapper, null);
   let pictureStylePreview: string | null = null;
@@ -806,6 +871,33 @@ export function createImageResizeNodeView(
     pointerEvents: "none",
   });
   wrapper.appendChild(pictureBorder);
+  // A perspective shadow under the picture and an inner shadow over it
+  // (`pictureShadowEffect`, officeShadowCss), on the picture's own box.
+  const shadowLayer = (testId: string): HTMLSpanElement => {
+    const layer = document.createElement("span");
+    layer.setAttribute("aria-hidden", "true");
+    layer.contentEditable = "false";
+    layer.dataset.pictureShadowLayer = testId;
+    layer.style.display = "none";
+    wrapper.appendChild(layer);
+    return layer;
+  };
+  const shadowUnderLayer = shadowLayer("under");
+  const shadowOverLayer = shadowLayer("over");
+  const applyShadowLayer = (layer: HTMLSpanElement, css: CSSProperties | undefined) => {
+    layer.removeAttribute("style");
+    const rest: Record<string, unknown> = { ...(css ?? {}) };
+    delete rest.inset;
+    Object.assign(layer.style, rest, {
+      display: css ? "block" : "none",
+      position: "absolute",
+      top: "var(--picture-chrome-top, 0px)",
+      right: "var(--picture-chrome-right, 0px)",
+      bottom: "var(--picture-chrome-bottom, 0px)",
+      left: "var(--picture-chrome-left, 0px)",
+      pointerEvents: "none",
+    });
+  };
   // Where the picture sits in its wrapper, for the chrome to hug it (see
   // ImageSelectionChrome.module.css). Measured only while selected, when the
   // chrome shows; `apply` rewrites the wrapper's inline style, so it runs
@@ -1380,8 +1472,27 @@ export function createImageResizeNodeView(
       : "none";
     // Picture Format > Artistic Effects first, the colour adjustments after
     // it, as Office applies them; a file's own rendered bitmap draws as is.
-    const pictureEffects = pictureEffectsCss(attrs as Record<string, unknown>);
+    const drawnWidth = Number(attrs.width) || img.clientWidth;
+    const drawnHeight = Number(attrs.height) || img.clientHeight;
+    const pictureEffects = pictureEffectsCss(attrs as Record<string, unknown>, {
+      width: Math.max(1, drawnWidth),
+      height: Math.max(1, drawnHeight),
+    });
+    // Format Picture > Effects > Shadow (reading row 547): the shared model's
+    // outer shadow as a drop shadow of the picture (or, scaled, its box
+    // shadow), a perspective one on a layer under it, an inner one over it.
+    const shadowEffect = normalizeOfficeShadowEffect(attrs.pictureShadowEffect);
+    const shadowCss = shadowEffect
+      ? officePictureEffectsCss({ shadow: shadowEffect }, { width: Math.max(1, drawnWidth), height: Math.max(1, drawnHeight) })
+      : null;
+    img.style.boxShadow = String(shadowCss?.wrapper.boxShadow ?? "");
+    applyShadowLayer(shadowUnderLayer, shadowCss?.shadowUnder);
+    applyShadowLayer(shadowOverLayer, shadowCss?.shadowOver);
+    if (shadowCss?.shadowUnder) wrapper.style.isolation = "isolate";
+    else if (wrapper.style.isolation === "isolate") wrapper.style.removeProperty("isolation");
     img.style.filter = [
+      // Its soft edges, on the raster itself before everything drawn around it.
+      applySoftEdge(pictureEffects.softEdgeRampPx, drawnWidth, drawnHeight),
       officeArtisticEffectCss(attrs.artisticEffect, attrs.artisticEffectRendered === true),
       displayLook.filter,
       // A Recolor preset (Sepia, Black and White, Dark / Light), before the
@@ -1402,19 +1513,17 @@ export function createImageResizeNodeView(
       // Its 3-D Format (bevel, depth, contour, material, lighting), lit as
       // Word lights it, before the effects around the picture.
       applyPicture3d(attrs.picture3d, Number(attrs.width) || img.clientWidth, Number(attrs.height) || img.clientHeight),
-      // The picture's own outer shadow (`a:outerShdw`), drawn last.
-      pictureShadowFilter(attrs.pictureShadow) ?? "",
+      // The picture's own shadow, drawn last: the shared model's
+      // (`pictureShadowEffect`, reading row 547) from the picture's alpha,
+      // else the older outer one (`pictureShadow`).
+      shadowEffect ? (shadowCss?.wrapper.filter ?? "") : (pictureShadowFilter(attrs.pictureShadow) ?? ""),
       // Its glow (`a:glow`), around the drawn picture.
       pictureEffects.filter,
     ]
       .filter(Boolean)
       .join(" ");
-    // Its reflection (`a:reflection`) and soft edges (`a:softEdge`).
+    // Its reflection (`a:reflection`), mirroring the softened picture.
     img.style.setProperty("-webkit-box-reflect", pictureEffects.boxReflect || "");
-    img.style.setProperty("mask-image", pictureEffects.mask || "");
-    img.style.setProperty("-webkit-mask-image", pictureEffects.mask || "");
-    img.style.setProperty("mask-composite", pictureEffects.mask ? "intersect" : "");
-    img.style.setProperty("-webkit-mask-composite", pictureEffects.mask ? "source-in" : "");
     const recolorPreset = isPictureRecolorPreset(attrs.pictureRecolor) ? attrs.pictureRecolor : recolor;
     if (recolorPreset === "none") img.removeAttribute("data-picture-recolor");
     else img.setAttribute("data-picture-recolor", recolorPreset);

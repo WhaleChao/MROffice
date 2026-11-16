@@ -20,12 +20,62 @@ export function cssZoomOf(element: Element | null | undefined): number {
     .currentCSSZoom;
   if (typeof native === "number" && native > 0) return native;
   if (typeof getComputedStyle !== "function") return 1;
+  // An engine without currentCSSZoom: each ancestor's zoom read once a frame.
+  // A style read between two font faces added at an open restyled the whole
+  
+  const now = clockMs();
+  const frame = renderedFrame();
   let zoom = 1;
   for (let node: Element | null = element; node; node = node.parentElement) {
-    const own = Number.parseFloat(getComputedStyle(node).zoom);
+    const known = nodeZooms.get(node);
+    let own: number;
+    if (known && known.epoch === transformEpoch && sameFrame(known, now, frame)) own = known.own;
+    else {
+      own = Number.parseFloat(getComputedStyle(node).zoom);
+      nodeZooms.set(node, { at: now, epoch: transformEpoch, frame, own });
+    }
     if (own > 0) zoom *= own;
   }
   return zoom;
+}
+
+const nodeZooms = new WeakMap<Element, StyleAnswer>();
+
+/** What one style read of a node answered, and when. */
+type StyleAnswer = { at: number; epoch: number; frame: number | undefined; own: number };
+
+function clockMs(): number {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+/** Where no frame is counted: how long one frame's style reads stand. */
+const FRAME_MS = 16;
+
+
+
+
+
+
+
+
+
+
+let framesDrawn = 0;
+let frameAsked = false;
+function renderedFrame(): number | undefined {
+  if (typeof requestAnimationFrame !== "function") return undefined;
+  if (!frameAsked) {
+    frameAsked = true;
+    requestAnimationFrame(() => {
+      frameAsked = false;
+      framesDrawn += 1;
+    });
+  }
+  return framesDrawn;
+}
+
+function sameFrame(known: StyleAnswer, now: number, frame: number | undefined): boolean {
+  return frame !== undefined && known.frame !== undefined ? known.frame === frame : now - known.at < FRAME_MS;
 }
 
 /**
@@ -105,29 +155,34 @@ export function screenScaleOf(element: HTMLElement): number {
 export function transformScaleOf(element: Element | null | undefined): number {
   let scale = 1;
   if (typeof getComputedStyle !== "function" || typeof DOMMatrixReadOnly === "undefined" || !element) return scale;
-  // The grid's canvas asks this at every paint, and the walk read the style of
-  // some 25 ancestors each time (11% of a Page Down). Only the few that carry a
-  // transform are read again while the element's ancestors are the same ones; the
-  // whole walk runs again after a second, a desk zoom or a resize, so a transform
-  // put on another ancestor meanwhile (a window's opening) is soon seen.
-  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-  const known = transformedAncestors.get(element);
-  if (known && known.epoch === transformEpoch && now - known.at < TRANSFORM_WALK_MS && sameAncestors(element, known.chain)) {
-    for (const node of known.transformed) scale *= ownTransformScale(node);
-    return scale;
-  }
-  const chain: Element[] = [];
-  const transformed: Element[] = [];
+  // The grid's canvas asks this at every paint. Each ancestor's own scale is
+  // kept: one drawn at its own size for a second, one scaling it (a window's
+  // opening, a live zoom's preview) for a frame. The walk read the
+  // style of some 25 ancestors (11% of a Page Down), and at a workbook's open,
+  // between the font faces added one at a time, every read restyled the whole
+  
+  // ancestor is seen within a second, at once after a desk zoom or a resize.
+  const now = clockMs();
+  const frame = renderedFrame();
   for (let node: Element | null = element; node; node = node.parentElement) {
-    chain.push(node);
+    const known = nodeScales.get(node);
+    // A node drawn at its own size (no transform, or a translation only: a
+    // window's place on the desk, moved by every drag) keeps its answer for a
+    // second; only one scaling what it draws is read again each frame. The
+    // window's translation was read again every frame, and every read of an
+    
+    if (known && known.epoch === transformEpoch && (known.own !== 1 ? sameFrame(known, now, frame) : now - known.at < TRANSFORM_WALK_MS)) {
+      scale *= known.own;
+      continue;
+    }
     const style = getComputedStyle(node);
     const transform = style.transform;
     const own = style.scale;
-    if ((!transform || transform === "none") && (!own || own === "none")) continue;
-    transformed.push(node);
-    scale *= ownTransformScale(node, transform, own);
+    const transformed = !((!transform || transform === "none") && (!own || own === "none"));
+    const value = transformed ? ownTransformScale(node, transform || "none", own || "none") : 1;
+    nodeScales.set(node, { at: now, epoch: transformEpoch, frame, own: value });
+    scale *= value;
   }
-  transformedAncestors.set(element, { at: now, epoch: transformEpoch, chain, transformed });
   return scale;
 }
 
@@ -161,17 +216,9 @@ function ownTransformScale(node: Element, transform?: string, own?: string): num
   return scale;
 }
 
-function sameAncestors(element: Element, chain: readonly Element[]): boolean {
-  let index = 0;
-  for (let node: Element | null = element; node; node = node.parentElement, index += 1) {
-    if (chain[index] !== node) return false;
-  }
-  return index === chain.length;
-}
-
-/** How long the transformed ancestors found by a whole walk stand for an element. */
+/** How long an ancestor with no transform stands as one. */
 const TRANSFORM_WALK_MS = 1000;
-const transformedAncestors = new WeakMap<Element, { at: number; epoch: number; chain: Element[]; transformed: Element[] }>();
+const nodeScales = new WeakMap<Element, StyleAnswer>();
 let transformEpoch = 0;
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   const walkAgain = () => {
@@ -218,6 +265,10 @@ export function canvasPixelsPerUnit(element: Element, zoom: number): number {
 export function rectScaleUnderZoom(element: HTMLElement, zoom: number): number {
   const sheetScale = zoom > 0 ? zoom : 1;
   const outer = transformScaleOf(element);
+  // At the sheet's own size either answer below is the transforms' scale: the
+  // measure (offsetWidth and a client rect, a forced layout at every canvas
+  
+  if (sheetScale === 1) return outer;
   const measured = screenScaleOf(element) / outer;
   return (Math.abs(measured - sheetScale) <= Math.abs(measured - 1) ? sheetScale : 1) * outer;
 }

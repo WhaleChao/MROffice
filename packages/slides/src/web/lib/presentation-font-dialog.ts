@@ -15,12 +15,20 @@
  * character spacing in points.
  *
  * Only what the slide model keeps end to end is offered (Latin font, style,
- * size, colour, single/double underline, strikethrough, superscript /
- * subscript, small / all caps, spacing); the rest of the page is shown
- * disabled by the host rather than taking a choice the export would drop.
+ * size, colour, every DrawingML underline line, strikethrough and double
+ * strikethrough, superscript / subscript, small / all caps, spacing); the
+ * rest of the page is shown disabled by the host rather than taking a choice
+ * the export would drop.
  */
 
 import type { RunStyle } from "@mrnote/core/web/lib/presentation-runs.ts";
+import {
+  PRESENTATION_UNDERLINE_FONT_PAGE,
+  PRESENTATION_UNDERLINE_FROM_FONT_PAGE,
+  PRESENTATION_UNDERLINE_STYLES,
+  normalizePresentationUnderlineStyle,
+  type PresentationUnderlineStyle,
+} from "@mrnote/core/web/lib/presentation-text-decoration.ts";
 
 /** Home > Font > Character Spacing presets, in points (PowerPoint's values). */
 export const PRESENTATION_CHARACTER_SPACING_PRESETS = [
@@ -52,7 +60,30 @@ export function presentationCharacterSpacingPreset(
 }
 
 export type PresentationFontDialogSpacingKind = "normal" | "expanded" | "condensed";
-export type PresentationFontDialogUnderline = "none" | "single" | "double";
+/**
+ * The Font page's underline names a slide's words keep: (none), Single and
+ * every DrawingML line by the shared table (Word-spelled, as the page lists
+ * them). Words only is not kept by the slide's runs.
+ */
+export type PresentationFontDialogUnderline =
+  | "none"
+  | "single"
+  | (typeof PRESENTATION_UNDERLINE_FONT_PAGE)[PresentationUnderlineStyle];
+
+/** The Font page's underline list for a slide's words, in PowerPoint's order. */
+export const PRESENTATION_FONT_DIALOG_UNDERLINES: readonly PresentationFontDialogUnderline[] = [
+  "none",
+  "single",
+  ...PRESENTATION_UNDERLINE_STYLES.map((style) => PRESENTATION_UNDERLINE_FONT_PAGE[style]),
+];
+
+/** The run's line for a Font page name ("single" and "none" carry no style). */
+export function presentationFontDialogUnderlineStyle(
+  underline: PresentationFontDialogUnderline,
+): PresentationUnderlineStyle | undefined {
+  if (underline === "none" || underline === "single") return undefined;
+  return normalizePresentationUnderlineStyle(PRESENTATION_UNDERLINE_FROM_FONT_PAGE[underline]);
+}
 export type PresentationFontDialogCaps = "none" | "small" | "all";
 
 /** One field's drafted value; `null` where the selection is mixed and untouched. */
@@ -67,6 +98,8 @@ export interface PresentationFontDialogDraft {
   color: string | null;
   underline: PresentationFontDialogUnderline | null;
   strike: boolean;
+  /** Double Strikethrough (`strike="dblStrike"`); excludes the single line. */
+  doubleStrike: boolean;
   superscript: boolean;
   subscript: boolean;
   caps: PresentationFontDialogCaps;
@@ -102,9 +135,13 @@ export function presentationFontDialogDraft(
     sizePt: source.sizePt,
     color: style.color ?? "",
     underline: style.underline === true
-      ? style.underlineStyle === "double" ? "double" : "single"
+      ? (() => {
+          const kind = normalizePresentationUnderlineStyle(style.underlineStyle);
+          return kind ? PRESENTATION_UNDERLINE_FONT_PAGE[kind] : "single";
+        })()
       : "none",
-    strike: style.strike === true,
+    strike: style.strike === true && style.strikeStyle !== "double",
+    doubleStrike: style.strike === true && style.strikeStyle === "double",
     superscript: style.superscript === true,
     subscript: style.subscript === true,
     caps: style.caps ?? "none",
@@ -115,7 +152,7 @@ export function presentationFontDialogDraft(
 
 /**
  * One control's change, with the fields it moves: superscript and subscript
- * exclude each other, and so do the two caps.
+ * exclude each other, and so do the two caps and the two strikethroughs.
  */
 export function changePresentationFontDialogDraft<K extends PresentationFontDialogField>(
   draft: PresentationFontDialogDraft,
@@ -131,6 +168,16 @@ export function changePresentationFontDialogDraft<K extends PresentationFontDial
   if (field === "subscript" && value === true) {
     next.superscript = false;
     touched.push("superscript");
+  }
+  // Strikethrough and Double Strikethrough are one line or the other, as
+  // PowerPoint's Font dialog checks them.
+  if (field === "strike" && value === true) {
+    next.doubleStrike = false;
+    touched.push("doubleStrike");
+  }
+  if (field === "doubleStrike" && value === true) {
+    next.strike = false;
+    touched.push("strike");
   }
   if (field === "spacing" && value === "normal") {
     next.spacingBy = "";
@@ -176,9 +223,12 @@ export function presentationFontDialogResult(
   if (touched.has("color") && draft.color !== null) runPatch.color = draft.color || undefined;
   if (touched.has("underline") && draft.underline !== null) {
     runPatch.underline = draft.underline === "none" ? undefined : true;
-    runPatch.underlineStyle = draft.underline === "double" ? "double" : undefined;
+    runPatch.underlineStyle = presentationFontDialogUnderlineStyle(draft.underline);
   }
-  if (touched.has("strike")) runPatch.strike = draft.strike || undefined;
+  if (touched.has("strike") || touched.has("doubleStrike")) {
+    runPatch.strike = draft.strike || draft.doubleStrike || undefined;
+    runPatch.strikeStyle = draft.doubleStrike ? "double" : undefined;
+  }
   if (touched.has("superscript") || touched.has("subscript")) {
     runPatch.superscript = draft.superscript || undefined;
     runPatch.subscript = draft.subscript || undefined;

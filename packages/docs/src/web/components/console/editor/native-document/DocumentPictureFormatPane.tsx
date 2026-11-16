@@ -57,11 +57,26 @@ import {
 import { officeShapeFormatPaneStyles as shared } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
 import styles from "@mrnote/core/web/components/console/editor/native-document/DocumentShapeFormatPane.module.css";
 import { documentValueInputClassName } from "@mrnote/core/web/components/console/editor/documentValueInput.ts";
-import { OfficeShapeFormatPaneSections } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
+import {
+  OfficeShapeFormatPaneSections,
+  revealOfficeShapeFormatPaneSection,
+} from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
 import { officeEffectsPaneSections } from "@mrnote/core/web/components/office-ribbon/officeEffectsPaneSections.tsx";
 import { presentationEffectsPaneLabels } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEffectsLabels.ts";
 import { withOfficePictureEffect } from "@mrnote/core/web/lib/office-picture-effects.ts";
-import { PICTURE_THREE_D_KINDS, normalizePicture3d, picture3dBlocker } from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
+import {
+  PICTURE_LOOK_EFFECT_KINDS,
+  PICTURE_THREE_D_KINDS,
+  normalizePicture3d,
+  picture3dBlocker,
+  pictureLookEffectAttrs,
+  pictureLookEffects,
+  pictureLookEffectsBlocker,
+  pictureShadowBlocker,
+  pictureShadowEffect,
+  pictureShadowEffectAttrs,
+  type PictureLookEffectKind,
+} from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
 import { documentPictureStylePatch } from "@mrnote/core/web/components/console/editor/native-document/DocumentPictureStyleGallery.tsx";
 import {
   documentImageCropFrameSize,
@@ -81,8 +96,10 @@ import {
  *                A picture's own Fill (behind transparent pixels), gradient
  *                lines, compound / cap / join types are not in the picture
  *                model and are not offered.
- *   Effects      Shadow, reflection, glow, soft edges and 3-D reach a picture
- *                here as one of Office's 28 Picture Styles, each a complete
+ *   Effects      Shadow, Reflection, Glow, Soft Edges, 3-D Format and 3-D
+ *                Rotation are Office's own sections (reading rows 544, 545,
+ *                547) over the picture's own effects; they also reach a
+ *                picture as one of Office's 28 Picture Styles, each a complete
  *                `pic:spPr` recipe (`pictureStyle`) that round-trips through
  *                both save paths; per-effect parameters have no carrier in
  *                the picture model and are not offered. Artistic Effects is
@@ -135,8 +152,9 @@ interface Props {
   onCommitAlt: (value: string) => boolean;
   onCommitVisual: (patch: Readonly<Record<string, unknown>>) => boolean;
   /** Open on a page (the right-click menu's Size and Position / Edit Alt
-   *  Text); a new object turns to it again. */
-  opening?: { readonly tab: PaneTab; readonly focusAlt: boolean } | null;
+   *  Text), and at one section of it (Picture Effects > Glow > Glow
+   *  Options... opens Effects at Glow); a new object turns to it again. */
+  opening?: { readonly tab: PaneTab; readonly focusAlt: boolean; readonly section?: string } | null;
   sizePx: readonly [width: number, height: number];
   visualEditable: boolean;
 }
@@ -176,6 +194,9 @@ export default function DocumentPictureFormatPane(props: Props) {
     });
     return () => cancelAnimationFrame(frame);
   }, [props.opening]);
+  useEffect(() => {
+    if (props.opening?.section) revealOfficeShapeFormatPaneSection(paneRef.current, props.opening.section);
+  }, [props.opening]);
   const [error, setError] = useState<string | null>(null);
   const alt = typeof attrs.alt === "string" ? attrs.alt : "";
   const crop = Object.fromEntries(
@@ -196,6 +217,9 @@ export default function DocumentPictureFormatPane(props: Props) {
     : "none";
   const pictureStyle = normalizeImagePictureStyle(attrs.pictureStyle);
   const picture3dBlock = picture3dBlocker(attrs as Record<string, unknown>);
+  const lookEffectsBlock = pictureLookEffectsBlocker(attrs as Record<string, unknown>);
+  const shadowBlock = pictureShadowBlocker(attrs as Record<string, unknown>);
+  const pictureShadow = pictureShadowEffect(attrs as Record<string, unknown>);
   const artisticEffect = normalizeOfficeArtisticEffect(attrs.artisticEffect) ?? "none";
   const artisticRendered = attrs.artisticEffectRendered === true;
   const styleOutlineHidden = attrs.pictureStyleOutlineHidden === true;
@@ -493,6 +517,72 @@ export default function DocumentPictureFormatPane(props: Props) {
           </label>,
           t("pictureFormatPane.effectsHint"),
         )}
+        {/* Format Picture > Shadow (reading row 547): Office's own section
+            (presets, colour, transparency, size, blur, angle, distance) over
+            the picture's shadow in the shared model, as a shape's pane and
+            the deck's and sheet's pictures show it. */}
+        <OfficeShapeFormatPaneSections
+          sections={officeEffectsPaneSections({
+            effects: pictureShadow ? { shadow: pictureShadow } : {},
+            accentColors: DEFAULT_ACCENTS,
+            labels: presentationEffectsPaneLabels(t),
+            disabled: visualDisabled || shadowBlock !== null,
+            disabledReason:
+              shadowBlock === "styled"
+                ? t("pictureFormatPane.effectsHint")
+                : shadowBlock === "preserved"
+                  ? t("presentation.shapeEffectsUnavailable")
+                  : undefined,
+            testIdPrefix: "effects",
+            onChange: (kind, value) => {
+              if (kind !== "shadow") return;
+              commitVisual({ ...pictureShadowEffectAttrs(value), pictureShadowEditable: true });
+            },
+          }).filter((entry) => entry.id === "effects-shadow")}
+          labels={{
+            title: "",
+            close: t("common.close"),
+            apply: t("presentation.ui.shapeFormatPane.apply"),
+            cancel: t("common.cancel"),
+          }}
+          testIdPrefix="document-picture-format-pane"
+          writable={!visualDisabled}
+        />
+        {/* Format Picture > Reflection, Glow and Soft Edges (reading row
+            545): Office's own sections over the picture's effect list, the
+            ones a shape's pane and the deck's and sheet's pictures show. */}
+        <OfficeShapeFormatPaneSections
+          sections={officeEffectsPaneSections({
+            effects: pictureLookEffects(attrs as Record<string, unknown>),
+            accentColors: DEFAULT_ACCENTS,
+            labels: presentationEffectsPaneLabels(t),
+            disabled: visualDisabled || lookEffectsBlock !== null,
+            disabledReason:
+              lookEffectsBlock === "styled"
+                ? t("pictureFormatPane.effectsHint")
+                : lookEffectsBlock === "preserved"
+                  ? t("presentation.shapeEffectsUnavailable")
+                  : undefined,
+            testIdPrefix: "effects",
+            onChange: (kind, value) => {
+              if (!(PICTURE_LOOK_EFFECT_KINDS as readonly string[]).includes(kind)) return;
+              commitVisual({
+                ...pictureLookEffectAttrs(attrs as Record<string, unknown>, kind as PictureLookEffectKind, value),
+                pictureEffectsEditable: true,
+              });
+            },
+          }).filter(
+            (entry) => entry.id === "effects-reflection" || entry.id === "effects-glow" || entry.id === "effects-soft-edge",
+          )}
+          labels={{
+            title: "",
+            close: t("common.close"),
+            apply: t("presentation.ui.shapeFormatPane.apply"),
+            cancel: t("common.cancel"),
+          }}
+          testIdPrefix="document-picture-format-pane"
+          writable={!visualDisabled}
+        />
         {/* Format Picture > 3-D Format and 3-D Rotation (reading row 544):
             Office's own sections over the picture's `picture3d`, the ones a
             shape's pane and the deck's and sheet's pictures show. */}

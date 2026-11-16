@@ -723,6 +723,17 @@ function rewriteFormula<C extends StructuralCell>(
   if (typeof cell.formula === "string" && cell.formula.startsWith("=")) {
     const next = adjustFormulaForStructuralChange(cell.formula, axis, at, delta, scope);
     const rewritten: C = { ...cell, formula: next, value: next };
+    // A held result (keptResult: a VBA or add-in function's cached value and
+    // the inputs it read) moves with its formula, as the file's cached <v>
+    // does: left behind, it named the old formula and areas, and the page
+    // and the export read the cell differently (xlsx-rounds R431-X08 E4/E6:
+    // =countColoredCells($Q$6:$S$65,Q69) under a row inserted at 45).
+    const kept = (cell as { keptResult?: unknown }).keptResult;
+    if (kept !== undefined && next !== cell.formula) {
+      const moved = keptResultMovedWithLines(kept, cell.formula, next, axis, at, delta, scope);
+      if (moved === undefined) delete (rewritten as { keptResult?: unknown }).keptResult;
+      else (rewritten as { keptResult?: unknown }).keptResult = moved;
+    }
     if (!ownSheet) return rewritten;
     // An array formula's range ("M5:P10") moves with its anchor: the save
     // writes it only from the cell it starts at. A legacy CSE range
@@ -744,6 +755,82 @@ function rewriteFormula<C extends StructuralCell>(
     return rewritten;
   }
   return cell;
+}
+
+/** One line coordinate after a line edit: `at`.. shifted by `delta` (an
+ *  insert), or null when a delete removes it. */
+function lineAfterEdit(index: number, at: number, delta: number): number | null {
+  if (delta > 0) return index >= at ? index + delta : index;
+  if (index >= at && index < at - delta) return null;
+  return index >= at - delta ? index + delta : index;
+}
+
+/**
+ * A cell's `keptResult` after a line edit moved its formula from `formula` to
+ * `next`: the formula text follows, and each input area on the edited sheet
+ * moves (grows over lines inserted inside it, shrinks over lines deleted from
+ * it) with the values it holds, as the reference it stands for does. A result
+ * that named another formula is stale and stays as it was; undefined drops it
+ * (an area the edit erases whole).
+ */
+function keptResultMovedWithLines(
+  kept: unknown,
+  formula: string,
+  next: string,
+  axis: StructuralAxis,
+  at: number,
+  delta: number,
+  scope?: StructuralChangeScope,
+): unknown {
+  if (typeof kept !== "object" || kept === null || Array.isArray(kept)) return kept;
+  const held = kept as { formula?: unknown; inputs?: unknown };
+  if (held.formula !== formula) return kept;
+  if (!Array.isArray(held.inputs)) return { ...held, formula: next };
+  const inputs: unknown[] = [];
+  for (const input of held.inputs) {
+    const entry = input as { sheet?: unknown; area?: unknown; cells?: unknown } | null;
+    const area = entry?.area;
+    if (
+      !entry || !scope || typeof entry.sheet !== "string" || entry.sheet.toUpperCase() !== scope.sheetName.toUpperCase() ||
+      !Array.isArray(area) || area.length !== 4 || !area.every((n) => Number.isSafeInteger(n))
+    ) {
+      inputs.push(input);
+      continue;
+    }
+    const [top, left, bottom, right] = area as [number, number, number, number];
+    const [low, high] = axis === "row" ? [top, bottom] : [left, right];
+    let first: number | null;
+    let last: number | null;
+    if (delta > 0) {
+      first = low >= at ? low + delta : low;
+      last = high >= at ? high + delta : high;
+    } else {
+      // the lines that remain of [low, high], renumbered
+      const end = at - delta;
+      const keptLow = low >= at && low < end ? end : low;
+      const keptHigh = high >= at && high < end ? at - 1 : high;
+      if (keptLow > keptHigh) return undefined;
+      first = lineAfterEdit(keptLow, at, delta);
+      last = lineAfterEdit(keptHigh, at, delta);
+      if (first === null || last === null) return undefined;
+    }
+    const cells: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries((entry.cells ?? {}) as Record<string, unknown>)) {
+      const match = /^(\d+):(\d+)$/.exec(key);
+      if (!match) continue;
+      const row = Number(match[1]);
+      const col = Number(match[2]);
+      const moved = lineAfterEdit(axis === "row" ? row : col, at, delta);
+      if (moved === null) continue;
+      cells[axis === "row" ? `${moved}:${col}` : `${row}:${moved}`] = value;
+    }
+    inputs.push({
+      ...entry,
+      area: axis === "row" ? [first, left, last, right] : [top, first, bottom, last],
+      cells,
+    });
+  }
+  return { ...held, formula: next, inputs };
 }
 
 function remapCells<C extends StructuralCell>(
@@ -1934,7 +2021,10 @@ function groupsOpenedByInsertion(
   const opened = new Set<number>();
   if (delta <= 0) return opened;
   groups.forEach((group, index) => {
-    if (group.axis === axis && (group as { collapsed?: boolean }).collapsed === true && group.start < at && at <= group.end) {
+    // At the line right after the group too: the inserted line takes the outline level of the line before it, so the
+    // group grows over it (``remapLineRange``) and opens as above (Windows Excel 16, xlsx-rounds
+    // probe/night14/x20lvl: B hidden at level 1, C collapsed; a column at C reads C level 1 shown, D not collapsed).
+    if (group.axis === axis && (group as { collapsed?: boolean }).collapsed === true && group.start < at && at <= group.end + 1) {
       opened.add(index);
     }
   });
@@ -1958,7 +2048,11 @@ function remapLineRange<G extends StructuralLineRange>(
     let { start, end } = group;
     if (delta > 0) {
       if (start >= at) start += delta;
-      if (end >= at) end += delta;
+      // A line inserted right after the group's last takes that line's outline level, as Excel gives an inserted
+      // row the level of the row above and a column that of the column to its left (Windows Excel 16, xlsx-rounds
+      // R432-X20 STRUCT, probe/night14/x20lvl: B at level 1, a column inserted at C reads level 1).
+      if (end >= at - 1 && start < at) end += delta;
+      else if (end >= at) end += delta;
     } else {
       if (start === at && end === at) continue; // fully on the deleted line
       if (start > at) start -= 1;
@@ -2652,6 +2746,11 @@ function remapOverlays<T extends StructuralSheet>(
   }
   if (sheet.rowHeights)
     patch.rowHeights = remapIndexKeyedMap(sheet.rowHeights, axis === "row", at, delta);
+  // The rows a file marks thickTop / thickBot (officeRowThickMarkExtras) move
+  // with their rows too; an inserted row carries none.
+  const thickMarks = (sheet as { rowThickEdges?: unknown }).rowThickEdges;
+  if (axis === "row" && thickMarks && typeof thickMarks === "object" && !Array.isArray(thickMarks))
+    (patch as Record<string, unknown>).rowThickEdges = remapIndexKeyedMap(thickMarks as Record<string, number>, true, at, delta) ?? {};
   if (sheet.filters)
     patch.filters = remapIndexKeyedMap(sheet.filters, axis === "col", at, delta, MAX_GRID_COLUMNS);
   // Filter-by-Color and Text/Number condition filters are ALSO keyed by column

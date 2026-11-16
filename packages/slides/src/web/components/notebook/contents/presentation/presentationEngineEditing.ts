@@ -34,8 +34,9 @@ export function presentationRowsText(rows: readonly PresentationParagraphRowPlan
 export function presentationRowsWithTypedText(
   rows: readonly PresentationParagraphRowPlan[],
   after: string,
+  /** `presentationRowsText(rows)`, when the caller has it. */
+  before: string = presentationRowsText(rows),
 ): readonly PresentationParagraphRowPlan[] | null {
-  const before = presentationRowsText(rows);
   if (before === after) return rows;
   const limit = Math.min(before.length, after.length);
   let prefix = 0;

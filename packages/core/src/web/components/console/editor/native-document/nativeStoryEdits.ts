@@ -145,6 +145,12 @@ export interface NativeStoryEdits {
    * the group's `groupMembers`. Nothing else of a group is an edit of the
    * story (server: `_member_words_replacements`). */
   memberWords?: Record<string, Record<string, string>>;
+  /** Word's Accept All Changes / Reject All Changes reached the story, as
+   * they reach every story of the document: the save settles each tracked
+   * change Word wrote in the part, the ones the band draws (insertions,
+   * deletions) and the ones it does not (formatting, paragraph marks) alike
+   * (server: `NATIVE_STORY_REVISIONS`). */
+  revisions?: NativeStoryRevisions;
   /** What each edited property was before it was first changed: changing it
    * back removes the edit, so undoing in the editor writes nothing; and
    * (`removedRuns`) the formatting a removed line's words had, which text
@@ -483,6 +489,8 @@ function runText(runs: readonly NativeRun[]): number {
   return runs.reduce((total, run) => total + ("text" in run ? codePoints(run.text).length : 0), 0);
 }
 
+export type NativeStoryRevisions = "accept" | "reject";
+
 /**
  * The canonical `nativeEdits` of one story, or null when any part is off the
  * closed model (the server twin: `normalize_native_story_edits`).
@@ -506,9 +514,14 @@ export function normalizeNativeStoryEdits(value: unknown, slotIds: ReadonlySet<s
     "objects",
     "memberWords",
     "originals",
+    "revisions",
   ];
   if (Object.keys(value).some((key) => !keys.includes(key))) return null;
   const out: NativeStoryEdits = {};
+  if ("revisions" in value) {
+    if (value.revisions !== "accept" && value.revisions !== "reject") return null;
+    out.revisions = value.revisions;
+  }
   let text = 0;
   if ("paragraphs" in value) {
     const raw = value.paragraphs;
@@ -2032,6 +2045,9 @@ function commit(
   // Consecutive text from the same run in the same formatting is one run.
   for (const [anchorId, list] of Object.entries(inserted)) inserted[anchorId] = joinRuns(list);
   const nativeEdits: NativeStoryEdits = {};
+  // A story whose tracked changes were accepted or rejected stays so: an
+  // edit after it is the edit of the settled story.
+  if (previous?.revisions) nativeEdits.revisions = previous.revisions;
   if (Object.keys(paragraphEdits).length) nativeEdits.paragraphs = paragraphEdits;
   if (Object.keys(runEdits).length) nativeEdits.runs = runEdits;
   if (Object.keys(inserted).length) nativeEdits.insertedRuns = inserted;

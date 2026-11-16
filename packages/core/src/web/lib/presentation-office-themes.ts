@@ -89,7 +89,22 @@ export interface PresentationOfficeThemeVariant {
   readonly titleColor: string;
   /** The master's body text colour (`p:bodyStyle`), readable on the ground. */
   readonly bodyColor: string;
+  /**
+   * The master's colour map (`p:clrMap`) of the four names it maps: the slot a
+   * word coloured Text 1 / Background 1 / Text 2 / Background 2 takes on this
+   * variant's slides (Ion, Office's dark variants: `tx1` -> `lt1`).
+   */
+  readonly colorMap: PresentationOfficeColorMap;
 }
+
+/** The names a colour map resolves (ECMA-376 19.3.1.6 `p:clrMap`): each to one of the twelve slots. */
+export const PRESENTATION_OFFICE_MAPPED_COLORS = ["bg1", "tx1", "bg2", "tx2"] as const;
+
+export type PresentationOfficeMappedColor = (typeof PRESENTATION_OFFICE_MAPPED_COLORS)[number];
+
+export type PresentationOfficeColorMap = Readonly<Record<PresentationOfficeMappedColor, PresentationOfficeColorSlot>>;
+
+const STANDARD_COLOR_MAP: PresentationOfficeColorMap = Object.freeze({ bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" });
 
 /**
  * One placeholder of a theme layout, as the catalog records it: the `p:ph`
@@ -141,6 +156,8 @@ interface CatalogVariantSource {
   k: string;
   /** Position in `layoutIds` -> frame indices, for the layouts that differ from the base variant's. */
   l?: Record<string, number[]>;
+  /** The master's colour map of bg1/tx1/bg2/tx2 as four slots; absent = lt1/dk1/lt2/dk2. */
+  m?: string[];
 }
 
 /**
@@ -235,6 +252,19 @@ function freezeFrame(
 const PACKED_COLORS_RE = /^[0-9a-f]{72}$/;
 const PACKED_CANVAS_RE = /^[0-9a-f]{18}$/;
 
+function colorMapOf(raw: unknown): PresentationOfficeColorMap | null {
+  if (raw === undefined) return STANDARD_COLOR_MAP;
+  if (
+    !Array.isArray(raw) ||
+    raw.length !== 4 ||
+    !raw.every((slot) => (PRESENTATION_OFFICE_COLOR_SLOTS as readonly string[]).includes(slot))
+  ) {
+    return null;
+  }
+  const [bg1, tx1, bg2, tx2] = raw as PresentationOfficeColorSlot[];
+  return Object.freeze({ bg1: bg1!, tx1: tx1!, bg2: bg2!, tx2: tx2! });
+}
+
 function freezeVariant(
   raw: CatalogVariantSource,
   index: number,
@@ -251,10 +281,13 @@ function freezeVariant(
     const frozen = frameIndices(indices);
     if (layoutId && frozen) layoutFrames[layoutId] = frozen;
   }
+  const colorMap = colorMapOf(raw.m);
+  if (!colorMap) return null;
   return Object.freeze({
     id: `v${index}` as PresentationOfficeVariantId,
     index,
     layoutFrames: Object.freeze(layoutFrames),
+    colorMap,
     colors: Object.freeze(colors),
     background: `#${raw.k.slice(0, 6)}`,
     titleColor: `#${raw.k.slice(6, 12)}`,

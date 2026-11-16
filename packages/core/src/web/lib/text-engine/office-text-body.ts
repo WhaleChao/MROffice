@@ -5,6 +5,8 @@
  */
 import { hangingMarginTabTarget } from "../document-tabstops";
 
+import { eastAsianMarkLine, eastAsianMeasuredFirstBaselineEm } from "./east-asian-lines";
+import { splitFamilyList } from "./face-index";
 import { KINSOKU_EAST_ASIAN, type KinsokuList } from "./kinsoku";
 import { lineBreakOpportunities } from "./line-break";
 import { symbolAdvanceEm } from "./symbol-advances";
@@ -20,6 +22,8 @@ export const OFFICE_SINGLE_LINE = 1.2;
  * sizes, where 0.7547 put the 24, 28 and 32 pt first lines a point low.
  */
 export const OFFICE_BASELINE_SHARE = 0.75;
+/** The least share of a single line an East Asian face's ideographs keep under the baseline ({@link lineVerticals}). */
+const EAST_ASIAN_DESCENT_SHARE = 0.2;
 /** A table cell's spaced line ({@link OfficeTextBodyInput.cellLines}). */
 const CELL_BASELINE_SHARE = 0.7547;
 /** Where PowerPoint's baseline stands in an exactly spaced line. */
@@ -53,6 +57,13 @@ export type OfficeMeasureAnswer<T> =
 export interface OfficeFaceVerticals {
   readonly ascent: number;
   readonly descent: number;
+  /**
+   * The face's external leading, em: what its hhea line (ascender, descender
+   * and line gap) stands beyond its win box, never below zero (Office's
+   * Arial 67/2048, Calibri and Times New Roman none). A diagram's lines step
+   * by it (`OfficeTextBodyInput.naturalLines`).
+   */
+  readonly lineGap?: number;
 }
 
 export interface OfficeTextMeasurer {
@@ -118,6 +129,27 @@ export interface OfficeParagraphInput {
   readonly defaultTabPt?: number;
   readonly kinsoku?: KinsokuList | null;
   readonly latinLineBreak?: boolean;
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  readonly fontAlign?: "auto" | "t" | "ctr" | "base" | "b";
 }
 
 export interface OfficeTextBodyInput {
@@ -143,6 +175,17 @@ export interface OfficeTextBodyInput {
    * 40 pt row, 37 at its foot.
    */
   readonly cellLines?: boolean;
+  
+
+
+
+
+
+
+
+
+
+  readonly naturalLines?: boolean;
 }
 
 /** A stretch of one run on one line. */
@@ -165,6 +208,8 @@ export interface OfficeLaidSegment {
   readonly tab?: boolean;
   /** Each grapheme of the stretch and its left edge from the text area's left, pt. */
   readonly glyphs: readonly { readonly text: string; readonly x: number }[];
+  /** Its own baseline where it is not the line's (Text alignment Top), pt from the text area's top. */
+  readonly baseline?: number;
 }
 
 export interface OfficeLaidLine {
@@ -407,7 +452,45 @@ function fillLines(
       x += advance;
     }
     if (overflow >= 0) {
-      if (lastBreak > start) end = lastBreak;
+      if (lastBreak > start) {
+        end = lastBreak;
+        // A tab after a space goes down with the word it leads: PowerPoint
+        // breaks at the space, and the next line opens with the tab, stepping
+        
+        // \tzapotrzebowanie", "niekorzystne \twarunki" indented past the
+        // slide's icon in PowerPoint's PDF; the tab hung at the line's end
+        // and the word started at the margin, under the icon).
+        // A run of tabs before the word that does not fit (PowerPoint for
+        // Windows, look-fit truth-probes lookfit-tabrun / -tabrun2 / -tabrun3,
+        
+        // in, a stop 0.05-0.48 in past the line's end): the tabs whose stop is
+        // within the line stay on it, the rest go down with the word -- the
+        // last one always, a space before it or not; a tab whose stop falls
+        // even 0.05 in past the end goes down. The next line takes the carried
+        // tabs by the same rule, so a run longer than a line leaves a line of
+        // tabs alone (8 tabs in the 4.5 in box: 1 stays, 4 make the second
+        
+        // at the next line's first stop).
+        const run = overflow < glyphs.length && glyphs[overflow].kind === "tab" ? overflow : end - 1;
+        if (run > start && glyphs[run].kind === "tab") {
+          let last = run;
+          while (last + 1 < glyphs.length && glyphs[last + 1].kind === "tab") last += 1;
+          let first = run;
+          while (first - 1 >= start && glyphs[first - 1].kind === "tab") first -= 1;
+          let at = left;
+          for (let index = start; index < first; index += 1) {
+            at += glyphs[index].kind === "tab" ? Math.max(0, nextTabStop(at, paragraph, hang).position - at) : glyphs[index].advance;
+          }
+          let keep = first;
+          for (let index = first; index < last; index += 1) {
+            const stop = Math.max(at, nextTabStop(at, paragraph, hang).position);
+            if (stop - left > available + EPSILON) break;
+            keep = index + 1;
+            at = stop;
+          }
+          if (keep > start) end = keep;
+        }
+      }
       else if (keepLongWords) {
         // The word runs on whole: the line ends at the next place a line may.
         end = overflow;
@@ -444,14 +527,23 @@ function lineVerticals(
   reduction: number,
   measurer: OfficeTextMeasurer,
   cell = false,
+  natural = false,
+  eastAsian: readonly boolean[] = [],
+  mark?: OfficeTextFont,
 ): LineVerticals | { status: "pending" } {
   let size = 0;
+  // The single line's height (pt): Office's 1.2 em of the largest size, or
+  // in a diagram the largest of the faces' own lines.
+  let singleHeight = 0;
   let single = 0;
   let descent = 0;
   // The part of the single line under the baseline (its descent share).
   let singleBelow = 0;
   let pending = false;
-  for (const font of fonts) {
+  // The paragraph mark this line holds (its last line): its Latin face
+  // (`eastAsianMarkLine`).
+  const markFace = mark && !natural && !cell ? primaryFamily(mark.stack) : undefined;
+  for (const [index, font] of fonts.entries()) {
     const answer = measurer.verticals(font);
     if (answer.status === "pending") {
       pending = true;
@@ -467,12 +559,47 @@ function lineVerticals(
     // Calibri, Times New Roman and Verdana, against 1138 with the face's ink
     // box centred in the line (Arial 16 pt: 16 pt under the top, not 15.14;
     // Calibri 40 pt: 37, not 37.66; Times 12 pt: 12, not 11.23).
-    const share = cell && a + d <= OFFICE_SINGLE_LINE
-      ? (OFFICE_SINGLE_LINE - (a + d)) / 2 + a
-      : a + d > 0 ? (OFFICE_SINGLE_LINE * a) / (a + d) : a;
+    const line = natural ? a + d + Math.max(0, answer.value.lineGap ?? 0) : OFFICE_SINGLE_LINE;
+    // East Asian characters in an East Asian face keep at least a fifth of
+    // the single line under the baseline -- above it at most 0.8 of it --
+    // whatever the face's own descent share. Measured on PowerPoint for
+    // Mac's print only (the Windows print of the same probe is to confirm
+    // it, and Meiryo's 0.022 em): look-fit truth-probes/lookfit-cjk-faces-
+    // probe.pptx, only the boxes whose PDF embeds the face named (Malgun
+    // Gothic, Batang and Gulim were replaced on the Mac and are left out):
+    // 24 pt ideographs' first baseline 0.96 em under the top in
+    // MS Gothic / Mincho (win 220/36), SimSun, SimHei, KaiTi, FangSong,
+    // MingLiU, Microsoft YaHei / JhengHei and Meiryo UI alike, 0.92 in Yu
+    // Gothic and DengXian; under Calibri, Arial or Times New Roman as the
+    // run's Latin face alike). Latin letters in those faces share it as any
+    // face's (P3-faces: "Hxg" in Meiryo UI 1.00 em). The share was 1.031 em
+    
+    const ideographic = eastAsian[index] === true && !natural && !cell;
+    const ascentShare = a + d > 0 ? a / (a + d) : 1;
+    // A face PowerPoint for Windows sets apart from the rule: its measured
+    // first baseline (`EAST_ASIAN_FIRST_BASELINE_EM`).
+    const measured = ideographic ? eastAsianFirstBaselineEm(font.stack) : undefined;
+    // The line that holds the paragraph mark (PowerPoint for Windows,
+    // `eastAsianMarkLine`): a mark in this face (or one of its win box) lays
+    // the line as its Latin text, no floor and no measured place; a measured
+    // other mark moves it; any other leaves it.
+    const markLine = ideographic && markFace !== undefined ? eastAsianMarkLine(primaryFamily(font.stack), markFace) : null;
+    const share = cell && a + d <= line
+      ? (line - (a + d)) / 2 + a
+      : a + d > 0 && markLine !== null && "latin" in markLine
+        ? line * ascentShare
+        : (measured !== undefined
+          ? measured
+          : a + d > 0
+            ? line * (ideographic ? Math.min(ascentShare, 1 - EAST_ASIAN_DESCENT_SHARE) : ascentShare)
+            : a) + (markLine !== null && "shiftEm" in markLine ? markLine.shiftEm : 0);
     single = Math.max(single, share * font.sizePt);
-    singleBelow = Math.max(singleBelow, (OFFICE_SINGLE_LINE - share) * font.sizePt);
-    descent = Math.max(descent, d * font.sizePt);
+    singleBelow = Math.max(singleBelow, (line - share) * font.sizePt);
+    singleHeight = Math.max(singleHeight, line * font.sizePt);
+    // Under the last line they keep that share too (centred two-line boxes:
+    // MS PGothic 0.25 em, Yu Gothic 0.28, Meiryo 0.33, where its win descent
+    // is 0.44).
+    descent = Math.max(descent, (ideographic ? line - share : d) * font.sizePt);
   }
   if (pending) return { status: "pending" };
   if (spacing.kind === "points") {
@@ -481,7 +608,7 @@ function lineVerticals(
     return { above, below: pitch - above, descent, sizePt: size };
   }
   const multiple = Math.max(0.01, spacing.value - (reduction > 0 && reduction < 1 ? reduction : 0));
-  const pitch = multiple * OFFICE_SINGLE_LINE * size;
+  const pitch = multiple * (natural ? singleHeight : OFFICE_SINGLE_LINE * size);
   // Below single the line loses its height from above the baseline: the
   // single line's descent share stays under it. P1-pitch (PowerPoint for
   // Mac's PDF, five lines a box, whole-point baselines): Arial 90 % 8-32 pt
@@ -503,6 +630,22 @@ function lineVerticals(
         ? Math.max(single, OFFICE_BASELINE_SHARE * pitch)
         : Math.max(pitch - singleBelow, OFFICE_BASELINE_SHARE * pitch);
   return { above, below: pitch - above, descent, sizePt: size };
+}
+
+/** The Windows-measured first baseline (em) of the East Asian face leading `stack`, if it has one. */
+function eastAsianFirstBaselineEm(stack: string): number | undefined {
+  for (const family of splitFamilyList(stack)) {
+    const measured = eastAsianMeasuredFirstBaselineEm(family.trim().replace(/^["']|["']$/g, ""));
+    if (measured !== undefined) return measured;
+    // Only the face that leads: a later family is a fallback's.
+    return undefined;
+  }
+  return undefined;
+}
+
+/** A stack's leading family, lowercase. */
+function primaryFamily(stack: string): string {
+  return (splitFamilyList(stack)[0] ?? "").trim().replace(/^["']|["']$/g, "").toLowerCase();
 }
 
 /** Lay a text body out. */
@@ -567,30 +710,45 @@ function layoutBody(input: OfficeTextBodyInput, measurer: OfficeTextMeasurer): O
     for (let lineIndex = 0; lineIndex < lineRanges.length; lineIndex += 1) {
       const range = lineRanges[lineIndex];
       const fonts: OfficeTextFont[] = [];
+      // Whether each font draws East Asian characters on this line (its
+      // single line is shared otherwise: `lineVerticals`).
+      const eastAsian: boolean[] = [];
       if (range && range.inkEnd > range.start) {
-        const runs = new Set<number>();
-        for (let index = range.start; index < range.inkEnd; index += 1) runs.add(list[index].run);
-        for (const run of runs) fonts.push(paragraph.runs[run].font);
+        const runs = new Map<number, boolean>();
+        for (let index = range.start; index < range.inkEnd; index += 1) {
+          const glyph = list[index];
+          runs.set(glyph.run, runs.get(glyph.run) === true || KINSOKU_EAST_ASIAN.test(glyph.text));
+        }
+        for (const [run, drawsEastAsian] of runs) {
+          fonts.push(paragraph.runs[run].font);
+          eastAsian.push(drawsEastAsian);
+        }
       } else if (range && range.end > range.start) {
         fonts.push(paragraph.runs[list[range.start].run].font);
       }
       if (!fonts.length) fonts.push(paragraph.endFont);
-      const verticals = lineVerticals(fonts, paragraph.lineSpacing, reduction, measurer, input.cellLines === true);
+      // A cell's row that states its Text alignment is laid as a text box's (P7c).
+      const cellRule = input.cellLines === true && paragraph.fontAlign === undefined;
+      // The paragraph's last line holds its mark, set in the mark's face.
+      const holdsMark = lineIndex === lineRanges.length - 1;
+      const verticals = lineVerticals(fonts, paragraph.lineSpacing, reduction, measurer, cellRule, input.naturalLines === true, eastAsian, holdsMark ? paragraph.endFont : undefined);
       if ("status" in verticals) {
         pending = true;
         return;
       }
       // The line's top is where the previous line's pitch ended.
       const top = cursor;
-      // On a whole point from the body's top (PowerPoint for Mac's PDFs:
-      // first baselines 19.01, 22.01, 25.99 pt under the inset; Arial 12 pt
-      // lines 14 and 15 pt apart, never 14.4), the pitches adding up exactly.
-      // A half point rounds down never: the pitches add up in binary (Arial
-      // 150 % 14 pt's fourth line at 94.5 summed to 94.4999...).
-      const baseline = Math.round(top + verticals.above + 1e-6);
+      // Where the line puts it, on no grid: PowerPoint for Windows' print
+      // (P1-pitch-win.pdf: Arial 12 pt lines 14.40 apart, Calibri 10 pt's
+      // first baseline 9.38 under the box top). PowerPoint for Mac's stands
+      // every baseline on a whole point (14 and 15 apart, never 14.4); the
+      
+      const baseline = top + verticals.above;
       const bottom = top + verticals.above + verticals.below;
       if (Number.isNaN(paragraphTop)) paragraphTop = top;
-      lines.push(placeLine(list, range, paragraph, input.widthPt, baseline, top, bottom, verticals.sizePt, lineIndex === lineRanges.length - 1));
+      const placed = placeLine(list, range, paragraph, input.widthPt, baseline, top, bottom, verticals.sizePt, lineIndex === lineRanges.length - 1);
+      const mode = paragraph.fontAlign;
+      lines.push(mode === "t" || mode === "ctr" || mode === "b" ? fontAlignedLine(placed, paragraph, mode, top, verticals, measurer) : placed);
       cursor = bottom;
       lastDescent = verticals.descent;
     }
@@ -615,6 +773,65 @@ function layoutBody(input: OfficeTextBodyInput, measurer: OfficeTextMeasurer): O
 
 function isEastAsian(text: string): boolean {
   return KINSOKU_EAST_ASIAN.test(text);
+}
+
+/**
+ * Text alignment Top, Center or Bottom: each run on a baseline of its own.
+ * PowerPoint for Mac's P7c (five faces, 8-40 pt, alone and after a 10 pt
+ * word; 144 of 144 Center, 121 of 126 Bottom, every Top) stands a run of
+ * ascent a and descent d (its win box, em) at size s
+ * - Top: its ascender at the line's top, round(top + a·s);
+ * - Center: its box's middle at the middle of the line's pitch,
+ *   round(top + pitch / 2) + round((a - d) / 2 · s);
+ * - Bottom: the middle of its descent at the middle of the line's share
+ *   under its baseline, round(top + above + below / 2) - round(d / 2 · s).
+ * The line's own baseline is its largest run's.
+ */
+function fontAlignedLine(
+  line: OfficeLaidLine,
+  paragraph: OfficeParagraphInput,
+  mode: "t" | "ctr" | "b",
+  top: number,
+  verticals: { readonly above: number; readonly below: number },
+  measurer: OfficeTextMeasurer,
+): OfficeLaidLine {
+  if (!line.segments.length) return line;
+  const anchor =
+    mode === "ctr"
+      ? top + (verticals.above + verticals.below) / 2
+      : mode === "b"
+        ? top + verticals.above + verticals.below / 2
+        : 0;
+  const byRun = new Map<number, number>();
+  let largest = -1;
+  let lineBaseline = line.baseline;
+  for (const segment of line.segments) {
+    if (byRun.has(segment.run)) continue;
+    const font = paragraph.runs[segment.run]?.font;
+    const answer = font ? measurer.verticals(font) : null;
+    if (!font || !answer || answer.status !== "ok") continue;
+    const { ascent, descent } = answer.value;
+    const baseline =
+      mode === "t"
+        ? top + ascent * font.sizePt
+        : mode === "ctr"
+          ? anchor + ((ascent - descent) / 2) * font.sizePt
+          : anchor - (descent / 2) * font.sizePt;
+    byRun.set(segment.run, baseline);
+    if (font.sizePt > largest) {
+      largest = font.sizePt;
+      lineBaseline = baseline;
+    }
+  }
+  if (!byRun.size) return line;
+  const same = [...byRun.values()].every((baseline) => baseline === lineBaseline);
+  return {
+    ...line,
+    baseline: lineBaseline,
+    segments: same
+      ? line.segments
+      : line.segments.map((segment) => (byRun.has(segment.run) ? { ...segment, baseline: byRun.get(segment.run)! } : segment)),
+  };
 }
 
 function placeLine(

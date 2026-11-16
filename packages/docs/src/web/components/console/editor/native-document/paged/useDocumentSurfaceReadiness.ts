@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { type Transaction } from "@tiptap/pm/state";
 import { documentLifecycleLayoutSettled } from "../documentLifecycleObservation";
 import { createBackgroundLane } from "@mrnote/core/web/lib/background-work.ts";
-import { createDocumentLayoutKeep, readDocumentLayoutOutline, readDocumentLayoutSnapshot } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
+import { createDocumentLayoutKeep, OUTLINE_INCOMPLETE, readDocumentLayoutOutline, readDocumentLayoutSnapshot } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
 import { mutationInsideOverlayBlock, overlayOnlyDocChange } from "@mrnote/core/web/components/console/editor/native-document/paged/overlayOnlyChange.ts";
 import { pagePhysicallyOverflows } from "@mrnote/core/web/components/console/editor/native-document/paged/pageRebalance.ts";
 import { PRINT_SHEETS_OVERRUN_REASON } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionKeys.ts";
@@ -33,6 +33,14 @@ const SURFACE_READINESS_INPUT_PAUSE_MS = 1_000;
 const SURFACE_READINESS_INPUT_EVENTS = [
   "keydown", "beforeinput", "compositionupdate", "pointerdown",
 ] as const;
+
+/** The boxes (blocks and text lines) the readiness read takes before it
+ * calls the layout unmeasured. It carries no boxes anywhere, it only asks
+ * whether the whole document is laid out: a 600-page book is 51,400 of them
+ * (R442-D01: 7,283 blocks, 44,119 lines). Under the 25,000 of a save's proof
+ * (LAYOUT_SNAPSHOT_MAX_RECTANGLES) it was never ready, and its PDF never
+ * printed. */
+export const SURFACE_READINESS_MAX_RECTANGLES = 1_000_000;
 
 export interface DocumentSurfaceReadiness {
   readonly ready: boolean;
@@ -56,6 +64,20 @@ export interface UseDocumentSurfaceReadinessInputs {
   initialContent: Record<string, unknown> | undefined;
   /** Browser layout observation only; never a save/export/delivery receipt. */
   onSurfaceReadinessChange: ((value: DocumentSurfaceReadiness) => void) | undefined;
+}
+
+
+
+
+
+
+
+
+
+export const SURFACE_READINESS_SLICE_MS = 50;
+
+export function readinessSlicesOn(win: Window | null | undefined): boolean {
+  return (win as (Window & { __docsReadinessWhole?: boolean }) | null | undefined)?.__docsReadinessWhole !== true;
 }
 
 /** How many times a print reads its sheets past their foot again. */
@@ -159,9 +181,22 @@ export function useDocumentSurfaceReadiness({
         if (active && frame === null) sampleNow();
       });
     };
+    
+    let goOnAsked = false;
+    const goOn = () => {
+      if (goOnAsked) return;
+      goOnAsked = true;
+      void readinessLane.turn().then(() => {
+        goOnAsked = false;
+        if (active && frame === null && inputPause === null) sampleNow();
+      });
+    };
     const sampleNow = () => {
       frame = null;
       if (!active || !isUsableEditor(editor)) return;
+      const sliced = readinessSlicesOn(ownerWindow);
+      const sliceStart = ownerWindow.performance.now();
+      const stop = sliced ? () => ownerWindow.performance.now() - sliceStart >= SURFACE_READINESS_SLICE_MS : undefined;
       // Pending projections already disprove readiness. Let their existing
       // mutation/font/load observers restart sampling instead of forcing a
       // full document layout on every frame while they are still working.
@@ -191,13 +226,23 @@ export function useDocumentSurfaceReadiness({
         // still. Reading all of them on each of those frames was four
         // whole-document reads (130 ms each on a 120-page document) after
         // every pause in typing.
-        const outline = readDocumentLayoutOutline(editor.view, layoutKeep);
+        const outline = readDocumentLayoutOutline(editor.view, layoutKeep, stop);
+        if (outline === OUTLINE_INCOMPLETE) {
+          goOn();
+          return;
+        }
         stable = outline !== null && outline === fingerprint ? stable + 1 : 0;
         fingerprint = outline ?? "";
         if (stable >= 3) {
           // Kept only while every page is measurable: a layout that is not
           // proves "not ready" either way (readableOnly gives up at once).
-          const layout = readDocumentLayoutSnapshot(editor.view, { readableOnly: true, keep: layoutKeep });
+          const layout = readDocumentLayoutSnapshot(editor.view, {
+            readableOnly: true, keep: layoutKeep, maxRectangles: SURFACE_READINESS_MAX_RECTANGLES, ...(stop ? { stop } : {}),
+          });
+          if (layout.incomplete) {
+            goOn();
+            return;
+          }
           const measurable = dom.isConnected && layout.measured && layout.physicalPageCount > 0 &&
             documentLifecycleLayoutSettled(dom, { formulaBoxesStand: forPrint }) && !layout.settling && !layout.stalled &&
             layout.fontsReady && layout.imagesReady &&

@@ -24,7 +24,7 @@
  * plan, `lib/text-engine/PLAN-phase2.md`); the canvas follows with its caret.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties, type ReactElement } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
 import {
   layoutOfficeTextBody,
   type OfficeParagraphInput,
@@ -38,6 +38,17 @@ import { OFFICE_TEXT_HIT_ATTRIBUTE, registerOfficeTextHitMap } from "@mrnote/cor
 import { OFFICE_TEXT_MARKER_ATTRIBUTE } from "@mrnote/core/web/lib/presentation/math-atom.ts";
 import { onTextEngineChange, textEngineEpoch } from "@mrnote/core/web/lib/text-engine/measure.ts";
 import { officeUnderline } from "@mrnote/core/web/lib/text-engine/office-underline.ts";
+import {
+  OFFICE_TEXT_OUTLINE_COLOR,
+  OFFICE_TEXT_OUTLINE_DASH,
+  OFFICE_TEXT_OUTLINE_JOIN,
+  OFFICE_TEXT_OUTLINE_WIDTH,
+  officeTextOutlineStrokeOfMarks,
+  type OfficeTextOutlineStroke,
+  officeTextOutlineGlyph,
+  officeTextOutlineGlyphsEpoch,
+  subscribeOfficeTextOutlineGlyphs,
+} from "@mrnote/core/web/lib/office-text-outline/office-text-outline-css.ts";
 import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import { normalizePresentationTabStops } from "../../../../lib/presentation-tab-stops";
@@ -312,6 +323,7 @@ export function presentationEngineBodyInput(args: {
         defaultTabPt:
           typeof args.defaultTabPx === "number" && args.defaultTabPx > 0 ? args.defaultTabPx * PT_PER_PX : 72,
         kinsoku: "zh-CN",
+        ...(row.fontAlign ? { fontAlign: row.fontAlign } : {}),
       });
     }
     return { paragraphs, rowRuns };
@@ -366,23 +378,26 @@ export function usePresentationEngineBody(args: {
   wrap: boolean;
   /** Lay out whatever the surface: the lines a body being typed in should end at. */
   force?: boolean;
+  /** A SmartArt diagram's label: lines step by the faces' own line height (`OfficeTextBodyInput.naturalLines`). */
+  naturalLines?: boolean;
 }): PresentationEngineBodyAnswer {
   const surface = useContext(PresentationTextEngineSurfaceContext) || args.force === true;
   const slideNumber = useContext(PresentationSlideNumberContext);
   const active = args.enabled && surface && args.rows !== null && args.widthPx !== null && textEngineOn("slides");
   const epoch = useTextEngineEpoch(active);
   const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, widthPx, wrap } = args;
+  const naturalLines = args.naturalLines === true;
   return useMemo((): PresentationEngineBodyAnswer => {
     void epoch;
     if (!surface) return { status: "off" };
     if (!active || !rows || widthPx === null) return noteEngine("off", !args.enabled ? "not a candidate" : !rows ? "no rows" : widthPx === null ? "no width" : "switched off");
     const input = presentationEngineBodyInput({ rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning });
     if ("unsupported" in input) return noteEngine("off", input.unsupported);
-    const layout = layoutOfficeTextBody({ widthPt: widthPx * PT_PER_PX, wrap, paragraphs: input.paragraphs }, pageOfficeTextMeasurer);
+    const layout = layoutOfficeTextBody({ widthPt: widthPx * PT_PER_PX, wrap, paragraphs: input.paragraphs, naturalLines }, pageOfficeTextMeasurer);
     if (layout.status === "pending") return noteEngine("pending", "pending");
     if (layout.status === "unsupported") return noteEngine("off", layout.reason);
     return noteEngine("ok", "laid", { status: "ok", layout, input });
-  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, widthPx, wrap]);
+  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, widthPx, wrap, naturalLines]);
 }
 
 /**
@@ -427,7 +442,7 @@ function noteEngine(status: "ok" | "pending" | "off", reason: string, answer?: P
  * gives it: its colour as the fill, its face, size, weight, slant and lines.
  * Its spacing is not: every grapheme stands at the engine's own position.
  */
-function svgTextPaint(css: CSSProperties, colorOverride: string | undefined): CSSProperties {
+export function svgTextPaint(css: CSSProperties, colorOverride: string | undefined): CSSProperties {
   const out: CSSProperties = {
     fontFamily: css.fontFamily,
     fontSize: css.fontSize,
@@ -438,8 +453,32 @@ function svgTextPaint(css: CSSProperties, colorOverride: string | undefined): CS
   };
   const color = colorOverride ?? css.color;
   if (color !== undefined) out.fill = color as CSSProperties["fill"];
-  if (css.WebkitTextStroke) out.WebkitTextStroke = css.WebkitTextStroke;
+  const outline = outlineOf(css);
+  if (outline) {
+    // SVG text takes no -webkit-text-stroke: Office's outline as SVG's
+    // stroke, centred and round over the fill (the glyphs' merged outlines
+    // replace it where they are kept: PresentationEngineLine).
+    out.stroke = outline.color;
+    out.strokeWidth = `${outline.widthPt}pt`;
+    // Its join, cap and dash as Office states them (round, solid if none).
+    out.strokeLinejoin = outline.stroke.join;
+    if (outline.stroke.join === "miter") out.strokeMiterlimit = outline.stroke.miterLimit;
+    out.strokeLinecap = outline.stroke.dash ? outline.stroke.cap : "round";
+    if (outline.stroke.dash) out.strokeDasharray = outline.stroke.dash.map((length) => `${length * outline.widthPt}pt`).join(" ");
+    out.paintOrder = "normal";
+  } else if (css.WebkitTextStroke) out.WebkitTextStroke = css.WebkitTextStroke;
   return out;
+}
+
+/** A run's Office outline as its CSS states it (office-text-outline-css.ts). */
+function outlineOf(css: CSSProperties): { color: string; widthPt: number; stroke: OfficeTextOutlineStroke } | null {
+  const record = css as Record<string, unknown>;
+  const color = record[OFFICE_TEXT_OUTLINE_COLOR];
+  const widthPt = Number(record[OFFICE_TEXT_OUTLINE_WIDTH]);
+  const mark = (key: string) => (typeof record[key] === "string" ? record[key] as string : "");
+  return typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color) && widthPt > 0
+    ? { color, widthPt, stroke: officeTextOutlineStrokeOfMarks(mark(OFFICE_TEXT_OUTLINE_JOIN), mark(OFFICE_TEXT_OUTLINE_DASH)) }
+    : null;
 }
 
 const SVG_TEXT_STYLE: CSSProperties = {
@@ -454,6 +493,254 @@ const SVG_TEXT_STYLE: CSSProperties = {
 function px(points: number): number {
   return Math.round(points * PX_PER_PT * 1000) / 1000;
 }
+
+/**
+ * The body drawn from an `ok` layout, as SVG text: each run's stretch of
+ * each line a `tspan` whose every grapheme stands at the engine's position
+ * on the line's baseline -- PowerPoint's 1/8 pt advances, its kerning and
+ * its justification, whatever advances the platform's text stack would
+ * have used (Chromium on Linux rounds each to a whole pixel: up to 0.37 pt
+ * a glyph). The marker of a row stands on its first line.
+ */
+type EngineLaidLine = Extract<OfficeTextBodyLayout, { status: "ok" }>["paragraphs"][number]["lines"][number];
+
+/** A style object's contents as a string, once per object (styles are not changed in place). */
+const styleKeys = new WeakMap<object, string>();
+function styleKey(style: unknown): string {
+  if (!style || typeof style !== "object") return "";
+  let key = styleKeys.get(style);
+  if (key === undefined) {
+    key = JSON.stringify(style) ?? "";
+    styleKeys.set(style, key);
+  }
+  return key;
+}
+
+/**
+ * Everything one line's drawing is made of: where it stands, and each of its
+ * stretches' run, look, face and glyph positions. Two lines with one
+ * signature (and one body style) draw the same elements.
+ */
+function engineLineSignature(line: EngineLaidLine, runs: readonly TextRun[], runInputs: readonly OfficeTextRunInput[]): string {
+  let out = `${line.baseline}|${line.top}|${line.bottom}`;
+  for (const segment of line.segments) {
+    if (segment.tab) continue;
+    const run = runs[segment.run];
+    if (!run) continue;
+    const input = runInputs[segment.run];
+    const font = input?.font;
+    out += `\u0001${segment.run}|${segment.x}|${segment.width}|${styleKey(run.style)}|${font ? `${font.stack}|${font.sizePt}|${font.weight}|${font.italic ? 1 : 0}` : ""}|${input?.allCaps ? 1 : 0}|${scriptShiftPt.get(run) ?? ""}|${segment.baseline ?? ""}|`;
+    for (const glyph of segment.glyphs) out += `${glyph.text}\u0002${glyph.x}\u0003`;
+  }
+  return out;
+}
+
+interface EngineDrawingParts {
+  readonly rows: readonly PresentationParagraphRowPlan[];
+  /** Per row, per line: `engineLineSignature`. */
+  readonly lines: readonly (readonly string[])[];
+  /** Per row: its own look (style, marker) and whether it has runs. */
+  readonly rowKeys: readonly string[];
+  /** The whole drawing, its hit map (each row's run lengths) and its height. */
+  readonly whole: string;
+}
+
+/** An answer's drawing, read once per answer and rows (answers are not changed once made). */
+const drawingParts = new WeakMap<object, EngineDrawingParts>();
+function engineDrawingParts(
+  answer: Extract<PresentationEngineBodyAnswer, { status: "ok" }>,
+  rows: readonly PresentationParagraphRowPlan[],
+): EngineDrawingParts {
+  const known = drawingParts.get(answer);
+  if (known && known.rows === rows) return known;
+  const { layout, input } = answer;
+  const lines: string[][] = [];
+  const rowKeys: string[] = [];
+  let whole = `${layout.height}`;
+  layout.paragraphs.forEach((paragraph, rowIndex) => {
+    const row = rows[rowIndex];
+    const runs = input.rowRuns[rowIndex] ?? [];
+    const runInputs = input.paragraphs[rowIndex]?.runs ?? [];
+    const rowKey = row
+      ? `${row.runs ? 1 : 0}|${styleKey(row.rowTextStyle)}|${styleKey(row.markerCss)}|${row.markerText ?? ""}|${row.markerPicture ?? ""}`
+      : "-";
+    rowKeys.push(rowKey);
+    const signatures = paragraph.lines.map((line) => engineLineSignature(line, runs, runInputs));
+    lines.push(signatures);
+    whole += `\u0004${rowKey}|${paragraph.marker ? paragraph.marker.x : ""}|${runs.map((run) => run.text.length).join(",")}\u0005${signatures.join("\u0006")}`;
+  });
+  const parts = { rows, lines, rowKeys, whole };
+  drawingParts.set(answer, parts);
+  return parts;
+}
+
+/**
+ * Whether two answers draw one body the same: the same elements, the same
+ * hit map. A body being typed in keeps the drawing it made for the letters
+ * when the window then lays the same letters out (`PresentationEngineEditLayer`).
+ */
+export function presentationEngineDrawsSame(
+  a: Extract<PresentationEngineBodyAnswer, { status: "ok" }>,
+  aRows: readonly PresentationParagraphRowPlan[],
+  b: Extract<PresentationEngineBodyAnswer, { status: "ok" }>,
+  bRows: readonly PresentationParagraphRowPlan[],
+): boolean {
+  if (a === b && aRows === bRows) return true;
+  return engineDrawingParts(a, aRows).whole === engineDrawingParts(b, bRows).whole;
+}
+
+interface EngineLineProps {
+  readonly signature: string;
+  readonly rowKey: string;
+  readonly line: EngineLaidLine;
+  readonly lineIndex: number;
+  readonly row: PresentationParagraphRowPlan | undefined;
+  readonly runs: readonly TextRun[];
+  readonly runInputs: readonly OfficeTextRunInput[];
+  readonly fontSizeUnit: PresentationFontSizeUnit;
+  readonly fontAliases: PresentationFontAliases;
+  readonly autofitScale: number;
+  readonly colorOverride: string | undefined;
+}
+
+
+
+
+
+
+
+const PresentationEngineLine = memo(
+  function PresentationEngineLine({ line, lineIndex, row, runs, runInputs, fontSizeUnit, fontAliases, autofitScale, colorOverride }: EngineLineProps) {
+    // Drawn again when glyph outlines a run's outline waits on come.
+    useSyncExternalStore(subscribeOfficeTextOutlineGlyphs, officeTextOutlineGlyphsEpoch, officeTextOutlineGlyphsEpoch);
+    const bands: ReactElement[] = [];
+    const fills: ReactElement[] = [];
+    const rowStyle = row?.rowTextStyle ?? {};
+    const rowPaint = svgTextPaint(rowStyle, colorOverride ?? (rowStyle.color as string | undefined));
+    const spans: ReactElement[] = [];
+    const underlines: { x0: number; x1: number; top: number; height: number; color: string }[] = [];
+    // Text alignment Top stands runs on baselines of their own: then every
+    // stretch states its y (a tspan's y holds for the stretches after it).
+    const ownBaselines = line.segments.some((segment) => segment.baseline !== undefined);
+    line.segments.forEach((segment, segmentIndex) => {
+      const segmentBaseline = segment.baseline ?? line.baseline;
+      const segmentY = ownBaselines ? px(segmentBaseline) : undefined;
+      if (segment.tab) return;
+      const run = runs[segment.run];
+      if (!run) return;
+      const caps = runInputs[segment.run]?.allCaps === true;
+      const css = row?.runs ? runStyleCss(run.style, fontSizeUnit, fontAliases, autofitScale) : {};
+      // Drawn in exactly the face, size, weight and slant the engine measured.
+      const measured = runInputs[segment.run]?.font;
+      const paint: CSSProperties = {
+        ...svgTextPaint(css, colorOverride),
+        ...(scriptShiftPt.has(run) ? { baselineShift: px(scriptShiftPt.get(run)!) } : {}),
+        ...(measured
+          ? { fontFamily: measured.stack, fontSize: px(measured.sizePt), fontWeight: measured.weight, fontStyle: measured.italic ? "italic" : "normal" }
+          : {}),
+      };
+      // A single underline in whole points from the Office face's own
+      // metrics, as PowerPoint draws it (lib/text-engine/office-underline.ts).
+      const decoration = typeof paint.textDecoration === "string" ? paint.textDecoration : "";
+      const underline =
+        measured && /\bunderline\b/.test(decoration) && (paint.textDecorationStyle === undefined || paint.textDecorationStyle === "solid")
+          ? officeUnderline(measured.stack, measured.weight, measured.italic, measured.sizePt)
+          : null;
+      if (underline) {
+        paint.textDecoration = decoration.replace(/\bunderline\b/, "").trim() || "none";
+        const color = String(paint.fill ?? rowPaint.fill ?? "currentColor");
+        const top = segmentBaseline + underline.topPt - (scriptShiftPt.get(run) ?? 0);
+        const last = underlines[underlines.length - 1];
+        if (last && last.color === color && last.top === top && last.height === underline.thicknessPt && Math.abs(last.x1 - segment.x) < 0.5) {
+          last.x1 = segment.x + segment.width;
+        } else {
+          underlines.push({ x0: segment.x, x1: segment.x + segment.width, top, height: underline.thicknessPt, color });
+        }
+      }
+      const highlight = typeof run.style?.highlight === "string" ? run.style.highlight : undefined;
+      if (highlight) {
+        spans.push(
+          <rect key={`h${segmentIndex}`} x={px(segment.x)} y={px(line.top)} width={px(segment.width)} height={px(line.bottom - line.top)} fill={highlight} />,
+        );
+      }
+      const glyphs = segment.glyphs.filter((glyph) => glyph.text !== "\n");
+      const shown = (text: string) => (caps ? text.toUpperCase() : text);
+      // Office's outline: one stroke along each glyph's merged outline,
+      // centred and round, over the fill, at the engine's own positions;
+      // the text's SVG stroke stands in until every glyph's is kept.
+      const outline = outlineOf(css);
+      const smallCaps = /small-caps/.test(String(css.fontVariantCaps ?? css.fontVariant ?? ""));
+      if (outline && measured && !smallCaps) {
+        const sizePx = px(measured.sizePt);
+        const placed = glyphs.map((glyph) =>
+          glyph.text.trim() ? officeTextOutlineGlyph(shown(glyph.text), measured.stack, measured.weight, measured.italic, sizePx) : "space" as const);
+        if (placed.every((glyph) => glyph !== null && glyph !== "pending")) {
+          const baseline = px(segmentBaseline - (scriptShiftPt.get(run) ?? 0));
+          // Where an installed font draws the words (not the file the band
+          // is read from), they are filled from the band's outlines too, and
+          // the text's own fill is see-through.
+          const fill = placed.some((glyph) => glyph !== "space" && glyph.installed) && typeof (paint.fill ?? rowPaint.fill) === "string" ? String(paint.fill ?? rowPaint.fill) : null;
+          placed.forEach((glyph, glyphIndex) => {
+            if (glyph === "space" || !glyph.d) return;
+            const x = px(glyphs[glyphIndex].x);
+            const s = glyph.scale;
+            const transform = `matrix(${s} 0 ${glyph.skew * s} ${-s} ${x} ${baseline})`;
+            if (fill) fills.push(<path key={`f${segmentIndex}-${glyphIndex}`} d={glyph.d} transform={transform} fill={fill} />);
+            bands.push(
+              <path key={`o${segmentIndex}-${glyphIndex}`} d={glyph.d} transform={transform}
+                fill="none" stroke={outline.color} strokeWidth={(outline.widthPt * PX_PER_PT) / s}
+                strokeLinejoin={outline.stroke.join} strokeMiterlimit={outline.stroke.join === "miter" ? outline.stroke.miterLimit : undefined}
+                strokeLinecap={outline.stroke.dash ? outline.stroke.cap : "round"}
+                strokeDasharray={outline.stroke.dash ? outline.stroke.dash.map((length) => (length * outline.widthPt * PX_PER_PT) / s).join(" ") : undefined} />,
+            );
+          });
+          paint.stroke = "none";
+          if (fill) paint.fill = "transparent";
+        }
+      }
+      if (glyphs.every((glyph) => shown(glyph.text).length === 1)) {
+        spans.push(
+          <tspan key={segmentIndex} data-run-index={segment.run} x={glyphs.map((glyph) => px(glyph.x)).join(" ")} y={segmentY} style={paint}>
+            {glyphs.map((glyph) => shown(glyph.text)).join("")}
+          </tspan>,
+        );
+      } else {
+        glyphs.forEach((glyph, glyphIndex) => {
+          spans.push(
+            <tspan key={`${segmentIndex}-${glyphIndex}`} data-run-index={segment.run} x={px(glyph.x)} y={segmentY} style={paint}>
+              {shown(glyph.text)}
+            </tspan>,
+          );
+        });
+      }
+    });
+    if (!spans.length) return null;
+    const highlights = spans.filter((span) => span.type === "rect");
+    const texts = spans.filter((span) => span.type !== "rect");
+    return (
+      <g data-testid="presentation-engine-line" data-engine-line={lineIndex}>
+        {highlights}
+        <text y={px(line.baseline)} style={{ ...SVG_TEXT_STYLE, ...rowPaint }}>
+          {texts}
+        </text>
+        {fills.length ? <g aria-hidden="true" data-office-text-outline-fill="">{fills}</g> : null}
+        {bands.length ? <g aria-hidden="true" data-office-text-outline-band="">{bands}</g> : null}
+        {underlines.map((rule, index) => (
+          // PowerPoint's underline is whole points long too.
+          <rect key={`u${index}`} data-testid="presentation-engine-underline" x={px(rule.x0)} y={px(rule.top)} width={px(Math.max(1, Math.round(rule.x1 - rule.x0)))} height={px(rule.height)} fill={rule.color} />
+        ))}
+      </g>
+    );
+  },
+  (a, b) =>
+    a.signature === b.signature &&
+    a.rowKey === b.rowKey &&
+    a.lineIndex === b.lineIndex &&
+    a.fontSizeUnit === b.fontSizeUnit &&
+    a.fontAliases === b.fontAliases &&
+    a.autofitScale === b.autofitScale &&
+    a.colorOverride === b.colorOverride,
+);
 
 /**
  * The body drawn from an `ok` layout, as SVG text: each run's stretch of
@@ -484,18 +771,17 @@ export function PresentationEngineTextBody({
   overlay?: boolean;
 }): ReactElement {
   const { layout, input } = answer;
+  const parts = engineDrawingParts(answer, rows);
   const nodes: ReactElement[] = [];
   layout.paragraphs.forEach((paragraph, rowIndex) => {
     const row = rows[rowIndex];
     const runs = input.rowRuns[rowIndex] ?? [];
     const runInputs = input.paragraphs[rowIndex]?.runs ?? [];
     const rowStyle = row?.rowTextStyle ?? {};
-    const rowPaint = svgTextPaint(rowStyle, colorOverride ?? (rowStyle.color as string | undefined));
     const firstLine = paragraph.lines[0];
     // The row as the text readers read a drawn row (`presentationPreviewDomPoint`,
     // find highlights): its marker apart, its words in order in one group.
     const markerNodes: ReactElement[] = [];
-    const lineNodes: ReactElement[] = [];
     if (paragraph.marker && row && firstLine) {
       const markerPaint = svgTextPaint({ ...rowStyle, ...row.markerCss }, colorOverride ?? (row.markerCss.color as string | undefined));
       if (row.markerPicture) {
@@ -518,82 +804,22 @@ export function PresentationEngineTextBody({
         );
       }
     }
-    paragraph.lines.forEach((line, lineIndex) => {
-      const spans: ReactElement[] = [];
-      const underlines: { x0: number; x1: number; top: number; height: number; color: string }[] = [];
-      line.segments.forEach((segment, segmentIndex) => {
-        if (segment.tab) return;
-        const run = runs[segment.run];
-        if (!run) return;
-        const caps = runInputs[segment.run]?.allCaps === true;
-        const css = row?.runs ? runStyleCss(run.style, fontSizeUnit, fontAliases, autofitScale) : {};
-        // Drawn in exactly the face, size, weight and slant the engine measured.
-        const measured = runInputs[segment.run]?.font;
-        const paint: CSSProperties = {
-          ...svgTextPaint(css, colorOverride),
-          ...(scriptShiftPt.has(run) ? { baselineShift: px(scriptShiftPt.get(run)!) } : {}),
-          ...(measured
-            ? { fontFamily: measured.stack, fontSize: px(measured.sizePt), fontWeight: measured.weight, fontStyle: measured.italic ? "italic" : "normal" }
-            : {}),
-        };
-        // A single underline in whole points from the Office face's own
-        // metrics, as PowerPoint draws it (lib/text-engine/office-underline.ts).
-        const decoration = typeof paint.textDecoration === "string" ? paint.textDecoration : "";
-        const underline =
-          measured && /\bunderline\b/.test(decoration) && (paint.textDecorationStyle === undefined || paint.textDecorationStyle === "solid")
-            ? officeUnderline(measured.stack, measured.weight, measured.italic, measured.sizePt)
-            : null;
-        if (underline) {
-          paint.textDecoration = decoration.replace(/\bunderline\b/, "").trim() || "none";
-          const color = String(paint.fill ?? rowPaint.fill ?? "currentColor");
-          const top = line.baseline + underline.topPt - (scriptShiftPt.get(run) ?? 0);
-          const last = underlines[underlines.length - 1];
-          if (last && last.color === color && last.top === top && last.height === underline.thicknessPt && Math.abs(last.x1 - segment.x) < 0.5) {
-            last.x1 = segment.x + segment.width;
-          } else {
-            underlines.push({ x0: segment.x, x1: segment.x + segment.width, top, height: underline.thicknessPt, color });
-          }
-        }
-        const highlight = typeof run.style?.highlight === "string" ? run.style.highlight : undefined;
-        if (highlight) {
-          spans.push(
-            <rect key={`h${segmentIndex}`} x={px(segment.x)} y={px(line.top)} width={px(segment.width)} height={px(line.bottom - line.top)} fill={highlight} />,
-          );
-        }
-        const glyphs = segment.glyphs.filter((glyph) => glyph.text !== "\n");
-        const shown = (text: string) => (caps ? text.toUpperCase() : text);
-        if (glyphs.every((glyph) => shown(glyph.text).length === 1)) {
-          spans.push(
-            <tspan key={segmentIndex} data-run-index={segment.run} x={glyphs.map((glyph) => px(glyph.x)).join(" ")} style={paint}>
-              {glyphs.map((glyph) => shown(glyph.text)).join("")}
-            </tspan>,
-          );
-        } else {
-          glyphs.forEach((glyph, glyphIndex) => {
-            spans.push(
-              <tspan key={`${segmentIndex}-${glyphIndex}`} data-run-index={segment.run} x={px(glyph.x)} style={paint}>
-                {shown(glyph.text)}
-              </tspan>,
-            );
-          });
-        }
-      });
-      if (!spans.length) return;
-      const highlights = spans.filter((span) => span.type === "rect");
-      const texts = spans.filter((span) => span.type !== "rect");
-      lineNodes.push(
-        <g key={`${rowIndex}-${lineIndex}`} data-testid="presentation-engine-line" data-engine-line={lineIndex}>
-          {highlights}
-          <text y={px(line.baseline)} style={{ ...SVG_TEXT_STYLE, ...rowPaint }}>
-            {texts}
-          </text>
-          {underlines.map((rule, index) => (
-            // PowerPoint's underline is whole points long too.
-            <rect key={`u${index}`} data-testid="presentation-engine-underline" x={px(rule.x0)} y={px(rule.top)} width={px(Math.max(1, Math.round(rule.x1 - rule.x0)))} height={px(rule.height)} fill={rule.color} />
-          ))}
-        </g>,
-      );
-    });
+    const lineNodes = paragraph.lines.map((line, lineIndex) => (
+      <PresentationEngineLine
+        key={`${rowIndex}-${lineIndex}`}
+        signature={parts.lines[rowIndex]?.[lineIndex] ?? ""}
+        rowKey={parts.rowKeys[rowIndex] ?? ""}
+        line={line}
+        lineIndex={lineIndex}
+        row={row}
+        runs={runs}
+        runInputs={runInputs}
+        fontSizeUnit={fontSizeUnit}
+        fontAliases={fontAliases}
+        autofitScale={autofitScale}
+        colorOverride={colorOverride}
+      />
+    ));
     nodes.push(
       overlay ? (
         <g key={rowIndex} data-testid="presentation-engine-paragraph">
@@ -610,9 +836,12 @@ export function PresentationEngineTextBody({
   });
   // A press on the drawn words finds its character from the engine's lines
   // (`officeTextOffsetAtPoint`): SVG text is no caret target of the body's.
-  const registerHits = (element: HTMLDivElement | null) => {
-    if (element) registerOfficeTextHitMap(element, { layout, runLengths: input.rowRuns.map((runs) => runs.map((run) => run.text.length)) });
-  };
+  const registerHits = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (element) registerOfficeTextHitMap(element, { layout, runLengths: input.rowRuns.map((runs) => runs.map((run) => run.text.length)) });
+    },
+    [layout, input],
+  );
   return (
     <div
       ref={registerHits}
@@ -620,7 +849,13 @@ export function PresentationEngineTextBody({
       {...(overlay
         ? { [OFFICE_TEXT_HIT_ATTRIBUTE]: "", [OFFICE_TEXT_MARKER_ATTRIBUTE]: "", "aria-hidden": true, contentEditable: false, "data-presentation-selection-ignore": "true" }
         : { [PRESENTATION_TEXT_ENGINE_ATTRIBUTE]: "laid", [OFFICE_TEXT_HIT_ATTRIBUTE]: "" })}
-      style={{ position: "relative", width: "100%", height: px(layout.height), ...(overlay ? { userSelect: "none" as const } : {}) }}
+      // Never shrunk by the anchoring flex column it stands in: its words are
+      // an absolute SVG, so the box had no content height and a body taller
+      // than its frame shrank to the frame -- a centred or bottom-anchored
+      // body that overflows stood from the frame's top. PowerPoint overflows
+      // a centred body both ways and a bottom-anchored one upward (look-fit
+      
+      style={{ position: "relative", width: "100%", height: px(layout.height), flexShrink: 0, ...(overlay ? { userSelect: "none" as const } : {}) }}
     >
       <svg
         data-testid="presentation-engine-text-svg"
@@ -648,6 +883,7 @@ export function PresentationEngineOrFallback({
   widthPx,
   wrap,
   colorOverride,
+  naturalLines,
   fallback,
 }: {
   rows: readonly PresentationParagraphRowPlan[] | null;
@@ -660,6 +896,8 @@ export function PresentationEngineOrFallback({
   widthPx: number | null;
   wrap: boolean;
   colorOverride?: string;
+  /** A SmartArt diagram's label (`usePresentationEngineBody`). */
+  naturalLines?: boolean;
   fallback: ReactElement;
 }): ReactElement {
   const fontAliases = useContext(PresentationFontAliasesContext);
@@ -675,6 +913,7 @@ export function PresentationEngineOrFallback({
     kerning,
     widthPx,
     wrap,
+    naturalLines,
   });
   if (engine.status === "ok" && rows) {
     return (

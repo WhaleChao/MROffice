@@ -41,7 +41,11 @@ export interface PdfTextBackgroundSaveQueue {
   enqueue(waiter: (saved: boolean) => void): boolean;
 }
 
-export function createPdfTextBackgroundSaveQueue(): PdfTextBackgroundSaveQueue {
+export function createPdfTextBackgroundSaveQueue(
+  /** Told how many saves are started and not settled, each time that
+   * changes: what the window's save status reads while one is behind it. */
+  onPendingChange?: (pending: number) => void,
+): PdfTextBackgroundSaveQueue {
   let tail: Promise<void> = Promise.resolve();
   let pending = 0;
   const waiters: Array<(saved: boolean) => void> = [];
@@ -52,6 +56,7 @@ export function createPdfTextBackgroundSaveQueue(): PdfTextBackgroundSaveQueue {
     get pending() { return pending; },
     start(job, handlers = {}) {
       pending += 1;
+      call(() => onPendingChange?.(pending));
       return new Promise<boolean>((resolve) => {
         const run = async () => {
           let published = false;
@@ -67,6 +72,7 @@ export function createPdfTextBackgroundSaveQueue(): PdfTextBackgroundSaveQueue {
             saved = false;
           }
           pending -= 1;
+          call(() => onPendingChange?.(pending));
           if (!published) resolve(saved);
           call(() => handlers.onSettled?.(saved, published));
           if (pending === 0) {

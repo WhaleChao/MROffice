@@ -459,8 +459,27 @@ export const CONTROLS: OfficeScreenTipControls = {
     "review.proofing": "toolbar.wordCountCommand",
     "review.rejectOne": "toolbar.rejectChange",
     "review.tracking": "toolbar.suggesting",
+    
+    // properties rail, the Design tab, picture/shape arrange and equations.
+    "doc-status-page": "toolbar.statusPageGoTo",
+    "document-toolbar-document-properties-rail": "toolbar.documentPropertiesLabel",
+    "document-toolbar-ribbon-design-themes": "toolbar.designTheme",
+    "document-toolbar-ribbon-design-style-set-more": "toolbar.designStyleSet",
+    "document-toolbar-ribbon-design-colors": "toolbar.designColors",
+    "document-toolbar-ribbon-design-font-set": "toolbar.designFonts",
+    "document-toolbar-ribbon-design-paragraph-spacing": "toolbar.designParagraphSpacing",
+    "document-toolbar-ribbon-design-set-default": "toolbar.designSetAsDefault",
+    "document-toolbar-picture-position": "spreadsheet.chartFormatCopy.arrange.position",
+    "document-toolbar-picture-bring-forward": "spreadsheet.chartFormatCopy.arrange.bringForward",
+    "document-toolbar-picture-send-backward": "spreadsheet.chartFormatCopy.arrange.sendBackward",
+    "document-toolbar-shape-merge": "presentation.contextMenu.mergeShapes",
+    "document-toolbar-shape-reorder": "toolbar.reorderObjectsOnPage",
+    "document-toolbar-chart-format-alt-text": "toolbar.altText",
+    "equation.tools.normalText": "equation.ribbon.normalText",
   },
   patterns: [
+    // Draw > Paper: ruled lines, grid or dots, one sentence for the three.
+    [/^draw\.paper\.|-draw-paper-(rule|grid|dot)$/, "toolbar.drawPaperGuide"],
     // Pens added to the Draw gallery carry their colour and width in the id.
     [/-draw-ink-pen-/, "toolbar.drawTool_pen"],
     [/-draw-ink-pencil-/, "toolbar.drawTool_pencil"],

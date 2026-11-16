@@ -5,6 +5,7 @@
  */
 import { pxToPt } from "@mrnote/core/web/lib/office-units.ts";
 import { aspectLockedResizeSize } from "./drawing-aspect";
+import { OFFICE_PRINT_IDENTITY, type OfficePrintScale } from "./office-print-metrics";
 import {
   DEFAULT_SPREADSHEET_ROW_HEIGHT_PX,
   DEFAULT_SPREADSHEET_COLUMN_WIDTH_PX,
@@ -15,6 +16,8 @@ import {
   computePageBreakLines,
   normalizePrintSettings,
   paginateSheet,
+  printedColumnPoints,
+  printedRowPoints,
   parseA1Range,
   printAreaRanges,
   resolveMargins,
@@ -160,16 +163,180 @@ export function pageLayoutAxisBands(sizes: readonly number[], indices: readonly 
   return bands;
 }
 
+/** The columns wider than the page's printable width, as [start, end] sheet
+ * spans in the printed sizes given, and that width. */
+export interface PageLayoutWideColumns {
+  spans: readonly (readonly [start: number, end: number])[];
+  limit: number;
+}
+
+/** Windows Excel prints a column wider than the printable width cut at that
+ * width, and lays out what lies right of it -- columns, pictures, charts --
+ * as if the column were exactly that wide (lookwin probe p48-lw: a picture
+ * 600 pt into a 150-character B prints at C's left margin; R59-X13: a 758 pt
+ * picture from A reaches past B onto C's page). Null when no column is. */
+export function pageLayoutWideColumns(sizes: readonly number[], limit: number): PageLayoutWideColumns | null {
+  if (!(limit > 0) || !Number.isFinite(limit)) return null;
+  const spans: Array<readonly [number, number]> = [];
+  let position = 0;
+  for (const size of sizes) {
+    if (size > limit + 1e-6) spans.push([position, position + size]);
+    position += size;
+  }
+  return spans.length ? { spans, limit } : null;
+}
+
+/** A sheet x (printed points) as the printed page places it: past a wide
+ * column's printable width it stands at that column's cut end. */
+export function pageLayoutClampColumnPoint(value: number, wide: PageLayoutWideColumns | null | undefined): number {
+  if (!wide) return value;
+  let cut = 0;
+  for (const [start, end] of wide.spans) {
+    if (value <= start + wide.limit) break;
+    cut += Math.min(value, end) - (start + wide.limit);
+  }
+  return value - cut;
+}
+
+/** Inverse of pageLayoutClampColumnPoint: a printed x back to the sheet's
+ * (a point at a wide column's cut end is that column's end). */
+export function pageLayoutUnclampColumnPoint(value: number, wide: PageLayoutWideColumns | null | undefined): number {
+  if (!wide) return value;
+  let cut = 0;
+  for (const [start, end] of wide.spans) {
+    if (value + cut < start + wide.limit) break;
+    cut += end - start - wide.limit;
+  }
+  return value + cut;
+}
+
 /** Without an explicit print area, the final data line is not a drawing
  * clipping boundary. Use the remaining printable paper for its last band;
- * repeated-title bands and intermediate page boundaries stay unchanged. */
-export function pageLayoutDrawingBands(sizes: readonly number[], indices: readonly number[], availablePoints: number, finalUnboundedPage: boolean) {
+ * repeated-title bands and intermediate page boundaries stay unchanged.
+ * Wide columns (pageLayoutWideColumns) clip at the printable width, and the
+ * bands after them start where the printed page puts them. */
+export function pageLayoutDrawingBands(sizes: readonly number[], indices: readonly number[], availablePoints: number, finalUnboundedPage: boolean, wide?: PageLayoutWideColumns | null) {
   const bands = pageLayoutAxisBands(sizes, indices);
+  if (wide) {
+    let offset = 0;
+    for (const band of bands) {
+      band.start = pageLayoutClampColumnPoint(band.start, wide);
+      band.end = pageLayoutClampColumnPoint(band.end, wide);
+      band.offset = offset;
+      offset += band.end - band.start;
+    }
+  }
   const last = bands.at(-1);
   if (last && finalUnboundedPage && Number.isFinite(availablePoints)) {
     last.end = Math.max(last.end, last.start + Math.max(0, availablePoints - last.offset));
   }
   return bands;
+}
+
+/**
+ * Whether a cell of its own (a line format painted onto the grid's blanks
+ * set aside) widens the range Excel prints without a print area: a value, or
+ * a blank whose format shows on paper -- a border, a pattern, a gradient or
+ * a fill, white too (lookwin p46 whitefar: an own white blank far past the
+ * data widens Excel's print; the server's writer counts it, sheet_extent). A
+ * blank carrying only a font, alignment or number format does not (MX060).
+ */
+export function printedCellWidensRange(cell: { value?: unknown; formula?: unknown; style?: Record<string, unknown> }): boolean {
+  const style = cell.style ?? {};
+  const fill = typeof style.backgroundColor === "string" && style.backgroundColor !== "" && !/^transparent$/i.test(style.backgroundColor);
+  const border = Boolean(style.border) || Boolean(style.borderEdges) || Boolean(style.borderTop || style.borderBottom || style.borderLeft || style.borderRight);
+  const valued = (typeof cell.value === "string" && cell.value !== "") || (typeof cell.formula === "string" && cell.formula !== "");
+  return valued || fill || border || Boolean(style.pattern) || Boolean(style.gradientFill);
+}
+
+/**
+ * Whether a row's `spans` (the file's ``spans``) keep a page that holds no
+ * cell of its own: only where the page paints a row's or column's format (a
+ * fill or border on its blanks, `paintsLineFormat`) -- R51-X06's bordered
+ * rows 424-432 state 1:35 and keep the last band's page (lookwin p67-lw). A
+ * page that paints nothing is blank whatever its rows state: R305-X04's rows
+ * span 1:13 to M, whose cells carry a font only, and Excel prints none of
+ * the five pages below the first in L:M (7 pages; 12 here). The API's
+ * page_shows_line_formats_only is the same rule.
+ */
+export function pageLayoutSpansKeepPage(
+  spans: unknown,
+  rows: readonly [number, number],
+  cols: readonly [number, number],
+  paintsLineFormat: () => boolean,
+): boolean {
+  if (!Array.isArray(spans)) return false;
+  const reaches = spans.some((run) => Array.isArray(run) && run.length === 4
+    && run[0] <= rows[1] && run[1] >= rows[0] && run[2] <= cols[1] && run[3] >= cols[0]);
+  return reaches && paintsLineFormat();
+}
+
+/**
+ * Whether Windows Excel prints the tail of a text run carried onto a later
+ * page: the run reaches a column holding a value in the page's rows (lookwin
+ * p69-lw: a note from D ending in G, G5 holding a value, prints; p68-lw: the
+ * band's only value in J, the note ending in G, prints nothing; R327-X12's
+ * third page J13 / K18), or -- running out past the used range -- the page's
+ * last column (p60-lw: a Title note three times as long prints over every
+ * band it crosses; p64-lw t119_21: a tail ending inside the band a longer
+ * note set does not). The server's writer follows the same rule
+ * (draw_spill_from_left). Sizes are printed points, `textEnd` measured from
+ * the source cell's left edge to the end of its text; `runEndCol` the last
+ * free column of the run (a value stops it), `usedColumns` the used range's
+ * column count before spills widen it, a column with a style of its own
+ * counted in (lookwin p86b-lw: a tail ending in a styled column prints
+ * nothing on its page; R162-X08 Metadata).
+ */
+export function pageLayoutCarriedRunPrints(input: {
+  pageCols: readonly number[];
+  colSizes: readonly number[];
+  colWidth: number;
+  source: number;
+  runEndCol: number;
+  textEnd: number;
+  padding: number;
+  usedColumns?: number;
+  columnHolds: (col: number) => boolean;
+  /** "print": Windows Excel's File > Print, which prints every tail that
+   * reaches the page (lookwin p64-lw-winprint, CRITERIA XC-155); else its
+   * Save as PDF's rule below. */
+  route?: "export" | "print";
+}): boolean {
+  const { pageCols, source, runEndCol, textEnd, padding } = input;
+  const first = pageCols[0];
+  const last = pageCols[pageCols.length - 1];
+  if (first === undefined || last === undefined || !Number.isFinite(textEnd) || first <= source) return false;
+  const size = (col: number) => {
+    const value = input.colSizes[col];
+    return typeof value === "number" && Number.isFinite(value) ? value : input.colWidth;
+  };
+  // A column's left edge from the source cell's, points.
+  const lefts = new Map<number, number>();
+  let position = 0;
+  // As far as the text and the page's columns reach: the used range may run
+  // to the sheet's end (a styled column to XFD), past which nothing matters.
+  for (let col = source; col <= Math.max(last, input.usedColumns ?? 0); col += 1) {
+    lefts.set(col, position);
+    if (col > last && position > textEnd + padding) break;
+    position += size(col);
+  }
+  const leftOf = (col: number) => lefts.get(col) ?? position;
+  // Half a pixel: a run ending right at an edge does not reach past it.
+  const slack = 0.375;
+  if (textEnd <= leftOf(first) + slack) return false;
+  // File > Print: p64-lw t119_44_91's third page prints END2, END3 and END4;
+  // p81-lw n127far and p86b-lw socolB (a styled B) print theirs.
+  if (input.route === "print") return runEndCol >= first;
+  for (const col of pageCols) {
+    if (col > runEndCol || leftOf(col) >= textEnd - slack) break;
+    if (input.columnHolds(col)) return true;
+  }
+  // With the cell's right padding (p63-lw's filled notes end 3 pt short of
+  // the unfilled one that set the band, and print).
+  const reachesLast = runEndCol >= last && textEnd + padding > leftOf(last) + slack;
+  const pastUsed = input.usedColumns === undefined || input.usedColumns <= source ||
+    textEnd + padding > leftOf(input.usedColumns);
+  return reachesLast && pastUsed;
 }
 
 /** Inverse of drawing clipping. Paper margins/gaps never become sheet offsets. */
@@ -276,6 +443,10 @@ export interface SpreadsheetPageLayoutGeometry {
   segments?: readonly SpreadsheetPageLayoutGeometry[];
   /** Cumulative first page index of each segment, plus the total at the end. */
   segmentPageOffsets?: readonly number[];
+  /** The printer's scale of the screen grid (officePrintScale): rowSizes,
+   * colSizes and the headings already carry it; a drawing's frame is mapped
+   * by its anchor (officePrintedDrawingFrame). Absent: the identity. */
+  printScale?: OfficePrintScale;
 }
 
 export interface SpreadsheetPageLayoutPage {
@@ -394,9 +565,16 @@ function resolveAxisProjection(input: {
       repeatCount: repeatIndices.length, dataCount: dataIndices.length,
       paginateCount: repeatIndices.length + Math.max(1, dataIndices.length), visibleIndices: [...repeatIndices, ...dataIndices] };
   }
-  if (input.hidden?.size) {
-    const repeatIndices = Array.from({ length: repeatCount }, (_, i) => repeatStart + i).filter(i => !input.hidden!.has(i));
-    const dataIndices = Array.from({ length: dataCount }, (_, i) => dataStart + i).filter(i => !input.hidden!.has(i));
+  // Print titles that are rows (columns) inside the range print once, as
+  // titles: the range's own share leaves them out (Windows Excel, lookwin
+  // R59-X18: titles 3:22 of a range from row 1; the API's project_axis takes
+  // the titles out of the body too). They print in their own place on the
+  // page that runs past them (pageTitledIndices).
+  const titlesInside = repeatCount > 0 && repeatStart > dataStart && repeatStart <= dataStart + dataCount - 1;
+  if (input.hidden?.size || titlesInside) {
+    const isTitle = (index: number) => repeatCount > 0 && index >= repeatStart && index <= repeatEnd;
+    const repeatIndices = Array.from({ length: repeatCount }, (_, i) => repeatStart + i).filter(i => !input.hidden?.has(i));
+    const dataIndices = Array.from({ length: dataCount }, (_, i) => dataStart + i).filter(i => !input.hidden?.has(i) && !isTitle(i));
     return {
       repeatStart, dataStart, repeatCount: repeatIndices.length, dataCount: dataIndices.length,
       paginateCount: repeatIndices.length + Math.max(1, dataIndices.length),
@@ -460,8 +638,8 @@ function pageCountAtScale(input: PaginateInput, scale: number): {
     ...input,
     rowHeight: input.rowHeight * scale,
     colWidth: input.colWidth * scale,
-    rowSizes: input.rowSizes?.map((size) => size * scale),
-    colSizes: input.colSizes?.map((size) => size * scale),
+    rowSizes: input.rowSizes?.map((size) => printedRowPoints(size, scale)),
+    colSizes: input.colSizes?.map((size) => printedColumnPoints(size, scale)),
     headingHeight: (input.headingHeight ?? 0) * scale,
     headingWidth: (input.headingWidth ?? 0) * scale,
   });
@@ -474,16 +652,109 @@ function pageCountAtScale(input: PaginateInput, scale: number): {
   };
 }
 
+/** The print titles that are rows or columns of the printed range itself
+ * but laid out only as titles (A:C of a range A:AA): Fit To counts them a
+ * second time, as part of the range (fitTitlesTwice). */
+function titlesInRangeSizes(
+  projection: PageLayoutAxisProjection,
+  sizes: readonly number[] | undefined,
+  areaStart: number,
+  areaEnd: number,
+  sourceOf: (actual: number) => number = (actual) => actual,
+): number[] {
+  const result: number[] = [];
+  for (let local = 0; local < projection.repeatCount; local += 1) {
+    const actual = mapLocalAxisIndex(projection, local);
+    if (actual === null) continue;
+    const source = sourceOf(actual);
+    if (source < areaStart || source > areaEnd) continue;
+    // Titles the range's own run holds already (F:H of A:AA) are in it.
+    if (!projection.visibleIndices && actual >= projection.dataStart && actual < projection.dataStart + projection.dataCount) continue;
+    const size = sizes?.[local];
+    if (typeof size === "number" && Number.isFinite(size) && size > 0) result.push(size);
+  }
+  return result;
+}
+
+/** Fit To counts the print titles on top of the whole range, those that are
+ * part of it too, as if every page, the first included, printed them before
+ * its share of the range (lookwin p74-lw/p74b-lw: 40 columns Fit 1 wide print
+ * 37%, with titles A or A:C 36% / 35%, F:H 35%; 200 rows 1 tall 26%, titles
+ * 50:59 25%, 1:20 24%; R87-X14 51% -> 48%, as Excel). The pages then print
+ * each title once. The API's fit (titles_in_range) is the same rule. */
+function fitTitlesTwice(
+  input: PaginateInput,
+  twice: { rows: readonly number[]; cols: readonly number[] },
+): PaginateInput {
+  const scaling = input.settings.scaling;
+  if (!scaling || scaling.kind === "percent") return input;
+  const fitted = (axis: "row" | "col") =>
+    scaling.kind === "fitToWidth" ? axis === "col"
+      : "widthPages" in scaling ? (axis === "row" ? scaling.heightPages : scaling.widthPages) > 0
+        : true;
+  const rows = fitted("row") ? twice.rows : [];
+  const cols = fitted("col") ? twice.cols : [];
+  if (!rows.length && !cols.length) return input;
+  const titleCount = (range: string | undefined, rowsAxis: boolean) => {
+    const parsed = range ? parseA1Range(range) : null;
+    return parsed ? (rowsAxis ? parsed.r2 - parsed.r1 + 1 : parsed.c2 - parsed.c1 + 1) : 0;
+  };
+  const insert = (sizes: readonly number[] | undefined, total: number, fallback: number, at: number, extra: readonly number[]) => {
+    const all = Array.from({ length: total }, (_, index) => {
+      const size = sizes?.[index];
+      return typeof size === "number" && Number.isFinite(size) && size > 0 ? size : fallback;
+    });
+    return [...all.slice(0, at), ...extra, ...all.slice(at)];
+  };
+  const rowTitles = Math.min(titleCount(input.settings.repeatTitleRows, true), input.totalRows);
+  const colTitles = Math.min(titleCount(input.settings.repeatTitleCols, false), input.totalCols);
+  return {
+    ...input,
+    totalRows: input.totalRows + rows.length,
+    totalCols: input.totalCols + cols.length,
+    rowSizes: rows.length ? insert(input.rowSizes, input.totalRows, input.rowHeight, rowTitles, rows) : input.rowSizes,
+    colSizes: cols.length ? insert(input.colSizes, input.totalCols, input.colWidth, colTitles, cols) : input.colSizes,
+  };
+}
+
+/** The screen width (px) past which a column prints cut at the page's
+ * printable width (`dataAreaWidth`, points) at a percent scale: Windows Excel
+ * prints such a column at the page's width (lookwin p48-lw, p61-lw).
+ * Infinity under Fit To, whose scale shrinks the columns anyway. */
+export function pageLayoutWideColumnLimitPx(
+  dataAreaWidth: number,
+  scaling: PrintSettings["scaling"],
+  printScale?: OfficePrintScale,
+): number {
+  if (scaling && scaling.kind !== "percent") return Infinity;
+  const colPx = SPREADSHEET_PAGE_LAYOUT_PX_TO_PT * validPrintScale(printScale).x;
+  return dataAreaWidth / (colPx * Math.max(0.1, Math.min(4, scaling ? scaling.percent / 100 : 1)));
+}
+
+/** The page's printable width in points for a sheet's print settings. */
+export function pageLayoutDataAreaWidth(printSettings: PrintSettings | undefined): number {
+  const settings = normalizePrintSettings(printSettings) ?? {};
+  const stock = resolvePaperSizePoints(settings.paperSize);
+  const paperWidth = settings.orientation === "landscape" ? stock.height : stock.width;
+  const margins = resolveMargins(settings.margins);
+  return Math.max(1, paperWidth - margins.left - margins.right);
+}
+
 /** Resolve fit policies by asking paginateSheet itself, never a second pager. */
-function resolveContentScale(input: PaginateInput, override?: number): number {
+function resolveContentScale(
+  pageInput: PaginateInput,
+  override?: number,
+  titlesTwice: { rows: readonly number[]; cols: readonly number[] } = { rows: [], cols: [] },
+): number {
   if (typeof override === "number" && Number.isFinite(override) && override > 0) {
     return Math.max(0.1, Math.min(4, override));
   }
-  const scaling = input.settings.scaling;
+  const scaling = pageInput.settings.scaling;
   if (!scaling) return 1;
   if (scaling.kind === "percent") {
     return Math.max(0.1, Math.min(4, scaling.percent / 100));
   }
+  const input = fitTitlesTwice(pageInput, titlesTwice);
   const fits = (scale: number) => {
     const result = pageCountAtScale(input, scale);
     if (scaling.kind === "fitToWidth") {
@@ -547,20 +818,27 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
   drawingBounds?: readonly (readonly [left: number, top: number, width: number, height: number])[];
   /** Internal: a multi-area composite resolves every block at one scale. */
   contentScaleOverride?: number;
+  /** Windows Excel's printer scale of this workbook's grid (officePrintScale
+   * of its Normal font): Excel pages and prints rows and columns at their
+   * printed sizes, so the pages break where its own do. */
+  printScale?: OfficePrintScale;
 }): SpreadsheetPageLayoutGeometry {
   const settings = normalizePrintSettings(input.printSettings) ?? {};
   const printAreaBlocks = printAreaRanges(settings.printArea);
   if (printAreaBlocks.length > 1) {
     return resolveMultiAreaPageLayoutGeometry(input, settings, printAreaBlocks);
   }
+  const printScale = validPrintScale(input.printScale);
+  // Sizes in points as the printer lays them out; the px maps below stay in
+  // screen pixels (rowPx / colPx), which is what the sheet's maps hold.
+  const rowPx = SPREADSHEET_PAGE_LAYOUT_PX_TO_PT * printScale.y;
+  const colPx = SPREADSHEET_PAGE_LAYOUT_PX_TO_PT * printScale.x;
   const baseRowHeight = finitePositive(
-    finitePositive(input.defaultRowHeight, input.rowHeight ?? DEFAULT_SPREADSHEET_ROW_HEIGHT_PX) *
-      SPREADSHEET_PAGE_LAYOUT_PX_TO_PT,
+    finitePositive(input.defaultRowHeight, input.rowHeight ?? DEFAULT_SPREADSHEET_ROW_HEIGHT_PX) * rowPx,
     SPREADSHEET_PAGE_LAYOUT_DEFAULT_ROW_HEIGHT_PT,
   );
   const baseColWidth = finitePositive(
-    finitePositive(input.defaultColumnWidth, input.colWidth ?? DEFAULT_SPREADSHEET_COLUMN_WIDTH_PX) *
-      SPREADSHEET_PAGE_LAYOUT_PX_TO_PT,
+    finitePositive(input.defaultColumnWidth, input.colWidth ?? DEFAULT_SPREADSHEET_COLUMN_WIDTH_PX) * colPx,
     SPREADSHEET_PAGE_LAYOUT_DEFAULT_COLUMN_WIDTH_PT,
   );
   const sourceTotalRows = boundedDimension(input.totalRows);
@@ -568,12 +846,47 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
   const printArea = settings.printArea
     ? parseA1Range(settings.printArea)
     : null;
+  const stock = resolvePaperSizePoints(settings.paperSize);
+  const landscape = settings.orientation === "landscape";
+  const paperWidth = landscape ? stock.height : stock.width;
+  const paperHeight = landscape ? stock.width : stock.height;
+  const sourceMargins = resolveMargins(settings.margins);
+  // Native Mac worksheet origins use whole point pixels. Keep authored
+  // precision separately so merely viewing or grabbing a ruler cannot edit it.
+  const margins = input.nativeGridDpi === 72
+    ? { left: Math.floor(sourceMargins.left), right: Math.floor(sourceMargins.right),
+        top: Math.floor(sourceMargins.top), bottom: Math.floor(sourceMargins.bottom) }
+    : sourceMargins;
+  const dataAreaWidth = Math.max(1, paperWidth - margins.left - margins.right);
+  const dataAreaHeight = Math.max(
+    1,
+    paperHeight - margins.top - margins.bottom,
+  );
+  const columnPx = (index: number) =>
+    input.hiddenCols?.has(index) ? 0 : finitePositive(input.columnWidths?.[String(index)], baseColWidth / colPx);
+  // A column wider than the page prints at the page's width, and a drawing
+  // right of it moves left with it (pageLayoutWideColumns): the columns its
+  // reach needs are counted at those printed widths. Taken at the stated
+  // percent; a Fit To scale is not known yet and shrinks the columns anyway.
+  const scaling = settings.scaling;
+  const wideLimitPx = pageLayoutWideColumnLimitPx(dataAreaWidth, scaling, printScale);
+  let drawingWide: PageLayoutWideColumns | null = null;
+  if (!printArea && Number.isFinite(wideLimitPx) && input.drawingBounds?.length) {
+    const reach = Math.max(0, ...input.drawingBounds.map((bounds) =>
+      Array.isArray(bounds) && bounds.length === 4 && bounds.every(Number.isFinite) ? bounds[0] : 0));
+    const sizes: number[] = [];
+    for (let index = 0, position = 0; position <= reach && index < Math.min(MAX_GRID_COLUMNS, MAX_RENDERED_PAGE_LAYOUT_CELLS_TOTAL); index += 1) {
+      sizes.push(columnPx(index));
+      position += sizes[index];
+    }
+    drawingWide = pageLayoutWideColumns(sizes, wideLimitPx);
+  }
   let drawingRight = 0, drawingBottom = 0;
   if (!printArea) {
     for (const bounds of input.drawingBounds ?? []) {
       if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every(Number.isFinite)) continue;
       const [left, top, width, height] = bounds;
-      const right = left + width, bottom = top + height;
+      const right = pageLayoutClampColumnPoint(left, drawingWide) + width, bottom = top + height;
       if (width <= 0 || height <= 0 || !Number.isFinite(right) || !Number.isFinite(bottom) || right <= 0 || bottom <= 0) continue;
       drawingRight = Math.max(drawingRight, right);
       drawingBottom = Math.max(drawingBottom, bottom);
@@ -588,9 +901,9 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
   const areaRows = boundedArea ? boundedArea.r2 + 1 : 0;
   const areaCols = boundedArea ? boundedArea.c2 + 1 : 0;
   const totalRows = drawingAxisCount(Math.max(sourceTotalRows, areaRows), drawingBottom, MAX_GRID_ROWS, index =>
-    input.hiddenRows?.has(index) ? 0 : finitePositive(input.rowHeights?.[String(index)], baseRowHeight / SPREADSHEET_PAGE_LAYOUT_PX_TO_PT));
+    input.hiddenRows?.has(index) ? 0 : finitePositive(input.rowHeights?.[String(index)], baseRowHeight / rowPx));
   const totalCols = drawingAxisCount(Math.max(sourceTotalCols, areaCols), drawingRight, MAX_GRID_COLUMNS, index =>
-    input.hiddenCols?.has(index) ? 0 : finitePositive(input.columnWidths?.[String(index)], baseColWidth / SPREADSHEET_PAGE_LAYOUT_PX_TO_PT));
+    Math.min(columnPx(index), wideLimitPx));
   // A sorted view's existing source permutation remains intact. The blank
   // rows needed only to reach a drawing follow it in ordinary source order.
   // The order may cover more rows than are printed (the window passes the
@@ -627,29 +940,11 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
       ? { repeatStart: repeatCols.c1, repeatEnd: repeatCols.c2 }
       : {}),
   });
-  const stock = resolvePaperSizePoints(settings.paperSize);
-  const landscape = settings.orientation === "landscape";
-  const paperWidth = landscape ? stock.height : stock.width;
-  const paperHeight = landscape ? stock.width : stock.height;
-  const sourceMargins = resolveMargins(settings.margins);
-  // Native Mac worksheet origins use whole point pixels. Keep authored
-  // precision separately so merely viewing or grabbing a ruler cannot edit it.
-  const margins = input.nativeGridDpi === 72
-    ? { left: Math.floor(sourceMargins.left), right: Math.floor(sourceMargins.right),
-        top: Math.floor(sourceMargins.top), bottom: Math.floor(sourceMargins.bottom) }
-    : sourceMargins;
-  const dataAreaWidth = Math.max(1, paperWidth - margins.left - margins.right);
-  const dataAreaHeight = Math.max(
-    1,
-    paperHeight - margins.top - margins.bottom,
-  );
   const sourceRowSizes = Array.from({ length: totalRows }, (_, index) =>
-    input.hiddenRows?.has(index) ? 0 : finitePositive(input.rowHeights?.[String(index)], baseRowHeight / SPREADSHEET_PAGE_LAYOUT_PX_TO_PT) *
-    SPREADSHEET_PAGE_LAYOUT_PX_TO_PT,
+    input.hiddenRows?.has(index) ? 0 : finitePositive(input.rowHeights?.[String(index)], baseRowHeight / rowPx) * rowPx,
   );
   const sourceColSizes = Array.from({ length: totalCols }, (_, index) =>
-    input.hiddenCols?.has(index) ? 0 : finitePositive(input.columnWidths?.[String(index)], baseColWidth / SPREADSHEET_PAGE_LAYOUT_PX_TO_PT) *
-    SPREADSHEET_PAGE_LAYOUT_PX_TO_PT,
+    input.hiddenCols?.has(index) ? 0 : finitePositive(input.columnWidths?.[String(index)], baseColWidth / colPx) * colPx,
   );
   const projectSizes = (
     projection: PageLayoutAxisProjection,
@@ -688,9 +983,14 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
   const lastPrintedRow = Math.max(printArea?.r2 ?? totalRows - 1, repeatRows?.r2 ?? 0);
   const headingDigits = Math.max(3, String(lastPrintedRow + 1).length);
   const unscaledHeadingHeight = settings.showHeadings === true ? baseRowHeight : 0;
-  const unscaledHeadingWidth = settings.showHeadings === true
-    ? ((headingDigits * headingDigit + Math.round(headingDigit * 0.8)) * 72) / headingDpi
-    : 0;
+  // Windows Excel's printer (lookwin probe p18: Calibri 11, Arial 10, ＭＳ Ｐゴシック
+  // 11): the digits at the printed digit width plus 32 printer dots, 20.76 pt
+  // for three Calibri 11 digits, 26.4 pt for four.
+  const unscaledHeadingWidth = settings.showHeadings !== true
+    ? 0
+    : printScale !== OFFICE_PRINT_IDENTITY
+      ? ((headingDigits * headingDigit * 72) / headingDpi) * printScale.x + (32 * 72) / 600
+      : ((headingDigits * headingDigit + Math.round(headingDigit * 0.8)) * 72) / headingDpi;
   const unscaledPaginateInput: PaginateInput = {
     headingHeight: unscaledHeadingHeight,
     headingWidth: unscaledHeadingWidth,
@@ -704,15 +1004,19 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     colSizes: projectSizes(colProjection, sourceColSizes, baseColWidth),
     settings: paginationSettings,
   };
-  const contentScale = resolveContentScale(unscaledPaginateInput, input.contentScaleOverride);
+  const contentScale = resolveContentScale(unscaledPaginateInput, input.contentScaleOverride, {
+    rows: titlesInRangeSizes(rowProjection, unscaledPaginateInput.rowSizes, printArea?.r1 ?? 0, printArea?.r2 ?? totalRows - 1,
+      (actual) => rowOrder?.[actual] ?? actual),
+    cols: titlesInRangeSizes(colProjection, unscaledPaginateInput.colSizes, printArea?.c1 ?? 0, printArea?.c2 ?? totalCols - 1),
+  });
   const rowHeight = baseRowHeight * contentScale;
   const colWidth = baseColWidth * contentScale;
   const paginateInput: PaginateInput = {
     ...unscaledPaginateInput,
     rowHeight,
     colWidth,
-    rowSizes: unscaledPaginateInput.rowSizes?.map((size) => size * contentScale),
-    colSizes: unscaledPaginateInput.colSizes?.map((size) => size * contentScale),
+    rowSizes: unscaledPaginateInput.rowSizes?.map((size) => printedRowPoints(size, contentScale)),
+    colSizes: unscaledPaginateInput.colSizes?.map((size) => printedColumnPoints(size, contentScale)),
     headingHeight: unscaledHeadingHeight * contentScale,
     headingWidth: unscaledHeadingWidth * contentScale,
   };
@@ -733,8 +1037,8 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     dataAreaHeight,
     rowHeight,
     colWidth,
-    rowSizes: sourceRowSizes.map((size) => size * contentScale),
-    colSizes: sourceColSizes.map((size) => size * contentScale),
+    rowSizes: sourceRowSizes.map((size) => printedRowPoints(size, contentScale)),
+    colSizes: sourceColSizes.map((size) => printedColumnPoints(size, contentScale)),
     contentScale,
     headingHeight: unscaledHeadingHeight * contentScale,
     headingWidth: unscaledHeadingWidth * contentScale,
@@ -743,7 +1047,17 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     totalPages,
     rowProjection,
     colProjection,
+    ...(printScale !== OFFICE_PRINT_IDENTITY ? { printScale } : {}),
   };
+}
+
+function validPrintScale(scale: OfficePrintScale | undefined): OfficePrintScale {
+  // A factor past these bounds is not a printer's metrics (the measured
+  // faces lie between 0.85 and 1.17): it would only distort the page.
+  const ok = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value >= 0.5 && value <= 2;
+  return scale && ok(scale.x) && ok(scale.y) && (scale.x !== 1 || scale.y !== 1)
+    ? { x: scale.x, y: scale.y }
+    : OFFICE_PRINT_IDENTITY;
 }
 
 /**
@@ -808,6 +1122,44 @@ function axisPageIndices(
     rowPageIndex: overThenDown ? Math.floor(index / colPageCount) : index % rowPageCount,
     colPageIndex: overThenDown ? index % colPageCount : Math.floor(index / rowPageCount),
   };
+}
+
+/**
+ * How many of the sheet's pages print: Excel leaves out the trailing blank
+ * pages ("Trailing blank page suppression is the default behavior of Excel"),
+ * those after the last page with anything on it, in page order; the first
+ * page always prints, a blank page before a printing one prints, and a print
+ * area prints every page. `pagePrints` says whether a page (its own rows and
+ * columns, as live worksheet indices, and the print titles printed with it)
+ * holds anything: a value, a fill or border of a cell of its own, a drawing,
+ * a spill, a row's `spans` (lookwin p67-lw). The API's page_meta blank /
+ * dropped is the same rule.
+ */
+export function pageLayoutPrintedPageCount(
+  geometry: SpreadsheetPageLayoutGeometry,
+  pagePrints: (rows: readonly number[], cols: readonly number[],
+    titleRows: readonly number[], titleCols: readonly number[]) => boolean,
+): number {
+  if (geometry.segments || geometry.settings.printArea || geometry.totalPages <= 1) return geometry.totalPages;
+  const indices = (projection: PageLayoutAxisProjection, first: number, last: number) => {
+    const result: number[] = [];
+    for (let local = first; local <= last; local += 1) {
+      const actual = mapLocalAxisIndex(projection, local);
+      if (actual !== null) result.push(actual);
+    }
+    return result;
+  };
+  const titleRows = indices(geometry.rowProjection, 0, geometry.rowProjection.repeatCount - 1);
+  const titleCols = indices(geometry.colProjection, 0, geometry.colProjection.repeatCount - 1);
+  for (let index = geometry.totalPages - 1; index > 0; index -= 1) {
+    const { rowPageIndex, colPageIndex } = axisPageIndices(geometry, index);
+    const rowRange = geometry.pagination.rowRanges[rowPageIndex];
+    const colRange = geometry.pagination.colRanges[colPageIndex];
+    if (!rowRange || !colRange) return index + 1;
+    if (pagePrints(indices(geometry.rowProjection, rowRange[0], rowRange[1]),
+      indices(geometry.colProjection, colRange[0], colRange[1]), titleRows, titleCols)) return index + 1;
+  }
+  return 1;
 }
 
 /**
@@ -895,29 +1247,40 @@ function indicesForPageRange(
   projection: PageLayoutAxisProjection,
   limit: number,
 ): number[] {
-  const result: number[] = [];
-  for (
-    let index = 0;
-    index < projection.repeatCount && result.length < limit;
-    index += 1
-  ) {
+  const titles: number[] = [];
+  for (let index = 0; index < projection.repeatCount; index += 1) {
     const mapped = mapLocalAxisIndex(projection, index);
-    if (mapped !== null) result.push(mapped);
+    if (mapped !== null) titles.push(mapped);
   }
   const dataStart = Math.max(range[0], projection.repeatCount);
   const dataEnd = Math.min(
     range[1],
     projection.repeatCount + projection.dataCount - 1,
   );
-  for (
-    let index = dataStart;
-    index <= dataEnd && result.length < limit;
-    index += 1
-  ) {
+  const body: number[] = [];
+  for (let index = dataStart; index <= dataEnd && titles.length + body.length < limit; index += 1) {
     const mapped = mapLocalAxisIndex(projection, index);
-    if (mapped !== null) result.push(mapped);
+    if (mapped !== null) body.push(mapped);
   }
-  return result;
+  return pageTitledIndices(titles, body).slice(0, limit);
+}
+
+/**
+ * A page's rows (or columns) in print order: its print titles, then its
+ * share of the range -- except on the page whose share runs from before the
+ * titles to past them, where the titles print in their own place, once
+ * (Windows Excel, lookwin R59-X18: titles 3:22 of a range from row 1, the
+ * first page prints rows 1-33 in order; later pages print the titles above
+ * their share). The API's titled_lines is the same rule.
+ */
+export function pageTitledIndices(titles: readonly number[], body: readonly number[]): number[] {
+  const firstTitle = titles[0];
+  const lastTitle = titles[titles.length - 1];
+  if (firstTitle === undefined || lastTitle === undefined || !body.length) return [...titles, ...body];
+  const before = body.filter((index) => index < firstTitle);
+  const after = body.filter((index) => index > lastTitle);
+  if (!before.length || !after.length || before.length + after.length !== body.length) return [...titles, ...body];
+  return [...before, ...titles, ...after];
 }
 
 function boundedAxisLimits(

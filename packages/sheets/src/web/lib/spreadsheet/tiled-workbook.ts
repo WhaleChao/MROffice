@@ -65,6 +65,15 @@ export interface TiledWorkbookOpening {
   /** The sheet the workbook opens on (what it first shows is read before the
    * page's own read has answered); absent from an older server. */
   active_sheet_id?: string | null;
+  /** The tiles its first screen is drawn from, as the editor reads tiles
+   * (asked with `first=editor`; absent from an older server or a workbook
+   * of the first version). */
+  first_tiles?: {
+    revision: number;
+    sheet: string;
+    styles: Record<string, unknown>[];
+    tiles: { tile: number; revision: number; cells: Record<string, Record<string, unknown>> }[];
+  };
 }
 
 export const EXCEL_MAX_ROWS = 1_048_576;
@@ -89,7 +98,9 @@ export async function fetchTiledWorkbook(
   options?: { beforeMountKnown?: boolean },
 ): Promise<TiledWorkbookOpening | null> {
   try {
-    return await apiGet<TiledWorkbookOpening>(base(pageId), { signal }, options);
+    // With the tiles its first screen is drawn from: they were a second
+    
+    return await apiGet<TiledWorkbookOpening>(`${base(pageId)}?first=editor`, { signal }, options);
   } catch (error) {
     if (isApiRequestError(error) && error.status === 404) return null;
     throw error;

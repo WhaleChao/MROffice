@@ -9,6 +9,8 @@
 /* eslint-disable */
 import { inertClass, inertComponent, inertFunction, inertHook, inertValue } from "@mrnote/core/host/inert.ts";
 
+export const OUTLINE_INCOMPLETE: any = "\u0000outline-incomplete";
+export type OUTLINE_INCOMPLETE = any;
 export const captureSavedPaginationProjection: any = inertFunction("cut#captureSavedPaginationProjection", "null");
 export type captureSavedPaginationProjection = any;
 export const captureSavedPaginationProjectionInSteps: any = inertFunction("cut#captureSavedPaginationProjectionInSteps", "promise");

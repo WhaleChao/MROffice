@@ -34,12 +34,33 @@ import {
   type OfficeThemeGridColors,
   type OfficeThemeGridSlot,
 } from "./office-theme-color-grid";
-import type { DeckTheme, PresentationThemeColorSlot } from "./presentation-theme";
+import {
+  PRESENTATION_THEME_COLOR_SLOTS,
+  markThemeSelectionCustom,
+  type DeckTheme,
+  type PresentationThemeColorSlot,
+} from "./presentation-theme";
 import type { OfficeTextPaint } from "./office-text-paint";
 import { presentationTextPaintUnderTheme } from "./presentation-wordart-gallery";
-import { officeMasterColorMapFlipped, officeThemeMasterIsDark } from "./presentation-office-background-styles";
+import { resolveSmartArtListColor } from "./office-smartart/colors";
+import type { TextRun } from "./presentation-runs";
+import { presentationThemeColorMap } from "./presentation-office-background-styles";
+import {
+  presentationMasterColorMap,
+  presentationMasterMappedColor,
+  type PresentationMasterColorMapRecord,
+} from "./presentation/master-color-map";
 
 export const PRESENTATION_THEME_COLORS_KEY = "themeColors";
+
+
+
+
+
+
+
+
+export const PRESENTATION_THEME_COLORS_TRANSFORMED_KEY = "themeColorsTransformed";
 
 /** The colour fields a theme reference may stand behind, per block kind. */
 export const PRESENTATION_THEME_COLOR_FIELDS = {
@@ -113,15 +134,6 @@ const GRID_TO_THEME_SLOT: Record<OfficeThemeGridSlot, PresentationThemeColorSlot
   accent6: "accent6",
 };
 
-/** The dark colour map, the one Office's dark variants use. */
-const DARK_MAP_THEME_SLOT: Record<OfficeThemeGridSlot, PresentationThemeColorSlot> = {
-  ...GRID_TO_THEME_SLOT,
-  bg1: "dk1",
-  tx1: "lt1",
-  bg2: "dk2",
-  tx2: "lt2",
-};
-
 /**
  * The ten picker colours of a deck's theme: its twelve Office slots when it
  * states them (an Office theme, or an imported deck's own theme), else the
@@ -130,37 +142,107 @@ const DARK_MAP_THEME_SLOT: Record<OfficeThemeGridSlot, PresentationThemeColorSlo
  */
 export function presentationThemeGridColors(
   theme: DeckTheme | null | undefined,
+  master?: PresentationMasterColorMapRecord | null,
 ): OfficeThemeGridColors {
-  const identity = theme?.identity;
-  const slots =
-    theme?.colorSlots ??
-    (identity?.selectionKind === "native" && identity.variantId === "base"
-      ? identity.source?.colorSlots
-      : undefined);
+  // A slide on a master with its own colour map (reading row 850): its
+  // Text / Background cells are what that master maps them to.
+  const masterMap = presentationMasterColorMap(theme, master);
+  const mastersOwn = (slot: OfficeThemeGridSlot): string | null =>
+    slot === "bg1" || slot === "tx1" || slot === "bg2" || slot === "tx2"
+      ? normalizeHexColor(presentationMasterMappedColor(theme, master, slot))
+      : null;
+  if (masterMap) theme = { ...theme, colorMap: masterMap };
   // bg1 / tx1 / bg2 / tx2 name a slot through the master's colour map (`p:clrMap`):
   // a dark variant's Background 1 is its dark slot. Read as the light map, a
   // reselected dark theme turned its master's lines from #262626 to #ffffff, and
-  // the Theme Colors grid offered the other end of each pair.
-  const darkMap = officeThemeMasterIsDark(theme) !== officeMasterColorMapFlipped(theme);
-  const stated = (slot: OfficeThemeGridSlot): string | null =>
-    normalizeHexColor(slots?.[darkMap ? DARK_MAP_THEME_SLOT[slot] : GRID_TO_THEME_SLOT[slot]]);
-  const accent = (index: number) =>
-    normalizeHexColor(theme?.accentColors?.[index]);
+  // the Theme Colors grid offered the other end of each pair. An imported dark
+  // master states its map (`colorMap`, reading row 826): its Text 1 cell is
+  // Light 1 too, as PowerPoint's grid shows it.
+  const map = presentationThemeColorMap(theme);
+  const slots = presentationThemeSchemeSlots(theme);
   const colors = {} as Record<OfficeThemeGridSlot, string>;
   for (const slot of OFFICE_THEME_GRID_SLOTS) {
-    const fromFields =
-      slot === "bg1"
-        ? normalizeHexColor(theme?.background)
-        : slot === "tx1"
-          ? normalizeHexColor(theme?.titleColor)
-          : slot === "tx2"
-            ? normalizeHexColor(theme?.bodyTextColor)
-            : slot.startsWith("accent")
-              ? accent(Number(slot.slice(6)) - 1)
-              : null;
-    colors[slot] = stated(slot) ?? fromFields ?? FALLBACK_SLOTS[slot];
+    const themeSlot =
+      slot === "bg1" || slot === "tx1" || slot === "bg2" || slot === "tx2" ? map[slot] : GRID_TO_THEME_SLOT[slot];
+    colors[slot] = mastersOwn(slot) ?? normalizeHexColor(slots[themeSlot]) ?? FALLBACK_SLOTS[slot];
   }
   return colors;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationThemeMarkedCustom(
+  merged: DeckTheme,
+  previous: DeckTheme | null | undefined,
+): DeckTheme | undefined {
+  const slots: Partial<Record<PresentationThemeColorSlot, string>> = presentationThemeSchemeSlots(previous);
+  if (merged.colorSlots && JSON.stringify(merged.colorSlots) !== JSON.stringify(previous?.colorSlots)) {
+    Object.assign(slots, merged.colorSlots);
+  }
+  const ground = normalizeHexColor(merged.background);
+  if (ground && ground !== normalizeHexColor(previous?.background)) {
+    slots[presentationThemeColorMap(merged).bg1] = ground;
+  }
+  if (JSON.stringify(merged.accentColors ?? []) !== JSON.stringify(previous?.accentColors ?? [])) {
+    const own = previous?.identity?.source?.colorSlots;
+    for (let index = 0; index < 6; index += 1) {
+      const slot = `accent${index + 1}` as PresentationThemeColorSlot;
+      const value = normalizeHexColor(merged.accentColors?.[index]) ?? normalizeHexColor(own?.[slot]);
+      if (value) slots[slot] = value;
+    }
+  }
+  const complete = PRESENTATION_THEME_COLOR_SLOTS.every((slot) => normalizeHexColor(slots[slot]));
+  return markThemeSelectionCustom(
+    complete ? { ...merged, colorSlots: Object.fromEntries(PRESENTATION_THEME_COLOR_SLOTS.map((slot) => [slot, normalizeHexColor(slots[slot])])) as DeckTheme["colorSlots"] } : merged,
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationThemeSchemeSlots(
+  theme: DeckTheme | null | undefined,
+): Partial<Record<PresentationThemeColorSlot, string>> {
+  const identity = theme?.identity;
+  if (theme?.colorSlots) return { ...theme.colorSlots };
+  const source = identity?.source?.colorSlots;
+  if (identity?.selectionKind === "native" && identity.variantId === "base" && source) return { ...source };
+  const slots: Partial<Record<PresentationThemeColorSlot, string>> = { ...(source ?? {}) };
+  const set = (slot: PresentationThemeColorSlot, value: unknown) => {
+    const hex = normalizeHexColor(value);
+    if (hex) slots[slot] = hex;
+  };
+  const designOwnsSlots = !source || identity?.selectionKind === "catalog" || identity?.selectionKind === "office";
+  if (designOwnsSlots) {
+    set("lt1", theme?.background);
+    set("dk1", theme?.titleColor);
+    set("dk2", theme?.bodyTextColor);
+  } else {
+    set(presentationThemeColorMap(theme).bg1, theme?.background);
+  }
+  (theme?.accentColors ?? []).slice(0, 6).forEach((value, index) => set(`accent${index + 1}` as PresentationThemeColorSlot, value));
+  return slots;
 }
 
 export function normalizePresentationThemeColorBindings(
@@ -186,14 +268,26 @@ function blockFields(block: PresentationBlock): readonly PresentationThemeColorF
   return [];
 }
 
+/** Every binding a block stores: `themeColors`' swatches and
+ * `themeColorsTransformed`'s references with transforms. */
+export function presentationBlockThemeColorBindings(
+  block: PresentationBlock,
+): PresentationThemeColorBindings | undefined {
+  const record = block as Record<string, unknown>;
+  const plain = normalizePresentationThemeColorBindings(record[PRESENTATION_THEME_COLORS_KEY]);
+  const stepped = normalizePresentationThemeColorBindings(record[PRESENTATION_THEME_COLORS_TRANSFORMED_KEY]);
+  const result: Record<string, PresentationThemeColorBinding> = {};
+  for (const [field, binding] of Object.entries(plain ?? {})) if (binding && !binding.transforms) result[field] = binding;
+  for (const [field, binding] of Object.entries(stepped ?? {})) if (binding?.transforms?.length) result[field] = binding;
+  return Object.keys(result).length ? (result as PresentationThemeColorBindings) : undefined;
+}
+
 /** The binding behind one field, only while it still authenticates. */
 export function presentationThemeColorBinding(
   block: PresentationBlock,
   field: PresentationThemeColorField,
 ): PresentationThemeColorBinding | null {
-  const binding = normalizePresentationThemeColorBindings(
-    (block as Record<string, unknown>)[PRESENTATION_THEME_COLORS_KEY],
-  )?.[field];
+  const binding = presentationBlockThemeColorBindings(block)?.[field];
   const value = normalizeHexColor((block as Record<string, unknown>)[field]);
   return binding && value === binding.rgb ? binding : null;
 }
@@ -203,8 +297,15 @@ function withBindings(
   bindings: PresentationThemeColorBindings,
 ): PresentationBlock {
   const next = { ...block } as Record<string, unknown>;
-  if (Object.keys(bindings).length) next[PRESENTATION_THEME_COLORS_KEY] = bindings;
+  const plain: Record<string, PresentationThemeColorBinding> = {};
+  const stepped: Record<string, PresentationThemeColorBinding> = {};
+  for (const [field, binding] of Object.entries(bindings)) {
+    if (binding) (binding.transforms?.length ? stepped : plain)[field] = binding;
+  }
+  if (Object.keys(plain).length) next[PRESENTATION_THEME_COLORS_KEY] = plain;
   else delete next[PRESENTATION_THEME_COLORS_KEY];
+  if (Object.keys(stepped).length) next[PRESENTATION_THEME_COLORS_TRANSFORMED_KEY] = stepped;
+  else delete next[PRESENTATION_THEME_COLORS_TRANSFORMED_KEY];
   return next as PresentationBlock;
 }
 
@@ -223,9 +324,7 @@ export function reconcilePresentationThemeColors(
   if (!fields.length) return after;
   const record = after as Record<string, unknown>;
   const previous = before as Record<string, unknown> | undefined;
-  const stored = normalizePresentationThemeColorBindings(
-    record[PRESENTATION_THEME_COLORS_KEY],
-  );
+  const stored = presentationBlockThemeColorBindings(after);
   const bindings: PresentationThemeColorBindings = {};
   const picks = (Array.isArray(pick) ? pick : pick ? [pick] : []) as readonly PresentationThemeColorPick[];
   const pickFor = (value: string | null) =>
@@ -245,11 +344,41 @@ export function reconcilePresentationThemeColors(
   }
   if (
     JSON.stringify(stored ?? {}) === JSON.stringify(bindings) &&
-    (stored !== undefined || !(PRESENTATION_THEME_COLORS_KEY in record))
+    (stored !== undefined ||
+      (!(PRESENTATION_THEME_COLORS_KEY in record) && !(PRESENTATION_THEME_COLORS_TRANSFORMED_KEY in record)))
   ) {
     return after;
   }
   return withBindings(after, bindings);
+}
+
+
+
+
+
+
+
+
+
+export function presentationBlockKeepingThemeBindings(
+  before: PresentationBlock,
+  after: PresentationBlock,
+  colors: OfficeThemeGridColors,
+): PresentationBlock {
+  if (!presentationBlockThemeColorBindings(before)) return after;
+  const current = { ...(presentationBlockThemeColorBindings(after) ?? {}) } as Record<string, PresentationThemeColorBinding>;
+  let changed = false;
+  for (const field of blockFields(after)) {
+    const binding = presentationThemeColorBinding(before, field);
+    if (!binding || current[field]) continue;
+    const value = normalizeHexColor((after as Record<string, unknown>)[field]);
+    const resolved = officeThemeRefHex(binding, colors);
+    if (value && resolved === value) {
+      current[field] = { ...binding, rgb: value };
+      changed = true;
+    }
+  }
+  return changed ? withBindings(after, current as PresentationThemeColorBindings) : after;
 }
 
 /**
@@ -308,7 +437,7 @@ export function presentationBlockUnderTheme(
   colors: OfficeThemeGridColors,
   previousColors?: OfficeThemeGridColors,
 ): PresentationBlock {
-  const block = wordArtUnderTheme(input, colors);
+  const block = runsUnderTheme(wordArtUnderTheme(input, colors), colors);
   const fields = blockFields(block);
   if (!fields.length) return block;
   const bindings: PresentationThemeColorBindings = {};
@@ -352,6 +481,48 @@ function resolvedUnderOppositeMap(
   if (!["bg1", "tx1", "bg2", "tx2"].includes(binding.slot)) return false;
   return !sameColorWithinRounding(officeThemeRefHex(binding, previous), binding.rgb) &&
     sameColorWithinRounding(officeThemeRefHex(binding, oppositeMapColors(previous)), binding.rgb);
+}
+
+
+
+
+
+
+
+function runsUnderTheme(input: PresentationBlock, colors: OfficeThemeGridColors): PresentationBlock {
+  if (input.type !== "text") return input;
+  const theme = {
+    dk1: colors.tx1, lt1: colors.bg1, dk2: colors.tx2, lt2: colors.bg2,
+    accents: [colors.accent1, colors.accent2, colors.accent3, colors.accent4, colors.accent5, colors.accent6],
+  };
+  // A converted label's own colour in a theme colour (`smartArtTextColorScheme`).
+  let block: PresentationBlock = input;
+  {
+    const own = (block as { smartArtTextColorScheme?: { scheme: string; mods: readonly (readonly [string, number])[]; rgb: string } }).smartArtTextColorScheme;
+    const drawn = (block as { style?: { color?: string } }).style?.color;
+    if (own && drawn && own.rgb === drawn) {
+      const resolved = resolveSmartArtListColor(undefined, [own], 0, 1, theme);
+      if (resolved && resolved.alpha > 0 && resolved.color !== drawn) {
+        block = {
+          ...block,
+          style: { ...(block as { style?: object }).style, color: resolved.color },
+          smartArtTextColorScheme: { ...own, rgb: resolved.color },
+        } as PresentationBlock;
+      }
+    }
+  }
+  const runs = (block as { runs?: TextRun[] }).runs;
+  if (!Array.isArray(runs) || !runs.some((run) => run.style?.colorScheme)) return block;
+  let changed = false;
+  const next = runs.map((run) => {
+    const scheme = run.style?.colorScheme;
+    if (!scheme || !run.style?.color || scheme.rgb !== run.style.color) return run;
+    const resolved = resolveSmartArtListColor(undefined, [scheme], 0, 1, theme);
+    if (!resolved || resolved.alpha <= 0 || resolved.color === run.style.color) return run;
+    changed = true;
+    return { ...run, style: { ...run.style, color: resolved.color, colorScheme: { ...scheme, rgb: resolved.color } } };
+  });
+  return changed ? ({ ...block, runs: next } as PresentationBlock) : block;
 }
 
 /** A text box's or shape's WordArt under the new theme (PPT-A059). */

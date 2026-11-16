@@ -189,6 +189,12 @@ export const TOC_RIGHT_TAB_INSET_PX = (0.5 * 96) / 72;
  * number at the right margin. The width is measured, row by row: all
  * leaders collapsed, all rows read, all widths written.
  */
+/** `window.__docsRtlTocRowsOff = true` draws right-to-left rows left to right,
+ * as before, for an A/B of one build. */
+function rtlTocRowsOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsRtlTocRowsOff?: boolean }).__docsRtlTocRowsOff === true;
+}
+
 export function layoutTocLeaders(list: HTMLElement | null): void {
   if (!list) return;
   const rows = Array.from(list.querySelectorAll<HTMLElement>('.note-editor-toc__link[data-toc-tail="leader"]'));
@@ -226,6 +232,14 @@ export function layoutTocLeaders(list: HTMLElement | null): void {
     const page = row.querySelector<HTMLElement>(".note-editor-toc__page-number");
     const pageWidth = page ? page.getBoundingClientRect().width : 0;
     const em = Number.parseFloat(style.fontSize) * scale;
+    // A right-to-left row's words end on the left of their last line, and its
+    // tab stop stands in from the left margin (nativeRowCss).
+    if (style.direction === "rtl") {
+      const rtlStop = contentLeft + TOC_RIGHT_TAB_INSET_PX * scale;
+      let rtlWidth = (lastLine ? lastLine.left : contentRight) - rtlStop - pageWidth;
+      if (rtlWidth < em * TOC_MIN_LEADER_EM) rtlWidth = contentRight - rtlStop - pageWidth;
+      return Math.max(0, rtlWidth / scale);
+    }
     const tabStop = contentRight - TOC_RIGHT_TAB_INSET_PX * scale;
     let width = tabStop - (lastLine ? lastLine.right : contentLeft) - pageWidth;
     if (width < em * TOC_MIN_LEADER_EM) width = tabStop - contentLeft - pageWidth;
@@ -553,8 +567,29 @@ export function nativeParagraphCss(attrs: Record<string, unknown> | undefined): 
 function nativeRowCss(node: Record<string, unknown>, attrs: Record<string, unknown>): CSSProperties {
   const css: CSSProperties = {};
   const indent = attrs.indentLeftPt;
-  css.paddingLeft =
+  const start =
     typeof indent === "number" && Number.isFinite(indent) && indent >= -1584 && indent <= 1584 ? `${indent}pt` : "0pt";
+  // A right-to-left row (w:bidi, corpus R297-D05's TOC 1/2) runs from the
+  // right margin, its tab, leader and page number to its left: Windows Word
+  // draws "تمهيد: لماذا هذا الدليل؟" from 523.5 pt, the dots to 88.6 and "5"
+  // at 79 (the right tab at 8 900 twips from the right). Its start indent is
+  // the right one; its end indent leaves the tab and the number where they
+  // are, as on the left of a left-to-right row.
+  if (attrs.dir === "rtl" && !rtlTocRowsOff()) {
+    css.direction = "rtl";
+    css.paddingRight = start;
+    css.paddingLeft = "0pt";
+  } else css.paddingLeft = start;
+  // The tab after an entry's number goes to the row's first left tab stop,
+  // as Word sets it, not to the document's default interval (corpus
+  // R281-D02: "1<tab>LIST OF ABBREVIATIONS" under a stop at 480 twips drew
+  // its words at 36 pt, Word's at 24 pt). A stop is measured from the
+  // margin, the row's tab stops from its indent.
+  const stop = nativeRowFirstLeftTabPt(attrs.tabStops);
+  const indentPt = typeof indent === "number" && Number.isFinite(indent) ? indent : 0;
+  if (stop !== null && stop - indentPt > 0.5) {
+    (css as Record<string, string>)["--toc-row-tab-size"] = `${Math.round((stop - indentPt) * 100) / 100}pt`;
+  }
   const content = Array.isArray(node.content) ? (node.content as Record<string, unknown>[]) : [];
   const run = content.find((item) => item && item.type === "text");
   const marks = Array.isArray(run?.marks) ? (run?.marks as Record<string, unknown>[]) : [];
@@ -579,6 +614,21 @@ function nativeRowCss(node: Record<string, unknown>, attrs: Record<string, unkno
     }
   }
   return css;
+}
+
+/** The first left (start) tab stop a native paragraph states, in pt from
+ * the margin, or null. Its positions are twips. */
+function nativeRowFirstLeftTabPt(raw: unknown): number | null {
+  if (!Array.isArray(raw)) return null;
+  let best: number | null = null;
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const { pos, align } = entry as { pos?: unknown; align?: unknown };
+    if (typeof pos !== "number" || !Number.isFinite(pos) || pos <= 0 || pos > 31680) continue;
+    if (align !== undefined && align !== null && align !== "left" && align !== "start") continue;
+    if (best === null || pos < best) best = pos;
+  }
+  return best === null ? null : best / 20;
 }
 
 /** The character look of a native paragraph's first run. */
@@ -1371,12 +1421,19 @@ function TableOfContentsView(props: NodeViewProps) {
   );
 }
 
-const TableOfContents = Node.create({
+const TableOfContents = Node.create<{
+  /** Says a table of contents asked for in a table cell went after the table (referencesButtons). */
+  onPlacedAfterTable?: () => void;
+}>({
   name: "tableOfContents",
   group: "block",
   atom: true,
   draggable: true,
   selectable: true,
+
+  addOptions() {
+    return { onPlacedAfterTable: undefined };
+  },
 
   addAttributes() {
     return {

@@ -69,7 +69,7 @@ import { LIST_ITEM_SPLIT_BRIDGE_ATTR } from "../native-document/paged/containerS
 import { listParagraphSpacingDecorations } from "../native-document/listParagraphSpacing";
 import { PAGE_BLOCK_NODE } from "../native-document/paged/paginationProjectionKeys";
 import { touchedRanges } from "../native-document/touchedTextblocks";
-import { WORD_ZH_CN_NO_START_EXTRA, WORD_ZH_CN_NO_START_EXTRA_TEST, documentHangulWordRanges, documentKinsokuAllowedBreaks, wordKinsokuList, documentHanSlashBoundaries, documentKinsokuNoStartBoundaries, documentSlashLetterBoundaries, documentSourceArrowBoundaries } from "../native-document/documentWordDelimiterBoundaries";
+import { WORD_ZH_CN_NO_START_EXTRA, WORD_ZH_CN_NO_START_EXTRA_TEST, documentHangulWordRanges, documentKoreanWholeWordRanges, documentKinsokuAllowedBreaks, wordKinsokuList, documentHanSlashBoundaries, documentKinsokuNoStartBoundaries, documentSlashLetterBoundaries, documentSourceArrowBoundaries } from "../native-document/documentWordDelimiterBoundaries";
 import { resolveDocumentOverflowPunctuation, resolveDocumentWordWrap, wordPunctuationMayHang } from "../native-document/documentOverflowPunctuation";
 import { documentOwnStyleFontSizePx, documentStyleFontSizePx, paragraphHoldsNoText } from "../native-document/documentStyleFontSize";
 import { wordAutoTextAttributes } from "../native-document/wordAutoTextColor";
@@ -673,6 +673,30 @@ function documentHeadingStyleSizeDecorations(
 /** Han, Kana, Hangul, CJK punctuation and fullwidth forms. */
 const EAST_ASIAN_TEXT = /[\u1100-\u11ff\u2e80-\u9fff\ua960-\ua97f\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]|[\u{20000}-\u{3134f}]/u;
 
+const EAST_ASIAN_CHARACTER = /[\u1100-\u11ff\u2e80-\u9fff\ua960-\ua97f\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]|[\u{20000}-\u{3134f}]/u;
+
+/** The maximal runs of East Asian characters (their punctuation included)
+ * in a text block's text nodes, as document ranges. */
+function eastAsianRunRanges(block: PmNode, contentFrom: number): Array<{ from: number; to: number }> {
+  const ranges: Array<{ from: number; to: number }> = [];
+  block.forEach((child, offset) => {
+    if (!child.isText || !child.text) return;
+    let start = -1;
+    let index = 0;
+    for (const character of child.text) {
+      const east = EAST_ASIAN_CHARACTER.test(character);
+      if (east && start < 0) start = index;
+      if (!east && start >= 0) {
+        ranges.push({ from: contentFrom + offset + start, to: contentFrom + offset + index });
+        start = -1;
+      }
+      index += character.length;
+    }
+    if (start >= 0) ranges.push({ from: contentFrom + offset + start, to: contentFrom + offset + index });
+  });
+  return ranges;
+}
+
 /**
  * Word's simplified-Chinese "cannot end a line" characters (Kinsoku,
  * `w:kinsoku`; zh-CN default list `$(£¥·‘“〈《「『【〔〖〝﹙﹛﹝＄（．［｛￡￥`) that
@@ -759,6 +783,12 @@ function kinsokuNoEndRanges(
   return ranges;
 }
 
+/** Harness switch (`window.__docsKoreanWordWrapOff = true`): Latin words in
+ * Korean text under w:wordWrap 0 are cut as in any other text (A/B). */
+function koreanWordWrapOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKoreanWordWrapOff?: boolean }).__docsKoreanWordWrapOff === true;
+}
+
 /** Inherited Word punctuation defaults are independent of list layout gates. */
 function documentOverflowPunctuationDecorations(
   doc: PmNode,
@@ -828,6 +858,22 @@ function documentOverflowPunctuationDecorations(
         }, { inclusiveStart: false, inclusiveEnd: false }));
       }
     }
+    // East Asian line breaking rules off (`w:kinsoku` 0): Word lets any East
+    // Asian character, its punctuation included, open or end a line, and
+    // still wraps Latin text between words (docx-look/probes kin_probe.py:
+    // "，" and "。" open lines with kinsoku 0; the Latin paragraph breaks at
+    // the same words either way). A paragraph-wide `line-break: anywhere` cut
+    // Latin words mid-word at every line end (corpus R324-D01, a Norwegian
+    // template's body style with kinsoku off: "quant|um", "Alumin|ium";
+    // 37 of 44 corpus documents with kinsoku off hold no East Asian text).
+    if ((displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku) === false && EAST_ASIAN_TEXT.test(block.textContent)) {
+      for (const range of eastAsianRunRanges(block, pos + 1)) {
+        result.push(Decoration.inline(range.from, range.to, {
+          "data-document-kinsoku-off": "true",
+          style: "line-break:anywhere",
+        }, { inclusiveStart: false, inclusiveEnd: false }));
+      }
+    }
     // The marks Word's list for the text's language lets start or end a line
     // where Chromium's line breaking does not (R14-D15's ladder).
     if (sourceAdapter === "docx" && (displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku) !== false) {
@@ -855,6 +901,19 @@ function documentOverflowPunctuationDecorations(
           style: "white-space:pre-wrap",
         }));
       }
+    }
+    // "Allow Latin text to wrap in the middle of a word" (w:wordWrap 0, drawn
+    // word-break: break-all by the attribute) cuts no Latin word in Korean
+    // text: Word keeps the word whole there, and Hangul still breaks between
+    // syllables as with break-all (documentKoreanWholeWordRanges). Under
+    // break-all an AutoFit table read every such cell as one letter wide
+    // (corpus R287-D30: "Variable" on two lines in a 33pt column, Word's
+    // 127pt). `window.__docsKoreanWordWrapOff = true`: as before (A/B).
+    if (sourceAdapter === "docx" && normalizeParagraphOnOff(block.attrs.wordWrap) === false && !koreanWordWrapOff()) {
+      const korean = documentKoreanWholeWordRanges(block, pos + 1, doc.attrs.eastAsianLanguage);
+      const attrs = { "data-document-korean-whole-words": "true", style: "word-break:normal;overflow-wrap:break-word" };
+      if (korean === "paragraph") result.push(Decoration.node(pos, pos + block.nodeSize, attrs));
+      else for (const range of korean) result.push(Decoration.inline(range.from, range.to, attrs, { inclusiveStart: false, inclusiveEnd: false }));
     }
     if (sourceAdapter === "docx" && !wordsMayBreak) {
       for (const boundary of documentSlashLetterBoundaries(block, pos + 1)) {
@@ -2158,8 +2217,10 @@ const DocumentFormatting = Extension.create<DocumentFormattingOptions>({
                 : {
                     "data-kinsoku": String(value),
                     // Word's standard list unless the document asks for
-                    // its strict rules (note-editor.css).
-                    style: `line-break: ${value ? "var(--doc-kinsoku-line-break, normal)" : "anywhere"}`,
+                    // its strict rules (note-editor.css). Off, Latin words
+                    // still wrap between words: only the East Asian runs
+                    // break anywhere (`eastAsianRunRanges`, decorated).
+                    style: `line-break: ${value ? "var(--doc-kinsoku-line-break, normal)" : "normal"}`,
                   };
             },
           },

@@ -52,6 +52,9 @@ const EXPLICIT: ReadonlyMap<number, Lb> = (() => {
   return map;
 })();
 
+/** What Word's mode-13 Latin breaking takes as letters (ideographsAsLetters). */
+const LATIN_SET_IDEOGRAPH = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Bopomofo}⺀-⿿\u3001-〿㇀-㇯㈀-㏿︰-﹏\uff00-\uffef]/u;
+
 const HAN_LIKE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Bopomofo}⺀-⿿\u3000-〿㇀-㇯㈀-㏿︰-﹏\uff00-\uffef]/u;
 
 function classOf(grapheme: string): Lb {
@@ -96,10 +99,62 @@ export interface LineBreakOptions {
 
 
   readonly continuesText?: boolean;
+  /** Windows Excel's wrap of a cell (see {@link excelLineBreakOpportunities}):
+   * every other option is ignored. */
+  readonly excel?: boolean;
+  /** Windows Word's East Asian text in a document whose defaults name no
+   * East Asian face, in compatibility mode 13 and earlier
+   * (wordSetsIdeographsAsLetters): ideographs, kana and the full-width forms
+   * are letters of a word, broken only where a Latin word would be. Hangul
+   * and the ideographic space keep their own class. */
+  readonly ideographsAsLetters?: boolean;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function excelLineBreakOpportunities(graphemes: readonly string[]): boolean[] {
+  const out = new Array<boolean>(graphemes.length).fill(false);
+  let worded = false;
+  for (let i = 1; i < graphemes.length; i += 1) {
+    const before = graphemes[i - 1];
+    if (before !== " ") worded = true;
+    out[i] = worded && graphemes[i] !== " " && (before === " " || before === "-");
+  }
+  return out;
 }
 
 /** Closing (final) quotation marks, `\p{Pf}` among UAX #14's QU. */
 const FINAL_QUOTES = new Set(Array.from("’”›»⸃⸅⸊⸍⸝⸡"));
+/** Opening (initial) quotation marks, `\p{Pi}` among UAX #14's QU. */
+const INITIAL_QUOTES = new Set(Array.from("‘“‹«‛‟⸂⸄⸉⸌⸜⸠"));
+
+
+
+
+
+
+
+
+
+
+
+function quoteBreaksAmongEastAsian(graphemes: readonly string[], classes: readonly Lb[], i: number): boolean {
+  const eastAsian = (grapheme: string | undefined) => grapheme !== undefined && KINSOKU_EAST_ASIAN.test(grapheme);
+  if (classes[i] === "QU" && !(INITIAL_QUOTES.has(graphemes[i]!) && eastAsian(graphemes[i - 1]) && eastAsian(graphemes[i + 1]))) return false;
+  if (classes[i - 1] === "QU" && !(FINAL_QUOTES.has(graphemes[i - 1]!) && eastAsian(graphemes[i]) && eastAsian(graphemes[i - 2]))) return false;
+  return true;
+}
 
 /** After these, Chromium breaks only before an opening bracket. */
 const ASCII_BREAK_BEFORE_OPEN = new Set(Array.from('!"#%&)*+,.:;=>\\]|}~'));
@@ -135,10 +190,15 @@ function chromiumAsciiBreak(previous: string | undefined, before: string, after:
  * Whether a line may break before each grapheme (index 0 is always false).
  */
 export function lineBreakOpportunities(graphemes: readonly string[], options: LineBreakOptions): boolean[] {
+  if (options.excel) return excelLineBreakOpportunities(graphemes);
   const count = graphemes.length;
   // The browser breaks between pictographs (emoji), as between ideographs.
-  const classes = graphemes.map((grapheme) =>
-    options.browser && /^\p{Extended_Pictographic}/u.test(grapheme) ? "ID" : classOf(grapheme),
+  const classes = graphemes.map((grapheme): Lb =>
+    options.browser && /^\p{Extended_Pictographic}/u.test(grapheme)
+      ? "ID"
+      : options.ideographsAsLetters && LATIN_SET_IDEOGRAPH.test(String.fromCodePoint(grapheme.codePointAt(0) ?? 0x20))
+        ? "AL"
+        : classOf(grapheme),
   );
   const out = new Array<boolean>(count).fill(false);
   const kinsoku = options.kinsoku ? OFFICE_KINSOKU[options.kinsoku] : null;
@@ -157,7 +217,8 @@ export function lineBreakOpportunities(graphemes: readonly string[], options: Li
     out[i] =
       options.browser && asciiPrintable(graphemes[i - 1]) && asciiPrintable(graphemes[i])
         ? chromiumAsciiBreak(graphemes[i - 2], graphemes[i - 1], graphemes[i])
-        : afterSpaceRun || pairBreaks(before, after, beforeSpaces, lastNonSpace === i - 1);
+        : afterSpaceRun || pairBreaks(before, after, beforeSpaces, lastNonSpace === i - 1,
+          (options.word === true || options.browser === true) && lastNonSpace === i - 1 && quoteBreaksAmongEastAsian(graphemes, classes, i));
     // Nor after the spaces a text opens with: no line of spaces alone.
     if (out[i] && options.browser && lastNonSpace < 0 && !options.continuesText) out[i] = false;
     // After a number too: Word for Mac's PDF of corpus R282-D08 (p22) left 215 pt of a line empty
@@ -194,7 +255,7 @@ export function lineBreakOpportunities(graphemes: readonly string[], options: Li
 /** UAX #14 LB7-LB31 for the pair (before, after); `lead` is the class
  * before any spaces ending at `before`, `adjacent` whether no space
  * separates them. */
-function pairBreaks(before: Lb, after: Lb, lead: Lb | undefined, adjacent: boolean): boolean {
+function pairBreaks(before: Lb, after: Lb, lead: Lb | undefined, adjacent: boolean, quoteAmongEastAsian = false): boolean {
   // LB7
   if (after === "SP" || after === "ZW") return false;
   // LB8
@@ -216,8 +277,8 @@ function pairBreaks(before: Lb, after: Lb, lead: Lb | undefined, adjacent: boole
   if (lead === "B2" && after === "B2") return false;
   // LB18
   if (before === "SP") return true;
-  // LB19
-  if (before === "QU" || after === "QU") return false;
+  // LB19 (LB19a: not among East Asian text, quoteBreaksAmongEastAsian)
+  if ((before === "QU" || after === "QU") && !quoteAmongEastAsian) return false;
   // LB21
   if (after === "BA" || after === "HY" || after === "NS" || before === "BB") return false;
   // LB22

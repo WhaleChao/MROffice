@@ -22,6 +22,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { INLINE_DISPLAY_MATH_ATTR, KNOWN_FORMULA_ATTR, applyLazyMathPlaceholderGeometry, type LazyMathPlaceholderGeometry } from "../../../extensions/lazyKatex";
 import katex from "katex";
 import { currentWebBuildId } from "../../../../../../lib/web-build";
+import { SheetFact } from "../../../../../../lib/editor/sheet-facts";
 import {
   forgetFormulaBoxes,
   forgetMathGeometry,
@@ -38,6 +39,7 @@ import {
 } from "../../../../../../lib/docs-math-geometry-cache";
 import { FormulaKeys, formulaBoxOfMeasured, formulaKeysOf, formulaLeavesItsLine, typesetFormulaBreaks, typesetterOf } from "./ledgerFormulaBoxes";
 import { measureTypesetCloneBlockHeights } from "../../typesetCloneMeasurement";
+import { noteFacesAfterMeasure } from "./ledgerFaceScan";
 import { textEngineEnabled } from "../../../../../../lib/text-engine/flags";
 import { SheetMeasureMemo, sheetsOf } from "../sheetMeasureMemo";
 import {
@@ -110,6 +112,24 @@ export function katexFontsReady(doc: Document, onSettled: () => void): boolean {
   return false;
 }
 
+const HOLDS_FORMULA = new SheetFact((node) => node.type.name === "mathBlock" || node.type.name === "inlineMath");
+
+
+
+
+
+
+
+
+
+export function askKatexFacesIfFormulas(view: EditorView): void {
+  const doc = view.dom.ownerDocument;
+  if (katexFontsByDocument.has(doc)) return;
+  if ((doc.defaultView as (Window & { __docsKatexFacesEarly?: boolean }) | null)?.__docsKatexFacesEarly === false) return;
+  if (!HOLDS_FORMULA.inDoc(view.state.doc)) return;
+  katexFontsReady(doc, () => undefined);
+}
+
 /** Whether `face` is a KaTeX face, and whether it arrived after the faces
  * the clone waits for had settled (a face the preload did not bring). */
 export function katexFaceNews(doc: Document, face: { family?: string }): "none" | "preloaded" | "late" {
@@ -159,6 +179,8 @@ function pmBlockOwnsMath(block: PmNode): boolean {
 interface MeasuredFormula {
   readonly box: FormulaBox;
   readonly families: ReadonlySet<string>;
+  /** The look at the faces right after it was read (noteFacesAfterMeasure). */
+  readonly look?: number;
 }
 
 /** Harness switches: the formula boxes off (A/B), the kept block boxes unread (as
@@ -224,7 +246,9 @@ export interface LedgerTypesetMath {
   invalidate(): void;
   /** Faces of these families arrived: the geometry of the blocks drawn with
    * them (and only those) is stale. */
-  invalidateFamilies(families: readonly string[]): void;
+  /** `through`: formulas read at a look up to it were read without these
+   * faces asked for (facesUnaskedThrough) and stand. */
+  invalidateFamilies(families: readonly string[], through?: number): void;
   dispose(): void;
 }
 
@@ -250,6 +274,7 @@ export function createLedgerTypesetMath(
   /** The font families each block's formulas were measured with (its
    * elements' computed families), by geometry key, and its node. */
   const familiesByKey = new Map<string, ReadonlySet<string>>();
+  const lookByKey = new Map<string, number>();
   const nodeByKey = new Map<string, PmNode>();
   /** Boxes read back from an earlier opening: measured once every face
    * had loaded, so a face of theirs arriving now changes nothing. */
@@ -647,6 +672,7 @@ export function createLedgerTypesetMath(
         const families = chosen.map(([, { index }]) => familiesOfBlock(blocks[index]));
         const started = performance.now();
         let typesetAt = 0;
+        let readLook: number | undefined;
         let readMs = 0;
         const read: ({ box: FormulaBox | null } | null)[] = chosen.map(() => null);
         const traceSink = (view.dom.ownerDocument.defaultView as (Window & { __pageLedgerTrace?: unknown[] }) | null)?.__pageLedgerTrace;
@@ -665,6 +691,7 @@ export function createLedgerTypesetMath(
               typesetAt = performance.now();
               const all = measureTypesetMathPlaceholderGeometriesForBlocks(clones);
               readMs = performance.now() - typesetAt;
+              readLook = noteFacesAfterMeasure(view.dom.ownerDocument);
               clones.forEach((clone, at) => {
                 const preview = mathPreviews(clone)[0];
                 const geometry = all[at]?.[0];
@@ -687,7 +714,7 @@ export function createLedgerTypesetMath(
             chosen.forEach(([formula], at) => {
               const box = read[at]?.box;
               if (!box || crossed.some((arrival) => meets(families[at], arrival.families))) return;
-              const entry = { box, families: families[at]! };
+              const entry = { box, families: families[at]!, look: readLook };
               measuredFormulas.set(formula, entry);
               formulasToKeep.set(formula, entry);
             });
@@ -732,6 +759,7 @@ export function createLedgerTypesetMath(
       const batchStarted = performance.now();
       const batchFamilies = batch.map((index) => familiesOfBlock(blocks[index]));
       let typesetAt = 0;
+      let readLook: number | undefined;
       let readMs = 0;
       const keptBefore = missing.length;
       missing.splice(0, batch.length);
@@ -770,6 +798,7 @@ export function createLedgerTypesetMath(
             typesetAt = performance.now();
             const all = measureTypesetMathPlaceholderGeometriesForBlocks(requestedIndexes.map((subsetIndex) => clones[subsetIndex]));
             readMs = performance.now() - typesetAt;
+            readLook = noteFacesAfterMeasure(view.dom.ownerDocument);
             requestedIndexes.forEach((subsetIndex) => {
               const read = all[subsetIndex] ?? [];
               const known = knownFormulas.get(batch[subsetIndex]);
@@ -804,6 +833,8 @@ export function createLedgerTypesetMath(
             if (key && geometry && geometry.length > 0) {
               geometryByKey.set(key, geometry);
               familiesByKey.set(key, families);
+              if (readLook === undefined) lookByKey.delete(key);
+              else lookByKey.set(key, readLook);
               nodeByKey.set(key, nodes[index]);
               if (staleNodes.has(nodes[index])) {
                 staleNodes.delete(nodes[index]);
@@ -831,7 +862,7 @@ export function createLedgerTypesetMath(
                       verifying.push({ latex: previews[at]?.getAttribute("data-math-render-latex"), before, box, block: blocks[index].tagName });
                     }
                   }
-                  const entry = { box, families };
+                  const entry = { box, families, look: readLook };
                   measuredFormulas.set(formula, entry);
                   formulasToKeep.set(formula, entry);
                 });
@@ -863,14 +894,15 @@ export function createLedgerTypesetMath(
       measureNextBatch();
       return false;
     },
-    invalidateFamilies(families) {
+    invalidateFamilies(families, through = 0) {
       const arrived = new Set(families.map((family) => family.trim().replace(/^["']|["']$/g, "").toLowerCase()).filter(Boolean));
       if (arrived.size === 0) return;
       arrivals.push({ at: performance.now(), families: arrived });
       if (arrivals.length > 64) arrivals.splice(0, arrivals.length - 64);
       const formulasForgotten: number[] = [];
-      for (const [formula, { families: drawnWith }] of measuredFormulas) {
+      for (const [formula, { families: drawnWith, look }] of measuredFormulas) {
         if (!meets(drawnWith, arrived)) continue;
+        if (look !== undefined && look <= through) continue;
         measuredFormulas.delete(formula);
         formulasToKeep.delete(formula);
         if (formulasKeptHere.delete(formula)) formulasForgotten.push(formula);
@@ -879,8 +911,11 @@ export function createLedgerTypesetMath(
       const forgotten: string[] = [];
       for (const [key, node] of nodeByKey) {
         if (finalKeys.has(key) || !meets(familiesByKey.get(key), arrived)) continue;
+        const look = lookByKey.get(key);
+        if (look !== undefined && look <= through) continue;
         geometryByKey.delete(key);
         familiesByKey.delete(key);
+        lookByKey.delete(key);
         nodeByKey.delete(key);
         if (!staleNodes.has(node)) {
           staleNodes.add(node);
@@ -898,6 +933,7 @@ export function createLedgerTypesetMath(
       epoch += 1;
       geometryByKey.clear();
       familiesByKey.clear();
+      lookByKey.clear();
       nodeByKey.clear();
       finalKeys.clear();
       toKeep.clear();

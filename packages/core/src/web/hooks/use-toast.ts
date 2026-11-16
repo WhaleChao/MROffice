@@ -30,6 +30,12 @@ function genId() {
   return count.toString()
 }
 
+/** How many toasts have been shown so far: read before and after a step, it
+ * tells whether the step said anything to the reader. */
+function toastsShown(): number {
+  return count
+}
+
 type Action =
   | {
       type: "ADD_TOAST"
@@ -187,4 +193,4 @@ function useToast() {
   }
 }
 
-export { useToast, toast }
+export { useToast, toast, toastsShown }

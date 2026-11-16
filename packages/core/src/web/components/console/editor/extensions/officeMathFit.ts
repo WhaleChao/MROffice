@@ -57,7 +57,8 @@ function wordAdvance(node: KatexTreeNode): number {
   return CAMBRIA_MATH_ADVANCE_EM[family]?.[characters[0]] ?? own;
 }
 
-const drawnHere = (node: KatexTreeNode, next: KatexTreeNode | null) => katexSymbolAdvance(node) + officeItalic(node, next);
+/** A symbol as an office formula draws it here: KaTeX's advance and the stylesheet's italic correction. */
+export const drawnHere = (node: KatexTreeNode, next: KatexTreeNode | null) => katexSymbolAdvance(node) + officeItalic(node, next);
 const drawnInWord = (node: KatexTreeNode, next: KatexTreeNode | null) => wordAdvance(node) + officeItalic(node, next);
 
 const fits = new Map<string, OfficeMathFit | null>();

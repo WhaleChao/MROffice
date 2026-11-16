@@ -40,7 +40,7 @@ import {
   type ComboRenderAs,
 } from "@mrnote/core/web/components/console/editor/extensions/chartBlockShared.ts";
 import { pointsFromRows } from "@mrnote/core/web/components/notebook/contents/MiniChart.tsx";
-import { chartWithColorPalette } from "@mrnote/core/web/lib/office-charts/chart-color-palettes.ts";
+import { chartThemeAccents, chartWithColorPalette } from "@mrnote/core/web/lib/office-charts/chart-color-palettes.ts";
 import { officeChartDateAxisTimes } from "@mrnote/core/web/lib/office-charts/axis-options.ts";
 import {
   chartWithAxis,
@@ -309,7 +309,13 @@ export function chartColorPaletteIdFromGallery(
  * fill -- a gradient fill included -- and keeps its outline and effect. The
  * commit and the menu's hover preview both run it.
  */
-export function sheetChartWithChangedColors(attrs: ChartBlockAttrsV2, paletteId: SpreadsheetChartColorPaletteId): ChartBlockAttrsV2 | null {
+export function sheetChartWithChangedColors(
+  attrs: ChartBlockAttrsV2,
+  paletteId: SpreadsheetChartColorPaletteId,
+  /** The workbook theme's accents: a chart varying its colours by point
+   * takes the pick on each point in them. */
+  accents?: readonly string[],
+): ChartBlockAttrsV2 | null {
   const format = { ...(attrs.format ?? {}) };
   for (const key of ["seriesStyles", "sliceStyles"] as const) {
     const entries = format[key] as readonly Record<string, unknown>[] | undefined;
@@ -321,7 +327,7 @@ export function sheetChartWithChangedColors(attrs: ChartBlockAttrsV2, paletteId:
       return { ...entry, shapePaint: rest };
     });
   }
-  return chartWithColorPalette({ ...attrs, format }, paletteId);
+  return chartWithColorPalette({ ...attrs, format }, paletteId, chartThemeAccents(accents));
 }
 
 
@@ -382,6 +388,8 @@ export interface SheetChartData {
   cellValue(row: number, col: number): string;
   /** The placeholder words Quick Layout writes (Office's English by default). */
   words?: { chartTitle: string; axisTitle: string };
+  /** The workbook theme's six accents (Office's when unsaid). */
+  themeAccents?: readonly string[];
 }
 
 /** A chart's next model, its binding, and record flags the write settles. */
@@ -737,6 +745,22 @@ export function excelChartRangeLabelLines(
   };
 }
 
+/** Whether any cell of `rect` holds a number (a date is one), as Excel finds
+ * a selection's data. */
+function selectionHoldsANumber(
+  rect: ChartRange,
+  value: (row: number, col: number) => string,
+  display: (row: number, col: number) => string,
+): boolean {
+  for (let row = rect.r1; row <= rect.r2; row += 1) {
+    for (let col = rect.c1; col <= rect.c2; col += 1) {
+      const raw = String(value(row, col) ?? "").trim();
+      if (chartNumericText(raw === "" ? String(display(row, col) ?? "").trim() : raw)) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * The layout fields a chart over `range` states for the label lines Excel
  * reads there (`excelChartRangeLabelLines`), laid by columns or by rows.
@@ -805,6 +829,23 @@ export function insertChartSelectionLayout(
       return { range, seriesInColumns: true, noSeriesNames: true, outer };
     }
     return { range, seriesInColumns: true, outer };
+  }
+  if (rect.r2 > rect.r1 && !selectionHoldsANumber(rect, value, display)) {
+    // A selection with no number in it is laid in rows: its last row is the
+    // one series' values, the rows above are its category levels, and no
+    
+    // xlsx-rounds probe/night6/x49: a funnel over A1:B6 of text binds
+    // categories A1:B5 and values A6:B6 by row, a clustered column
+    // =SERIES(,A1:B5,A6:B6,1); B1:B6 alone, B1:B5 and B6). The page's
+    // categories run in one line, so the row above the values is its
+    // category line; the levels above that are not drawn. Before, the first
+    // column was the series, named by its first cell (R424-X49 WALK1).
+    return {
+      range: { r1: rect.r2 - 1, c1: rect.c1, r2: rect.r2, c2: rect.c2 },
+      seriesInColumns: false,
+      noSeriesNames: true,
+      outer: 0,
+    };
   }
   const lines = excelChartRangeLabelLines(rect, value, display);
   let range: ChartRange = { ...rect };
@@ -1326,7 +1367,7 @@ export const chartColorsButton: SheetChartButton = (target, parameter, data) => 
   if (paletteId === null) return null;
   // Change Colors repaints every series' fill from the palette -- a
   // gradient fill included -- and keeps its outline and effect.
-  return sheetChartModelEdited(target, data, (attrs) => sheetChartWithChangedColors(attrs, paletteId));
+  return sheetChartModelEdited(target, data, (attrs) => sheetChartWithChangedColors(attrs, paletteId, data.themeAccents));
 };
 
 /** Design > Change Chart Type. */

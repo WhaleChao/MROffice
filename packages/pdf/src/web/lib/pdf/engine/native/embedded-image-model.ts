@@ -363,6 +363,41 @@ export function resolvePdfNativeEmbeddedImageOrder(
   return matches.length === 1 ? matches[0] : null;
 }
 
+/**
+ * The paint a queued delete or new image of a picture is made on when the
+ * other window changed that very picture (no paint is drawn where the edit
+ * found it): `onHead` are the page's paints on the version that window
+ * saved, `onPlanned` the same page as this edit left it when it was first
+ * planned, `order` the picture's order when the edit was made. It is the
+ * paint at that order when every other paint of the page is where this edit
+ * left it -- the lists differ in that paint alone, which a delete took away
+ * and a new image left where it was. `already-there`: the page is as the
+ * delete left it (the other window deleted the picture too). Where the
+ * paints lie does not say which image a paint draws: the caller holds the
+ * paint to the image the edit was made on before it writes
+ * (readMraiNativeEmbeddedImageObject). Null whenever the lists differ
+ * otherwise.
+ */
+export function resolvePdfNativeEmbeddedImageLaterSaveOrder(input: Readonly<{
+  onHead: readonly (readonly number[] | null)[];
+  onPlanned: readonly (readonly number[] | null)[];
+  order: number;
+  /** The edit took the paint away: the page as it left it has one fewer. */
+  removes: boolean;
+}>): number | "already-there" | null {
+  const { onHead, onPlanned, order } = input;
+  if (!Number.isSafeInteger(order) || order < 0) return null;
+  const same = (left: readonly number[] | null | undefined, right: readonly number[] | null | undefined) =>
+    left === null || left === undefined ? right === null || right === undefined
+      : pdfNativeEmbeddedImagePaintMatrixMatches(right, left);
+  if (input.removes && onPlanned.length === onHead.length) {
+    return onHead.every((paint, index) => same(paint, onPlanned[index])) ? "already-there" : null;
+  }
+  if (onPlanned.length !== onHead.length - (input.removes ? 1 : 0) || !onHead[order]) return null;
+  return onHead.every((paint, index) => index === order ||
+    same(paint, onPlanned[input.removes && index > order ? index - 1 : index])) ? order : null;
+}
+
 export const UNIT_TURN_MATRICES: readonly PdfNativeEmbeddedImageTransformMatrix[] = [
   [1, 0, 0, 1, 0, 0],
   // 90° clockwise on screen: (u, v) -> (v, 1 - u)

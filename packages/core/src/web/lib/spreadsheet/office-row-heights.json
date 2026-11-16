@@ -1,0 +1,217 @@
+{
+ "_source": "Windows Excel's own automatic row heights (96-dpi pixels) for faces and sizes where officeRowHeight's metric formula is off. Defaults: the defaultRowHeight most often stated by 5,187 xlsx-rounds files written by Windows Excel (font 0, no customHeight), each pair seen in at least 5 files and in at least 45% of them (tools/rowmetric_check.py). Other sizes: the ht Windows Excel wrote for rows set in that one font alone, in workbooks whose default font it outgrows or where the row stands below the default, and n wrapped lines n times one (tools/rowfont_by_default.py, rowlines_check.py, 2026-11-13). MS Gothic, MS PGothic, MS Mincho and MS PMincho at 9, 9.5 and 10.5 pt, and the names Windows lacks that real files give with charset 128 (明朝, MS　明朝, 標準ゴシック, Osaka, 細明朝体: GDI maps them to MS Mincho), from Windows Excel's printed rows (xlsx-rounds/lookwin probes p3, p23). Small Normal fonts (5-10 pt: Calibri, Arial, Aptos Narrow, Aptos, Times New Roman, Verdana, Tahoma, Segoe UI, Cambria), Windows Excel's default row off its printed rows (lookwin p88-lw, 2026-11-15): GDI's hinted heights there are not monotonic (Times New Roman 7 is 14 px, 7.5 is 13).",
+ "ｍｓ ｐゴシック": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms pgothic": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ｍｓ 明朝": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms　明朝": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms mincho": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "新細明體": {
+  "12": 22
+ },
+ "pmingliu": {
+  "12": 22
+ },
+ "arial": {
+  "5": 11,
+  "6.5": 13,
+  "7.5": 14,
+  "8": 15,
+  "9": 16,
+  "11": 19,
+  "12": 20,
+  "14": 24,
+  "16": 27,
+  "18": 31,
+  "20": 34,
+  "22": 37
+ },
+ "times new roman": {
+  "6.5": 14,
+  "7": 14,
+  "7.5": 13,
+  "11": 20,
+  "12": 21
+ },
+ "tahoma": {
+  "6": 11,
+  "7": 12,
+  "10": 17,
+  "16": 26
+ },
+ "游ゴシック": {
+  "9": 21,
+  "10": 22
+ },
+ "yu gothic": {
+  "9": 21,
+  "10": 22
+ },
+ "calibri": {
+  "7": 12,
+  "8.5": 15,
+  "10": 17,
+  "13": 23,
+  "18": 31,
+  "20": 35,
+  "24": 42,
+  "26": 45
+ },
+ "ｍｓ ｐ明朝": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms p明朝": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms pmincho": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "aptos narrow": {
+  "7": 12,
+  "12": 21,
+  "14": 25
+ },
+ "細明體": {
+  "12": 22
+ },
+ "mingliu": {
+  "12": 22
+ },
+ "gill sans mt": {
+  "14": 29
+ },
+ "verdana": {
+  "6": 11,
+  "8": 14
+ },
+ "ｍｓ ゴシック": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms gothic": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms ゴシック": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms pゴシック": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "ms 明朝": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "明朝": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "標準ゴシック": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "osaka": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "細明朝体": {
+  "9": 15,
+  "9.5": 16,
+  "10.5": 17,
+  "11": 18,
+  "12": 19,
+  "14": 23
+ },
+ "segoe ui": {
+  "6": 13
+ },
+ "cambria": {
+  "7": 12
+ },
+ "aptos": {
+  "7": 12
+ }
+}

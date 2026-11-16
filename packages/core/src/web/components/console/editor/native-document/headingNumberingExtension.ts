@@ -135,11 +135,25 @@ export function buildHeadingNumberDecorations(
  * own stylesheet look (the editor's bold black heading face), not the
  * document's: "Article I." stood in black Calibri before gray Cambria text.
  */
-function headingNumberLook(node: ProseMirrorNode | null | undefined): string {
-  const first = node?.firstChild;
-  if (!first?.isText) return "";
+export function headingNumberLook(node: ProseMirrorNode | null | undefined): string {
+  // The first text, past the inline atoms that draw nothing before it (Word's
+  // rendered page break mark opening the heading of a new page, corpus
+  // R324-D01: "1" stood in the document's Times before the Arial heading).
+  // `window.__docsHeadingNumberFirstChildLook = true` asks the older look
+  // (the first child only) for an A/B of one build.
+  const firstChildOnly = typeof window !== "undefined" && (window as Window & { __docsHeadingNumberFirstChildLook?: boolean }).__docsHeadingNumberFirstChildLook === true;
+  let first: ProseMirrorNode | null = null;
+  if (firstChildOnly) {
+    if (node?.firstChild?.isText) first = node.firstChild;
+  } else {
+    node?.forEach((child) => {
+      if (!first && child.isText) first = child;
+    });
+  }
+  if (!first) return "";
+  const text: ProseMirrorNode = first;
   const parts: string[] = [];
-  for (const mark of first.marks) {
+  for (const mark of text.marks) {
     const attrs = mark.attrs as Record<string, unknown>;
     switch (mark.type.name) {
       case "fontFamily":

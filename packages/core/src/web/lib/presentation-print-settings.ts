@@ -3,39 +3,6 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-/**
- * Presentation PRINT / HANDOUT settings (打印 / 讲义) — PowerPoint / WPS parity.
- *
- * These are the deck's print layout: Print (the title-row face) prints what
- * the Print Settings dialog shows, and the server applies the scale. Like
- * PowerPoint's Print Layout the default is full-page slides (1 per page);
- * the Export ▸ PDF handout item keeps its historical 2-per-page grid when
- * the layout is full-page slides, since a handout is always a grid.
- *
- * A pure, framework-free module mirroring `lib/spreadsheet/print-settings.ts`:
- * a small settings model, a normalizer that collapses unknown / stale /
- * hand-edited values to a safe default, and a helper that maps the chosen
- * slides-per-page to the export's `layout` query param. Consumed by the deck
- * PDF export URL (PowerPoint "Print ▸ Handouts: N slides per page") and
- * validated by the FE schema.
- *
- * Key concepts
- * ─────────────
- * slidesPerPage : how many slide thumbnails are tiled onto each printed page.
- *                 1 = one slide per page (the plain "PDF" export, no handout
- *                 grid); 2 / 3 / 4 / 6 / 9 = a handout grid, PowerPoint's
- *                 Handouts choices (the 3-slide page has note lines).
- * printHiddenSlides : PowerPoint's Print Hidden Slides (off by default, as
- *                 Save as PDF leaves hidden slides out).
- * scale         : a print SCALE percentage [10, 400] (100 = unscaled, default).
- *                 Persisted for round-trip; the handout grid already auto-fits
- *                 each cell, so this is an additive future / PPTX-handout hint.
- *
- * Neither field is mandatory; a deck without printSettings exports exactly as
- * before (the handout item uses `handout-2`). That default path is byte-for-byte
- * unchanged.
- */
-
 // ── Types ────────────────────────────────────────────────────────────────────
 
 /** The supported slides-per-page counts (PowerPoint handout layouts). */
@@ -62,8 +29,48 @@ export interface PresentationPrintSettings {
   slidesPerPage?: SlidesPerPage;
   /** Print scale percentage [10, 400] (100 = unscaled). */
   scale?: number;
-  /** Print Hidden Slides (stored only when on). */
+  /** Print Hidden Slides: absent = PowerPoint's default (on); stated only
+   * when explicit (see {@link printHiddenSlidesAnswer}). */
   printHiddenSlides?: boolean;
+  /** The imported `p:prnPr` (its attributes), kept for the deck written
+   * whole; opaque to the editor. */
+  source?: PresentationPrintSettingsSource;
+}
+
+export interface PresentationPrintSettingsSource {
+  readonly prnPr: Readonly<Record<string, string>>;
+}
+
+/** The print settings with every editable field filled (no receipt). */
+export type ResolvedPresentationPrintSettings = Required<
+  Omit<PresentationPrintSettings, "source">
+>;
+
+/** `CT_PrintProperties` attributes a receipt may name (the API checks values). */
+const PRN_PR_ATTRIBUTES: ReadonlySet<string> = new Set([
+  "prnWhat",
+  "clrMode",
+  "hiddenSlides",
+  "scaleToFitPaper",
+  "frameSlides",
+]);
+
+function normalizePrintSettingsSource(
+  value: unknown,
+): PresentationPrintSettingsSource | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const prnPr = (value as Record<string, unknown>).prnPr;
+  if (!prnPr || typeof prnPr !== "object" || Array.isArray(prnPr)) return undefined;
+  const entries = Object.entries(prnPr as Record<string, unknown>);
+  if (
+    entries.some(
+      ([name, text]) =>
+        !PRN_PR_ATTRIBUTES.has(name) || typeof text !== "string" || text.length > 16,
+    )
+  ) {
+    return undefined;
+  }
+  return { prnPr: Object.fromEntries(entries) as Record<string, string> };
 }
 
 // ── Normalisation ─────────────────────────────────────────────────────────────
@@ -99,8 +106,9 @@ export function normalizePrintScale(value: unknown): number {
 /**
  * Normalize a raw persisted print-settings blob into a
  * {@link PresentationPrintSettings}, keeping ONLY the non-default fields so a
- * deck whose settings equal the defaults (2 slides per page, 100 % scale)
- * serializes to `undefined` (no `printSettings` key persisted, byte-clean).
+ * deck whose settings equal the defaults (full-page slides, 100 % scale, Print
+ * Hidden Slides unstated) serializes to `undefined` (no `printSettings` key
+ * persisted, byte-clean). An explicit Print Hidden Slides, on or off, is kept.
  * Returns `undefined` when the blob is not an object or every field is at its
  * default. Pure + side-effect free.
  */
@@ -117,7 +125,12 @@ export function normalizePresentationPrintSettings(
   const scale = normalizePrintScale(r.scale);
   if (scale !== DEFAULT_PRINT_SCALE) out.scale = scale;
 
-  if (r.printHiddenSlides === true) out.printHiddenSlides = true;
+  // Three-way: an explicit on or off is kept, absent is the default (on).
+  if (typeof r.printHiddenSlides === "boolean") out.printHiddenSlides = r.printHiddenSlides;
+
+  // The imported p:prnPr, carried as it came.
+  const source = normalizePrintSettingsSource(r.source);
+  if (source) out.source = source;
 
   return Object.keys(out).length > 0 ? out : undefined;
 }
@@ -129,7 +142,7 @@ export function normalizePresentationPrintSettings(
  */
 export function resolvePresentationPrintSettings(
   raw: unknown,
-): Required<PresentationPrintSettings> {
+): ResolvedPresentationPrintSettings {
   const r =
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? (raw as Record<string, unknown>)
@@ -137,8 +150,25 @@ export function resolvePresentationPrintSettings(
   return {
     slidesPerPage: normalizeSlidesPerPage(r.slidesPerPage),
     scale: normalizePrintScale(r.scale),
-    printHiddenSlides: r.printHiddenSlides === true,
+    // PowerPoint's Print prints hidden slides unless turned off.
+    printHiddenSlides: r.printHiddenSlides !== false,
   };
+}
+
+/**
+ * What the Print Settings dialog's Print Hidden Slides box stores: off is an
+ * explicit `false`; on is the default (nothing stored) unless the deck held an
+ * explicit value, when it is an explicit `true` -- a deck whose import read
+ * Print Hidden Slides off states the user's on as such. (The page's alone:
+ * nothing of it is written into the file, as PowerPoint writes nothing of its
+ * Print pane.)
+ */
+export function printHiddenSlidesAnswer(
+  checked: boolean,
+  stored: boolean | undefined,
+): boolean | undefined {
+  if (!checked) return false;
+  return stored === undefined ? undefined : true;
 }
 
 /**

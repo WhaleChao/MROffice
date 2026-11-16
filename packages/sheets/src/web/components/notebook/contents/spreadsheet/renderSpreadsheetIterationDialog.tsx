@@ -106,3 +106,42 @@ export function renderSpreadsheetIterationDialog({
     </OfficeDialogShell>
   );
 }
+
+export interface RenderSpreadsheetPrecisionWarningInputs {
+  commandDialogReturnFocusTarget: () => HTMLElement | null;
+  confirmPrecisionAsDisplayed: () => void;
+  precisionWarningOpen: boolean;
+  setPrecisionWarningOpen: Dispatch<SetStateAction<boolean>>;
+  t: ReturnType<typeof useTranslations<"console-notebooks">>;
+}
+
+/**
+ * The warning Excel gives when Set precision as displayed is turned on
+ * (Options > Advanced > When calculating this workbook): every number then
+ * becomes the number its format shows, for good. OK turns it on; Cancel
+ * leaves the workbook as it is.
+ */
+export function renderSpreadsheetPrecisionWarning({
+  commandDialogReturnFocusTarget,
+  confirmPrecisionAsDisplayed,
+  precisionWarningOpen,
+  setPrecisionWarningOpen,
+  t,
+}: RenderSpreadsheetPrecisionWarningInputs) {
+  if (!precisionWarningOpen) return null;
+  return (
+    <OfficeDialogShell
+      open
+      testIdPrefix="spreadsheet-precision-warning"
+      title={t("spreadsheet.formulas.precisionAsDisplayedMenu")}
+      description={t("spreadsheet.formulas.precisionAsDisplayedWarning")}
+      defaultActionLabel={t("spreadsheet.cellShiftOk")}
+      cancelActionLabel={t("spreadsheet.cellShiftCancel")}
+      defaultActionTestId="spreadsheet-precision-warning-ok"
+      onDefaultAction={confirmPrecisionAsDisplayed}
+      onCancel={() => setPrecisionWarningOpen(false)}
+      returnFocusTarget={commandDialogReturnFocusTarget}
+      className="sm:max-w-[360px]"
+    />
+  );
+}

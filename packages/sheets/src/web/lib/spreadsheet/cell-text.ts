@@ -96,6 +96,16 @@ export function autoRowMeasuredText(
   return { text: cellTextOnOneLine(text, false), singleLine: true };
 }
 
+/** The characters a cell shows on one line: Excel draws the first 1,024 of a
+ * longer text that does not wrap (R250-X06's J571, a 6,407-character
+ * TEXTJOIN, prints its first 1,024 across 11 pages); wrapped text shows whole. */
+export const EXCEL_SHOWN_LINE_CHARACTERS = 1024;
+
+/** A text that does not wrap, cut to the characters Excel shows of it. */
+export function cellLineShown(text: string, wrapText: boolean | undefined): string {
+  return wrapText === true || text.length <= EXCEL_SHOWN_LINE_CHARACTERS ? text : text.slice(0, EXCEL_SHOWN_LINE_CHARACTERS);
+}
+
 export function cellTextOnOneLine<T>(text: T, wrapText: boolean | undefined): T {
   if (wrapText !== false || typeof text !== "string" || !/[\r\n]/.test(text)) return text;
   return text.replace(/[\r\n]/g, "") as T;

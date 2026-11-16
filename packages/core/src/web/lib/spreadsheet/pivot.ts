@@ -755,6 +755,12 @@ function pivotConfigCacheSnapshot(
   return config.native?.snapshot ?? config.cacheSnapshot ?? null;
 }
 
+/** Whether a PivotTable is computed from its source's cells as they read
+ * now: one without a cache snapshot (pivotComputationMatrix). */
+export function pivotReadsLiveCells(config: PivotConfig): boolean {
+  return pivotConfigCacheSnapshot(config) === null;
+}
+
 /** Freeze the selected source as the cache used by a newly-created Pivot. */
 export function createPivotCacheSnapshot(
   fields: readonly PivotInferredField[],

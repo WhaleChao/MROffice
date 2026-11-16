@@ -27,7 +27,8 @@ import type {
 } from "../components/console/editor/native-document/documentCommands";
 import { textSplice } from "./collab/json-crdt";
 import { textFromParagraphs } from "./presentation-paragraphs";
-import { normalizeRuns, textFromRuns } from "./presentation-runs";
+import { textEditDelta } from "./presentation-point-runs";
+import { mergeRuns, normalizeRuns, runIsAtomic, textFromRuns, type RunStyle, type TextRun } from "./presentation-runs";
 import { reconcilePresentationTextBlock } from "./presentation-shape-buttons";
 import { normalizeParagraphsWithRuns } from "./presentation-text-buttons";
 
@@ -60,10 +61,33 @@ export function reconcileCollaborativeBlockText<B extends PresentationBlock>(
   if (spelled === null || spelled === carrier.text) return next;
   const priorSpelled = formattedText(prior);
   if (priorSpelled !== null && priorSpelled !== prior.text) return next;
-  return reconcilePresentationTextBlock(
+  const rebuilt = reconcilePresentationTextBlock(
     { ...(next as unknown as PresentationTextBlock), text: spelled },
     carrier.text,
-  ) as unknown as B;
+  );
+  return withRestoredFormat(rebuilt, spelled, prior as unknown as PresentationTextBlock) as unknown as B;
+}
+
+/** Each character's run style in `block`'s layers, by its offset in the block's words ("\n" between rows: none). */
+function charStyles(block: PresentationTextBlock): ((RunStyle | undefined) | null)[] | null {
+  const out: ((RunStyle | undefined) | null)[] = [];
+  const push = (runs: readonly TextRun[]) => {
+    for (const run of runs) {
+      for (let index = 0; index < run.text.length; index += 1) out.push(runIsAtomic(run) ? null : run.style);
+    }
+  };
+  const rows = normalizeParagraphsWithRuns(block.paragraphs);
+  if (rows) {
+    rows.forEach((row, index) => {
+      if (index) out.push(null);
+      push(normalizeRuns(row.runs) ?? [{ text: row.text }]);
+    });
+    return out;
+  }
+  const runs = normalizeRuns(block.runs);
+  if (!runs) return null;
+  push(runs);
+  return out;
 }
 
 
@@ -74,20 +98,91 @@ export function reconcileCollaborativeBlockText<B extends PresentationBlock>(
 
 
 
-export function repairBlockTextLayers<B extends PresentationBlock>(block: B): B {
+function withRestoredFormat(
+  block: PresentationTextBlock,
+  spelled: string,
+  prior: PresentationTextBlock,
+): PresentationTextBlock {
+  const words = block.text;
+  const priorWords = typeof prior.text === "string" ? prior.text : null;
+  if (priorWords === null) return block;
+  const put = textEditDelta(spelled, words);
+  const putEnd = put.from + put.inserted.length;
+  if (put.inserted.length === 0) return block;
+  // Where the window's own words line up with the block's: their common start
+  // and end (what the delivery did not touch here).
+  const here = textEditDelta(priorWords, words);
+  const priorStyles = charStyles(prior);
+  if (!priorStyles) return block;
+  const restored = new Map<number, RunStyle | undefined>();
+  for (let at = put.from; at < putEnd; at += 1) {
+    const priorAt = at < here.from ? at : at >= here.from + here.inserted.length ? at - (words.length - priorWords.length) : -1;
+    if (priorAt < 0 || priorAt >= priorWords.length || priorWords[priorAt] !== words[at]) continue;
+    const style = priorStyles[priorAt];
+    if (style === null || words[at] === "\n") continue;
+    restored.set(at, style);
+  }
+  if (restored.size === 0) return block;
+  const restyle = (runs: readonly TextRun[], offset: number): TextRun[] => {
+    const pieces: TextRun[] = [];
+    let cursor = offset;
+    for (const run of runs) {
+      if (runIsAtomic(run)) {
+        pieces.push(run);
+        cursor += run.text.length;
+        continue;
+      }
+      for (let index = 0; index < run.text.length; index += 1) {
+        const style = restored.has(cursor) ? restored.get(cursor) : run.style;
+        pieces.push(style ? { text: run.text[index], style: { ...style } } : { text: run.text[index] });
+        cursor += 1;
+      }
+    }
+    return normalizeRuns(mergeRuns(pieces)) ?? [...runs];
+  };
+  const rows = normalizeParagraphsWithRuns(block.paragraphs);
+  if (rows) {
+    let offset = 0;
+    const paragraphs = rows.map((row, index) => {
+      if (index) offset += 1;
+      const start = offset;
+      offset += row.text.length;
+      const runs = normalizeRuns(row.runs);
+      return runs ? { ...row, runs: restyle(runs, start) } : row;
+    });
+    return { ...block, paragraphs } as PresentationTextBlock;
+  }
+  const runs = normalizeRuns(block.runs);
+  return runs ? ({ ...block, runs: restyle(runs, 0) } as PresentationTextBlock) : block;
+}
+
+
+
+
+
+
+
+
+
+export function repairBlockTextLayers<B extends PresentationBlock>(block: B, prior?: PresentationBlock): B {
   const carrier = block as TextCarrier;
   if ((carrier.type !== "text" && carrier.type !== "shape") || typeof carrier.text !== "string") return block;
   const text = carrier.text;
   if (layersSpell(carrier, text)) return block;
   // Rebuilt by replaying the change onto what the layers spell, so untouched
-  // characters keep their formatting.
+  // characters keep their formatting; words put back that this window held
+  // (`prior`, its own block, its layers spelling its words) keep theirs.
   const spelled = formattedText(carrier) ?? rawLayerText(carrier);
   if (spelled !== null) {
-    const rebuilt = reconcilePresentationTextBlock(
+    let rebuilt = reconcilePresentationTextBlock(
       { ...(block as unknown as PresentationTextBlock), text: spelled },
       text,
-    ) as unknown as B;
-    if (layersSpell(rebuilt as TextCarrier, text)) return rebuilt;
+    );
+    const held = prior as TextCarrier | undefined;
+    if (held && held.type === carrier.type && typeof held.text === "string" && layersSpell(held, held.text)) {
+      rebuilt = withRestoredFormat(rebuilt, spelled, prior as unknown as PresentationTextBlock);
+    }
+    if (layersSpell(rebuilt as TextCarrier, text)) return rebuilt as unknown as B;
   }
   const { runs: _runs, paragraphs: _paragraphs, ...plain } = block as B & TextCarrier;
   void _runs;
@@ -103,17 +198,24 @@ export function repairBlockTextLayers<B extends PresentationBlock>(block: B): B 
 
 
 
-export function repairContentTextLayers<C>(content: C): { content: C; repaired: boolean } {
+export function repairContentTextLayers<C>(
+  content: C,
+  /** This window's slides before the delivery: words put back keep the format they had here. */
+  prior?: readonly { readonly id: string; readonly blocks: readonly PresentationBlock[] }[],
+): { content: C; repaired: boolean } {
   const record = content as { slides?: unknown } | null | undefined;
   if (!record || typeof record !== "object" || !Array.isArray(record.slides)) return { content, repaired: false };
+  const priorSlides = new Map((prior ?? []).map((slide) => [slide.id, slide]));
   let repaired = false;
   const slides = record.slides.map((slide: unknown) => {
     const blocks = slide && typeof slide === "object" ? (slide as { blocks?: unknown }).blocks : undefined;
     if (!Array.isArray(blocks)) return slide;
+    const priorBlocks = priorSlides.get(String((slide as { id?: unknown }).id));
     let changed = false;
     const next = blocks.map((block: unknown) => {
       if (!block || typeof block !== "object") return block;
-      const fixed = repairBlockTextLayers(block as PresentationBlock);
+      const id = (block as { id?: unknown }).id;
+      const fixed = repairBlockTextLayers(block as PresentationBlock, priorBlocks?.blocks.find((candidate) => candidate.id === id));
       if (fixed !== block) changed = true;
       return fixed;
     });

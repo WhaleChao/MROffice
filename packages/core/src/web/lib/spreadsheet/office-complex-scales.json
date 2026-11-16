@@ -1,0 +1,30 @@
+{
+ "_source": "Windows Excel's printed width of complex-script letters over the width of the packaged Noto face of their script (Noto Sans Arabic, Noto Sans Hebrew, Noto Sans Bengali) at the same size, by script and the cell's face as Excel names it, lower case ('*': any face). Both ends set those letters in the Noto face at size x scale: the API's sheet PDF writer (notebooks.py complex_pieces, office_complex_scales.json) and the web's cell stacks (office-complex-scales.ts, this file), a face whose own substitute has the letters (Tinos' and Arimo's Hebrew, Wine Tahoma's Arabic) included; the web's Arial keeps its metric-clone script parts (catalog scriptParts), drawn at Office's own advances. Bengali is Nirmala UI's (Windows font linking: lookwin p84-lw, Arial, SutonnyMJ, Bangla MN and Calibri cells alike). Arabic and Hebrew: a 42- and a 47-character sentence in each face at two sizes, Windows Excel's printed ink width over ours with the spaces at the cell's face (lookwin p90-lw, refitted against Noto with the whole production font set 2026-11-15, look-win 14th). Calibri, Cambria, Aptos and Verdana lack the letters, which Windows takes from its fallback faces.",
+ "scales": {
+  "bengali": {
+   "*": 1.0825
+  },
+  "arabic": {
+   "arial": 0.776,
+   "calibri": 0.818,
+   "times new roman": 0.782,
+   "tahoma": 1.039,
+   "segoe ui": 1.016,
+   "aptos": 0.809,
+   "aptos narrow": 0.82,
+   "cambria": 0.802,
+   "verdana": 0.752
+  },
+  "hebrew": {
+   "arial": 0.912,
+   "calibri": 0.872,
+   "times new roman": 0.825,
+   "tahoma": 1.075,
+   "segoe ui": 1.023,
+   "aptos": 0.949,
+   "aptos narrow": 0.954,
+   "cambria": 0.844,
+   "verdana": 0.887
+  }
+ }
+}

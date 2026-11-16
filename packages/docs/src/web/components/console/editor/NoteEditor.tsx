@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { reloadPage as reloadWebPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { registerEditorDraftHandover } from "@mrnote/core/web/lib/editor-draft-handover.ts";
 import { refuseStrayNativeDragExcept } from "@mrnote/core/web/lib/native-drag-guard.ts";
 import { DocumentPeerInkLayer } from "./native-document/DocumentPeerInkLayer";
@@ -14,6 +15,7 @@ import { OfficeSemanticIcon } from "@mrnote/core/web/components/office-ribbon/ic
 import { officeAutosaveEnabled, officeAutosaveLabels } from "@mrnote/core/web/lib/office-autosave-preference.ts";
 import { DocumentDisplayFontRepair } from "./native-document/DocumentDisplayFontRepair";
 import { editorViewDom } from "@mrnote/core/web/components/console/editor/native-document/editorViewDom.ts";
+import { PAGE_LEDGER_BACKGROUND_ATTR, PAGE_LEDGER_DEFERRED_ATTR } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
 import { useDocumentDisplayFonts, useHandedDocumentDisplayFonts } from "./native-document/useDocumentDisplayFonts";
 import { notifyDocumentDisplayFontBindings } from "@mrnote/core/web/components/console/editor/native-document/documentDisplayFonts.ts";
 import {
@@ -73,6 +75,8 @@ import {
   type AutosavedPageLoadSource,
   type PageCausalUpgradeHolder,
 } from "@mrnote/core/web/hooks/useAutosavedPageDocument.ts";
+import { useDraftCommitOnLeave } from "@mrnote/core/web/lib/draft-commit-on-leave.ts";
+import { commitOpenEquationDrafts } from "@mrnote/core/web/components/console/editor/extensions/equationDraftCommit.ts";
 import { AUTH_SESSION_HELD_EVENT, AUTH_SESSION_RESTORED_EVENT, apiDelete, apiGet, apiPost, isApiRequestError, isAuthSessionHeld, registerUnsavedWorkHold, type ApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import { openReauthWindow, reauthLoginUrl, watchSessionRestore } from "@mrnote/core/web/lib/session-reauth.ts";
 import { uploadPageAttachment } from "@mrnote/core/web/lib/page-attachment-upload.ts";
@@ -498,12 +502,13 @@ import {
   mergePagedRuntimeContinuationsJson,
 } from "@mrnote/core/web/components/console/editor/native-document/paged/serialization.ts";
 import { captureSavedPaginationProjectionInSteps, runtimeDocumentJson } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
-import { changedBlockPieces, lastMergeRefusal, mergedPartTransaction } from "./native-document/documentPartMerge";
+import { changedBlockPieces, lastMergeRefusal, mergedPartTransaction, partSheetsOfView, serializeViewParts, type PartSerializations } from "./native-document/documentPartMerge";
 import { splitPieceRoot } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionKeys.ts";
 import { cachedDocsLayoutReceipt, cachedDocsLayoutSizes } from "@mrnote/core/web/lib/docs-layout-receipt-cache.ts";
 import { layoutSnapshotsAwaited, preloadLayoutSnapshots } from "@mrnote/core/web/lib/docs-layout-snapshot-store.ts";
 import { documentIsLongForLayoutSnapshot, forgetOpenedParts, layoutSnapshotsEnabled, noteRestoredPart, rowFontsHold, seedPartMeasures, snapshotReceiptFor, type KeptPartLayout } from "@mrnote/core/web/components/console/editor/native-document/paged/layoutSnapshot.ts";
 import { hydrationWasRestored, markRestoredLayout, markRestoredSnapshot, notePartArrived, noteRestoredSheets } from "@mrnote/core/web/components/console/editor/native-document/paged/restoredLayoutMark.ts";
+import { dispatchKeepingReader } from "@mrnote/core/web/components/console/editor/native-document/paged/readerAnchor.ts";
 import { restorePaginationProjection } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionReceipt.ts";
 import type { ClassicPendingEdits } from "@mrnote/core/web/lib/classic-start/pending.ts";
 import { yieldBetweenSaveSteps } from "@mrnote/core/web/lib/collab/save-yield.ts";
@@ -561,6 +566,7 @@ import { readOversizedImportPreview } from "@mrnote/core/web/lib/office/oversize
 import {
   documentBodyCutNeedsSaying,
   documentDraftReach,
+  documentPartsArrivingAttrs,
   documentPartsCount,
   knownDocumentPartsPage,
   rememberDocumentPartsPage,
@@ -655,6 +661,7 @@ export {
 import { DOCUMENT_OFFICE_DATA, documentEditorBaseExtensions, documentLowlight } from "./native-document/paged/documentEditorExtensions";
 import { PREVIEW_PAGE_WIDTH_INSET_PX, usePreviewPageFitZoom } from "./native-document/paged/usePreviewPageFitZoom";
 import { usePagedSurfaceZoomReserve } from "./native-document/paged/usePagedSurfaceZoomReserve";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 
 /** The Docs body's dragstart guard: ProseMirror's own content keeps its drags. */
 const refuseDocumentStrayNativeDrag = refuseStrayNativeDragExcept(".ProseMirror");
@@ -3068,7 +3075,13 @@ export default function NoteEditor({
     holdWhileTyping: true,
     pageId,
     enabled: !guestMode,
-    debounceMs: 1500,
+    // The wait is the typing gate's (no key for 800 ms, lib/typing-session)
+    // and the large-document serialisation's (300 ms, then the work); this
+    // delay only follows the serialisation, and the gate holds it until the
+    // typing has paused. At 1.5 s the save left ~2.8 s after the last key on
+    
+    
+    debounceMs: 200,
     // Match the existing native PPTX/XLSX request deadline. A DOCX save can
     // still be rewriting/reimporting its package at 20 seconds; aborting then
     // leaves the next draft on a stale CAS version after the server commits.
@@ -5206,7 +5219,8 @@ export default function NoteEditor({
       }
       const pagesBefore = view.state.doc.childCount;
       notePartArrived(view.dom);
-      view.dispatch(trustReadOnlyDocumentMutation(transaction, "document-part-load"));
+      // The text the reader looks at stays where it is in the view (readerAnchor).
+      dispatchKeepingReader(view, trustReadOnlyDocumentMutation(transaction, "document-part-load"));
       // Read off the document as it stands: what comes in with it (an inline
       // atom's marks drawn from its run style) makes new nodes of some blocks,
       // and a measurement goes by the node.
@@ -5327,6 +5341,24 @@ export default function NoteEditor({
     documentRoomsSerializedRef.current = { doc, document };
     return document;
   }, [editor, normalizeDocumentForSave]);
+  // Every part of the view serialized by itself, as the rooms serialize the
+  // view (no layout measured: the records it would add are the body's attrs,
+  // never a part's blocks), a part whose nodes did not change not again.
+  const documentPartSerializationsRef = useRef<{ kept: PartSerializations }>({ kept: [] });
+  const serializeDocumentParts = useCallback((owner: ReadonlyMap<string, number>, loaded: number): unknown[][] | null => {
+    const target = editor;
+    if (!isUsableEditor(target)) return null;
+    const doc = (target as unknown as { state?: { doc?: ProseMirrorNode } }).state?.doc;
+    if (!doc) return null;
+    const memo = documentPartSerializationsRef.current;
+    return serializeViewParts(doc, owner, loaded, (sheets) => {
+      const normalized = normalizeDocumentForSave(
+        runtimeDocumentJson(doc.type.create(doc.attrs, Fragment.fromArray([...sheets]))) as Record<string, unknown>, false, false,
+      );
+      const content = normalized.ok ? (normalized.document as { content?: unknown }).content : null;
+      return Array.isArray(content) ? content : null;
+    }, memo.kept);
+  }, [editor, normalizeDocumentForSave]);
   // Live part rooms (lib/collab/document-word-part-room): what the rooms need
   // of the view. A view that takes its body from the rooms never asks the page
   // to save it, so the save's receipt that normally says "saved" never comes:
@@ -5381,6 +5413,18 @@ export default function NoteEditor({
       // The blocks of the sheets two versions of the view differ in (whole
       // blocks), serialized as the rooms read them: a key's publish reads a
       // sheet or two, not the whole document.
+      partBlocks: (index, owner, loaded) => {
+        const doc = viewOf()?.state.doc;
+        if (!doc) return null;
+        // As the whole view's serialization gives them (serializeDocumentForRooms), when it is at hand.
+        const sheets = partSheetsOfView(doc, owner, loaded, index);
+        if (!sheets) return null;
+        const normalized = normalizeDocumentForSave(
+          runtimeDocumentJson(doc.type.create(doc.attrs, Fragment.fromArray(sheets))) as Record<string, unknown>, false, false,
+        );
+        const content = normalized.ok ? (normalized.document as { content?: unknown }).content : null;
+        return Array.isArray(content) ? content : null;
+      },
       changedBlocks: (previous, next) => {
         if (!previous || !next || typeof previous !== "object" || typeof next !== "object") return null;
         const [before, after] = [previous as ProseMirrorNode, next as ProseMirrorNode];
@@ -5422,6 +5466,22 @@ export default function NoteEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the hook's ref is the same for the page's life
   }, [editor, guestMode, previewMode, autosave.noteVersionSavedElsewhere]);
+  // Whether the pages' ledger is still laying the document out: its first
+  // layout, its background, or a pass held for typing to pause.
+  const documentPartsLayoutBusy = useCallback((): boolean => {
+    const dom = isUsableEditor(editor) ? (editor as unknown as { view?: EditorView }).view?.dom : null;
+    if (!dom) return true;
+    return dom.getAttribute("data-pagination-initial-settling") === "true" ||
+      dom.hasAttribute(PAGE_LEDGER_BACKGROUND_ATTR) || dom.hasAttribute(PAGE_LEDGER_DEFERRED_ATTR);
+  }, [editor]);
+  // The first screen is still to come: its first layout settling, or the
+  // display font plan (documentDisplayFonts) still to answer.
+  const documentPartsFirstScreenPending = useCallback((): boolean => {
+    const dom = isUsableEditor(editor) ? (editor as unknown as { view?: EditorView }).view?.dom : null;
+    if (!dom) return true;
+    return dom.getAttribute("data-pagination-initial-settling") === "true" ||
+      dom.getAttribute("data-document-display-fonts") === "loading";
+  }, [editor]);
   const documentParts = useDocumentPageParts({
     pageId,
     body: documentPartsPage ? autosave.page?.content_json : null,
@@ -5430,8 +5490,11 @@ export default function NoteEditor({
     writable: editorMayEditBase,
     appendBlocks: appendDocumentPartBlocks,
     keptLayoutOf: keptLayoutOfDocumentPart,
+    layoutBusy: documentPartsLayoutBusy,
+    firstScreenPending: documentPartsFirstScreenPending,
     serialize: serializeDocumentForParts,
     serializeForRooms: serializeDocumentForRooms,
+    serializeParts: serializeDocumentParts,
     editorFormOf: editorFormOfPartBlocks,
     mergePartIntoView: mergePartBlocksIntoView,
     partRooms: documentPartRoomsView,
@@ -5442,6 +5505,26 @@ export default function NoteEditor({
   // for a closing tab's save, which compared the whole view with the body alone.
   const docsViewHoldsStoredRef = useRef<((storedBody: unknown) => Promise<boolean | null>) | null>(null);
   docsViewHoldsStoredRef.current = documentPartsPage ? documentParts.viewHoldsStored : null;
+  // Whether a later part is coming in, and how many are still out of the view,
+  // on the editor's root (read by the pages' ledger, which holds its structural
+  // rebalance while parts arrive: R397-D28, 43 parts, rebalanced after each).
+  const documentPartsArriving = documentPartsArrivingAttrs(documentPartsPage, documentParts.state);
+  const documentPartsLoading = documentPartsArriving?.loading ?? null;
+  const documentPartsLeft = documentPartsArriving?.left ?? null;
+  const documentPartsEager = documentPartsArriving?.eager ?? null;
+  useEffect(() => {
+    const dom = isUsableEditor(editor) ? (editor as unknown as { view?: EditorView }).view?.dom : null;
+    if (!dom) return;
+    if (documentPartsLoading === null || documentPartsLeft === null) {
+      delete dom.dataset.documentPartsLoading;
+      delete dom.dataset.documentPartsLeft;
+      delete dom.dataset.documentPartsEager;
+      return;
+    }
+    dom.dataset.documentPartsLoading = documentPartsLoading;
+    dom.dataset.documentPartsLeft = documentPartsLeft;
+    dom.dataset.documentPartsEager = documentPartsEager ?? "false";
+  }, [documentPartsEager, documentPartsLeft, documentPartsLoading, editor]);
   documentPartsSavedTitleRef.current = autosave.page?.title ?? null;
   documentPartsStoredBodyRef.current = autosave.page?.content_json ?? null;
   const documentPartsSaveLaterTries = useRef({ timer: null as number | null, tries: 0 });
@@ -6335,6 +6418,11 @@ export default function NoteEditor({
     if (!pageId || guestMode || previewMode) return undefined;
     return registerUnsavedWorkHold(`document:${pageId}`, docsHoldsUnsaved);
   }, [pageId, guestMode, previewMode, docsHoldsUnsaved]);
+  // An equation still open in its editor as the page goes (the window
+  // closed, the app quit): written as Done writes it (lib/draft-commit-on-leave).
+  useDraftCommitOnLeave(`document-equations:${pageId}`, () => {
+    if (editor && !editor.isDestroyed) commitOpenEquationDrafts(editor.view.dom);
+  }, Boolean(pageId) && !previewMode);
   // Leaving the tab with a change not yet saved asks first, as the workbook's
   // and the browser's own "changes may not be saved" do: an Undo made a moment
   // before closing was otherwise only in this tab, and the page kept the edit.
@@ -9485,13 +9573,17 @@ export default function NoteEditor({
       suppressEditorUpdateRef.current = true;
       let contentApplied = false;
       try {
+        // Its doc-attr stores go in with the content, as the authed
+        // hydration's do: restored one transaction each after it, each one
+        // that changed a doc attribute drew the whole document again.
         contentApplied = executeAuthorizedContentReplacement(
           editor,
           content,
           "hydration-content",
+          content,
         );
         if (contentApplied && stillOwnsHydration()) {
-          restoreCommentThreads(content);
+          restoreDocumentStoresAfterContent(editor, content);
         }
       } finally {
         suppressEditorUpdateRef.current = false;
@@ -9581,13 +9673,17 @@ export default function NoteEditor({
       suppressEditorUpdateRef.current = true;
       let contentApplied = false;
       try {
+        // Its doc-attr stores go in with the content, as the authed
+        // hydration's do: restored one transaction each after it, each one
+        // that changed a doc attribute drew the whole document again.
         contentApplied = executeAuthorizedContentReplacement(
           editor,
           content,
           "hydration-content",
+          content,
         );
         if (contentApplied && stillOwnsHydration()) {
-          restoreCommentThreads(content);
+          restoreDocumentStoresAfterContent(editor, content);
         }
       } finally {
         suppressEditorUpdateRef.current = false;
@@ -12214,6 +12310,10 @@ export default function NoteEditor({
         ? "conflict"
         : autosave.syncedToServer && saveStatus === "unsaved"
           ? "synced"
+          // Edits held on this device because the page's room cannot take
+          // them (lib/collab/room-unreachable): said so, not "Saving…".
+          : autosave.notConnected
+            ? "offline"
           : autosave.error && saveStatus === "unsaved"
             ? "error"
             : saveStatus,
@@ -12221,6 +12321,8 @@ export default function NoteEditor({
         ? t("pages.unsaved")
         : autosave.syncedToServer && saveStatus === "unsaved"
         ? t("pages.synced")
+        : autosave.notConnected
+        ? t("pages.notConnectedKeptOnDevice")
         : saveStatus === "saving" && longSaveElapsed !== null
           ? t("pages.savingLong", { elapsed: longSaveElapsed })
           : t(`pages.${saveStatus}` as "pages.saving"),
@@ -12264,7 +12366,7 @@ export default function NoteEditor({
           }
         : undefined,
     }),
-    [autosave.error, autosave.hasConflict, docsVerification, exportFidelityUnverified, longSaveElapsed,
+    [autosave.error, autosave.hasConflict, autosave.notConnected, docsVerification, exportFidelityUnverified, longSaveElapsed,
       publishedReadback, saveNow, saveStatus, shellControlWriteAllowed, stoppedAfterSection, t],
   );
 
@@ -13083,7 +13185,7 @@ export default function NoteEditor({
             <ul data-testid="document-recovered-copies" className={windowNoticeStyles.list}>
               {docsOfferedCopies.map((copy) => (
                 <li key={copy.slot} data-testid="document-recovered-copy" data-slot={copy.slot} className={windowNoticeStyles.issue}>
-                  <p>{t("pages.recoveredCopy.savedAt", { time: new Date(copy.savedAt).toLocaleString() })}</p>
+                  <p>{t("pages.recoveredCopy.savedAt", { time: new Date(copy.savedAt).toLocaleString(pageInterfaceLocale()) })}</p>
                   <button type="button" className={windowNoticeStyles.action} data-testid="document-recovered-copy-restore"
                     disabled={autosave.readOnly}
                     onClick={() => {
@@ -13161,7 +13263,7 @@ export default function NoteEditor({
               ) : null}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 {docsAccountChanged ? (
-                  <button type="button" className={windowNoticeStyles.action} onClick={() => window.location.reload()}>
+                  <button type="button" className={windowNoticeStyles.action} onClick={() => reloadWebPage("note_editor_notice")}>
                     {t("pages.signedOut.reload")}
                   </button>
                 ) : (

@@ -47,6 +47,7 @@ import { usePopupPortalTarget } from "@mrnote/core/web/components/ui/portal-host
 import { isTouchLikePointer } from "@mrnote/core/web/lib/pointer-capability.ts";
 
 import styles from "./SpreadsheetReviewComments.module.css";
+import { fitTextareaToText } from "@mrnote/core/web/lib/fit-textarea.ts";
 
 /** The thin leader Excel draws from a noted cell's corner to its note box. */
 export interface SpreadsheetNoteConnectorLine {
@@ -664,8 +665,7 @@ export function SpreadsheetNotePopover({
     const text = textRef.current;
     const box = popoverRef.current;
     if (!text || (box && box.style.height)) return;
-    text.style.height = "auto";
-    text.style.height = `${text.scrollHeight}px`;
+    fitTextareaToText(text);
   }, [draft, placed, popoverRef]);
   useEffect(() => {
     if (!placed || !canEdit) return;

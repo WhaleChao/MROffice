@@ -45,7 +45,8 @@ import {
   isTableFormula,
   type TableFormulaGrid,
 } from "./tableCellFormula";
-import { collectLogicalTableFragments } from "./paged/tableFragmentGroups";
+import { collectLogicalTableFragments, type TableFragment } from "./paged/tableFragmentGroups";
+import { touchedRanges } from "./touchedTextblocks";
 import { pageSplitSeamText } from "./paged/pageSplitSeam";
 import {
   TABLE_ORIGINAL_ROWSPAN_ATTR,
@@ -525,10 +526,12 @@ function carrierPart(cell: LogicalCell): PhysicalCell {
 export function buildFormulaRecomputeTransaction(
   doc: ProseMirrorNode,
   tr: Transaction,
+  refreshes: (fragments: readonly TableFragment[]) => boolean = () => true,
 ): Transaction | null {
   const groups = collectLogicalTableFragments(doc);
   const formulaGroups = new Set<string>();
   for (const [key, fragments] of groups) {
+    if (!refreshes(fragments)) continue;
     const hasFormula = fragments.some(({ node }) => {
       let found = false;
       node.forEach((row) =>
@@ -581,9 +584,10 @@ export function buildFormulaRecomputeTransaction(
 function safeFormulaRecompute(
   doc: ProseMirrorNode,
   tr: Transaction,
+  refreshes?: (fragments: readonly TableFragment[]) => boolean,
 ): Transaction | null {
   try {
-    return buildFormulaRecomputeTransaction(doc, tr);
+    return buildFormulaRecomputeTransaction(doc, tr, refreshes);
   } catch (error) {
     console.error("[table-formula] recompute skipped", error);
     return null;
@@ -591,6 +595,50 @@ function safeFormulaRecompute(
 }
 
 export const tableFormulaPluginKey = new PluginKey("mrnote-table-formula-recompute");
+
+/**
+ * A table read from a Word file: its `=` fields show the result Word cached,
+ * and Word does not update them when it opens the file (Update Field does).
+ * The page keeps that result until the user edits the table itself; opening
+ * the page, a collaborator's update or an edit elsewhere rewrote it (FIXQUEUE
+ * 235, corpus R435-D09: `=SUM(B2:B5)/82*100 \# "0%"` cached 83.3% in Word,
+ * recomputed to 67% on load and saved into the untouched table).
+ */
+function keepsWordResults(doc: ProseMirrorNode, fragments: readonly TableFragment[]): boolean {
+  const fromWord = (node: ProseMirrorNode) =>
+    node.type.name === "table" &&
+    (node.attrs.source as { adapter?: unknown } | null | undefined)?.adapter === "docx";
+  return fragments.some(({ node, pos }) => {
+    if (fromWord(node)) return true;
+    // A table nested in a Word table is the Word file's too.
+    const $pos = doc.resolve(pos);
+    for (let depth = $pos.depth; depth > 0; depth -= 1) if (fromWord($pos.node(depth))) return true;
+    return false;
+  });
+}
+
+/** Whether a logical table holds a position of `ranges` (the user's edits). */
+function touchedBy(fragments: readonly TableFragment[], ranges: ReadonlyArray<readonly [number, number]>): boolean {
+  return fragments.some(({ node, pos }) => ranges.some(([from, to]) => from <= pos + node.nodeSize && to >= pos));
+}
+
+/** The ranges the batch's own user edits changed, in the final document. */
+function userEditRanges(transactions: readonly Transaction[]): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  transactions.forEach((transaction, index) => {
+    if (!isUserHistoryEdit(transaction)) return;
+    for (const [from, to] of touchedRanges(transaction)) {
+      let start = from;
+      let end = to;
+      for (const later of transactions.slice(index + 1)) {
+        start = later.mapping.map(start, -1);
+        end = later.mapping.map(end, 1);
+      }
+      ranges.push([start, end]);
+    }
+  });
+  return ranges;
+}
 
 /**
  * Plugin that recomputes document table-cell formulas after any doc-changing
@@ -611,7 +659,11 @@ export function createTableFormulaRecomputePlugin(): Plugin {
         ) {
           return;
         }
-        const result = safeFormulaRecompute(view.state.doc, view.state.tr);
+        const result = safeFormulaRecompute(
+          view.state.doc,
+          view.state.tr,
+          (fragments) => !keepsWordResults(view.state.doc, fragments),
+        );
         if (!result) return;
         result.setMeta(tableFormulaPluginKey, true);
         result.setMeta("addToHistory", false);
@@ -640,7 +692,12 @@ export function createTableFormulaRecomputePlugin(): Plugin {
         return undefined;
       }
       const tr = newState.tr;
-      const result = safeFormulaRecompute(newState.doc, tr);
+      const edited = userEditRanges(transactions);
+      const result = safeFormulaRecompute(
+        newState.doc,
+        tr,
+        (fragments) => !keepsWordResults(newState.doc, fragments) || touchedBy(fragments, edited),
+      );
       if (!result) return undefined;
       result.setMeta(tableFormulaPluginKey, true);
       // The refreshed result belongs to the edit that caused it: when a user

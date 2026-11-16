@@ -968,6 +968,25 @@ export async function sendPageClosingEdits(pageId: string, body: PageClosingEdit
   return typeof version === "number" ? version : null;
 }
 
+/** A deck window's edits its room has not confirmed, handed to the room's
+ * durable custody while the window is open (services/page_room_durable
+ * `take_edits_into_custody`): the closing edits' causal form. Resolves with
+ * the custody's sequence; rejects with the request's error. `keepalive` for a
+ * body small enough to outlive the page. */
+export async function sendPageCustodyEdits(
+  pageId: string,
+  body: { epoch: number; model: string; update_base64: string },
+  signal?: AbortSignal,
+): Promise<number | null> {
+  const keepalive = body.update_base64.length < 60 * 1024;
+  // High priority: waiting for a connection, it goes before the window's
+  // other requests (HTTP/1.1 dispatches the queue by priority).
+  const wire = await apiPost<unknown>(`${base(pageId)}/custody-edits`, body,
+    { ...(keepalive ? { keepalive: true } : {}), ...(signal ? { signal } : {}), priority: "high" });
+  const sequence = isRecord(wire) ? wire.sequence : null;
+  return typeof sequence === "number" ? sequence : null;
+}
+
 /** What became of closing edits this account sent: unknown (not heard of),
  * received, applied, unchanged or refused. Null from a server without the read. */
 export async function getPageClosingEditsState(

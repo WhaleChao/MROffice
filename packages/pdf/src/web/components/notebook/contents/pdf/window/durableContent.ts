@@ -5,7 +5,7 @@
  */
 import { isApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import type { JsonValue } from "@mrnote/core/web/lib/collab/json-crdt.ts";
-import { pageStoredJsonEquals } from "@mrnote/core/web/lib/page-save-acknowledgement.ts";
+import { pageDocumentJsonEquals, pageStoredJsonEquals } from "@mrnote/core/web/lib/page-save-acknowledgement.ts";
 import type { PdfEngineSourceIdentity } from "../../../../../lib/pdf/engine/contracts";
 import {
   MRAI_NATIVE_LIST_TEXT_ACTION,
@@ -113,7 +113,14 @@ export function authenticatePdfDurableContentCommit(options: {
   // written into the PDF and then refused here as a changed body, its draft
   
   
-  if (!pageStoredJsonEquals(savedContent, submittedContent)) return null;
+  // Nor a key left undefined: the request carried the body as JSON, which
+  // names no such key. A body built from the window's own records (the
+  // "before" a page turn's Undo writes back: its text boxes read back name
+  // their unset colour, kind, runs...) never equalled the page it had just
+  // saved -- the Undo was written, then refused here, its history cleared
+  // and 「保存失败…没有可安全撤销的原生 PDF 修改」 said over a page that was
+  
+  if (!pageStoredJsonEquals(savedContent, asJsonKeeps(submittedContent))) return null;
   const contentSignature = JSON.stringify(savedContent);
   const dataItemId = getDataItemId(savedContent);
   if (!dataItemId || dataItemId !== getDataItemId(submittedContent))
@@ -196,6 +203,79 @@ export function authenticatePdfSourceBoundNativeMutationSaveReceipt(options: {
       sourceSha256: patchback.outputSha256,
     }),
   });
+}
+
+/** A value as JSON keeps it: a key left undefined is no key, an undefined
+ * item of a list is null. */
+function asJsonKeeps(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((item) => (item === undefined ? null : asJsonKeeps(item)));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([, inner]) => inner !== undefined).map(([key, inner]) => [key, asJsonKeeps(inner)]));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function pdfPageContentChangedKeys(
+  content: Readonly<Record<string, unknown>>,
+  base: Readonly<Record<string, unknown>>,
+): string[] {
+  const nothing = (value: unknown) => value === undefined || value === null ||
+    (Array.isArray(value) && value.length === 0) ||
+    (typeof value === "object" && !Array.isArray(value) && Object.keys(value as object).length === 0);
+  const labels = (value: unknown) => (Array.isArray(value) ? value : null);
+  return [...new Set([...Object.keys(content), ...Object.keys(base)])].filter((key) =>
+    key === "pageLabelRanges"
+      ? !pageDocumentJsonEquals(labels(content[key]), labels(base[key]))
+      : !(nothing(content[key]) && nothing(base[key])) &&
+        !pageDocumentJsonEquals(asJsonKeeps(content[key] ?? null), asJsonKeeps(base[key] ?? null)));
+}
+
+/**
+ * Whether a save of `content` as the page would change nothing: every
+ * collection reads as the saved page holds it, and that page's last save
+ * wrote it into the very file this write would start from.
+ *
+ * Such a write is not sent. The page save sends the whole body, every
+ * collection named; a page the working copy's queue has saved names only the
+ * collections its edits changed, so the server reads the same list as a new
+ * body, writes the file again -- byte for byte the file it was, under a new
+ * version -- and a receipt whose digest is the source's own is one the
+ * source-bound check above refuses (it asks that the write advance the file).
+ * The window then kept a repair nothing was missing for, which held every
+ * later reading of the page off, and with it the queue's next save (a box
+ * emptied and left: its removal follows the write that already took it out
+ * of the file).
+ */
+export function pdfPageSaveWouldChangeNothing(options: {
+  content: Readonly<Record<string, unknown>>;
+  savedPage: PageItem | null | undefined;
+  expectedSource: PdfEngineSourceIdentity;
+}): boolean {
+  const { content, savedPage, expectedSource } = options;
+  const saved = savedPage?.content_json;
+  if (!savedPage || !saved) return false;
+  const receipt = readPdfNativeListTextPatchbackAuthority(
+    readPdfPatchbackReceiptSnapshot(savedPage),
+  );
+  return Boolean(
+    receipt &&
+    receipt.resourceId === expectedSource.resourceId &&
+    receipt.resourceVersionId === expectedSource.resourceVersionId &&
+    receipt.outputSha256 === expectedSource.sourceSha256.toLowerCase() &&
+    pdfPageContentChangedKeys(content, saved).length === 0,
+  );
 }
 
 export function hasLosslessPdfNativeMutationReceipt(options: {
@@ -571,16 +651,19 @@ export function reconstructRefusedNativeWriteRestore(
     return null;
   }
   const remaining = collection.slice(0, -1);
-  const source = remaining.length
-    ? auth.last_known_resource_version_id
-      ? ({ kind: "export", resourceVersionId: auth.last_known_resource_version_id } as const)
-      : null
-    : ({
-        kind: "original",
-        resourceVersionId: auth.source_resource_version_id,
-        outputSha256: auth.source_sha256,
-      } as const);
-  if (!source) return null;
+  // Records before the refused one with no export behind them were never
+  // written either (a further record saved on the failed page, by this
+  // window or another): the file is still the upload, and the page goes
+  // back to it with the whole unwritten journal dropped. This used to be no
+  // restore at all, and the page stayed unwritable.
+  const exportSource = remaining.length && auth.last_known_resource_version_id
+    ? ({ kind: "export", resourceVersionId: auth.last_known_resource_version_id } as const)
+    : null;
+  const source = exportSource ?? ({
+    kind: "original",
+    resourceVersionId: auth.source_resource_version_id,
+    outputSha256: auth.source_sha256,
+  } as const);
   const withJournal = (journal: unknown[] | null) => {
     const body = clonePdfPageContent(content) as Record<string, unknown>;
     if (journal === null) delete body.pdfNativeTransactions;
@@ -593,7 +676,7 @@ export function reconstructRefusedNativeWriteRestore(
     marker,
     refusedTransactionId,
     candidates: Object.freeze(
-      remaining.length ? [withJournal(remaining)] : [withJournal(null), withJournal([])],
+      exportSource ? [withJournal(remaining)] : [withJournal(null), withJournal([])],
     ),
     source: Object.freeze(source),
     key: `${savedPage.id}:${contentVersion}:${auth.current_content_sha256}`,
@@ -609,7 +692,7 @@ export function reconstructRefusedNativeWriteRestore(
  */
 export function readRefusedNativeTextDraft(
   savedPage: PageItem,
-): Readonly<{ lineKey: string; text: string }> | null {
+): Readonly<{ lineKey: string; text: string; lineText?: string }> | null {
   const content = savedPage.content_json;
   const collection = content && typeof content === "object" && !Array.isArray(content)
     ? readPdfNativeTransactionCollection(content as Record<string, unknown>)
@@ -628,7 +711,14 @@ export function readRefusedNativeTextDraft(
       : null;
   const indexes = Array.isArray(items) ? items.map(indexOf) : [indexOf(item)];
   if (!Number.isSafeInteger(pageNumber) || !indexes.length || indexes.some((index) => index === null)) return null;
-  return Object.freeze({ lineKey: `${pageNumber as number}:${indexes.join(",")}`, text });
+  // The line's own words (as pdfNativeListTextTargetText reads them): the
+  // draft is held to them once the page is saved again.
+  const strOf = (value: unknown) =>
+    value && typeof value === "object" && typeof (value as { str?: unknown }).str === "string"
+      ? (value as { str: string }).str : null;
+  const words = Array.isArray(items) ? items.map(strOf) : [strOf(item)];
+  return Object.freeze({ lineKey: `${pageNumber as number}:${indexes.join(",")}`, text,
+    ...(words.every((word) => word !== null) ? { lineText: words.join("\n") } : {}) });
 }
 
 const PDF_NATIVE_SERVER_REFUSAL_REASON = /^native_text_transaction_rejected:([a-z0-9-]+)$/;

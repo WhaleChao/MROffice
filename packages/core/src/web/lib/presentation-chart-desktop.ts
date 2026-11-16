@@ -10,6 +10,8 @@ import {
   type PresentationChartAreaStyle,
   type PresentationChartAreaPaint,
   type PresentationChartEffectPreset,
+  chartPointEffectiveStyle,
+  chartRowsWithPointStyle,
   chartStyleRowExtras,
 } from "./presentation-chart-area-style";
 import {
@@ -164,6 +166,10 @@ export function presentationChartAreaStyle(
     return format?.sliceStyles?.find(
       (s) => s.pointIndex === Number(area.slice(6)),
     );
+  // One data point of a series (Format Data Point: a column's or a bar's
+  // own fill, line and effects), selected by a second click on it.
+  const point = /^point:(\d+):(\d+)$/.exec(area);
+  if (point) return chartPointEffectiveStyle(format, Number(point[1]), Number(point[2]));
   if (area.startsWith("axis:"))
     return format?.axisStyles?.find((s) => s.axis === area.slice(5));
   if (area.startsWith("axisTitle:"))
@@ -196,6 +202,16 @@ export function setPresentationChartAreaStyle(
       const { style: _style, ...rest } = entry;
       return normalized ? { ...rest, style: normalized } : rest;
     });
+    return readPresentationChartV2({ ...attrs, format });
+  }
+  const point = /^point:(\d+):(\d+)$/.exec(area);
+  if (point) {
+    // One data point of a series: its own row in sliceStyles, by series and
+    // point (`c:dPt` in that series), its paint over the series'.
+    if (style !== null && !normalized) return null;
+    const rows = chartRowsWithPointStyle(format.sliceStyles, Number(point[1]), Number(point[2]), style);
+    if (rows) format.sliceStyles = rows;
+    else delete format.sliceStyles;
     return readPresentationChartV2({ ...attrs, format });
   }
   const rule = area.startsWith("series:")

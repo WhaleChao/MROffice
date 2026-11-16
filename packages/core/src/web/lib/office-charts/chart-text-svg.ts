@@ -9,6 +9,7 @@
  * Copy as Picture: the words go back into the picture where the editor draws
  * them, in their runs' looks (a WordArt in its fill and outline).
  */
+import { chartTextAllCaps, officeSmallCapsSizePx, chartTextSmallCapsPieces } from "./chart-letter-spacing";
 import { ptToPx } from "../office-units";
 import type { ChartTextFrame, ChartTextPart } from "../engine-host/charts-types";
 import { normalizeOfficeTextPaint } from "../office-text-paint";
@@ -39,16 +40,27 @@ function frameSvg(frame: ChartTextFrame): string {
   let top = -total / 2;
   const fill = paint ? (paint.fill === "none" ? "none" : paint.fillGradient?.stops[0]?.color ?? paint.fill) : null;
   const stroke = paint && paint.outline !== "none"
-    ? ` stroke="${escape(paint.outline)}" stroke-width="${ptToPx(paint.outlineWidthPt)}"`
+    ? ` stroke="${escape(paint.outline)}" stroke-width="${ptToPx(paint.outlineWidthPt)}" stroke-linejoin="round"`
     : "";
   const texts = lines.map((line, index) => {
     const middle = top + heights[index] / 2;
     top += heights[index];
     const spans = line
-      .map(
-        (run) =>
-          `<tspan font-family="${escape(cssFontFamilyList(run.look.fontFamily))}" font-size="${run.look.fontSize}" font-weight="${escape(run.look.fontWeight)}" font-style="${escape(run.look.fontStyle)}" fill="${escape(fill ?? run.look.color)}">${escape(run.text)}</tspan>`,
-      )
+      .map((run) => {
+        // Character Spacing and capitals as the picture draws them (`chart-letter-spacing`).
+        const spacing = run.look.letterSpacing ? ` letter-spacing="${run.look.letterSpacing}"` : "";
+        const words =
+          run.look.caps === "small"
+            ? chartTextSmallCapsPieces(run.text)
+                .map((piece) =>
+                  piece.small
+                    ? `<tspan font-size="${officeSmallCapsSizePx(run.look.fontSize)}">${escape(piece.text)}</tspan>`
+                    : escape(piece.text),
+                )
+                .join("")
+            : escape(run.look.caps === "all" ? chartTextAllCaps(run.text) : run.text);
+        return `<tspan font-family="${escape(cssFontFamilyList(run.look.fontFamily))}" font-size="${run.look.fontSize}" font-weight="${escape(run.look.fontWeight)}" font-style="${escape(run.look.fontStyle)}" fill="${escape(fill ?? run.look.color)}"${spacing}>${words}</tspan>`;
+      })
       .join("");
     return `<text x="0" y="${middle}" text-anchor="middle" dominant-baseline="central" xml:space="preserve"${stroke}>${spans}</text>`;
   });

@@ -95,6 +95,15 @@ export interface SlideParagraph {
    * text edit. `{}` states "no formatting of its own".
    */
   bulletFormat?: ParagraphBulletFormat;
+  
+
+
+
+
+
+
+
+  markerHidden?: true;
   /**
    * The size, in points, of the row's end mark (`a:endParaRPr@sz`): how tall
    * a BLANK row is in PowerPoint, which no run states. Read by the import
@@ -103,6 +112,47 @@ export interface SlideParagraph {
    * proves its original package.
    */
   endFontSize?: number;
+  /**
+   * The row's end mark set Superscript or Subscript (`a:endParaRPr@baseline`,
+   * readings row 730): PowerPoint lays a BLANK row out at the raised size,
+   * two thirds of `endFontSize` to a whole point (as it sets a raised run).
+   * Carried like `endFontSize`; never written.
+   */
+  endScript?: "super" | "sub";
+  /**
+   * Paragraph > Asian Typography > Text alignment (`a:pPr@fontAlgn`,
+   * ST_TextFontAlignType): where the characters of a line stand on it when
+   * their sizes differ -- Auto, Top, Center, Baseline, Bottom. The row's own
+   * value (readings row 513); `fontAlignInherited` is what its level
+   * inherits from the list styles when not Auto, for the text engine only,
+   * never written.
+   */
+  fontAlign?: PresentationFontAlign;
+  fontAlignInherited?: PresentationFontAlign;
+}
+
+/** ST_TextFontAlignType, in OOXML's own words. */
+export type PresentationFontAlign = "auto" | "t" | "ctr" | "base" | "b";
+
+export const PRESENTATION_FONT_ALIGNS: readonly PresentationFontAlign[] = ["auto", "t", "ctr", "base", "b"];
+
+/** A stated Text alignment, or undefined for anything else. */
+export function normalizeParagraphFontAlign(value: unknown): PresentationFontAlign | undefined {
+  return typeof value === "string" && (PRESENTATION_FONT_ALIGNS as readonly string[]).includes(value)
+    ? (value as PresentationFontAlign)
+    : undefined;
+}
+
+
+
+
+
+
+
+export function paragraphEndLineFontSize(paragraph: Pick<SlideParagraph, "endFontSize" | "endScript"> | undefined): number | undefined {
+  const size = paragraph?.endFontSize;
+  if (typeof size !== "number" || !(size > 0)) return undefined;
+  return paragraph?.endScript ? Math.max(1, Math.round((size * 2) / 3)) : size;
 }
 
 /** A row's stated end-mark size, in points (`a:endParaRPr@sz`, 1..4000). */
@@ -113,10 +163,22 @@ export function normalizeParagraphEndFontSize(value: unknown): number | undefine
 }
 
 /** A row's own formatting the editor carries without drawing or authoring it. */
-export function paragraphCarriedFields(record: unknown): Pick<SlideParagraph, "endFontSize"> {
+export function paragraphCarriedFields(
+  record: unknown,
+): Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited"> {
   if (!record || typeof record !== "object") return {};
-  const endFontSize = normalizeParagraphEndFontSize((record as Record<string, unknown>).endFontSize);
-  return endFontSize === undefined ? {} : { endFontSize };
+  const raw = record as Record<string, unknown>;
+  const out: Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited"> = {};
+  const endFontSize = normalizeParagraphEndFontSize(raw.endFontSize);
+  if (endFontSize !== undefined) out.endFontSize = endFontSize;
+  if (raw.endScript === "super" || raw.endScript === "sub") out.endScript = raw.endScript;
+  // A row's Text alignment goes with it through every rebuild, as its
+  // direction does (the Paragraph dialog is what changes it).
+  const fontAlign = normalizeParagraphFontAlign(raw.fontAlign);
+  if (fontAlign !== undefined) out.fontAlign = fontAlign;
+  const fontAlignInherited = normalizeParagraphFontAlign(raw.fontAlignInherited);
+  if (fontAlignInherited !== undefined) out.fontAlignInherited = fontAlignInherited;
+  return out;
 }
 
 /** A row's own marker formatting; see {@link SlideParagraph.bulletFormat}. */
@@ -170,11 +232,14 @@ export function normalizeParagraphBulletFormat(
  * glyph on an unbulleted row draws nothing and would be invisible state.
  */
 export function paragraphMarkerFields(
-  record: { bulletChar?: unknown; numberFormat?: unknown; bulletFormat?: unknown },
+  record: { bulletChar?: unknown; numberFormat?: unknown; bulletFormat?: unknown; markerHidden?: unknown },
   bullet: ParagraphBullet,
-): Pick<SlideParagraph, "bulletChar" | "numberFormat" | "bulletFormat"> {
+): Pick<SlideParagraph, "bulletChar" | "numberFormat" | "bulletFormat" | "markerHidden"> {
   const bulletFormat = normalizeParagraphBulletFormat(record.bulletFormat, bullet);
-  const formatted = bulletFormat === undefined ? {} : { bulletFormat };
+  const formatted = {
+    ...(bulletFormat === undefined ? {} : { bulletFormat }),
+    ...(record.markerHidden === true && bullet !== "none" ? { markerHidden: true as const } : {}),
+  };
   if (bullet === "bullet") {
     const bulletChar = normalizeBulletChar(record.bulletChar);
     return bulletChar === undefined ? formatted : { bulletChar, ...formatted };
@@ -490,6 +555,14 @@ const SYMBOL_FONT_UNICODE_FALLBACK: Readonly<Record<string, string>> = {
   "Wingdings 3:\uf077": "▷",
   "Symbol:": "•",
   "Symbol:": "•",
+  // The Office 2003 templates' `buFont Symbol` + `buChar ·`: the Symbol
+  // font's code 0xB7 is its bullet, as PowerPoint draws it (symbol-bullet
+  
+  
+  "Symbol:·": "•",
+  // The same encoding's 0xA7 and 0xD8 (symbol-bullet probe R3, R4).
+  "Symbol:§": "♣",
+  "Symbol:Ø": "¬",
   "StarSymbol:": "■",
   "StarSymbol:": "•",
 };
@@ -631,6 +704,8 @@ export function isFlatEquivalentParagraphs(
         p.level === 0 &&
         p.align === undefined &&
         p.dir === undefined &&
+        p.fontAlign === undefined &&
+        p.fontAlignInherited === undefined &&
         !paragraphStatesIndent(p),
     )
   );
@@ -758,12 +833,21 @@ export function adjustParagraphLevelAt(
   paragraphs: readonly SlideParagraph[],
   index: number,
   delta: number,
+  /**
+   * The row's character formatting at its new level
+   * (`presentationListLevelRestyle`: an imported body's runs re-inherit as
+   * PowerPoint's do); null keeps the row where it is, as PowerPoint refuses
+   * a move that would pass its largest type size. Absent: formatting stays.
+   */
+  restyle?: <P extends SlideParagraph>(paragraph: P, from: number, to: number) => P | null,
 ): SlideParagraph[] {
   const arr = paragraphs as SlideParagraph[];
   if (index < 0 || index >= paragraphs.length || delta === 0) return arr;
-  const current = paragraphs[index];
-  const nextLevel = clampLevel(current.level + delta);
-  if (nextLevel === current.level) return arr;
+  const original = paragraphs[index];
+  const nextLevel = clampLevel(original.level + delta);
+  if (nextLevel === original.level) return arr;
+  const current = restyle ? restyle(original, original.level, nextLevel) : original;
+  if (current === null) return arr;
   // A row that states its own `a:pPr@marL` is drawn at that margin, not at
   // its level's, so the level alone would not move it: an imported text box
   // whose rows carry their exact indentation would ignore Increase / Decrease
@@ -778,12 +862,12 @@ export function adjustParagraphLevelAt(
             PARAGRAPH_INDENT_EMU_LIMIT,
             Math.max(
               0,
-              current.marL + (nextLevel - current.level) * PARAGRAPH_LEVEL_STEP_EMU,
+              current.marL + (nextLevel - original.level) * PARAGRAPH_LEVEL_STEP_EMU,
             ),
           ),
         };
   return paragraphs.map((paragraph, position) =>
-    position === index ? { ...paragraph, level: nextLevel, ...moved } : paragraph,
+    position === index ? { ...current, level: nextLevel, ...moved } : paragraph,
   );
 }
 
@@ -803,6 +887,7 @@ const PARAGRAPH_LEVEL_STEP_EMU = 457_200;
 export {
   MIN_PARAGRAPH_LEVEL,
   MAX_PARAGRAPH_LEVEL,
+  BLOCK_BULLET_CHARS,
   BULLET_CHARS,
   NUMBER_FORMATS,
   PRESENTATION_WEB_BULLET_STYLES,
@@ -810,11 +895,13 @@ export {
   bulletGlyphForLevel,
   clampLevel,
   nativeAutoNumberLabel,
+  normalizeBlockBulletChar,
   normalizeBulletChar,
   normalizeNumberFormat,
   numberFormatForLevel,
   numberLabelForFormat,
   renderParagraphs,
+  type BlockBulletChar,
   type BulletChar,
   type MarkerOptions,
   type NumberFormat,

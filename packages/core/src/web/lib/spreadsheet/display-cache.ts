@@ -35,6 +35,7 @@ import { normalizeDataTables, normalizeTableColumnNames, type DataTable } from "
 import { cellPictureEntries } from "./cell-picture";
 import { cellPhoneticReading, readCellPhonetic } from "./cell-phonetic";
 import { keptFormulaResultEntries, keptFormulaResultOption } from "./kept-formula-results";
+import { displayPrecisionEntries, displayPrecisionOption } from "./display-precision";
 import { spreadsheetCellIsText } from "./entry-parse";
 import { recoverDeepChain } from "./formula-dependencies";
 import {
@@ -303,13 +304,17 @@ export function resolveCellDisplay(
   }
   // A number format shapes numbers. A constant the cell calls text (typed
   // with a leading apostrophe, or entered in a Text cell) stays the text it
-  // is: '007 under Percentage shows 007, as ISTEXT says.
+  // is: '007 under Percentage shows 007, as ISTEXT says. A stored number
+  // under an apostrophe format (an xf's quotePrefix over a numeric value) is
+  // still a number, and Excel shows it formatted: R87-X14's populations
+  // "4, 867" (#,##0) and ages "43.1" printed raw, "4867", and as ####.
+  const numberIdentity = (candidate: SpreadsheetCell) => candidate.style?.quotePrefix !== true || candidate.kind === "number";
   if (
     fmt &&
     cell?.value &&
     cell.value.trim() !== "" &&
     cell.kind !== "text" &&
-    cell.style?.quotePrefix !== true
+    numberIdentity(cell)
   ) {
     const num = Number(cell.value);
     if (Number.isFinite(num)) return applyCellNumberFormat(num, fmt, dateSystem);
@@ -326,7 +331,7 @@ export function resolveCellDisplay(
     cell?.value &&
     cell.kind !== "text" &&
     cell.stringValue !== true &&
-    cell.style?.quotePrefix !== true &&
+    numberIdentity(cell) &&
     STORED_EXPONENT_NUMBER.test(cell.value)
   ) {
     const num = Number(cell.value);
@@ -340,7 +345,7 @@ export function resolveCellDisplay(
     cell?.value &&
     cell.kind !== "text" &&
     cell.stringValue !== true &&
-    cell.style?.quotePrefix !== true &&
+    numberIdentity(cell) &&
     PLAIN_DECIMAL_NUMBER.test(cell.value)
   ) {
     return cell.value.trim().replace(".", separators.decimal);
@@ -671,6 +676,8 @@ export function workbookSheetInputFor<S extends DisplayCacheSheet>(
     /** The workbook's sheets still placeholders (deferred-sheets
      *  `pendingSheetNames`): a formula naming one keeps the file's value. */
     pendingSheetNames?: ReadonlySet<string>;
+    /** The workbook sets precision as displayed (calcPr@fullPrecision="0"). */
+    precisionAsDisplayed?: boolean;
   },
 ): WorkbookSheetInput {
   const merges = normalizeMerges(sheet.merges);
@@ -712,6 +719,7 @@ export function workbookSheetInputFor<S extends DisplayCacheSheet>(
     carrying, covered, opts?.pendingSheetNames?.size ? { sheets: opts.pendingSheetNames, cells } : undefined);
   const formulaHidden = formulaHiddenEngineOption(sheet.protected === true, cells, covered);
   const legacyArrays = legacyArrayEngineOption(carrying, covered);
+  const shownPrecision = opts?.precisionAsDisplayed ? displayPrecisionEntries(cells, covered) : [];
   const options: SheetEvaluatorOptions = {
     usedRange: { rowCount, columnCount },
     ...pictureCells.option,
@@ -719,6 +727,7 @@ export function workbookSheetInputFor<S extends DisplayCacheSheet>(
     ...keptFormulaResultOption(keptResults, readStored),
     ...formulaHidden.option,
     ...legacyArrays.option,
+    ...displayPrecisionOption(shownPrecision),
     ...columnWidthOption(opts?.columnWidths),
     // Excel stores a cell's TYPE: an apostrophe-prefixed entry, and one typed
     // into a Text (@) cell, is a string even when it reads as a number. The
@@ -766,6 +775,7 @@ export function workbookSheetInputFor<S extends DisplayCacheSheet>(
     ...(keptResults.length ? { keptResults } : {}),
     ...(formulaHidden.keys.length ? { formulaHiddenCells: formulaHidden.keys } : {}),
     ...(legacyArrays.entries.length ? { legacyArrays: legacyArrays.entries } : {}),
+    ...(shownPrecision.length ? { displayPrecision: shownPrecision } : {}),
     ...(opts?.columnWidths ? { columnWidths: opts.columnWidths } : {}),
     ...(covered.size ? { coveredCells: [...covered] } : {}),
   });

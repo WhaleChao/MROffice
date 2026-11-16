@@ -57,6 +57,10 @@ const IMPORT_LOSS_MESSAGE_KEY: Readonly<Record<string, string>> = {
   // the page past its size: on the slide and editable; the file and every
   // export keep the original.
   pptx_picture_display_copy: "pptxPictureDisplayCopy",
+  
+  
+  // export keep the original.
+  pptx_picture_src_refused: "pptxPictureSrcRefused",
   pptx_shape_not_projected: "pptxShape",
   // Distinct from `pptxShape` on purpose: that one is the BROWSER preview's
   // gap, and its message says the saved page reads those shapes in full. This

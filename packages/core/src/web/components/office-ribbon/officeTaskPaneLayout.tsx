@@ -382,6 +382,12 @@ export function OfficeTaskPaneOptions({
  * for one pixel; Home/End go to the narrowest/widest, Enter or Esc hand the
  * keyboard back to the pane. `onWidth` hears every step; `commit` is true
  * when the gesture or key press ends, which is when the width is kept.
+ *
+ * `edge` is which side of the pane the border is: a task pane docked at the
+ * right is sized at its left edge (the default); a pane docked at the left,
+ * as the slide thumbnails are, at its right edge; a pane under the document,
+ * as the Notes pane is, at its top edge, and then `width` is its height and
+ * Up/Down size it.
  */
 export const OfficeTaskPaneResizeHandle = forwardRef<
   HTMLDivElement,
@@ -395,9 +401,12 @@ export const OfficeTaskPaneResizeHandle = forwardRef<
     readonly className?: string;
     readonly style?: React.CSSProperties;
     readonly testId?: string;
+    readonly edge?: "left" | "right" | "top";
+    /** False keeps the border out of the Tab order (still focusable). */
+    readonly tabbable?: boolean;
   }
 >(function OfficeTaskPaneResizeHandle(
-  { width, minWidth, maxWidth, label, onWidth, onDone, className, style, testId },
+  { width, minWidth, maxWidth, label, onWidth, onDone, className, style, testId, edge = "left", tabbable = true },
   ref,
 ) {
   const clamp = (value: number) => Math.round(Math.min(maxWidth, Math.max(minWidth, value)));
@@ -405,12 +414,12 @@ export const OfficeTaskPaneResizeHandle = forwardRef<
     <div
       ref={ref}
       role="separator"
-      aria-orientation="vertical"
+      aria-orientation={edge === "top" ? "horizontal" : "vertical"}
       aria-label={label}
       aria-valuemin={minWidth}
       aria-valuemax={maxWidth}
       aria-valuenow={Math.round(width)}
-      tabIndex={0}
+      tabIndex={tabbable ? 0 : -1}
       className={className}
       style={style}
       data-testid={testId}
@@ -419,12 +428,20 @@ export const OfficeTaskPaneResizeHandle = forwardRef<
         event.preventDefault();
         const target = event.currentTarget;
         const startX = event.clientX;
+        const startY = event.clientY;
         const startWidth = width;
         let latest = startWidth;
         target.setPointerCapture(event.pointerId);
         const move = (moveEvent: PointerEvent) => {
-          // The pane's free edge is its left one: dragging left widens it.
-          latest = clamp(startWidth + (startX - moveEvent.clientX));
+          // A left edge widens the pane dragged left; a right edge dragged
+          // right; a top edge makes it taller dragged up.
+          const grow =
+            edge === "top"
+              ? startY - moveEvent.clientY
+              : edge === "right"
+                ? moveEvent.clientX - startX
+                : startX - moveEvent.clientX;
+          latest = clamp(startWidth + grow);
           onWidth(latest, false);
         };
         const end = () => {
@@ -450,8 +467,15 @@ export const OfficeTaskPaneResizeHandle = forwardRef<
             : event.key === "End"
               ? maxWidth
               : (() => {
-                  const step = stepOfficeTaskPaneByKey("size", false, event.key, event.ctrlKey || event.metaKey);
-                  return step ? width + step.dx : null;
+                  const fine = event.ctrlKey || event.metaKey;
+                  if (edge === "left") {
+                    const step = stepOfficeTaskPaneByKey("size", false, event.key, fine);
+                    return step ? width + step.dx : null;
+                  }
+                  const grows = edge === "top" ? "ArrowUp" : "ArrowRight";
+                  const shrinks = edge === "top" ? "ArrowDown" : "ArrowLeft";
+                  const step = fine ? 1 : 10;
+                  return event.key === grows ? width + step : event.key === shrinks ? width - step : null;
                 })();
         if (next === null) return;
         event.preventDefault();

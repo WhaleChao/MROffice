@@ -24,6 +24,7 @@ import {
   type PdfSavePolicyRevision,
 } from "./save-policy";
 import { PDF_EDITABLE_MAX_BYTES } from "@mrnote/core/web/lib/document-size-limits.ts";
+import { pdfLibObjectsPerTick } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 export const PDF_BATCH_PRINT_MAX_FILES = 16;
 export const PDF_BATCH_PRINT_MAX_SOURCE_BYTES = PDF_EDITABLE_MAX_BYTES;
@@ -323,7 +324,7 @@ export async function buildPdfBatchPrintDocument(
   if (pageCount < 1 || output.getPageCount() !== pageCount) {
     throw new Error("Batch print produced no pages");
   }
-  const bytes = copyBytes(await output.save());
+  const bytes = copyBytes(await output.save({ objectsPerTick: pdfLibObjectsPerTick() }));
   try {
     const reopened = await loadPdfForMutation(bytes);
     if (

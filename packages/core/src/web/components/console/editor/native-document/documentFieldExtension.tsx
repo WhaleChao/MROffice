@@ -485,6 +485,22 @@ export function documentFieldViewText(
   }));
 }
 
+
+
+
+
+
+
+
+
+function replaceSelectionWithField(tr: Transaction, node: ProseMirrorNode): void {
+  const { selection } = tr;
+  const marks =
+    tr.storedMarks ??
+    (selection.empty ? selection.$from.marks() : (selection.$from.marksAcross(selection.$to) ?? []));
+  tr.replaceSelectionWith(node.mark(marks.filter((mark) => mark.type.name !== "link")), false);
+}
+
 /**
  * A SEQ field just inserted holds the number it shows as its result, as Word
  * writes one when it inserts it: a second "Figure" SEQ after a first reads 2,
@@ -1020,7 +1036,7 @@ export const DocumentFields = Extension.create<DocumentFieldExtensionOptions>({
               dispatch(tr.scrollIntoView());
               return true;
             }
-            tr.replaceSelectionWith(nodeType.create(attrs), true);
+            replaceSelectionWithField(tr, nodeType.create(attrs));
             withInsertedSeqResult(tr, tr.selection.from - 1, this.options.getContext?.());
             dispatch(tr);
           }
@@ -1041,7 +1057,7 @@ export const DocumentFields = Extension.create<DocumentFieldExtensionOptions>({
             return true;
           }
           if (dispatch) {
-            tr.replaceSelectionWith(node, true);
+            replaceSelectionWithField(tr, node);
             withInsertedSeqResult(tr, tr.selection.from - 1, this.options.getContext?.());
             dispatch(tr);
           }

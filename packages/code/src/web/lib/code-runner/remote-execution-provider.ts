@@ -955,12 +955,14 @@ function exactKeys(
 
 export { PROVIDER_ID as REMOTE_EXECUTION_PROVIDER_ID };
 
-/**
- * The execution service declined the run before it started: the person's
- * other run is still going, every slot is taken, today's time is used up, or
- * the service cannot take runs now. Not a failure of the program.
- */
+
+
+
+
+
+
 const REMOTE_EXECUTION_REFUSAL_CODES = new Set([
+  "ai_allowance_exhausted",
   // A draft's review: the draft was decided or replaced meanwhile.
   "agent_code_draft_changed",
   "agent_code_draft_unavailable",

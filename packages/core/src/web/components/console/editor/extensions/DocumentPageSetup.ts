@@ -8,6 +8,7 @@ import { SheetFact } from "../../../../lib/editor/sheet-facts";
 import { PX_PER_PT } from "../../../../lib/office-units";
 import { createBackgroundLane, requestLaneFrame } from "../../../../lib/background-work";
 import { normalizeWordCompatibilityMode, wordPunctuationCompresses } from "../native-document/documentOverflowPunctuation";
+import { wordOmitsEastAsianAutoSpace } from "../native-document/wordFarEastDefaults";
 import {
   documentTerminalPunctuation,
   documentTerminalPunctuationApplies,
@@ -18,7 +19,11 @@ import { documentStyleFontSizePx, paragraphHoldsNoText } from "../native-documen
 import { documentLineGridPitch, offLineGridAt, sectionsOffLineGrid } from "../native-document/sectionLineGrid";
 import { WORD_ZH_CN_NO_START_EXTRA, wordKinsokuList } from "../native-document/documentWordDelimiterBoundaries";
 import { TABLE_REPEATED_HEADER_ATTR } from "../native-document/paged/tablePagination";
+import { bandOverflowByIndexOnly, bandOverflowForSection, bandOverflowSectionsOf } from "../native-document/paged/bandOverflowSections";
+import { footnotesAllowProgressiveLayout, sheetedDocHasFootnoteRefs } from "../native-document/paged/footnoteRefs";
 import { documentDisplayFontPluginKey } from "../native-document/documentDisplayFonts";
+import { projectionFontReach } from "../native-document/projectionFontNews";
+import { DOCS_ENGINE_BASE_SPACING_ATTR, DOCS_ENGINE_BASE_WORD_SPACING_ATTR, DOCS_ENGINE_LINE_ATTR } from "../../../../lib/text-engine/docs-lines";
 import { measureOfficeGlyphAdvances, measureOfficeGlyphBaselineOffsets, type measureOfficeGlyphBaselineOffset, type OfficeGlyphAdvanceOptions, type OfficeGlyphBaselineOptions } from "../../../office-ribbon/officeFontLineBox";
 import { INLINE_FORMULA_TYPESET_EVENT, LAYOUT_METRICS_FLUSH_EVENT, sourceFontPlanIsReady, writeDocumentLayoutStatus, DOCUMENT_AUTO_LINE_SPACING_PENDING, DOCUMENT_WORD_CJK_SPACING_PENDING, measureOutsideEditorObservation } from "../native-document/documentLayoutStatus";
 import Document from "@tiptap/extension-document";
@@ -36,7 +41,7 @@ import { normalizeOfficeThemePaletteId } from "../../../../lib/office-color-pale
 import {
   normalizeEastAsianFontFamilies,
   WORD_EAST_ASIAN_SINGLE_LINE_FACTOR,
-  wordEastAsianSingleLineFactor,
+  wordDocumentEastAsianSingleLineFactor,
 } from "../../../../lib/document-word-line-metrics";
 import {
   wordFontIsEastAsian,
@@ -128,6 +133,7 @@ import {
   type DocumentWatermark,
 } from "../native-document/watermark";
 import {
+  documentDefaultEastAsianFontFamily,
   normalizeCharacterStyle,
   normalizeFontFamily,
   normalizeFontSize,
@@ -453,6 +459,14 @@ export function measureSectionVerticalOffsets(root: ParentNode): Map<number, num
   return out;
 }
 
+
+
+
+
+function sectionLayoutsWhileArriving(): boolean {
+  return (globalThis as { __docsSectionLayoutsArriving?: boolean }).__docsSectionLayoutsArriving !== false;
+}
+
 export function buildSectionLayoutDecorations(
   doc: ProseMirrorNode,
   verticalOffsets: ReadonlyMap<number, number> = new Map(),
@@ -481,11 +495,17 @@ export function buildSectionLayoutDecorations(
     });
     pages.push({ pos: offset, nodeSize: node.nodeSize, sectionBreaks, innerBreak });
   });
-  if (
-    pages.length === 0 ||
-    layouts.length !==
-      pages.reduce((total, page) => total + page.sectionBreaks, 1)
-  ) {
+  const sections = pages.reduce((total, page) => total + page.sectionBreaks, 1);
+  // A long document comes in a run of pages at a time, its section layouts
+  // with the first: until its last break has arrived, the pages it holds
+  // name fewer sections than the layouts list. Their sections are known
+  // (a page's is the breaks before it), but no sheet of the document had its
+  // layout until the last of them came: R286-D01 opened 36 s without its
+  // pages' width, margins and height, then every sheet took them at once and
+  // the ledger laid all 117 out again from the first (3.3-3.8 s, Chromium).
+  
+  const arriving = sections < layouts.length && sectionLayoutsWhileArriving();
+  if (pages.length === 0 || (layouts.length !== sections && !arriving)) {
     return DecorationSet.empty;
   }
 
@@ -583,7 +603,22 @@ const NO_BAND_OVERFLOW = "0px|0px";
  * later pages' indexes, but their overflow, nearly always the same, writes
  * nothing.
  */
-function stampSheetBandOverflow(view: EditorView): void {
+/**
+ * A document with footnotes laid out a window at a time
+ * (`__docsFootnoteProgressive`) takes each page's band overflow by its section
+ * (bandOverflowSections): a pass that moved pages between sections left pages
+ * the next window planned with another section's band (R286-D01: pages 64-80
+ * planned at 1019 px for 1004, a table row cut there kept when the room read
+ * right again; laid out whole, the next pass plans them again).
+ * `window.__docsNotesBandBySection = false` reads the index's value as before.
+ */
+function notesBandBySection(view: EditorView): boolean {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsNotesBandBySection?: boolean }) | null;
+  if (win?.__docsNotesBandBySection === false) return false;
+  return sheetedDocHasFootnoteRefs(view.state.doc) && footnotesAllowProgressiveLayout(view.state.doc, win);
+}
+
+export function stampSheetBandOverflow(view: EditorView): void {
   const root = view.dom;
   if (!root.isConnected) return;
   const sheets = sheetsOf(root);
@@ -593,12 +628,29 @@ function stampSheetBandOverflow(view: EditorView): void {
   let host: HTMLElement | null = root;
   while (host && !(host.getAttribute("style") ?? "").includes("--sheet-band-extra-")) host = host.parentElement;
   const published = (name: string) => host?.style.getPropertyValue(name).trim() || "0px";
+  // A page a pass moved to another section takes its section's overflow,
+  // not the one its index had under the old cut (bandOverflowSections).
+  const sections = host && (!bandOverflowByIndexOnly() || notesBandBySection(view)) ? bandOverflowSectionsOf(root) : null;
+  const sectionFallback = new Map<string, string>();
   const writes: Array<() => void> = [];
   sheets.forEach((sheet, index) => {
     // No page's band overflows: no name to build for each sheet of a long book.
     if (!host && stampedBandOverflow.get(sheet) === NO_BAND_OVERFLOW) return;
-    const top = host ? published(`--sheet-band-extra-top-${index}`) : "0px";
-    const bottom = host ? published(`--sheet-band-extra-bottom-${index}`) : "0px";
+    const sectionAttr = sections ? sheet.getAttribute("data-section-layout-index") : null;
+    const section = sectionAttr === null ? Number.NaN : Number(sectionAttr);
+    const valueOf = (edge: "top" | "bottom") => {
+      if (!host) return "0px";
+      if (!sections || !Number.isInteger(section) || sections[index] === section) return published(`--sheet-band-extra-${edge}-${index}`);
+      const key = `${edge}:${section}`;
+      let value = sectionFallback.get(key);
+      if (value === undefined) {
+        value = bandOverflowForSection(index, section, sections, (at) => published(`--sheet-band-extra-${edge}-${at}`));
+        sectionFallback.set(key, value);
+      }
+      return value;
+    };
+    const top = valueOf("top");
+    const bottom = valueOf("bottom");
     const signature = `${top}|${bottom}`;
     if (stampedBandOverflow.get(sheet) === signature) return;
     writes.push(() => {
@@ -1677,6 +1729,8 @@ export function planWordCjkPunctuationCompression(
   interface Admission {
     endIndex: number;
     requiredTrimPx: number;
+    /** What the line is over its width before any mark gives room. */
+    overflowPx?: number;
     /** The crossing word, which ends here, was taken by shrinking the
      * line's spaces. */
     spacesWordEnd?: number;
@@ -1749,6 +1803,7 @@ export function planWordCjkPunctuationCompression(
     if (trimPx > capacityPx + WORD_CJK_RENDER_FIT_SAFETY_PX) return null;
     return {
       endIndex,
+      overflowPx: trimPx,
       requiredTrimPx:
         trimPx > 0
           ? Math.min(capacityPx, trimPx + WORD_CJK_RENDER_FIT_SAFETY_PX)
@@ -1880,6 +1935,27 @@ export function planWordCjkPunctuationCompression(
       inline,
       Math.max(0, requiredTrimPx - terminalTrimPx),
     );
+    // A line admitted within the render safety of its marks' half-em (Word
+    // takes it) is drawn as admitted: the marks give what it is over and the
+    // safety, a hair past their half-em. Held to the half-em, the page drew
+    // it up to a quarter pixel too wide, the browser and the engine broke it
+    // a character early, and every later line of the paragraph stood a
+    // character off the plan, its marks trimmed on the wrong lines; cut
+    // across a page, the head's last line lost its trim and the page split
+    
+    // four marks held at 7 px in all).
+    const overflowPx = admission.overflowPx ?? 0;
+    const shortPx =
+      overflowPx + WORD_CJK_RENDER_FIT_SAFETY_PX -
+      adjustments.reduce((sum, adjustment) => sum + adjustment.trimPx, 0) -
+      terminalTrimPx;
+    if (overflowPx > 0 && shortPx > WORD_CJK_FIT_EPSILON_PX && shortPx <= 2 * WORD_CJK_RENDER_FIT_SAFETY_PX + WORD_CJK_FIT_EPSILON_PX) {
+      if (adjustments.length) {
+        for (const adjustment of adjustments) adjustment.trimPx += shortPx / adjustments.length;
+      } else if (terminalTrimPx > 0) {
+        terminalTrimPx += shortPx;
+      }
+    }
     if (terminalTrimPx > 0) {
       adjustments.push({
         index: contentEnd - 1,
@@ -1978,7 +2054,7 @@ interface WordCjkDomGlyph extends WordCjkMeasuredGlyph {
   kerning: boolean;
 }
 
-interface WordCjkDomTextStyle {
+export interface WordCjkDomTextStyle {
   font: string;
   fontSizePx: number;
   letterSpacingPx: number;
@@ -1991,6 +2067,13 @@ interface WordCjkDomTextStyle {
    * it in the run's Latin font at that font's width (Word 16.86, corpus
    * R74-D15's EA6e: "“" 4.4 pt in Calibri beside SimSun text). */
   drawnInEastAsianCells: boolean;
+  
+
+
+
+
+
+  asciiInEastAsianCells: boolean;
   /** What the engine's own emboldening adds to each glyph of a run that
    * documentSyntheticBoldWordAdvance sets at Word's bold advance: its
    * letter-spacing already takes it back, so it is not the face's advance. */
@@ -2129,7 +2212,7 @@ function wordCjkPrimaryFontFamily(value: string): string {
     .toLowerCase();
 }
 
-function wordCjkDomTextStyle(parent: HTMLElement): WordCjkDomTextStyle {
+export function wordCjkDomTextStyle(parent: HTMLElement): WordCjkDomTextStyle {
   const style = getComputedStyle(parent);
   const fontSizePx = Math.max(1, wordCjkSpacingNumber(style.fontSize));
   const font = wordCjkCanvasFont(style);
@@ -2150,15 +2233,29 @@ function wordCjkDomTextStyle(parent: HTMLElement): WordCjkDomTextStyle {
   // A section's character grid adds to the run's own spacing.
   const gridSpace = style.getPropertyValue("--doc-grid-char-space").trim();
   const gridSpacePx = gridSpace ? wordCjkSpacingNumber(gridSpace) * CSS_PX_PER_PT : 0;
+  // The text engine's line correction (documentEngineLineBreaks) is spacing
+  // of its own, spread over the line the run was drawn on: under it the run's
+  // spacing is the one the correction states. Read as the run's, each pass
+  // took the correction of the layout before it for the run's own spacing,
+  // so a line's punctuation trim, and the engine's break that rests on it,
+  // came out one way and then the other on alternate passes: a click that
+  // brought a face, a keystroke and its Undo laid the document out anew
+  
+  const engineCorrected = parent.closest<HTMLElement>(`[${DOCS_ENGINE_LINE_ATTR}]`);
+  const engineBaseLetterSpacing = engineCorrected?.getAttribute(DOCS_ENGINE_BASE_SPACING_ATTR);
+  const engineBaseWordSpacing = engineCorrected?.getAttribute(DOCS_ENGINE_BASE_WORD_SPACING_ATTR);
   const letterSpacingPx = Number.isFinite(charSpacingPt) && !engineAdvance
     ? charSpacingPt * CSS_PX_PER_PT + gridSpacePx
     : Number.isFinite(projectedBaseLetterSpacing)
       ? projectedBaseLetterSpacing
-      : style.letterSpacing === "normal"
-        ? 0
-        : wordCjkSpacingNumber(style.letterSpacing);
-  const wordSpacingPx =
-    style.wordSpacing === "normal"
+      : engineBaseLetterSpacing != null
+        ? wordCjkSpacingNumber(engineBaseLetterSpacing)
+        : style.letterSpacing === "normal"
+          ? 0
+          : wordCjkSpacingNumber(style.letterSpacing);
+  const wordSpacingPx = engineBaseWordSpacing != null
+    ? wordCjkSpacingNumber(engineBaseWordSpacing)
+    : style.wordSpacing === "normal"
       ? 0
       : wordCjkSpacingNumber(style.wordSpacing);
   const direction: CanvasDirection = style.direction === "rtl" ? "rtl" : "ltr";
@@ -2175,6 +2272,14 @@ function wordCjkDomTextStyle(parent: HTMLElement): WordCjkDomTextStyle {
   const drawnInEastAsianCells =
     eastAsianCellMetrics &&
     WORD_EAST_ASIAN_HALF_WIDTH_FONT_FAMILIES.has(wordCjkPrimaryFontFamily(style.fontFamily));
+  const slotElement = parent.closest<HTMLElement>("[data-office-font-slot]");
+  const latinFontElement = parent.closest<HTMLElement>("[data-font-family]");
+  const asciiInEastAsianCells =
+    eastAsianCellMetrics &&
+    (slotElement?.dataset.officeFontSlot === "eastAsia" ||
+      WORD_EAST_ASIAN_HALF_WIDTH_FONT_FAMILIES.has(
+        wordCjkPrimaryFontFamily(latinFontElement?.dataset.fontFamily ?? style.fontFamily),
+      ));
   return {
     font,
     fontSizePx,
@@ -2183,6 +2288,7 @@ function wordCjkDomTextStyle(parent: HTMLElement): WordCjkDomTextStyle {
     direction,
     eastAsianCellMetrics,
     drawnInEastAsianCells,
+    asciiInEastAsianCells,
     syntheticBoldEnginePx,
     cacheKey: [
       font,
@@ -2192,6 +2298,7 @@ function wordCjkDomTextStyle(parent: HTMLElement): WordCjkDomTextStyle {
       direction,
       eastAsianCellMetrics ? "eastAsianCells" : "natural",
       drawnInEastAsianCells ? "drawnCells" : "drawnNatural",
+      asciiInEastAsianCells ? "asciiCells" : "asciiNatural",
     ].join("|"),
   };
 }
@@ -2250,6 +2357,10 @@ function wordGridRunFaces(doc: ProseMirrorNode): {
       : [];
   const defaultLatin = defaults[0] ?? null;
   const defaultEastAsian = defaults.find(isEastAsian) ?? null;
+  // The defaults' eastAsia slot where their first face is an East Asian face
+  // of the ascii slot: a run naming no face sets its East Asian text in it.
+  const defaultSlot = (documentDefaultEastAsianFontFamily(doc) ?? "")
+    .split(",").map(unquoted).filter(Boolean)[0] ?? null;
   const ratios = new Map<string, number>();
   const faceRatio = (family: string | null, eastAsianText: boolean) => {
     if (!family) {
@@ -2264,7 +2375,7 @@ function wordGridRunFaces(doc: ProseMirrorNode): {
     const metrics = wordGridFontLineMetrics(family);
     const ratio = metrics
       ? eastAsian
-        ? metrics.box * wordEastAsianSingleLineFactor(family)
+        ? metrics.box * wordDocumentEastAsianSingleLineFactor(family)
         : metrics.box + metrics.lineGap
       : eastAsian
         ? WORD_EAST_ASIAN_SINGLE_LINE_FACTOR
@@ -2303,6 +2414,7 @@ function wordGridRunFaces(doc: ProseMirrorNode): {
         // stands in only for a run that names no East Asian face.
         const eastAsian =
           markFamily(node, "fontCjkFamily") ??
+          (defaultSlot && !markFamily(node, "fontFamily") ? defaultSlot : null) ??
           (latin && isEastAsian(latin) ? latin : defaultEastAsian);
         ratio = Math.max(ratio, faceRatio(eastAsian, true));
       }
@@ -2319,10 +2431,13 @@ interface WordGridBlockLineHeightSpec {
   pos: number;
   lineHeightPx: number;
   slots: number;
+  /** Word's single line of the block's text (px), where its line is whole
+   * slots of it: the slots' room above and below it is padding. */
+  naturalPx?: number;
 }
 
 interface GridBlockSpec {
-  readonly block: { readonly lineHeightPx: number; readonly slots: number } | null;
+  readonly block: { readonly lineHeightPx: number; readonly slots: number; readonly naturalPx?: number } | null;
   readonly runs: ReadonlyArray<{ readonly from: number; readonly to: number; readonly lineHeightPx: number; readonly slots: number }>;
 }
 
@@ -2356,14 +2471,15 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       : documentStyleFontSizePx(view.state.doc.attrs, block) ??
         wordCjkSpacingNumber(String(view.state.doc.attrs.defaultFontSize ?? ""));
     if (!(fontSizePx > 0)) return null;
-    const naturalLineHeightPx = Math.max(
-      pitchPx,
-      fontSizePx * faces.ratio(node),
-    );
+    const singleLinePx = fontSizePx * faces.ratio(node);
+    const naturalLineHeightPx = Math.max(pitchPx, singleLinePx);
     const slots = Math.max(1, Math.ceil(naturalLineHeightPx / pitchPx - 0.000_001));
+    naturalOfRun.set(node, singleLinePx);
     // On one pitch an inherited size has nothing to say: the line is the grid's.
     return markedPx > 0 || slots > 1 ? slots : null;
   };
+  // Word's single line of each run read by slotsOf, for the block's padding.
+  const naturalOfRun = new Map<ProseMirrorNode, number>();
   // A multiple on the grid multiplies the pitch; a run taller than the pitch
   // takes whole slots; the line is the larger of the two (Word 16 for Mac,
   // probes g-grid-*: 10.5 pt at 1.5 on 15.6 pt is 23.4 pt, 14 pt, two slots,
@@ -2376,9 +2492,9 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
     return Number.isFinite(value) && value > 1 ? value : 1;
   };
   /** One text block's grid line heights, positions from its own start. */
-  const gridSpecOfBlock = (block: ProseMirrorNode): GridBlockSpec => {
+  const gridSpecOfBlock = (block: ProseMirrorNode, ownFactor?: number): GridBlockSpec => {
     const out: { block: GridBlockSpec["block"]; runs: Array<{ from: number; to: number; lineHeightPx: number; slots: number }> } = { block: null, runs: [] };
-    const factor = factorOf(block);
+    const factor = ownFactor ?? factorOf(block);
     if (paragraphHoldsNoText(block)) {
       // A line with no text is the paragraph mark's, in the mark's own face
       // and size, in whole slots as text is (R283-D16: 12 pt Segoe UI on a
@@ -2399,7 +2515,7 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       }
       return out;
     }
-    const children: Array<{ pos: number; size: number; slots: number | null }> = [];
+    const children: Array<{ pos: number; size: number; slots: number | null; naturalPx: number | null }> = [];
     let textOnly = true;
     block.forEach((child, offset) => {
       if (!child.isText) {
@@ -2414,10 +2530,12 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       // of a tab or a space in a face two pitches tall stands on one: the tab
       // before a proof's ∎).
       if (/^[\t ]+$/u.test(child.text ?? "")) return;
+      const slots = slotsOf(child, block);
       children.push({
         pos: 1 + offset,
         size: child.nodeSize,
-        slots: slotsOf(child, block),
+        slots,
+        naturalPx: naturalOfRun.get(child) ?? null,
       });
     });
     // Every run of the paragraph needs the same several pitches (a 14pt
@@ -2433,7 +2551,16 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       uniform > 1 &&
       children.every((child) => child.slots === uniform)
     ) {
-      out.block = { lineHeightPx: quantized(uniform, factor), slots: uniform };
+      // Word centres the text in its slots; where the line is whole slots
+      // (no multiple above them), the room under the tallest run's single
+      // line is padding the page's foot may take (pageEdgeLeading).
+      const naturals = children.map((child) => child.naturalPx);
+      // Measured for Auto lines only: an exact or at-least rule sets its own box.
+      const naturalPx = factor <= uniform && (block.attrs.lineHeightRule === null || block.attrs.lineHeightRule === undefined) &&
+        naturals.every((value) => value !== null && value > 0)
+        ? Math.round(Math.max(...(naturals as number[])) * 1_000) / 1_000
+        : undefined;
+      out.block = { lineHeightPx: quantized(uniform, factor), slots: uniform, ...(naturalPx !== undefined ? { naturalPx } : {}) };
       return out;
     }
     for (const child of children) {
@@ -2458,22 +2585,55 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
     }
     return out;
   };
+  // "At least" on the grid: the line is the larger of the floor and the
+  // whole pitches its tallest text needs (Word, probe al and corpus R355-D02:
+  // 10.5pt Microsoft YaHei at least 20pt on a 15.6pt grid stands on two
+  // slots, 31.2pt; the stylesheet's round(up, 1.2em, pitch) read one, 20.8pt).
+  // Table cells too where the document puts table lines on the grid
+  // (w:adjustLineHeightInTable; R355-D02's rows, two slots and the space
+  // after). `window.__docsGridAtLeastSlotsOff = true` leaves both to the
+  // stylesheet, for an A/B of one build.
+  const atLeastSlots = !(typeof window !== "undefined" &&
+    (window as Window & { __docsGridAtLeastSlotsOff?: boolean }).__docsGridAtLeastSlotsOff === true);
+  const cellsOnGrid = atLeastSlots && view.state.doc.attrs.wordTableLinesOnGrid === true;
+  const atLeastSpecOfBlock = (block: ProseMirrorNode): GridBlockSpec | null => {
+    const floorPt = Number(block.attrs.lineHeightPt);
+    const floorPx = Number.isFinite(floorPt) && floorPt > 0 ? floorPt * 4 / 3 : 0;
+    const spec = gridSpecOfBlock(block, 1);
+    const line = (slots: number) => Math.round(Math.max(floorPx, slots * pitchPx) * 1_000) / 1_000;
+    if (spec.block) return { block: { lineHeightPx: line(spec.block.slots), slots: spec.block.slots }, runs: [] };
+    if (spec.runs.some((run) => run.slots > 1)) {
+      return { block: null, runs: spec.runs.filter((run) => run.slots > 1).map((run) => ({ ...run, lineHeightPx: line(run.slots) })) };
+    }
+    return null;
+  };
   // A block's specs stand while it, the grid and the document's faces do:
   // each pass of a long book read every block's runs again.
-  const signature = `${pitchPx}|${String(defaultFactor)}`;
+  const signature = `${pitchPx}|${String(defaultFactor)}|${atLeastSlots}`;
   const docAttrs = view.state.doc.attrs;
-  view.state.doc.descendants((block, blockPos) => {
+  view.state.doc.descendants((block, blockPos, parent) => {
     // A table cell's paragraphs are left to the table: not walked into,
     // rather than each textblock resolving its ancestors (a resolve scans
-    // every sheet before it: 1.5 s of a 272-page book's opening).
-    if (block.type.name === "tableCell" || block.type.name === "tableHeader") return false;
+    // every sheet before it: 1.5 s of a 272-page book's opening). Only a
+    // document with its table lines on the grid has their "at least" lines
+    // to read.
+    if (block.type.name === "tableCell" || block.type.name === "tableHeader") return cellsOnGrid;
     if (!block.isTextblock) return true;
+    const inCell = parent?.type.name === "tableCell" || parent?.type.name === "tableHeader";
+    const atLeast = atLeastSlots && block.attrs.lineHeightRule === "atLeast";
     if (
       block.attrs.snapToGrid === false ||
       (offGrid.length > 0 && offLineGridAt(offGrid, blockPos)) ||
-      (block.attrs.lineHeightRule !== null &&
+      (inCell && !atLeast) ||
+      (!atLeast && block.attrs.lineHeightRule !== null &&
         block.attrs.lineHeightRule !== undefined)
     ) {
+      return false;
+    }
+    if (atLeast) {
+      const spec = atLeastSpecOfBlock(block);
+      if (spec?.block) blocks.push({ pos: blockPos, lineHeightPx: spec.block.lineHeightPx, slots: spec.block.slots });
+      for (const run of spec?.runs ?? []) runs.push({ from: blockPos + run.from, to: blockPos + run.to, lineHeightPx: run.lineHeightPx, slots: run.slots });
       return false;
     }
     let known = gridBlockSpecs.get(block);
@@ -2482,7 +2642,7 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       gridBlockSpecs.set(block, known);
     }
     const { spec } = known;
-    if (spec.block) blocks.push({ pos: blockPos, lineHeightPx: spec.block.lineHeightPx, slots: spec.block.slots });
+    if (spec.block) blocks.push({ pos: blockPos, lineHeightPx: spec.block.lineHeightPx, slots: spec.block.slots, ...(spec.block.naturalPx !== undefined ? { naturalPx: spec.block.naturalPx } : {}) });
     for (const run of spec.runs) runs.push({ from: blockPos + run.from, to: blockPos + run.to, lineHeightPx: run.lineHeightPx, slots: run.slots });
     return false;
   });
@@ -2898,7 +3058,7 @@ function wordCjkDomGlyphs(
           if (Number.isFinite(measured)) {
             const normalizedFontAdvance = textStyle.eastAsianCellMetrics
               ? WORD_EAST_ASIAN_HALF_WIDTH_ASCII_RE.test(character)
-                ? textStyle.fontSizePx * 0.5
+                ? textStyle.asciiInEastAsianCells ? textStyle.fontSizePx * 0.5 : measured
                 : WORD_CJK_EAST_ASIAN_RE.test(character) ||
                     wordCjkPunctuationRole(character) !== null ||
                     (WORD_EAST_ASIAN_FULL_WIDTH_PUNCTUATION.has(character) && textStyle.drawnInEastAsianCells)
@@ -2929,7 +3089,7 @@ function wordCjkDomGlyphs(
         if (!Number.isFinite(measured) || box.height <= 0) return { status: "pending" };
         const normalizedFontAdvance = textStyle.eastAsianCellMetrics
           ? WORD_EAST_ASIAN_HALF_WIDTH_ASCII_RE.test(character)
-            ? textStyle.fontSizePx * 0.5
+            ? textStyle.asciiInEastAsianCells ? textStyle.fontSizePx * 0.5 : measured
             : WORD_CJK_EAST_ASIAN_RE.test(character) ||
                 wordCjkPunctuationRole(character) !== null ||
                 (WORD_EAST_ASIAN_FULL_WIDTH_PUNCTUATION.has(character) && textStyle.drawnInEastAsianCells)
@@ -2970,7 +3130,11 @@ function wordCjkDomGlyphs(
 function applyWordCjkAutoSpacing(
   element: HTMLElement,
   glyphs: WordCjkDomGlyph[],
+  documentAttrs: { readonly [key: string]: unknown },
 ): void {
+  // Defaults naming no East Asian face: Word spaces no boundary at all
+  // (wordOmitsEastAsianAutoSpace, R398-D14).
+  if (wordOmitsEastAsianAutoSpace(documentAttrs)) return;
   const autoSpaceLatin = element.dataset.autoSpaceDe !== "false";
   const autoSpaceNumber = element.dataset.autoSpaceDn !== "false";
   for (let index = 0; index + 1 < glyphs.length; index += 1) {
@@ -3157,6 +3321,67 @@ export class WordCjkSpacingProjectionCache implements WordCjkAdvanceSources {
   }
 }
 
+/**
+ * Development counters of the East Asian spacing projection, kept only when
+ * a harness creates `window.__docsCjkStats = {}` before the page runs: per
+ * pass, how many blocks were drawn from a sheet's record, drawn from their
+ * kept spacing, or read afresh, and of those read whether the block was read
+ * before (its node, element or text) and why it was read again -- its kept
+ * spacing under another key (which part of the key changed) or none kept.
+ * They tell a first read of a long document from work done again.
+ */
+interface WordCjkProjectionStats {
+  calls: number;
+  ms: number;
+  sheetsReplayed: number;
+  blocksReplayed: number;
+  blocksKept: number;
+  blocksRead: number;
+  readMs: number;
+  firstReads: number;
+  readAgain: number;
+  keyChanged: number;
+  keyParts: Record<string, number>;
+  noEntryAgain: number;
+  /** Read for the first time as this node and element, but a block of the
+   * same text was read before (a document loaded anew, or repeated text). */
+  sameTextAgain: number;
+}
+
+const wordCjkReadNodes = new WeakSet<ProseMirrorNode>();
+const wordCjkReadElements = new WeakSet<HTMLElement>();
+const wordCjkReadTexts = new Set<string>();
+
+function wordCjkProjectionStats(view: EditorView): WordCjkProjectionStats | null {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsCjkStats?: Partial<WordCjkProjectionStats> }) | null;
+  const stats = win?.__docsCjkStats;
+  if (!stats || typeof stats !== "object") return null;
+  for (const field of ["calls", "ms", "sheetsReplayed", "blocksReplayed", "blocksKept", "blocksRead", "readMs", "firstReads", "readAgain", "keyChanged", "noEntryAgain", "sameTextAgain"] as const) {
+    if (typeof stats[field] !== "number") stats[field] = 0;
+  }
+  if (!stats.keyParts || typeof stats.keyParts !== "object") stats.keyParts = {};
+  return stats as WordCjkProjectionStats;
+}
+
+/** Which parts of a block's spacing key (blockCacheKey) differ: development. */
+function wordCjkKeyPartsChanged(before: string, now: string): string[] {
+  let a: unknown[];
+  let b: unknown[];
+  try {
+    a = JSON.parse(before) as unknown[];
+    b = JSON.parse(now) as unknown[];
+  } catch {
+    return ["unreadable"];
+  }
+  const names = ["width", "compression", "language", "spaceCompression", "autoSpaceDe", "autoSpaceDn", "pendingMath"];
+  const parts = new Set<string>();
+  for (let index = 0; index < Math.max(a.length, b.length); index += 1) {
+    if (JSON.stringify(a[index]) === JSON.stringify(b[index])) continue;
+    parts.add(index < names.length ? names[index]! : index < names.length + 9 ? "font" : "viewport");
+  }
+  return [...parts];
+}
+
 export function wordCjkSpacingProjection(
   view: EditorView,
   cache?: WordCjkSpacingProjectionCache,
@@ -3174,6 +3399,8 @@ export function wordCjkSpacingProjection(
   terminalReflow?: boolean;
 } {
   recordProjectedHorizon(view.dom, WORD_CJK_HORIZON_KEY);
+  const cjkStats = wordCjkProjectionStats(view);
+  if (cjkStats) cjkStats.calls += 1;
   cache?.watchSheets(view.dom);
   cache?.bindRootLayout(JSON.stringify(Object.fromEntries(
     Object.entries(view.state.doc.attrs).filter(([key]) =>
@@ -3247,7 +3474,7 @@ export function wordCjkSpacingProjection(
         `grid:${spec.from}:${spec.to}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}`,
     ),
     ...gridSpecs.blocks.map(
-      (spec) => `gridBlock:${spec.pos}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}`,
+      (spec) => `gridBlock:${spec.pos}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}:${spec.naturalPx ?? ""}`,
     ),
   ].join("|");
   const gridBlockDecorations = gridSpecs.blocks.map((spec) =>
@@ -3256,6 +3483,7 @@ export function wordCjkSpacingProjection(
       spec.pos + (view.state.doc.nodeAt(spec.pos)?.nodeSize ?? 0),
       {
         "data-docs-word-grid-block-slots": String(spec.slots),
+        ...(spec.naturalPx !== undefined ? { "data-docs-word-grid-natural": String(spec.naturalPx) } : {}),
         style: `line-height:${spec.lineHeightPx}px !important`,
       },
       { key: "docs-word-grid-block" },
@@ -3493,6 +3721,10 @@ export function wordCjkSpacingProjection(
       const kept = wholeRecordOf(article);
       if (kept) {
         replayed.add(article);
+        if (cjkStats) {
+          cjkStats.sheetsReplayed += 1;
+          cjkStats.blocksReplayed += kept.record.blocks.length;
+        }
         for (const block of kept.record.blocks) {
           const entry = block.entry;
           if (!entry) continue;
@@ -3530,6 +3762,10 @@ export function wordCjkSpacingProjection(
         record.blocks.every((block) => cache.blocks.get(block.node) === block.entry)
       ) {
         replayed.add(article);
+        if (cjkStats) {
+          cjkStats.sheetsReplayed += 1;
+          cjkStats.blocksReplayed += record.blocks.length;
+        }
         for (const block of record.blocks) {
           const kept = block.entry;
           if (!kept) continue;
@@ -3605,7 +3841,7 @@ export function wordCjkSpacingProjection(
         (character) =>
           wordCjkPunctuationRole(character) !== null || /[\u2018\u2019\u201c\u201d]/u.test(character),
       );
-    const hasAutoSpaceBoundary = /[A-Za-z0-9]/u.test(blockText);
+    const hasAutoSpaceBoundary = /[A-Za-z0-9]/u.test(blockText) && !wordOmitsEastAsianAutoSpace(view.state.doc.attrs);
     const hasHangingPunctuation = /[、。，：；]/u.test(blockText);
     if (!hasCompressiblePunctuation && !hasAutoSpaceBoundary && !hasHangingPunctuation) continue;
     const eligibility = wordCjkDomEligibility(view, element);
@@ -3642,6 +3878,7 @@ export function wordCjkSpacingProjection(
     const cached = cacheNode ? cache?.blocks.get(cacheNode) : undefined;
     const reading = readingSheet(element);
     if (cached?.key === cacheKey) {
+      if (cjkStats) cjkStats.blocksKept += 1;
       if (reading && cacheNode) reading.blocks.push({ node: cacheNode, offset: blockContentFrom - reading.from, entry: cached });
       spacingMarks += cached.specs.length;
       if (spacingMarks <= MAX_WORD_CJK_SPACING_MARKS) {
@@ -3661,10 +3898,28 @@ export function wordCjkSpacingProjection(
         markerReflow,
       };
     }
+    const readStarted = cjkStats ? performance.now() : 0;
     const read = wordCjkDomGlyphs(view, element, eligibility, advanceSources, {
       textStyles: batchStyles,
       advancesRead: advanceCanvas !== null && prefetchedWidths.has(element) && !keptBeforeRead.has(element),
     });
+    if (cjkStats) {
+      cjkStats.readMs += performance.now() - readStarted;
+      cjkStats.blocksRead += 1;
+      const before = (cacheNode !== null && wordCjkReadNodes.has(cacheNode)) || wordCjkReadElements.has(element);
+      if (!before && wordCjkReadTexts.has(blockText)) cjkStats.sameTextAgain += 1;
+      if (!before) cjkStats.firstReads += 1;
+      else {
+        cjkStats.readAgain += 1;
+        if (cached) {
+          cjkStats.keyChanged += 1;
+          for (const part of wordCjkKeyPartsChanged(cached.key, cacheKey)) cjkStats.keyParts[part] = (cjkStats.keyParts[part] ?? 0) + 1;
+        } else cjkStats.noEntryAgain += 1;
+      }
+      if (cacheNode) wordCjkReadNodes.add(cacheNode);
+      wordCjkReadElements.add(element);
+      wordCjkReadTexts.add(blockText);
+    }
     if (read.status === "unsupported") continue;
     if (!widths || read.status === "pending" || read.glyphs.length === 0) {
       complete = false;
@@ -3685,7 +3940,7 @@ export function wordCjkSpacingProjection(
         markerReflow,
       };
     }
-    applyWordCjkAutoSpacing(element, glyphs);
+    applyWordCjkAutoSpacing(element, glyphs, view.state.doc.attrs);
     const punctuationAdjustments = blockCompresses
       ? planWordCjkPunctuationCompression(
           glyphs,
@@ -4054,7 +4309,10 @@ function wordCjkSpacingProjectionPlugin(waitForSourceFontPlan = false): Plugin<W
           // again once the glide ended (surfaceGlide.ts). The pending flag
           // stays up until the pass after it.
           if (deferWhileSurfaceGlides(view.dom, schedule)) return;
+          const projectionStarted = performance.now();
           const projection = wordCjkSpacingProjection(view, spacingCache);
+          const projectionStats = wordCjkProjectionStats(view);
+          if (projectionStats) projectionStats.ms += performance.now() - projectionStarted;
           if (
             !projection.complete &&
             projectionRetryFrames < MAX_TRANSIENT_PROJECTION_RETRY_FRAMES
@@ -4181,7 +4439,10 @@ function wordCjkSpacingProjectionPlugin(waitForSourceFontPlan = false): Plugin<W
         attributeFilter: [INITIAL_PAGINATION_SETTLING_ATTR, DOCUMENT_AUTO_LINE_SPACING_PENDING],
       });
       const fonts = document.fonts;
-      const onFontsReady = () => {
+      const onFontsReady = (event?: Event) => {
+        // A face no page text draws with (the ribbon's font list, drawn when
+        // the caret is first placed) changes no advance read here.
+        if (projectionFontReach(view, "cjk-spacing", event) === "none") return;
         spacingCache.clear();
         schedule();
       };
@@ -4587,6 +4848,7 @@ export function normalizeHydratedDocumentPageAttrs(
     endnoteTextStyle: sanitizeNoteTextStyle(attrs.endnoteTextStyle),
     designColorSet: normalizeOfficeThemePaletteId(attrs.designColorSet),
     defaultFontFamily: normalizeFontFamily(attrs.defaultFontFamily),
+    defaultEastAsianFontFamily: normalizeFontFamily(attrs.defaultEastAsianFontFamily),
     defaultFontSize: normalizeFontSize(attrs.defaultFontSize),
     defaultTextColor: normalizeTextColor(attrs.defaultTextColor),
     defaultLineHeight: normalizeDefaultLineHeight(attrs.defaultLineHeight),
@@ -4606,6 +4868,7 @@ export function normalizeHydratedDocumentPageAttrs(
     eastAsianLanguage: normalizeDocumentEastAsianLanguage(attrs.eastAsianLanguage),
     wordStrictKinsoku: attrs.wordStrictKinsoku === true ? true : null,
     wordBalanceSbcsDbcs: attrs.wordBalanceSbcsDbcs === true ? true : null,
+    wordBalancedSpaces: attrs.wordBalancedSpaces === true ? true : null,
     wordDoNotBreakWrappedTables: attrs.wordDoNotBreakWrappedTables === true ? true : null,
     defaultParagraphSpaceBefore: normalizeSpacing(
       attrs.defaultParagraphSpaceBefore,
@@ -5502,6 +5765,21 @@ const DocumentPageSetup = Document.extend<{ waitForSourceFontPlan: boolean }>({
           return family ? { "data-default-font-family": family } : {};
         },
       },
+      // The defaults' eastAsia face where their ascii face is an East Asian
+      // one too (宋体 over ＭＳ 明朝): Word sets the defaults' East Asian
+      // text in it (`documentDefaultEastAsianFontFamily`). Read-only source
+      // evidence: no command writes it.
+      defaultEastAsianFontFamily: {
+        default: null,
+        parseHTML: (element) =>
+          normalizeFontFamily(element.getAttribute("data-default-east-asian-font-family")),
+        renderHTML: (attributes) => {
+          const family = normalizeFontFamily(
+            (attributes as { defaultEastAsianFontFamily?: unknown }).defaultEastAsianFontFamily,
+          );
+          return family ? { "data-default-east-asian-font-family": family } : {};
+        },
+      },
       defaultFontSize: {
         default: null,
         parseHTML: (element) =>
@@ -5594,6 +5872,9 @@ const DocumentPageSetup = Document.extend<{ waitForSourceFontPlan: boolean }>({
       // JSON-only; without it Word's standard list lets them.
       wordStrictKinsoku: { default: null, rendered: false },
       wordBalanceSbcsDbcs: { default: null, rendered: false },
+      // The spaces that option sets at half an East Asian cell, with East
+      // Asian layout on (balancedSpaces.ts). Read-only layout evidence.
+      wordBalancedSpaces: { default: null, rendered: false },
       // Word's "Don't break wrapped tables across pages" (w:compat), read
       // before mode 15: a floating table stays whole on its page
       // (tablePageFrame). Read-only layout evidence.
@@ -6366,6 +6647,12 @@ const DocumentPageSetup = Document.extend<{ waitForSourceFontPlan: boolean }>({
                   storyVariant,
                 )
               : null;
+            // Whether Word's part is blank is read against the band it paints,
+            // as the rich write reads it: its text slots alone said a header
+            // whose words are all tracked insertions, beside a drawn line, was
+            // an empty part, and the plain text replaced the whole part --
+            // which the save refuses (corpus R455-D41 / R456-D20 E26).
+            const shownBlocks = normalizeBandRichBlocks(current[sectionIndex]?.[richKey]) ?? undefined;
             const nextGraph =
               preparedGraph && targetRef
                 ? sanitized
@@ -6375,6 +6662,7 @@ const DocumentPageSetup = Document.extend<{ waitForSourceFontPlan: boolean }>({
                       kind,
                       storyVariant,
                       blocks,
+                      shownBlocks,
                     )
                   : clearSectionStoryEditableContent(
                       preparedGraph,

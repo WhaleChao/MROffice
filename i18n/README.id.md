@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ Untuk semua fitur, pasang aplikasi desktop MR Office (gratis)
->
-> Aplikasi desktop MR Office gratis, berisi editor-editor ini dan layanan lengkap, serta berjalan offline di komputer Anda sendiri. Aplikasi ini menambahkan yang tidak ada di editor sumber terbuka:
->
-> - Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx)
-> - Menghitung rumus dengan fungsi (SUM, IF, VLOOKUP …)
-> - Bagan
-> - Pengeditan SmartArt
-> - Menyimpan hasil edit PDF kembali ke file
->
-> **[Unduh MR Office dari Releases →](https://github.com/XinaTian/MROffice/releases)** · [atau dari mroffice.ai](https://mroffice.ai)
+<p align="center"><b>Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban.</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Coba di MR Office →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Coba demo langsung — tanpa instalasi</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Unduh MR Office dari Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban.
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Dokumen" width="100%"></a><br><b>Dokumen</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Lembar kerja" width="100%"></a><br><b>Lembar kerja</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentasi" width="100%"></a><br><b>Presentasi</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Tulisan tangan" width="100%"></a><br><b>Tulisan tangan</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Kode" width="100%"></a><br><b>Kode</b></td>
+</tr>
+</table>
 
 MR Office adalah ruang kerja untuk catatan, AI, dan file sungguhan. Repositori ini menerbitkan kode sumber editornya: editor yang sama dengan yang dijalankan MR Office, yang bisa Anda bangun, jalankan, dan sematkan sendiri. Ini adalah editor sumber terbuka, bukan paket perkantoran sumber terbuka yang lengkap: membaca dan menulis file Microsoft Office tetap ada di MR Office (lihat di bawah).
 
@@ -33,16 +36,9 @@ Yang dilakukan setiap editor di repositori ini:
 
 Penghitungan rumus dengan fungsi, penggambaran bagan, dan tata letak SmartArt dijalankan oleh mesin MR Office sendiri, di aplikasi desktop MR Office: editor sumber terbuka menyimpan rumus, bagan, dan SmartArt dalam file, dan menampilkan SmartArt sebagaimana disimpan.
 
-## File Word, Excel, PowerPoint, dan PDF
-
-Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx), serta menyimpan hasil edit PDF kembali ke file, disediakan oleh aplikasi desktop MR Office (gratis), yang berisi semua editor ini dan berjalan offline di komputer Anda sendiri:
-
-- **MR Office** (aplikasi desktop gratis): https://github.com/XinaTian/MROffice/releases
-- **Situs web**: https://mroffice.ai
-
-[Semua versi →](https://github.com/XinaTian/MROffice/releases)
-
 ## Menjalankan editor
+
+**▶ [Coba demo langsung — tanpa instalasi](https://demo.mroffice.ai)**
 
 Keenam editor ada di `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, yang berbagi `@mrnote/core`) dan berjalan bersama di `apps/playground`:
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` memulai server pengembangan di alamat yang sama, dan `npm run smoke` memeriksa hasil build. README setiap paket menjelaskan secara rinci apa yang dilakukannya dan cara menyematkannya.
+
+## Untuk semua fitur, pasang aplikasi desktop MR Office (gratis)
+
+Aplikasi desktop MR Office gratis, berisi editor-editor ini dan layanan lengkap, serta berjalan offline di komputer Anda sendiri. Aplikasi ini menambahkan yang tidak ada di editor sumber terbuka:
+
+- Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx)
+- Menghitung rumus dengan fungsi (SUM, IF, VLOOKUP …)
+- Bagan
+- Pengeditan SmartArt
+- Menyimpan hasil edit PDF kembali ke file
+
+**[Unduh MR Office dari Releases →](https://github.com/XinaTian/MROffice/releases)** · [atau dari mroffice.ai](https://mroffice.ai)
+
+### File Word, Excel, PowerPoint, dan PDF
+
+Membuka dan menyimpan file Word, Excel, dan PowerPoint (.docx, .xlsx, .pptx), serta menyimpan hasil edit PDF kembali ke file, disediakan oleh aplikasi desktop MR Office (gratis), yang berisi semua editor ini dan berjalan offline di komputer Anda sendiri:
 
 ## Lisensi
 

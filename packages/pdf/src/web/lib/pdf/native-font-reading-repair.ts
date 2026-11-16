@@ -6,6 +6,7 @@
 import { appendMraiNativeObjectRevisions } from "./engine/native/content-stream-transaction";
 import { planPdfToUnicodeRepair } from "./engine/native/to-unicode-repair";
 import { sha256PdfBytes } from "./engine/native/transaction-error";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 type PdfLib = typeof import("pdf-lib");
 type PdfDict = import("pdf-lib").PDFDict;
@@ -197,7 +198,7 @@ async function loadForRepair(sourceBytes: Uint8Array) {
   if (sourceBytes.length > MAX_REPAIR_SOURCE_BYTES) return null;
   const lib = await import("pdf-lib");
   const doc = await lib.PDFDocument.load(Uint8Array.from(sourceBytes),
-    { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
+    { parseSpeed: pdfLibParseSpeed(), ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
   return doc.isEncrypted ? null : { lib, doc };
 }
 

@@ -22,6 +22,7 @@
  */
 
 import { PDFDocument } from "pdf-lib";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 /** Thrown when a mutation path receives encrypted bytes. Matched by name so
  *  it survives minification and realm boundaries, like the password errors. */
@@ -60,6 +61,7 @@ export async function loadPdfForMutation(
   options: Omit<LoadOptions, "ignoreEncryption"> = {},
 ): Promise<PDFDocument> {
   const doc = await PDFDocument.load(bytes, {
+    parseSpeed: pdfLibParseSpeed(),
     ...options,
     ignoreEncryption: true,
   });
@@ -79,6 +81,7 @@ export async function loadPdfForInspection(
   options: Omit<LoadOptions, "ignoreEncryption"> = {},
 ): Promise<PDFDocument | null> {
   const doc = await PDFDocument.load(bytes, {
+    parseSpeed: pdfLibParseSpeed(),
     ...options,
     ignoreEncryption: true,
   });

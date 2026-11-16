@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ För alla funktioner: installera MR Offices skrivbordsapp (gratis)
->
-> MR Offices skrivbordsapp är kostnadsfri, innehåller de här redigerarna och hela tjänsten och fungerar offline på din egen dator. Den lägger till det som redigerarna med öppen källkod saknar:
->
-> - Öppna och spara Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx)
-> - Beräkna formler med funktioner (SUMMA, OM, LETARAD …)
-> - Diagram
-> - Redigering av SmartArt
-> - Spara ändringar i en PDF tillbaka i filen
->
-> **[Ladda ned MR Office från Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller från mroffice.ai](https://mroffice.ai)
+<p align="center"><b>MR Offices redigerare med öppen källkod – dokument, kalkylblad, presentationer, PDF, handskrift och kod – i webbläsaren.</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Prova dem i MR Office →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Prova livedemon – ingen installation</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Ladda ned MR Office från Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> MR Offices redigerare med öppen källkod – dokument, kalkylblad, presentationer, PDF, handskrift och kod – i webbläsaren.
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Dokument" width="100%"></a><br><b>Dokument</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Kalkylblad" width="100%"></a><br><b>Kalkylblad</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Presentationer" width="100%"></a><br><b>Presentationer</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Handskrift" width="100%"></a><br><b>Handskrift</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Kod" width="100%"></a><br><b>Kod</b></td>
+</tr>
+</table>
 
 MR Office är en arbetsyta för anteckningar, AI och riktiga filer. Det här arkivet publicerar källkoden till dess redigerare: samma redigerare som MR Office använder, som du själv kan bygga, köra och bädda in. Det är redigerare med öppen källkod, inte ett komplett kontorspaket med öppen källkod: läsning och skrivning av Microsoft Office-filer finns kvar i MR Office (se nedan).
 
@@ -33,16 +36,9 @@ Vad varje redigerare gör i det här arkivet:
 
 Att beräkna formler med funktioner, rita diagram och ställa upp SmartArt görs av MR Offices egen motor, i MR Offices skrivbordsapp: redigerarna med öppen källkod behåller en fils formler, diagram och SmartArt och visar SmartArt som det sparades.
 
-## Word-, Excel-, PowerPoint- och PDF-filer
-
-Att öppna och spara Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx), och att spara ändringar i en PDF tillbaka i filen, sköts av MR Offices kostnadsfria skrivbordsapp. Den innehåller alla de här redigerarna och fungerar offline på din egen dator:
-
-- **MR Office** (kostnadsfri skrivbordsapp): https://github.com/XinaTian/MROffice/releases
-- **Webbplats**: https://mroffice.ai
-
-[Alla versioner →](https://github.com/XinaTian/MROffice/releases)
-
 ## Kör redigerarna
+
+**▶ [Prova livedemon – ingen installation](https://demo.mroffice.ai)**
 
 De sex redigerarna finns i `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, som delar `@mrnote/core`) och körs tillsammans i `apps/playground`:
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` startar en utvecklingsserver på samma adress och `npm run smoke` kontrollerar ett bygge. Varje pakets README beskriver i detalj vad det gör och hur det bäddas in.
+
+## För alla funktioner: installera MR Offices skrivbordsapp (gratis)
+
+MR Offices skrivbordsapp är kostnadsfri, innehåller de här redigerarna och hela tjänsten och fungerar offline på din egen dator. Den lägger till det som redigerarna med öppen källkod saknar:
+
+- Öppna och spara Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx)
+- Beräkna formler med funktioner (SUMMA, OM, LETARAD …)
+- Diagram
+- Redigering av SmartArt
+- Spara ändringar i en PDF tillbaka i filen
+
+**[Ladda ned MR Office från Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller från mroffice.ai](https://mroffice.ai)
+
+### Word-, Excel-, PowerPoint- och PDF-filer
+
+Att öppna och spara Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx), och att spara ändringar i en PDF tillbaka i filen, sköts av MR Offices kostnadsfria skrivbordsapp. Den innehåller alla de här redigerarna och fungerar offline på din egen dator:
 
 ## Licens
 

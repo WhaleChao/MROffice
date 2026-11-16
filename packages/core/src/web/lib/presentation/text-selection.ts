@@ -480,6 +480,111 @@ export function presentationPreviewOffsetAtPoint(
   );
 }
 
+/** The most characters `presentationPreviewNearestOffset` measures one by one. */
+const NEAREST_OFFSET_CHARACTERS = 4000;
+
+/**
+ * The caret place nearest a point that falls beside a body's words (between
+ * lines, past a line's end, under a frame's edge): the character whose drawn
+ * box is closest, before or after it by the side of its middle the point is
+ * on. PowerPoint puts the caret there for a click on a shape's words; null
+ * when nothing is drawn or the body is too long to measure here.
+ */
+export function presentationPreviewNearestOffset(
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+  textLength: number,
+  paragraphs?: readonly SlideParagraphWithRuns[],
+): number | null {
+  const doc = root.ownerDocument;
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const range = doc.createRange();
+  // Nothing measures characters without a range's box (jsdom has none): the
+  // caller's own placement stands, rather than an exception thrown from the
+  // animation frame that puts the caret.
+  if (typeof range.getBoundingClientRect !== "function") return null;
+  let best: { node: Node; offset: number; distance: number } | null = null;
+  let measured = 0;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const length = node.textContent?.length ?? 0;
+    for (let at = 0; at < length; at += 1) {
+      measured += 1;
+      if (measured > NEAREST_OFFSET_CHARACTERS) return null;
+      range.setStart(node, at);
+      range.setEnd(node, at + 1);
+      const box = range.getBoundingClientRect();
+      if (box.width <= 0 && box.height <= 0) continue;
+      const dx = clientX < box.left ? box.left - clientX : clientX > box.right ? clientX - box.right : 0;
+      const dy = clientY < box.top ? box.top - clientY : clientY > box.bottom ? clientY - box.bottom : 0;
+      const distance = Math.hypot(dx, dy);
+      if (best && distance >= best.distance) continue;
+      best = { node, offset: clientX > box.left + box.width / 2 ? at + 1 : at, distance };
+    }
+  }
+  if (!best) return null;
+  return Math.max(
+    0,
+    Math.min(textLength, Math.trunc(presentationPreviewPointOffset(root, best.node, best.offset, paragraphs))),
+  );
+}
+
+/** Whether `element`, or an ancestor of it up to `top`, is drawn through a 3-D transform or a perspective. */
+function drawnIn3d(element: Element, top: Element): boolean {
+  const view = element.ownerDocument.defaultView;
+  if (!view) return false;
+  for (let at: Element | null = element; at; at = at.parentElement) {
+    const style = view.getComputedStyle(at);
+    if (style.transform?.startsWith("matrix3d(") || (style.perspective && style.perspective !== "none")) return true;
+    if (at === top) break;
+  }
+  return false;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationTurnedPreviewOffsetAtPoint(
+  host: HTMLElement,
+  preview: HTMLElement,
+  clientX: number,
+  clientY: number,
+  textLength: number,
+): number | null {
+  if (!host.contains(preview) || !drawnIn3d(preview, host)) return null;
+  const doc = preview.ownerDocument;
+  if (typeof doc.elementsFromPoint !== "function") return null;
+  // What stands over the words at the point, found with the words taking the
+  // pointer (they take none at rest).
+  const restore: Array<[HTMLElement, string]> = [];
+  for (const element of [preview, ...preview.querySelectorAll<HTMLElement>("*")]) {
+    if (!element.style) continue;
+    restore.push([element, element.style.pointerEvents]);
+    element.style.pointerEvents = "auto";
+  }
+  let over: HTMLElement[] = [];
+  try {
+    const stack = doc.elementsFromPoint(clientX, clientY);
+    const first = stack.findIndex((element) => preview.contains(element));
+    if (first < 0) return null;
+    // An SVG shape drawn over them is let through the same way (its style).
+    over = stack
+      .slice(0, first)
+      .filter((element) => !element.contains(preview) && (element as HTMLElement).style !== undefined) as HTMLElement[];
+  } finally {
+    for (const [element, value] of restore.reverse()) element.style.pointerEvents = value;
+  }
+  return presentationPreviewOffsetAtPoint(preview, clientX, clientY, textLength, undefined, over);
+}
+
 
 
 
@@ -500,6 +605,22 @@ export function presentationDoubleClickWord(text: string, offset: number): [numb
   if (probe < lineStart) return [at, at];
   const [start, end] = wordAround(text, probe);
   return [Math.max(lineStart, start), Math.min(lineEnd, Math.max(end, probe + 1))];
+}
+
+/**
+ * The word a click at `offset` lands on, for a painter's brush: the word the
+ * caret is in or touches (a click on a word's left half puts the caret before
+ * it, on its right half after it), never the spaces beside it; null where
+ * there is none (an empty paragraph, a run of spaces). Office's brush formats
+ * the word it is clicked on; only a drag formats a range of its own.
+ */
+export function presentationClickedWord(text: string, offset: number): [number, number] | null {
+  for (const at of [offset, offset - 1]) {
+    if (at < 0 || at > text.length) continue;
+    const [start, end] = presentationDoubleClickWord(text, at);
+    if (end > start && /\S/.test(text.slice(start, end))) return [start, end];
+  }
+  return null;
 }
 
 /** The word (or run of one script's letters) around `offset` in `text`. */

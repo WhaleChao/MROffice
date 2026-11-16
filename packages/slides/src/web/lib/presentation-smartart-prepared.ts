@@ -25,7 +25,10 @@
  * - any other change is the first real edit: the conversion goes out with it, and
  *   the history entry before it holds the preserved diagram, so one Undo returns
  *   the diagram as the file has it;
- * - selecting something else with nothing changed puts the preserved diagram back.
+ * - selecting something else with nothing changed puts the preserved diagram back;
+ * - another window's change arriving on the slide places the conversion again on
+ *   the slide as it arrived ({@link preparedOverDelivery}), its words carried
+ *   over, instead of letting it go under the shape being edited.
  */
 
 export interface PreparedSlide<Block> {
@@ -172,4 +175,90 @@ export function preparedAfterCommit<Block, Slide extends PreparedSlide<Block>>(
     }
   }
   return { kind: "edited" };
+}
+
+export type PreparedDelivery<Block, Slide extends PreparedSlide<Block>> =
+  /** Placed again on the arriving slide, which is what is saved. */
+  | { kind: "kept"; prepared: PreparedSmartArt<Block, Slide> }
+  /** The arriving slide holds the conversion itself: another window's first
+   * edit converted the diagram into the same blocks (their ids are the same in
+   * every window), so the editor stays on them and nothing is prepared any more. */
+  | { kind: "landed" }
+  /** The file's diagram changed beyond its words, or is gone: let go. */
+  | { kind: "changed" };
+
+/**
+ * What another window's change arriving on a prepared slide does to the
+ * conversion. A room delivers its slide as the room holds it: the preserved
+ * diagram, not this window's conversion, which is on this screen only. Taken
+ * as it came, it replaced the conversion under the shape being edited (the
+ * caret went, a handle's drag and a double click's word found no shape); now
+ * the conversion is placed again on the arriving slide with `place`, and that
+ * slide is what is saved. Words the other window wrote on the preserved
+ * members are carried onto the conversion with `words`; anything else they
+ * changed lets the conversion go, as a real change does.
+ */
+export function preparedOverDelivery<Block, Slide extends PreparedSlide<Block>>(
+  current: PreparedSmartArt<Block, Slide>,
+  arriving: Slide,
+  convert: {
+    /** The conversion with the words of the preserved members `after` (were
+     * `before`) on its own blocks; null when they cannot be carried. */
+    words: ((converted: readonly Block[], before: readonly Block[], after: readonly Block[]) => Block[] | null) | null;
+    /** The conversion placed on a slide holding the preserved members. */
+    place: (slide: Slide, converted: readonly Block[]) => Slide | null;
+  },
+): PreparedDelivery<Block, Slide> {
+  // The slide as it was saved (another slide of its part changed): as it was.
+  if (arriving === current.original || sameBlock(arriving, current.original)) return { kind: "kept", prepared: current };
+  const arrived = byId(arriving.blocks);
+  if (current.converted.some((block) => arrived.has((block as { id: string }).id))) return { kind: "landed" };
+  const originals = current.originals.map((block) => arrived.get((block as { id: string }).id));
+  if (originals.some((block) => block === undefined)) return { kind: "changed" };
+  const after = originals as Block[];
+  let converted = current.converted;
+  if (after.some((block, index) => !sameBlock(block, current.originals[index]))) {
+    // Only their words may differ; the frames a word refits are no change.
+    if (after.some((block, index) => JSON.stringify(withoutWords(block)) !== JSON.stringify(withoutWords(current.originals[index])))) {
+      return { kind: "changed" };
+    }
+    const carried = convert.words?.(current.converted, current.originals, after) ?? null;
+    if (!carried || carried.length !== current.converted.length) return { kind: "changed" };
+    // A block whose words are the same stays the very block on screen.
+    converted = carried.map((block, index) => (sameBlock(block, current.converted[index]) ? current.converted[index] : block));
+  }
+  const prepared = convert.place(arriving, converted);
+  if (!prepared) return { kind: "changed" };
+  persistPreparedSlideAs(prepared, arriving);
+  return {
+    kind: "kept",
+    prepared: { ...current, prepared, original: arriving, originals: after, converted },
+  };
+}
+
+/**
+ * A served SmartArt step's members (`planned`, as its request was built) found
+ * again by id in the live slide's `blocks`: the planned objects of those that
+ * are new objects now, and the words another window wrote in them meanwhile
+ * (by outline place). Null when one is gone or changed beyond its words: the
+ * step is planned again.
+ */
+export function servedSmartArtMembersLive<Block>(
+  planned: readonly Block[],
+  blocks: readonly Block[],
+): { planned: Map<string, Block>; words: Map<number, string> } | null {
+  const live = byId(blocks);
+  const was: Block[] = [];
+  const now: Block[] = [];
+  for (const member of planned) {
+    const current = live.get((member as { id: string }).id);
+    if (current === undefined) return null;
+    if (current === member) continue;
+    was.push(member);
+    now.push(current);
+  }
+  if (!was.length) return { planned: new Map(), words: new Map() };
+  const words = wordsChangedInConversion(was, now);
+  if (!words) return null;
+  return { planned: new Map(was.map((block) => [(block as { id: string }).id, block])), words };
 }

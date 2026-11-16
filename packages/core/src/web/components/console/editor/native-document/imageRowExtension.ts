@@ -55,12 +55,20 @@ export const ImageRow = Node.create({
     ];
   },
 
-  renderHTML({ HTMLAttributes }) {
+  renderHTML({ node, HTMLAttributes }) {
+    // The row's tallest picture: on a line grid Word sets the paragraph's line
+    // in whole slots (note-editor.css).
+    let tallest = 0;
+    node.forEach((child) => {
+      const height = Number(child.attrs.height);
+      if (Number.isFinite(height) && height > tallest) tallest = height;
+    });
     return [
       "div",
       mergeAttributes(HTMLAttributes, {
         "data-type": "image-row",
         class: "note-editor-image-row",
+        ...(tallest > 0 ? { style: `--image-row-height: ${tallest}px` } : {}),
       }),
       0,
     ];

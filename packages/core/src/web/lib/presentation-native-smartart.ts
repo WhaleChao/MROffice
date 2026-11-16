@@ -10,6 +10,7 @@ import { smartArtColorVariantIdFromUrn, type SmartArtSchemeColor } from "./offic
 import { readSmartArtCustom } from "./office-smartart/custom-geometry";
 import { isShapeKind } from "./presentation-shapes";
 import { normalizeOfficeShapeEffectPreset } from "./office-shape-effects";
+import { normalizeOfficePictureEffects } from "./office-picture-effects";
 import {
   normalizeOfficeShapeGradient,
   normalizeOfficeShapeShadow,
@@ -149,6 +150,12 @@ export interface NativeSmartArtView {
    * the converted diagram's `smartArtBackground`. Null when it states none.
    */
   graphicFormat?: unknown;
+  /**
+   * The graphic's OWN 3-D Rotation (its document point's `a:scene3d`, reading
+   * `smartArtViewGraphicCamera`), which the conversion draws as one scene
+   * over its SmartArt Style's. Null when it states none.
+   */
+  graphicScene3d?: unknown;
 }
 
 const THEME_COLOR_SLOTS = ["dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
@@ -315,6 +322,8 @@ function authorFormat(value: unknown): { format?: SmartArtAuthorFormat } {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const record = value as Record<string, unknown>;
   const format: SmartArtAuthorFormat = {};
+  const effects = normalizeOfficePictureEffects(record.shapeEffects);
+  if (effects) format.shapeEffects = effects;
   const effect = normalizeOfficeShapeEffectPreset(record.effect);
   if (effect) format.effect = effect;
   const shadow = normalizeOfficeShapeShadow(record.shapeShadow);
@@ -344,6 +353,23 @@ const hexColour = (value: unknown): string | null =>
  * Read the diagram the given block belongs to, or `null` when the block is not
  * part of one complete, self-consistent native SmartArt projection.
  */
+/**
+ * The ids a diagram's first-edit conversion gives its blocks: the same in
+ * every window (`idPrefix` + the layout's own count), from its slide and its
+ * frame, so two people converting it at once make one set of members. A
+ * name the id grammar cannot carry, or a long one, is hashed.
+ */
+export function nativeSmartArtConversionIdPrefix(slideId: string, frameShapeId: unknown): string {
+  const raw = `${slideId}-${String(frameShapeId ?? "")}`;
+  if (/^[A-Za-z0-9_-]{1,96}$/.test(raw)) return `smartart-${raw}-`;
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i += 1) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `smartart-${hash.toString(16).padStart(8, "0")}-${raw.length}-`;
+}
+
 /** A theme colour an outline item states (`{ scheme, mods }`), or `undefined`. */
 function schemeValue(value: unknown): SmartArtSchemeColor | undefined {
   const colour = record(value);
@@ -470,6 +496,7 @@ export function readNativeSmartArtView(
       : [],
     customizations: first.customizations ?? null,
     graphicFormat: first.graphicFormat ?? null,
+    graphicScene3d: first.graphicScene3d ?? null,
   };
 }
 
@@ -486,6 +513,86 @@ function ownLayoutDefinition(value: unknown): { part: string; sha256: string } |
     : null;
 }
 
+/** Whether a block is a member of a file's SmartArt drawing (its native view). */
+export function isNativeSmartArtMember(block: unknown): boolean {
+  return record(record(record(block)?.source)?.nativeSmartArtView)?.schemaVersion === "pptx-smartart-drawing-v1";
+}
+
+/**
+ * Whether a block is the one frame member the importer keeps for a diagram
+ * whose cached drawing is absent or empty (`drawingCache: "absent"`): the
+ * diagram is drawn as the engine lays it out, and this frame is the object.
+ */
+export function nativeSmartArtDrawingAbsent(block: unknown): boolean {
+  return record(record(record(block)?.source)?.nativeSmartArtView)?.drawingCache === "absent";
+}
+
+/**
+ * The shape of a diagram's conversion whose words a double click on the file's
+ * own drawing opens: the item of the topmost drawn member under the point
+ * (slide units), as its data points name it, and that item's one converted
+ * node. PowerPoint opens the words of the shape the author double-clicked;
+ * hit again on the conversion, which is laid out anew and drawn over the same
+ * place, the press landed on whatever the conversion has there -- a column
+ * behind the words (Horizontal Bullet List), the node's own outline (a label
+ * as large as its node) -- and opened nothing. Null where the drawing has no
+ * single item there or the conversion no single node for it.
+ */
+export function nativeSmartArtConvertedShapeAt(
+  view: Pick<NativeSmartArtView, "members" | "outline">,
+  converted: readonly PresentationBlock[],
+  point: { x: number; y: number },
+): string | null {
+  for (let at = view.members.length - 1; at >= 0; at -= 1) {
+    const member = view.members[at] as unknown as Record<string, unknown>;
+    const { left, top, width, height } = member;
+    if (
+      typeof left !== "number" || typeof top !== "number" ||
+      typeof width !== "number" || typeof height !== "number" ||
+      point.x < left || point.x > left + width || point.y < top || point.y > top + height
+    ) {
+      continue;
+    }
+    const node = convertedNodeOfMember(view, converted, member);
+    if (node === undefined) continue;
+    return node;
+  }
+  return null;
+}
+
+/**
+ * The conversion's shape standing for the drawing's member `memberId` (its
+ * item's node), whose words open where that member's were open: null when
+ * the member stands for no single item.
+ */
+export function nativeSmartArtConvertedShapeOf(
+  view: Pick<NativeSmartArtView, "members" | "outline">,
+  converted: readonly PresentationBlock[],
+  memberId: string,
+): string | null {
+  const member = view.members.find((block) => block.id === memberId);
+  return member ? convertedNodeOfMember(view, converted, member as unknown as Record<string, unknown>) ?? null : null;
+}
+
+/** The node of `member`'s item in the conversion; undefined when it names no
+ * item of the outline, null when the conversion has no single node for it. */
+function convertedNodeOfMember(
+  view: Pick<NativeSmartArtView, "outline">,
+  converted: readonly PresentationBlock[],
+  member: Record<string, unknown>,
+): string | null | undefined {
+  const ids = record(record(member.source)?.nativeSmartArtView)?.dataPointIds;
+  const index = Array.isArray(ids) && typeof ids[0] === "string"
+    ? view.outline.findIndex((item) => item.id === ids[0])
+    : -1;
+  if (index < 0) return undefined;
+  const nodes = converted.filter((block) => {
+    const own = block as { smartArtItemIndex?: unknown; smartArtRole?: unknown };
+    return block.type === "shape" && own.smartArtItemIndex === index && own.smartArtRole === "node";
+  });
+  return nodes.length === 1 ? nodes[0].id : null;
+}
+
 /**
  * Whether a diagram is laid out from its own file's definition when it
  * converts: a layout MRAI does not own (no catalog id, alias or second
@@ -498,7 +605,7 @@ export function nativeSmartArtConvertsFromOwnDefinition(
   return (
     !!view.layoutDefinition &&
     nativeLayoutToCatalogId(view.layoutIdentity) === null &&
-    !view.members.some((member) => record(record(member.source)?.nativeSmartArtView)?.drawingCache === "absent")
+    !view.members.some(nativeSmartArtDrawingAbsent)
   );
 }
 
@@ -834,4 +941,79 @@ export function updateNativeSmartArtText(
     return next;
   });
   return changed ? updated : null;
+}
+
+/** A text block reading `text`, its paragraphs and runs keeping their formatting (`withRunText`); null if the words do not fit its paragraphs. */
+function textBlockWithWords(block: PresentationBlock, text: string): PresentationBlock | null {
+  type Row = { text?: unknown; runs?: NativeTextRun[] };
+  const paragraphs = (block as { paragraphs?: unknown }).paragraphs;
+  if (Array.isArray(paragraphs) && paragraphs.length) {
+    const parts = text.split("\n");
+    if (parts.length !== paragraphs.length) return null;
+    return {
+      ...block,
+      text,
+      paragraphs: (paragraphs as Row[]).map((paragraph, i) => withRunText(paragraph, parts[i])),
+    } as PresentationBlock;
+  }
+  return withRunText(block as PresentationBlock & Row, text) as PresentationBlock;
+}
+
+/**
+ * The words another window wrote on a file's diagram -- its preserved members
+ * as they were (`before`) and as they arrived (`after`) -- carried onto this
+ * window's conversion of it: each point whose words changed gives them to the
+ * one converted block of its place in the diagram's `outline` (the place the
+ * conversion's `smartArtItemIndex` names, as `nativeSmartArtWithWords` reads
+ * it the other way). Null when they cannot be carried: a point with no single
+ * block of words, or words whose lines its paragraphs cannot hold.
+ */
+export function nativeSmartArtWordsOntoConversion(
+  converted: readonly PresentationBlock[],
+  before: readonly PresentationBlock[],
+  after: readonly PresentationBlock[],
+  outline: readonly { id: string }[],
+): PresentationBlock[] | null {
+  const was = readNativeSmartArtGroup(before, before.find((block) => block.type === "text"));
+  const now = readNativeSmartArtGroup(after, after.find((block) => block.type === "text"));
+  if (!was || !now) return null;
+  const previous = new Map(was.outline.map((item) => [item.id, item.text]));
+  const out = [...converted];
+  for (const item of now.outline) {
+    if (!previous.has(item.id)) return null;
+    if (previous.get(item.id) === item.text) continue;
+    const index = outline.findIndex((entry) => entry.id === item.id);
+    const holders = out.flatMap((block, at) =>
+      (block as { smartArtItemIndex?: unknown }).smartArtItemIndex === index &&
+      typeof (block as { text?: unknown }).text === "string" ? [at] : []);
+    if (index < 0 || holders.length !== 1) return null;
+    const written = textBlockWithWords(out[holders[0]], item.text);
+    if (!written) return null;
+    out[holders[0]] = written;
+  }
+  return out;
+}
+
+/**
+ * A served answer's blocks (a SmartArt rebuild or restyle) with words another
+ * window wrote while it was on its way: each outline place's words on the one
+ * block of words its items name (`smartArtItemIndex`), runs keeping their
+ * formatting; null when a place has no single such block or the words do not
+ * fit its paragraphs.
+ */
+export function smartArtAnswerWithWords(
+  blocks: readonly PresentationBlock[],
+  words: ReadonlyMap<number, string>,
+): PresentationBlock[] | null {
+  const out = [...blocks];
+  for (const [index, text] of words) {
+    const holders = out.flatMap((block, at) =>
+      (block as { smartArtItemIndex?: unknown }).smartArtItemIndex === index &&
+      typeof (block as { text?: unknown }).text === "string" ? [at] : []);
+    if (holders.length !== 1) return null;
+    const written = textBlockWithWords(out[holders[0]], text);
+    if (!written) return null;
+    out[holders[0]] = written;
+  }
+  return out;
 }

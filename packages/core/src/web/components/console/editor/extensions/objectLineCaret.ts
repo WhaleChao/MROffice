@@ -1,28 +1,36 @@
 "use client";
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /*!
  * MR Office - https://mroffice.ai
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-/**
- * The insertion point on a line that holds an in-line picture or chart.
- *
- * Word draws the insertion point as tall as the text it stands in; only right
- * beside an In Line with Text object is it as tall as that object. WebKit
- * draws its native caret as tall as the whole LINE box instead, so a line an
- * in-line picture or chart makes 250 px high got a 250 px caret wherever the
- * caret stood on it -- beside "我是" as much as beside the picture.
- *
- * While the caret stands in a paragraph that holds an in-line drawing, the
- * native caret is made transparent and this plugin draws one from the
- * caret's own client rect: the text's box beside text, the object's box
- * beside the object (Chromium's and Word's reading). It follows focus,
- * scrolling and layout, blinks like a caret and steps aside during IME
- * composition and while the caret is parked beside a block object (that
- * caret is drawn by `objectPlacement.ts`).
- */
-
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey, TextSelection, type EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
@@ -32,6 +40,34 @@ import { isInlineDrawingNode } from "../native-document/documentObjectNodes";
 import { isImeCompositionActive } from "../native-document/imeCompositionGuard";
 import { parkedBlockObjectSide } from "./objectPlacement";
 import { clipToVisibleEditor } from "../native-document/visibleEditorClip";
+import { officeCaretFontScale, officeScaledCaretBox } from "../../../../lib/office-painted-caret";
+
+/** TextStyling's font size mark (`size`: "<n>px"). Named here, not imported,
+ * so this extension pulls in no text-styling module. */
+const FONT_SIZE_MARK_NAME = "fontSize";
+
+function markSizePx(marks: readonly { readonly type: { readonly name: string }; readonly attrs: Record<string, unknown> }[]): number | null {
+  const mark = marks.find((candidate) => candidate.type.name === FONT_SIZE_MARK_NAME);
+  if (!mark) return null;
+  const match = /^(\d+(?:\.\d+)?)px$/.exec(String(mark.attrs.size ?? "").trim());
+  return match ? Number.parseFloat(match[1]) : null;
+}
+
+/**
+ * The size held at a bare caret: the stored marks' size where it is not the
+ * size of the text the caret stands in. A number in px, "block" when the
+ * stored marks drop the size (what is typed next takes the paragraph's own),
+ * null when the caret types the size it stands beside.
+ */
+export function heldCaretFontSize(state: EditorState): number | "block" | null {
+  const { selection } = state;
+  if (!(selection instanceof TextSelection) || !selection.empty || !state.storedMarks) return null;
+  if (!selection.$head.parent.isTextblock) return null;
+  const held = markSizePx(state.storedMarks);
+  const beside = markSizePx(selection.$head.marks());
+  if (held === beside) return null;
+  return held ?? "block";
+}
 
 /**
  * On the paragraph whose caret the drawn one replaces. The stylesheet makes
@@ -71,7 +107,7 @@ function paragraphHoldsDrawing(state: EditorState): boolean {
  * native one; focus and composition are the view's part. */
 function drawnCaretState(state: EditorState): boolean {
   return (
-    paragraphHoldsDrawing(state) &&
+    (paragraphHoldsDrawing(state) || heldCaretFontSize(state) !== null) &&
     // No caret at all while the boundary policy keeps it hidden (a
     // pointer dismissal, a caret parked beside a block object).
     documentBoundaryInteractionKey.getState(state) !== "idle" &&
@@ -117,6 +153,48 @@ function caretRect(
   } catch {
     return null;
   }
+}
+
+/**
+ * How much taller the caret draws for the size held at it: the held size
+ * over the drawn size of the text it stands in, both as the page draws
+ * them (a zoomed page scales both alike). Null with no held size.
+ */
+function heldCaretScale(view: EditorView): number | null {
+  const held = heldCaretFontSize(view.state);
+  if (held === null) return null;
+  const { $head } = view.state.selection;
+  // Text with a size of its own beside the caret: the two marks' sizes.
+  const besideMark = markSizePx($head.marks());
+  if (held !== "block" && besideMark !== null) return officeCaretFontScale(held, besideMark);
+  const doc = view.dom.ownerDocument;
+  const anchor = doc.getSelection()?.anchorNode ?? null;
+  const at =
+    anchor && view.dom.contains(anchor)
+      ? anchor.nodeType === Node.ELEMENT_NODE
+        ? (anchor as Element)
+        : anchor.parentElement
+      : null;
+  if (!at) return null;
+  const px = (element: Element | null) =>
+    element ? Number.parseFloat(getComputedStyle(element).fontSize) : Number.NaN;
+  if (held === "block") {
+    // The size dropped: what is typed next wears the paragraph's own.
+    let block: Node | null = null;
+    try {
+      block = view.nodeDOM($head.before());
+    } catch {
+      block = null;
+    }
+    return officeCaretFontScale(px(block instanceof Element ? block : null), px(at));
+  }
+  // Text wearing the paragraph's size: the held px against it as drawn,
+  // read through a sized run of the page (its stated px against its drawn
+  // px), so an engine that reports zoomed sizes is read alike.
+  const sized = view.dom.querySelector<HTMLElement>("span[data-font-size]:not([data-type])");
+  const stated = sized ? /^(\d+(?:\.\d+)?)px$/.exec(sized.dataset.fontSize ?? "") : null;
+  const drawn = sized && stated ? px(sized) / Number.parseFloat(stated[1]) : 1;
+  return officeCaretFontScale(held * (drawn > 0 && Number.isFinite(drawn) ? drawn : 1), px(at));
 }
 
 class ObjectLineCaretView {
@@ -172,7 +250,9 @@ class ObjectLineCaretView {
       view.hasFocus() &&
       !isImeCompositionActive(view) &&
       drawnCaretState(view.state);
-    const caret = active ? caretRect(view) : null;
+    const beside = active ? caretRect(view) : null;
+    const scale = beside ? heldCaretScale(view) : null;
+    const caret = beside && scale !== null ? officeScaledCaretBox(beside, scale) : beside;
     // Beside a tall in-line picture scrolled half out of view the caret runs
     // past the scroller; the part the page does not show is not drawn.
     const rect = caret ? clipToVisibleEditor(view.dom, { ...caret, width: 0 }) : null;

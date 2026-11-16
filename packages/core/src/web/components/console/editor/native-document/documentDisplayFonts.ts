@@ -22,7 +22,9 @@ import { documentFontScriptRanges, documentFontDescriptor, fontFamilyWithCjkRend
 import { normalizeOfficeFontFace, officeFontFaceFamily, type OfficeFontFace } from "../../../office-ribbon/officeFontFace";
 import { isEastAsianFontCodePoint } from "../../../office-ribbon/officeFontScriptSlots";
 import { officePrimaryFontFamily } from "../../../office-ribbon/officeTypographyCatalog";
-import { officeFontSubstitution } from "../../../../lib/office-fonts/substitutes";
+import { officeFamilyForFace, officeFontSubstitution } from "../../../../lib/office-fonts/substitutes";
+import { wordLacksFixedOff, wordWindowsLacksFace } from "../../../../lib/office-fonts/word-windows-lacks";
+import { wordFontIsEastAsian, wordFontIsRecordedLatin } from "./wordFontMetrics";
 import { retainOfficeFontAssets, registerLeasedFontAsset, OFFICE_FONT_ASSETS_EVENT } from "../../../office-ribbon/officeFontAssets";
 import { getPageFontBindings } from "../../../../lib/notebook-sdk";
 import { captureSavedPageHotCacheScope, isSavedPageHotCacheScopeCurrent } from "../../../../lib/saved-page-hot-cache";
@@ -272,10 +274,143 @@ function withEastAsianSubstitutes(state: EditorState, plan: DocumentDisplayFontP
  */
 const quotedFontName = (name: string) => `"${name.replace(/["\\]/g, "")}"`;
 export function documentMissingFontStack(plan: DocumentDisplayFontPlan, family: string): string | null {
-  const faces = plan.missingFontSubstitutes?.get(family.toLowerCase());
+  return missingFontStackOf(plan.missingFontSubstitutes?.get(family.toLowerCase()), family);
+}
+
+/** The same stack from the plan's substitutes as a plain record (lower-case
+ * family -> faces), which a header or footer is drawn with
+ * (`documentMissingFontSubstitutes`). */
+export function missingFontStackFrom(substitutes: Readonly<Record<string, readonly string[]>> | null | undefined, family: string): string | null {
+  return substitutes ? missingFontStackOf(substitutes[family.toLowerCase()], family) : null;
+}
+
+const substituteRecords = new WeakMap<Map<string, readonly string[]>, Readonly<Record<string, readonly string[]>>>();
+/** The page's missing-font substitutes as a record, one object per plan, or
+ * null before a plan with any arrives. */
+export function documentMissingFontSubstitutes(state: EditorState): Readonly<Record<string, readonly string[]>> | null {
+  const map = documentDisplayFontPluginKey.getState(state)?.plan.missingFontSubstitutes;
+  if (!map?.size) return null;
+  let record = substituteRecords.get(map);
+  if (!record) substituteRecords.set(map, (record = Object.fromEntries(map)));
+  return record;
+}
+
+/** The faces Windows Word sets East Asian text in for a family it lacks,
+ * named by the run's own East Asian slot or behind its Latin face: Han and
+ * kana in SimSun, Hangul in Batang, each line taking that face's East Asian
+ * box (docx-look/probes/fonts lack1: Noto Sans CJK KR / SC / JP and Source
+ * Han Sans CN alike, 16.44pt lines at 11pt and 1.15 where the Cambria Latin
+ * line is 14.8pt). */
+export const WORD_LACKED_EAST_ASIAN_FACES = ["SimSun", "Batang"] as const;
+
+/** The face Windows Word sets Devanagari in for a family it lacks: Mangal,
+ * Windows' Devanagari face (corpus R409-D25: the 22 pt title in Yatra One, a
+ * face Word does not have, is Mangal Bold in Word's PDF, 57 characters). It
+ * follows the East Asian faces, none of which holds Devanagari.
+ * `window.__docsLackedDevanagariOff = true` asks the older reading (the
+ * browser's own fallback), for an A/B of one build. */
+const WORD_LACKED_DEVANAGARI_FACE = "Mangal";
+function lackedDevanagariOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsLackedDevanagariOff?: boolean}).__docsLackedDevanagariOff === true;
+}
+
+/** `window.__docsWordLacksOff = true` asks the older reading (a family the
+ * page serves is drawn in its served face), for an A/B of one build. */
+function wordLacksOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsWordLacksOff?: boolean}).__docsWordLacksOff === true;
+}
+
+/** Whether the page draws `family` in the faces Windows Word draws it in,
+ * Word lacking it: the stack `documentMissingFontStack` builds then names
+ * Word's faces only. */
+export function documentFamilyWordLacks(family: string): boolean {
+  return wordWindowsLacksFace(family) !== undefined && !wordLacksOff();
+}
+
+/** The faces the reader's font-table picks end in (document_word_font_context
+ * `_word_face_for`): Word's own choice by the entry's charset and family. */
+const WORD_TABLE_ENTRY_PICKS = new Set(["cambria", "calibri", "simsun", "microsoft yahei", "yu gothic", "malgun gothic", "arial", "sakkal majalla"]);
+/** `window.__docsFontTableAltOff = true` asks the older reading (every family
+ * Word lacks in its fixed pick or Cambria, the font table unread), for an A/B
+ * of one build. */
+function fontTableAltOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsFontTableAltOff?: boolean}).__docsFontTableAltOff === true;
+}
+
+/**
+ * The face Windows Word sets a family it lacks in, the font table read: the
+ * entry's w:altName when Word has that face; else Word's fixed pick for the
+ * name (Myriad Pro -> Segoe UI, Times -> Times New Roman: corpus R401-D01,
+ * R412-D12, whose entries name no altName); else Word's pick by the entry's
+ * charset and family (86 -> Microsoft YaHei, roman -> Cambria, any other
+ * family or none -> Calibri), and Cambria for a family the table does not
+ * list. Measured with names Word had never met (docx-look/probes/altname
+ * alt, alt2, alt4): Word keeps a substitution it made for a name for the rest
+ * of its session, whatever a later document's table says, so a probe reusing
+ * names reads the first document's pick (the earlier "always Cambria" was
+ * read that way). Corpus R353-D20: KaTeX_Math, altName Segoe Print, which
+ * Word draws, its 1.77 em line taller than the text's. `faces` are the
+ * reader's picks for the family: [altName?, entry pick].
+ */
+function wordTablePicks(faces: readonly string[] | undefined, lacked: string): string[] {
+  if (fontTableAltOff() || !faces?.length) return [lacked];
+  const last = faces[faces.length - 1];
+  const alt = faces.length > 1 || !WORD_TABLE_ENTRY_PICKS.has(last.toLowerCase()) ? faces[0] : null;
+  if (alt && wordWindowsLacksFace(alt) === undefined) return [alt];
+  if (lacked !== "Cambria") return [lacked];
+  return WORD_TABLE_ENTRY_PICKS.has(last.toLowerCase()) ? [last] : [lacked];
+}
+
+function missingFontStackOf(faces: readonly string[] | undefined, family: string): string | null {
+  const lacked = wordLacksOff() ? undefined : wordWindowsLacksFace(family);
+  if (lacked !== undefined) {
+    // A family Windows Word does not have is drawn in Word's faces even where
+    // the page serves it (Noto Sans CJK KR -> Noto Sans KR) or the machine
+    // has it (a Linux box's Liberation Serif): its Latin in Word's own pick
+    // for the name (Liberation Sans -> Arial, Myriad Pro -> Segoe UI, corpus
+    // R394-D04 / R401-D01) or else in Cambria, its East Asian text in SimSun
+    // and Batang. Corpus R340-D10: a Normal in Noto Sans CJK KR, which Word
+    // sets in Cambria and Batang, ran six pages long in the served face's
+    // 1.448 em line. A family the font table lists is Word's table pick
+    // (`wordTablePicks`); the older reading (`window.__docsWordLacksFixedOff`)
+    // put the table's faces after a fixed pick.
+    const picks = wordLacksFixedOff()
+      ? lacked !== "Cambria" || !faces?.length ? [lacked, ...(faces ?? [])] : [...faces]
+      : wordTablePicks(faces, lacked);
+    const seen = new Set([family.trim().toLowerCase()]);
+    const order = [...picks, ...WORD_LACKED_EAST_ASIAN_FACES, ...(lackedDevanagariOff() ? [] : [WORD_LACKED_DEVANAGARI_FACE])].filter(face => {
+      const key = face.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return fontFamilyWithCjkRenderFallback(order.map(quotedFontName).join(", "));
+  }
   if (!faces?.length || officeFontSubstitution(family)?.substitutes.length) return null;
   if (["serif", "sans-serif", "monospace", "system-ui", "ui-monospace"].includes(family.toLowerCase())) return null;
-  return fontFamilyWithCjkRenderFallback([quotedFontName(family), ...faces.map(quotedFontName)].join(", "));
+  // A face the page serves only as an Office face's stand-in, that Word does
+  // not have itself: Word sets it in its own pick, so that pick comes first
+  // (corpus R436-D09: a LibreOffice Normal in Liberation Sans Narrow, which
+  // the page serves for Arial Narrow; Word, without it, takes the font
+  // table's Arial, and the narrow face set every citation a third shorter).
+  const order = servedStandInWordLacks(family) ? [...faces, family] : [family, ...faces];
+  return fontFamilyWithCjkRenderFallback(order.map(quotedFontName).join(", "));
+}
+
+function servedStandInWordLacks(family: string): boolean {
+  const office = officeFamilyForFace(family);
+  const name = family.trim().toLowerCase();
+  // A face the page serves as a weight of its own family ("Open Sans" for
+  // Open Sans Light, the nearest of the family's weights the table names) is
+  // that family, no stand-in: Word has it (Open Sans is an Office cloud face;
+  // corpus R401-D01: Word's PDF sets the report in Open Sans, the page set it
+  // in the Cambria Word would pick were it missing).
+  // `window.__docsStandInSameFamilyOff = true` asks the older reading, for an
+  // A/B of one build.
+  const sameFamily = office !== undefined && office.toLowerCase().startsWith(`${name} `) &&
+    !(typeof window !== "undefined" && (window as Window & {__docsStandInSameFamilyOff?: boolean}).__docsStandInSameFamilyOff === true);
+  return office !== undefined && office.toLowerCase() !== name && !sameFamily &&
+    !wordFontIsRecordedLatin(family) && !wordFontIsEastAsian(family);
 }
 
 /** The stack a bound face paints with: the face, then the run's own family. A
@@ -324,6 +459,9 @@ function rangeDecorations(state: EditorState, plan: DocumentDisplayFontPlan, sta
         "data-document-display-font": "true",
         "data-document-word-line-metrics": "unverified",
         "data-document-missing-font": family,
+        // Word's own East Asian faces for a family it lacks: the line takes
+        // their box (documentAutoLineSpacing), not a page fallback's.
+        ...(documentFamilyWordLacks(family) ? {"data-document-word-east-asian": WORD_LACKED_EAST_ASIAN_FACES.join(",")} : {}),
         style: `--document-display-font-family:${stack};`,
       }, {inclusiveStart: false, inclusiveEnd: false})];
     }

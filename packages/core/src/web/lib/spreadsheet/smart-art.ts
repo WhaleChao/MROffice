@@ -235,7 +235,12 @@ export interface SpreadsheetSmartArtMember {
 export function spreadsheetSmartArtTextBoxOf(object: unknown): SmartArtTextBox | null {
   if (!object || typeof object !== "object") return null;
   const value = (object as { smartArtTextBox?: unknown }).smartArtTextBox;
-  return readSmartArtTextBox(value) ? (value as SmartArtTextBox) : null;
+  if (!readSmartArtTextBox(value)) return null;
+  // Words at a size the author fixed break where Office breaks them, exactly
+  // (SmartArt probe X24ui: 28 pt Georgia "gamm" / "a").
+  return (object as { smartArtAuthorTextSize?: unknown }).smartArtAuthorTextSize === true
+    ? { ...(value as SmartArtTextBox), exact: true }
+    : (value as SmartArtTextBox);
 }
 
 function pixels(emu: number): number {

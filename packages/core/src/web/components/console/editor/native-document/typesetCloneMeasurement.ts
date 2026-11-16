@@ -13,6 +13,8 @@ import {
   renderKatexCached,
 } from "../extensions/lazyKatex";
 import { clearPageEdgeMarks } from "./paged/paginationProjectionKeys";
+import { editorFontFamilies } from "./paged/ledger/ledgerFontRanges";
+import { msSinceInput } from "../../../../lib/background-work";
 
 interface MeasuredFlowLayout {
   heights: number[];
@@ -171,6 +173,7 @@ export function typesetPendingMath(clone: HTMLElement): void {
 async function typesetPendingMathChunked(
   clone: HTMLElement,
   isCancelled: () => boolean,
+  now = false,
 ): Promise<boolean> {
   const pending = [
     ...(clone.matches("[data-math-pending]") ? [clone] : []),
@@ -180,12 +183,43 @@ async function typesetPendingMathChunked(
   for (let index = 0; index < pending.length; index += 1) {
     if (isCancelled()) return false;
     typesetOnePendingMath(pending[index]);
-    if (performance.now() - sliceStartedAt >= 10) {
+    if (now && inputPending()) now = false;
+    if (!now && performance.now() - sliceStartedAt >= 10) {
       await new Promise((resolve) => setTimeout(resolve, 0));
       sliceStartedAt = performance.now();
     }
   }
   return !isCancelled();
+}
+
+/** How long the reader must have done nothing for a ledger's batch to be
+ * typeset in one task (__docsMathBatchNow). */
+const MATH_BATCH_NOW_QUIET_MS = 1000;
+
+function inputPending(): boolean {
+  try {
+    return (navigator as Navigator & { scheduling?: { isInputPending?: () => boolean } }).scheduling?.isInputPending?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+/** How long a geometry batch waits for its text's faces (projectionFontNews). */
+const CLONE_FACES_WAIT_MS = 3000;
+
+/** The faces the clone's text draws with, each family asked for the clone's
+ * own characters, waited for a while at most. */
+async function facesTheCloneUses(clone: HTMLElement): Promise<void> {
+  const fonts = clone.ownerDocument.fonts;
+  if (!fonts?.load) return;
+  const text = (clone.textContent ?? "").slice(0, 2000);
+  if (!text.trim()) return;
+  const families = [...editorFontFamilies(clone)].filter((family) => !/^(serif|sans-serif|monospace|cursive|fantasy|system-ui)$/.test(family));
+  if (!families.length) return;
+  await Promise.race([
+    Promise.allSettled(families.map((family) => fonts.load(`16px "${family}"`, text))),
+    new Promise((resolve) => setTimeout(resolve, CLONE_FACES_WAIT_MS)),
+  ]);
 }
 
 /**
@@ -261,9 +295,35 @@ export async function measureTypesetCloneBlockHeights(
 
   parent.append(host);
   host.append(cloneShell);
+  // (Trace: `window.__pageLedgerTrace`) where a geometry batch's time goes:
+  // the KaTeX faces, the typesetting, the wait for every face of the page.
+  const traceSink = layoutTarget?.geometryOnly
+    ? (host.ownerDocument.defaultView as (Window & { __pageLedgerTrace?: unknown[] }) | null)?.__pageLedgerTrace
+    : undefined;
+  const steps: Record<string, number> = {};
+  let stepAt = performance.now();
+  const step = (name: string) => {
+    const now = performance.now();
+    steps[name] = Math.round(now - stepAt);
+    stepAt = now;
+  };
+  // A batch the page ledger waits for is typeset in one task while the reader
+  // does nothing; input arriving meanwhile has it yield again. Yielding every
+  
+  // the line projections): R286-D01's 15 formulas took 2-7 s a batch, the
+  // ledger held all that time, and a face arriving meanwhile cancelled it
+  
+  const batchNow = Boolean(layoutTarget?.geometryOnly) && msSinceInput() >= MATH_BATCH_NOW_QUIET_MS &&
+    (host.ownerDocument.defaultView as (Window & { __docsMathBatchNow?: boolean }) | null)?.__docsMathBatchNow !== false;
   try {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await ensureKatexFonts();
+    if (!batchNow) await new Promise((resolve) => setTimeout(resolve, 0));
+    step("yield");
+    // (projectionFontNews) A geometry batch waits for the faces its formulas
+    // and their text use, not for every face the page is loading.
+    const facesOnly = Boolean(layoutTarget?.geometryOnly) &&
+      (host.ownerDocument.defaultView as (Window & { __docsProjectionFontNews?: boolean }) | null)?.__docsProjectionFontNews === true;
+    await ensureKatexFonts(!facesOnly);
+    step("katexFonts");
     if (isCancelled()) return null;
 
     if (requested.size > 500 || layoutTarget?.geometryOnly) {
@@ -288,9 +348,18 @@ export async function measureTypesetCloneBlockHeights(
         cloneShell.append(block);
         return block;
       });
-      const done = await typesetPendingMathChunked(cloneShell, isCancelled);
+      step("clone");
+      const done = await typesetPendingMathChunked(cloneShell, isCancelled, batchNow);
+      step("typeset");
       if (!done || isCancelled()) return null;
-      if (document.fonts?.ready) await document.fonts.ready;
+      const loading = document.fonts?.status === "loading";
+      if (facesOnly) {
+        await facesTheCloneUses(cloneShell);
+        step(loading ? "facesLoading" : "faces");
+      } else {
+        if (document.fonts?.ready) await document.fonts.ready;
+        step(loading ? "fontsReadyLoading" : "fontsReady");
+      }
       if (isCancelled()) return null;
       layoutTarget?.onTypesetBatch?.(clonedBlocks);
       if (layoutTarget?.geometryOnly) return new Array<number>(sourceBlocks.length).fill(Number.NaN);
@@ -383,5 +452,6 @@ export async function measureTypesetCloneBlockHeights(
     return heights;
   } finally {
     host.remove();
+    if (Array.isArray(traceSink)) traceSink.push({ at: Date.now(), mathClone: { ...steps, cancelled: isCancelled() } });
   }
 }

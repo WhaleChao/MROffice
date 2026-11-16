@@ -16,6 +16,9 @@ import type {
   PresentationConnectorEndSize,
 } from "../../lib/presentation-shapes";
 
+/** The smallest base an end is sized from: 0.7 mm (PresentationNativeShapeGraphic). */
+const LINE_END_MIN_BASE_PX = (0.7 / 25.4) * 96;
+
 /** The six `a:ln` end fields as any Office host canvas carries them. */
 export interface OfficeLineEndFields {
   readonly headEnd?: PresentationConnectorEnd;
@@ -59,11 +62,17 @@ export function OfficeLineEndMarkers({
   head,
   tail,
   stroke,
+  lineWeight,
 }: {
   readonly id: string;
   readonly head: NativeLineEnd | null;
   readonly tail: NativeLineEnd | null;
   readonly stroke: string;
+  /** A drawing at its real size: the ends in multiples of the line's weight
+   * (px, never under 0.7 mm, as a slide's native shape draws them), in a
+   * view whose units are `unitsPerPx` of a pixel. Without it, the preview's
+   * fixed 10-unit `med` box. */
+  readonly lineWeight?: { readonly px: number; readonly unitsPerPx: number };
 }) {
   if (!head && !tail) return null;
   return (
@@ -77,8 +86,8 @@ export function OfficeLineEndMarkers({
             key={side}
             id={`${id}-${side}`}
             viewBox="0 0 6 6"
-            markerWidth={(end.length * 10) / 3}
-            markerHeight={(end.width * 10) / 3}
+            markerWidth={lineWeight ? end.length * Math.max(lineWeight.px, LINE_END_MIN_BASE_PX) * lineWeight.unitsPerPx : (end.length * 10) / 3}
+            markerHeight={lineWeight ? end.width * Math.max(lineWeight.px, LINE_END_MIN_BASE_PX) * lineWeight.unitsPerPx : (end.width * 10) / 3}
             refX="6"
             refY="3"
             orient="auto-start-reverse"

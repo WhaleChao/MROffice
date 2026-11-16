@@ -43,6 +43,12 @@ export interface OfficeChartLabelOverride {
   value?: boolean;
   seriesName?: boolean;
   position?: "outEnd" | "inEnd" | "ctr" | "inBase" | "bestFit";
+  /**
+   * A series' own labels stand where their chart type stands them: its own
+   * `c:dLbls` states no `c:dLblPos` where its group's does. A series', never
+   * beside a position of its own (the server's `normalize_layout`).
+   */
+  positionAutomatic?: true;
 }
 /** What a calibrated layout lays out beyond the element switches. */
 export interface OfficeChartLayout {
@@ -105,6 +111,7 @@ export function normalizeOfficeChartLayout(
             "value",
             "seriesName",
             "position",
+            "positionAutomatic",
           ].includes(k),
       ) ||
       !Number.isInteger(item.seriesIndex) ||
@@ -118,7 +125,9 @@ export function normalizeOfficeChartLayout(
         (k) => item[k] !== undefined && typeof item[k] !== "boolean",
       ) ||
       (item.position !== undefined && !positions.has(String(item.position))) ||
-      !["value", "seriesName", "position"].some((k) => item[k] !== undefined)
+      (item.positionAutomatic !== undefined &&
+        (item.positionAutomatic !== true || item.pointIndex !== undefined || item.position !== undefined)) ||
+      !["value", "seriesName", "position", "positionAutomatic"].some((k) => item[k] !== undefined)
     )
       return;
     const key = `${item.seriesIndex}:${item.pointIndex ?? "series"}`;
@@ -126,6 +135,157 @@ export function normalizeOfficeChartLayout(
     seen.add(key);
   }
   return raw as unknown as OfficeChartLayout;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function officeChartLayoutWithAxisTicks<F extends { readonly layout?: unknown; readonly axisOptions?: unknown }>(
+  chartType: unknown,
+  format: F,
+): F {
+  const layout = format.layout;
+  const options = format.axisOptions;
+  if (!record(layout) || !record(options)) return format;
+  const horizontal = chartType === "bar";
+  const stated: Record<string, string> = {};
+  for (const [suffix, axis] of [
+    ["X", horizontal ? "value" : "category"],
+    ["Y", horizontal ? "category" : "value"],
+  ] as const) {
+    const own = options[axis];
+    const mark = record(own) ? own.majorTickMark : undefined;
+    if (
+      typeof mark === "string" &&
+      ["none", "out", "in", "cross"].includes(mark) &&
+      layout[`majorTick${suffix}`] !== mark
+    ) {
+      stated[`majorTick${suffix}`] = mark;
+    }
+  }
+  return Object.keys(stated).length ? { ...format, layout: { ...layout, ...stated } } : format;
+}
+
+
+
+
+
+
+
+
+
+export function officeChartLayoutWithBarSpacing<F extends { readonly layout?: unknown; readonly barGapWidth?: unknown; readonly barOverlap?: unknown }>(
+  format: F,
+): F {
+  const layout = format.layout;
+  if (!record(layout)) return format;
+  const stated: Record<string, number> = {};
+  for (const [own, key] of [["barGapWidth", "gapWidth"], ["barOverlap", "overlap"]] as const) {
+    const value = format[own];
+    if (typeof value === "number" && Number.isInteger(value) && layout[key] !== value) stated[key] = value;
+  }
+  return Object.keys(stated).length ? { ...format, layout: { ...layout, ...stated } } : format;
+}
+
+/** Format Data Labels' positions a calibrated layout states (`c:dLblPos`). */
+const LABEL_POSITION_TOKENS: Readonly<Record<string, OfficeChartLabelOverride["position"]>> = {
+  bestFit: "bestFit",
+  center: "ctr",
+  insideBase: "inBase",
+  insideEnd: "inEnd",
+  outsideEnd: "outEnd",
+};
+
+
+
+
+
+
+
+
+
+
+export function officeChartLayoutWithLabelOverrides<F extends { readonly layout?: unknown; readonly dataLabelOverrides?: unknown; readonly dataLabelPosition?: unknown }>(
+  format: F,
+): F {
+  const layout = format.layout;
+  const overrides = format.dataLabelOverrides;
+  if (!record(layout) || !Array.isArray(overrides) || !overrides.length) return format;
+  const labels = Array.isArray(layout.labels) ? (layout.labels as OfficeChartLabelOverride[]).map((item) => ({ ...item })) : [];
+  let changed = false;
+  for (const entry of overrides) {
+    if (!record(entry) || typeof entry.seriesIndex !== "number") continue;
+    const fields: { value?: boolean; seriesName?: boolean; position?: OfficeChartLabelOverride["position"]; positionAutomatic?: true } = {};
+    if (entry.dataLabels === false) {
+      fields.value = false;
+      fields.seriesName = false;
+    } else {
+      if (typeof entry.dataLabelValue === "boolean") fields.value = entry.dataLabelValue;
+      if (typeof entry.dataLabelSeriesName === "boolean") fields.seriesName = entry.dataLabelSeriesName;
+      const position = typeof entry.dataLabelPosition === "string" ? LABEL_POSITION_TOKENS[entry.dataLabelPosition] : undefined;
+      if (position) fields.position = position;
+      else if (
+        entry.dataLabelPositionAutomatic === true &&
+        typeof entry.pointIndex !== "number" &&
+        typeof format.dataLabelPosition === "string" &&
+        LABEL_POSITION_TOKENS[format.dataLabelPosition]
+      ) {
+        
+        // 1): the layout's series stands at the chart type's place.
+        fields.positionAutomatic = true;
+      }
+    }
+    if (!Object.keys(fields).length) continue;
+    const pointIndex = typeof entry.pointIndex === "number" ? entry.pointIndex : undefined;
+    const at = labels.findIndex((item) => item.seriesIndex === entry.seriesIndex && item.pointIndex === pointIndex);
+    const merged: OfficeChartLabelOverride = { ...(at >= 0 ? labels[at] : { seriesIndex: entry.seriesIndex, ...(pointIndex !== undefined ? { pointIndex } : {}) }), ...fields };
+    if (fields.position) delete merged.positionAutomatic;
+    else if (fields.positionAutomatic) delete merged.position;
+    if (at >= 0 && JSON.stringify(labels[at]) === JSON.stringify(merged)) continue;
+    if (at >= 0) labels[at] = merged;
+    else labels.push(merged);
+    changed = true;
+  }
+  return changed ? { ...format, layout: { ...layout, labels } } : format;
+}
+
+/** The calibrated layout a chart draws and is written with: its stated
+ * layout, with the ticks its axes, the spacing its Series Options and the
+ * label switches Format Data Labels state (`officeChartLayoutWithAxisTicks`,
+ * `officeChartLayoutWithBarSpacing`, `officeChartLayoutWithLabelOverrides`). */
+export function officeChartLayoutAsStated(
+  chartType: unknown,
+  format:
+    | { readonly layout?: unknown; readonly axisOptions?: unknown; readonly barGapWidth?: unknown; readonly barOverlap?: unknown; readonly dataLabelOverrides?: unknown; readonly dataLabelPosition?: unknown }
+    | undefined,
+): OfficeChartLayout | undefined {
+  if (!format || !record(format.layout)) return undefined;
+  return officeChartLayoutWithLabelOverrides(officeChartLayoutWithBarSpacing(officeChartLayoutWithAxisTicks(chartType, format)))
+    .layout as OfficeChartLayout;
+}
+
+/**
+ * A chart format with one record of its layout's atoms: where it has a
+ * layout, the layout takes what the chart's own keys state (its axes' ticks,
+ * its Series Options' spacing) and the spacing keys go, so an edit of the
+ * layout is not answered by a stale own key. The one form every command that
+ * writes a chart's format commits.
+ */
+export function officeChartFormatWithOneLayoutRecord<F extends { readonly layout?: unknown; readonly axisOptions?: unknown; readonly barGapWidth?: unknown; readonly barOverlap?: unknown; readonly dataLabelOverrides?: unknown; readonly dataLabelPosition?: unknown }>(
+  chartType: unknown,
+  format: F,
+): F {
+  if (!record(format.layout)) return format;
+  const { barGapWidth: _gap, barOverlap: _overlap, ...rest } = format;
+  return { ...rest, layout: officeChartLayoutAsStated(chartType, format) } as unknown as F;
 }
 
 export function officeChartQuickLayoutRecipe(
@@ -230,24 +390,37 @@ export function officeChartLayoutOf(chart: {
   axisTitleX?: unknown;
   axisTitleY?: unknown;
   layout?: unknown;
+  /** The chart's format: a layout made for it takes the tick marks its axes
+   *  already state (`axisOptions.<axis>.majorTickMark`) and the spacing its
+   *  Series Options state (`barGapWidth` / `barOverlap`). */
+  format?: unknown;
 }): OfficeChartLayout | null {
   if (!officeChartTakesCalibratedLayouts(chart.chartType, chart.chartSubtype))
     return null;
-  return (
-    normalizeOfficeChartLayout(chart.layout) ?? {
-      title: Boolean(chart.title),
-      axisTitleX: Boolean(chart.axisTitleX),
-      axisTitleY: Boolean(chart.axisTitleY),
-      minorGridlinesX: false,
-      minorGridlinesY: false,
-      majorTickX: "none",
-      majorTickY: "none",
-      gapWidth: 150,
-      // A stacked or 100% stacked chart's bars lie on one another.
-      overlap: chart.chartSubtype === "stacked" || chart.chartSubtype === "percentStacked" ? 100 : 0,
-      labels: [],
-    }
-  );
+  const format = record(chart.format) ? chart.format : {};
+  const stated = normalizeOfficeChartLayout(chart.layout);
+  // A stored layout as the chart states it (a page saved while the two
+  // records disagreed): what it draws, and what a command edits.
+  if (stated) return officeChartLayoutAsStated(chart.chartType, { ...format, layout: stated }) ?? stated;
+  // A layout made for a chart that had none (minor gridlines turned on, a
+  // Chart Style's spacing) keeps the tick marks the chart's axes state and
+  // the spacing it states: made from Office's defaults, it wrote an imported
+  
+  
+  const made: OfficeChartLayout = {
+    title: Boolean(chart.title),
+    axisTitleX: Boolean(chart.axisTitleX),
+    axisTitleY: Boolean(chart.axisTitleY),
+    minorGridlinesX: false,
+    minorGridlinesY: false,
+    majorTickX: "none",
+    majorTickY: "none",
+    gapWidth: 150,
+    // A stacked or 100% stacked chart's bars lie on one another.
+    overlap: chart.chartSubtype === "stacked" || chart.chartSubtype === "percentStacked" ? 100 : 0,
+    labels: [],
+  };
+  return officeChartLayoutAsStated(chart.chartType, { ...format, layout: made }) ?? made;
 }
 
 

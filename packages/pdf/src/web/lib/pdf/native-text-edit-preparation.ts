@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { markPdfTextLatency } from "./text-edit-latency";
+import { readPdfNativeTextRowStarts } from "./native-text-row-starts";
 import { type PdfNativeTransactionErrorCode, type PdfNativePreparedContentStreamTransaction } from "./engine/native/content-stream-transaction";
 import { MAX_MRAI_NATIVE_SOURCE_BYTES, PdfNativeTransactionError } from "./engine/native/transaction-error";
 import type {
@@ -44,7 +45,9 @@ export interface PdfNativeTextPreparationRequest {
    * paragraph frame (its right edge, an x of the page), of the paragraph set
    * again in that frame. */
   readonly compile?: Readonly<{ replacementText: string; paragraphFrameRight?: number; paragraphLineStep?: number;
-    paragraphSizeScale?: number }>;
+    paragraphSizeScale?: number;
+    /** Where the editor's rows start in the text (native-text-row-starts). */
+    rowStarts?: readonly number[] }>;
 }
 
 export interface PdfNativeTextPreparation {
@@ -384,11 +387,19 @@ export async function warmPdfNativeTextPreparation(input: Readonly<{
 export async function compilePdfNativeTextOffThread(input: Omit<Parameters<typeof preparePdfNativeTextOffThread>[0], "managedBoxId" | "sourceText" | "compile"> & { replacementText: string; paragraphFrameRight?: number; paragraphLineStep?: number;
   paragraphSizeScale?: number }) {
   const selection = structuredClone(input.selection);
+  // The rows the editor showed this very edit in, where it showed one: every
+  // plain edit is compiled from here (its preview, its Leave, a queued one),
+  // so each is planned with them. A paragraph set in a frame asked sets
+  // every line anew and takes none.
+  const framed = input.paragraphFrameRight !== undefined || input.paragraphLineStep !== undefined ||
+    input.paragraphSizeScale !== undefined;
+  const rowStarts = framed ? null : readPdfNativeTextRowStarts(selection.item.str, input.replacementText);
   const result = await preparePdfNativeTextOffThread({ ...input, selection, managedBoxId: null, sourceText: null,
     compile: { replacementText: input.replacementText,
       ...(input.paragraphFrameRight !== undefined ? { paragraphFrameRight: input.paragraphFrameRight } : {}),
       ...(input.paragraphLineStep !== undefined ? { paragraphLineStep: input.paragraphLineStep } : {}),
-      ...(input.paragraphSizeScale !== undefined ? { paragraphSizeScale: input.paragraphSizeScale } : {}) } });
+      ...(input.paragraphSizeScale !== undefined ? { paragraphSizeScale: input.paragraphSizeScale } : {}),
+      ...(rowStarts ? { rowStarts: [...rowStarts] } : {}) } });
   if (!result.compiled) throw new Error("The PDF compiler did not return an exact native candidate.");
   issuePdfCompiledTextPreview(result.compiled, selection);
   return result.compiled;

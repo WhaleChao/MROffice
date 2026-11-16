@@ -29,6 +29,7 @@ import {
 import {
   createNativeSlideInsertionReceipt,
   nativeSlideCanDuplicate,
+  parseNativeSlideInsertionReceipt,
 } from "./presentation-layouts";
 import {
   normalizeParagraphs,
@@ -378,9 +379,25 @@ export function duplicatePresentationSlideAt<
   }
   const slideId = reserveFreshId();
   if (!slideId) return null;
+  // A slide New Slide or Duplicate made and not saved yet carries no package
+  // slide, only its insertion receipt: its copy is another slide of that
+  // kind, on the same layout, and carries the same receipt under its own id
+  
+  // package slide, 422 presentation_native_slide_copy_source_invalid). Only
+  // a receipt the slide holds for itself is carried; a slide with none gets
+  // none, and the server's check stays the one gate.
+  const heldInsertionReceipt = nativeSource
+    ? null
+    : parseNativeSlideInsertionReceipt(
+        source.source && typeof source.source === "object" && !Array.isArray(source.source)
+          ? (source.source as Record<string, unknown>).nativeSlideInsertion
+          : undefined,
+      );
   const nativeInsertionReceipt = nativeSource
     ? createNativeSlideInsertionReceipt(source, slideId, "duplicate")
-    : null;
+    : heldInsertionReceipt && heldInsertionReceipt.modelSlideId === source.id
+      ? { ...heldInsertionReceipt, modelSlideId: slideId }
+      : null;
   if (nativeSource && !nativeInsertionReceipt) return null;
 
   const clone = clonedSource.value;

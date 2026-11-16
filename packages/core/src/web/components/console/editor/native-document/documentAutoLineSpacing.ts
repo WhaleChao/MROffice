@@ -14,12 +14,12 @@ import { OFFICE_FONT_ASSETS_EVENT } from "../../../office-ribbon/officeFontAsset
 import { editorFontFamilies, facesUsedBy, loadedFaceRanges } from "./paged/ledger/ledgerFontRanges";
 import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { measureOfficeFontBoundingBox, measureOfficeFontLineBox } from "../../../office-ribbon/officeFontLineBox";
 import { officePrimaryFontFamily } from "../../../office-ribbon/officeTypographyCatalog";
 import { normalizeOfficeFontFace, officeFontFaceFamily } from "../../../office-ribbon/officeFontFace";
-import { normalizeEastAsianFontFamilies, wordEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
+import { normalizeEastAsianFontFamilies, wordDocumentEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
 import { documentFontScriptRanges } from "../extensions/TextStyling";
 import { documentFormatPreviewRanges } from "../extensions/InactiveSelectionHighlight";
 import { documentDisplayFontAliasFamilies, documentDisplayFontEastAsianAliasFamilies, documentDisplayFontPluginKey } from "./documentDisplayFonts";
@@ -30,16 +30,19 @@ import { resolveFontScriptSlices } from "../../../office-ribbon/officeFontScript
 import { readDocumentNumberingMarkerFact, type DocumentNumberingMarkerFact } from "./documentNumberingLayout";
 import { bulletStyleForGlyph, DEFAULT_BULLET_STYLE, LIST_MARKER_HOST_SELECTOR, normalizeBulletStyle } from "./bulletListStyle";
 import { PAGE_BLOCK_NODE, PAGE_LEDGER_CONVERGED_EVENT, SPLIT_CONTINUES_ATTR } from "./paged/paginationProjectionKeys";
+import { REBALANCE_META } from "./paged/pageRebalanceExtension";
 import { DOCUMENT_FIELD_NODE_NAME } from "./documentFieldValues";
 import { newFontFacesOf } from "../../../../lib/font-face-news";
 import { cssFontFamilyList } from "../../../../lib/css-font-family";
 import { officeFontMetricMatchesWidths, officeFontSubstitution } from "../../../../lib/office-fonts/substitutes";
 import { projectionCoversHorizon, recordProjectedHorizon, sheetsWithinMeasureHorizon } from "./paged/measureHorizon";
 import { measureLineMetrics } from "../../../../lib/text-engine/measure";
+import { DOCS_ENGINE_TAB_BREAK_CLASS, engineBreakStrutOff } from "../../../../lib/text-engine/docs-lines";
 import { pageEngineFont, textEngineOn } from "../../../../lib/text-engine/page-adapter";
 import { textEngineEnabled } from "../../../../lib/text-engine/flags";
 import { offLineGridAt, sectionsOffLineGrid } from "./sectionLineGrid";
 import { fragmentCarries } from "./paged/fragmentRoles";
+import { autoLinesKeptOn, noteDrawnAutoLines, retireSeededLines, seededAutoLinesFor } from "./engineLinesKept";
 
 /** This projection's coverage record in measureHorizon. */
 const AUTO_LINE_HORIZON_KEY = "auto-line-spacing";
@@ -84,6 +87,8 @@ const ZERO_LAYOUT_MARK_SELECTOR =
   // The zero-height filler before a justified line's manual break
   // (justifiedLineBreaks.ts): it sits on a line of its own and adds no height.
   'span.mrnote-justified-break-filler';
+/** The break the line engine draws before a tab or space that opens a line. */
+const ENGINE_BREAK_SELECTOR = `br.${DOCS_ENGINE_TAB_BREAK_CLASS}`;
 const record = (value: unknown): Record<string, unknown> | null =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 
@@ -233,7 +238,18 @@ export function documentAutoLineMultiplier(state: EditorState, block: ProseMirro
   // section's, and read for the whole document it left that section's lines
   // at the bare CSS box (corpus R49-D14: Calibri 11 pt a line apart, Word's
   // single line is 13.45 pt; 10 pages for 11).
-  const onGrid = attrs.snapToGrid !== false && !(position !== undefined && inSectionOffLineGrid(state.doc, position));
+  // A table cell's lines are on the grid only with Word's "Adjust line height
+  // to grid height in the table" (w:adjustLineHeightInTable,
+  // `wordTableLinesOnGrid`): without it Word sets them at their own single
+  // line, as off the grid (docx-look/probes grid_probe.py grid2: Calibri 11 pt
+  // cell rows 14.75 pt apart with snapToGrid on or off, body lines 15.6 pt on
+  // the grid). Read as on the grid, the cell kept the bare CSS line box of one
+  // em, 11.5 pt a row.
+  // `window.__docsGridCellOwnLineOff = true` asks the older reading (cells on
+  // the grid) for an A/B of one build.
+  const cellOwnLineOff = typeof window !== "undefined" && (window as Window & { __docsGridCellOwnLineOff?: boolean }).__docsGridCellOwnLineOff === true;
+  const cellOffGrid = !cellOwnLineOff && position !== undefined && doc.wordTableLinesOnGrid !== true && insideTableCell(state.doc, position);
+  const onGrid = attrs.snapToGrid !== false && !cellOffGrid && !(position !== undefined && inSectionOffLineGrid(state.doc, position));
   if (onGrid && ((doc.docGridLinePitch && doc.manuscriptGrid !== "off") || (doc.manuscriptGrid && doc.manuscriptGrid !== "off"))) return null;
   if (Array.isArray(doc.sectionLayouts) && doc.sectionLayouts.some((value: unknown) => {
     const section = record(value), grid = record(section?.docGrid);
@@ -249,6 +265,17 @@ export function documentAutoLineMultiplier(state: EditorState, block: ProseMirro
 /** How much smaller than the paragraph's own line its runs must be before
  * they, not it, set the paragraph's strut (px). */
 const STRUT_RUN_TOLERANCE_PX = 0.5;
+
+/** Whether the text block at `position` stands in a table cell. */
+function insideTableCell(doc: ProseMirrorNode, position: number): boolean {
+  if (position < 0 || position > doc.content.size) return false;
+  const $pos = doc.resolve(position);
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    const name = $pos.node(depth).type.name;
+    if (name === "tableCell" || name === "tableHeader") return true;
+  }
+  return false;
+}
 
 const offLineGridRanges = new WeakMap<ProseMirrorNode, ReadonlyArray<[number, number]>>();
 
@@ -364,8 +391,31 @@ export function leasedFaceArrived(doc: Document, family: string): boolean {
 /** Whether the page has its own face registered under this family name. */
 function registeredFamily(doc: Document, family: string): boolean {
   const name = family.toLowerCase();
-  return [...(doc.fonts ?? [])].some(face => face.family.replace(/^["']|["']$/g, "").toLowerCase() === name);
+  const fonts = doc.fonts;
+  if (!fonts) return false;
+  if ((globalThis as { __docsRegisteredFamilyMemo?: boolean }).__docsRegisteredFamilyMemo === false) {
+    return [...fonts].some(face => face.family.replace(/^["']|["']$/g, "").toLowerCase() === name);
+  }
+  // The page's family names, gathered once for as many faces as it holds:
+  // asked for each run a pass reads, the walk over every face (a document's
+  // page holds thousands) was 1.9 s of R286-D01's cold open. Kept for the
+  // task that gathered them (a pass is one task) and while the count holds:
+  // a warm print page swaps one document's faces for the next one's between
+  // tasks, as many for as many. A face's status is not asked here.
+  let known = registeredFamilyNames.get(doc);
+  if (!known || known.size !== fonts.size) {
+    const names = new Set<string>();
+    for (const face of fonts) names.add(face.family.replace(/^["']|["']$/g, "").toLowerCase());
+    const gathered = { size: fonts.size, names };
+    known = gathered;
+    registeredFamilyNames.set(doc, gathered);
+    setTimeout(() => {
+      if (registeredFamilyNames.get(doc) === gathered) registeredFamilyNames.delete(doc);
+    }, 0);
+  }
+  return known.names.has(name);
 }
+const registeredFamilyNames = new WeakMap<Document, { size: number; names: Set<string> }>();
 
 /**
  * Whether the family is a face of the page's own, whose ascent is not the one
@@ -395,6 +445,16 @@ function elementAt(view: EditorView, position: number): Element | null {
 /** An in-line picture: a replaced box on the line's baseline, as Word sets
  * one. Its own height raises its line; it adds no strut of its own. */
 const INLINE_PICTURE_NODE = "inlineImage";
+/** A chart "In Line with Text" is set on its line as a picture is (Windows
+ * Word 16, corpus R440-D15: a 152.25 pt chart in a 1.15-line Times New Roman
+ * 12 pt paragraph is a 154.3 pt line, the multiple's share of the single line
+ * above it). `window.__docsChartLineOff = true` asks the older reading (the
+ * chart's line kept the paragraph's strut), for an A/B of one build. */
+const INLINE_CHART_NODE = "inlineChart";
+function linePicture(name: string): boolean {
+  return name === INLINE_PICTURE_NODE || (name === INLINE_CHART_NODE &&
+    !(typeof window !== "undefined" && (window as Window & {__docsChartLineOff?: boolean}).__docsChartLineOff === true));
+}
 /** The share of a single line the multiple adds to a picture's line (Word 16:
  * 12.96pt of Calibri 11pt's 13.43pt line, 28.2pt of 24pt's 29.3pt). */
 const PICTURE_LINE_MULTIPLE_SHARE = 0.964;
@@ -434,14 +494,44 @@ function paragraphMarkSizePx(block: ProseMirrorNode): number | null {
   return null;
 }
 
+/** The size a paragraph mark that holds no typing marks states: the
+ * `paragraphFontSize` the projection writes on a paragraph whose closing line
+ * break leaves the mark alone on the line after it (corpus R279-D29). */
+function paragraphFontSizePx(block: ProseMirrorNode): number | null {
+  const size: unknown = block.attrs.paragraphFontSize;
+  const match = typeof size === "string" ? /^(\d+(?:\.\d+)?)px$/.exec(size.trim()) : null;
+  const px = match ? Number.parseFloat(match[1]) : Number.NaN;
+  return Number.isFinite(px) && px > 0 && px <= 2_200 ? px : null;
+}
+
+/**
+ * A footnote or endnote reference: Word's reference mark is a superscript run
+ * of its paragraph's text, and the raise adds nothing to the line (Word
+ * 16.86, t-supline). Its view (a `sup` around a button with the live number)
+ * is drawn with no line of its own (note-editor.css: line-height 0), so it
+ * needs no leaf and does not cost its paragraph the leaf-only line boxes.
+ * Rejected, the paragraph kept its own strut -- the document's Aptos under
+ * Times New Roman runs -- and each of its lines stood 0.75 pt taller than
+ * Word's 20.7 pt (corpus R347-D06: every paragraph with an endnote mark, a
+ * line short per page by the foot). `window.__docsNoteRefLineOff = true`
+ * asks the older reading, for an A/B of one build.
+ */
+const NOTE_REFERENCE_NODE = "footnoteRef";
+const NOTE_REFERENCE_VIEW = "sup.mrnote-footnote-ref";
+function noteRefLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsNoteRefLineOff?: boolean}).__docsNoteRefLineOff === true;
+}
+function lineFreeNode(name: string): boolean {
+  return linePicture(name) || name === SOURCE_PAGE_BREAK_NODE || (name === NOTE_REFERENCE_NODE && !noteRefLineOff());
+}
+
 function plainParagraph(block: ProseMirrorNode): boolean {
   if (!["paragraph", "heading"].includes(block.type.name) || block.content.size === 0) return false;
   let plain = true, words = false;
   block.forEach(child => {
     // A text-only field is a run of words (`fieldLeaf`).
     if (child.isText || child.type.name === DOCUMENT_FIELD_NODE_NAME) words = true;
-    else if (child.type.name !== "hardBreak" && child.type.name !== INLINE_PICTURE_NODE &&
-      child.type.name !== SOURCE_PAGE_BREAK_NODE) plain = false;
+    else if (child.type.name !== "hardBreak" && !lineFreeNode(child.type.name)) plain = false;
   });
   // A paragraph of nothing but pictures has no run to take its line from.
   return plain && words;
@@ -451,7 +541,7 @@ function plainParagraph(block: ProseMirrorNode): boolean {
 function pictureOnlyParagraph(block: ProseMirrorNode): boolean {
   let pictures = false, other = false;
   block.forEach(child => {
-    if (child.type.name === INLINE_PICTURE_NODE) pictures = true;
+    if (linePicture(child.type.name)) pictures = true;
     else if (child.type.name !== SOURCE_PAGE_BREAK_NODE) other = true;
   });
   return pictures && !other;
@@ -482,18 +572,33 @@ function coversParagraph(block: ProseMirrorNode, position: number, leaves: reado
   // An in-line picture is its own box: it needs no leaf.
   const pictures: {from: number; to: number}[] = [];
   block.forEach((child, offset) => {
-    // A rendered page-break mark takes no room: it needs no leaf either.
-    if (child.type.name === INLINE_PICTURE_NODE || child.type.name === SOURCE_PAGE_BREAK_NODE) {
+    // A rendered page-break mark takes no room: it needs no leaf either, nor
+    // does a note reference (NOTE_REFERENCE_NODE).
+    if (lineFreeNode(child.type.name)) {
       pictures.push({from: position + 1 + offset, to: position + 1 + offset + child.nodeSize});
     }
   });
+  // Spaces no leaf took (a paragraph's closing space after a hyperlink, a
+  // run of its own): a leaf-only line gives them no box, as Word gives a
+  // space at a line's end none. Uncovered, they cost every line of the
+  // paragraph its leaf-only box: corpus R367-D26's references, a space after
+  // each URL, stood 14.2 pt a line for Word's 13.8, a page long by the end.
+  const spacesOnly = (from: number, to: number) => !uncoveredSpacesOff() &&
+    /^ +$/.test(block.textBetween(from - position - 1, to - position - 1, "", "\ufffc"));
   for (const leaf of [...leaves, ...pictures].sort((a, b) => a.from - b.from)) {
     if (leaf.to <= covered || leaf.from >= end) continue;
-    if (leaf.from > covered) return false;
+    if (leaf.from > covered && !spacesOnly(covered, leaf.from)) return false;
     covered = Math.max(covered, leaf.to);
     if (covered >= end) return true;
   }
-  return false;
+  return covered < end && covered > position + 1 && spacesOnly(covered, end);
+}
+
+/** `window.__docsUncoveredSpacesOff = true` asks the older reading (a space
+ * no leaf took costs its paragraph the leaf-only line boxes), for an A/B of
+ * one build. */
+function uncoveredSpacesOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsUncoveredSpacesOff?: boolean}).__docsUncoveredSpacesOff === true;
 }
 
 /** Only native decorations issued by the font resolver can complete coverage.
@@ -506,7 +611,10 @@ function nativeLineCoverage(state: EditorState, from: number, to: number): Decor
 function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, block: ProseMirrorNode): boolean {
   if (!dom.matches("p,h1,h2,h3,h4,h5,h6")) return false;
   // A formatting mark is a zero-size inline box (see documentAutoLineSafety).
-  const zeroLayoutMark = (element: Element) => element.matches(ZERO_LAYOUT_MARK_SELECTOR);
+  // The engine's own line break (documentEngineLineBreaks) stands in the
+  // wrappers, which take no line height here: it owns no line box either.
+  const zeroLayoutMark = (element: Element) => element.matches(ZERO_LAYOUT_MARK_SELECTOR) ||
+    (element.matches(ENGINE_BREAK_SELECTOR) && !engineBreakStrutOff());
   // A list level's own number (listDefinitionMarkers' widget) is the page's,
   // not the source's: its line height is zero and the strut of
   // `customMarkerLine` raises the line when the number is the larger, as Word
@@ -542,9 +650,16 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
     const mark = element.closest('span[data-type="source-page-break"]');
     return mark !== null && mark.parentElement === dom && !mark.textContent;
   };
+  // A note reference's view (NOTE_REFERENCE_NODE): its number is the page's,
+  // drawn with no line of its own.
+  const noteRef = (element: Element) => {
+    if (noteRefLineOff()) return false;
+    const ref = element.closest(NOTE_REFERENCE_VIEW);
+    return ref !== null && ref.parentElement !== null && dom.contains(ref);
+  };
   for (const element of dom.querySelectorAll(nonTextLayout)) {
     if (!zeroLayoutMark(element) && !listMarker(element) && !inlinePicture(element) &&
-      !controlAnchor(element) && !pageBreakMark(element) && !textOnlyFieldView(element)) return false;
+      !controlAnchor(element) && !pageBreakMark(element) && !textOnlyFieldView(element) && !noteRef(element)) return false;
   }
   // Never neutralize an authored inline line-height, or an unmapped label
   // supplied by a NodeView. This is a paragraph-source proof, not text matching
@@ -559,7 +674,7 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
     const text = walker.currentNode as Text;
     if (!text.length) continue;
     if (text.parentElement && (listMarker(text.parentElement) || inlinePicture(text.parentElement) ||
-      controlAnchor(text.parentElement))) continue;
+      controlAnchor(text.parentElement) || noteRef(text.parentElement))) continue;
     // A field's result text is its view's, not the paragraph's: the field
     // carries its own leaf (`fieldLeaf`).
     if (text.parentElement && textOnlyFieldView(text.parentElement)) continue;
@@ -646,6 +761,39 @@ const MAYBE_EAST_ASIAN_TEXT = /[\u0e00-\u0e7f\u1100-\u11ff\u2e80-\ua4cf\uac00-\u
 /** Word's Thai faces for a run naming no complex-script font (TextStyling's
  * withThaiScriptFallback puts one of them in the rendered stack). */
 const THAI_FALLBACK_FACES = ["Angsana New", "Browallia New"];
+/** Word's face for Hangul in a run whose faces are all Latin (no East Asian
+ * face in its stack): Windows Word draws it in Batang, and the line takes
+ * Batang's East Asian box -- 14.28 / 17.16 pt at 11 pt and 1 / 1.2 lines
+ * under Calibri, Arial, Cambria or Times New Roman alike, with or without a
+ * ko-KR language (docx-look/probes/hang hang1; corpus R345-D06, a Google
+ * Docs export with w:eastAsia="Calibri": the Calibri line ran 1 pt a line
+ * short, 15.5 pt by the end of a cell). */
+const HANGUL_FALLBACK_FACE = "Batang";
+const HANGUL_TEXT = /[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]/;
+/** `window.__docsHangulBatangLineOff = true` asks the older reading (Hangul
+ * under a Latin run measured as that run's face), for an A/B of one build. */
+function hangulBatangLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsHangulBatangLineOff?: boolean}).__docsHangulBatangLineOff === true;
+}
+/** Word's face for Han, kana and the other East Asian characters of a run
+ * whose faces are all Latin (no East Asian face in its stack): Windows Word
+ * draws them in SimSun, and the line takes SimSun's East Asian box -- 15.6 pt
+ * at 12 pt single, 16.4 pt at 11 pt and 1.15 lines -- under Cambria, Calibri,
+ * Times New Roman or Arial alike, with an en-US or a ja-JP language, in
+ * compatibility mode 15 or without a compatibility setting (docx-look/probes/
+ * cjkfb cjkfb1, cjkfb1n). Corpus R398-D14, a pandoc export whose every run is
+ * Cambria (eastAsiaTheme="minorHAnsi"): each Japanese line ran 1.55 pt short
+ * of Word's, a page short by the end. */
+const HAN_FALLBACK_FACE = "SimSun";
+const HAN_TEXT = /[\u2e80-\u2fdf\u3000-\u303f\u3040-\u30ff\u3100-\u312f\u31f0-\u31ff\u3200-\u33ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]|[\ud840-\ud8bf][\udc00-\udfff]/;
+/** `window.__docsHanSimSunLineOff = true` asks the older reading (Han and
+ * kana under a Latin run measured as that run's face), for an A/B of one build. */
+function hanSimSunLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsHanSimSunLineOff?: boolean}).__docsHanSimSunLineOff === true;
+}
+/** Word's own faces for East Asian text under an all-Latin run: their box is
+ * Word's file's, whatever the page paints the characters with. */
+const LATIN_RUN_EAST_ASIAN_FALLBACK_FACES = new Set([HANGUL_FALLBACK_FACE.toLowerCase(), HAN_FALLBACK_FACE.toLowerCase()]);
 /** Parts per (stack, text), relative to the range start. */
 const autoLinePartCache = new Map<string, readonly {from: number; to: number; stack?: string}[]>();
 
@@ -677,6 +825,7 @@ interface BlockDecoration {
   strut?: number;
   /** A strut set at the line's top (a script run's full size). */
   strutTop?: boolean;
+  strutBare?: boolean;
 }
 
 /**
@@ -688,7 +837,15 @@ interface BlockDecoration {
  * break's font. A zero-width text in a box of that line height gives the line
  * that height, on the run's own baseline.
  */
-function emptyLineStrut(pos: number, pixels: number, top = false): Decoration {
+/**
+ * `bare`: the strut stands outside the runs' marks, on the paragraph's own
+ * face. A paragraph whose mark states a size of its own draws its last line
+ * (the one its closing line break leaves) at that size; a strut inside the
+ * last run would carry the run's face onto that line, and its box of the
+ * paragraph's small line height stands where the run's face centres it, not
+ * on the mark's baseline (R279-D29: a 5 pt line for Word's 1.2 pt).
+ */
+function emptyLineStrut(pos: number, pixels: number, top = false, bare = false): Decoration {
   return Decoration.widget(pos, (view) => {
     const element = view.dom.ownerDocument.createElement("span");
     element.className = "document-auto-linebox document-auto-line-strut";
@@ -701,11 +858,25 @@ function emptyLineStrut(pos: number, pixels: number, top = false): Decoration {
     // open a break there.
     element.textContent = top ? "\u2060" : "\u200b";
     return element;
-  }, {side: -1, key: `document-auto-line-strut:${pixels}${top ? ":top" : ""}`, ignoreSelection: true, autoLineStrut: pixels, autoLineStrutTop: top});
+  }, {
+    side: -1,
+    key: `document-auto-line-strut:${pixels}${top ? ":top" : ""}${bare ? ":bare" : ""}`,
+    ignoreSelection: true,
+    autoLineStrut: pixels,
+    autoLineStrutTop: top,
+    ...(bare ? {marks: [], autoLineStrutBare: true} : {}),
+  });
+}
+
+/** Counts for probes (`window.__docsAutoLinesSeeded`). */
+function noteSeededAutoLines(): void {
+  if (typeof window === "undefined") return;
+  const holder = window as Window & { __docsAutoLinesSeeded?: number };
+  holder.__docsAutoLinesSeeded = (holder.__docsAutoLinesSeeded ?? 0) + 1;
 }
 
 function replayBlockDecoration(item: BlockDecoration, position: number): Decoration {
-  if (item.strut !== undefined) return emptyLineStrut(position + item.from, item.strut, item.strutTop === true);
+  if (item.strut !== undefined) return emptyLineStrut(position + item.from, item.strut, item.strutTop === true, item.strutBare === true);
   return item.inline
     ? Decoration.inline(position + item.from, position + item.to, item.attrs, item.spec)
     : Decoration.node(position + item.from, position + item.to, item.attrs, item.spec);
@@ -785,6 +956,21 @@ export class AutoLineBlockCache {
   private whole = false;
   // The blocks whose last measurement found DOM it could not rule out.
   private readonly unsafeBlocks = new Set<ProseMirrorNode>();
+  // Changes noted and clears made so far (`mark`).
+  private notes = 0;
+
+  /** Whether the changes of the DOM are recorded (`observe`). */
+  get observing(): boolean {
+    return this.observer !== null;
+  }
+
+  /** A count of the DOM changes noted and the clears made so far: a pass
+   * measured in slices is still the document's while it is what it was when
+   * the pass began. */
+  mark(): number {
+    if (this.observer) this.note(this.observer.takeRecords());
+    return this.notes;
+  }
 
   /** Record the changes of `root`'s subtree from now on. */
   observe(root: Element): void {
@@ -808,13 +994,14 @@ export class AutoLineBlockCache {
       if (record.target === this.root) {
         // The root's own attributes: its classes and style are the cache's
         // context; the rest are status flags. A sheet put in is new DOM.
-        if (record.type === "childList") for (const node of record.addedNodes) this.changed.add(node);
+        if (record.type === "childList") for (const node of record.addedNodes) { this.changed.add(node); this.notes += 1; }
         continue;
       }
       // A sheet going dormant or waking (paged/sheetDormancy) changes none
       // of its lines.
       if (record.type === "attributes" && record.attributeName === "data-page-dormant") continue;
       this.changed.add(record.target);
+      this.notes += 1;
     }
     if (this.changed.size > this.pruneAt) this.pruneDetached();
     // No pass may come for a long time (a settled document, a reader scrolling
@@ -915,6 +1102,8 @@ export class AutoLineBlockCache {
     this.entries = new WeakMap();
     this.unsafeBlocks.clear();
     this.whole = false;
+    // The view clears the font measurements with this cache.
+    this.notes += 1;
   }
 
   /** Drop everything when the context the entries were measured in changed. */
@@ -930,7 +1119,13 @@ export class AutoLineBlockCache {
   }
 
   set(block: ProseMirrorNode, model: string, dom: string, decorations: BlockDecoration[], unsafe: boolean): void {
-    this.entries.set(block, { model, dom, decorations, unsafe });
+    const entry = { model, dom, decorations, unsafe };
+    this.entries.set(block, entry);
+    // What a kept layout takes of it, while this stays its measurement.
+    if (!unsafe && autoLinesKeptOn()) {
+      // Read at the time: a clear puts a new map in place.
+      noteDrawnAutoLines(block, model, decorations, () => this.entries.get(block) === entry && !(entry as { stale?: boolean }).stale);
+    }
     if (unsafe) this.unsafeBlocks.add(block);
     else this.unsafeBlocks.delete(block);
   }
@@ -951,8 +1146,12 @@ export class AutoLineBlockCache {
 // may carry another plugin's attributes too: those stay.
 const OWN_CLASSES = new Set(["document-auto-linebox", "document-auto-line-fraction"]);
 const OWN_ATTRIBUTES = new Set([AUTO_LINE_INTERMEDIATES_ATTR, "data-document-auto-line-fraction", "data-document-list-marker-strut"]);
+
 const OWN_STYLE = /--(?:document-auto-line-height|document-auto-line-natural|document-auto-line-multiple|document-auto-line-fraction|document-list-marker-strut-height|document-list-marker-strut-shift|docs-list-marker-line-height|doc-word-line-shift)\s*:[^;]*;?/g;
 const FRACTION_FACE = /(?:^|;)\s*font-(?:family|size)\s*:[^;]*/g;
+/** A marker that rises less than this above its text's Word ascent rises
+ * not at all: the two sizes differ only by the rounding of a computed size. */
+const MARKER_RISE_EPSILON_PX = 1 / 64;
 
 /** An element's attributes without the projection's own; null for a span
  * that carries nothing but the projection's own (it inherits its run's face
@@ -992,9 +1191,39 @@ function signatureSubtree(element: Element, parts: string[]): void {
 const docAttrIds = new WeakMap<object, number>();
 let nextDocAttrId = 1;
 
-function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map<string, EngineLineBox | null>, unsafeDOM?:()=>void, faceStillLoading?:(font: string)=>void, blocks?: AutoLineBlockCache, whole = false): AutoLineProjection {
+/**
+ * A pass that may be measured in slices. A whole pass walked every paragraph
+ * of the document in one task: R286-D01 reopened in Safari held the main
+ * thread 5.8 s with it (docs-auto-line-spacing maxSlice), and the fill that
+ * makes the page editable waited its turn behind it.
+ */
+interface AutoLineRun {
+  /** Measures on until `stop` says so (asked before each paragraph, once
+   * this step measured one): the projection once every paragraph was, null
+   * while some are left. Without `stop`, everything left. */
+  step(stop?: () => boolean): AutoLineProjection | null;
+  /** Something the measurements read changed since the run began: what it
+   * would publish is not the document's. */
+  disturbed(): boolean;
+}
+
+function finishedRun(result: AutoLineProjection): AutoLineRun {
+  return { step: () => result, disturbed: () => false };
+}
+
+/** The context the block cache's entries hold for (`AutoLineBlockCache.enter`). */
+function blockCacheContext(view: EditorView, eastAsianKey: string): string {
+  const attrs = view.state.doc.attrs;
+  let attrsId = docAttrIds.get(attrs);
+  if (attrsId === undefined) docAttrIds.set(attrs, (attrsId = nextDocAttrId++));
+  // ProseMirror's own state classes (focus, a hidden selection) select no font.
+  const rootClasses = [...view.dom.classList].filter((name) => !name.startsWith("ProseMirror-")).sort().join(" ");
+  return `${attrsId}\u0001${eastAsianKey}\u0001${rootClasses}\u0001${view.dom.getAttribute("style") ?? ""}`;
+}
+
+function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: Map<string, EngineLineBox | null>, unsafeDOM?:()=>void, faceStillLoading?:(font: string)=>void, blocks?: AutoLineBlockCache, whole = false): AutoLineRun {
   const doc = view.dom.ownerDocument, win = doc.defaultView;
-  if (!win) return {set: DecorationSet.empty};
+  if (!win) return finishedRun({set: DecorationSet.empty});
   // A long document laid out progressively: only the sheets the page ledger
   // measures now are projected (measureHorizon), as the CJK spacing does.
   let withinSheets: ReadonlySet<Element> | null = blocks ? sheetsWithinMeasureHorizon(view.dom) : null;
@@ -1048,14 +1277,8 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
   };
   const eastAsian = eastAsianFontFamilies(view.state);
   const eastAsianKey = [...eastAsian].sort().join("|");
-  if (blocks) {
-    const attrs = view.state.doc.attrs;
-    let attrsId = docAttrIds.get(attrs);
-    if (attrsId === undefined) docAttrIds.set(attrs, (attrsId = nextDocAttrId++));
-    // ProseMirror's own state classes (focus, a hidden selection) select no font.
-    const rootClasses = [...view.dom.classList].filter((name) => !name.startsWith("ProseMirror-")).sort().join(" ");
-    blocks.enter(`${attrsId}\u0001${eastAsianKey}\u0001${rootClasses}\u0001${view.dom.getAttribute("style") ?? ""}`);
-  }
+  const cacheContext = blocks ? blockCacheContext(view, eastAsianKey) : "";
+  if (blocks) blocks.enter(cacheContext);
   // A long document whose projection the earlier passes made: the blocks of
   // the sheets within the horizon are measured, and every other block keeps
   // what it published (which is what a whole pass would replay for it). A
@@ -1121,7 +1344,11 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     // Explicit longhands avoid an empty computed shorthand in WebKit.
     let face = `${css.fontStyle || "normal"} ${css.fontWeight || "400"}`;
     const family = officePrimaryFontFamily(css.fontFamily);
-    const eastAsianFace = isEastAsianFace(family);
+    // Word's fallback faces for East Asian text under a Latin run are Word's
+    // own files (Batang, SimSun), whatever the page paints the text with:
+    // their box, East Asian.
+    const hangulFallback = stack !== undefined && LATIN_RUN_EAST_ASIAN_FALLBACK_FACES.has(family.toLowerCase());
+    const eastAsianFace = hangulFallback || isEastAsianFace(family);
     // Word has only the regular face of SimSun and its kind. It sets a bold
     // or italic run in that face, emboldened or slanted, so the run's line box
     // is the regular face's, as on an exact line (documentDisplayFonts). The
@@ -1150,7 +1377,7 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
       // 12.13 pt, every equation 0.8 pt and its paragraph after low).
       const standIn = officeFontSubstitution(family);
       const styleStandIn = face === "normal 400" && standIn?.metric === "style" && standIn.wordLines !== true;
-      const recorded = styleStandIn
+      const recorded = styleStandIn || hangulFallback
         ? wordFileLineMetrics(family)
         : stack !== undefined || (face === "normal 400" &&
           (!registeredFamily(doc, family) || wordFontFileIsRecorded(family)))
@@ -1172,7 +1399,7 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
         : undefined;
       if (recorded) {
         ratio = eastAsianFace
-          ? recorded.box * wordEastAsianSingleLineFactor(family)
+          ? recorded.box * wordDocumentEastAsianSingleLineFactor(family)
           : recorded.box + recorded.lineGap;
       } else if (fromFile === "pending") {
         // The face is still loading in the engine: measure as before for now,
@@ -1187,11 +1414,11 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
           loadingFaceBoxes.set(key, result);
         }
         if (!result || !Number.isFinite(result)) return null;
-        return (eastAsianFace ? result * wordEastAsianSingleLineFactor(family) : result) / SINGLE_LINE_REFERENCE_PX * sizePx * multiplier;
+        return (eastAsianFace ? result * wordDocumentEastAsianSingleLineFactor(family) : result) / SINGLE_LINE_REFERENCE_PX * sizePx * multiplier;
       } else if (fromFile) {
-        ratio = eastAsianFace ? fromFile.box * wordEastAsianSingleLineFactor(family) : fromFile.box + fromFile.lineGap;
+        ratio = eastAsianFace ? fromFile.box * wordDocumentEastAsianSingleLineFactor(family) : fromFile.box + fromFile.lineGap;
       } else if (boundingBox !== undefined) {
-        ratio = boundingBox * wordEastAsianSingleLineFactor(family) / SINGLE_LINE_REFERENCE_PX;
+        ratio = boundingBox * wordDocumentEastAsianSingleLineFactor(family) / SINGLE_LINE_REFERENCE_PX;
       } else {
         const result = measureOfficeFontLineBox(doc, {font, lineHeight: "normal", measureHeight: true});
         if (!result?.heightPx || !Number.isFinite(result.heightPx)) return null;
@@ -1221,7 +1448,14 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     const text = view.state.doc.textBetween(from, to, "", "");
     if (!text || text.length !== to - from || !MAYBE_EAST_ASIAN_TEXT.test(text)) return whole;
     const stackOfElement = fontsOf(element).fontFamily;
-    const cacheKey = `${eastAsianKey}\u0000${stackOfElement}\u0000${text}`;
+    // Word's own East Asian faces for a family it lacks (documentDisplayFonts):
+    // SimSun there is the face Word sets the text in, not the page's fallback.
+    const wordEastAsian = new Set((element.closest("[data-document-word-east-asian]")
+      ?.getAttribute("data-document-word-east-asian") ?? "").toLowerCase().split(",").filter(Boolean));
+    // The A/B switches of the Latin-run fallbacks are part of the key: a part
+    // list read under one never answers the other.
+    const fallbackSwitches = `${hangulBatangLineOff() ? 1 : 0}${hanSimSunLineOff() ? 1 : 0}`;
+    const cacheKey = `${eastAsianKey}\u0000${[...wordEastAsian].join(",")}\u0000${stackOfElement}\u0000${fallbackSwitches}\u0000${text}`;
     const cached = autoLinePartCache.get(cacheKey);
     if (cached) return cached.map((part) => ({...part, from: from + part.from, to: from + part.to}));
     const tokens = stackOfElement.split(",").map((token) => token.trim()).filter(Boolean);
@@ -1230,7 +1464,7 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     const index = own ? 0 : tokens.findIndex((token, at) => {
       if (at === 0) return false;
       const name = unquotedFamily(token), key = name.toLowerCase();
-      return eastAsian.has(key) || (wordFontIsEastAsian(name) && !RENDER_FALLBACK_EAST_ASIAN_FACES.has(key));
+      return eastAsian.has(key) || wordEastAsian.has(key) || (wordFontIsEastAsian(name) && !RENDER_FALLBACK_EAST_ASIAN_FACES.has(key));
     });
     // Thai in a run that names no complex-script face: Word sets it in
     // Angsana New / Browallia New, and the line takes that face's box
@@ -1238,7 +1472,9 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     const thaiFace = THAI_FALLBACK_FACES.find((face) =>
       tokens.some((token) => unquotedFamily(token).toLowerCase() === face.toLowerCase()),
     );
-    if (index < 0 && !thaiFace) return whole;
+    const hangulFace = index < 0 && HANGUL_TEXT.test(text) && !hangulBatangLineOff() ? HANGUL_FALLBACK_FACE : null;
+    const hanFace = index < 0 && HAN_TEXT.test(text) && !hanSimSunLineOff() ? HAN_FALLBACK_FACE : null;
+    if (index < 0 && !thaiFace && !hangulFace && !hanFace) return whole;
     const eastAsianFace = index >= 0 ? unquotedFamily(tokens[index]) : "";
     const eastAsianStack = own || index < 0 ? undefined : tokens.slice(index).join(", ");
     const parts: {from: number; to: number; stack?: string}[] = [];
@@ -1251,6 +1487,15 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     for (const slice of slices) {
       if (slice.slot === "cs") {
         push(from + slice.from, from + slice.to, thaiFace && /[\u0e00-\u0e7f]/.test(text.slice(slice.from, slice.to)) ? `"${thaiFace}"` : undefined);
+        continue;
+      }
+      if (slice.slot === "eastAsia" && !eastAsianFace && (hangulFace || hanFace)) {
+        let offset = slice.from;
+        for (const char of text.slice(slice.from, slice.to)) {
+          const face = hangulFace && HANGUL_TEXT.test(char) ? hangulFace : hanFace && HAN_TEXT.test(char) ? hanFace : null;
+          push(from + offset, from + offset + char.length, face ? `"${face}"` : undefined);
+          offset += char.length;
+        }
         continue;
       }
       if (slice.slot !== "eastAsia" || !eastAsianFace) {
@@ -1363,7 +1608,7 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     const first = profiles.find(profile => profile.from === position + 1);
     if (!first || profiles.some(profile => profile.word > first.word || profile.ascent > first.ascent)) return null;
     const rise = markerEm * markerSizePx - first.word;
-    if (!(rise > 0)) return null;
+    if (!(rise > MARKER_RISE_EPSILON_PX)) return null;
     const descent = first.descent;
     const ascent = first.ascent + rise;
     // A 1/64px shorter box keeps its bottom inside the text's descent after
@@ -1405,12 +1650,17 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     const textEm = wordFontLineAscent(textFamily, isEastAsianFace(textFamily));
     if (markerEm === null || textEm === null || !(textSizePx > 0)) return null;
     const rise = markerEm * markerSizePx - textEm * textSizePx;
+    // A computed size is rounded (10pt reads back 13.3333px against the
+    // marker's 13.33333...px): a number in the text's own face and size rose
+    // by 4e-5px, and the line took the paragraph style's whole strut (corpus
+    // R436-D25: Times 10pt references under an 11pt Calibri List Paragraph,
+    // every first line 17.89px where Word sets 15.33px, a page more).
     // The paragraph's own line (its strut) keeps the text's descent; an
     // empty box on the paragraph reaches the number's ascent above the
     // baseline, as the Word-numbering strut does, and the number itself
     // takes no line height (its glyphs stay on the baseline), a fallback
     // face's number included.
-    if (!(rise > 0)) return null;
+    if (!(rise > MARKER_RISE_EPSILON_PX)) return null;
     const strut = engineLineBox(elementFont(blockDOM).shorthand, base);
     if (!strut) return null;
     const descent = strut.heightPx - strut.baselinePx;
@@ -1462,8 +1712,8 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     // "ABSTRACT" and a line break, the mark 1 pt -- the line after the break
     // 1.2 pt, not the break's 13 pt; R279-D17: a paragraph of one 12 pt space
     // and a 2 pt mark stands 2.3 pt).
-    const markLineOf = (element: Element): number | null => {
-      const size = paragraphMarkSizePx(block);
+    const markLineOf = (element: Element, closingBreak = false): number | null => {
+      const size = paragraphMarkSizePx(block) ?? (closingBreak ? paragraphFontSizePx(block) : null);
       if (size === null) return null;
       const own = Number.parseFloat(fontsOf(element).fontSize);
       const family = paragraphMarkFamily(block);
@@ -1507,6 +1757,14 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
       model.push(fact ? JSON.stringify(fact) : "");
       modelKey = model.join("\u0001");
       const entry = blocks.get(block);
+      // A block of a restored layout draws the boxes kept with it while its
+      // model reads as it did (engineLinesKept): no reading of its DOM.
+      const kept = entry ? null : seededAutoLinesFor(block, modelKey);
+      if (kept) {
+        for (const item of kept) decorations.push(replayBlockDecoration(item, position));
+        noteSeededAutoLines();
+        return false;
+      }
       if (entry && !blocks.domChanged(blockDOM)) {
         domKey = entry.dom;
       } else {
@@ -1591,8 +1849,19 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
             {autoLinePixels: 0, autoLineLeaf: true, autoLineEastAsian: false}));
           continue;
         }
-        const pixels = lineHeightOf(element, part.stack);
-        if (pixels === null) continue;
+        const lined = lineHeightOf(element, part.stack);
+        if (lined === null) continue;
+        // A raised or lowered run (w:position) moves its glyphs, not a box of
+        // the whole line: Word grows the line only where the moved glyphs
+        // pass its edge. A leaf of the line's height moved 2 pt grew every
+        // line it stood on by 2 pt (corpus R283-D02: "CaCO3" with a
+        // Subscript style lowered -4 half-points, under an At least 14 pt
+        // line, 2.7 px a line taller than Word's). The leaf keeps its face's
+        // own line; a strut at the line's top keeps the line's height.
+        const positioned = element.closest("[data-text-position]");
+        const faceLine = positioned && blockDOM.contains(positioned) ? height(element, 1, part.stack) : null;
+        const pixels = faceLine !== null && faceLine > 0 && faceLine < lined ? faceLine : lined;
+        if (pixels !== lined) leaves.push(emptyLineStrut(part.from, lined, true));
         const face = part.stack ? officePrimaryFontFamily(part.stack) : undefined;
         // Inclusive: text typed at a run's end is that run's until the pause reads it.
         leaves.push(Decoration.inline(part.from, part.to, attrs(pixels, naturalOf(element, part.stack)), {inclusiveEnd: true, autoLinePixels: pixels, autoLineLeaf: true,
@@ -1700,7 +1969,7 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
         leaves.push(Decoration.node(from, from + node.nodeSize, attrs(pixels), {autoLinePixels: pixels, autoLineLeaf: true}));
         return;
       }
-      if (node.type.name === INLINE_PICTURE_NODE) {
+      if (linePicture(node.type.name)) {
         // A line raised by an in-line picture takes the multiple's extra of
         // the paragraph's own line, not of the picture: Word 16 sets a 150pt
         // picture in an 11pt Calibri paragraph 3.1pt further down at 1.25
@@ -1770,8 +2039,12 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     ) {
       const element = lastLeaf.isText ? elementAt(view, blockTo - 1) : view.nodeDOM(blockTo - lastLeaf.nodeSize);
       if (element instanceof win.HTMLElement && !element.closest('[data-document-word-line-metrics="native-control"]')) {
-        const pixels = markLineOf(element) ?? lineHeightOf(element);
-        if (pixels !== null && pixels > 0) leaves.push(emptyLineStrut(blockTo, pixels));
+        const markLine = markLineOf(element, true);
+        const pixels = markLine ?? lineHeightOf(element);
+        // The mark's line stands on the mark's face (emptyLineStrut `bare`)
+        // when the paragraph draws in it (paragraphFontSize).
+        const bare = markLine !== null && paragraphMarkSizePx(block) === null && paragraphFontSizePx(block) !== null;
+        if (pixels !== null && pixels > 0) leaves.push(emptyLineStrut(blockTo, pixels, false, bare));
       }
     } else if (markLineStrut !== null) {
       leaves.push(emptyLineStrut(blockTo, markLineStrut));
@@ -1797,7 +2070,7 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     if (blocks && modelKey !== null && domKey !== null && facesStillLoading === loadingBefore) {
       blocks.set(block, modelKey, domKey, decorations.slice(firstDecoration).map((item) => {
         const kind = item as Decoration & { inline: boolean; type: { attrs: Record<string, string> } };
-        if (typeof item.spec.autoLineStrut === "number") return { inline: false, from: item.from - position, to: item.to - position, attrs: {}, spec: item.spec, strut: item.spec.autoLineStrut, ...(item.spec.autoLineStrutTop === true ? {strutTop: true} : {}) };
+        if (typeof item.spec.autoLineStrut === "number") return { inline: false, from: item.from - position, to: item.to - position, attrs: {}, spec: item.spec, strut: item.spec.autoLineStrut, ...(item.spec.autoLineStrutTop === true ? {strutTop: true} : {}), ...(item.spec.autoLineStrutBare === true ? {strutBare: true} : {}) };
         return { inline: kind.inline, from: item.from - position, to: item.to - position, attrs: kind.type.attrs, spec: item.spec };
       }), blockUnsafe);
     }
@@ -1831,15 +2104,54 @@ function projection(view: EditorView, cache: Map<string, number>, lineBoxes: Map
     // remove() and add() clear the entries they take from the array given.
     const doc = view.state.doc;
     let set: DecorationSet | null = null;
-    return {
+    return finishedRun({
       get set() { return (set ??= published.remove(removed.slice()).add(doc, decorations.slice())); },
       patch: {removed, added: decorations},
       scoped,
-    };
+    });
   }
-  view.state.doc.descendants(visit);
-  blocks?.endPass();
-  return {set: DecorationSet.create(view.state.doc, decorations)};
+  // The walk of every block, resumable at a block's start: a step stops
+  // before a paragraph once it measured one and `stop` says so, and the next
+  // step walks on from there (nodesBetween passes over the blocks before it
+  // and enters only the ancestors of that paragraph, which measure nothing).
+  // It is the document's while nothing it reads changed (`disturbed`), which
+  // only the DOM changes the cache records can tell: without them, one step.
+  const walked = view.state.doc, sliceable = blocks?.observing === true;
+  const publishedAtStart = documentAutoLineSpacingKey.getState(view.state);
+  const fontsAtStart = documentDisplayFontPluginKey.getState(view.state);
+  const markAtStart = blocks?.mark() ?? 0;
+  let resumeAt = 0, result: AutoLineProjection | null = null;
+  return {
+    step(stop) {
+      if (result) return result;
+      let measuredNow = 0, stopped = false;
+      walked.nodesBetween(resumeAt, walked.content.size, (block, position) => {
+        if (stopped) return false;
+        if (block.isTextblock) {
+          if (stop && sliceable && measuredNow > 0 && stop()) {
+            stopped = true;
+            resumeAt = position;
+            return false;
+          }
+          measuredNow += 1;
+        }
+        return visit(block, position);
+      });
+      if (stopped) return null;
+      blocks?.endPass();
+      result = {set: DecorationSet.create(walked, decorations)};
+      return result;
+    },
+    disturbed() {
+      if (result) return false;
+      return view.state.doc !== walked ||
+        documentAutoLineSpacingKey.getState(view.state) !== publishedAtStart ||
+        documentDisplayFontPluginKey.getState(view.state) !== fontsAtStart ||
+        (blocks !== undefined && (blocks.mark() !== markAtStart ||
+          // The root's classes and style (the faces follow the document).
+          blockCacheContext(view, eastAsianKey) !== cacheContext));
+    },
+  };
 }
 
 /** Whether `drawn` (from `first` on) are the very decorations `published`
@@ -1864,6 +2176,103 @@ function sameDecorations(published: readonly Decoration[], drawn: readonly Decor
 /** The signature a published patch leaves: no whole pass's is equal to it. */
 const PATCHED_SIGNATURE = "\u0000patched";
 
+
+
+function autoLineCarryMoved(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsAutoLineCarryMoved?: boolean }).__docsAutoLineCarryMoved === true;
+}
+
+/**
+ * The line boxes of the text blocks a page-ledger move took out and put back.
+ * The ledger re-cuts a table across pages by replacing its fragments: every
+ * paragraph of the rows that moved came out of the mapping without its
+ * decorations, was drawn without them, and got them back from the next pass,
+ * which marked its sheet changed and laid the pages out once more (R286-D01
+ * on the local stack: 1,692 of 1,695 line-box withdrawals, all of them gone
+ * from this plugin's state, nearly all in table cells; four passes of an
+ * opening, 0.5-2.7 s each, began with them). A slice keeps its nodes, so the
+ * moved paragraph is the very node it was: its decorations are put back at
+ * its new place, as a pass would replay them from the block cache (keyed by
+ * the node). A block that changed is a new node and waits for the pass.
+ */
+function carryMovedBlockDecorations(
+  transaction: Transaction,
+  previous: DecorationSet,
+  mapped: DecorationSet,
+  oldDoc: ProseMirrorNode,
+): { set: DecorationSet; blocks: ReadonlySet<ProseMirrorNode> } {
+  const kept = new Set(mapped.find().map((item) => item.spec));
+  // The decorations the mapping dropped, by the text block they stood in.
+  const lost = new Map<ProseMirrorNode, { offset: number; item: Decoration }[]>();
+  for (const item of previous.find()) {
+    if (kept.has(item.spec)) continue;
+    const $at = oldDoc.resolve(item.from);
+    const after = $at.nodeAfter;
+    const onBlock = after !== null && after.isTextblock && item.to === item.from + after.nodeSize;
+    const block = onBlock ? after : $at.parent.isTextblock && $at.depth > 0 ? $at.parent : null;
+    if (!block) continue;
+    const start = onBlock ? item.from : $at.before();
+    const entries = lost.get(block) ?? [];
+    entries.push({ offset: item.from - start, item });
+    lost.set(block, entries);
+  }
+  const placed = new Set<ProseMirrorNode>();
+  if (lost.size === 0) return { set: mapped, blocks: placed };
+  // Where the steps put content, in the new document.
+  const doc = transaction.doc;
+  const ranges: [number, number][] = [];
+  transaction.mapping.maps.forEach((map, index) => {
+    map.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+      const rest = transaction.mapping.slice(index + 1);
+      ranges.push([rest.map(newStart, -1), rest.map(newEnd, 1)]);
+    });
+  });
+  const carried: Decoration[] = [];
+  for (const [from, to] of ranges) {
+    if (to <= from) continue;
+    doc.nodesBetween(Math.max(0, from), Math.min(doc.content.size, to), (node, position) => {
+      if (!node.isTextblock) return true;
+      const entries = lost.get(node);
+      if (entries && !placed.has(node)) {
+        placed.add(node);
+        for (const { offset, item } of entries) {
+          const at = position + offset;
+          carried.push((item as unknown as { copy(from: number, to: number): Decoration }).copy(at, at + (item.to - item.from)));
+        }
+      }
+      return false;
+    });
+  }
+  return { set: carried.length ? mapped.add(doc, carried) : mapped, blocks: placed };
+}
+
+
+
+const AUTO_LINE_SLICE_MS = 50;
+/** A pass disturbed this many times in a row is measured at once. */
+const AUTO_LINE_RESTARTS = 3;
+
+function autoLineNow(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+
+
+function autoLineSliced(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsAutoLineWhole?: boolean }).__docsAutoLineWhole !== true;
+}
+
+interface AutoLineRunRecord { steps: number; restarts: number; ms: number; finish: boolean; sliced: boolean }
+
+/** A harness that sets `window.__docsAutoLineRuns = []` gets a record of each
+ * pass: how many steps and restarts it took, and its span from first step to
+ * publication. */
+function noteAutoLineRun(record: AutoLineRunRecord): void {
+  if (typeof window === "undefined") return;
+  const runs = (window as Window & { __docsAutoLineRuns?: AutoLineRunRecord[] }).__docsAutoLineRuns;
+  if (Array.isArray(runs) && runs.length < 2000) runs.push(record);
+}
+
 export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan: boolean }>({
   name: "documentAutoLineSpacing",
   // Native font state must be applied before revalidating combined coverage.
@@ -1880,7 +2289,20 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           const supplied = transaction.getMeta(documentAutoLineSpacingKey) as DecorationSet | undefined;
           if (supplied) return supplied;
           if (!transaction.docChanged && !transaction.getMeta(documentDisplayFontPluginKey)) return previous;
-          const mapped = transaction.docChanged ? previous.map(transaction.mapping, transaction.doc) : previous;
+          // An edit of anyone's hand: what a restored layout drew no longer
+          // stands for the blocks around it (engineLinesKept).
+          if (transaction.docChanged && transaction.getMeta("addToHistory") !== false) retireSeededLines();
+          let mapped = transaction.docChanged ? previous.map(transaction.mapping, transaction.doc) : previous;
+          // The blocks a ledger move carried with their line boxes: the very
+          // nodes they were, wherever the inverse mapping puts their place.
+          let carriedBlocks: ReadonlySet<ProseMirrorNode> | null = null;
+          if (transaction.docChanged && transaction.getMeta(REBALANCE_META) && autoLineCarryMoved()) {
+            const carried = carryMovedBlockDecorations(transaction, previous, mapped, oldState.doc);
+            mapped = carried.set;
+            carriedBlocks = carried.blocks;
+          }
+          const formerBlock = (block: ProseMirrorNode | null, at: number): ProseMirrorNode | null =>
+            block && carriedBlocks?.has(block) ? block : oldState.doc.nodeAt(at);
           // Text typed inside a paragraph, with the document's attributes and
           // fonts as they were, can only have changed the paragraph it is in:
           // every other block is the very node it was, in the same place in
@@ -1923,7 +2345,7 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
             if (item.spec.autoLineMarkerStrut !== undefined) {
               const block = transaction.doc.nodeAt(item.from);
               const previousBlock = transaction.docChanged
-                ? oldState.doc.nodeAt(transaction.mapping.invert().map(item.from, 1)) : block;
+                ? formerBlock(block, transaction.mapping.invert().map(item.from, 1)) : block;
               // A rise was measured for these runs and fonts, in this list.
               const stale = Boolean(transaction.getMeta(documentDisplayFontPluginKey)) ||
                 oldState.doc.attrs !== newState.doc.attrs || !block || !previousBlock || !block.eq(previousBlock) ||
@@ -1936,7 +2358,7 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
             // Mapping proves location, not that a previously measured font is
             // still current. Preserve auto witnesses only for unchanged blocks.
             const previousBlock = transaction.docChanged
-              ? oldState.doc.nodeAt(transaction.mapping.invert().map(item.from, 1)) : block;
+              ? formerBlock(block, transaction.mapping.invert().map(item.from, 1)) : block;
             if (autoLeaves.length && (transaction.getMeta(documentDisplayFontPluginKey) ||
                 oldState.doc.attrs !== newState.doc.attrs ||
                 !block || !previousBlock || !block.eq(previousBlock))) return withdraw(block, previousBlock);
@@ -1984,7 +2406,7 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
               const block = onBlock ? own : $at.parent;
               if (!onBlock && (!block.isTextblock || $at.depth < 1)) { stale.push(item); continue; }
               const start = onBlock ? item.from : $at.before();
-              const previousBlock = oldState.doc.nodeAt(inverse.map(start, 1));
+              const previousBlock = formerBlock(block, inverse.map(start, 1));
               if (fontsChanged || !previousBlock || !block.eq(previousBlock)) {
                 if (previousBlock && block === previousBlock) keptBlockWithdrawn = true;
                 stale.push(item);
@@ -2054,6 +2476,9 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
         // A pass read only the sheets that changed: the whole document is read
         // once the ledger has settled, for what no sheet's DOM shows.
         let wholePassOwed = false, wholePassNext = false;
+        // The pass measured in slices (`measure`): what it found unsafe, when
+        // it began, its steps, its restarts, and whether it is a whole pass.
+        let run: AutoLineRun | null = null, runUnsafe = false, runStarted = 0, runSteps = 0, runRestarts = 0, runWhole = false;
         const holdForSourceFonts = () => {
           if (sourceFontPlanIsReady(view.state.doc, view.dom, waitForSourceFontPlan)) return false;
           heldForSourceFonts = true;
@@ -2085,18 +2510,53 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           // Flushable: the page ledger asks for the measurement in the frame
           // of the keystroke (`mrn-layout-metrics-flush`), so the page it
           // composes already has these line boxes.
-          const measure = () => {
+          // `finish`: measure everything left now (the ledger's flush, which
+          // composes with these line boxes in the same frame).
+          const measure = (finish = false) => {
             frame = null;
             // Line boxes read while the window glides are drawn, not laid-out,
             // pixels (surfaceGlide.ts): measure once it has arrived, the
             // pending flag held meanwhile.
             if (!destroyed && !view.isDestroyed && deferWhileSurfaceGlides(view.dom, schedule)) return;
+            let more = false;
             try {
-              if (destroyed || view.isDestroyed || holdForSourceFonts()) return;
-              let unsafe=false;
-              substitutes.clear();
-              const projected = projection(view, cache, lineBoxes,()=>{unsafe=true;},font=>{substitutes.add(font);}, blocks, wholePassNext);
-              wholePassNext = false;
+              if (destroyed || view.isDestroyed || holdForSourceFonts()) { run = null; return; }
+              if (run?.disturbed()) {
+                // What the earlier slices read is not the document's now: the
+                // pass begins again (the blocks they measured are kept, so
+                // mostly replayed), unless a hand typing holds it for the pause.
+                run = null;
+                runRestarts += 1;
+                if (typedDocuments.has(view.state.doc) && msSinceTyping() < TYPING_IDLE_MS) {
+                  if (typingTimer === null) {
+                    typingTimer = setTimeout(() => { typingTimer = null; if (!destroyed) schedule(); }, TYPING_IDLE_MS - msSinceTyping());
+                  }
+                  return;
+                }
+              }
+              if (!run) {
+                runUnsafe = false;
+                substitutes.clear();
+                runStarted = autoLineNow();
+                runSteps = 0;
+                run = projectionRun(view, cache, lineBoxes,()=>{runUnsafe=true;},font=>{substitutes.add(font);}, blocks, wholePassNext || runWhole);
+                runWhole = wholePassNext || runWhole;
+                wholePassNext = false;
+              }
+              // A pass that keeps being disturbed is measured at once, as before.
+              const sliced = !finish && runRestarts < AUTO_LINE_RESTARTS && autoLineSliced();
+              const stepStart = autoLineNow();
+              runSteps += 1;
+              const projected = run.step(sliced ? () => autoLineNow() - stepStart >= AUTO_LINE_SLICE_MS : undefined);
+              if (!projected) { more = true; return; }
+              noteAutoLineRun({steps: runSteps, restarts: runRestarts, ms: autoLineNow() - runStarted, finish, sliced});
+              run = null;
+              runRestarts = 0;
+              runWhole = false;
+              const unsafe = runUnsafe;
+              // A walk of the whole document asked for while it was measured
+              // in slices: it was that whole pass.
+              if (projected.scoped !== true) wholePassNext = false;
               wholePassOwed = projected.scoped === true;
               hadUnsafeDOM=unsafe;
               if (substitutes.size) awaitFaces();
@@ -2127,14 +2587,20 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
               finally { applying = false; }
               view.dom.dispatchEvent(new CustomEvent("mrn-page-rebalance", {bubbles: true, detail: {reason}}));
             } finally {
-              writeDocumentLayoutStatus(view.dom, DOCUMENT_AUTO_LINE_SPACING_PENDING, null, view);
+              
+              
+              if (more && !destroyed) request();
+              else writeDocumentLayoutStatus(view.dom, DOCUMENT_AUTO_LINE_SPACING_PENDING, null, view);
             }
           };
-          pendingMeasure = measure;
-          frame = requestLaneFrame(measureLane, () => {
-            pendingMeasure = null;
-            measure();
-          }, win);
+          const request = () => {
+            pendingMeasure = () => measure(true);
+            frame = requestLaneFrame(measureLane, () => {
+              pendingMeasure = null;
+              measure();
+            }, win);
+          };
+          request();
         };
         const fontsChanged = () => { externalLayout = true; cache.clear(); lineBoxes.clear(); blocks.clear(); schedule(); };
         // A font subset (unicode-range) arriving changes the lines that draw
@@ -2277,6 +2743,7 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
             destroyed = true;
             if (typingTimer !== null) clearTimeout(typingTimer);
             frame?.();
+            run = null;
             measureLane.dispose();
             writeDocumentLayoutStatus(view.dom, DOCUMENT_AUTO_LINE_SPACING_PENDING, null, view);
             fonts?.removeEventListener("loadingdone", onFontsLoaded);

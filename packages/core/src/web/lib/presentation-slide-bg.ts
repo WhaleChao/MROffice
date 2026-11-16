@@ -25,7 +25,8 @@
 
 import { isPictureObjectUrl } from "./page-picture-objects";
 import type { CSSProperties } from "react";
-import { officePathGradientFocus } from "./office-shape-paint";
+import { officeGradientDrawnStops, officePathGradientFocus } from "./office-shape-paint";
+import { officeRectPathGradientBackground } from "./office-path-gradient";
 import { normalizeOfficePictureFillRect, type OfficePictureFillRect } from "./office-picture-fill-options";
 
 /** Six-digit hex colour, e.g. `#1a2b3c`. Matches the slide background regex. */
@@ -344,7 +345,12 @@ export interface BgGradient {
    * rectangle (`a:fillToRect`, insets of the slide in 1/1000 %) outward, as
    * PowerPoint draws it. Absent: the linear gradient `angle` describes.
    */
-  path?: { kind: "circle" | "rect" | "shape"; fillToRect?: { l?: number; t?: number; r?: number; b?: number } };
+  path?: {
+    kind: "circle" | "rect" | "shape";
+    fillToRect?: { l?: number; t?: number; r?: number; b?: number };
+    /** The bounds a rectangular path reaches (`a:tileRect`, insets of the slide; negative, out past it). */
+    tileRect?: { l?: number; t?: number; r?: number; b?: number };
+  };
 }
 
 /** A picture (image-URL) background fill. */
@@ -432,17 +438,25 @@ export function normalizeBgGradientPath(value: unknown): BgGradient["path"] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
   if (record.kind !== "circle" && record.kind !== "rect" && record.kind !== "shape") return undefined;
-  const rect = record.fillToRect;
-  const fillToRect: { l?: number; t?: number; r?: number; b?: number } = {};
-  if (rect && typeof rect === "object" && !Array.isArray(rect)) {
-    for (const side of ["l", "t", "r", "b"] as const) {
-      const inset = (rect as Record<string, unknown>)[side];
-      if (typeof inset === "number" && Number.isInteger(inset) && Math.abs(inset) <= 2_147_483_647) {
-        fillToRect[side] = inset;
+  const insets = (rect: unknown) => {
+    const out: { l?: number; t?: number; r?: number; b?: number } = {};
+    if (rect && typeof rect === "object" && !Array.isArray(rect)) {
+      for (const side of ["l", "t", "r", "b"] as const) {
+        const inset = (rect as Record<string, unknown>)[side];
+        if (typeof inset === "number" && Number.isInteger(inset) && Math.abs(inset) <= 2_147_483_647) {
+          out[side] = inset;
+        }
       }
     }
-  }
-  return { kind: record.kind, ...(Object.keys(fillToRect).length ? { fillToRect } : {}) };
+    return out;
+  };
+  const fillToRect = insets(record.fillToRect);
+  const tileRect = insets(record.tileRect);
+  return {
+    kind: record.kind,
+    ...(Object.keys(fillToRect).length ? { fillToRect } : {}),
+    ...(Object.keys(tileRect).length ? { tileRect } : {}),
+  };
 }
 
 /**
@@ -509,8 +523,13 @@ export interface ResolvedSlideBackground {
   isSolid: boolean;
 }
 
-/** Build the CSS `background` shorthand for a gradient fill. */
+/** Build the CSS `background` shorthand for a gradient fill, its stops
+ * drawn as PowerPoint draws them (`officeGradientDrawnStops`). */
 export function bgGradientCss(g: BgGradient): string {
+  const stops = officeGradientDrawnStops(g.stops ?? [{ color: g.from, position: 0 }, { color: g.to, position: 1 }])
+    .map((stop) => `${stop.color} ${Number((stop.position * 100).toFixed(3))}%`)
+    .join(", ");
+  if (g.path?.kind === "rect") return rectPathGradientBackground(g);
   if (g.path) {
     // A path gradient spreads from its focus to the slide's edges, out to
     
@@ -520,18 +539,22 @@ export function bgGradientCss(g: BgGradient): string {
     const focus = officePathGradientFocus(g.path.fillToRect);
     const x = focus.x * 100;
     const y = focus.y * 100;
-    const stops = (g.stops ?? [{ color: g.from, position: 0 }, { color: g.to, position: 1 }])
-      .map((stop) => `${stop.color} ${Number((stop.position * 100).toFixed(3))}%`)
-      .join(", ");
     return `radial-gradient(${g.path.kind === "circle" ? "circle" : "ellipse"} farthest-corner at ${Number(x.toFixed(3))}% ${Number(y.toFixed(3))}%, ${stops})`;
   }
-  if (g.stops)
-    return `linear-gradient(${g.angle}deg, ${g.stops
-      .map(
-        (stop) => `${stop.color} ${Number((stop.position * 100).toFixed(3))}%`,
-      )
-      .join(", ")})`;
-  return `linear-gradient(${g.angle}deg, ${g.from}, ${g.to})`;
+  return `linear-gradient(${g.angle}deg, ${stops})`;
+}
+
+
+
+
+
+
+
+
+function rectPathGradientBackground(g: BgGradient): string {
+  const stops = officeGradientDrawnStops(g.stops ?? [{ color: g.from, position: 0 }, { color: g.to, position: 1 }]);
+  const last = stops[stops.length - 1]?.color ?? g.to;
+  return `${officeRectPathGradientBackground(stops, g.path?.fillToRect, g.path?.tileRect)} ${last}`;
 }
 
 /** Build the CSS `background` shorthand for a picture fill. */

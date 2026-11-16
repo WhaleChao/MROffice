@@ -135,8 +135,8 @@ export function presentationLetterSpacingAt(
 
 /**
  * The block with Character Spacing `points` on the characters a command acts
- * on: the selected ones while the words are typed in (a caret: its word),
- * else every character. Null when nothing changes (a caret between words).
+ * on: the selected ones while the words are typed in, else every character.
+ * Null when nothing changes (a bare caret formats no existing character).
  */
 export function presentationBlockWithLetterSpacingIn(
   block: PresentationBlock,

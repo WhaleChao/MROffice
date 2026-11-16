@@ -104,6 +104,10 @@ export type PdfNativeTextEditActivationEvidence = Readonly<{
         readerRuns?: readonly PdfNativeTextReaderRun[];
         /** Drawn in a Type3 face (selectionDrawnInType3). */
         type3Text?: boolean;
+        /** The width (a fraction of the page) from the box's left edge to
+         * the next text the page draws on its row (pdfNativeTextRowRoom);
+         * absent where nothing stands there or the box is turned. */
+        rowRoom?: number;
       }>
     | null;
 }>;

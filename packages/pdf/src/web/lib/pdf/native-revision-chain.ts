@@ -43,7 +43,10 @@ export async function planPdfNativeRevisionChain<
   engine: PdfNativeChainEngine,
   headBytes: Uint8Array,
   count: number,
-  planStep: (index: number, sourceBytes: Uint8Array, sourceSha256: string) => Promise<T>,
+  /** One step on the bytes the one before left; null when this step has
+   * nothing to write (a multiple selection's object already where the
+   * Arrange command takes it), which leaves the bytes as they are. */
+  planStep: (index: number, sourceBytes: Uint8Array, sourceSha256: string) => Promise<T | null>,
 ): Promise<{ readonly steps: readonly PdfNativeChainStep<T>[]; readonly candidateBytes: Uint8Array;
   readonly candidateSha256: string }> {
   if (!Number.isSafeInteger(count) || count < 1) throw new Error("A PDF edit chain needs at least one step.");
@@ -61,6 +64,7 @@ export async function planPdfNativeRevisionChain<
   };
   for (let index = 0; index < count; index += 1) {
     const plan = await planStep(index, bytes, sha256);
+    if (plan === null) continue;
     steps.push(Object.freeze({ plan, sourceSha256: sha256 }));
     bytes = plan.prepared.candidateBytes;
     sha256 = plan.prepared.candidateSha256;
@@ -69,6 +73,7 @@ export async function planPdfNativeRevisionChain<
       await squash();
     }
   }
+  if (steps.length === 0) throw new Error("A PDF edit chain wrote nothing.");
   await squash();
   return Object.freeze({ steps: Object.freeze(steps), candidateBytes: bytes, candidateSha256: sha256 });
 }

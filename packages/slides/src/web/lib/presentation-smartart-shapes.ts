@@ -171,7 +171,7 @@ export function presentationSmartArtMembersAsShapes(
 ): PresentationBlock[] {
   const drawn = members.map((member) => {
     const fit = smartArtLabelFitScale(member, options.siblings);
-    return fit !== null && fit < 1 ? smartArtLabelAtDrawnSize(member, fit) : member;
+    return withoutRunColorSchemes(fit !== null && fit < 1 ? smartArtLabelAtDrawnSize(member, fit) : member);
   });
   const inside = smartArtWordsIntoTheirShapes(drawn, {
     box: memberBox,
@@ -191,4 +191,27 @@ export function presentationSmartArtMembersAsShapes(
   const released = releaseSmartArtMembers(inside.map(smartArtLabelInItsBand), { keepGroup: options.keepGroup });
   const picks = deckThemePicks(options.themeColors);
   return picks.length ? released.map((block) => reconcilePresentationThemeColors(undefined, block, picks)) : released;
+}
+
+/**
+ * A member's runs as an ordinary object keeps them: in the colour they draw,
+ * without the SmartArt point's theme reference (`RunStyle.colorScheme`),
+ * which only the diagram's writer states back as `a:schemeClr`.
+ */
+function withoutRunColorSchemes(input: PresentationBlock): PresentationBlock {
+  let member = input;
+  if ("smartArtTextColorScheme" in (member as object)) {
+    const { smartArtTextColorScheme: _label, ...rest } = member as PresentationBlock & { smartArtTextColorScheme?: unknown };
+    member = rest as PresentationBlock;
+  }
+  const runs = (member as { runs?: { text: string; style?: Record<string, unknown> }[] }).runs;
+  if (!Array.isArray(runs) || !runs.some((run) => run.style && "colorScheme" in run.style)) return member;
+  return {
+    ...member,
+    runs: runs.map((run) => {
+      if (!run.style || !("colorScheme" in run.style)) return run;
+      const { colorScheme: _scheme, ...style } = run.style;
+      return Object.keys(style).length ? { ...run, style } : { text: run.text };
+    }),
+  } as PresentationBlock;
 }

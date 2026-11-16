@@ -181,6 +181,9 @@ export function PresentationStatusBar({ ctl }: { ctl: PresentationStatusBarCtl }
             onClick={togglePresentationNotesPane}
           >
             <StickyNote size={14} aria-hidden="true" />
+            <span className={presentationChrome.statusPaneLabel} aria-hidden="true">
+              {t("presentation.view.notes")}
+            </span>
           </button>
           <button
             ref={commentsToggleRef}
@@ -199,6 +202,9 @@ export function PresentationStatusBar({ ctl }: { ctl: PresentationStatusBarCtl }
             onClick={toggleReviewCommentsPane}
           >
             <MessageSquare size={14} aria-hidden="true" />
+            <span className={presentationChrome.statusPaneLabel} aria-hidden="true">
+              {t("presentation.comments.title")}
+            </span>
             <span
               className="sr-only"
               data-testid="presentation-comments-count"

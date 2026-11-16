@@ -765,6 +765,9 @@ export interface PhysicalSheetPageNumberInput {
   span: number;
   /** Zero-based Word/WPS section owning the sheet. */
   sectionIndex: number;
+  /** The sheet's section began on the sheet before, under its top (a
+   * continuous break mid-page). */
+  sectionContinues?: boolean;
 }
 
 /** Formatted PAGE labels for the first/last fragment of one structural sheet. */
@@ -847,6 +850,13 @@ export const PAGE_NUMBER_CHAPTER_SEPARATOR_GLYPHS: Readonly<
   enDash: "–",
 };
 
+/** `window.__docsContinuousStartOff = true` asks the older reading (a
+ * continuous section's Start at N on its first whole page), for an A/B of
+ * one build. */
+function continuousStartOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsContinuousStartOff?: boolean}).__docsContinuousStartOff === true;
+}
+
 /**
  * Word's per-section page numbering over structural sheets: each section
  * numbers in its own format; a section with a Start at value restarts there
@@ -897,7 +907,12 @@ export function resolveSectionSheetPageNumberLabels(
       runPhysical = physicalStart;
     } else if (sectionIndex !== currentSection && explicitStart !== null) {
       runBase = explicitStart;
-      runPhysical = physicalStart;
+      // A section that began mid-page (a continuous break) is Start at N on
+      // the page it began on, though that page prints the section before's
+      // number: Windows Word 16 (probes/pgnum) numbers the pages after a
+      // continuous "Start at 10" on page 1 as 11, 12, ...; corpus R441-D01's
+      // "Start at 23" on page 1 prints 24 on page 2, where this printed 23.
+      runPhysical = raw.sectionContinues === true && !continuousStartOff() ? physicalStart - 1 : physicalStart;
     }
     currentSection = sectionIndex;
     // A section's own w:pgNumType without w:fmt numbers in Arabic: Word

@@ -12,6 +12,7 @@
  * No hooks run here.
  */
 
+import type { OfficeGroupCameraControl } from "@mrnote/core/web/lib/office-group-camera.ts";
 import type { PresentationShapeBlock, PresentationBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import type { ReactNode, Dispatch, SetStateAction } from "react";
 import {
@@ -39,14 +40,12 @@ import { presentationCanChangeToShape, presentationCanChangeShape, presentationS
 import { presentationShapeKindMessageKey } from "../../../../lib/presentation/ribbon-tabs";
 import { inspectorChipStyle } from "../../../../lib/presentation/window-chrome-styles";
 import { officeDialogParts as dialogParts } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
-import { officeEffectsPaneSections } from "@mrnote/core/web/components/office-ribbon/officeEffectsPaneSections.tsx";
 import { officeChartFillLineSections, officePictureFillPaneArgs } from "@mrnote/core/web/components/office-ribbon/officeChartFillLinePage.tsx";
 import { officePictureFillOptionsOf, type OfficePictureFillOptions } from "@mrnote/core/web/lib/office-picture-fill-options.ts";
 import { pickOfficePictureFill } from "@mrnote/core/web/lib/office-picture-fill.ts";
 import type { OfficeLineEndsState } from "@mrnote/core/web/lib/office-line-ends.ts";
 import { presentationShapeFillLineChange, presentationShapeFillLineStyle } from "./presentationShapeFillLine";
-import { presentationShapeEffectPatch, presentationShapeEffects } from "../../../../lib/presentation-shape-effects";
-import { presentationEffectsPaneLabels } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEffectsLabels.ts";
+import { presentationShapeEffectsPaneSections } from "./presentationShapeEffectsPane";
 import { canEditBlockContent } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import { presentationShapeBlockTakesText } from "../../../../lib/presentation/text-editing-host";
@@ -60,7 +59,7 @@ export interface BuildShapeFormatPaneCtl {
   t: ReturnType<typeof useTranslations<"console-notebooks">>;
   formatPaneOpen: boolean;
   setFormatPaneOpen: Dispatch<SetStateAction<boolean>>;
-  formatPaneRequestedTab: { readonly id: string; readonly serial: number; } | null;
+  formatPaneRequestedTab: { readonly id: string; readonly serial: number; readonly section?: string } | null;
   renderEyedropper: (onPick: (hex: string) => void, label: string, testId: string, disabled?: boolean) => JSX.Element | null;
   themeAccentColors: string[];
   taskPaneDock: PresentationTaskPaneDock;
@@ -87,6 +86,8 @@ export interface BuildShapeFormatPaneCtl {
 
 
 
+  /** The camera of the group the shape is in (Format Shape > 3-D Rotation edits the group's). */
+  groupCameraFor?: (block: PresentationShapeBlock) => OfficeGroupCameraControl | undefined;
   group?: {
     readonly blocks: readonly PresentationShapeBlock[];
     readonly update: (patchOf: (target: PresentationShapeBlock) => Partial<PresentationShapeBlock> | null) => boolean;
@@ -117,6 +118,7 @@ export function buildShapeFormatPane(ctl: BuildShapeFormatPaneCtl) {
     setShapePaneStops,
     shapeLineEnds,
     group,
+    groupCameraFor,
   } = ctl;
   const renderShapeFormatPane = (block: PresentationShapeBlock): ReactNode => {
     // One shape's change, or every selected shape's, each from its own state.
@@ -421,23 +423,17 @@ export function buildShapeFormatPane(ctl: BuildShapeFormatPaneCtl) {
     );
     // Format Shape > Effects, as PowerPoint draws it (Shadow, Reflection,
     // Glow, Soft Edges, 3-D Format, 3-D Rotation): the shape's combinable
-    // `shapeEffects`. The deck's own object transparency and blend follow.
-    const accents = {
-      accent1: themeAccentColors[0] ?? "#4472c4",
-      accent2: themeAccentColors[1] ?? "#ed7d31",
-      accent3: themeAccentColors[2] ?? "#a5a5a5",
-      accent4: themeAccentColors[3] ?? "#ffc000",
-      accent5: themeAccentColors[4] ?? "#5b9bd5",
-      accent6: themeAccentColors[5] ?? "#70ad47",
-    };
-    const officeEffects = officeEffectsPaneSections({
-      effects: presentationShapeEffects(block, accents.accent1),
-      accentColors: accents,
-      labels: presentationEffectsPaneLabels(t),
+    // `shapeEffects`, the builder a text box's pane shares. Keep text flat on
+    // a shape holding words. The deck's own object transparency and blend
+    // follow.
+    const officeEffects = presentationShapeEffectsPaneSections({
+      block,
+      themeAccentColors,
+      t,
       disabled: !canEditBlockContent(block),
-      testIdPrefix: "effects",
-      onChange: (kind, value) =>
-        update((target) => presentationShapeEffectPatch(target, kind, value, accents.accent1)),
+      update,
+      holdsWords: typeof block.text === "string" && block.text.trim() !== "",
+      groupCamera: groupCameraFor?.(block),
     });
     const effects: OfficeShapeFormatPaneField[] = [
       {

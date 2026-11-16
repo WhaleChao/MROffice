@@ -36,6 +36,21 @@ export function unsavedWorkIsHeld(): boolean {
   return false;
 }
 
+/** Whether the editors of one page (each registers as `<kind>:<pageId>`)
+ * hold work its server copy does not have yet: a ⌘S that writes the file
+ * from the server waits for none. */
+export function pageHoldsUnsavedWork(pageId: string): boolean {
+  for (const [id, holdsWork] of unsavedWorkHolds) {
+    if (!id.endsWith(`:${pageId}`)) continue;
+    try {
+      if (holdsWork()) return true;
+    } catch {
+      // a holder that cannot answer holds nothing
+    }
+  }
+  return false;
+}
+
 /** True from a held 401 until the session is proven back. */
 export function isAuthSessionHeld(): boolean {
   return authSessionHeld;
@@ -43,4 +58,69 @@ export function isAuthSessionHeld(): boolean {
 
 export function setAuthSessionHeld(held: boolean): void {
   authSessionHeld = held;
+}
+
+/**
+ * What an editor holds that is not even in its document yet (a speaker-notes
+ * draft written on blur, a typing burst drawn and saved after a pause): each
+ * registers how to write it in now, and how to save now. A window about to
+ * close or the app about to quit settles its work (`settleUnsavedWork`):
+ * every flush and every editor's reload handover first, then the holds are
+ * waited on until none holds work or the time is up, then the local recovery
+ * copies are written. Not settled, the page still asks before it goes.
+ */
+const unsavedWorkFlushes = new Map<string, () => unknown>();
+
+export function registerUnsavedWorkFlush(id: string, flush: () => unknown): () => void {
+  unsavedWorkFlushes.set(id, flush);
+  return () => {
+    if (unsavedWorkFlushes.get(id) === flush) unsavedWorkFlushes.delete(id);
+  };
+}
+
+/** Every registered flush, now (a page hiding: no waiting). */
+export function flushUnsavedWork(): void {
+  for (const flush of unsavedWorkFlushes.values()) {
+    try {
+      const done = flush();
+      if (done && typeof (done as Promise<unknown>).catch === "function") void (done as Promise<unknown>).catch(() => null);
+    } catch {
+      // one editor's flush failing leaves the others to theirs
+    }
+  }
+}
+
+export interface UnsavedWorkSettled {
+  /** Nothing held unsaved when it returned. */
+  readonly settled: boolean;
+  readonly waitedMs: number;
+}
+
+/** The work written in and saved, as far as `timeoutMs` allows; the local
+ * recovery copies written either way (what did not reach the server is on
+ * this device for the next open). */
+export async function settleUnsavedWork({ timeoutMs = 3000, pollMs = 50 } = {}): Promise<UnsavedWorkSettled> {
+  const started = Date.now();
+  flushUnsavedWork();
+  // The editors that hand their drafts over before a reload (a PDF line
+  // being typed: lib/editor-draft-handover) do so here too, within the time.
+  try {
+    const { handOverEditorDrafts } = await import("./editor-draft-handover");
+    await handOverEditorDrafts(Math.max(0, timeoutMs - (Date.now() - started)));
+  } catch {
+    // an editor's handover failing leaves the rest to the holds below
+  }
+  // A flush queues its save; the holds read it from state a render later.
+  await new Promise((resolve) => setTimeout(resolve, pollMs));
+  while (unsavedWorkIsHeld() && Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  const settled = !unsavedWorkIsHeld();
+  try {
+    const { flushAutoRecoverWrites } = await import("./autorecover-store");
+    await flushAutoRecoverWrites();
+  } catch {
+    // no recovery store here: what was saved is saved
+  }
+  return { settled, waitedMs: Date.now() - started };
 }

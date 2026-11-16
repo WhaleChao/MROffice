@@ -21,6 +21,7 @@ import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { DELETION_MARK_NAME, OBJECT_DELETION_REVISION_ATTR, PARAGRAPH_MARK_REVISION_ATTR } from "./trackChanges";
 
 export const SECTION_MARK_ONLY_ATTR = "data-section-mark-only";
 /**
@@ -45,6 +46,93 @@ export const HIDDEN_MARK_ONLY_ATTR = "data-hidden-mark-only";
  * `scratchpad/r93d23/v`; one or two columns in the next section alike).
  */
 export const SECTION_MARK_AFTER_BREAK_ATTR = "data-section-mark-after-break";
+
+/**
+ * A paragraph whose mark is a tracked deletion (`w:pPr/w:rPr/w:del`) and
+ * whose every word is deleted too: in Word's final view (No Markup, Simple
+ * Markup, and the PDF a document is saved as) its mark goes, the paragraph
+ * joins the next one, and the joined paragraph is the next one's: its
+ * alignment, indents and spacing (Windows Word, probe docx-look
+ * probes/pmerge pm1: a deleted mark before a right-aligned paragraph with
+ * 36 pt before and after set the survivor at its own place, alone; a chain
+ * of deleted marks ends in the last paragraph's). Nothing of it is left, so
+ * it takes no room (corpus R387-D06: 97 such paragraphs, R417-D03: 219,
+ * each drawn as an empty line), before a paragraph, a table, or between two
+ * tables, and as a cell's first paragraph (pm2). Not when it is the last
+ * block of its container (a cell's last paragraph keeps its line, pm2), and
+ * not in the views that show deletions (the stylesheet keys on the markup
+ * filter).
+ * `window.__docsFinalMarkJoinOff = true` keeps the older layout (A/B).
+ */
+export const FINAL_VIEW_GONE_ATTR = "data-tc-final-gone";
+
+/**
+ * On the paragraph a deleted mark joins: the spaces the joining paragraph
+ * leaves, drawn at its start in the views that hide deletions (Word draws
+ * the joined paragraph as the first one's words, then the second's, with
+ * the second's properties; probes pmerge, corpus R380-D02).
+ */
+export const FINAL_VIEW_JOIN_LEAD_ATTR = "data-tc-final-join-lead";
+
+function deletedMarkParagraph(node: ProseMirrorNode): boolean {
+  if (node.type.name !== "paragraph" && node.type.name !== "heading") return false;
+  const revision = node.attrs?.[PARAGRAPH_MARK_REVISION_ATTR] as { kind?: unknown } | null | undefined;
+  return !!revision && typeof revision === "object" && revision.kind === "del";
+}
+
+/** Whether the final view draws anything of a paragraph's content. */
+function finalViewShowsContent(node: ProseMirrorNode): boolean {
+  let visible = false;
+  node.forEach((child) => {
+    if (visible) return;
+    if (child.marks.some((mark) => mark.type.name === DELETION_MARK_NAME)) return;
+    if (child.attrs?.[OBJECT_DELETION_REVISION_ATTR]) return;
+    if (child.type.name === "bookmarkPoint" || child.type.name === "rangePermission") return;
+    visible = true;
+  });
+  return visible;
+}
+
+function deletedMarkOnly(node: ProseMirrorNode): boolean {
+  return deletedMarkParagraph(node) && !finalViewShowsContent(node);
+}
+
+/** A paragraph whose mark is deleted and whose words the final view still
+ * draws: they join the next paragraph. */
+function deletedMarkJoining(node: ProseMirrorNode): boolean {
+  return deletedMarkParagraph(node) && finalViewShowsContent(node);
+}
+
+/** `window.__docsFinalJoinEmptyOff = true`: the empty paragraph a deleted
+ * mark joins still draws its own line (as before; A/B). */
+function finalJoinEmptyOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsFinalJoinEmptyOff?: boolean }).__docsFinalJoinEmptyOff === true;
+}
+
+/** The words the final view draws of a paragraph, when they are spaces only. */
+function finalViewSpacesOnly(node: ProseMirrorNode): string | null {
+  let text = "";
+  let other = false;
+  node.forEach((child) => {
+    if (other) return;
+    if (child.marks.some((mark) => mark.type.name === DELETION_MARK_NAME)) return;
+    if (child.attrs?.[OBJECT_DELETION_REVISION_ATTR]) return;
+    if (child.type.name === "bookmarkPoint" || child.type.name === "rangePermission") return;
+    if (child.isText && /^ +$/.test(child.text ?? "")) text += child.text;
+    else other = true;
+  });
+  return !other && text.length > 0 && text.length <= 64 ? text : null;
+}
+
+/** `window.__docsFinalJoinLeadOff = true`: a paragraph of spaces a deleted
+ * mark joins to the next one's words still draws its own line (A/B). */
+function finalJoinLeadOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsFinalJoinLeadOff?: boolean }).__docsFinalJoinLeadOff === true;
+}
+
+function finalMarkJoinOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsFinalMarkJoinOff?: boolean }).__docsFinalMarkJoinOff === true;
+}
 
 function hiddenMarkOnly(node: ProseMirrorNode): boolean {
   if (node.type.name !== "paragraph" || node.content.size !== 0) return false;
@@ -83,6 +171,7 @@ function continuousBreak(node: ProseMirrorNode | null | undefined): boolean {
 
 const HOLDS_HIDDEN_MARK = new SheetFact((node) => hiddenMarkOnly(node));
 const HOLDS_CONTINUOUS_BREAK = new SheetFact((node) => continuousBreak(node));
+const HOLDS_DELETED_MARK = new SheetFact((node) => deletedMarkParagraph(node));
 
 export function buildSectionMarkParagraphDecorations(doc: ProseMirrorNode): DecorationSet {
   const decorations: Decoration[] = [];
@@ -100,6 +189,68 @@ export function buildSectionMarkParagraphDecorations(doc: ProseMirrorNode): Deco
       });
     };
     visitHidden(doc, 0);
+  }
+  if (!finalMarkJoinOff() && HOLDS_DELETED_MARK.inDoc(doc)) {
+    // The body runs on across its page sheets: a sheet's last block closes
+    // the body only on the last sheet.
+    let sheetIndex = -1;
+    // A paragraph whose mark is deleted and whose words stay joins the next
+    // one: when that one draws nothing of its own (an empty paragraph, or
+    // one whose words are all deleted), the joined paragraph is its words
+    // alone, and the empty one's line is not drawn (corpus R380-D02 and
+    // R387-D06: 8 of their 10 such joins end in an empty paragraph, each an
+    // extra empty line here). The joined paragraph keeps the first one's
+    // properties here; Word gives it the second one's (pmerge).
+    let joining: ProseMirrorNode | null = null;
+    let joiningParent: ProseMirrorNode | null = null;
+    // Where the joining paragraph is, and its spaces when it draws only
+    // spaces: joined to a paragraph with words of its own, the spaces lead
+    // that paragraph's first line and their own line is not drawn (corpus
+    // R380-D02: three inserted spaces before a deleted mark; Word's line
+    // starts with them at the second paragraph's indent).
+    let joiningPos = -1;
+    let joiningLead: string | null = null;
+    const sameStory = (parent: ProseMirrorNode | null) =>
+      parent === joiningParent || (parent?.type.name === "pageBlock" && joiningParent?.type.name === "pageBlock");
+    HOLDS_DELETED_MARK.descendants(doc, (child, pos, parent, index) => {
+      if (parent === doc) sheetIndex = index;
+      if (!child.isTextblock) {
+        if (parent !== doc) joining = null;
+        return true;
+      }
+      const closes =
+        !parent ||
+        (index + 1 >= parent.childCount && (parent === doc || parent.type.name !== "pageBlock" || sheetIndex >= doc.childCount - 1));
+      const joined = joining !== null && sameStory(parent);
+      if (!closes && deletedMarkOnly(child)) {
+        decorations.push(Decoration.node(pos, pos + child.nodeSize, { [FINAL_VIEW_GONE_ATTR]: "true" }));
+        return false;
+      }
+      if (joined && !finalJoinEmptyOff() && !finalViewShowsContent(child)) {
+        decorations.push(Decoration.node(pos, pos + child.nodeSize, { [FINAL_VIEW_GONE_ATTR]: "true" }));
+      } else if (
+        joined &&
+        joining &&
+        joiningLead !== null &&
+        !finalJoinLeadOff() &&
+        parent?.type.name !== "listItem" &&
+        finalViewShowsContent(child)
+      ) {
+        const lead = joiningLead;
+        decorations.push(
+          Decoration.node(joiningPos, joiningPos + (joining as ProseMirrorNode).nodeSize, { [FINAL_VIEW_GONE_ATTR]: "true" }),
+          Decoration.node(pos, pos + child.nodeSize, {
+            [FINAL_VIEW_JOIN_LEAD_ATTR]: String(lead.length),
+            style: `--tc-join-lead: "${lead}"`,
+          }),
+        );
+      }
+      joining = deletedMarkJoining(child) ? child : null;
+      joiningParent = parent;
+      joiningPos = pos;
+      joiningLead = joining ? finalViewSpacesOnly(child) : null;
+      return false;
+    });
   }
   const visit = (parent: ProseMirrorNode, start: number) => {
     parent.forEach((child, offset, index) => {

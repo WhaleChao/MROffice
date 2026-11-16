@@ -16,6 +16,7 @@ import {
   pivotIsScenarioReport,
   pivotLiveSourceRange,
   pivotPlanKey,
+  pivotReadsLiveCells,
   sheetPivots,
   type PivotConfig,
   type PivotMatrix,
@@ -46,6 +47,30 @@ export interface PivotOverlaySheet {
   morePivots?: readonly PivotConfig[];
 }
 
+/** Whether every cell of rows `range` of a sheet is in the model. A large
+ * tiled sheet holds only the tiles around the screen (lib/spreadsheet/
+ * tiled-sheets), and a sheet that is not shown often none at all. */
+export type PivotSourceReadable = (sheetId: string, range: PivotRange) => boolean;
+
+export interface PivotPlanReadOptions {
+  /** Omitted: every sheet is whole. A report computed from its source's live
+   * cells whose source rows are not all in the model is HELD: not planned,
+   * not drawn and not read by formulas, rather than totalled over whatever
+   * rows happen to be in (an imported report's saved cells then show as they
+   * were saved). A report computed from its cache snapshot is not held. */
+  readonly sourceReadable?: PivotSourceReadable;
+}
+
+/** A PivotTable report that reads its source's live cells, and the rows it
+ * reads: what must be in the model before it can be computed. */
+export interface PivotLiveSourceRead {
+  readonly planKey: string;
+  /** The sheet the PivotTable sits on. */
+  readonly sheetId: string;
+  readonly sourceSheetId: string;
+  readonly range: PivotRange;
+}
+
 export interface WorkbookPivotPlans {
   /** Each PivotTable's report, by `pivotPlanKey(sheetId, slot)`. */
   readonly plans: Map<string, PivotOutputPlan>;
@@ -57,6 +82,8 @@ export interface WorkbookPivotPlans {
   readonly chartReports: Map<string, PivotChartReport>;
   /** The rows each such report is computed from (a field button's list). */
   readonly chartMatrices: Map<string, PivotMatrix>;
+  /** The reports held until their source's rows are read (`sourceReadable`). */
+  readonly held: readonly PivotLiveSourceRead[];
 }
 
 /**
@@ -116,9 +143,9 @@ export function planWorkbookPivots(
   sheets: readonly PivotOverlaySheet[],
   /** The workbook evaluated without the PivotTables' reports. */
   evaluatorFor: (sheetName: string) => SheetEvaluator,
-  options: { labels: PivotOutputLabels; collapsed: ReadonlySet<string> },
+  options: { labels: PivotOutputLabels; collapsed: ReadonlySet<string> } & PivotPlanReadOptions,
 ): WorkbookPivotPlans {
-  const { requests, chartMatrices } = pivotPlanRequests(sheets, evaluatorFor);
+  const { requests, chartMatrices, held } = pivotPlanRequests(sheets, evaluatorFor, options);
   const plans = new Map<string, PivotOutputPlan>();
   const nativeFootprints = new Map<string, PivotRange[]>();
   // What each PivotChart plots, by the plan key of its PivotTable: every
@@ -138,27 +165,25 @@ export function planWorkbookPivots(
     }
     if (plan.chart) chartReports.set(request.planKey, plan.chart);
   }
-  return { plans, nativeFootprints, chartReports, chartMatrices };
+  return { plans, nativeFootprints, chartReports, chartMatrices, held };
 }
 
-/** Every PivotTable's request, read from the workbook evaluated without the
- * reports, and the rows each PivotChart's PivotTable is computed from. */
-export function pivotPlanRequests(
-  sheets: readonly PivotOverlaySheet[],
-  evaluatorFor: (sheetName: string) => SheetEvaluator,
-): { requests: PivotPlanRequest[]; chartMatrices: Map<string, PivotMatrix> } {
-  const requests: PivotPlanRequest[] = [];
-  // The rows each such report is computed from (a field button's list).
-  const pivotChartMatrices = new Map<string, PivotMatrix>();
-  const boundPivotPlanKeys = new Set<string>();
+/** The plan keys of the PivotTables a PivotChart is bound to. */
+function boundPivotPlanKeysOf(sheets: readonly PivotOverlaySheet[]): Set<string> {
+  const bound = new Set<string>();
   for (const dataSheet of sheets) {
     for (const chart of [...(dataSheet.charts ?? []), ...(dataSheet.objects ?? [])]) {
       const source = (chart as { pivotSource?: SpreadsheetPivotChartSource }).pivotSource;
-      const bound = source ? resolvePivotChartPivot(sheets, source) : null;
-      if (bound) boundPivotPlanKeys.add(pivotPlanKey(bound.sheet.id, bound.slot));
+      const pivot = source ? resolvePivotChartPivot(sheets, source) : null;
+      if (pivot) bound.add(pivotPlanKey(pivot.sheet.id, pivot.slot));
     }
   }
-  // Every PivotTable of every sheet gets its own derived report.
+  return bound;
+}
+
+/** Every PivotTable that gets a derived report, with the sheet and the range
+ * it is computed from. */
+function* plannedPivots(sheets: readonly PivotOverlaySheet[], boundPivotPlanKeys: ReadonlySet<string>) {
   for (const { candidate, slot, rawPivot } of sheets.flatMap(
     (dataSheet) =>
       sheetPivots(dataSheet).map((pivot, pivotSlot) => ({
@@ -204,6 +229,54 @@ export function pivotPlanRequests(
     const readSheet =
       sourceCandidate ?? (pivotIsScenarioReport(config) ? candidate : undefined);
     if (!readSheet) continue;
+    // A table source is read where the table is now.
+    const liveRange =
+      pivotLiveSourceRange(config, readSheet.dataTables) ?? sourceRange;
+    yield { candidate, slot, planKey, config, chartOnly, readSheet, liveRange };
+  }
+}
+
+/**
+ * The reports computed from their source's live cells (no cache snapshot),
+ * each with the rows it reads: a window holding only part of a large tiled
+ * sheet reads those rows before such a report is computed.
+ */
+export function pivotLiveSourceReads(sheets: readonly PivotOverlaySheet[]): PivotLiveSourceRead[] {
+  const out: PivotLiveSourceRead[] = [];
+  for (const { candidate, planKey, config, readSheet, liveRange } of plannedPivots(sheets, boundPivotPlanKeysOf(sheets))) {
+    if (pivotReadsLiveCells(config)) {
+      out.push({ planKey, sheetId: candidate.id, sourceSheetId: readSheet.id, range: liveRange });
+    }
+  }
+  return out;
+}
+
+/** Every PivotTable's request, read from the workbook evaluated without the
+ * reports, and the rows each PivotChart's PivotTable is computed from. A
+ * report whose live source rows are not all in the model is held instead
+ * (`sourceReadable`). */
+export function pivotPlanRequests(
+  sheets: readonly PivotOverlaySheet[],
+  evaluatorFor: (sheetName: string) => SheetEvaluator,
+  options: PivotPlanReadOptions = {},
+): { requests: PivotPlanRequest[]; chartMatrices: Map<string, PivotMatrix>; held: PivotLiveSourceRead[] } {
+  const requests: PivotPlanRequest[] = [];
+  const held: PivotLiveSourceRead[] = [];
+  // The rows each such report is computed from (a field button's list).
+  const pivotChartMatrices = new Map<string, PivotMatrix>();
+  const boundPivotPlanKeys = boundPivotPlanKeysOf(sheets);
+  // Every PivotTable of every sheet gets its own derived report.
+  for (const { candidate, planKey, config, chartOnly, readSheet, liveRange } of plannedPivots(sheets, boundPivotPlanKeys)) {
+    // Totals of the rows around the screen are no report of the source: one
+    // read from live cells waits until every row it reads is in.
+    if (
+      options.sourceReadable &&
+      pivotReadsLiveCells(config) &&
+      !options.sourceReadable(readSheet.id, liveRange)
+    ) {
+      held.push({ planKey, sheetId: candidate.id, sourceSheetId: readSheet.id, range: liveRange });
+      continue;
+    }
     const sourceName =
       typeof readSheet.name === "string" && readSheet.name
         ? readSheet.name
@@ -216,9 +289,6 @@ export function pivotPlanRequests(
       sourceCovered,
       evaluator,
     );
-    // A table source is read where the table is now.
-    const liveRange =
-      pivotLiveSourceRange(config, readSheet.dataTables) ?? sourceRange;
     const liveMatrix: string[][] = [];
     for (let row = liveRange.r1; row <= liveRange.r2; row += 1) {
       const values: string[] = [];
@@ -274,7 +344,7 @@ export function pivotPlanRequests(
       chartOnly: false,
     });
   }
-  return { requests, chartMatrices: pivotChartMatrices };
+  return { requests, chartMatrices: pivotChartMatrices, held };
 }
 
 /** Whether a report is placed and free: its cells join the read model. */

@@ -15,7 +15,7 @@
 import { EngineRefusedError, EngineUnavailableError, engineErrorMessageKey } from "@mrnote/core/web/lib/engine-host/client.ts";
 import { pdfEngineFailureMessageKey } from "./pdf-native-remote";
 import { MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE, MRAI_NATIVE_TEXT_MOVE_REFUSALS } from "./engine/native/vocabulary";
-import { PDF_FALLBACK_NOT_FOUND_MESSAGE } from "./source-text-fallback-copy";
+import { PDF_FALLBACK_NOT_FOUND_MESSAGE, PDF_FALLBACK_TEXT_BOX_SOURCE_MESSAGE } from "./source-text-fallback-copy";
 import { pdfReaderRefusalText } from "./reader-refusal-text";
 
 
@@ -40,6 +40,11 @@ const WORKING_SESSION_RECONCILIATION = new Set([
   "Queued PDF operations require history or reconciliation.",
 ]);
 
+const WORKING_SESSION_HELD_TOO_MUCH = new Set([
+  "PDF pending operation memory budget is exhausted.",
+  "PDF pending edits must finish saving before this operation can be staged.",
+]);
+
 export function pdfErrorText(error: unknown, t: (key: string) => string, fallback: string): string {
   if (error instanceof EngineUnavailableError || error instanceof EngineRefusedError) {
     return t(engineErrorMessageKey(error));
@@ -55,6 +60,11 @@ export function pdfErrorText(error: unknown, t: (key: string) => string, fallbac
   
   // English on a move's toast).
   if (WORKING_SESSION_RECONCILIATION.has(error.message)) return t("pdf.pageWindow.previousPdfWriteStillRequires");
+  // The unsaved edits a window may hold are bounded in memory (twice the
+  // largest file): past that the next edit is not taken until they are
+  // saved. Its English, or a sentence that named no way out, reached the
+  
+  if (WORKING_SESSION_HELD_TOO_MUCH.has(error.message)) return t("pdf.pageWindow.heldEditsTooLarge");
   // The working copy's write authority moved under an edit (the page's
   // version or access changed): its English reached the reader as-is
   
@@ -70,6 +80,9 @@ export function pdfErrorText(error: unknown, t: (key: string) => string, fallbac
   // form object drawn twice): its English went onto every format button of
   
   if (error.message === PDF_FALLBACK_NOT_FOUND_MESSAGE) return t("pdf.nativeTextEdit.noGlyphWhereText");
+  // A line under a text box whose record cannot be read: the same sentence
+  // (how the text is drawn cannot be read), not the engine's English.
+  if (error.message === PDF_FALLBACK_TEXT_BOX_SOURCE_MESSAGE) return t("pdf.nativeTextEdit.noGlyphWhereText");
   const moveRefusal = MOVE_REFUSAL_KEYS.get(error.message);
   if (moveRefusal) return t(moveRefusal);
   const key = pdfEngineFailureMessageKey(error.message);

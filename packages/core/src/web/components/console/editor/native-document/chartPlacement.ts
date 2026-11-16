@@ -23,7 +23,7 @@ import { NodeSelection } from "@tiptap/pm/state";
 
 import { reanchorMovedDocumentFloats } from "./floatReanchor";
 
-import { documentFloatingStack, nextDocumentFloatingHeight } from "../../../../lib/document-shapes";
+import { nextDocumentFloatingHeight, type resolveDocumentShapeStack } from "../../../../lib/document-shapes";
 import { EMU_PER_PX, normalizeFloatAnchor, type FloatAnchor } from "../../../../lib/office-float-anchor";
 import {
   floatAnchorAligned,
@@ -34,7 +34,6 @@ import {
   floatAnchorWithMoveWithText,
   floatAnchorWithWrap,
   floatPositionPresetOf,
-  floatStackHeightAfter,
   floatWrapChoiceOf,
   type FloatPositionPreset,
   type FloatWrapChoice,
@@ -50,6 +49,7 @@ import { commitLiveDocumentChartAttrs, liveDocumentChartTarget } from "./chartBu
 import { BLOCK_PICTURE_NODE_NAME, INLINE_PICTURE_NODE_NAME } from "./documentObjectNodes";
 import { pictureFloatAnchor } from "./pictureFloat";
 import { floatPaintOf, inLineDrawingColumnOffsetPx } from "./floatingTextBoxLayout";
+import { applyFloatingStackZOrder, floatingStackZOrderAtBoundary } from "./floatingStackOrder";
 
 export type DocumentChartPlacementCommand =
   | { readonly kind: "inline" }
@@ -104,26 +104,29 @@ export function documentChartAnchor(attrs: Readonly<Record<string, unknown>>): F
 }
 
 export function documentChartPlacementState(
-  doc: Parameters<typeof documentFloatingStack>[0],
+  doc: Parameters<typeof resolveDocumentShapeStack>[0],
   attrs: Readonly<Record<string, unknown>>,
+  /** The chart's position: the floating stack knows its members by it. */
+  pos: number | null = null,
 ): DocumentChartPlacementState {
-  return placementStateOf(doc, documentChartAnchor(attrs));
+  return placementStateOf(doc, documentChartAnchor(attrs), pos);
 }
 
 function placementStateOf(
-  doc: Parameters<typeof documentFloatingStack>[0],
+  doc: Parameters<typeof resolveDocumentShapeStack>[0],
   anchor: FloatAnchor | null,
+  pos: number | null,
 ): DocumentChartPlacementState {
   if (!anchor) {
     return { wrap: "inline", preset: null, moveWithText: null, canBringForward: false, canSendBackward: false };
   }
-  const heights = documentFloatingStack(doc).heights;
+  // The one stack's planner, as every member's (`floatingStackOrder`).
   return {
     wrap: floatWrapChoiceOf(anchor),
     preset: floatPositionPresetOf(anchor),
     moveWithText: floatAnchorMovesWithText(anchor),
-    canBringForward: floatStackHeightAfter(anchor.relativeHeight, heights, "forward") !== null,
-    canSendBackward: floatStackHeightAfter(anchor.relativeHeight, heights, "backward") !== null,
+    canBringForward: pos !== null && !floatingStackZOrderAtBoundary(doc, [pos], "bringForward"),
+    canSendBackward: pos !== null && !floatingStackZOrderAtBoundary(doc, [pos], "sendBackward"),
   };
 }
 
@@ -257,7 +260,7 @@ function anchorOutOfLine(editor: Editor, target: LiveDrawingTarget, wrap: FloatW
 export function liveDocumentDrawingPlacementState(editor: Editor): DocumentChartPlacementState | null {
   const target = liveDrawingTarget(editor);
   if (!target) return null;
-  return placementStateOf(editor.state.doc, drawingAnchor(target));
+  return placementStateOf(editor.state.doc, drawingAnchor(target), target.pos);
 }
 
 /** One Layout Options choice on the selected chart or picture. */
@@ -290,13 +293,11 @@ export function setLiveDocumentDrawingPlacement(
     if (!paint) return false;
     return commitAnchor(editor, target, floatAnchorWithMoveWithText(anchor, paint, command.value));
   }
-  const height = floatStackHeightAfter(
-    anchor.relativeHeight,
-    documentFloatingStack(editor.state.doc).heights,
-    command.step,
-  );
-  if (height === null) return false;
-  return commitAnchor(editor, target, { ...anchor, relativeHeight: height });
+  // Bring Forward / Send Backward / to Front / to Back: the one stack's
+  // planner, as every member's (`floatingStackOrder`).
+  if (target.node.isInline || editor.state.doc.nodeAt(target.pos) !== target.node) return false;
+  const action = ({ forward: "bringForward", front: "bringToFront", backward: "sendBackward", back: "sendToBack" } as const)[command.step];
+  return applyFloatingStackZOrder(editor, [target.pos], action);
 }
 
 /** One Layout Options choice on the selected chart. */

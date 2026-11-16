@@ -1146,7 +1146,10 @@ export async function preparePresentationVideoFile(
   return Object.freeze({
     mimeType: "video/mp4" as const,
     sizeBytes: file.size,
-    title: (name || "Video.mp4").slice(0, 2_000),
+    // PowerPoint names a clip it inserts by its file's name without the
+    // extension (office-truth probe media-names: "My Clip.mp4" -> "My Clip"),
+    // the name the saved file states and a reopen reads.
+    title: name.replace(/\.mp4$/i, "").trim().slice(0, 160) || "Video",
   });
 }
 

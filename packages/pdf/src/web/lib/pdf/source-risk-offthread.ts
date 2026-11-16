@@ -92,6 +92,16 @@ export async function inspectPdfRiskProfileOffThread(
   });
 }
 
+/**
+ * Start the worker now (no-op where there is none, or one is started): for
+ * a caller that will inspect in a moment -- the reader asks the shared store
+ * of profiles first, and a file the store does not hold then found the
+ * worker still to start.
+ */
+export function warmPdfSourceRiskWorker(): void {
+  void startWorker().catch(() => undefined);
+}
+
 /** Tests: forget the worker so the next call starts afresh. */
 export function resetPdfSourceRiskWorkerForTests(): void {
   worker?.terminate();

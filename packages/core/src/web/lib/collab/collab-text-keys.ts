@@ -23,6 +23,7 @@ import {
   type CollaborativeTextEdit,
   type JsonValue,
 } from "./json-crdt";
+import { updateDeletes } from "./remote-update-payload";
 
 /** A noted keystroke: `base` with [start, end) replaced by `insert`, in the
  * text at `path`, with its container before and after. */
@@ -282,4 +283,99 @@ export function writeWaitingTextEdits<T extends CollaborativeTextEdit & { path: 
     left.push(edit);
   }
   return left;
+}
+
+/** How long, and how many, keys typed into words the room does not hold
+ * wait for a peer's words (`OrphanTextEdits`). */
+const ORPHAN_EDITS_MS = 120_000;
+const ORPHAN_EDITS_LIMIT = 512;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/** The items a publication wrote: this member's client, clocks [from, to). */
+export interface OwnItems { client: number; from: number; to: number }
+
+interface OrphanEntry<T> { edit: T; at: number; own: OwnItems | null }
+
+export class OrphanTextEdits<T extends CollaborativeTextEdit & { path: readonly string[]; container?: CollaborativeTextKey["container"] }> {
+  /** Each key, when it was kept, and the items its publication wrote. */
+  private edits: Array<OrphanEntry<T>> = [];
+
+  get size(): number {
+    return this.edits.length;
+  }
+
+  /** After a publication of `noted` (which wrote `own`'s items): those whose
+   * words are not in `root`. */
+  keep(root: Y.Map<unknown>, noted: readonly T[], own: OwnItems | null): void {
+    const now = Date.now();
+    for (const edit of noted) {
+      if (edit.container && !collaborativeTextAt(root, edit.path)) this.edits.push({ edit, at: now, own });
+    }
+    if (this.edits.length > ORPHAN_EDITS_LIMIT) this.edits.splice(0, this.edits.length - ORPHAN_EDITS_LIMIT);
+  }
+
+  /** After a change of this member's own: the keys whose words it brought go. */
+  forgetPresent(root: Y.Map<unknown>): void {
+    if (this.edits.length > 0) this.edits = this.edits.filter(({ edit }) => !collaborativeTextAt(root, edit.path));
+  }
+
+  /**
+   * A peer's update (`payload`, when the room knows it) just brought words
+   * some keys were typed into: those keys the peer did not hold, each text's
+   * in order, taken off the list. A peer that read this member's words where
+   * they were written (the drawing) before replacing them holds them, and
+   * its update deletes the items that wrote them: those keys are not written
+   * twice. Without the update, the peer's words tell it: from the first key
+   * whose words they are not.
+   */
+  arrived(root: Y.Map<unknown>, payload?: Uint8Array): T[] {
+    const now = Date.now();
+    this.edits = this.edits.filter(({ at }) => now - at <= ORPHAN_EDITS_MS);
+    const byText = new Map<string, Array<OrphanEntry<T>>>();
+    const left: Array<OrphanEntry<T>> = [];
+    for (const entry of this.edits) {
+      if (!collaborativeTextAt(root, entry.edit.path)) {
+        left.push(entry);
+        continue;
+      }
+      const key = entry.edit.path.join("\u0000");
+      byText.set(key, [...(byText.get(key) ?? []), entry]);
+    }
+    this.edits = left;
+    const out: T[] = [];
+    for (const entries of byText.values()) {
+      if (payload && entries.every(({ own }) => own)) {
+        out.push(...entries.filter(({ own }) => !updateDeletes(payload, own!.client, own!.from, own!.to)).map(({ edit }) => edit));
+        continue;
+      }
+      const words = collaborativeTextAt(root, entries[0]!.edit.path)?.toString() ?? "";
+      let from = 0;
+      for (let at = entries.length - 1; at >= 0; at -= 1) {
+        if (applyCollaborativeTextEdit(entries[at]!.edit) === words) {
+          from = at + 1;
+          break;
+        }
+      }
+      out.push(...entries.slice(from).map(({ edit }) => edit));
+    }
+    return out;
+  }
+
+  clear(): void {
+    this.edits = [];
+  }
 }

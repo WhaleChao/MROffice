@@ -40,16 +40,20 @@ import {
 import {
   isNativePresentationThemePartPath,
   normalizeTheme,
+  normalizeThemeColorMap,
   presentationBodyFontStyle,
   themeFontSchemeFamily,
   normalizeThemeColor,
   resolveBlockTextStyle,
   resolveSlideBackground,
   resolveTitleTextStyle,
+  DECK_THEME_MAPPED_COLORS,
   type DeckTheme,
+  type DeckThemeColorMap,
   type ResolvedBlockTextStyle,
 } from "./presentation-theme";
 import { SLIDE_BG_FIELDS } from "./presentation-slide-bg";
+import { presentationMasterColorMap } from "./presentation/master-color-map";
 import { officeThemeFontStack } from "./office-theme-fonts";
 
 /** Max length for a master id / name (mirrors the schema's structural guard). */
@@ -356,6 +360,17 @@ export interface SlideMaster {
    * surface draws its links in `hlink` (`presentationHyperlinkStyle`).
    */
   linkColors?: { hlink?: string; folHlink?: string };
+  /**
+   * The master's own colour map (`p:clrMap`: Background 1 / Text 1 /
+   * Background 2 / Text 2 to a theme slot) and the colour each names in the
+   * master's own theme, stated by the import when the deck's masters do not
+   * all draw them alike (reading row 850); read-only. A slide on the master
+   * draws its unstated words and Text 1 through them
+   * (`presentationSlideInk`, `presentationThemeGridColors`), while the deck's
+   * theme is still the file's own.
+   */
+  colorMap?: DeckThemeColorMap;
+  mappedColors?: Readonly<Record<(typeof DECK_THEME_MAPPED_COLORS)[number], string>>;
   /** Size / bold / italic / colour each `p:txStyles` level states (§75.2). */
   textStyleLevels?: MasterTextStyleLevels;
   /** Inherited layout id (placeholder geometry). Absent → no layout contribution. */
@@ -369,6 +384,21 @@ export interface SlideMaster {
    * `resolveSlideRenderBlocks`. Absent/empty → the master contributes no text.
    */
   blocks?: Array<{ id?: string; [key: string]: unknown }>;
+}
+
+function normalizeMasterMappedColors(
+  raw: unknown,
+): SlideMaster["mappedColors"] | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  if (Object.keys(record).length !== DECK_THEME_MAPPED_COLORS.length) return undefined;
+  const result = {} as Record<(typeof DECK_THEME_MAPPED_COLORS)[number], string>;
+  for (const name of DECK_THEME_MAPPED_COLORS) {
+    const value = record[name];
+    if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) return undefined;
+    result[name] = value.toLowerCase();
+  }
+  return result;
 }
 
 /**
@@ -424,6 +454,14 @@ export function normalizeMaster(
       if (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)) linkColors[slot] = value.toLowerCase();
     }
     if (linkColors.hlink || linkColors.folHlink) master.linkColors = linkColors;
+  }
+  // Both or neither: a map without its colours (or the colours without the
+  // map) cannot be drawn exactly, and the deck theme's is then the one.
+  const colorMap = normalizeThemeColorMap(record.colorMap);
+  const mappedColors = normalizeMasterMappedColors(record.mappedColors);
+  if (colorMap && mappedColors) {
+    master.colorMap = colorMap;
+    master.mappedColors = mappedColors;
   }
   const textStyleLevels = normalizeMasterTextStyleLevels(record.textStyleLevels);
   if (textStyleLevels) master.textStyleLevels = textStyleLevels;
@@ -975,7 +1013,11 @@ export function mergeMasterTheme(
     MASTER_BACKGROUND_FIELDS.some((field) => overlay[field] !== undefined);
   const under: DeckTheme = { ...(base ?? {}) };
   if (ownFill) for (const field of MASTER_BACKGROUND_FIELDS) delete under[field];
-  return normalizeTheme({ ...under, ...(overlay ?? {}) });
+  // The master's own colour map (reading row 850): its slides' Text 1 and
+  // Background 1 name the slots it maps, as PowerPoint draws them, while the
+  // deck still sits on the file's masters.
+  const ownMap = presentationMasterColorMap(base, master);
+  return normalizeTheme({ ...under, ...(overlay ?? {}), ...(ownMap ? { colorMap: ownMap } : {}) });
 }
 
 
@@ -1008,6 +1050,47 @@ const MASTER_BACKGROUND_FIELDS = [
   "backgroundImage",
   "backgroundPattern",
 ] as const satisfies readonly (keyof DeckTheme)[];
+
+/**
+ * What a master states of its own that Design > Themes takes away: its
+ * background, and Slide Master > Fonts (`fontFamily`), which is the fonts of
+ * the master's theme part -- a theme picked replaces that part whole
+ * (ISO/IEC 29500-1 §20.1.6.10), its font scheme with it.
+ */
+const MASTER_THEME_PICK_FIELDS = [
+  ...MASTER_BACKGROUND_FIELDS,
+  "fontFamily",
+] as const satisfies readonly (keyof DeckTheme)[];
+
+
+
+
+
+
+
+
+
+
+
+
+export function mastersTakingThemePick(
+  masters: readonly SlideMaster[] | null | undefined,
+): SlideMaster[] | null {
+  if (!Array.isArray(masters)) return null;
+  let changed = false;
+  const next = masters.map((master) => {
+    const theme = master.theme;
+    if (!theme || !MASTER_THEME_PICK_FIELDS.some((field) => theme[field] !== undefined)) return master;
+    changed = true;
+    const kept: DeckTheme = { ...theme };
+    for (const field of MASTER_THEME_PICK_FIELDS) delete kept[field];
+    const out: SlideMaster = { ...master };
+    if (Object.keys(kept).length > 0) out.theme = kept;
+    else delete out.theme;
+    return out;
+  });
+  return changed ? next : null;
+}
 
 /**
  * The fully resolved layout id for a slide, applying:

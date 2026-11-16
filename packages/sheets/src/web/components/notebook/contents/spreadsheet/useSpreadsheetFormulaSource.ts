@@ -15,6 +15,7 @@ import { sheetColumnWidthReading, workbookCallsCell } from "../../../../lib/spre
 import { coveredCells, type MergeSpan } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
 import { resolveName as resolveNamedRange, type NamedRange } from "@mrnote/core/web/lib/spreadsheet/named-ranges.ts";
 import { type SheetModel } from "./spreadsheetSheetModel";
+import { displayPrecisionEntries, displayPrecisionOption } from "@mrnote/core/web/lib/spreadsheet/display-precision.ts";
 import { buildWorkbookSheetInput } from "./spreadsheetHiddenRows";
 import { pendingSheetNames } from "../../../../lib/spreadsheet/deferred-sheets";
 
@@ -28,6 +29,8 @@ export interface SpreadsheetFormulaSourceInputs {
   namedRanges: NamedRange[];
   pageId: string;
   pivotRefreshRevision: number;
+  /** The workbook sets precision as displayed (calcPr@fullPrecision="0"). */
+  precisionAsDisplayed?: boolean;
   sheet: SheetModel;
 }
 
@@ -41,6 +44,7 @@ export function useSpreadsheetFormulaSource({
   namedRanges,
   pageId,
   pivotRefreshRevision,
+  precisionAsDisplayed = false,
   sheet,
 }: SpreadsheetFormulaSourceInputs) {
   const formulaInputCache = useMemo(() => new SpreadsheetFormulaInputCache(), [pageId]);
@@ -62,7 +66,7 @@ export function useSpreadsheetFormulaSource({
     const pendingNames = pendingSheetNames(formulaDataSheets);
     const pendingKey = pendingNames.size ? [...pendingNames].sort().join("\n") : "";
     const activeInput = formulaInputCache.input(sheet.id, "active", [
-      pendingKey,
+      pendingKey, precisionAsDisplayed,
       ...widthKeys(sheet),
       sheet.cells, sheet.name, sheet.rowCount, sheet.columnCount, sheet.merges,
       sheet.namedRanges, sheet.dataTables, sheet.whatIfTables, sheet.protected, pivotRefreshRevision,
@@ -109,6 +113,8 @@ export function useSpreadsheetFormulaSource({
         carrying, covered, pendingNames.size ? { sheets: pendingNames, cells: activeCells } : undefined);
       const activeFormulaHidden = formulaHiddenEngineOption(sheet.protected === true, activeCells, covered);
       const activeLegacyArrays = legacyArrayEngineOption(carrying, covered);
+      // Set precision as displayed: a formula keeps the number it shows.
+      const activeShownPrecision = precisionAsDisplayed ? displayPrecisionEntries(activeCells, covered) : [];
       const activeColumnWidths = cellWidthUsed ? sheetColumnWidthReading(sheet) : undefined;
       const activeOptions: SheetEvaluatorOptions = {
         // The sheet's extent bounds a whole-column or whole-row reference, as
@@ -125,6 +131,7 @@ export function useSpreadsheetFormulaSource({
         // FORMULATEXT of a formula protection hides is #N/A (B405).
         ...activeFormulaHidden.option,
         ...activeLegacyArrays.option,
+        ...displayPrecisionOption(activeShownPrecision),
         ...columnWidthOption(activeColumnWidths),
         // Same cell typing the serialize path uses (buildWorkbookSheetInput):
         // a quote-prefixed or Text-cell entry is a string to the engine.
@@ -175,6 +182,7 @@ export function useSpreadsheetFormulaSource({
         ...(activeKeptResults.length ? { keptResults: activeKeptResults } : {}),
         ...(activeFormulaHidden.keys.length ? { formulaHiddenCells: activeFormulaHidden.keys } : {}),
         ...(activeLegacyArrays.entries.length ? { legacyArrays: activeLegacyArrays.entries } : {}),
+        ...(activeShownPrecision.length ? { displayPrecision: activeShownPrecision } : {}),
         ...(activeColumnWidths ? { columnWidths: activeColumnWidths } : {}),
         ...(covered.size ? { coveredCells: [...covered] } : {}),
       });
@@ -184,13 +192,13 @@ export function useSpreadsheetFormulaSource({
       candidate.id === sheet.id ? activeInput : formulaInputCache.input(candidate.id, "nonactive", [
         candidate.cells, candidate.id, candidate.name, candidate.rowCount, candidate.columnCount,
         candidate.merges, candidate.namedRanges, candidate.dataTables, candidate.whatIfTables, candidate.outlineGroups, candidate.protected,
-        ...widthKeys(candidate), pendingKey,
-      ], () => buildWorkbookSheetInput(candidate, { columnWidths: cellWidthUsed, pendingSheetNames: pendingNames })),
+        ...widthKeys(candidate), pendingKey, precisionAsDisplayed,
+      ], () => buildWorkbookSheetInput(candidate, { columnWidths: cellWidthUsed, pendingSheetNames: pendingNames, precisionAsDisplayed })),
     );
     const bindings = formulaInputCache.bindings(formulaDataSheets, inputs, input => backgroundInputContexts.get(input) ?? {});
     const readActiveRaw = activeInput.getRawCell;
     return { inputs: formulaInputCache.orderedInputs(inputs), bindings, activeName, activeCells, readActiveRaw };
-  }, [sheet.cells, sheet.id, sheet.name, sheet.dataTables, sheet.whatIfTables, sheet.protected, sheet.rowCount, sheet.columnCount, sheet.columnWidths, sheet.defaultColumnWidth, sheet.nativeGrid, sheet.manuallyHiddenCols, sheet.outlineGroups, formulaDataSheets, namedRanges, mergeSpans, hiddenRows, groupHiddenRows, pivotRefreshRevision, formulaInputCache]);
+  }, [sheet.cells, sheet.id, sheet.name, sheet.dataTables, sheet.whatIfTables, sheet.protected, sheet.rowCount, sheet.columnCount, sheet.columnWidths, sheet.defaultColumnWidth, sheet.nativeGrid, sheet.manuallyHiddenCols, sheet.outlineGroups, formulaDataSheets, namedRanges, mergeSpans, hiddenRows, groupHiddenRows, pivotRefreshRevision, precisionAsDisplayed, formulaInputCache]);
   return {
     formulaSource,
   };

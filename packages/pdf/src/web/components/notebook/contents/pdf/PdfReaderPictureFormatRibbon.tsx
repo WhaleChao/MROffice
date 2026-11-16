@@ -109,6 +109,10 @@ export interface PdfReaderPictureRibbonModel {
   readonly altPaneOpen: boolean;
   /** The picture has an alternate description. */
   readonly hasAlt: boolean;
+  /** Painted last (first) on its page: Office greys Bring Forward (Send
+   * Backward) with both its moves. */
+  readonly arrangeAtFront?: boolean;
+  readonly arrangeAtBack?: boolean;
 }
 
 export interface PdfReaderPictureRibbonCommands {
@@ -405,7 +409,9 @@ export function PdfReaderPictureFormatRibbon({
             <OfficeHomeCommandRow>
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger disabled={disabled} disabledReason={disabledReason} hasMenuIndicator
+                  <OfficeHomeMenuTrigger disabled={disabled || model.arrangeAtFront === true}
+                    disabledReason={model.arrangeAtFront === true && !disabled
+                      ? t("pdf.annotationFormat.alreadyAtFront") : disabledReason} hasMenuIndicator
                     icon={<OfficeSemanticIcon semanticId="object.bringForward" size={18} />}
                     label={arrangeLabel("bringForward")} testId="pdf-picture-bring-forward" variant="large" />
                 </DropdownMenuTrigger>
@@ -420,7 +426,9 @@ export function PdfReaderPictureFormatRibbon({
               </DropdownMenu>
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>
-                  <OfficeHomeMenuTrigger disabled={disabled} disabledReason={disabledReason} hasMenuIndicator
+                  <OfficeHomeMenuTrigger disabled={disabled || model.arrangeAtBack === true}
+                    disabledReason={model.arrangeAtBack === true && !disabled
+                      ? t("pdf.annotationFormat.alreadyAtBack") : disabledReason} hasMenuIndicator
                     icon={<OfficeSemanticIcon semanticId="object.sendBackward" size={18} />}
                     label={arrangeLabel("sendBackward")} testId="pdf-picture-send-backward" variant="large" />
                 </DropdownMenuTrigger>

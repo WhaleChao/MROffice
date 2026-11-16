@@ -96,7 +96,10 @@ export type PdfNativeVectorMutationPlan =
   | Readonly<{ kind: "style"; plan: PdfNativeVectorStyleSelectionEditPlan }>
   | Readonly<{ kind: "duplicate"; plan: PdfNativeVectorSelectionDuplicatePlan;
       group?: Readonly<{ steps: readonly PdfNativeChainStep<PdfNativeVectorSelectionDuplicatePlan>[] }> }>
-  | Readonly<{ kind: "reorder"; plan: PdfNativeVectorSelectionReorderPlan }>;
+  | Readonly<{ kind: "reorder"; plan: PdfNativeVectorSelectionReorderPlan;
+      /** Several layer moves written as one revision (a multiple selection's
+       * Arrange command, a Selection pane drop): planNativeVectorReorderChain. */
+      group?: Readonly<{ steps: readonly PdfNativeChainStep<PdfNativeVectorSelectionReorderPlan>[] }> }>;
 
 /** `transactionId`: the committed record, which Undo writes back. */
 export type PdfNativeVectorCommittedMutation = Readonly<{ transactionId?: string }> & (
@@ -200,6 +203,12 @@ export interface PdfNativeReceiptJournalPublisher {
   /** PdfNativeReceiptJournalEntry.rowsSubStep: a press written in the
    * revision of the step pushed just before it. */
   readonly rowsSubStep?: boolean;
+  
+
+
+
+
+  readonly run?: Readonly<{ key: string; end: unknown; endAt: (end: unknown) => void }>;
   readonly undo: (
     lease: PdfNativeReceiptMutationLease,
   ) => Promise<boolean | void>;

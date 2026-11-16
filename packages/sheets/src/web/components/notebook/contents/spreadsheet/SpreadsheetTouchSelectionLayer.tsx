@@ -17,7 +17,9 @@ import {
 
 import { OfficeTouchGrip } from "@mrnote/core/web/components/office-ribbon/OfficeTouchGrip.tsx";
 
+import { sheetFrozenPanes, type SheetRangePaneLayerRefs } from "./SheetRangePaneLayers";
 import { SPREADSHEET_GRID_TOUCH_GRIP_LAYER } from "./spreadsheetGridConstants";
+import { sheetRangePaneLayer, type SheetFrozenLines, type SheetRangePane } from "./useSheetRangeBoxes";
 
 /**
  * Excel's touch selection handles on the live grid (Excel for iPad / Android:
@@ -44,6 +46,17 @@ export type SpreadsheetTouchGripCorner = "start" | "end";
 interface Point {
   readonly x: number;
   readonly y: number;
+  /** The frozen pane whose cell the grip stands on: drawn on that pane's
+   * pinned layer, in its pixels ("body", the default: the layer itself). */
+  readonly pane?: SheetRangePane;
+}
+
+/** The pane a grid cell stands in, from what its paint marks
+ * (`data-frozen`, `data-frozen-pane`, its row's `data-frozen-row`). */
+function cellPane(cell: HTMLElement): SheetRangePane {
+  if (cell.dataset.frozenPane === "corner") return "corner";
+  if (cell.closest("tr")?.hasAttribute("data-frozen-row")) return "top";
+  return cell.dataset.frozen === "true" ? "left" : "body";
 }
 
 export interface SpreadsheetTouchGripGeometry {
@@ -96,6 +109,9 @@ export function measureSpreadsheetTouchGrips(
   viewport: HTMLElement,
   layer: HTMLElement,
   options: SpreadsheetTouchMeasureOptions,
+  /** A frozen pane's pinned layer (absent: the grips of that pane's cells are
+   * drawn on `layer`, under the frozen cells). */
+  paneLayer: (pane: SheetRangePane) => HTMLElement | null | undefined = () => null,
 ): SpreadsheetTouchGripGeometry {
   const view = viewport.getBoundingClientRect();
   if (view.width <= 0 || view.height <= 0) return EMPTY;
@@ -109,10 +125,17 @@ export function measureSpreadsheetTouchGrips(
   const dataBottom = view.bottom;
   const inData = (x: number, y: number) =>
     x >= dataLeft - 1 && x <= dataRight + 1 && y >= dataTop - 1 && y <= dataBottom + 1;
-  const local = (x: number, y: number): Point => ({
-    x: (x - origin.left) * unscale,
-    y: (y - origin.top) * unscale,
-  });
+  const local = (x: number, y: number, pane: SheetRangePane = "body"): Point => {
+    // A grip on a frozen cell is drawn on its pane's pinned layer, over the
+    // frozen cells (on `layer`, under them, the cell covered it).
+    const pinned = pane === "body" ? null : paneLayer(pane);
+    const from = pinned ? pinned.getBoundingClientRect() : origin;
+    return {
+      x: (x - from.left) * unscale,
+      y: (y - from.top) * unscale,
+      ...(pinned ? { pane } : {}),
+    };
+  };
   const startX = (rect: DOMRect) => (rtl ? rect.right : rect.left);
   const endX = (rect: DOMRect) => (rtl ? rect.left : rect.right);
   const inward = rtl ? -1 : 1;
@@ -176,6 +199,8 @@ export function measureSpreadsheetTouchGrips(
     viewport.querySelector<HTMLElement>(
       `td[data-range-cell][data-selection-edges~="${vertical}"][data-selection-edges~="${horizontal}"]`,
     ) ?? viewport.querySelector<HTMLElement>('td[data-range-cell][data-active="true"]');
+  // The end grip's screen height: the fill grip hangs below it if there is room.
+  let endScreenY = 0;
   const corner = (cell: HTMLElement | null, which: SpreadsheetTouchGripCorner): Point | null => {
     if (!cell) return null;
     const rect = cell.getBoundingClientRect();
@@ -188,7 +213,8 @@ export function measureSpreadsheetTouchGrips(
     const probeY = y + (which === "start" ? 3 : -3);
     const top = topRangeCellAt(probeX, probeY);
     if (top !== undefined && top !== cell) return null;
-    return local(x, y);
+    if (which === "end") endScreenY = y;
+    return local(x, y, cellPane(cell));
   };
   const start = corner(cornerCell("top", "start"), "start");
   const end = corner(cornerCell("bottom", "end"), "end");
@@ -198,10 +224,12 @@ export function measureSpreadsheetTouchGrips(
     // with no room below (the last visible row), it goes beside it. The gap
     // is screen px, the layer's are layout px.
     const offset = FILL_GRIP_OFFSET_PX * unscale;
-    const below = end.y / unscale + FILL_GRIP_OFFSET_PX + origin.top <= dataBottom - 6;
+    const below = endScreenY + FILL_GRIP_OFFSET_PX <= dataBottom - 6;
+    // On the selection grip's layer, in its pixels.
+    const pane = end.pane ? { pane: end.pane } : {};
     fill = below
-      ? { x: end.x, y: end.y + offset, beside: false }
-      : { x: end.x + offset * inward, y: end.y, beside: true };
+      ? { x: end.x, y: end.y + offset, beside: false, ...pane }
+      : { x: end.x + offset * inward, y: end.y, beside: true, ...pane };
   }
   return {
     start,
@@ -216,7 +244,7 @@ export function measureSpreadsheetTouchGrips(
 function samePoint(a: Point | null, b: Point | null): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  return Math.round(a.x) === Math.round(b.x) && Math.round(a.y) === Math.round(b.y);
+  return a.pane === b.pane && Math.round(a.x) === Math.round(b.x) && Math.round(a.y) === Math.round(b.y);
 }
 
 function sameGeometry(a: SpreadsheetTouchGripGeometry, b: SpreadsheetTouchGripGeometry): boolean {
@@ -245,6 +273,8 @@ export interface SpreadsheetTouchSelectionLayerProps extends SpreadsheetTouchMea
   readonly viewportRef: RefObject<HTMLElement | null>;
   /** Anything whose change can move the corners (selection, zoom, freeze …). */
   readonly layoutKey: unknown;
+  /** The frozen lines: a grip on a frozen cell is drawn over that pane. */
+  readonly frozen?: SheetFrozenLines | null;
   /** A grip or a held press is dragging: follow every frame, let hits through. */
   readonly dragging: boolean;
   /** Bumped when a long press selects: the grips announce themselves. */
@@ -267,6 +297,7 @@ export interface SpreadsheetTouchSelectionLayerProps extends SpreadsheetTouchMea
 export function SpreadsheetTouchSelectionLayer(props: SpreadsheetTouchSelectionLayerProps): React.JSX.Element | null {
   const { enabled, viewportRef, layoutKey, dragging, emphasisNonce } = props;
   const layerRef = useRef<HTMLDivElement | null>(null);
+  const paneLayersRef = useRef<SheetRangePaneLayerRefs>({});
   const [geometry, setGeometry] = useState<SpreadsheetTouchGripGeometry>(EMPTY);
   const frameRef = useRef(0);
   const live = useRef(props);
@@ -281,7 +312,7 @@ export function SpreadsheetTouchSelectionLayer(props: SpreadsheetTouchSelectionL
       const current = live.current;
       const next =
         viewport && layer && current.enabled
-          ? measureSpreadsheetTouchGrips(viewport, layer, current)
+          ? measureSpreadsheetTouchGrips(viewport, layer, current, (pane) => paneLayersRef.current[pane])
           : EMPTY;
       setGeometry((previous) => (sameGeometry(previous, next) ? previous : next));
       // A drag repaints the corners every frame without a React commit here.
@@ -351,85 +382,108 @@ export function SpreadsheetTouchSelectionLayer(props: SpreadsheetTouchSelectionL
       {grip}
     </span>
   );
+  const selectionGrip = (corner: SpreadsheetTouchGripCorner, point: Point) =>
+    place(
+      `${corner}-${emphasisNonce}`,
+      point,
+      <OfficeTouchGrip
+        variant="selection"
+        testId={`spreadsheet-touch-grip-${corner}`}
+        x={0}
+        y={0}
+        emphasis={emphasis}
+        zIndex={2}
+        {...startOffset}
+        onPointerDown={(event) => props.onSelectionGrip(corner, lines, event)}
+      />,
+    );
+  // Each grip with the pane it is drawn over ("body": the layer itself).
+  const grips: [SheetRangePane, React.JSX.Element][] = [];
+  if (start) grips.push([start.pane ?? "body", selectionGrip("start", start)]);
+  if (fill) {
+    grips.push([
+      fill.pane ?? "body",
+      place(
+        "fill",
+        fill,
+        <OfficeTouchGrip
+          variant="fill"
+          testId="spreadsheet-touch-fill-grip"
+          x={0}
+          y={0}
+          emphasis={props.fillArmed}
+          zIndex={1}
+          {...(fill.beside ? { hitOffsetX: (props.rtl ? -1 : 1) * 6 } : { hitOffsetY: 6 })}
+          onPointerDown={props.onFillGrip}
+        />,
+      ),
+    ]);
+  }
+  if (end) grips.push([end.pane ?? "body", selectionGrip("end", end)]);
+  if (resize) {
+    grips.push([
+      "body",
+      place(
+        `resize-${resize.axis}-${resize.index}`,
+        resize,
+        <OfficeTouchGrip
+          variant={resize.axis === "col" ? "resize-col" : "resize-row"}
+          testId={`spreadsheet-touch-resize-${resize.axis}-${resize.index}`}
+          x={0}
+          y={0}
+          zIndex={3}
+          onPointerDown={(event) => props.onResizeGrip(resize.axis, resize.index, event)}
+        />,
+      ),
+    ]);
+  }
+  const onPane = (pane: SheetRangePane) => grips.filter(([at]) => at === pane).map(([, grip]) => grip);
   return (
-    <div
-      ref={layerRef}
-      data-testid="spreadsheet-touch-grips"
-      data-office-touch-grips={props.hidden ? "hidden" : dragging ? "dragging" : "idle"}
-      aria-hidden="true"
-      // A press on a grip is not a press on the stage under it.
-      onPointerDown={(event) => event.stopPropagation()}
-      style={{
-        position: "absolute",
-        inset: 0,
-        overflow: "visible",
-        pointerEvents: "none",
-        visibility: props.hidden ? "hidden" : undefined,
-        zIndex: SPREADSHEET_GRID_TOUCH_GRIP_LAYER,
-      }}
-    >
-      {start
-        ? place(
-            `start-${emphasisNonce}`,
-            start,
-            <OfficeTouchGrip
-              variant="selection"
-              testId="spreadsheet-touch-grip-start"
-              x={0}
-              y={0}
-              emphasis={emphasis}
-              zIndex={2}
-              {...startOffset}
-              onPointerDown={(event) => props.onSelectionGrip("start", lines, event)}
-            />,
-          )
-        : null}
-      {fill
-        ? place(
-            "fill",
-            fill,
-            <OfficeTouchGrip
-              variant="fill"
-              testId="spreadsheet-touch-fill-grip"
-              x={0}
-              y={0}
-              emphasis={props.fillArmed}
-              zIndex={1}
-              {...(fill.beside ? { hitOffsetX: (props.rtl ? -1 : 1) * 6 } : { hitOffsetY: 6 })}
-              onPointerDown={props.onFillGrip}
-            />,
-          )
-        : null}
-      {end
-        ? place(
-            `end-${emphasisNonce}`,
-            end,
-            <OfficeTouchGrip
-              variant="selection"
-              testId="spreadsheet-touch-grip-end"
-              x={0}
-              y={0}
-              emphasis={emphasis}
-              zIndex={2}
-              {...startOffset}
-              onPointerDown={(event) => props.onSelectionGrip("end", lines, event)}
-            />,
-          )
-        : null}
-      {resize
-        ? place(
-            `resize-${resize.axis}-${resize.index}`,
-            resize,
-            <OfficeTouchGrip
-              variant={resize.axis === "col" ? "resize-col" : "resize-row"}
-              testId={`spreadsheet-touch-resize-${resize.axis}-${resize.index}`}
-              x={0}
-              y={0}
-              zIndex={3}
-              onPointerDown={(event) => props.onResizeGrip(resize.axis, resize.index, event)}
-            />,
-          )
-        : null}
-    </div>
+    <>
+      <div
+        ref={layerRef}
+        data-testid="spreadsheet-touch-grips"
+        data-office-touch-grips={props.hidden ? "hidden" : dragging ? "dragging" : "idle"}
+        aria-hidden="true"
+        // A press on a grip is not a press on the stage under it.
+        onPointerDown={(event) => event.stopPropagation()}
+        style={{
+          position: "absolute",
+          inset: 0,
+          overflow: "visible",
+          pointerEvents: "none",
+          visibility: props.hidden ? "hidden" : undefined,
+          zIndex: SPREADSHEET_GRID_TOUCH_GRIP_LAYER,
+        }}
+      >
+        {onPane("body")}
+      </div>
+      {/* A grip on a frozen cell, on a layer pinned with its pane over that
+          pane's cells, as the range boxes are (SheetRangePaneLayers): on
+          the layer above, under the frozen cells, the cell covered it. */}
+      {sheetFrozenPanes(props.frozen).map((pane) => (
+        <div
+          key={pane}
+          ref={(element) => {
+            paneLayersRef.current[pane] = element;
+          }}
+          data-testid={`spreadsheet-touch-grips-pane-${pane}`}
+          aria-hidden="true"
+          onPointerDown={(event) => event.stopPropagation()}
+          style={{
+            position: "sticky",
+            ...(pane !== "left" ? { top: 0 } : {}),
+            ...(pane !== "top" ? { left: 0, width: 0 } : {}),
+            height: 0,
+            overflow: "visible",
+            pointerEvents: "none",
+            visibility: props.hidden ? "hidden" : undefined,
+            zIndex: sheetRangePaneLayer(pane, SPREADSHEET_GRID_TOUCH_GRIP_LAYER),
+          }}
+        >
+          {onPane(pane)}
+        </div>
+      ))}
+    </>
   );
 }

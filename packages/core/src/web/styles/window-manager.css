@@ -878,6 +878,8 @@
       );
   overflow: hidden;
    
+  overflow: clip;
+   
   overscroll-behavior: none;
   transition:
     box-shadow var(--motion-base, 200ms)
@@ -1730,6 +1732,8 @@ button.wm-titlebar-readonly-status {
   inset: 0;
   z-index: 2;
   overflow: auto;
+   
+  scrollbar-gutter: stable;
   overscroll-behavior: contain;
   background: var(--console-surface-canvas, #f8fafc);
 }

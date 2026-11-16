@@ -17,6 +17,7 @@ import type * as VectorStyle from "../native-vector-style-selection-edit";
 import type * as TextDecoration from "../native-text-decoration";
 import type * as TextObjectDelete from "../native-text-object-delete";
 import type * as ImageReorder from "../native-embedded-image-reorder";
+import type * as ContentUnits from "../engine/native/vector-content-transaction";
 import type * as FontExtension from "../native-font-extension-text-edit";
 import type * as AuthorRecovery from "../native-author-recovery";
 import type * as SourceTextBoxProof from "../source-text-box-proof";
@@ -237,6 +238,8 @@ function bindPdfNativePlanners(pageId: string | null) {
       remote<typeof ContentStream.readMraiNativeEmbeddedImageMarkedContent>(pageId, "readMraiNativeEmbeddedImageMarkedContent"),
     readMraiNativeEmbeddedImageObject:
       remote<typeof ContentStream.readMraiNativeEmbeddedImageObject>(pageId, "readMraiNativeEmbeddedImageObject"),
+    listMraiNativeEmbeddedImagePaintsOfObject:
+      remote<typeof ContentStream.listMraiNativeEmbeddedImagePaintsOfObject>(pageId, "listMraiNativeEmbeddedImagePaintsOfObject"),
     planMraiNativePictureOrigin:
       remote<typeof ContentStream.planMraiNativePictureOrigin>(pageId, "planMraiNativePictureOrigin"),
     readMraiNativePictureOrigin:
@@ -354,6 +357,12 @@ function bindPdfNativePlanners(pageId: string | null) {
       remote<typeof ImageReorder.planPdfNativeEmbeddedImageReorder>(pageId, "planPdfNativeEmbeddedImageReorder"),
     planMraiNativeEmbeddedImageClipEscape:
       remote<typeof ImageReorder.planMraiNativeEmbeddedImageClipEscape>(pageId, "planMraiNativeEmbeddedImageClipEscape"),
+    /** The page content's objects as a layer step passes them, and the layer
+     * move of a text object, shading, Form or group (the Selection pane). */
+    listMraiNativePageContentUnits:
+      remote<typeof ContentUnits.listMraiNativePageContentUnits>(pageId, "listMraiNativePageContentUnits"),
+    planMraiNativeContentUnitReorder:
+      remote<typeof ContentUnits.planMraiNativeContentUnitReorder>(pageId, "planMraiNativeContentUnitReorder"),
     planPdfNativeFontExtensionTextEdit: fontExtensionTextEdit(pageId),
     /** A part set in a family the PDF does not hold: the slices the editor
      * fetched and verified travel with the call (the engine fetches nothing). */

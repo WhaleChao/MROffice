@@ -780,16 +780,34 @@ export function brightnessOffsetFilters(stored: number): string[] {
  * The CSS to layer onto the visible image element for the resolved effects.
  * Returns an empty object when no effect is active (so spreading it onto the
  * plain `<img>` is a no-op and the historical render stays byte-stable). The
- * frame uses `border` (drawn outside the image content via `box-sizing`),
+ * frame is an `outline` centred on the picture's edge (PowerPoint's line),
  * `borderRadius` clips the corners, `boxShadow` is the soft drop shadow, and the
  * picture adjustments (recolor / brightness / contrast → `filter`; transparency
  * → `opacity`) tint / fade the picture.
  */
-export function imageEffectsCss(effects: ResolvedImageEffects): CSSProperties {
+export function imageEffectsCss(
+  effects: ResolvedImageEffects,
+  options: {
+    /**
+     * How far outside the frame the line's centre lies, px
+     * (`officePictureLineOutset`: half its width for a flat picture, as
+     * PowerPoint draws it). Absent: centred on the frame.
+     */
+    readonly lineOutset?: number;
+  } = {},
+): CSSProperties {
   if (!effects.hasEffects) return {};
   const css: CSSProperties = {};
+  // The picture's line is centred on its frame, as PowerPoint draws a picture's
+  // `a:ln` (and as a video's border already is, `videoBorderCss`): half over
+  // the picture's edge, half outside it, the picture filling the whole frame.
+  // A border inside the frame (CSS `border` on a border-box) drew the picture
+  // a whole line width smaller on every side and the line half a width inside
+  
+  // pictures in 22 bench decks).
   if (effects.borderWidth > 0) {
-    css.border = `${effects.borderWidth}px ${effects.borderStyle} ${effects.borderColor}`;
+    css.outline = `${effects.borderWidth}px ${effects.borderStyle} ${effects.borderColor}`;
+    css.outlineOffset = `${(options.lineOutset ?? 0) - effects.borderWidth / 2}px`;
   }
   if (effects.cornerRadius > 0) {
     css.borderRadius = effects.cornerRadius;

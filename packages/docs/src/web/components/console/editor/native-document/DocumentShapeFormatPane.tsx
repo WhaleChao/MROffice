@@ -71,6 +71,9 @@ interface DocumentShapeFormatPaneProps {
   canEdit: boolean;
   draftConflictMessage?: string;
   initialSection?: "shape" | "effects" | "text" | "alt" | "link";
+  /** A command's section of the page to bring into view (Shape Effects >
+   * Glow > Glow Options...: `effects-glow`); a new `serial` asks again. */
+  revealSection?: { readonly section: string; readonly serial: number } | null;
   isChinese: boolean;
   linkTargets: readonly DocumentShapeFormatLinkTarget[];
   onClose: () => void;
@@ -134,6 +137,7 @@ export default function DocumentShapeFormatPane({
   canEdit,
   draftConflictMessage,
   initialSection = "shape",
+  revealSection,
   linkTargets,
   onClose,
   onCommit,
@@ -343,6 +347,17 @@ export default function DocumentShapeFormatPane({
               effect: "none",
             });
           },
+          // 3-D Rotation > Keep text flat, on a shape holding words (its
+          // body's `a:flatTx`); unchecked is stated, so the save takes the
+          // file's element off.
+          ...(attrs.text.trim()
+            ? {
+                keepTextFlat: {
+                  checked: attrs.keepTextFlat === true,
+                  onChange: (checked: boolean) => commit({ keepTextFlat: checked }),
+                },
+              }
+            : {}),
         });
       })(),
     },
@@ -528,6 +543,11 @@ export default function DocumentShapeFormatPane({
       className={styles.pane}
       dockRight={false}
       initialTab={initialSection}
+      requestedTab={
+        revealSection
+          ? { id: initialSection, serial: revealSection.serial, section: revealSection.section }
+          : undefined
+      }
       labels={{
         title: t("document.shapeFormatPane.formatShape"),
         close: t("document.shapeFormatPane.closeFormatPane"),

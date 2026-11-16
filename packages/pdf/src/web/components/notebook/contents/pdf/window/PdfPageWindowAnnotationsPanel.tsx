@@ -77,6 +77,7 @@ import { pdfSourceNoteProjectionKey } from "./sourceNotes";
 import type { PdfAnnotation } from "../../../../../lib/pdf/page-content-model";
 import type { PdfAnnotationListModel } from "../viewer/PDFViewerProps";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 
 export interface PdfPageWindowAnnotationsPanelModel {
   pageId: string;
@@ -175,7 +176,7 @@ function timeLabel(value: string | undefined): string | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+    return new Intl.DateTimeFormat(pageInterfaceLocale(), { dateStyle: "medium", timeStyle: "short" }).format(date);
   } catch {
     return null;
   }

@@ -66,6 +66,45 @@ export function wordEastAsianSingleLineFactor(family: string | null | undefined)
   return WORD_EAST_ASIAN_SINGLE_LINE_FACTOR;
 }
 
+/**
+ * Faces whose single line Windows Word reads from another box than the one
+ * recorded (the hhea box of Word for macOS): Windows Word sets a face that
+ * does not ask for its typographic metrics (OS/2 fsSelection bit 7) on its
+ * OS/2 win box, usWinAscent + usWinDescent. For Yu Mincho and Yu Gothic that
+ * box is 2636 / 2048 em where hhea's is 2257 / 2048, and Word's line is 1.3x
+ * it: 1.6732 em -- 17.56 / 20.08 pt at 10.5 / 12 pt single, 20.17 pt at
+ * 10.5 pt and 1.15 lines, two pitches of a 17.4 pt line grid at 10.5 pt as at
+ * 12 pt (docx-look/probes/yu yu1, yu2). The other recorded East Asian faces
+ * have one box both ways (MS Mincho 1.3 em, Meiryo 1.95 em measured alike).
+ * Japanese documents take Yu Mincho from their theme's minorEastAsia face:
+ * read at 1.43 em, corpus R315-D15 set its Japanese body one grid pitch a
+ * line where Word sets two, a page short of three. The factor is relative to
+ * the recorded hhea box, so a caller multiplies the box it already reads.
+ */
+const WORD_WINDOWS_EAST_ASIAN_LINE_FACTORS: readonly (readonly [RegExp, number])[] = [
+  [/^(yu mincho|yu gothic|游明朝|游ゴシック)( regular)?$/i, (2636 * 1.3) / 2257],
+];
+
+/** `window.__docsWinBoxLineOff = true` asks the older reading (Yu Mincho and
+ * Yu Gothic on their hhea box) for an A/B of one build. */
+function windowsBoxLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsWinBoxLineOff?: boolean }).__docsWinBoxLineOff === true;
+}
+
+/**
+ * Word's single-line factor for the East Asian face `family` in a Word
+ * document, as Windows Word sets it: `wordEastAsianSingleLineFactor`, save
+ * for the faces Windows Word reads from their win box. The Docs editor's own;
+ * other editors keep `wordEastAsianSingleLineFactor`.
+ */
+export function wordDocumentEastAsianSingleLineFactor(family: string | null | undefined): number {
+  if (!windowsBoxLineOff()) {
+    const name = (family ?? "").trim().replace(/^["']|["']$/g, "");
+    for (const [pattern, factor] of WORD_WINDOWS_EAST_ASIAN_LINE_FACTORS) if (pattern.test(name)) return factor;
+  }
+  return wordEastAsianSingleLineFactor(family);
+}
+
 /** Upper bound mirrored from the OOXML font table the values are read from. */
 const MAX_EAST_ASIAN_FONT_FAMILIES = 256;
 

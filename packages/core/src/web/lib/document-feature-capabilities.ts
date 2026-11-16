@@ -255,6 +255,9 @@ const SERVER_METADATA_DOCUMENT_ATTRIBUTE_NAMES = [
   // table from the fonts a document actually uses, so this must never block or
   // alter DOCX serialization.
   "eastAsianFontFamilies",
+  // The source's Normal/docDefaults eastAsia face where their ascii face is an
+  // East Asian one too: the face the defaults' East Asian text is set in.
+  "defaultEastAsianFontFamily",
   // The source's Word compatibility mode, read for layout rules that differ
   // by mode; the package keeps its own compat settings.
   "wordCompatibilityMode",
@@ -265,6 +268,7 @@ const SERVER_METADATA_DOCUMENT_ATTRIBUTE_NAMES = [
   "eastAsianLanguage",
   "wordStrictKinsoku",
   "wordBalanceSbcsDbcs",
+  "wordBalancedSpaces",
   "wordDoNotBreakWrappedTables",
   "mailMergeData",
   "pageBlockSizes",

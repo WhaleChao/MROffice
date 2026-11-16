@@ -13,6 +13,7 @@
 import { PDFDict, PDFDocument, PDFName, PDFObjectCopier, PDFRef, type PDFObject } from "pdf-lib";
 
 import { loadCompatiblePdfJs, PDF_JS_DOCUMENT_ASSETS } from "@mrnote/core/web/lib/pdf/pdfjs-runtime.ts";
+import { pdfLibObjectsPerTick, pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 type ObjectRef = Readonly<{ objectNumber: number; generation: number }>;
 
@@ -24,7 +25,7 @@ function lookup(document: PDFDocument, value: PDFObject | undefined): PDFObject 
 }
 
 async function load(bytes: Uint8Array): Promise<PDFDocument> {
-  return PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
+  return PDFDocument.load(bytes, { parseSpeed: pdfLibParseSpeed(), ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
 }
 
 /**
@@ -50,7 +51,7 @@ export async function renderPdfImageObject(bytes: Uint8Array, ref: ObjectRef): P
   page.node.setXObject(PDFName.of("Im0"), copied as PDFRef);
   const content = single.context.flateStream(`q ${width} 0 0 ${height} 0 0 cm /Im0 Do Q`);
   page.node.set(PDFName.of("Contents"), single.context.register(content));
-  const singleBytes = await single.save({ useObjectStreams: false });
+  const singleBytes = await single.save({ objectsPerTick: pdfLibObjectsPerTick(), useObjectStreams: false });
   const pdfjs = await loadCompatiblePdfJs();
   const task = pdfjs.getDocument({ data: singleBytes, ...PDF_JS_DOCUMENT_ASSETS });
   const rendered = await task.promise;

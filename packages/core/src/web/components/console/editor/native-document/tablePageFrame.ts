@@ -57,6 +57,13 @@ import {
 } from "./floatBothSidesWrap";
 import { paginationLayoutScale } from "./paged/paginationGeometry";
 import {
+  COLUMN_BAND_EXCLUSION_ATTR,
+  COLUMN_TABLE_FRAME,
+  ownSectionColumnCount,
+  unequalColumnCount,
+  unequalColumnPlacementForBlock,
+} from "./paged/unequalColumnProjection";
+import {
   normalizeTablePositioning,
   tablePositioningAnchorOffsetPx,
   tablePositioningIgnoredByWord,
@@ -448,6 +455,7 @@ const MANAGED_PROPERTIES = [
   "margin-right",
   "margin-bottom",
   "margin-left",
+  "padding-bottom",
   "z-index",
   "shape-outside",
   "shape-margin",
@@ -479,6 +487,7 @@ function writeAttribute(element: HTMLElement, name: string, value: string | null
 export function releaseTablePageFrame(wrapper: HTMLElement): void {
   if (!wrapper.hasAttribute(TABLE_PAGE_FRAME_ATTR)) return;
   wrapper.removeAttribute(TABLE_PAGE_FRAME_ATTR);
+  wrapper.removeAttribute(COLUMN_BAND_EXCLUSION_ATTR);
   wrapper.removeAttribute(TABLE_KEEP_WHOLE_ATTR);
   wrapper.removeAttribute(FLOAT_BOTH_SIDES_ATTR);
   wrapper.removeAttribute(FLOAT_WRAP_DISTANCES_ATTR);
@@ -486,6 +495,22 @@ export function releaseTablePageFrame(wrapper: HTMLElement): void {
 }
 
 const px = (value: number) => `${Math.round(value * 100) / 100}px`;
+
+/**
+ * A table in its frame ends at its own foot: Word sets the text after a
+ * positioned table at the frame's bottom plus its distance from text (the
+ * margin below), nothing more. The editor's table wrapper keeps 2 px of
+ * spare padding below (note-editor.css, for the Markdown table's resize
+ * handle), which pushed the paragraphs after every framed Word table 2 px
+ * down: R281-D19's form on page 6 ended 2 px lower than Word's, its last note
+ * line crossed the bottom margin by 2 px and went to a page of its own (14
+ * pages; Word 13). `window.__docsFrameWrapperPad = true` keeps the padding
+ * (old, A/B).
+ */
+function framePadding(wrapper: HTMLElement): Partial<Record<ManagedProperty, string>> {
+  const win = wrapper.ownerDocument.defaultView as (Window & { __docsFrameWrapperPad?: boolean }) | null;
+  return win?.__docsFrameWrapperPad === true ? {} : { "padding-bottom": "0px" };
+}
 
 /** Anything drawn in a paragraph. ProseMirror's own separator image (it ends
  * a text that ends in white space, before the trailing break) draws nothing:
@@ -603,6 +628,81 @@ export function stackedFloatDropPx(
 }
 
 /**
+ * A floating table placed down from the page or the margins on a page of
+ * newspaper columns, drawn where Word draws it: at its page point, out of the
+ * column flow, the page it stands on being its anchor paragraph's (corpus
+ * R423-D04: a journal's sidebar table 9169 tw down the page in the narrow
+ * first column, anchored after the abstract in the wide second; Word draws
+ * it in the first column of page 1, x 28 pt, y 458-737 pt). Laid into its
+ * anchor's column at its drop, it overflowed that column and took itself and
+ * every page after it on by a page, the single-column frame's page margins
+ * squeezing its column slot to 1 px. A column it stands across to the foot
+ * ends above it (`COLUMN_BAND_EXCLUSION_ATTR`, as a page-placed text box).
+ * A table anchored to its text, one the paginator broke, or one running past
+ * the page's foot keeps its column's flow. Returns whether it was placed.
+ * `window.__docsColumnTableFloatOff = true` keeps the older layout (A/B).
+ */
+function placeColumnPageTable(
+  wrapper: HTMLElement,
+  table: HTMLTableElement,
+  positioning: TablePositioning,
+  geometry: FloatPageGeometry,
+  sheet: HTMLElement,
+  size: { readonly widthPx: number; readonly heightPx: number },
+  broken: boolean,
+): boolean {
+  if (broken || positioning.verticalAnchor === "text") return false;
+  // From the column it stands in: the track its place in the flow is in.
+  const slot = positioning.horizontalAnchor === "column" ? unequalColumnPlacementForBlock(wrapper) : null;
+  const pageGeometry: FloatPageGeometry = {
+    ...geometry,
+    ...nominalVerticalMargins(sheet),
+    ...(slot ? { columnLeftPx: geometry.marginLeftPx + slot.inlineStartPx, columnWidthPx: slot.widthPx } : {}),
+  };
+  const frame = resolveTablePageFrame(positioning, pageGeometry, size, 1, geometry.pageHeightPx - geometry.marginBottomPx, true);
+  if (!frame) return false;
+  const { placement, distances } = frame;
+  const bodyBottomPx = geometry.pageHeightPx - geometry.marginBottomPx;
+  if (frame.mode !== "frame" && placement.topPx + placement.heightPx > bodyBottomPx + 0.5) return false;
+  const anchorShift = table.dataset.wordTableOutdent === "true" ? tablePositioningAnchorOffsetPx(positioning) ?? 0 : 0;
+  const left = placement.leftPx - anchorShift;
+  const band =
+    frame.mode === "frame"
+      ? null
+      : [
+          placement.topPx - distances.topPx - geometry.marginTopPx,
+          placement.topPx + placement.heightPx + distances.bottomPx - geometry.marginTopPx,
+          placement.leftPx - distances.leftPx - geometry.marginLeftPx,
+          placement.leftPx + placement.widthPx + distances.rightPx - geometry.marginLeftPx,
+        ].map((value) => Math.round(value * 100) / 100).join(",");
+  writeAttribute(wrapper, TABLE_PAGE_FRAME_ATTR, COLUMN_TABLE_FRAME);
+  writeAttribute(wrapper, TABLE_KEEP_WHOLE_ATTR, null);
+  writeAttribute(wrapper, COLUMN_BAND_EXCLUSION_ATTR, band);
+  writeAttribute(wrapper, FLOAT_BOTH_SIDES_ATTR, null);
+  writeAttribute(wrapper, FLOAT_WRAP_DISTANCES_ATTR, null);
+  writeStyles(wrapper, {
+    position: "absolute",
+    left: px(left),
+    top: px(placement.topPx),
+    float: "none",
+    width: "max-content",
+    "max-width": "none",
+    "margin-top": "0px",
+    "margin-right": "0px",
+    "margin-bottom": "0px",
+    "margin-left": "0px",
+    ...framePadding(wrapper),
+    "z-index": "1",
+  });
+  return true;
+}
+
+function columnTableFloatOff(sheet: HTMLElement): boolean {
+  const win = sheet.ownerDocument.defaultView as (Window & { __docsColumnTableFloatOff?: boolean }) | null;
+  return win?.__docsColumnTableFloatOff === true;
+}
+
+/**
  * Draw every floating table of one sheet where Word puts it. Returns the
  * wrappers set to wrap on both sides, for `floatBothSidesWrap`.
  */
@@ -617,6 +717,7 @@ export function projectTablePageFrames(
   const bothSides: HTMLElement[] = [];
   let geometry: FloatPageGeometry | null | undefined;
   let columnCount = 1;
+  let trackCount = 1;
   // A sheet without a positioned table (nearly every one) is asked once,
   // not once per block: every ledger pass asked every block of the book.
   const anyPositioned = sheet.querySelector("table[data-table-positioning]") !== null;
@@ -687,6 +788,7 @@ export function projectTablePageFrames(
     if (geometry === undefined) {
       geometry = sheetGeometry(sheet, keepOnPage);
       columnCount = Number.parseInt(getComputedStyle(sheet).columnCount, 10) || 1;
+      trackCount = columnTableFloatOff(sheet) ? 1 : unequalColumnCount(sheet) ?? 1;
     }
     const widthPx = table.offsetWidth;
     // The first part of a broken table is placed as the whole table is:
@@ -697,6 +799,19 @@ export function projectTablePageFrames(
     // first row on page 24).
     const heightPx = continues && !continuation ? brokenTableHeightPx(table) : table.offsetHeight;
     if (!geometry || !(widthPx > 0) || !(heightPx > 0)) continue;
+    // A page of newspaper columns: every block stands in a column track
+    // (unequalColumnProjection), so a table's frame is never a float of the
+    // page. One placed down the page or the margins is drawn at its page
+    // point out of the column flow; any other keeps its column's flow.
+    if (trackCount > 1 && ownSectionColumnCount(wrapper) > 1) {
+      if (!placeColumnPageTable(wrapper, table, positioning, geometry, sheet, { widthPx, heightPx }, continues || continuation)) {
+        releaseTablePageFrame(wrapper);
+      }
+      continue;
+    }
+    // A table of a single-column section on a page of column regions is laid
+    // out as on a single-column page; a column frame it had is let go.
+    if (wrapper.getAttribute(TABLE_PAGE_FRAME_ATTR) === COLUMN_TABLE_FRAME) releaseTablePageFrame(wrapper);
     const flowTop = flowTopPx(wrapper, sheet);
     const pageGeometry = { ...geometry, ...nominalVerticalMargins(sheet), flowTopPx: flowTop };
     // A table holding a floating table is kept whole on its page (R104-D19)
@@ -786,6 +901,7 @@ export function projectTablePageFrames(
         "margin-top": px(frame.dropPx > 0.5 ? frame.dropPx + previousSpaceAfterPx(wrapper) : 0),
         ...(frame.dropPx > 0.5 && !continuation ? { "--table-frame-lead": px(frame.dropPx) } : {}),
         "margin-bottom": "0px",
+        ...framePadding(wrapper),
         "margin-left": px(left - geometry.marginLeftPx),
         "margin-right": px(Math.max(0, geometry.pageWidthPx - geometry.marginRightPx - left - wrapperWidth)),
       });
@@ -810,6 +926,7 @@ export function projectTablePageFrames(
         "margin-top": px(drop),
         ...(drop > 0.5 ? { "--table-frame-lead": px(drop) } : {}),
         "margin-bottom": px(distances.bottomPx),
+        ...framePadding(wrapper),
         ...(frame.side === "left"
           ? { "margin-left": px(left - geometry.marginLeftPx), "margin-right": px(distances.rightPx) }
           : {
@@ -837,6 +954,7 @@ export function projectTablePageFrames(
       "margin-right": "0px",
       "margin-bottom": "0px",
       "margin-left": "0px",
+      ...framePadding(wrapper),
       "z-index": "1",
     });
     if (frame.mode === "both") {

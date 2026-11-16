@@ -22,7 +22,8 @@ import { pdfTextDraftNodes, type PdfFallbackGlyphAdvances } from "./fallback-gly
  */
 export interface PdfAnchoredDraftGlyph {
   readonly text: string;
-  /** The glyph's advance in the geometry's own units. */
+  /** The glyph's advance in the geometry's own units: below zero where the
+   * next glyph starts left of this one (the parts of a stack). */
   readonly advance: number;
   /** The glyph's size against the line's first glyph (a superscript set
    * smaller: 2/3); absent when it is the first glyph's size. */
@@ -88,11 +89,21 @@ function segmentsOf(appearance: PdfTextSourceAppearance): Segment[] | null {
     const left = character.origin[0];
     const right = next ? next.origin[0] : Math.max(character.quad[2], character.quad[6]);
     const advance = right - left;
-    if (!Number.isFinite(advance) || advance < -size * 0.02) return null;
+    // A pen that goes back is no line -- but for the part of a stack set
+    // under or over the one before it (a fraction's denominator starting
+    // left of where its numerator did: the next glyph stands on another
+    // baseline, within a few glyphs back). Refused, one such row left the
+    // whole block to the browser: the paragraph wrapped again in its frame
+    // at the first key typed, and back when the page drew it (Attention
+    
+    const stacked = next !== undefined && Math.abs(next.origin[1] - character.origin[1]) > size * 0.1 &&
+      advance >= -size * 3;
+    if (!Number.isFinite(advance) || (advance < -size * 0.02 && !stacked)) return null;
     const own = Math.abs(character.fontSize) || firstSize;
     const scale = own / firstSize;
     segments.push({
-      start: character.start, end: character.end, text: character.text, advance: Math.max(0, advance),
+      start: character.start, end: character.end, text: character.text,
+      advance: advance < -size * 0.02 ? advance : Math.max(0, advance),
       ...(Math.abs(scale - 1) > 0.01 ? { scale: Math.round(scale * 1000) / 1000 } : {}),
       ...(Math.abs(rise) > size * 0.02 ? { rise: Math.round(rise * 1000) / 1000 } : {}),
     });
@@ -432,6 +443,12 @@ export function fillPdfAnchoredTextDraft(
     if (!freed || freed.look !== look || into[into.length - 1] !== freed.span) {
       const span = doc.createElement("span");
       span.dataset.pdfAnchoredFreed = "true";
+      // Like a glyph's box, at its face's own advances: the draft's letter
+      // and word spacing are what fits a line the browser lays out whole to
+      // the PDF's width, and are not this part's (inherited, they moved the
+      
+      span.style.letterSpacing = "0px";
+      span.style.wordSpacing = "0px";
       for (const [property, value] of Object.entries(css)) span.style.setProperty(property, value);
       if (glyph) ownLook(span, glyph);
       freed = { span, look };
@@ -443,7 +460,12 @@ export function fillPdfAnchoredTextDraft(
     const span = doc.createElement("span");
     span.dataset.pdfAnchoredGlyph = "true";
     span.style.display = "inline-block";
-    span.style.width = `${Math.round(glyph.advance * unitsToPx * 1000) / 1000}px`;
+    // (A pen that goes back -- the part of a stack -- is a box of no width
+    // the next one is set back from.)
+    if (glyph.advance < 0) {
+      span.style.width = "0px";
+      span.style.marginRight = `${Math.round(glyph.advance * unitsToPx * 1000) / 1000}px`;
+    } else span.style.width = `${Math.round(glyph.advance * unitsToPx * 1000) / 1000}px`;
     span.style.whiteSpace = "pre";
     // The box is the PDF's advance; the browser's own spacing is not added.
     span.style.letterSpacing = "0px";
@@ -465,6 +487,9 @@ export function fillPdfAnchoredTextDraft(
     const previewed = (text: string, from: number, glyph?: PdfAnchoredDraftGlyph) => {
       if (!span) {
         span = previewSpan(doc, preview);
+        // (At the previewed face's own advances, as a freed part is.)
+        if (!preview.css["letter-spacing"]) span.style.letterSpacing = "0px";
+        if (!preview.css["word-spacing"]) span.style.wordSpacing = "0px";
         nodes.push(span);
       }
       // The characters keep their own look (a part's face, its rules)
@@ -703,7 +728,11 @@ export function fillPdfAnchoredTextRows(
     /** The page's other text (client rects): the edited row wraps before
      * the first of it to its right, as the page sets the paragraph again
      * in the room free beside it. */
-    obstacles?: readonly Readonly<{ left: number; top: number; right: number; bottom: number }>[] }>,
+    obstacles?: readonly Readonly<{ left: number; top: number; right: number; bottom: number }>[];
+    /** The block is set centred (its rows on one axis): its left and right
+     * edges, in the rows' own units. The row typed onto keeps the block's
+     * axis, and wraps at the block's width, as the page sets it again. */
+    centred?: Readonly<{ left: number; right: number }> | null }>,
   preview?: PdfTextDraftFormatPreview | null,
   ranges?: readonly PdfTextDraftFormatPreview[],
 ): boolean {
@@ -769,7 +798,42 @@ export function fillPdfAnchoredTextRows(
     const x = (host.left + row.origin[0] * host.width / frame.pageWidth - corner.left) / a;
     const y = (baselines[index] + added * pitch - corner.top) / d;
     if (!place(layer, x, y)) return false;
-    if (!row.edited || !(pitch > 0)) continue;
+    if (!row.edited) continue;
+    if (frame.centred) {
+      // A centred block: the row keeps the block's axis as it is typed onto,
+      // and what no longer fits the block's width goes on rows of its own
+      // under it, on that axis too (the page sets the block so: IPCC SPM.1's
+      
+      // the axis until the page's own preview arrived).
+      const axis = host.left + (frame.centred.left + frame.centred.right) / 2 * host.width / frame.pageWidth;
+      const width = (frame.centred.right - frame.centred.left) * host.width / frame.pageWidth;
+      const centre = (target: HTMLElement, line: number) => {
+        // (Its ink: the separator after it draws nothing.)
+        const range = doc.createRange();
+        range.selectNodeContents(target);
+        const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0);
+        range.detach();
+        if (!rects.length) return true;
+        const left = Math.min(...rects.map((rect) => rect.left)), right = Math.max(...rects.map((rect) => rect.right));
+        const own = target.getBoundingClientRect().left;
+        return place(target, (axis - (right - left) / 2 - (left - own) - corner.left) / a,
+          (baselines[index] + line * pitch - corner.top) / d);
+      };
+      let current: HTMLElement = layer;
+      for (let wraps = 0; wraps < 64 && pitch > 0; wraps += 1) {
+        const band = current.getBoundingClientRect();
+        const rest = splitPdfDraftRowAt(current, band.left + width + 0.5);
+        if (!rest) break;
+        current.after(rest);
+        if (!centre(current, added)) return false;
+        added += 1;
+        if (!place(rest, x, (baselines[index] + added * pitch - corner.top) / d)) return false;
+        current = rest;
+      }
+      if (!centre(current, added)) return false;
+      continue;
+    }
+    if (!(pitch > 0)) continue;
     // Typed past the room beside it, the row's last words go on rows of
     // their own under it, from its left edge, as the page sets them.
     let current: HTMLElement = layer;

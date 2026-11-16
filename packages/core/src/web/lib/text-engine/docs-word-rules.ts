@@ -45,18 +45,40 @@ export function wordTrailingPunctuationLength(word: string): number {
 export const WORD_JUSTIFY_TRAILING_SHARE = 0.245;
 export const WORD_JUSTIFY_TRAILING_PER_SPACES = 9;
 
+
+
+
+
+
+
+export const WORD_WINDOWS_JUSTIFY_WORD_SHARE = 0.34;
+export const WORD_WINDOWS_JUSTIFY_HYPHEN_SHARE = 1 / 3;
+
+/** `window.__docsJustifyKeepMac = true` asks the older limits, measured in
+ * Word for Mac (16.86), for an A/B of one build. */
+function macKeepLimits(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsJustifyKeepMac?: boolean}).__docsJustifyKeepMac === true;
+}
+
 /** Whether a justified line overflowing by `overflowPx` keeps its next word
  * in Word: `spaces` are the spaces after the line's last tab (counting the
  * one before the kept word), `spacePx` a space's natural width, `wordPx` the
- * kept word's width and `fontPx` the font size (only whether it is 0 is read), 0 for what follows a hyphen,
- * which has no space before it. `trailingPx` is how much of `wordPx` is
- * trailing punctuation, which is paid for apart from the letters and past the
- * spaces' own limit. A line with no space at all (it can end only after a
- * hyphen) has nothing to narrow, and keeps what follows the hyphen only when
- * its trailing punctuation alone hangs over (sq/m7: , ; . ) % in Times New
- * Roman and Arial 11 pt, no punctuation none). What follows a hyphen on a line
- * with spaces gets less of its punctuation back, as if it had 5/3 the spaces
- * (sq/m7: "x-the," and "x-EIR;" after 3 and 12 spaces). */
+ * kept word's width and `fontPx` the font size (only whether it is 0 is read),
+ * 0 for what follows a hyphen, which has no space before it. `trailingPx` is
+ * how much of `wordPx` is trailing punctuation.
+ *
+ * Windows Word (the reference) keeps the word while the overflow is within
+ * both limits: a quarter of a space for each space, and 0.34 of the whole
+ * word -- its trailing punctuation counted as letters -- plus 0.372 of the
+ * space before it (a third of the word after a hyphen). The punctuation earns
+ * nothing past the spaces' limit: "portfolio." after 8 spaces at 10 pt goes
+ * at 5.0 pt over like "portfolio", and "EIR;" after 6 spaces at 11 pt at
+ * 4.125 (jkeep, jkeep2; corpus R425-D02, whose "portfolio." 6.4 pt over Word
+ * sends down). A line with no space keeps nothing past the margin, its
+ * punctuation neither (jkeep6). Word for Mac pays the punctuation apart, up
+ * to all of it past the spaces' limit, and hangs it on a line with no space
+ * (the older limits, `macKeepLimits`).
+ */
 export function wordKeepsJustifiedWord(
   overflowPx: number,
   spaces: number,
@@ -66,6 +88,29 @@ export function wordKeepsJustifiedWord(
   trailingPx = 0,
 ): boolean {
   if (!(overflowPx > 0) || !(wordPx > 0)) return false;
+  if (macKeepLimits()) return wordKeepsJustifiedWordMac(overflowPx, spaces, fontPx, spacePx, wordPx, trailingPx);
+  if (!(spaces > 0) || !(spacePx > 0)) return false;
+  const bySpaces = spacePx * spaces * WORD_JUSTIFY_SPACE_SHARE;
+  const byWord = fontPx > 0
+    ? wordPx * WORD_WINDOWS_JUSTIFY_WORD_SHARE + WORD_JUSTIFY_SPACE_BEFORE_SHARE * spacePx
+    : wordPx * WORD_WINDOWS_JUSTIFY_HYPHEN_SHARE;
+  return overflowPx <= Math.min(bySpaces, byWord);
+}
+
+/** Word for Mac's limits (16.86, measured before the Windows reference): the
+ * trailing punctuation paid apart from the letters and past the spaces' own
+ * limit, more of it the fewer spaces the line has; a line with no space at
+ * all keeps what follows its hyphen only when the punctuation alone hangs
+ * over (sq/m7); what follows a hyphen on a line with spaces gets less of its
+ * punctuation back, as if it had 5/3 the spaces. */
+function wordKeepsJustifiedWordMac(
+  overflowPx: number,
+  spaces: number,
+  fontPx: number,
+  spacePx: number,
+  wordPx: number,
+  trailingPx: number,
+): boolean {
   if (!(spaces > 0)) return overflowPx <= trailingPx;
   if (!(spacePx > 0)) return false;
   const bySpaces = spacePx * spaces * WORD_JUSTIFY_SPACE_SHARE;

@@ -680,19 +680,8 @@ export function spreadsheetChartDesignRibbonGroups({
                         paletteId,
                       )
                     }
-                    labels={{
-                      group: (group) =>
-                        group === "colorful"
-                          ? t("spreadsheet.uiCopy.colorful")
-                          : t("spreadsheet.uiCopy.monochromatic"),
-                      palette: (group, index) =>
-                        t(
-                          group === "colorful"
-                            ? "spreadsheet.dynamicCopy.chartPalette.colorful"
-                            : "spreadsheet.dynamicCopy.chartPalette.monochromatic",
-                          { index },
-                        ),
-                    }}
+                    // Office's gallery names (Colorful Palette 2, 彩色调色板 2),
+                    // the deck's and the document's.
                     testIdPrefix="spreadsheet-chart-color"
                   />
         );

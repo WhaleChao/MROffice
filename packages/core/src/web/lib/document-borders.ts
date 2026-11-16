@@ -261,6 +261,25 @@ const COMPOUND_BORDER_STYLES = new Set([
   "thinThickThinLargeGap",
 ]);
 
+/** The compound rules of a thin line and a thick one (and a third). */
+const THIN_THICK_STYLES = new Set([
+  "thinThickSmallGap",
+  "thickThinSmallGap",
+  "thinThickThinSmallGap",
+  "thinThickMediumGap",
+  "thickThinMediumGap",
+  "thinThickThinMediumGap",
+  "thinThickLargeGap",
+  "thickThinLargeGap",
+  "thinThickThinLargeGap",
+]);
+
+/** `window.__docsBorderThinThickThirds = true`: a thin-and-thick paragraph
+ * rule is three widths again, as before (A/B). */
+function compoundAsDoubleThirds(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBorderThinThickThirds?: boolean }).__docsBorderThinThickThirds === true;
+}
+
 function cssLineStyle(style: string): string {
   if (style === "nil" || style === "none") return "none";
   if (COMPOUND_BORDER_STYLES.has(style)) return "double";
@@ -292,6 +311,13 @@ function edgeWidthPx(style: string, sizePt: number, wordStyle?: string): number 
   // out 3 to 15 pt short and the page held a paragraph more than Word's.
   if (wordStyle === "triple") return Math.max(5, rawPx * 5);
   if (wordStyle === "threeDEmboss" || wordStyle === "threeDEngrave") return Math.max(2, rawPx * 2);
+  // The thin-and-thick pairs and triples: Word's thin line and gaps are their
+  // own widths, not the rule's (probes/pgbord p24: thinThickSmallGap at 3 pt
+  // takes 4.5 pt of the paragraph, drawn three widths it took 9 pt).
+  const ruled = wordStyle && THIN_THICK_STYLES.has(wordStyle) && !compoundAsDoubleThirds()
+    ? wordBorderRuleWidthPt(wordStyle, sizePt)
+    : null;
+  if (ruled !== null) return Math.min(128 * 3, Math.max(3, ptToPx(ruled)));
   return style === "double" ? wordDoubleBorderWidthPx(rawPx) : rawPx;
 }
 
@@ -322,6 +348,48 @@ export function documentBorderLineCss(
  */
 export function wordDoubleBorderWidthPx(linePx: number): number {
   return Math.max(3, linePx * 3);
+}
+
+/**
+ * The whole width, in points, Windows Word draws a page or paragraph border
+ * rule of one ST_Border style at `sizePt` (its `w:sz`): the lines and gaps
+ * together for a compound one (probe docx-look probes/pgbord: page borders
+ * at w:sz 4 / 12 / 24 on every style; p12 / p24: a paragraph's top rule
+ * takes the same width of its line box). `double` is three widths (two lines, a
+ * gap of the same), `triple` five; a Small Gap pair is the line, a 0.75 pt
+ * gap and a 0.75 pt line; a Medium Gap pair the line and two halves of it; a
+ * Large Gap pair a 1.5 pt line, a gap of the width and a 0.75 pt line; the
+ * thin-thick-thin rules add their second thin line and gap; 3-D Emboss and
+ * Engrave are two widths. Null for a style drawn at its own width.
+ */
+export function wordBorderRuleWidthPt(style: string, sizePt: number): number | null {
+  const sz = Math.max(0, sizePt);
+  switch (style) {
+    case "double":
+      return 3 * sz;
+    case "triple":
+      return 5 * sz;
+    case "thinThickSmallGap":
+    case "thickThinSmallGap":
+      return sz + 1.5;
+    case "thinThickThinSmallGap":
+      return sz + 3;
+    case "thinThickMediumGap":
+    case "thickThinMediumGap":
+      return 2 * sz;
+    case "thinThickThinMediumGap":
+      return 3 * sz;
+    case "thinThickLargeGap":
+    case "thickThinLargeGap":
+      return sz + 2.25;
+    case "thinThickThinLargeGap":
+      return 2 * sz + 2.875;
+    case "threeDEmboss":
+    case "threeDEngrave":
+      return Math.max(1.94, 2 * sz);
+    default:
+      return null;
+  }
 }
 
 /** The CSS pixel width an edge draws at (as `documentBorderLineCss` writes it). */

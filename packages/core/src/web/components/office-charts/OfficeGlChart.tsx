@@ -26,6 +26,7 @@ import { registerChartPrintSnapshot } from "../console/editor/extensions/chartPr
 import type { ChartTextFrame, ChartTextPart } from "../../lib/engine-host/charts-types";
 import { CHART_WORDART_TITLE_ID } from "../../lib/office-charts/chart-wordart-title";
 import { chartTextFramesSvg } from "../../lib/office-charts/chart-text-svg";
+import { installChartTextMarksOnCanvas } from "../../lib/office-charts/chart-letter-spacing";
 import { browserSupportsWebGL } from "../../lib/webgl-support";
 import { DOUBLE_TAP_MS, DOUBLE_TAP_SLOP_PX, noteDoubleTapAnswered } from "../../lib/double-tap";
 import { isTouchLikePointerType } from "../../lib/pointer-capability";
@@ -165,6 +166,8 @@ export function OfficeGlChart({
         }));
       }
       if (disposed || !hostRef.current) return;
+      // The labels' Character Spacing and capitals (`chart-letter-spacing`).
+      installChartTextMarksOnCanvas();
       chart = echarts.init(hostRef.current, undefined, { renderer: "canvas" });
       chart.setOption(option, { notMerge: true, lazyUpdate: false });
       if (shell) {

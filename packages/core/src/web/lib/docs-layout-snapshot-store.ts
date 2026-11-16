@@ -33,6 +33,12 @@ export interface LayoutSnapshotRow {
   readonly continues: boolean;
   readonly pages: ProjectionNodeRecipe[][];
   readonly measures: ((number[] | null)[])[];
+  /** Per block of each page, the engine's line corrections its textblocks
+   * drew (engineLinesKept); absent when none were noted. */
+  readonly lines?: ((number[] | null)[])[];
+  /** Per block of each page, per textblock, Auto line spacing's boxes it drew
+   * ([digest of its model, boxes]; engineLinesKept). */
+  readonly autoLines?: (unknown[] | null)[][];
   /** On a part put together from its segments (layoutSnapshot's
    * wholePartRows): each segment's first block, block count and content. */
   readonly segmentHashes?: readonly (readonly [first: number, count: number, hash: string])[];
@@ -78,13 +84,15 @@ export function preloadLayoutSnapshots(pageId: string): Promise<void> {
   askedAt.set(pageId, Date.now());
   waited.delete(pageId);
   rows.set(pageId, []);
-  const read = apiGet<{ rows?: LayoutSnapshotRow[] }>(snapshotsPath(pageId, 0)).then((answer) => {
+  const read = apiGet<{ rows?: LayoutSnapshotRow[]; accepts?: unknown }>(snapshotsPath(pageId, 0)).then((answer) => {
+    noteAccepted(answer?.accepts);
     rows.set(pageId, Array.isArray(answer?.rows) ? answer.rows : []);
   }).catch(() => {
     rows.set(pageId, []);
   }).finally(() => {
     loading.delete(pageId);
-    void apiGet<{ rows?: LayoutSnapshotRow[] }>(snapshotsPath(pageId)).then((answer) => {
+    void apiGet<{ rows?: LayoutSnapshotRow[]; accepts?: unknown }>(snapshotsPath(pageId)).then((answer) => {
+      noteAccepted(answer?.accepts);
       if (Array.isArray(answer?.rows)) rows.set(pageId, answer.rows);
     }).catch(() => undefined);
   });
@@ -122,18 +130,70 @@ export interface LayoutSnapshotPartOut {
   readonly continues: boolean;
   readonly pages: readonly (readonly ProjectionNodeRecipe[])[];
   readonly measures: readonly (readonly (readonly number[] | null)[])[];
+  readonly lines?: readonly (readonly (readonly number[] | null)[])[];
+  readonly autoLines?: readonly (readonly (readonly unknown[] | null)[])[];
+}
+
+/* ---- What a part may carry besides its pages ------------------------------ */
+
+
+
+
+export type LayoutRowExtra = "lines" | "autoLines";
+const EXTRAS: readonly LayoutRowExtra[] = ["lines", "autoLines"];
+let serverAccepts: ReadonlySet<LayoutRowExtra> = new Set();
+const printAccepts = new Map<string, ReadonlySet<LayoutRowExtra>>();
+
+function acceptedOf(value: unknown): ReadonlySet<LayoutRowExtra> {
+  return new Set(Array.isArray(value) ? EXTRAS.filter((extra) => value.includes(extra)) : []);
+}
+
+/** The latest answer says: a server rolled back says none. */
+function noteAccepted(value: unknown): void {
+  serverAccepts = acceptedOf(value);
+}
+
+/** Whether rows written for this page may carry `extra`. */
+export function layoutRowExtraAccepted(pageId: string, extra: LayoutRowExtra): boolean {
+  return (printAccepts.get(pageId) ?? serverAccepts).has(extra);
+}
+
+/** A part without its extras. */
+function plainPart(part: LayoutSnapshotPartOut): LayoutSnapshotPartOut {
+  const plain: { -readonly [K in keyof LayoutSnapshotPartOut]?: LayoutSnapshotPartOut[K] } = { ...part };
+  delete plain.lines;
+  delete plain.autoLines;
+  return plain as LayoutSnapshotPartOut;
+}
+
+/** Tests only. */
+export function setLayoutRowExtrasAcceptedForTests(value: unknown): void {
+  noteAccepted(value);
+  printAccepts.clear();
 }
 
 /** Keep these parts of the layout this reader reached. */
 export async function storeLayoutSnapshots(pageId: string, fontsKey: string, parts: readonly LayoutSnapshotPartOut[], partCount: number): Promise<boolean> {
   if (!LAYOUT_CODE_VERSION || !parts.length) return false;
+  const put = (sent: readonly LayoutSnapshotPartOut[]) => apiPut(`/api/v1/pages/${encodeURIComponent(pageId)}/layout-snapshots`, {
+    layout: LAYOUT_CODE_VERSION, engine: layoutEngineName(), fontsKey, parts: sent, partCount,
+  });
   try {
-    await apiPut(`/api/v1/pages/${encodeURIComponent(pageId)}/layout-snapshots`, {
-      layout: LAYOUT_CODE_VERSION, engine: layoutEngineName(), fontsKey, parts, partCount,
-    });
+    await put(parts);
     return true;
   } catch {
-    return false;
+    // A server that said it keeps the extras and then refused (another of its
+    // instances, older, mid-release): the pages are kept without them, and
+    // nothing is sent with them again until a server says so anew.
+    if (!parts.some((part) => part.lines || part.autoLines)) return false;
+    serverAccepts = new Set();
+    printAccepts.delete(pageId);
+    try {
+      await put(parts.map(plainPart));
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -166,12 +226,15 @@ const printParts = new Map<string, { readonly blocks: readonly (readonly unknown
 
 export function handPrintLayouts(
   pageId: string,
-  layouts: { readonly rows?: readonly LayoutSnapshotRow[]; readonly part_blocks?: readonly number[] } | null | undefined,
+  layouts: { readonly rows?: readonly LayoutSnapshotRow[]; readonly part_blocks?: readonly number[]; readonly accepts?: unknown } | null | undefined,
   content: unknown,
 ): void {
   printRows.delete(pageId);
   printParts.delete(pageId);
+  printAccepts.delete(pageId);
   if (!layouts) return;
+  // The server printing says what the rows it keeps from this print may carry.
+  printAccepts.set(pageId, acceptedOf(layouts.accepts));
   if (layouts.rows?.length) printRows.set(pageId, layouts.rows);
   const flat = (content as { content?: unknown; attrs?: unknown } | null)?.content;
   const sizes = layouts.part_blocks;

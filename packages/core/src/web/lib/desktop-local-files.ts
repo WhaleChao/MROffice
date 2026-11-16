@@ -72,6 +72,12 @@ export function markDesktopLocalFile(file: File, token: string | undefined): Fil
   return file;
 }
 
+/** Whether ``file`` was opened from the system in the desktop app (its API
+ * reads it where it is), known at once. */
+export function isDesktopLocalFile(file: File): boolean {
+  return tokens.has(file);
+}
+
 /** The token of a file on this computer, or null (not the desktop app, or a
  * file made in the page). */
 export async function desktopLocalFileToken(file: File): Promise<string | null> {

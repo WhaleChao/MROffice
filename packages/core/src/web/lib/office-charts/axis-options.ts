@@ -56,6 +56,7 @@
  */
 
 import DISPLAY_UNIT_LABELS from "./display-unit-labels.json";
+import { officeChartLayoutWithAxisTicks } from "./chart-layout";
 import {
   EXCEL_1900_FICTITIOUS_LEAP_SERIAL,
   excelSerialToUtcMs,
@@ -395,7 +396,9 @@ export function withOfficeChartAxisOptions<
   const format: Record<string, unknown> = { ...(attrs.format ?? {}) };
   if (Object.keys(axes).length) format.axisOptions = axes;
   else delete format.axisOptions;
-  return { ...attrs, format };
+  // A tick mark set here is the one Quick Layout's layout states too: one
+  // record of one `c:majorTickMark` (`officeChartLayoutWithAxisTicks`).
+  return { ...attrs, format: officeChartLayoutWithAxisTicks((attrs as { readonly chartType?: unknown }).chartType, format) };
 }
 
 export function sameOfficeChartAxisOptions(

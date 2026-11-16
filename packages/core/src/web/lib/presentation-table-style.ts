@@ -35,6 +35,7 @@ import {
 import {
   normalizeOfficeShapeGradient,
   officeGradientCss,
+  officeGradientDrawnStops,
   type OfficeShapeGradient,
 } from "./office-shape-paint";
 import { normalizeOfficeShapeFontFamily } from "./office-shape-text-font";
@@ -1197,7 +1198,7 @@ export function tableStyleLookTableCss(
     ...(look.background ? { backgroundColor: look.background } : {}),
     ...(look.backgroundGradient
       ? {
-          backgroundImage: `linear-gradient(${look.backgroundGradient.angle + 90}deg, ${look.backgroundGradient.stops.map((stop) => `${stop.color} ${stop.offset * 100}%`).join(", ")})`,
+          backgroundImage: `linear-gradient(${look.backgroundGradient.angle + 90}deg, ${officeGradientDrawnStops(look.backgroundGradient.stops.map((stop) => ({ position: stop.offset, color: stop.color }))).map((stop) => `${stop.color} ${stop.position * 100}%`).join(", ")})`,
         }
       : {}),
     ...(scaled

@@ -35,6 +35,12 @@ import {
   type OfficeTextPaint,
   type OfficeTextShadow,
 } from "./office-text-paint";
+import {
+  officeTextPaint3dEffects,
+  officeTextPaintStatedIsAuthentic,
+  officeTextPaintWith3d,
+  type OfficeText3dValues,
+} from "./office-text-3d";
 
 const EMU_PER_PX = 9_525;
 const ANGLE = 60_000;
@@ -145,7 +151,24 @@ export function officeTextPaintOfficeEffects(
         : ({ preset, width, height } satisfies OfficeBevelEffect);
   }
   if (paint.rotation3d) effects.rotation3d = { camera: paint.rotation3d.camera };
+  // Office's statement of the words' 3-D, where it still draws the paint: the
+  // whole of it -- the bottom bevel, depth, contour, material and lighting,
+  // the camera's own X / Y / Z and perspective (`office-text-3d`).
+  const stated3d = officeTextPaint3dEffects(paint);
+  if (stated3d) {
+    delete effects.bevel;
+    delete effects.rotation3d;
+    Object.assign(effects, stated3d);
+  }
   return Object.keys(effects).length ? (effects as OfficePictureEffects) : undefined;
+}
+
+/** Whether a 3-D pick needs the paint's statement: what the display paint holds no words for. */
+function needsStatement(kind: OfficePictureEffectKind, value: unknown): boolean {
+  if (kind === "format3d") return true;
+  if (kind !== "rotation3d" || !value || typeof value !== "object") return false;
+  const rotation = value as Record<string, unknown>;
+  return ["lat", "lon", "rev", "fov"].some((key) => typeof rotation[key] === "number");
 }
 
 /**
@@ -158,6 +181,18 @@ export function withOfficeTextEffect<K extends OfficePictureEffectKind>(
   kind: K,
   value: OfficePictureEffectValues[K] | null,
 ): OfficeTextPaint {
+  if (kind === "bevel" || kind === "rotation3d" || kind === "format3d") {
+    // The words' 3-D is edited on Office's statement where the paint has one
+    // (its other parts -- theme colours, a light, a material -- stay), or
+    // where the pick says more than the display paint holds (3-D Format,
+    // typed X / Y / Z, Perspective).
+    const current = normalizeOfficeTextPaint(paint)!;
+    if (needsStatement(kind, value) || (current.stated && officeTextPaintStatedIsAuthentic(current))) {
+      const stated = officeTextPaintWith3d(current, kind as keyof OfficeText3dValues, value as OfficeText3dValues[keyof OfficeText3dValues] | null);
+      if (stated) return stated;
+      if (kind === "format3d") return paint;
+    }
+  }
   switch (kind) {
     case "shadow": {
       const shadow = value as OfficeShadowEffect | null;

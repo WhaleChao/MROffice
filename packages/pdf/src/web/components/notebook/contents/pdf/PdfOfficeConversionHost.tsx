@@ -131,6 +131,22 @@ type DialogState =
 
 const CLOSED: DialogState = { kind: "closed" };
 
+
+
+
+
+
+
+
+
+
+
+
+
+function opensBeforeItsFile(job: PdfConversionJob, target: PdfEditableProjectionTarget): boolean {
+  return job.open_before_file ?? target !== "document";
+}
+
 function pageCountHint(pageCount: number): number | undefined {
   return Number.isSafeInteger(pageCount) &&
     pageCount >= 1 &&
@@ -165,9 +181,9 @@ function progressView(
 /**
  * PDF → Word / Excel / PPT for one PDF page window (or a reference window,
  * which converts the upload): the confirmation, the running conversion's
- * progress, and its result: downloaded and opened when
- * the dialog still shows it for the PDF on screen, otherwise announced in a
- * notice with Open and Download. The job itself is followed outside this
+ * progress, and its result: opened as soon as its page exists and its
+ * Office file downloaded behind it when the dialog still shows it for the
+ * PDF on screen, otherwise announced in a notice with Open and Download. The job itself is followed outside this
  * component (lib/pdf/office-conversion-jobs), so closing the window does not
  * lose its result.
  */
@@ -221,6 +237,11 @@ function PdfOfficeConversionHost({
   const startingRef = useRef(false);
   const preparedRef = useRef(new Set<string>());
   const handlersRef = useRef(new Map<string, PdfConversionJobSettleHandler>());
+  /** What each followed job was asked for (its handler's request). */
+  const requestsRef = useRef(new Map<string, ConversionRequest>());
+  /** Jobs whose page this window opened while their Office file was still
+   * being written: only the file is left to take when they end. */
+  const openedAheadRef = useRef(new Set<string>());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -297,6 +318,12 @@ function PdfOfficeConversionHost({
       if (error?.code === PDF_CONVERSION_UNREACHABLE_CODE) {
         return translate("pdf.officeProjection.unreachable");
       }
+      // A PDF past what one conversion holds: said in the reader's words,
+      // with what to do (the server's line read 「Universal document
+      // requestNodes budget exceeded (15194 > 5000)」 under a 186-page report).
+      if (error?.code === "pdf_conversion_document_too_long") {
+        return translate("pdf.officeProjection.tooLong");
+      }
       return (
         error?.message.trim() || translate("pdf.officeProjection.failedFallback")
       );
@@ -343,6 +370,49 @@ function PdfOfficeConversionHost({
       });
     });
   }, []);
+
+  /**
+   * The Office file of a page that is already open, downloaded while the
+   * person reads or edits it. It is the file of the page as converted; when
+   * the page has been edited by the time the file is asked for, it is the
+   * file of the page as it now is. A download that fails says so, with the
+   * download offered again.
+   */
+  const downloadBehindOpenPage = useCallback((page: ConvertedPage) => {
+    void (async () => {
+      try {
+        await downloadPageExport({
+          pageId: page.pageId,
+          format: page.format,
+          expectedContentVersion: page.contentVersion,
+        });
+        return;
+      } catch (error) {
+        if (isApiRequestError(error) && error.code === "page_version_conflict") {
+          try {
+            await downloadPageExport({ pageId: page.pageId, format: page.format });
+            return;
+          } catch {
+            // said below
+          }
+        }
+      }
+      const downloadLabel = tRef.current("pdf.officeProjection.download");
+      toast({
+        title: tRef.current("pdfFeatured.officeProjection.downloadFailed"),
+        variant: "destructive",
+        action: (
+          <ToastAction
+            altText={downloadLabel}
+            data-testid="pdf-office-projection-notice-download"
+            onClick={() => downloadConvertedPage(page)}
+          >
+            {downloadLabel}
+          </ToastAction>
+        ),
+      });
+    })();
+  }, [downloadConvertedPage]);
 
   const showReadyNotice = useCallback(
     (
@@ -399,10 +469,12 @@ function PdfOfficeConversionHost({
         isMounted: () => mountedRef.current,
         settle: (job, foreground) => {
           handlersRef.current.delete(jobId);
+          requestsRef.current.delete(jobId);
           finishRef.current(job, request, foreground);
         },
       };
       handlersRef.current.set(jobId, handler);
+      requestsRef.current.set(jobId, request);
       return handler;
     },
     [],
@@ -569,7 +641,7 @@ function PdfOfficeConversionHost({
   );
 
   const finish = useCallback(
-    async (
+    (
       job: PdfConversionJob,
       request: ConversionRequest,
       foreground: boolean,
@@ -615,6 +687,7 @@ function PdfOfficeConversionHost({
         });
       };
 
+      const openedAhead = openedAheadRef.current.delete(job.job_id);
       if (job.status === "cancelled") {
         closeShownDialog();
         // A cancel that came after the page was made keeps the page.
@@ -664,6 +737,12 @@ function PdfOfficeConversionHost({
       };
       // Downloaded and opened by itself only while the dialog shows it for
       // the very PDF on screen; any other result is offered in a notice.
+      if (openedAhead) {
+        // Its page was opened while the file was being written (below):
+        // the file is all that is left to take.
+        downloadBehindOpenPage(page);
+        return;
+      }
       const stillCurrent = () =>
         inDialog() &&
         paramsRef.current.authorityKey !== null &&
@@ -676,46 +755,58 @@ function PdfOfficeConversionHost({
         announceConverted();
         return;
       }
-      setDialog((current) =>
-        current.kind === "progress" && current.jobId === job.job_id
-          ? { ...current, downloading: true }
-          : current,
-      );
-      // The Office file is what the user asked for (as WPS gives it); the
-      // editable page it was made from is opened either way, so a failed
-      // download leaves the user on the converted page, not on nothing.
-      let downloadFailed = false;
-      try {
-        await downloadPageExport({
-          pageId: page.pageId,
-          format: page.format,
-          expectedContentVersion: page.contentVersion,
-        });
-      } catch {
-        downloadFailed = true;
-      }
-      if (!stillCurrent()) {
-        closeShownDialog();
-        dispatchNotebookPagesChanged(request.notebookId);
-        showReadyNotice(request, page, { downloaded: !downloadFailed });
-        announceConverted();
+      if (!opensBeforeItsFile(job, request.target)) {
+        // A document's file is downloaded before its page is opened (see
+        // `opensBeforeItsFile`); a failed download still leaves the user on
+        // the converted page, not on nothing.
+        setDialog((current) =>
+          current.kind === "progress" && current.jobId === job.job_id
+            ? { ...current, downloading: true }
+            : current,
+        );
+        void (async () => {
+          let downloadFailed = false;
+          try {
+            await downloadPageExport({
+              pageId: page.pageId,
+              format: page.format,
+              expectedContentVersion: page.contentVersion,
+            });
+          } catch {
+            downloadFailed = true;
+          }
+          if (!stillCurrent()) {
+            closeShownDialog();
+            dispatchNotebookPagesChanged(request.notebookId);
+            showReadyNotice(request, page, { downloaded: !downloadFailed });
+            announceConverted();
+            return;
+          }
+          closeShownDialog();
+          openConvertedPage(request, page);
+          announceConverted();
+          if (downloadFailed) {
+            toast({
+              title: translate("pdfFeatured.officeProjection.downloadFailed"),
+              variant: "destructive",
+            });
+          }
+        })();
         return;
       }
+      // The page is opened at once and its Office file follows it: the file
+      // is still what the user asked for (as WPS gives it), but writing it is
+      // seconds for a long document (and the download renders it where an
+      // export pool does), which were spent looking at the dialog with the
+      
       closeShownDialog();
       openConvertedPage(request, page);
       announceConverted();
-      if (downloadFailed) {
-        toast({
-          title: translate("pdfFeatured.officeProjection.downloadFailed"),
-          variant: "destructive",
-        });
-      }
+      downloadBehindOpenPage(page);
     },
-    [failureMessage, openConvertedPage, retryFromNotice, showReadyNotice],
+    [downloadBehindOpenPage, failureMessage, openConvertedPage, retryFromNotice, showReadyNotice],
   );
-  finishRef.current = (job, request, foreground) => {
-    void finish(job, request, foreground);
-  };
+  finishRef.current = finish;
 
   const continueInBackground = useCallback(() => {
     openTargetRef.current = null;
@@ -786,6 +877,61 @@ function PdfOfficeConversionHost({
     () => (resourceId ? getActivePdfConversionJobForResource(resourceId) : null),
     () => null,
   );
+
+  // The page exists before its Office file does (the job's "exporting"
+  // phase): it is opened then, for the PDF still on screen, and the file is
+  // downloaded when the job ends (`finish`). A job that ends in one step
+  // (page and file together) is opened by `finish` itself.
+  const aheadJobId =
+    shownJob !== null &&
+    progressJobId === shownJob.job_id &&
+    shownJob.status === "running" &&
+    shownJob.phase === "exporting" &&
+    shownJob.page_id
+      ? shownJob.job_id
+      : null;
+  useEffect(() => {
+    if (!aheadJobId || openedAheadRef.current.has(aheadJobId)) return;
+    const job = getTrackedPdfConversionJob(aheadJobId);
+    const request = requestsRef.current.get(aheadJobId);
+    const contentVersion = job?.content_version ?? null;
+    if (
+      !job ||
+      !request ||
+      !opensBeforeItsFile(job, request.target) ||
+      !job.page_id ||
+      job.page_type !== request.target ||
+      job.target_page_type !== request.target ||
+      job.source_sha256 !== request.expectedSha256 ||
+      contentVersion === null ||
+      !Number.isSafeInteger(contentVersion) ||
+      contentVersion < 1 ||
+      dialogJobIdRef.current !== aheadJobId ||
+      paramsRef.current.authorityKey === null ||
+      paramsRef.current.authorityKey !== request.authorityKey ||
+      paramsRef.current.windowManager === null
+    ) {
+      return;
+    }
+    openedAheadRef.current.add(aheadJobId);
+    openTargetRef.current = null;
+    dialogJobIdRef.current = null;
+    setDialog(CLOSED);
+    openConvertedPage(request, {
+      pageId: job.page_id,
+      contentVersion,
+      format: job.export_format,
+    });
+    paramsRef.current.onConverted?.();
+    // Said once: the page is in the notebook and its file is on its way
+    // (the transfer line shows it once the download has been asked for).
+    toast({
+      title: tRef.current("pdf.officeProjection.stepCreateFile", {
+        extension: pdfOfficeProjectionExtension(request.target),
+      }),
+      description: tRef.current("pdf.officeProjection.readyDescription"),
+    });
+  }, [aheadJobId, openConvertedPage]);
 
   if (dialog.kind === "closed") return null;
 

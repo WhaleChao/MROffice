@@ -16,6 +16,7 @@
 
 import { OfficeTextWarpMarker } from "@mrnote/core/web/components/office-text-warp/OfficeTextWarpMarker.tsx";
 import type { TextWarpShadow } from "@mrnote/core/web/lib/office-text-warp-render.ts";
+import { OfficeTextShadowCopyMarker } from "@mrnote/core/web/components/office-text-warp/OfficeTextShadowCopyMarker.tsx";
 import {
   nativeBaselineRequest,
   measureNativeBaselineOffset,
@@ -93,6 +94,7 @@ import {
   suppressImportedFirstParagraphSpaceBefore,
   IMPORTED_PPTX_NORMAL_LINE_HEIGHT,
   type PresentationFontSizeUnit,
+  presentationTextPaintOwnsShadow,
 } from "../../../../lib/presentation/text-layout-css";
 import { PresentationAutofitScaleContext, PresentationRunsText } from "./PresentationRunsText";
 import {
@@ -112,6 +114,7 @@ import {
 import { PresentationEngineEditLayer } from "./PresentationEngineEditLayer";
 import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
 import { PresentationLetterPlayContext } from "./PresentationRunsText";
+import { presentationTextShapingCss } from "../../../../lib/presentation/presentation-text-shaping";
 
 function presentationTextBaselineRequest(
   block: PresentationTextBlock,
@@ -236,6 +239,9 @@ export function presentationTextVisualLayout(
     fontSizeUnit,
   );
   const resolvedStyle = textBlockStyleCss(textStyleWithUniformIndent(textBlock), resolvePresentationTextStyle(slide, block, masters, theme), fontSizeUnit, fontAliases);
+  // The box's WordArt states its shadow: Home > Text Shadow adds none of its own
+  // (`presentationTextPaintOwnsShadow`).
+  if (presentationTextPaintOwnsShadow((block as { textPaint?: unknown }).textPaint)) delete resolvedStyle.textShadow;
   // A default title reads at the size its editor shows it (the title box's
   // 28px), not the body's 17px: with a link added, the rich preview and the
   // show drew the same title smaller (PPT-B239).
@@ -370,14 +376,17 @@ export function PresentationTextVisualContents({
   // its words never reach) is drawn unkerned by the browser too, while it is
   // typed in, so its lines end where the engine's drawing of it at rest ends
   // them (`usePowerPointLineFit` measures it so).
-  const kerningFrom = asRecord(block.source)?.nativeKerning;
-  const unkerned =
-    kerningFrom === 0 ||
-    (typeof kerningFrom === "number" &&
-      (paragraphs ?? []).every((paragraph) =>
-        (paragraph.runs ?? []).every((run) => typeof run.style?.fontSize === "number" && run.style.fontSize * (layout.autofitScale || 1) < kerningFrom),
-      ));
-  const kernedParagraphStyle: CSSProperties = unkerned ? { ...paintedParagraphStyle, fontKerning: "none" } : paintedParagraphStyle;
+  // Its letters are never joined in a common ligature (PowerPoint draws none).
+  const kernedParagraphStyle: CSSProperties = {
+    ...paintedParagraphStyle,
+    ...presentationTextShapingCss(
+      asRecord(block.source)?.nativeKerning,
+      (paragraphs ?? []).flatMap((paragraph) =>
+        (paragraph.runs ?? []).map((run) => (typeof run.style?.fontSize === "number" ? run.style.fontSize : undefined)),
+      ),
+      layout.autofitScale || 1,
+    ),
+  };
   const visibleParagraphStyle: CSSProperties = fontPolicyReady ? kernedParagraphStyle
     : { ...kernedParagraphStyle, visibility: "hidden" };
   const [measuredOffset, setMeasuredOffset] = useState<number>();
@@ -427,6 +436,16 @@ export function PresentationTextVisualContents({
   // Columns ordered right to left (`a:bodyPr@rtlCol`): each row states the
   // box's own direction, as the column container's orders only the columns.
   const columnRowDirection = textColumnsRowDirection(layout.columnsCss, (block as { dir?: unknown }).dir);
+  // A box of Right-to-Left paragraphs (`dir` on the block, a box of one
+  // direction): its rows' base direction, as the slide show draws it
+  // (PresentationBlockView). The canvas drew them left to right: "A1:2017 -
+  // <Hebrew>" with its Latin label on the left (look-fit
+  // truth-probes/lookfit-rtl-align-probe.pptx, PowerPoint: on the right).
+  // The box's own alignment (`style.align`, drawn on its container): a
+  
+  const blockStyle = block.style as { align?: unknown; textAlign?: unknown } | undefined;
+  const bodyAlignStated = (blockStyle?.align ?? blockStyle?.textAlign) !== undefined;
+  const rowDirection = columnRowDirection ?? ((block as { dir?: unknown }).dir === "rtl" ? "rtl" : undefined);
   // A By Paragraph build plays row by row, so its body is drawn as rows even
   // when a flat body would do.
   const paragraphPlay = useContext(PresentationParagraphPlayContext);
@@ -516,6 +535,7 @@ export function PresentationTextVisualContents({
     kerning: asRecord(block.source)?.nativeKerning,
     widthPx: engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX,
     wrap: textBlockWraps(block),
+    naturalLines: Boolean(asRecord(block.source)?.nativeSmartArtView),
   });
   // Being typed in, the body keeps its editing rows; the engine says where
   // their lines end, and the rows are fitted to end them there.
@@ -532,6 +552,7 @@ export function PresentationTextVisualContents({
     kerning: asRecord(block.source)?.nativeKerning,
     widthPx: engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX,
     wrap: textBlockWraps(block),
+    naturalLines: Boolean(asRecord(block.source)?.nativeSmartArtView),
   });
   const engineLineStarts = editEngine.status === "ok" ? presentationEngineLineStarts(editEngine) : undefined;
   // Being typed in, drawn by the engine too (`PresentationEngineEditLayer`):
@@ -586,6 +607,11 @@ export function PresentationTextVisualContents({
         shadow={(block as { textPaint?: { shadow?: TextWarpShadow } }).textPaint?.shadow ?? null}
         noWrap={!textBlockWraps(block)}
       />
+      {/* Text Effects > Shadow > Perspective on straight words (shared copy). */}
+      <OfficeTextShadowCopyMarker
+        warp={(block as { textWarp?: unknown }).textWarp}
+        shadow={(block as { textPaint?: { shadow?: TextWarpShadow } }).textPaint?.shadow ?? null}
+      />
       {buildParagraphs && (paragraphPlay || blockSpacesParagraphs || needsStructuredParagraphRender(buildParagraphs)) ? (
     <PresentationParagraphList
       emptyRowAsBreak={emptyEditable}
@@ -604,10 +630,11 @@ export function PresentationTextVisualContents({
       numberFormat={block.numberFormat}
       fontSizeUnit={fontSizeUnit}
       paragraphStyle={visibleParagraphStyle}
+      bodyAlignStated={bodyAlignStated}
       colorOverride={colorOverride}
       suppressFirstSpaceBefore={suppressFirstSpaceBefore}
       wrap={textBlockWraps(block)}
-      rowDirection={columnRowDirection}
+      rowDirection={rowDirection}
       slideIds={slideIds}
       onNavigateToSlide={onNavigateToSlide}
     />
@@ -622,11 +649,14 @@ export function PresentationTextVisualContents({
       // rows are `presentation-paragraph`; this is the flat body's, and naming
       // it keeps both shapes of the same canonical body addressable.
       data-testid="presentation-text-row"
-      dir={columnRowDirection}
+      dir={rowDirection}
       className={flatRowPlay.className}
       data-paragraph-play={flatRowPlay.state}
       style={{
         ...visibleParagraphStyle,
+        // A Right-to-Left row stating no alignment is Left, a physical side
+        // (PowerPoint's print of the probe above), not the direction's start.
+        ...(rowDirection === "rtl" && visibleParagraphStyle.textAlign === undefined && !bodyAlignStated ? { textAlign: "left" as const } : {}),
         ...flatRunLineBoxStyle,
         // Its glyphs stand in their lines where PowerPoint's do, as a
         // paragraph row's (`officePercentLeadingFlatRowCss`); a row placed by

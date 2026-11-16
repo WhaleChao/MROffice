@@ -17,6 +17,7 @@ import { PluginKey } from "@tiptap/pm/state";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import { FileText, Plus } from "../../office-ribbon/icons/houseIcons";
 import type { Editor, Range } from "@tiptap/core";
+import { isImeKeydown } from "../../../lib/soft-keyboard";
 
 export interface WikiLinkPageCandidate {
   id: string;
@@ -130,7 +131,9 @@ const CommandListComponent = forwardRef<
           // While a CJK IME candidate window is open, Enter/Arrow keys belong to
           // the IME (confirm candidate / move candidate list), NOT the wiki-link
           // suggestion menu — defer so a Chinese page-name search isn't hijacked.
-          if (event.isComposing) return false;
+          // Safari ends the composition before the Enter that commits it
+          // (isComposing false, keyCode 229): isImeKeydown sees both.
+          if (isImeKeydown(event)) return false;
           if (event.key === "ArrowDown") {
             setSelectedIndexForQuery((i) => (i + 1) % totalRows);
             return true;

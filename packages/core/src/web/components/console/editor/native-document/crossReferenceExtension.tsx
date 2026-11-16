@@ -30,6 +30,7 @@ import {
 } from "./captions";
 import type { Editor } from "@tiptap/core";
 import { bookmarkRangesFor } from "./bookmarkExtension";
+import { COMMENT_MARK_NAME } from "./comments";
 import {
   findFieldCaption,
   isFieldCaptionId,
@@ -1271,7 +1272,22 @@ const CrossReference = Node.create({
                 referenceTo,
               ),
             });
-            tr.replaceSelectionWith(node, false);
+            // A Word comment range is a stretch of the line between its two
+            // ends: a field put inside it is inside it. The reference wears
+            // the comment marks of its place, as typed text and an inserted
+            // field do; unmarked between two marked halves, the save read
+            
+            // E33, corpus R454-D53: non_contiguous_range).
+            const { selection } = tr;
+            const placeMarks =
+              tr.storedMarks ??
+              (selection.empty
+                ? selection.$from.marks()
+                : (selection.$from.marksAcross(selection.$to) ?? []));
+            tr.replaceSelectionWith(
+              node.mark(placeMarks.filter((mark) => mark.type.name === COMMENT_MARK_NAME)),
+              false,
+            );
             dispatch(tr);
           }
           return true;

@@ -92,6 +92,10 @@ export interface ChartTextLook {
   fontWeight: string;
   fontStyle: string;
   color: string;
+  /** Character Spacing (px after every character; negative: condensed). */
+  letterSpacing?: number;
+  /** All Caps or Small Caps, the words kept as typed (`chart-letter-spacing`). */
+  caps?: "all" | "small";
 }
 
 /** A chart text the editor draws (`textLayer`), in the picture's own px. */

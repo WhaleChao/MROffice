@@ -155,11 +155,14 @@ export const PAGE_IMPORT_CAPABILITIES: readonly PageImportCapability[] = [
     // An Excel 2003 XML Spreadsheet is a .xml like any XML: it is not listed
     // here (a plain .xml stays a code page) and is routed by its head
     // (`isSpreadsheetMl2003Head`) to the server, which converts it.
-    extensions: [".xlsb", ".ods", ".fods", ".xlt", ".et", ".ett", ".slk", ".dif", ".dbf", ".numbers"],
+    extensions: [".xlsb", ".ods", ".fods", ".ots", ".sxc", ".wk1", ".wks", ".xlt", ".et", ".ett", ".slk", ".dif", ".dbf", ".numbers"],
     mediaTypes: [
       "application/vnd.ms-excel.sheet.binary.macroenabled.12",
       "application/vnd.oasis.opendocument.spreadsheet",
       "application/vnd.oasis.opendocument.spreadsheet-flat-xml",
+      "application/vnd.oasis.opendocument.spreadsheet-template",
+      "application/vnd.sun.xml.calc",
+      "application/vnd.lotus-1-2-3",
       "application/x-sylk",
       "application/x-dif",
       "application/x-dbf",
@@ -387,6 +390,10 @@ const CONVERTED_IMPORT_EXTENSIONS: Readonly<Record<string, "xlsx" | "docx" | "pp
   ".xlsb": "xlsx",
   ".ods": "xlsx",
   ".fods": "xlsx",
+  ".ots": "xlsx",
+  ".sxc": "xlsx",
+  ".wk1": "xlsx",
+  ".wks": "xlsx",
   ".xlt": "xlsx",
   ".et": "xlsx",
   ".ett": "xlsx",
@@ -422,6 +429,9 @@ const CONVERTED_IMPORT_MEDIA_TYPES: Readonly<Record<string, "xlsx" | "docx" | "p
   "application/vnd.ms-excel.sheet.binary.macroenabled.12": "xlsx",
   "application/vnd.oasis.opendocument.spreadsheet": "xlsx",
   "application/vnd.oasis.opendocument.spreadsheet-flat-xml": "xlsx",
+  "application/vnd.oasis.opendocument.spreadsheet-template": "xlsx",
+  "application/vnd.sun.xml.calc": "xlsx",
+  "application/vnd.lotus-1-2-3": "xlsx",
   "application/x-sylk": "xlsx",
   "application/x-dif": "xlsx",
   "application/x-dbf": "xlsx",

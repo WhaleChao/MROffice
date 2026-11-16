@@ -13,7 +13,11 @@
  * (structural split, no behaviour change).
  */
 
+import officeLineMetrics from "@mrnote/core/web/lib/office-fonts/office-line-metrics.generated.json";
+import { eastAsianMeasuredFirstBaselineEm } from "@mrnote/core/web/lib/text-engine/east-asian-lines.ts";
 import { ptToPx } from "@mrnote/core/web/lib/office-units.ts";
+import { officeTextOutlineCss } from "@mrnote/core/web/lib/office-text-outline/office-text-outline-css.ts";
+import { runOutlineLine, runOutlineWidthPt } from "@mrnote/core/web/lib/presentation-runs.ts";
 import { CSS_PX_PER_POINT, designPxToPoints, pointsToCssPx, storedFontSizeToCssPx, type PresentationFontSizeUnit } from "@mrnote/core/web/lib/presentation/text-units.ts";
 import { normalizeDocumentShapeAdjustments } from "@mrnote/core/web/lib/document-shapes.ts";
 import type { CSSProperties } from "react";
@@ -24,7 +28,13 @@ import {
   type PresentationFontAliases,
 } from "@mrnote/core/web/lib/presentation-font-face-reads.ts";
 import { officeTextPaintCss, type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
+import {
+  normalizeOfficeShapeShadow,
+  OFFICE_SHADOW_DEFAULT_DIRECTION,
+  type OfficeShapeShadow,
+} from "@mrnote/core/web/lib/office-shape-paint.ts";
 import { normalizeOfficeTextWarp } from "@mrnote/core/web/lib/office-text-warp.ts";
+import { normalizePresentationUnderlineStyle, presentationTextDecorationCss } from "@mrnote/core/web/lib/presentation-text-decoration.ts";
 import { smartArtTextFitScale } from "@mrnote/core/web/lib/office-smartart/text-fit.ts";
 import {
   type SlideParagraph,
@@ -45,7 +55,7 @@ import {
   authoredShapeTextRectFractions,
   shapeTextRectFractions,
   textBlockTextRectFractions,
-} from "../presentation-shape-text-rect";
+} from "@mrnote/core/web/lib/presentation-shape-text-rect.ts";
 import { normalizeColumnCount } from "@mrnote/core/web/lib/presentation-text-columns.ts";
 import { readSmartArtBlockMarker } from "@mrnote/core/web/lib/presentation-smartart.ts";
 import {
@@ -115,6 +125,21 @@ export function shapeTextPaintCss(block: PresentationBlock): CSSProperties | nul
  * A run's own WordArt paint as CSS, or null (none, or not a valid paint: a
  * malformed one draws as plain text rather than throwing, PPT-B122).
  */
+
+
+
+
+
+
+
+
+
+
+export function presentationTextPaintOwnsShadow(paint: unknown): boolean {
+  const shadow = paint && typeof paint === "object" ? (paint as { shadow?: unknown }).shadow : undefined;
+  return Boolean(shadow && typeof shadow === "object");
+}
+
 export function runTextPaintCss(style: { textPaint?: unknown } | undefined): CSSProperties | null {
   const paint = style?.textPaint;
   if (!paint) return null;
@@ -392,6 +417,10 @@ export type { PresentationFontSizeUnit } from "@mrnote/core/web/lib/presentation
  */
 export const IMPORTED_PPTX_NORMAL_LINE_HEIGHT = 1.2;
 
+const OFFICE_LINE_FACES: ReadonlyMap<string, readonly number[]> = new Map(
+  Object.entries((officeLineMetrics as { faces: Record<string, number[]> }).faces).map(([name, value]) => [name.toLowerCase(), value]),
+);
+
 /** A face as CSS reads it (a document's "Wingdings 3" quoted), else undefined. */
 function cssFontFamilyOrUndefined(value: string | undefined): string | undefined {
   return value ? cssFontFamilyList(value) : value;
@@ -471,6 +500,47 @@ function presentationFontSizeCss(
 ): number | undefined {
   if (value === undefined) return undefined;
   return storedFontSizeToCssPx(value, unit);
+}
+
+/**
+ * Home > Text Shadow as PowerPoint writes it (and the API's
+ * `_set_run_text_shadow`): black at 43 %, 3 pt blur, 3 pt at 45 degrees
+ * (`a:outerShdw blurRad="38100" dist="38100" dir="2700000" algn="tl"`, alpha
+ * 43137), in the shape shadow model's design px.
+ */
+export const PRESENTATION_HOME_TEXT_SHADOW: OfficeShapeShadow = {
+  color: "#000000",
+  blur: 4,
+  distance: 4,
+  opacity: 0.43137,
+  direction: 45,
+  align: "tl",
+};
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationTextShadowCss(effect?: unknown): string {
+  let stated: OfficeShapeShadow | undefined;
+  try {
+    stated = normalizeOfficeShapeShadow(effect);
+  } catch {
+    stated = undefined;
+  }
+  const shadow = stated ?? PRESENTATION_HOME_TEXT_SHADOW;
+  const radians = ((shadow.direction ?? OFFICE_SHADOW_DEFAULT_DIRECTION) * Math.PI) / 180;
+  const round = (value: number) => Math.round(value * 100) / 100 + 0;
+  const value = Number.parseInt(shadow.color.slice(1), 16);
+  const alpha = Math.round(Math.min(1, Math.max(0, shadow.opacity)) * 10_000) / 10_000;
+  return `${round(Math.cos(radians) * shadow.distance)}px ${round(Math.sin(radians) * shadow.distance)}px ${round(shadow.blur)}px rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
 export function textBlockStyleCss(
@@ -553,9 +623,11 @@ export function textBlockStyleCss(
             ((style as { indentLevel: number }).indentLevel ?? 0) * 48,
         }
       : {}),
+    // The words' shadow: as they state it (`textShadowEffect`, PPTX readings
+    // row 805), else Home > Text Shadow's own.
     textShadow:
       (style as { textShadow?: unknown } | undefined)?.textShadow === true
-        ? "1px 1px 2px rgba(15, 23, 42, 0.45)"
+        ? presentationTextShadowCss((style as { textShadowEffect?: unknown } | undefined)?.textShadowEffect)
         : undefined,
     ...spacingCss,
   };
@@ -1107,7 +1179,15 @@ export function runStyleCss(
   const linked = typeof style.href === "string" && style.href.length > 0;
   if (linked && !style.underline) decorations.unshift("underline");
   if (decorations.length) css.textDecoration = decorations.join(" ");
-  if (style.underline && style.underlineStyle === "double") css.textDecorationStyle = "double";
+  // The line each is drawn as (Font dialog > Underline Style, Double
+  // Strikethrough), by the drawing table cells use.
+  Object.assign(
+    css,
+    presentationTextDecorationCss(
+      style.underline ? normalizePresentationUnderlineStyle(style.underlineStyle) : undefined,
+      style.strike && style.strikeStyle === "double" ? "double" : undefined,
+    ),
+  );
   // `a:rPr@cap`: shown in capitals, the text itself untouched (PPT-B362).
   if (style.caps === "all") css.textTransform = "uppercase";
   else if (style.caps === "small") css.fontVariant = "small-caps";
@@ -1128,10 +1208,14 @@ export function runStyleCss(
   if (typeof style.highlight === "string" && style.highlight) {
     css.backgroundColor = style.highlight;
   }
-  // Character text OUTLINE (stroke). Fixed 1px width; the stroke colour is a
-  // per-run #rrggbb distinct from the `color` fill (PowerPoint parity).
+  // Character text OUTLINE: its own colour (distinct from the `color` fill)
+  // and width (`a:ln@w`, absent Office's 0.75 pt), drawn as PowerPoint draws
+  // it -- centred and round over the glyphs' merged outline, over the fill
+  // (office-text-outline-css.ts); the CSS stroke stands in until then.
   if (typeof style.textOutline === "string" && style.textOutline) {
-    css.WebkitTextStroke = `1px ${style.textOutline}`;
+    const widthPt = runOutlineWidthPt(style);
+    // Its join, cap and dash too (row 725; round and solid where none).
+    Object.assign(css, officeTextOutlineCss(style.textOutline, widthPt, `${widthPt}pt ${style.textOutline}`, runOutlineLine(style)));
   }
   if (typeof style.fontSize === "number") {
     const size = presentationFontSizeCss(style.fontSize, fontSizeUnit);
@@ -1155,6 +1239,10 @@ export function runStyleCss(
   // is drawn (points to px).
   if (typeof style.letterSpacing === "number") {
     css.letterSpacing = `${pointsToCssPx(style.letterSpacing)}px`;
+  }
+  // A shadow on these characters only (readings row 808), drawn as a box's.
+  if (style.textShadow === true && !presentationTextPaintOwnsShadow((style as { textPaint?: unknown }).textPaint)) {
+    css.textShadow = presentationTextShadowCss(style.textShadowEffect);
   }
   // WordArt on these characters (their fill, outline and effects): the run's
   // own paint, over its colour and outline as PowerPoint draws `a:rPr`'s fill
@@ -1369,16 +1457,44 @@ function officeRowFaceVerticals(fontFamily: unknown): { descent: number; cssHalf
   return { descent, cssHalf: (line.box - 2 * descent) / 2 };
 }
 
+/**
+ * {@link officePercentLeadingCss}'s numbers, in em of the row's type size: how
+ * far the glyphs move down from where CSS lays them (`shift`) and how much of
+ * the last line's box PowerPoint leaves out under its descent (`tail`). A
+ * slide table's cell lays its lines out by the same rule (look-fit
+ * truth-probes/lookfit-cell-spacing-probe.pptx). Pure.
+ */
+export function officePercentLeadingEm(lineHeight: unknown, fontFamily?: unknown): { shift: number; tail: number } {
+  return officePercentLeading(lineHeight, fontFamily);
+}
+
 function officePercentLeading(lineHeight: unknown, fontFamily?: unknown): { shift: number; tail: number } {
-  if (
-    typeof lineHeight !== "number" ||
-    !Number.isFinite(lineHeight) ||
-    lineHeight <= 0 ||
-    Math.abs(lineHeight - IMPORTED_PPTX_NORMAL_LINE_HEIGHT) <= 0.001
-  ) {
+  if (typeof lineHeight !== "number" || !Number.isFinite(lineHeight) || lineHeight <= 0) {
     return { shift: 0, tail: 0 };
   }
   const round = (value: number) => Math.round(value * 10000) / 10000;
+  // An East Asian face's line, at every spacing: PowerPoint leaves its own
+  // descent share under the line (`officeLineFace`, at least 0.2 of a single
+  // line whatever the face, and whatever Latin face the run states), its
+  // first baseline at single less that share, below single at the line less
+  // it (no three-quarter floor: MS PGothic at 90 % stood 0.83 em down, Yu
+  // Gothic 0.79), above single at the larger of single's and 0.7547 L as a
+  // Latin line's. CSS stood a 90 % MS PGothic title 0.075 em under
+  
+  // truth-probes/lookfit-cjk-spacing-probe.pptx and lookfit-cjk-faces-probe.pptx).
+  const eastAsian = officeLineFace(fontFamily, false);
+  if (eastAsian?.eastAsian) {
+    const cssBaseline = lineHeight / 2 + eastAsian.cssHalf;
+    const officeBaseline =
+      lineHeight > IMPORTED_PPTX_NORMAL_LINE_HEIGHT + 0.001
+        ? Math.max(IMPORTED_PPTX_NORMAL_LINE_HEIGHT - eastAsian.descent, 0.7547 * lineHeight)
+        : lineHeight - eastAsian.descent;
+    return {
+      shift: round(officeBaseline - cssBaseline),
+      tail: round(Math.max(0, lineHeight - officeBaseline - eastAsian.descent)),
+    };
+  }
+  if (Math.abs(lineHeight - IMPORTED_PPTX_NORMAL_LINE_HEIGHT) <= 0.001) return { shift: 0, tail: 0 };
   if (lineHeight < IMPORTED_PPTX_NORMAL_LINE_HEIGHT) {
     // Below single (Office's own 90 % body and titles, an autofit's
     // `lnSpcReduction`) PowerPoint keeps the face's descent at the foot of
@@ -1399,11 +1515,50 @@ function officePercentLeading(lineHeight: unknown, fontFamily?: unknown): { shif
     const tail = lineHeight - baseline - face.descent;
     return { shift: round(shift), tail: round(tail) };
   }
-  const cssBaseline = lineHeight / 2 + 0.35;
-  const officeBaseline = Math.max(0.936, 0.7547 * lineHeight);
+  // Above single the first baseline is three quarters of the line whatever the
+  // face (PowerPoint's print of look-fit truth-probes/lookfit-box-spacing-
+  // probe.pptx, 20 pt at 115-250 %: 20.9 / 26.9 / 36.0 / 44.9 pt under the top
+  // in Calibri, Arial, Times New Roman and Georgia alike), and under the last
+  // baseline PowerPoint leaves the face's share of a single line taken by its
+  // descent (Calibri 0.262, Arial 0.228, Times New Roman 0.240, Georgia 0.228
+  // em): `officeLineFace`, read from the font files. Calibri's 0.264 for every
+  // face set Arial's last line 0.7 pt low at 20 pt, and its table rows that
+  // much too tall.
+  const face = officeLineFace(fontFamily);
+  const cssBaseline = lineHeight / 2 + face.cssHalf;
+  const officeBaseline = Math.max(IMPORTED_PPTX_NORMAL_LINE_HEIGHT - face.descent, 0.7547 * lineHeight);
   const shift = Math.max(0, officeBaseline - cssBaseline);
-  const tail = Math.max(0, lineHeight - cssBaseline - shift - 0.264);
+  const tail = Math.max(0, lineHeight - cssBaseline - shift - face.descent);
   return { shift: round(shift), tail: round(tail) };
+}
+
+/**
+ * A face's numbers for a percentage spacing above single
+ * (`office-line-metrics.generated.json`, scripts/measure-office-line-metrics.py,
+ * read from the font files): the share of a single 1.2 em line its descent
+ * takes in PowerPoint (1.2 x usWinDescent / (usWinAscent + usWinDescent) of the
+ * Office file; an East Asian face's at least 0.24), half of ascent less
+ * descent of the face the browser lays the line out with (where CSS puts the
+ * baseline past the line's middle), and whether the face is East Asian (its
+ * Office file's code pages). Calibri's for a face the table does not hold,
+ * or none when `calibriWhenUnknown` is false.
+ */
+function officeLineFace(fontFamily: unknown): { descent: number; cssHalf: number; eastAsian: boolean };
+function officeLineFace(
+  fontFamily: unknown,
+  calibriWhenUnknown: false,
+): { descent: number; cssHalf: number; eastAsian: boolean } | undefined;
+function officeLineFace(
+  fontFamily: unknown,
+  calibriWhenUnknown = true,
+): { descent: number; cssHalf: number; eastAsian: boolean } | undefined {
+  const primary = typeof fontFamily === "string" ? fontFamily.split(",")[0].trim().replace(/^["']|["']$/g, "").toLowerCase() : "";
+  const stated = OFFICE_LINE_FACES.get(primary) ?? (calibriWhenUnknown ? OFFICE_LINE_FACES.get("calibri") : undefined);
+  // An East Asian face PowerPoint for Windows sets apart from the rule keeps
+  // what its measured first baseline leaves (`eastAsianMeasuredFirstBaselineEm`).
+  const measured = stated?.[2] === 1 ? eastAsianMeasuredFirstBaselineEm(primary) : undefined;
+  if (stated) return { descent: measured !== undefined ? Math.round((IMPORTED_PPTX_NORMAL_LINE_HEIGHT - measured) * 10000) / 10000 : stated[0]!, cssHalf: stated[1]!, eastAsian: stated[2] === 1 };
+  return calibriWhenUnknown ? { descent: 0.264, cssHalf: 0.35, eastAsian: false } : undefined;
 }
 
 export function paragraphRowTextStyle(

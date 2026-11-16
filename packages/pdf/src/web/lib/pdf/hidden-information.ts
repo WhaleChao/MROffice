@@ -23,6 +23,7 @@ import {
 } from "pdf-lib";
 
 import { loadPdfForMutation } from "./encrypted-guard";
+import { pdfLibObjectsPerTick } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 export type PdfHiddenInformationKind =
   | "metadata"
@@ -256,5 +257,5 @@ export async function removePdfHiddenInformation(
   const doc = await loadPdfForMutation(bytes, { updateMetadata: false });
   removeKinds(doc, new Set(kinds));
   pruneUnreachable(doc);
-  return doc.save({ useObjectStreams: false, updateFieldAppearances: false });
+  return doc.save({ objectsPerTick: pdfLibObjectsPerTick(), useObjectStreams: false, updateFieldAppearances: false });
 }

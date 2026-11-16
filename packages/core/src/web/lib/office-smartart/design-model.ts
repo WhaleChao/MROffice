@@ -24,11 +24,13 @@ import {
   smartArtColorVariant,
   type SmartArtColorTheme,
 } from "./colors";
-import { smartArtConnectorsFollowNodes } from "./connector-follow";
 import {
   readSmartArtCustom,
+  SMARTART_CUSTOM_SCALE_MAX,
+  SMARTART_CUSTOM_SCALE_MIN,
+  SMARTART_CUSTOM_UNIT,
   smartArtLayoutBox,
-  smartArtMemberAfterBoxEdit,
+  withSmartArtCustom,
 } from "./custom-geometry";
 import {
   DEFAULT_SMARTART_STYLE,
@@ -510,6 +512,18 @@ export interface RebuildSmartArtGroupInput<T extends OfficeSmartArtHostNode> {
    */
   resetCustomGeometry?: boolean;
   /**
+   * `false`: the rebuilt words drop the formatting the author gave them --
+   * face, size, bold, italic, underline, strike, colour, capitals, WordArt
+   * and the runs a part of a label was formatted in -- and are drawn as the
+   * layout and the quick style draw them. PowerPoint's Reset Graphic does
+   * this (SmartArt probe B10b / B10c, PowerPoint for Mac 16.86: a label set
+   * bold red, and one whose first two letters alone were, came back as ONE
+   * run whose `a:rPr` holds only `lang`), although Microsoft Support's table
+   * says Reset keeps "Text and any formatting changes made to it".
+   * Absent (every other rebuild) keeps it.
+   */
+  keepTextFormat?: boolean;
+  /**
    * The Office alias this diagram is laid out from (`smartArtLayoutUrn`).
    * Omitted keeps the one the members record ({@link readSmartArtGroupLayoutUrn})
    * while `kind` stays the members' kind; a layout switch to another kind
@@ -706,16 +720,15 @@ export const SMARTART_RESET_CHANGE: {
 };
 
 /**
- * Reset Graphic's restyle for one diagram. Office's reset removes the
- * shapes' own fills, lines and effects and the quick style, and keeps the
- * colour variation (`csTypeId`) the diagram wears (Microsoft Support,
- * "Restore the default layout and color of your SmartArt graphic": colour
- * changes come off individual shapes, the graphic's colour set is not on the
- * removed list). So the diagram is repainted from its OWN variation --
- * Office's default `accent1_2` when it names none -- resolved against the
- * document's live theme: the reset used to paint every shape the 2013
- * palette's #4472C4 and drop the variation, on a deck whose accent 1 is
- * #156082. With no theme and no variation, the historical catalog default.
+ * Reset Graphic's restyle for one diagram: the default colour variation
+ * (Office's `accent1_2`) and the default quick style, the colours resolved
+ * against the document's live theme. PowerPoint's Reset puts the variation
+ * back as well as the style (SmartArt probe B10b, PowerPoint for Mac 16.86:
+ * Colorful Range - Accent Colors 2 to 3 and 3-D Inset came back as
+ * `accent1_2` -- the colours part's `uniqueId` too -- and `simple1`), which
+ * Microsoft Support's table leaves unsaid. The variation is therefore not
+ * read off the members: the reset used to repaint a Colorful diagram in its
+ * own variation. With no theme, the historical catalog default.
  */
 export function smartArtResetChange(
   members: readonly OfficeSmartArtBlockLike[],
@@ -724,21 +737,18 @@ export function smartArtResetChange(
   colors: SmartArtStyle;
   styleId: SmartArtStyleId;
   authorPaint: false;
-  colorsId: string | null;
+  colorsId: null;
   nodePaint: SmartArtNodePaint[] | null;
   colorTheme?: Partial<SmartArtColorTheme> | null;
 } {
-  const colorsId = readSmartArtGroupColorsId(members);
-  const variant = smartArtColorVariant(colorsId ?? "accent1_2", { all: true });
-  if (!variant || (!theme && !colorsId)) return { ...SMARTART_RESET_CHANGE, nodePaint: null };
+  const variant = smartArtColorVariant("accent1_2", { all: true });
+  if (!variant || !theme) return { ...SMARTART_RESET_CHANGE, nodePaint: null };
   const resolved = resolveSmartArtColorVariant(variant, smartArtDiagramItemCount(members), theme);
   return {
     ...SMARTART_RESET_CHANGE,
     colors: resolved.colors,
     nodePaint: resolved.nodePaint,
-    // A diagram on the default variation keeps stating none, as before.
-    colorsId,
-    ...(theme ? { colorTheme: theme } : {}),
+    colorTheme: theme,
   };
 }
 
@@ -1223,257 +1233,67 @@ export interface SmartArtMemberBox {
 }
 
 /**
- * Larger / Smaller on one outline item: its node member (and its own label,
- * where the host keeps one) grow or shrink about the node's centre, so the
- * shape stays where the author sees it. Everything else is untouched, which is
- * the host-independent part of Office's "the remaining shapes may adjust"
- * (MRAI does not re-flow the neighbours; Reset Graphic restores the layout's
- * own sizes).
+ * One item resized the way PowerPoint keeps it: Larger / Smaller, a resize
+ * handle or SmartArt Format's Height / Width on one shape is stored as the
+ * shape's `custScaleX/Y` against its layout box, and the WHOLE graphic is laid
+ * out again with it -- the other shapes move and shrink around the grown one
+ * (the golden deck's Basic Block List, one block dragged to 1.71 x 1.50 of its
+ * box: a 2-2-1 grid became 2 over 3, every other block 0.94 of its size;
+ * smartArt-26-probes/pos/owner-resized.pptx). This is the first half: the
+ * members to lay out from, the item's node and label each carrying its scale
+ * times `factor` (its move as it was), every box untouched; the host's
+ * rebuild (`rebuildSmartArtGroup`, which reads `smartArtCustom` as the
+ * layout's own `itemCustom`) places every shape.
  *
- * Box access goes through the host's `read` / `write` because the three page
- * models spell a member's rectangle differently (deck EMU fields, a Docs
- * member's child-space EMU, a sheet anchor). `null` when the item has no
- * node, a box is unreadable, or the step would take the shape below
- * `minEdge` — nothing partial is ever returned.
+ * `factor` is against the shape as it is now (a handle's or a typed size's
+ * ratio, Larger / Smaller's step). Office's bounds hold each factor
+ * (`SMARTART_CUSTOM_SCALE_MIN` / `MAX`). `null` when refused: no such item,
+ * an unreadable box, a shape that would go below `minEdge`, or a factor the
+ * bounds leave where it was.
  */
-export function resizeSmartArtItem<T>(
+export function smartArtMembersWithItemScale<T>(
   members: readonly T[],
   itemId: string,
-  /**
-   * The scale: one number for Larger / Smaller, or each axis on its own for
-   * SmartArt Format's Height and Width boxes (PPT-A010).
-   */
   factor: number | { readonly x: number; readonly y: number },
   read: (member: T) => SmartArtMemberBox | null,
-  write: (member: T, box: SmartArtMemberBox) => T,
   minEdge = 1,
-  /**
-   * The graphic's frame. Office grows a shape INSIDE its graphic, so when one
-   * is given the grown item is moved back in from an edge it would cross, and
-   * an item that would outgrow the frame is refused. A host whose frame is the
-   * members' own union passes it, or every Larger would silently widen the
-   * graphic and Reset would re-lay it out in the wider box.
-   */
-  frame?: SmartArtMemberBox,
-  /**
-   * The diagram's layout, for a host whose members do not state it (a Docs
-   * group keeps it on the group); otherwise read off the members.
-   */
-  kind?: string,
 ): T[] | null {
-  let fx = typeof factor === "number" ? factor : factor.x;
-  let fy = typeof factor === "number" ? factor : factor.y;
+  const fx = typeof factor === "number" ? factor : factor.x;
+  const fy = typeof factor === "number" ? factor : factor.y;
   if (!Number.isFinite(fx) || fx <= 0 || !Number.isFinite(fy) || fy <= 0) return null;
-  const roleOf = (member: T) =>
-    (member as unknown as Record<string, unknown>).smartArtRole;
-  const itemOf = (member: T) =>
-    (member as unknown as Record<string, unknown>).smartArtItemId;
-  const node = members.find(
-    (member) => roleOf(member) === "node" && itemOf(member) === itemId,
-  );
-  const nodeBox = node ? read(node) : null;
-  if (!nodeBox) return null;
-  const centerX = nodeBox.left + nodeBox.width / 2;
-  const centerY = nodeBox.top + nodeBox.height / 2;
-  const scaled = (box: SmartArtMemberBox): SmartArtMemberBox => ({
-    left: centerX + (box.left - centerX) * fx,
-    top: centerY + (box.top - centerY) * fy,
-    width: box.width * fx,
-    height: box.height * fy,
-  });
+  const record = (member: T) => member as unknown as Record<string, unknown>;
   const item = members.filter((member) => {
-    const role = roleOf(member);
-    return itemOf(member) === itemId && (role === "node" || role === "label");
+    const role = record(member).smartArtRole;
+    return record(member).smartArtItemId === itemId && (role === "node" || role === "label");
   });
-  const boxes = item.map((member) => read(member));
-  if (boxes.some((box) => box === null)) return null;
-  // Larger / Smaller is ONE factor, both ways: a shape keeps its proportions.
-  // Near the frame it grows by the largest factor that still fits on both
-  // axes, and not at all when it has no room. Capping each axis on its own
-  // let a node as tall as its row keep growing wide, and the Smaller after it
-  // shrank both ways: two Larger and two Smaller turned a 100x100 node into
-  // 100x82.6 (video audit A03).
-  //
-  // A shape already at the frame on one axis grows along the other (the
-  // per-axis cap below): refusing it left Larger enabled and dead on every
-  // Basic Process node, each as tall as its graphic (98edf085c7). Interim,
-  // until the layout re-flows the other shapes as Office does (Larger
-  // enlarges the selected shape and the layout adjusts the rest). Smaller
-  // after such a step shrinks both axes, so that pair does not round-trip.
-  if (typeof factor === "number" && frame && fx > 1) {
-    let room = fx;
-    for (const box of boxes as SmartArtMemberBox[]) {
-      if (box.width > 0) room = Math.min(room, frame.width / box.width);
-      if (box.height > 0) room = Math.min(room, frame.height / box.height);
-    }
-    if (room > 1 + 1e-6) {
-      fx = room;
-      fy = room;
-    }
-  }
-  // A graphic's frame caps how far a shape can grow along each axis: a box
-  // already as tall as its row keeps growing wide, and a shape that fills the
-  // frame both ways cannot grow at all (Office: "depending on ... the amount of
-  // available space").
-  const grown = (boxes as SmartArtMemberBox[]).map((box) => {
-    const next = scaled(box);
-    if (!frame) return next;
-    const width = Math.min(next.width, frame.width);
-    const height = Math.min(next.height, frame.height);
-    return {
-      left: next.left + (next.width - width) / 2,
-      top: next.top + (next.height - height) / 2,
-      width,
-      height,
+  if (!item.some((member) => record(member).smartArtRole === "node")) return null;
+  const clamp = (value: number) =>
+    Math.min(SMARTART_CUSTOM_SCALE_MAX, Math.max(SMARTART_CUSTOM_SCALE_MIN, Math.round(value)));
+  const next = new Map<T, T>();
+  let changed = false;
+  for (const member of item) {
+    const box = read(member);
+    if (!box || !(box.width > 0) || !(box.height > 0)) return null;
+    const before = readSmartArtCustom(record(member).smartArtCustom);
+    const oldX = before?.scaleX ?? SMARTART_CUSTOM_UNIT;
+    const oldY = before?.scaleY ?? SMARTART_CUSTOM_UNIT;
+    const scaleX = clamp(oldX * fx);
+    const scaleY = clamp(oldY * fy);
+    // The box the layout will give it is unknown until the rebuild; the shape
+    // as it is now, scaled by what the bounds let through, is the guard.
+    if (box.width * (scaleX / oldX) < minEdge || box.height * (scaleY / oldY) < minEdge) return null;
+    if (scaleX !== oldX || scaleY !== oldY) changed = true;
+    // A factor back at 100 % is no customization (Office writes none).
+    const { scaleX: _x, scaleY: _y, ...kept } = before ?? {};
+    const factors = {
+      ...kept,
+      ...(scaleX !== SMARTART_CUSTOM_UNIT ? { scaleX } : {}),
+      ...(scaleY !== SMARTART_CUSTOM_UNIT ? { scaleY } : {}),
     };
-  });
-  if (grown.some((box) => box.width < minEdge || box.height < minEdge)) {
-    return null;
+    next.set(member, withSmartArtCustom(member, Object.keys(factors).length ? factors : null));
   }
-  const unchanged = (boxes as SmartArtMemberBox[]).every(
-    (box, index) =>
-      Math.abs(box.width - grown[index].width) < 1e-6 &&
-      Math.abs(box.height - grown[index].height) < 1e-6,
-  );
-  if (unchanged) return null;
-  // Keep the item inside the graphic: one shift for the node and its label,
-  // so they stay together.
-  let dx = 0;
-  let dy = 0;
-  if (frame) {
-    const left = Math.min(...grown.map((box) => box.left));
-    const top = Math.min(...grown.map((box) => box.top));
-    const right = Math.max(...grown.map((box) => box.left + box.width));
-    const bottom = Math.max(...grown.map((box) => box.top + box.height));
-    if (right - left > frame.width + 1e-6 || bottom - top > frame.height + 1e-6) {
-      return null;
-    }
-    dx =
-      left < frame.left
-        ? frame.left - left
-        : right > frame.left + frame.width
-          ? frame.left + frame.width - right
-          : 0;
-    dy =
-      top < frame.top
-        ? frame.top - top
-        : bottom > frame.top + frame.height
-          ? frame.top + frame.height - bottom
-          : 0;
-  }
-  const byMember = new Map(
-    item.map((member, index) => [
-      member,
-      { ...grown[index], left: grown[index].left + dx, top: grown[index].top + dy },
-    ]),
-  );
-  // The lines that reach the node follow its edges (PPT-B167: an organization
-  // chart's drop stopped at the old top, a gap above the smaller shape).
-  const newNode = node ? byMember.get(node) : undefined;
-  const connectors = new Map<T, SmartArtMemberBox>();
-  if (newNode) {
-    for (const member of members) {
-      if (roleOf(member) !== "connector") continue;
-      const line = read(member);
-      const followed = line ? smartArtLineFollowingNode(line, nodeBox, newNode) : null;
-      if (followed && followed.width >= minEdge && followed.height >= minEdge) {
-        connectors.set(member, followed);
-      }
-    }
-  }
-  // Office keeps a Larger / Smaller only as the shape's `custScaleX/Y` on its
-  // presentation point, so the grown shape carries the factor against its
-  // layout box (`./custom-geometry`); the writers put it where Office reads it.
-  const grownMembers = members.map((member) => {
-    const box = byMember.get(member);
-    if (!box) return member;
-    const written = write(member, box);
-    return smartArtMemberAfterBoxEdit(member, written, read);
-  });
-  // In a layout whose transitions Office routes (`./connector-follow`) the
-  // arrows and lines that join the shape are re-laid onto it. The grown shape
-  // keeps its centre, so its connectors keep their direction; one that would
-  // have to turn is left to the line rule below. A member's place in the list
-  // is its identity across this one edit (an untouched member is the same
-  // object in both lists).
-  const position = new Map<T, number>();
-  members.forEach((member, at) => position.set(member, at));
-  grownMembers.forEach((member, at) => position.set(member, at));
-  const layout =
-    kind ??
-    ((members.find((member) => typeof (member as Record<string, unknown>).smartArtKind === "string") as
-      | Record<string, unknown>
-      | undefined)?.smartArtKind as string | undefined);
-  const followed = smartArtConnectorsFollowNodes(layout, members, grownMembers, {
-    id: (member) => String(position.get(member) ?? -1),
-    box: read,
-    rotation: smartArtMemberRotation,
-    shape: smartArtMemberShape,
-    write: (member, box, rotation) =>
-      Math.abs(rotation - smartArtMemberRotation(member)) < 0.01 ? write(member, box) : member,
-  });
-  return followed.map((member, at) => {
-    if (member !== grownMembers[at]) return member;
-    const line = connectors.get(members[at]);
-    return line ? write(members[at], line) : member;
-  });
-}
-
-/** A member's turn in clockwise degrees: a block's, a Docs member's or a sheet anchor's. */
-function smartArtMemberRotation(member: unknown): number {
-  const record = member as Record<string, unknown>;
-  const anchor = record.anchor as Record<string, unknown> | undefined;
-  const turn = typeof record.rotation === "number" ? record.rotation : anchor?.rotation;
-  return typeof turn === "number" && Number.isFinite(turn) ? turn : 0;
-}
-
-/** A member's preset shape: a block's `shape`, a sheet shape's `kind`, a Docs `preset`. */
-function smartArtMemberShape(member: unknown): unknown {
-  const record = member as Record<string, unknown>;
-  const shape = record.shape;
-  if (typeof shape === "string") return shape;
-  if (shape && typeof shape === "object") return (shape as Record<string, unknown>).kind;
-  return record.preset;
-}
-
-/**
- * A straight connector segment after the node one of its ends touches was
- * resized: a vertical segment ending on the node's top or bottom edge, or a
- * horizontal one on its left or right edge, is stretched or shortened to the
- * node's new edge. Null for a segment that does not end on the node.
- */
-export function smartArtLineFollowingNode(
-  line: SmartArtMemberBox,
-  before: SmartArtMemberBox,
-  after: SmartArtMemberBox,
-): SmartArtMemberBox | null {
-  const thickness = Math.min(line.width, line.height);
-  const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(1, thickness * 2);
-  const vertical = line.height > line.width;
-  if (vertical) {
-    const x = line.left + line.width / 2;
-    if (x < before.left || x > before.left + before.width) return null;
-    const lineBottom = line.top + line.height;
-    if (near(lineBottom, before.top)) {
-      return { ...line, height: after.top - line.top };
-    }
-    if (near(line.top, before.top + before.height)) {
-      const top = after.top + after.height;
-      return { ...line, top, height: lineBottom - top };
-    }
-    return null;
-  }
-  const y = line.top + line.height / 2;
-  if (y < before.top || y > before.top + before.height) return null;
-  const lineRight = line.left + line.width;
-  if (near(lineRight, before.left)) {
-    return { ...line, width: after.left - line.left };
-  }
-  if (near(line.left, before.left + before.width)) {
-    const left = after.left + after.width;
-    return { ...line, left, width: lineRight - left };
-  }
-  return null;
+  if (!changed) return null;
+  return members.map((member) => next.get(member) ?? member);
 }
 
 /** Delete: remove one item, selecting the one that takes its place. */

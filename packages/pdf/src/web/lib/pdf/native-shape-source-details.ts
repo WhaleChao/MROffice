@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 /**
  * The parts of a third-party drawing markup that pdf.js does not hand to the
  * page: a Line's own `/L` endpoints in their stored order (pdf.js normalizes
@@ -65,6 +66,7 @@ export async function readNativePdfShapeSourceDetails(
       await import("pdf-lib");
     // Numbers are never encrypted, so an encrypted file still yields /L and /IC.
     const document = await PDFDocument.load(sourceBytes, {
+      parseSpeed: pdfLibParseSpeed(),
       updateMetadata: false,
       ignoreEncryption: true,
     });

@@ -77,8 +77,25 @@ function blankParagraphMarks(schema: Schema, raw: unknown): readonly Mark[] | nu
   }
 }
 
+/**
+ * Inline nodes the projection does not count as a line's content: a break,
+ * a bookmark or permission point, Word's page-break hint.
+ */
+const NO_CONTENT_INLINE = new Set(["hardBreak", "bookmarkPoint", "rangePermission", "sourcePageBreak"]);
+
 function isBlankLine(block: ProseMirrorNode): boolean {
-  return BLANK_LINE_TEXT.test(block.textContent);
+  if (!BLANK_LINE_TEXT.test(block.textContent)) return false;
+  // An inline atom shows content of its own though it adds no text here: a
+  // field's result, a picture, an equation (FIXQUEUE W39, corpus R397-D23
+  // walk: a table of authorities inserted into a blank cell paragraph kept
+  // its blank-line size, which a projection of the saved file never reads).
+  let blank = true;
+  block.forEach((child) => {
+    if (!blank || child.isText || NO_CONTENT_INLINE.has(child.type.name)) return;
+    if (child.type.name === "documentField" && !String(child.attrs.cachedValue ?? "").trim()) return;
+    blank = false;
+  });
+  return blank;
 }
 
 type Remembered = { pos: number; blockId: string; attrs: Record<string, unknown> };

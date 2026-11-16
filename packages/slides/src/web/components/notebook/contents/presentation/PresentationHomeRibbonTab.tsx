@@ -289,6 +289,9 @@ export interface PresentationHomeRibbonTabCtl {
   ribbonTextBlock: PresentationTextBlock | null;
   /** A text box's or a shape's words: what the paragraph commands format. */
   ribbonParagraphBlock: PresentationBlock | null;
+  /** A SmartArt graphic's shape selected whole: Decrease / Increase List
+   * Level are greyed, as PowerPoint greys them (`listLevelGreyedForSmartArtShape`). */
+  ribbonListLevelGreyed?: boolean;
   /** A table's cells take Bullets / Numbering (FIXQUEUE R28): the list controls stand for them too. */
   ribbonTableListsWritable?: boolean;
   featureDecision: (featureId: string) => ResolvedPresentationFeatureCommand;
@@ -325,7 +328,7 @@ export interface PresentationHomeRibbonTabCtl {
   activeRibbonTab: "home";
   shapeArrowsEnabled: boolean;
   shapeArrowsPicker: JSX.Element;
-  presentationArrangeMenuProps: { labels: { reorderObjects: string; reorderOverlapping: string; orderObjects: string; bringToFront: string; sendToBack: string; bringForward: string; sendBackward: string; groupObjects: string; group: string; ungroup: string; regroup: string; positionObjects: string; align: string; rotate: string; selectionPane: string; alignSections: OfficeAlignMenuSectionLabels; alignAction: (action: OfficeObjectAlignAction) => string; rotateAction: (action: "rotateRight90" | "rotateLeft90" | "flipVertical" | "flipHorizontal") => string; moreRotationOptions: string; }; icons: { bringToFront: JSX.Element; sendToBack: JSX.Element; bringForward: JSX.Element; sendBackward: JSX.Element; group: JSX.Element; ungroup: JSX.Element; align: JSX.Element; rotate: JSX.Element; selectionPane: JSX.Element; }; reorder: { disabled: boolean; disabledReason: string; onSelect: () => void; }; reorderOverlapping: { disabled: boolean; disabledReason: string; onSelect: () => void; }; order: { isDisabled: () => boolean; onAction: (action: "bringToFront" | "sendToBack" | "bringForward" | "sendBackward") => void; }; group: { disabled: boolean; disabledReason: string; onSelect: () => void; }; ungroup: { disabled: boolean; disabledReason: string; onSelect: () => void; }; regroup: { disabled: boolean; disabledReason: string; onSelect: () => void; }; align: { disabled: boolean; isDisabled: (action: OfficeObjectAlignAction) => boolean; onAction: (action: OfficeObjectAlignAction) => void; target: { toTarget: boolean; targetLabel: string; selectedLabel: string; selectedDisabled: boolean; onChange: (next: boolean) => void; targetTestId: string | undefined; selectedTestId: string | undefined; }; }; rotate: { disabled: boolean; onAction: (action: "rotateRight90" | "rotateLeft90" | "flipVertical" | "flipHorizontal") => void; more: { disabled: boolean; onSelect: () => void; }; }; selectionPane: { disabled: boolean; controlId: string; onSelect: () => undefined; }; };
+  presentationArrangeMenuProps: { labels: { reorderObjects: string; reorderOverlapping: string; orderObjects: string; bringToFront: string; sendToBack: string; bringForward: string; sendBackward: string; groupObjects: string; group: string; ungroup: string; regroup: string; positionObjects: string; align: string; rotate: string; selectionPane: string; alignSections: OfficeAlignMenuSectionLabels; alignAction: (action: OfficeObjectAlignAction) => string; rotateAction: (action: "rotateRight90" | "rotateLeft90" | "flipVertical" | "flipHorizontal") => string; moreRotationOptions: string; }; icons: { bringToFront: JSX.Element; sendToBack: JSX.Element; bringForward: JSX.Element; sendBackward: JSX.Element; group: JSX.Element; ungroup: JSX.Element; align: JSX.Element; rotate: JSX.Element; selectionPane: JSX.Element; }; reorder: { disabled: boolean; disabledReason: string; onSelect: () => void; }; reorderOverlapping: { disabled: boolean; disabledReason: string; onSelect: () => void; }; order: { isDisabled: (action: "bringToFront" | "sendToBack" | "bringForward" | "sendBackward") => boolean; onAction: (action: "bringToFront" | "sendToBack" | "bringForward" | "sendBackward") => void; }; group: { disabled: boolean; disabledReason: string; onSelect: () => void; }; ungroup: { disabled: boolean; disabledReason: string; onSelect: () => void; }; regroup: { disabled: boolean; disabledReason: string; onSelect: () => void; }; align: { disabled: boolean; isDisabled: (action: OfficeObjectAlignAction) => boolean; onAction: (action: OfficeObjectAlignAction) => void; target: { toTarget: boolean; targetLabel: string; selectedLabel: string; selectedDisabled: boolean; onChange: (next: boolean) => void; targetTestId: string | undefined; selectedTestId: string | undefined; }; }; rotate: { disabled: boolean; onAction: (action: "rotateRight90" | "rotateLeft90" | "flipVertical" | "flipHorizontal") => void; more: { disabled: boolean; onSelect: () => void; }; }; selectionPane: { disabled: boolean; controlId: string; onSelect: () => undefined; }; };
 }
 
 export function PresentationHomeRibbonTab({ ctl }: { ctl: PresentationHomeRibbonTabCtl }) {
@@ -435,6 +438,7 @@ export function PresentationHomeRibbonTab({ ctl }: { ctl: PresentationHomeRibbon
     layoutGalleryGroupHeading,
     ribbonTextBlock,
     ribbonParagraphBlock,
+    ribbonListLevelGreyed,
     ribbonTableListsWritable = false,
     featureDecision,
     executePresentationFeature,
@@ -1991,7 +1995,7 @@ export function PresentationHomeRibbonTab({ ctl }: { ctl: PresentationHomeRibbon
                         <PresentationHomeAwareFontCommand
                           home={activeRibbonTab === "home"}
                           controlId="PPTCTL.RIBBON.HOME.PARAGRAPH.PROMOTE"
-                          disabled={!ribbonParagraphBlock}
+                          disabled={!ribbonParagraphBlock || Boolean(ribbonListLevelGreyed)}
                           icon={
                             <IconParagraphIndent
                               home={activeRibbonTab === "home"}
@@ -2006,7 +2010,7 @@ export function PresentationHomeRibbonTab({ ctl }: { ctl: PresentationHomeRibbon
                         <PresentationHomeAwareFontCommand
                           home={activeRibbonTab === "home"}
                           controlId="PPTCTL.RIBBON.HOME.PARAGRAPH.DEMOTE"
-                          disabled={!ribbonParagraphBlock}
+                          disabled={!ribbonParagraphBlock || Boolean(ribbonListLevelGreyed)}
                           icon={
                             <IconParagraphIndent
                               home={activeRibbonTab === "home"}

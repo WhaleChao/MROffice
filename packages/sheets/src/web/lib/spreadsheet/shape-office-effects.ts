@@ -59,18 +59,33 @@ export function spreadsheetShapeOfficeEffects(
  * JSON (`{kind, value, accent1?}`, `value` null for "No <effect>"). The
  * object's whole `shapeEffects`, with the older shadow and preset name
  * cleared since it now states them; null when nothing changes.
+ *
+ * Format Shape > 3-D Rotation > Keep text flat travels the same way
+ * (`{keepTextFlat: boolean}`): the object's `keepTextFlat` (`a:flatTx`),
+ * `true` when checked and `false` when unchecked over a shape that kept its
+ * text flat (the file's element then comes off; an absent key says nothing).
  */
 export function shapeOfficeEffectsPatch(
-  object: { readonly shapeEffects?: unknown; readonly shadow?: unknown; readonly effect?: unknown },
+  object: {
+    readonly shapeEffects?: unknown;
+    readonly shadow?: unknown;
+    readonly effect?: unknown;
+    readonly keepTextFlat?: unknown;
+  },
   parameter: string,
 ): Record<string, unknown> | null {
-  let picked: { kind?: unknown; value?: unknown; accent1?: unknown };
+  let picked: { kind?: unknown; value?: unknown; accent1?: unknown; keepTextFlat?: unknown };
   try {
     picked = JSON.parse(parameter) as typeof picked;
   } catch {
     return null;
   }
   if (!picked || typeof picked !== "object") return null;
+  if (typeof picked.keepTextFlat === "boolean") {
+    const flat = object.keepTextFlat === true;
+    if (picked.keepTextFlat === flat) return null;
+    return { keepTextFlat: picked.keepTextFlat };
+  }
   const kind = picked.kind;
   if (!(OFFICE_PICTURE_EFFECT_KINDS as readonly unknown[]).includes(kind)) return null;
   const accent1 = typeof picked.accent1 === "string" ? picked.accent1 : undefined;

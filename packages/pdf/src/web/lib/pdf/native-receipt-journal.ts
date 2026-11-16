@@ -577,7 +577,11 @@ export class PdfNativeReceiptJournal {
     previousReceipt: PdfNativeReceiptIdentity | null;
     receipt: PdfNativeReceiptIdentity;
     sourceAction?: PdfNativeReceiptSourceAction;
-    /** The revision's record, when its own history is a byte restore of it. */
+    /** The revision's record, when its own history is a byte restore of it.
+     * The step's own one record given again is that record widened to hold
+     * this revision too (a run of keys typed into a text box: its rows from
+     * before the first key to after the last): the step still restores by
+     * it alone. */
     restoreOrigin?: string;
   }>, lease: PdfNativeReceiptMutationLease): boolean {
     if (this.#activeMutationLease !== lease || this.#activeReplay !== null) return false;
@@ -591,9 +595,11 @@ export class PdfNativeReceiptJournal {
       ? Object.freeze([...new Set([...entry.sourceActions, input.sourceAction])])
       : null;
     const origin = input.restoreOrigin?.trim();
-    entry.restoreOrigins = entry.restoreOrigins && origin
-      ? Object.freeze([...entry.restoreOrigins, origin]) : null;
-    entry.restoreOrigin = null;
+    if (!origin || entry.restoreOrigin !== origin) {
+      entry.restoreOrigins = entry.restoreOrigins && origin
+        ? Object.freeze([...entry.restoreOrigins, origin]) : null;
+      entry.restoreOrigin = null;
+    }
     entry.appliedReceipt = next;
     this.#receipt = next;
     this.#epoch += 1;

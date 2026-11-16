@@ -25,6 +25,7 @@ import {
 import { placePictureInCell, readCellPicture } from "@mrnote/core/web/lib/spreadsheet/cell-picture.ts";
 import { whatIfTablePartRefused, whatIfTablesAfterOverwrite } from "@mrnote/core/web/lib/spreadsheet/what-if-table-definition.ts";
 import { runsForWrittenValue } from "@mrnote/core/web/lib/spreadsheet/cell-rich-text.ts";
+import { withRecordFontIfPlain } from "@mrnote/core/web/lib/spreadsheet/cell-record-font.ts";
 import {
   classifyDelimitedImportCell,
   delimitedImportNumberOptionsAreValid,
@@ -178,7 +179,8 @@ export function fillCellFrom(
       carried.hyperlinkDisplay = source.hyperlinkDisplay;
   }
   if (formula) {
-    return { ...carried, value, kind: cellKind(value), formula };
+    // A formula has no runs: the source's record font is the cell's.
+    return withRecordFontIfPlain({ ...carried, value, kind: cellKind(value), formula });
   }
   // Spaces are text; only an empty value is blank.
   if (value !== "") {
@@ -195,7 +197,8 @@ export function fillCellFrom(
     // (live audit B404); a series step is a new value, read afresh.
     const typedString =
       source?.stringValue === true && value === source.value && source.kind !== "number";
-    return { ...carried, value, kind: cellKind(value), ...(typedString ? { stringValue: true as const } : {}), ...(runs ? { runs: runs.map((run) => ({ ...run, ...(run.style ? { style: { ...run.style } } : {}) })) } : {}) };
+    // A series step's new text has no runs: the record's font is drawn.
+    return withRecordFontIfPlain({ ...carried, value, kind: cellKind(value), ...(typedString ? { stringValue: true as const } : {}), ...(runs ? { runs: runs.map((run) => ({ ...run, ...(run.style ? { style: { ...run.style } } : {}) })) } : {}) });
   }
   // Empty value: keep a cell only if it carries formatting (mirrors
   // updateCellValue's blank-cell handling), else drop it.
@@ -734,7 +737,9 @@ export function edgeFillRequest(
     // Fill Down from a merged cell wrote its text into the cells the merge
     // covers (xlsx-rounds WALK2 R293-X15: B4:B6 merged, Fill Down over B4:B8
     // put the heading in B5 and B6, which never show and did not save).
-    options: { fillContentAndFormats: true, refuseValuesUnderMerges: true },
+    // A merged cell the fill's range cuts refuses it, as Excel does
+    // (`refuseMergesCutIn`, R423-X56 WALK1).
+    options: { fillContentAndFormats: true, refuseValuesUnderMerges: true, refuseMergesCutIn: { ...sel } },
   };
 }
 
@@ -848,7 +853,20 @@ export function seriesFillRequest(
       baseCol,
       rows: grid,
       ...(seedStyled ? { clipboardCells: seedFormats } : {}),
-      options: { fillContentAndFormats: true, refuseValuesUnderMerges: true },
+      // A merged cell the series' range cuts refuses it, as Excel refuses a
+      // Fill (`refuseMergesCutIn`; R427-X85 WALK1: Fill > Series down G10:G15
+      // wrote the anchor of the merged G15:G17 and the block lost its bottom
+      // edge on the page while the file kept it).
+      options: {
+        fillContentAndFormats: true,
+        refuseValuesUnderMerges: true,
+        refuseMergesCutIn: {
+          r1: Math.min(range.r1, baseRow),
+          c1: Math.min(range.c1, baseCol),
+          r2: Math.max(range.r2, lastRow),
+          c2: Math.max(range.c2, lastCol),
+        },
+      },
     },
     count: writes.length,
   };

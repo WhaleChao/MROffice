@@ -19,7 +19,7 @@ export class SpreadsheetCsvExportBudgetError extends Error {
 }
 
 /** Count the existing serializer's UTF-8 output without allocating its escaped field. */
-function csvFieldBytes(value: string, remaining: number): number {
+function csvFieldBytes(value: string, remaining: number, delimiterCode = 44): number {
   // UTF-8 needs at least one byte per UTF-16 code unit, including lone surrogates.
   if (value.length > remaining) throw new SpreadsheetCsvExportBudgetError();
   let bytes = csvFormulaNeedsEscape(value) ? 1 : 0;
@@ -30,7 +30,7 @@ function csvFieldBytes(value: string, remaining: number): number {
       bytes += 1;
       quoted = true;
     } // Doubled quote.
-    if (code === 44 || code === 10 || code === 13) quoted = true;
+    if (code === delimiterCode || code === 10 || code === 13) quoted = true;
     if (code < 0x80) bytes += 1;
     else if (code < 0x800) bytes += 2;
     else if (
@@ -86,10 +86,19 @@ export async function buildSpreadsheetCsvExportInChunks(
   options: Readonly<{
     yieldToMain?: () => Promise<void>;
     limits?: Readonly<{ maxCells: number; maxBytes: number }>;
+    /** "\t" writes Excel's Unicode Text (tab between fields, CRLF between
+     * rows; {@link unicodeTextBytes} encodes it); a comma (the default), CSV. */
+    delimiter?: "," | "\t";
   }> = {},
 ): Promise<string> {
   const yieldToMain = options.yieldToMain ?? (() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
-  const steps = csvExportSteps(rowCount, columnCount, readDisplayValue, options.limits ?? SPREADSHEET_CSV_EXPORT_LIMITS);
+  const steps = csvExportSteps(
+    rowCount,
+    columnCount,
+    readDisplayValue,
+    options.limits ?? SPREADSHEET_CSV_EXPORT_LIMITS,
+    options.delimiter ?? ",",
+  );
   for (;;) {
     const step = steps.next();
     if (step.done) return step.value;
@@ -102,6 +111,7 @@ function* csvExportSteps(
   columnCount: number,
   readDisplayValue: (row: number, column: number) => string,
   limits: Readonly<{ maxCells: number; maxBytes: number }>,
+  delimiter: "," | "\t" = ",",
 ): Generator<void, string, void> {
   if (
     ![rowCount, columnCount, limits.maxCells, limits.maxBytes].every(
@@ -119,7 +129,7 @@ function* csvExportSteps(
   for (let row = 0; row < rowCount; row += 1) {
     for (let column = 0; column < columnCount; column += 1) {
       const value = readDisplayValue(row, column);
-      remaining -= csvFieldBytes(value, remaining);
+      remaining -= csvFieldBytes(value, remaining, delimiter.charCodeAt(0));
       values.push(value);
     }
     if ((row + 1) % rowsPerChunk === 0 && row + 1 < rowCount) yield;
@@ -128,11 +138,27 @@ function* csvExportSteps(
   for (let row = 0; row < rowCount; row += 1) {
     const offset = row * columnCount;
     lines.push(
-      toDelimitedText([values.slice(offset, offset + columnCount)], ",", true),
+      toDelimitedText([values.slice(offset, offset + columnCount)], delimiter, true),
     );
     if ((row + 1) % rowsPerChunk === 0 && row + 1 < rowCount) yield;
   }
-  return `\uFEFF${lines.join("\n")}`;
+  // Excel's Unicode Text ends its rows with CRLF; the CSV keeps LF.
+  return `\uFEFF${lines.join(delimiter === "\t" ? "\r\n" : "\n")}`;
+}
+
+/**
+ * Excel's Save As Unicode Text (.txt): the text (its BOM included) as
+ * UTF-16 little-endian, the encoding Excel writes it in and reads it back
+ * from without asking (a UTF-8 .txt opens in the system code page).
+ */
+export function unicodeTextBytes(text: string): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(new ArrayBuffer(text.length * 2));
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index);
+    bytes[index * 2] = code & 0xff;
+    bytes[index * 2 + 1] = code >> 8;
+  }
+  return bytes;
 }
 
 /** A stored cell as far as the CSV extent is concerned. */

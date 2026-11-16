@@ -136,6 +136,8 @@ function markFrontmostDocument(): (() => void) | null {
 
   // Each band box was placed at its sheet's screen place, gaps included; on
   // paper box i stands at sheet i's place, keeping the first box's offset.
+  // So do the paper layer's boxes and the watermark's stamps (paperUnderlay.ts),
+  // each moved with its own sheet.
   if (overlay) {
     const boxes = Array.from(overlay.querySelectorAll<HTMLElement>(":scope > .sheet-band-box"));
     const firstTop = Number.parseFloat(boxes[0]?.style.top ?? "");
@@ -149,6 +151,39 @@ function markFrontmostDocument(): (() => void) | null {
         }
         paperTop += papers[index]?.heightPx ?? 0;
       });
+    }
+  }
+  const columns = root.closest<HTMLElement>(".note-editor-content-columns");
+  const papersLayer = columns?.querySelector<HTMLElement>(":scope > .sheet-paper-underlay");
+  const paperBoxes = papersLayer
+    ? Array.from(papersLayer.querySelectorAll<HTMLElement>(":scope > .sheet-paper[data-sheet-index]"))
+    : [];
+  const screenTops = new Map<number, number>();
+  for (const box of paperBoxes) {
+    const top = Number.parseFloat(box.style.top);
+    if (Number.isFinite(top)) screenTops.set(Number(box.dataset.sheetIndex), top);
+  }
+  const firstScreenTop = screenTops.get(0);
+  if (firstScreenTop !== undefined) {
+    const paperTops: number[] = [];
+    let paperTop = 0;
+    for (const paper of papers) {
+      paperTops.push(paperTop);
+      paperTop += paper.heightPx;
+    }
+    const stamps = columns?.querySelector<HTMLElement>(":scope > .sheet-watermark-overlay");
+    const moved = [
+      ...paperBoxes,
+      ...(stamps ? Array.from(stamps.querySelectorAll<HTMLElement>(":scope > [data-sheet-index]")) : []),
+    ];
+    for (const box of moved) {
+      const index = Number(box.dataset.sheetIndex);
+      const screenTop = screenTops.get(index);
+      const before = box.style.top;
+      const top = Number.parseFloat(before);
+      if (screenTop === undefined || paperTops[index] === undefined || !Number.isFinite(top)) continue;
+      box.style.top = `${top - screenTop + firstScreenTop + paperTops[index]}px`;
+      restores.push(() => { box.style.top = before; });
     }
   }
   return () => {

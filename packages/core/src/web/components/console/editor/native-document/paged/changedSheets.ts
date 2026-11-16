@@ -37,6 +37,11 @@ export class ChangedSheets {
     this.invalidate();
   }
 
+  /** This sheet is read again next time (a face its text draws with arrived). */
+  mark(sheet: Element): void {
+    this.sheets.add(sheet);
+  }
+
   /** The next read answers "all of them". */
   invalidate(): void {
     this.everything = true;

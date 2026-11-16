@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 /**
  * Pure helpers for PDF Optional Content Groups (OCG / "layers", Acrobat/WPS
  * "图层"). pdf.js exposes them via `PDFDocumentProxy.getOptionalContentConfig()`;
@@ -154,6 +155,7 @@ export async function readOcgDocumentFacts(
     const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFString, PDFHexString } =
       await import("pdf-lib");
     const doc = await PDFDocument.load(bytes, {
+      parseSpeed: pdfLibParseSpeed(),
       ignoreEncryption: true,
       updateMetadata: false,
       throwOnInvalidObject: false,
@@ -231,6 +233,7 @@ export async function readOcgLockedIds(
       "pdf-lib"
     );
     const doc = await PDFDocument.load(bytes, {
+      parseSpeed: pdfLibParseSpeed(),
       ignoreEncryption: true,
       updateMetadata: false,
       throwOnInvalidObject: false,

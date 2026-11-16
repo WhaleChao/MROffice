@@ -175,6 +175,8 @@ function rewriteConditionalFormat(
 ): unknown {
   if (!isRecord(rule)) return rule;
   if (rule.kind === "formula") return rewriteFields(rule, ["formula"], rewrite);
+  
+  if (rule.kind === "textContains") return typeof rule.formula === "string" ? rewriteFields(rule, ["formula"], rewrite) : rule;
   let next = rule;
   const endpoints =
     rule.kind === "colorScale"

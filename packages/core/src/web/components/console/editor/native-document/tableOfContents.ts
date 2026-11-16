@@ -31,7 +31,13 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { textblockDisplayText } from "./inlineAtomText";
 import { BOOKMARK_POINT_NODE_NAME } from "./bookmarks";
 import { computeHeadingNumbers } from "./headingNumbering";
-import { createHeadingListNumberer, headingListNumbers } from "./headingListNumbers";
+import {
+  MANUAL_TOC_GALLERY,
+  createHeadingListNumberer,
+  headingListNumbers,
+  isManualTocTitle,
+  manualTocTitleListNumbering,
+} from "./headingListNumbers";
 import { fragmentCarries } from "./paged/fragmentRoles";
 
 
@@ -848,6 +854,26 @@ function walkJsonHeadings(
   // Otherwise the numbers a Word numbering gives imported headings.
   const listNumberer = headingNumbers === null ? createHeadingListNumberer() : null;
   let headingOrdinal = -1;
+  // A manual table's numbered title counts in its numbering, as Word counts
+  // it (manualTocTitleListNumbering): the headings after it read one more.
+  let titleNumbering: Record<string, unknown> | null | undefined;
+  const titleSource = (): Record<string, unknown> | null => {
+    if (titleNumbering === undefined) {
+      const numberings: unknown[] = [];
+      const collect = (node: JSONContent): void => {
+        if (!node || typeof node !== "object") return;
+        if (node.type === "heading") {
+          const source = (node.attrs as Record<string, unknown> | undefined)?.source;
+          if (source && typeof source === "object") numberings.push((source as { listNumbering?: unknown }).listNumbering);
+          return;
+        }
+        if (Array.isArray(node.content)) for (const child of node.content) collect(child);
+      };
+      collect(doc as JSONContent);
+      titleNumbering = manualTocTitleListNumbering(docAttrs, numberings);
+    }
+    return titleNumbering ? { source: { listNumbering: titleNumbering } } : null;
+  };
 
   const visit = (node: JSONContent): void => {
     if (!node || typeof node !== "object") return;
@@ -871,7 +897,7 @@ function walkJsonHeadings(
       let listNumber: string | undefined;
       if (node.type === "heading") {
         headingOrdinal += 1;
-        listNumber = listNumberer?.(attrs)?.label;
+        listNumber = listNumberer?.(attrs, !node.content?.length)?.label;
       }
       const level = resolveTocSourceLevel(node.type, attrs, normalizeLevel, styleLevelOf);
       if (level !== null) {
@@ -892,6 +918,17 @@ function walkJsonHeadings(
         if (runs) entry.runs = runs;
         headings.push(entry);
       }
+    }
+    if (
+      listNumberer &&
+      node.type === "blockContentControl" &&
+      (node.attrs as Record<string, unknown> | undefined)?.docPartGallery === MANUAL_TOC_GALLERY
+    ) {
+      const title = node.content?.[0];
+      const attrs = title && isManualTocTitle(title.type, title.attrs as Record<string, unknown> | undefined)
+        ? titleSource()
+        : null;
+      if (attrs) listNumberer(attrs);
     }
     if (Array.isArray(node.content)) {
       for (const child of node.content) visit(child);

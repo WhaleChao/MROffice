@@ -23352,16 +23352,13 @@ html[data-platform="other"][data-theme-mode="high-contrast"] :is(.note-window-sc
   z-index: 3;
   margin: 0 clamp(16px, 3vw, 28px);
 }
-/* The shell's main area and the dashboard clip at the top bar's lower edge
-   (y = 56), which cut the stream there however far up it ran: on the
-   conversation they clip only sideways, so the words pass under the glass
-   top bar and down to the window's foot. (Marked by WorkspaceDashboard: a
-   :has() searching the main area ran again on every DOM change.) */
+ 
 .console-shell-main[data-dashboard-chat],
 [data-shell-context] .console-shell-main[data-dashboard-chat],
 .app-dashboard[data-dashboard-chat] {
   overflow-x: clip;
   overflow-y: visible;
+  border-radius: 0;
 }
 .app-dashboard-chat-shell .dash-chat-composer .ai-panel-input-area {
   background: rgba(255, 255, 255, 0.72);
@@ -23428,6 +23425,13 @@ html[data-platform="other"][data-theme-mode="high-contrast"] :is(.note-window-sc
   letter-spacing: -0.01em;
   line-height: 1.25;
   text-align: center;
+}
+
+ 
+.dash-landing-files-title {
+  display: block;
+  font-size: clamp(19px, 2vw, 25px);
+  font-weight: 400;
 }
 
  
@@ -30641,4 +30645,120 @@ html[data-ink-armed] {
     left: 0;
     width: 212px;
   }
+}
+
+/* The brand lockup's word follows the surface (components/brand/BrandLockup,
+   lib/product-surface): "Office" on MR Office, "Note" everywhere else. */
+[data-brand-word="office"] {
+  display: none;
+}
+html[data-surface="office"] [data-brand-word="note"] {
+  display: none;
+}
+html[data-surface="office"] [data-brand-word="office"] {
+  display: inline;
+}
+
+/* MR Note's alone (settings sections and groups, components/console/
+   settings/Cupertino): never on MR Office, not even before the page's script
+   has run. */
+html[data-surface="office"] [data-note-only] {
+  display: none !important;
+}
+
+ 
+.office-landing-shell {
+  min-height: 100vh;
+  background: var(--console-bg, #f6fbf9);
+}
+
+html[data-surface="office"] [data-shell-recent] {
+  visibility: hidden;
+}
+
+html[data-surface="office"] [data-shell-recent] [data-testid="workspace-landing"] {
+  visibility: visible;
+}
+
+/* The "关于你" profile card above the memory graph (MemoryProfileCard). */
+.memory-profile-card {
+  border-radius: var(--dash-card-radius);
+  border: 1px solid var(--console-border-subtle);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--console-text, inherit);
+}
+.memory-profile-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.memory-profile-card__actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.memory-profile-card__actions button {
+  border: 1px solid var(--console-border-subtle);
+  background: transparent;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: inherit;
+}
+.memory-profile-card__actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.memory-profile-card__text {
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.memory-profile-card__hint,
+.memory-profile-card__sources small {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--console-text-muted);
+}
+.memory-profile-card__error {
+  margin: 0;
+  font-size: 12px;
+  color: #b42318;
+}
+.memory-profile-card__editor textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  border: 1px solid var(--console-border-subtle);
+  border-radius: 8px;
+  padding: 8px;
+  resize: vertical;
+  background: transparent;
+  color: inherit;
+}
+.memory-profile-card__sources {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.memory-profile-card__sources li span {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .memory-profile-card {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+:root[data-theme="dark"] .memory-profile-card {
+  background: rgba(255, 255, 255, 0.04);
 }

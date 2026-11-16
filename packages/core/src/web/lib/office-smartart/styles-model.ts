@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { OFFICE_MATERIAL_PRESETS, type OfficeMaterialPreset } from "../office-picture-effects";
+import { officeGradientAngle } from "../office-shape-paint";
 
 /**
  * The fourteen PowerPoint "SmartArt Styles": the catalog a gallery lists (ids,
@@ -104,6 +105,10 @@ export interface SmartArtScene3d {
   camera: {
     preset: SmartArtCameraPreset;
     zoom?: number;
+    /** The camera's own field of view (`a:camera@fov`, 60000ths of a degree,
+     *  0..180 degrees): Format Shape > 3-D Rotation > Perspective; absent,
+     *  the preset's own. */
+    fov?: number;
     latitude?: number;
     longitude?: number;
     revolution?: number;
@@ -247,7 +252,8 @@ export function smartArtGradientCanvasCompanions(
   // Structural, not {@link SmartArtFillGradient}: hosts type their stored
   // gradient with a plain `number` angle, and this works for any of them.
   gradient: {
-    angle: number;
+    // A path gradient has none (`OfficeShapeGradient.angle`).
+    angle?: number;
     stops: readonly { position: number; color: string }[];
   },
 ): { fillTo: string; gradientAngle: number } {
@@ -255,7 +261,7 @@ export function smartArtGradientCanvasCompanions(
   // every writer speaks, so the companions only name the far stop.
   return {
     fillTo: gradient.stops[gradient.stops.length - 1].color,
-    gradientAngle: gradient.angle % 360,
+    gradientAngle: officeGradientAngle(gradient) % 360,
   };
 }
 
@@ -396,6 +402,12 @@ export function isSmartArtScene3d(value: unknown): value is SmartArtScene3d {
   ) {
     return false;
   }
+  if (
+    camera.fov !== undefined &&
+    !(typeof camera.fov === "number" && Number.isInteger(camera.fov) && camera.fov >= 0 && camera.fov <= 10_800_000)
+  ) {
+    return false;
+  }
   for (const key of ["latitude", "longitude", "revolution"] as const) {
     if (camera[key] !== undefined && !isAngle(camera[key])) return false;
   }
@@ -467,6 +479,12 @@ export function isNativeScene3d(value: unknown): value is SmartArtScene3d {
   if (
     camera.zoom !== undefined &&
     !(typeof camera.zoom === "number" && Number.isInteger(camera.zoom) && camera.zoom >= 1 && camera.zoom <= 400000)
+  ) {
+    return false;
+  }
+  if (
+    camera.fov !== undefined &&
+    !(typeof camera.fov === "number" && Number.isInteger(camera.fov) && camera.fov >= 0 && camera.fov <= 10_800_000)
   ) {
     return false;
   }

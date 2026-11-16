@@ -6,7 +6,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { isAccessGateRefusal, noteAccessGateRequired } from "./access-gate";
-import { WEB_BUILD_ID } from "./web-build-id.generated";
+import { WEB_BUILD_AT, WEB_BUILD_ID } from "./web-build-id.generated";
 import { WEB_CLIENT_PROTOCOL } from "./web-protocol";
 
 
@@ -32,11 +32,24 @@ export const WEB_BUILD_STALE_EVENT = "mrnote:web-build-stale";
  * or a stylesheet that is gone). The notice with its button shows. */
 export const WEB_BUILD_RELOAD_NEEDED_EVENT = "mrnote:web-build-reload-needed";
 const ENDPOINT = "/web-build.json";
+/** When this page's build was made; 0 when unknown (development). */
+const PAGE_BUILT_AT: number = Number.isFinite(WEB_BUILD_AT) ? WEB_BUILD_AT : 0;
+
+
+
+
+
+
+
+
+
+export const OLDER_SERVER_STALE_AFTER_MS = 30 * 60_000;
 /** A check requested less than this long after the previous one is skipped. */
 const MIN_CHECK_INTERVAL_MS = 30_000;
 
 let stale = false;
 let reloadNeeded = false;
+let olderServerSince: number | null = null;
 let lastCheckAt = 0;
 let inFlight: Promise<boolean> | null = null;
 const listeners = new Set<(stale: boolean) => void>();
@@ -57,6 +70,17 @@ export function subscribeWebBuildStale(listener: (stale: boolean) => void): () =
 /** Stale when both sides know their build and they differ. */
 export function webBuildIsStale(page: string, server: unknown): boolean {
   return page !== "" && typeof server === "string" && server !== "" && server !== page;
+}
+
+/** Whether the server's build was made before this page's (both known). */
+export function webBuildServerIsOlder(pageBuiltAt: number, serverBuiltAt: unknown): boolean {
+  return (
+    pageBuiltAt > 0 &&
+    typeof serverBuiltAt === "number" &&
+    Number.isFinite(serverBuiltAt) &&
+    serverBuiltAt > 0 &&
+    serverBuiltAt < pageBuiltAt
+  );
 }
 
 /** The server says this page's protocol is older than it accepts. A server
@@ -113,11 +137,21 @@ export function checkWebBuildFreshness(options: { force?: boolean } = {}): Promi
         if (isAccessGateRefusal(response.status, refusal)) noteAccessGateRequired();
         return stale;
       }
-      const body = (await response.json()) as { build?: unknown; minProtocol?: unknown };
-      if (webBuildIsStale(WEB_BUILD_ID, body?.build)) {
-        markStale();
-        if (webBuildIsIncompatible(WEB_CLIENT_PROTOCOL, body?.minProtocol)) markWebBuildReloadNeeded();
+      const body = (await response.json()) as { build?: unknown; builtAt?: unknown; minProtocol?: unknown };
+      if (!webBuildIsStale(WEB_BUILD_ID, body?.build)) {
+        olderServerSince = null;
+        return stale;
       }
+      if (webBuildServerIsOlder(PAGE_BUILT_AT, body?.builtAt)) {
+        // A machine the release has not reached yet; see OLDER_SERVER_STALE_AFTER_MS.
+        const seenAt = Date.now();
+        olderServerSince ??= seenAt;
+        if (seenAt - olderServerSince < OLDER_SERVER_STALE_AFTER_MS) return stale;
+      } else {
+        olderServerSince = null;
+      }
+      markStale();
+      if (webBuildIsIncompatible(WEB_CLIENT_PROTOCOL, body?.minProtocol)) markWebBuildReloadNeeded();
       return stale;
     })
     .catch(() => stale)
@@ -139,6 +173,7 @@ export function requestWebBuildCheck(reason: string): void {
 export function resetWebBuildFreshnessForTests(): void {
   stale = false;
   reloadNeeded = false;
+  olderServerSince = null;
   lastCheckAt = 0;
   inFlight = null;
 }

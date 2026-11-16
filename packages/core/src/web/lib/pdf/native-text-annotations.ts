@@ -172,6 +172,10 @@ export interface NativePdfTextAnnotation {
 
 export interface NativePdfTextMarkupAnnotation {
   id: string;
+  /** The mark MRAI made that this object is, by the name the file gives it
+   * (`/NM`, lib/pdf/managed-note-source-identity): that mark's own id. Read
+   * with the object, never kept on a row. */
+  managedMarkupId?: string;
   text: string;
   page: number;
   rect: [number, number, number, number];
@@ -902,17 +906,29 @@ export function mergeNativePdfTextAnnotations<
   return changed ? next : (current as T[]);
 }
 
-/**
- * Merge freshly discovered native text-markup objects into the side-panel
- * model. The page/subtype/rect fallback refreshes an object reference after a
- * pikepdf save renumbers indirect objects, without conflating two marks that
- * happen to share an empty comment.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function mergeNativePdfTextMarkupAnnotations<
   T extends NativeMarkupMergeCandidate,
 >(
   current: readonly T[],
   incoming: readonly NativePdfTextMarkupAnnotation[],
+  options?: { readonly ownManagedIds?: ReadonlySet<string> },
 ): T[] {
   if (incoming.length === 0) return current as T[];
   const next = [...current];
@@ -920,12 +936,26 @@ export function mergeNativePdfTextMarkupAnnotations<
   const claimedIndexes = new Set<number>();
 
   for (const discovered of incoming) {
-    let matchIndex = next.findIndex(
-      (annotation, index) =>
-        !claimedIndexes.has(index) &&
-        annotation.nativeSource?.kind === NATIVE_PDF_TEXT_MARKUP_SOURCE_KIND &&
-        annotation.nativeSource.objectRef === discovered.nativeSource.objectRef,
-    );
+    const managedId = discovered.managedMarkupId;
+    let matchIndex = managedId
+      ? next.findIndex(
+          (annotation, index) =>
+            !claimedIndexes.has(index) &&
+            annotation.id === managedId &&
+            !!annotation.managedMarkup,
+        )
+      : -1;
+    if (matchIndex < 0 && managedId && options?.ownManagedIds?.has(managedId)) {
+      continue;
+    }
+    if (matchIndex < 0) {
+      matchIndex = next.findIndex(
+        (annotation, index) =>
+          !claimedIndexes.has(index) &&
+          annotation.nativeSource?.kind === NATIVE_PDF_TEXT_MARKUP_SOURCE_KIND &&
+          annotation.nativeSource.objectRef === discovered.nativeSource.objectRef,
+      );
+    }
     if (matchIndex < 0) {
       matchIndex = next.findIndex(
         (annotation, index) =>
@@ -940,7 +970,8 @@ export function mergeNativePdfTextMarkupAnnotations<
           ),
       );
     }
-    if (matchIndex < 0) {
+    // (Only an object the file gives no such name is known by its looks.)
+    if (matchIndex < 0 && !managedId) {
       matchIndex = next.findIndex(
         (annotation, index) =>
           !claimedIndexes.has(index) &&
@@ -1005,7 +1036,9 @@ export function mergeNativePdfTextMarkupAnnotations<
       }
       continue;
     }
-    next.push(discovered as T);
+    const source: NativePdfTextMarkupAnnotation = { ...discovered };
+    delete source.managedMarkupId;
+    next.push(source as T);
     claimedIndexes.add(next.length - 1);
     changed = true;
   }

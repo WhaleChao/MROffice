@@ -19,6 +19,7 @@ import { hasLayoutGeometry } from "@mrnote/core/web/lib/presentation-object-butt
 import { CroppedImageContent, importedPptxPictureFrameStyle } from "./PresentationMediaContent";
 import { labeledActionButtonStyle } from "../../../../lib/presentation/window-chrome-styles";
 import { PresentationPreservedObjectNotice } from "./PresentationPreservedObjectNotice";
+import { PresentationModel3dFrame } from "./PresentationModel3dFrame";
 import { ImagePlus, Trash2 } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import {
   CROP_CORNERS,
@@ -53,6 +54,9 @@ export interface PresentationCanvasImageBlockCtl {
   /** Selected, and a metafile the server could not draw: the picture itself
    * is transparent, so the frame says what is here. */
   pictureNotDrawn?: boolean;
+  /** A 3-D model this browser cannot draw (no WebGL, its part unreadable):
+   * what the frame says over the picture PowerPoint kept; null to say nothing. */
+  model3dFailureNotice?: string | null;
 }
 
 export function PresentationCanvasImageBlock({ ctl }: { ctl: PresentationCanvasImageBlockCtl }) {
@@ -73,6 +77,7 @@ export function PresentationCanvasImageBlock({ ctl }: { ctl: PresentationCanvasI
     pictureSmartArtReplaceDisabledReason,
     pictureSmartArtReplaceLabel,
     pictureNotDrawn,
+    model3dFailureNotice,
   } = ctl;
   return (
                     <figure
@@ -95,6 +100,11 @@ export function PresentationCanvasImageBlock({ ctl }: { ctl: PresentationCanvasI
                           : undefined
                       }
                     >
+                      <PresentationModel3dFrame
+                        block={displayedImageBlock ?? block}
+                        live
+                        failureNotice={model3dFailureNotice}
+                      >
                       <CroppedImageContent
                         block={displayedImageBlock ?? block}
                         themeColors={deckThemeGridColors}
@@ -117,6 +127,7 @@ export function PresentationCanvasImageBlock({ ctl }: { ctl: PresentationCanvasI
                           }),
                         }}
                       />
+                      </PresentationModel3dFrame>
                       {pictureNotDrawn ? (
                         <PresentationPreservedObjectNotice
                           notice={{ kind: "picture", code: "metafile-not-drawn" }}

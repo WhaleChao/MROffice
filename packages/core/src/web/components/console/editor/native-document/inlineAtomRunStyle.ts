@@ -73,6 +73,10 @@ export type InlineAtomRunStyle = {
   color?: string;
   fontSize?: number;
   fontFamily?: string;
+  /** Font > Superscript / Subscript (`w:vertAlign`): an EndNote citation's
+   * result raised small above the line (corpus R366-D13). */
+  superscript?: boolean;
+  subscript?: boolean;
 };
 
 /** The editor marks that carry the run-style vocabulary. */
@@ -84,7 +88,21 @@ const VOCABULARY_MARKS: ReadonlySet<string> = new Set([
   "fontSize",
   "fontFamily",
   "textColor",
+  "superscript",
+  "subscript",
 ]);
+
+
+
+
+const BASELINE_MARKS: ReadonlySet<string> = new Set(["superscript", "subscript"]);
+
+/** `window.__docsAtomBaselineOff = true` draws a field's result on the line
+ * whatever its runStyle states (the reading before), for an A/B of one build. */
+function atomBaselineOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsAtomBaselineOff?: boolean }).__docsAtomBaselineOff === true;
+}
 
 const MAX_ENCODED_RUN_STYLE = 1024;
 
@@ -126,6 +144,10 @@ export function inlineAtomRunStyleFromMarks(marks: readonly Mark[]): InlineAtomR
         if (color) raw.color = color;
         break;
       }
+      case "superscript":
+      case "subscript":
+        if (!atomBaselineOff()) raw[mark.type.name] = true;
+        break;
     }
   }
   return normalizeInlineAtomRunStyle(raw);
@@ -153,6 +175,10 @@ function stateMarks(schema: Schema, style: InlineAtomRunStyle): Mark[] {
     const color = normalizeTextColor(style.color);
     if (color) add("textColor", { color });
   }
+  if (!atomBaselineOff()) {
+    if (style.superscript === true) add("superscript");
+    else if (style.subscript === true) add("subscript");
+  }
   return out;
 }
 
@@ -167,7 +193,9 @@ export function inlineAtomMarksFromRunStyle(
   current: readonly Mark[],
   parent: ProseMirrorNode,
 ): readonly Mark[] {
-  let marks: readonly Mark[] = current.filter((mark) => !VOCABULARY_MARKS.has(mark.type.name));
+  let marks: readonly Mark[] = current.filter(
+    (mark) => !VOCABULARY_MARKS.has(mark.type.name) || BASELINE_MARKS.has(mark.type.name),
+  );
   if (!style) return marks;
   for (const mark of stateMarks(schema, style)) {
     if (parent.type.allowsMarkType(mark.type)) marks = mark.addToSet(marks);

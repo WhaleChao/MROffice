@@ -7,6 +7,7 @@
  */
 import { type SpreadsheetObjectBounds, objectBoundsPixels } from "../../../../lib/spreadsheet/drawing-buttons";
 import { useMemo } from "react";
+import { spreadsheetShapeSceneCamera } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import { totalAxisSize, offsetOfLine } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import { type SheetModel, type SpreadsheetObject } from "./spreadsheetSheetModel";
 import { SPREADSHEET_HEADER_WIDTH_PX, SPREADSHEET_HEADER_HEIGHT_PX } from "./spreadsheetGridConstants";
@@ -41,7 +42,8 @@ export function useSpreadsheetSmartArtBoxesAndPresence({
   const smartArtDiagramBoxes = useMemo(() => {
     const boxes = new Map<string, SpreadsheetObjectBounds>();
     for (const object of sheetObjects) {
-      if (object.type !== "shape" || !object.groupId || !object.shape?.scene3d) {
+      // A group's own camera (`nativeGroupScene3d`) turns it about this box too.
+      if (object.type !== "shape" || !object.groupId || !spreadsheetShapeSceneCamera(object.shape)) {
         continue;
       }
       const bounds = objectBoundsPixels(object, colWidth, rowHeight);

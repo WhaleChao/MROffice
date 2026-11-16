@@ -4,6 +4,10 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { CSS_PX_PER_POINT } from "@mrnote/core/web/lib/presentation/text-units.ts";
+import { officeTextEffectsPaneSections } from "@mrnote/core/web/components/office-ribbon/officeEffectsPaneSections.tsx";
+import { officeTextPaintOfficeEffects, withOfficeTextEffect } from "@mrnote/core/web/lib/office-text-effects.ts";
+import { presentationTextFrameWithKeepTextFlat } from "../../../../lib/presentation-shape-effects";
+import { presentationEffectsPaneLabels } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEffectsLabels.ts";
 import type {
   OfficeShapeFormatPaneField,
   OfficeShapeFormatPaneTab,
@@ -35,6 +39,8 @@ import {
   type PresentationTextFrameBlock,
 } from "../../../../lib/presentation-text-frame-options";
 import { PRESENTATION_TEXT_INSET_EDGES } from "../../../../lib/presentation-text-insets";
+import { isSmartArtGraphicShape } from "../../../../lib/presentation-smartart-shape-selection";
+import type { PresentationBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import type { WritingMode } from "@mrnote/core/web/lib/presentation-line-spacing.ts";
 
 /**
@@ -56,7 +62,9 @@ import type { WritingMode } from "@mrnote/core/web/lib/presentation-line-spacing
  */
 
 /** The deck's message lookup for the keys this tab uses. */
-export type PresentationTextOptionsTranslate = (key: string) => string;
+/** The host's translator: the values fill a label's placeholders (Glow's
+ * "{size} point; Accent color {accent}"). */
+export type PresentationTextOptionsTranslate = (key: string, values?: Record<string, string | number>) => string;
 
 export interface PresentationTextOptionsInput {
   readonly block: PresentationTextFrameBlock;
@@ -100,7 +108,6 @@ const OUTER_SHADOW: OfficeTextShadow = { color: "#000000", blur: 3, offsetX: 2, 
 const INNER_SHADOW: OfficeTextShadow = { color: "#000000", blur: 5, offsetX: 3, offsetY: 3, opacity: 0.5 };
 const REFLECTION = { opacity: 0.35, blur: 0, distance: 1 } as const;
 const GLOW = { color: "#5b9bd5", radius: 5, opacity: 0.6 } as const;
-const BEVEL = { width: 2, height: 2, depth: 0 } as const;
 
 function shadowAngle(shadow: OfficeTextShadow): number {
   return Math.round(((Math.atan2(shadow.offsetY, shadow.offsetX) * 180) / Math.PI + 360) % 360);
@@ -256,6 +263,29 @@ export function presentationTextOptionsTab(input: PresentationTextOptionsInput):
     },
   });
   const pt = t("presentation.home.pointsUnit");
+  // Text Effects' shared fields over the words' paint (the deck's and the
+  // sheet's panes and the ribbon's menu read and write the same way).
+  const shared = officeTextEffectsPaneSections({
+    effects: officeTextPaintOfficeEffects(base),
+    accentColors: { accent1: "#4472c4", accent2: "#ed7d31", accent3: "#a5a5a5", accent4: "#ffc000", accent5: "#5b9bd5", accent6: "#70ad47" },
+    labels: presentationEffectsPaneLabels(t as unknown as Parameters<typeof presentationEffectsPaneLabels>[0]),
+    disabled: disabledPaint,
+    disabledReason: paintReason,
+    testIdPrefix: "text-effects",
+    onChange: (kind, value) => input.editPaint((own) => withOfficeTextEffect(own, kind, value)),
+    // 3-D Rotation > Keep text flat: the shape's own field (`keepTextFlat`,
+    // the body's `a:flatTx`), which Shape Options' Effects sets too.
+    keepTextFlat: {
+      checked: block.keepTextFlat === true,
+      onChange: (checked) =>
+        input.commitFrame((target) => presentationTextFrameWithKeepTextFlat(target, checked)),
+    },
+  }, { threeD: "full" });
+  /** A shared section's fields, its first one under `label`. */
+  const sharedSection = (section: string, label: string): OfficeShapeFormatPaneField[] =>
+    (shared.find((entry) => entry.id === section)?.fields ?? []).map((field, index) =>
+      (index === 0 ? { ...field, label } : field) as OfficeShapeFormatPaneField,
+    );
   const effects: OfficeShapeFormatPaneField[] = [
     {
       kind: "select",
@@ -410,55 +440,12 @@ export function presentationTextOptionsTab(input: PresentationTextOptionsInput):
       disabledReason: t("presentation.textOptions.softEdgesNotForText"),
       onChange: () => undefined,
     },
-    {
-      kind: "select",
-      id: "text-bevel",
-      label: `${t("presentation.textOptions.threeDFormat")} · ${t("presentation.textOptions.topBevel")}`,
-      value: base.bevel ? "circle" : "none",
-      options: [
-        { value: "none", label: t("presentation.textOptions.none") },
-        { value: "circle", label: t("presentation.textOptions.circle") },
-      ],
-      disabled: disabledPaint,
-      disabledReason: paintReason,
-      onChange: (value) => writeParts({ bevel: value === "circle" ? { ...BEVEL } : null }),
-    },
-    numberField(
-      "text-bevel-width",
-      "presentation.textOptions.width",
-      base.bevel ? pxToPt(base.bevel.width) : 0,
-      pt,
-      [0, 12],
-      (value) => base.bevel && writeParts({ bevel: { ...base.bevel, width: clamp(ptToPx(value), 0, 16) } }),
-      !base.bevel,
-    ),
-    numberField(
-      "text-bevel-height",
-      "presentation.textOptions.height",
-      base.bevel ? pxToPt(base.bevel.height) : 0,
-      pt,
-      [0, 12],
-      (value) => base.bevel && writeParts({ bevel: { ...base.bevel, height: clamp(ptToPx(value), 0, 16) } }),
-      !base.bevel,
-    ),
-    numberField(
-      "text-bevel-depth",
-      "presentation.textOptions.depth",
-      base.bevel ? pxToPt(base.bevel.depth) : 0,
-      pt,
-      [0, 12],
-      (value) => base.bevel && writeParts({ bevel: { ...base.bevel, depth: clamp(ptToPx(value), 0, 16) } }),
-      !base.bevel,
-    ),
-    {
-      kind: "checkbox",
-      id: "text-3d-rotation",
-      label: t("presentation.textOptions.threeDRotation"),
-      checked: false,
-      disabled: true,
-      disabledReason: t("presentation.textOptions.rotationUnavailable"),
-      onChange: () => undefined,
-    },
+    // 3-D Format and 3-D Rotation, whole, as Format Text Effects shows them
+    // for a shape's words (the shared fields over Office's statement of the
+    // words' 3-D, `office-text-3d`): top and bottom bevels, depth, contour,
+    // material, lighting and its angle; presets, X / Y / Z, Perspective.
+    ...sharedSection("effects-bevel", `${t("presentation.textOptions.threeDFormat")} · ${t("presentation.textOptions.topBevel")}`),
+    ...sharedSection("effects-rotation", t("presentation.textOptions.threeDRotation")),
   ];
 
   const frame = presentationTextFrameOptions(block);
@@ -530,6 +517,11 @@ export function presentationTextOptionsTab(input: PresentationTextOptionsInput):
       id: "text-autofit",
       label: t("presentation.textOptions.autofit"),
       value: frame.autofit,
+      // A SmartArt graphic's shape takes no Autofit value (office-truth probe
+      // smartart-member-edits: TextFrame2.AutoSize 0/1/2 "out of range").
+      ...(isSmartArtGraphicShape(input.block as unknown as PresentationBlock)
+        ? { disabled: true, disabledReason: t("presentation.textOptions.autofitSmartArtShape") }
+        : {}),
       options: [
         { value: "none", label: t("presentation.textOptions.doNotAutofit") },
         { value: "shrink", label: t("presentation.textOptions.shrinkOnOverflow") },

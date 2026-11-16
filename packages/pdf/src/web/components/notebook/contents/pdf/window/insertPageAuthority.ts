@@ -65,6 +65,9 @@ export type PdfFormulaSourceSaveResult =
     }
   /** AutoSave on: staged on the working copy, saved by its queue in order. */
   | { readonly kind: "staged" }
+  /** Nothing to write: the saved page holds this list already, in the very
+   * file the write would start from (pdfPageSaveWouldChangeNothing). */
+  | { readonly kind: "unchanged" }
   | null;
 
 export type PdfInsertPageFormulaFlushResult =

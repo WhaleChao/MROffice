@@ -150,6 +150,14 @@ export interface DocumentChartEditDataEventDetail {
 export { ChartDataGrid } from "./ChartDataGrid";
 export type { ChartDataGridLabels, ChartDataGridProps } from "./ChartDataGrid";
 
+
+/** `window.__docsWordChartBlockMarginOff = true` asks the older reading (an
+ * imported block chart stands 8 px apart like an inserted one), for an A/B
+ * of one build. */
+function wordChartBlockMarginOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsWordChartBlockMarginOff?: boolean}).__docsWordChartBlockMarginOff === true;
+}
+
 function ChartBlockDataTable({
   attrs,
   label,
@@ -311,6 +319,15 @@ export function ChartBlockView(props: NodeViewProps) {
   // Paragraph alignment and floating placement belong to the host paragraph /
   // the block node, never to the run.
   const inlinePlacement = node.type.isInline;
+  // A Word chart "In Line with Text" alone on a single-spaced line, handed
+  // over as a block of its own: Word's line is the chart's own height (a
+  // picture's line takes no descent, documentAutoLineSpacing), so the block
+  // takes none of the 8 px a chart inserted here stands apart by (corpus
+  // R287-D06: three such charts, a page each, 6 pt a chart too far apart).
+  // On a line grid the line is whole slots (note-editor.css).
+  const wordLineBlock = !inlinePlacement && !wordChartBlockMarginOff() &&
+    (rawAttrs.source as { adapter?: unknown } | null | undefined)?.adapter === "docx" &&
+    hostLayout.mode !== "floating";
   // A floating chart (`wp:anchor`) is placed on its page by the float pass
   // that places a floating picture (`floatingTextBoxLayout`): the wrapper
   // publishes the anchor and that pass owns its position, float and margins.
@@ -924,6 +941,7 @@ export function ChartBlockView(props: NodeViewProps) {
       as={inlinePlacement ? "span" : "div"}
       className={`chart-block-wrapper ${officeDrawingSelectionStyles.selectedHost}`}
       data-inline-chart={inlinePlacement ? "true" : undefined}
+      data-chart-word-line={wordLineBlock && !floatAnchor ? "true" : undefined}
       data-testid="chart-block"
       data-selected={selected || undefined}
       // One of its elements selected: the chart's own frame steps back.
@@ -994,7 +1012,8 @@ export function ChartBlockView(props: NodeViewProps) {
         border: 0,
         borderRadius: 0,
         padding: 0,
-        ...(floatAnchor ? {} : { margin: "8px 0" }),
+        ...(floatAnchor ? {} : { margin: wordLineBlock ? 0 : "8px 0" }),
+        ...(wordLineBlock && hostSize ? { "--chart-line-height": `${hostSize.heightEmu / CHART_HOST_EMU_PER_PX}px` } : {}),
         backgroundColor: renderedAttrsV2.format?.chartAreaStyle?.fill === "none"
           ? "transparent" : renderedAttrsV2.format?.chartAreaStyle?.fill ?? "#ffffff",
         ...(hostSize ? {
@@ -1202,7 +1221,16 @@ function liftChartNodesOntoV2(
       return false;
     });
   }
-  return tr.docChanged ? tr.setMeta("addToHistory", false) : null;
+  if (!tr.docChanged) return null;
+  // A chart's attributes are set by replacing the node (it is a leaf), which
+  // maps a selection of it to a caret beside it: a V1 chart dropped into a
+  // line of text or pasted was left unselected. A lifted chart that was
+  // selected stays selected.
+  const { selection } = state;
+  if (selection instanceof NodeSelection && lifted.has(selection.from)) {
+    tr.setSelection(NodeSelection.create(tr.doc, selection.from));
+  }
+  return tr.setMeta("addToHistory", false);
 }
 
 /**

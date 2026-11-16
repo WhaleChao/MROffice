@@ -33,6 +33,7 @@
 import {
   BARE_NAME_PART_CLASS,
   BARE_NAME_START_CLASS,
+  DEFINED_NAME_LATER_MARK_CLASS,
   DEFINED_NAME_START_CLASS,
 } from "@mrnote/core/web/lib/spreadsheet/name-syntax.ts";
 
@@ -69,10 +70,11 @@ const REFERENCE_RE = new RegExp(
 );
 const LOCAL_REFERENCE_RE =
   /^\$?[A-Za-z]{1,3}\$?[0-9]{1,7}(?::\$?[A-Za-z]{1,3}\$?[0-9]{1,7})?/;
-// A defined name's later characters include the `?` and `\` Excel stores
-// (./name-syntax isDefinedNameCharacter; xlsx-rounds R268-X15).
+// A defined name's later characters include the `?` and `\` Excel stores and
+// the CJK marks it takes (./name-syntax isDefinedNameCharacter; xlsx-rounds
+// R268-X15, evidence/xprobe-namechars).
 const NAME_RE = new RegExp(
-  `^[${DEFINED_NAME_START_CLASS}][${BARE_NAME_PART_CLASS}?\\\\]*`,
+  `^[${DEFINED_NAME_START_CLASS}][${BARE_NAME_PART_CLASS}${DEFINED_NAME_LATER_MARK_CLASS}]*`,
   "u",
 );
 const QUALIFIED_CELL_RE = new RegExp(

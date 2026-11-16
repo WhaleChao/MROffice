@@ -26,9 +26,10 @@ const DEFAULTS: Readonly<Record<TextEngineSurface, boolean>> = {
   // A body being typed in drawn by the engine too, over its editing rows
   // (transparent, still the caret's and the input method's), its caret and
   // selection painted from the engine's lines (`PresentationEngineEditLayer`),
-  // so a box does not move as it is clicked. Off until the editor probe, the
   
-  // By name only: `?textEngine=slides-edit`.
+  
+  // misplaced letters with it and not without it; on again once that is 0.
+  // By name only: `?textEngine=slides-edit` turns it on for a tab.
   "slides-edit": false,
   // A paragraph's lines broken where Word breaks them (docs-lines.ts; the page
   // follows by documentEngineLineBreaks), its height and its cut across pages
@@ -55,8 +56,18 @@ const DEFAULTS: Readonly<Record<TextEngineSurface, boolean>> = {
   // `?textEngine=docs-formula-boxes` keeps their boxes in any browser.
   "docs-formula-boxes": true,
   // A long document's pages kept on the server and opened from there, not laid
-  // out again (paged/layoutSnapshot; with docs-layout). By name only.
-  "docs-layout-snapshot": false,
+  // out again (paged/layoutSnapshot; with docs-layout). On in Chromium since
+  
+  // reopened settled in 19-22 s against 47-50 s without it (Word lays it out
+  // in 20 s), the book in 44-45 s against 88 s (Word 70 s), every page where
+  // it was, no dispatch, its longest task 1.9 s against 2.5 s; its first page
+  
+  
+  // had it (x4) and the lookup misses since fixed (1f0bcedeb3, 4b0e542a9e).
+  // Off elsewhere (WebKit unmeasured). By name: `?textEngine=-docs-layout-snapshot`
+  // lays every opening out again, `?textEngine=docs-layout-snapshot` keeps
+  // pages in any browser.
+  "docs-layout-snapshot": true,
   // A handwritten page's strokes at rest drawn in their sheet's layer from
   // the note's data, each stroke an empty element until it is selected
   
@@ -103,7 +114,9 @@ export function textEngineEnabled(surface: TextEngineSurface): boolean {
   // `off` is everything off, a surface asked for by name apart; `on` never
   // reaches a by-name surface, which goes by its own default.
   if (byName) {
-    const fallback = surface === "docs-formula-boxes" ? DEFAULTS[surface] && formulaBoxesByDefault() : DEFAULTS[surface];
+    const fallback = surface === "docs-formula-boxes" ? DEFAULTS[surface] && formulaBoxesByDefault()
+      : surface === "docs-layout-snapshot" ? DEFAULTS[surface] && layoutSnapshotByDefault()
+      : DEFAULTS[surface];
     return surfaceOverrides?.get(surface) ?? (override === false ? false : fallback);
   }
   return override ?? surfaceOverrides?.get(surface) ?? DEFAULTS[surface];
@@ -120,6 +133,12 @@ export function formulaBoxesByDefault(userAgent: string | null = typeof navigato
   if (!userAgent) return false;
   if (/\b(CriOS|FxiOS|EdgiOS|OPiOS)\b|iPhone|iPad|iPod/.test(userAgent)) return false;
   return /\b(Chrome|HeadlessChrome|Chromium|Edg|OPR)\//.test(userAgent);
+}
+
+/** Whether this browser keeps a long document's pages unasked: Chromium's
+ * engine only, as formula boxes (WebKit's restore not yet measured). */
+export function layoutSnapshotByDefault(userAgent: string | null = typeof navigator === "undefined" ? null : navigator.userAgent): boolean {
+  return formulaBoxesByDefault(userAgent);
 }
 
 let surfaceOverrides: Map<TextEngineSurface, boolean> | null | undefined;

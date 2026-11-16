@@ -67,6 +67,20 @@ export function withoutImageEdit(
 }
 
 /**
+ * The staged edits once a write refused one of them: only that edit goes.
+ *
+ * The others were not part of the refused write and stay staged, and an edit
+ * staged for the same picture since is a newer one, not the refused one.
+ */
+export function withoutRefusedImageEdit(
+  edits: EmbeddedImageEdits,
+  refused: EmbeddedImageEdit,
+): EmbeddedImageEdits {
+  if (imageEditAt(edits, refused.page, refused.order) !== refused) return edits;
+  return withoutImageEdit(edits, refused.page, refused.order);
+}
+
+/**
  * Edits in page then paint order.
  *
  * The applier draws in the order it is given, and two edits on one page can

@@ -73,3 +73,57 @@ export function nativeVectorLayerBoundary(
   }
   return Object.freeze({ atFront, atBack });
 }
+
+/**
+ * Whether one Arrange move is live for an object standing at `boundary`, as
+ * Office's commands are: Bring Forward and Bring to Front grey once the
+ * object is painted last on its page, Send Backward and Send to Back once
+ * it is painted first, each saying why. A move the object cannot take for
+ * another reason keeps that reason.
+ */
+export function pdfLayerMoveAvailability(input: {
+  readonly direction: "forward" | "backward" | "front" | "back";
+  readonly enabled: boolean;
+  readonly disabledReason?: string;
+  readonly atFront?: boolean;
+  readonly atBack?: boolean;
+  readonly atFrontReason: string;
+  readonly atBackReason: string;
+}): Readonly<{ disabled: boolean; disabledReason?: string }> {
+  if (!input.enabled) {
+    return Object.freeze({ disabled: true, disabledReason: input.disabledReason });
+  }
+  const forward = input.direction === "forward" || input.direction === "front";
+  if (forward ? input.atFront === true : input.atBack === true) {
+    return Object.freeze({
+      disabled: true,
+      disabledReason: forward ? input.atFrontReason : input.atBackReason,
+    });
+  }
+  return Object.freeze({ disabled: false });
+}
+
+/**
+ * Where a multiple selection stands among everything its page paints, as
+ * Office reads it for its Arrange commands: Bring Forward / Bring to Front
+ * grey once the selected objects are the front-most ones (no other ink is
+ * painted after the back-most of them), Send Backward / Send to Back once
+ * they are the back-most ones.
+ */
+export function nativeVectorSelectionLayerBoundary(
+  stops: readonly number[],
+  operatorIndices: readonly number[],
+): PdfNativeVectorLayerBoundary {
+  if (operatorIndices.length === 0) return Object.freeze({ atFront: false, atBack: false });
+  const selected = new Set(operatorIndices);
+  const back = Math.min(...operatorIndices);
+  const front = Math.max(...operatorIndices);
+  let atFront = true;
+  let atBack = true;
+  for (const stop of stops) {
+    if (selected.has(stop)) continue;
+    if (stop > back) atFront = false;
+    if (stop < front) atBack = false;
+  }
+  return Object.freeze({ atFront, atBack });
+}

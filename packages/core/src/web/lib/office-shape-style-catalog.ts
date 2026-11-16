@@ -123,6 +123,30 @@ export interface OfficeShapeStyleRecipe {
   readonly fillTransparency?: number;
 }
 
+/**
+ * The theme slots a Shape Styles recipe paints its fill and line in (the
+ * Office gallery's `fillRef` / `lnRef` colours): a column's colour is Dark 1
+ * (column 0) or Accent 1-6, a Colored Outline fills in Light 1 and a Colored
+ * Fill outlines in it. `undefined` where the recipe paints no line.
+ */
+export function officeShapeStyleRecipeSlots(recipe: OfficeShapeStyleRecipe): {
+  readonly fill?: string;
+  readonly stroke?: string;
+} {
+  const column = recipe.column === 0 ? "dk1" : `accent${recipe.column}`;
+  // The measured Presets rows (`office-shape-style-presets`): Transparent
+  // paints neither, Colored Outline its line, the others their fill, in the
+  // column's colour.
+  if (recipe.row === "preset-transparent") return {};
+  if (recipe.row === "preset-outline") return { stroke: column };
+  if (String(recipe.row).startsWith("preset-")) return { fill: column };
+  if (!(OFFICE_SHAPE_STYLE_ROWS as readonly string[]).includes(recipe.row)) return {};
+  if (recipe.row === "outline") return { fill: "lt1", stroke: column };
+  if (recipe.row === "solid") return { fill: column, stroke: "lt1" };
+  if (recipe.row === "shadow") return { fill: column };
+  return { fill: column, stroke: column };
+}
+
 /** Seven slot identities are preserved even when a theme repeats a colour. */
 export function officeShapeStyleRecipes(
   accents: readonly string[],

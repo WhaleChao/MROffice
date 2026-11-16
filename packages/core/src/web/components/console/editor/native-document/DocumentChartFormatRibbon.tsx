@@ -72,6 +72,7 @@ import {
   type PresentationChartAreaStyle,
   type PresentationChartEffectPreset,
   normalizePresentationChartAxisTitleStyles,
+  chartPointEffectiveStyle,
 } from "../../../../lib/presentation-chart-area-style";
 import {
   CHART_FRAME_STYLE_KEYS,
@@ -233,6 +234,12 @@ export interface DocumentChartFormatRibbonProps {
    * (the deck) leaves it out.
    */
   readonly themeColumns?: readonly (readonly string[])[];
+  /**
+   * The chart's theme accents (its part's own theme's, else the document's),
+   * accent 1 to 6: the Format pane's Glow presets ("Glow: 8 point; Orange,
+   * Accent color 2") paint in them, as Office's do. Absent: Office's own.
+   */
+  readonly accentColors?: readonly string[];
   /** Opt in only when the host's native writer supports the shared paint model. */
   readonly officeProfile?: boolean;
   /**
@@ -349,6 +356,14 @@ export interface DocumentChartFormatRibbonProps {
    */
   readonly onAreaChange?: (area: DocumentChartAreaStyleKey) => void;
   /**
+   * The host's Current Selection as the chart's clicks left it
+   * (`chart-selection-store`): the ribbon opens on it. Two clicks on a
+   * column made before the Format tab is shown select that point, as
+   * Office's do; the ribbon, mounted after them, read only the last click
+   * and opened on the series.
+   */
+  readonly selectedArea?: string | null;
+  /**
    * The host's own options for the element the Format pane is formatting,
    * Office's per-element options page (Axis Options > Number, Series
    * Options...), shown under Current Selection.
@@ -429,6 +444,7 @@ function rememberChartArea(identity: unknown, area: DocumentChartAreaStyleKey): 
 
 export function DocumentChartFormatRibbon({
   themeColumns,
+  accentColors,
   elementPane,
   paneClassName,
   application = "docs",
@@ -483,6 +499,7 @@ export function DocumentChartFormatRibbon({
   paneHeaderActions,
   floatingHeights,
   onAreaChange,
+  selectedArea,
 }: DocumentChartFormatRibbonProps): React.JSX.Element {
   const t = useTranslations("console-notebooks");
   // A host without its own translator (the deck's chart tab) reads this
@@ -492,10 +509,16 @@ export function DocumentChartFormatRibbon({
   const zh = /^zh(?:-|$)/i.test(locale);
   const copy = (key: string, _fallback: string, values?: Record<string, string | number>) =>
     translate(key, values);
-  const [selection, setSelection] = useState(() => ({
-    identity: selectionIdentity,
-    area: rememberedChartArea(selectionIdentity) ?? ("chartAreaStyle" as DocumentChartAreaStyleKey),
-  }));
+  const [selection, setSelection] = useState(() => {
+    // The clicks the host already applied are not applied again here.
+    if (selectedArea && elementHit) consumedChartHits.add(elementHit);
+    return {
+      identity: selectionIdentity,
+      area: (selectedArea as DocumentChartAreaStyleKey | null | undefined) ??
+        rememberedChartArea(selectionIdentity) ??
+        ("chartAreaStyle" as DocumentChartAreaStyleKey),
+    };
+  });
   type PaintSession = {
     identity: typeof selectionIdentity;
     authority: typeof authority;
@@ -863,10 +886,13 @@ export function DocumentChartFormatRibbon({
     value && typeof value === "object" && ("shapePaint" in value || "textPaint" in value));
   const disabledReason = editorDisabledReason ?? getAreaDisabledReason?.(area) ?? (foreignAdvancedPaint
     ? (copy("spreadsheet.chartFormatCopy.availability.editThisAdvancedStyleInDocs", zh ? "此高级样式请在 Docs 中编辑" : "Edit this advanced style in Docs")) : null);
-  // One point selected by a second click formats that point's label (its
-  // Label Options page); its paint is its series' (the model carries no
-  // point paint off a pie), so the paint controls stand aside for it.
-  const pointSelected = officeChartPointArea(area) !== null;
+  // One point selected by a second click (Format Data Point): a column's,
+  // a bar's or a funnel stage's own fill, line and effects (its `c:dPt`,
+  // `sliceStyles` by series and point), as Office formats it. A line's or a
+  // scatter's point is its marker and label (the paint controls stand aside).
+  const pointSelected =
+    officeChartPointArea(area) !== null &&
+    !(attrs !== null && (attrs.chartType === "column" || attrs.chartType === "bar" || attrs.chartType === "funnel"));
   // What the chart's part keeps: an Office 2016 (chartEx) chart keeps its
   // frame's paint only, and a series' own paint reaches a funnel at most. The
   // axis of a histogram, a waterfall or a funnel is still selectable (its Axis
@@ -947,8 +973,13 @@ export function DocumentChartFormatRibbon({
   const axis = axisMatch?.[1] as "category" | "value" | undefined;
   const axisTitleMatch = /^axisTitle:(category|value)$/.exec(area);
   const axisTitle = axisTitleMatch?.[1] as "category" | "value" | undefined;
+  // Format Data Point: the point's own row (`c:dPt`), or its series' paint
+  // before it has one.
+  const pointRef = officeChartPointArea(area);
   const style =
-    axis !== undefined
+    pointRef !== null
+      ? chartPointEffectiveStyle(attrs?.format, pointRef.seriesIndex, pointRef.pointIndex)
+      : axis !== undefined
       ? normalizePresentationChartAxisStyles(attrs?.format?.axisStyles)?.find(
           (entry) => entry.axis === axis,
         )
@@ -1161,6 +1192,7 @@ export function DocumentChartFormatRibbon({
   const pane = paneOpen ? (
     <DocumentChartFormatPane
       area={area}
+      accentColors={accentColors}
       areas={selections}
       paintless={pointSelected || paintNotKept}
       options={paneOptions?.(area)}

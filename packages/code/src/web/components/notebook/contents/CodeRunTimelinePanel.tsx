@@ -25,6 +25,7 @@ import {
   type CodeTestSource,
   type PersistedCodeTestRunTimelineEntry,
 } from "../../../lib/code-runner/code-test-explorer";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 
 function moveHorizontalTimelineFocus(
   event: ReactKeyboardEvent<HTMLElement>,
@@ -94,7 +95,7 @@ interface CodeRunTimelinePanelProps {
 
 function entryTime(completedAt: number): string {
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(pageInterfaceLocale(), {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",

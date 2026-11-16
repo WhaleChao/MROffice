@@ -42,8 +42,9 @@ import { objectDragIsTouch } from "@mrnote/core/web/lib/object-drag-gesture.ts";
 import { geometryNumber } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import { presentationInPaintOrder } from "@mrnote/core/web/lib/presentation-paint-order.ts";
 import { isBlockNotDrawn } from "@mrnote/core/web/lib/presentation-selection-pane.ts";
+import { nativeSmartArtDrawingAbsent } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
 import { readSmartArtBlockMarker } from "@mrnote/core/web/lib/presentation-smartart.ts";
-import { presentationShapeHasNoFill } from "../../../../lib/presentation-shape-no-fill";
+import { presentationShapeHasNoFill, presentationShapeHasNoInterior } from "../../../../lib/presentation-shape-no-fill";
 import {
   presentationSmartArtGroup,
   presentationSmartArtLabelShape,
@@ -54,14 +55,19 @@ import type { PresentationSmartArtGroupFrameCtl } from "./PresentationSmartArtGr
 /**
  * Whether a block on the edit canvas is hit by its geometry and its words,
  * not by its box: a SmartArt shape (rule 1 above), and an ordinary shape with
- * No Fill, which PowerPoint selects by its outline or its words while a
+ * No Fill or an open outline with nothing inside it (an arc, a bracket),
+ * which PowerPoint selects by its outline or its words while a
  * click on its empty interior passes through to what lies below (a dashed
  * frame drawn over a chart). A text box (`type: "text"`) is not one:
- * PowerPoint selects it by a click anywhere inside it.
+ * PowerPoint selects it by a click anywhere inside it. Nor is the frame of a
+ * SmartArt whose cached drawing is absent: it paints nothing itself (its
+ * diagram is drawn as the engine lays it out, taking no presses), and it is
+ * the graphic, which PowerPoint selects by a click anywhere in its frame --
+ * hit by its geometry, the click went through to the title placeholder below.
  */
 export function presentationShapeHitsByGeometry(block: PresentationBlock): boolean {
-  if (block.type !== "shape") return false;
-  return readSmartArtBlockMarker(block) !== null || presentationShapeHasNoFill(block);
+  if (block.type !== "shape" || nativeSmartArtDrawingAbsent(block)) return false;
+  return readSmartArtBlockMarker(block) !== null || presentationShapeHasNoFill(block) || presentationShapeHasNoInterior(block);
 }
 
 /**
@@ -245,7 +251,16 @@ export interface PresentationSmartArtGraphicHitLayerCtl {
   ) => void;
   setBlockContextMenu: PresentationSmartArtGroupFrameCtl["setBlockContextMenu"];
   /** Put the caret in a SmartArt shape's words (false: it has none). */
-  editSmartArtShapeText: (shapeId: string, seed?: string, point?: { x: number; y: number }) => boolean;
+  editSmartArtShapeText: (shapeId: string, seed?: string, point?: { x: number; y: number; word?: boolean }) => boolean;
+  /**
+   * The stacking the block this layer wraps stands at (a slide's Header &
+   * Footer fields lift what is over them, `withFooterFieldStacking`). The hit
+   * areas stand at it too, so the slide's paint order places them: at 0 under
+   * members lifted to 3 (a slide with a footer field under the diagram), the
+   * words' hit was under every shape of the graphic and a double click on them
+   * took the shape behind (nobevel-style-probe p8, Horizontal Bullet List).
+   */
+  zIndex?: number;
 }
 
 /**
@@ -291,7 +306,7 @@ export function PresentationSmartArtGraphicHitLayer({
         top: `${(words.rect.top / activeSlideBounds.height) * 100}%`,
         width: `${((words.rect.right - words.rect.left) / activeSlideBounds.width) * 100}%`,
         height: `${((words.rect.bottom - words.rect.top) / activeSlideBounds.height) * 100}%`,
-        zIndex: 0,
+        zIndex: ctl.zIndex ?? 0,
       }}
       onPointerDown={(event) => {
         if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
@@ -310,7 +325,9 @@ export function PresentationSmartArtGraphicHitLayer({
       }}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        editSmartArtShapeText(words.shapeId);
+        // The word double-clicked selected, as PowerPoint's double click
+        // does in a SmartArt shape's words (and as on any of its shapes).
+        editSmartArtShapeText(words.shapeId, undefined, { x: event.clientX, y: event.clientY, word: true });
       }}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -375,7 +392,7 @@ export function PresentationSmartArtGraphicHitLayer({
           height: `calc(${(bounds.height / activeSlideBounds.height) * 100}% + ${SMARTART_FRAME_PAD_PX * 2}px)`,
           // A layer of the slide's paint order like every block: under the
           // graphic's members, over whatever the graphic covers.
-          zIndex: 0,
+          zIndex: ctl.zIndex ?? 0,
         }}
         onPointerDown={(event) => {
           // Shift / Ctrl / Cmd add the graphic to the selection on the click.
@@ -414,12 +431,12 @@ export function PresentationSmartArtGraphicHitLayer({
           selectGraphic();
         }}
         onDoubleClick={(event) => {
-          // A double click on a shape's words types in them, the caret
-          // where they were clicked.
+          // A double click on a shape's words types in them, the word
+          // double-clicked selected.
           const label = labelAt(event);
           if (!label) return;
           event.stopPropagation();
-          editSmartArtShapeText(label.shapeId, undefined, { x: event.clientX, y: event.clientY });
+          editSmartArtShapeText(label.shapeId, undefined, { x: event.clientX, y: event.clientY, word: true });
         }}
         onContextMenu={(event) => {
           // The graphic's menu, as a right click on its frame opens.

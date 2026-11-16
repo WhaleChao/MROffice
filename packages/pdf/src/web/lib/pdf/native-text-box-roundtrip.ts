@@ -9,7 +9,7 @@ import { effectiveTextBoxKind } from "@mrnote/core/web/lib/pdf/text-box-kind.ts"
 import { sanitizePdfTextBoxEditGeometry } from "@mrnote/core/web/lib/pdf/text-box-rect.ts";
 import { pdfFreeTextRectangleDifferencesV2Enabled } from "./pdf-flags";
 import { MAX_PDF_SOURCE_TEXT_BOX_TOKEN_CHARS, pdfSourceTextBoxCoversInk, pdfSourceTextBoxInkCoverRect, readPdfSourceTextBoxBinding, type PdfSourceTextBoxBinding } from "./source-text-box";
-import { readUnverifiedPdfPortableTextLayout, type PdfPortableTextLayout } from "./portable-text-layout";
+import { PDF_PORTABLE_LAYOUT_POINT_TOLERANCE, readUnverifiedPdfPortableTextLayout, type PdfPortableTextLayout } from "./portable-text-layout";
 import {
   decodePdfTextBoxTypographyField,
   encodePdfTextBoxTypographyField,
@@ -34,6 +34,7 @@ import {
   sanitizeNativePdfFreeTextAnnotationSource,
   type NativePdfFreeTextAnnotation,
 } from "./native-free-text-annotations";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 /** A frame grown to `height` (page fractions) to hold its rows: down from
  * where it is while the page has room, moved up just enough to stay on the
@@ -264,7 +265,7 @@ export async function resolveManagedTextBoxPreviewAnnotationId(
   if (!nativeId || !Number.isSafeInteger(pageNumber) || pageNumber < 1) return null;
   const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFBool, PDFString, PDFHexString } =
     await import("pdf-lib");
-  const document = await PDFDocument.load(sourceBytes, { updateMetadata: false });
+  const document = await PDFDocument.load(sourceBytes, { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
   if (document.isEncrypted || document.getPageCount() > 10_000) return null;
   let match: string | null = null;
   let count = 0;
@@ -350,6 +351,12 @@ function decodeTextToken(token: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** The key a box is saved under: this page's fingerprint of the family, the
+ * face name and the fill it sets the box in. */
+export function managedNativeTextBoxStyleKey(edit: TextBoxEditLike): string {
+  return styleKeyForEdit(edit);
 }
 
 function styleKeyForEdit(edit: TextBoxEditLike): string {
@@ -701,11 +708,43 @@ export function buildManagedNativeTextBoxRecord(
  * that becomes unsupported is explicitly tombstoned so an old `/AP` cannot
  * remain visible behind the flattened fallback.
  */
+/**
+ * Whether a record's row plan is the plan of its frame on the page as it is
+ * turned. A box's frame is a share of the page as it is shown and its letters
+ * a share of that page's height (native-text-box-appearance.ts), so the plan
+ * -- its width, height and letter size, in points -- is that of one turn of
+ * the page: turned a quarter, a box on an A4 page is 1.41 times as wide and
+ * its letters 0.71 times as tall. The writer checks the plan against the
+ * frame of the turn the row names and refuses the row otherwise
+ * (`pdf_portable_text_layout_invalid`), the whole page's write with it. A
+ * record with no plan (the writer sets its rows itself) always fits.
+ */
+export function managedNativeTextBoxRowPlanFitsPage(
+  record: ManagedNativeTextBoxRecord,
+  pageSize: Readonly<{ width: number; height: number; rotation?: number }>,
+): boolean {
+  if (record.deleted || !record.portableLayout) return true;
+  const quarter = ((Number(pageSize.rotation ?? 0) % 180) + 180) % 180 === 90;
+  const shownWidth = quarter ? pageSize.height : pageSize.width;
+  const shownHeight = quarter ? pageSize.width : pageSize.height;
+  if (!(shownWidth > 0) || !(shownHeight > 0)) return true;
+  const plan = record.portableLayout;
+  const near = (left: number, right: number) => Math.abs(left - right) <= PDF_PORTABLE_LAYOUT_POINT_TOLERANCE;
+  return near(plan.width, record.width * shownWidth) && near(plan.height, record.height * shownHeight) &&
+    near(plan.fontSize, record.fontSize * shownHeight);
+}
+
 export async function reconcileManagedNativeTextBoxRecords(
   previous: readonly ManagedNativeTextBoxRecord[],
   edits: readonly TextBoxEditLike[],
   resolveAppearance: (edit: TextBoxEditLike) => Promise<string | {image:string; portableLayout:PdfPortableTextLayout; height?: number} | null>,
-  options: { restoreMissingSourceText?: boolean } = {},
+  options: {
+    restoreMissingSourceText?: boolean;
+    /** Whether a record is still the one its page is written from as the
+     * page is now (managedNativeTextBoxRowPlanFitsPage): a record that is
+     * not is drawn again though its box reads the same. */
+    recordFits?: (record: ManagedNativeTextBoxAnnotation) => boolean;
+  } = {},
 ): Promise<ManagedNativeTextBoxReconcileResult> {
   const appearanceFailureIds: string[] = [];
   const duplicateIds: string[] = [];
@@ -727,7 +766,7 @@ export async function reconcileManagedNativeTextBoxRecords(
   for (const edit of eligible) {
     const id = edit.id as string;
     const existing = previousById.get(id);
-    if (isManagedNativeTextBoxEquivalent(existing, edit)) {
+    if (isManagedNativeTextBoxEquivalent(existing, edit) && (options.recordFits?.(existing) ?? true)) {
       nextById.set(id, existing);
       continue;
     }

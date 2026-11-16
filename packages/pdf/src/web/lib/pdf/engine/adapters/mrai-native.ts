@@ -115,6 +115,7 @@ import {
   MRAI_NATIVE_TEXT_WINDOW_HISTORY_SCHEMA_VERSION,
   planMraiNativeListTextPropertyReplacement,
   planMraiNativeListTextParagraphFormat,
+  pdfNativeParagraphPlanClearOfOtherText,
   planMraiNativeListTextSelectionReplacement,
   type PdfNativeListTextFidelityEvidence,
   type PdfNativeListTextSelectionEvidence,
@@ -327,6 +328,9 @@ export interface MraiNativePdfAdapterOptions {
    * own space. A plain text edit with it is set again by the paragraph
    * rewrite in that frame (planMraiNativeListTextSelectionReplacement). */
   readonly listTextParagraphFrame?: Readonly<{ right?: number; lineStep?: number; sizeScale?: number }>;
+  /** Where the editor's rows start in a text edit's new text
+   * (lib/pdf/native-text-row-starts): display only, no authority. */
+  readonly listTextRowStarts?: readonly number[];
   /** A group move's paragraph set again in a frame reaching this right edge
    * (the page's user space) after it: the landing is planned with it. */
   readonly textGroupMoveFrameRight?: number;
@@ -344,6 +348,10 @@ export interface MraiNativePdfAdapterOptions {
       pageFont?: import("../../page-fonts").PdfPageFont;
     }>[];
     embeddedFontManifest?: import("@mrnote/core/web/lib/office-fonts/embeddable-faces.ts").EmbeddableFontManifest | null;
+    /** The paragraph set again would draw over other text of the page: the
+     * write is refused instead of made with a notice (a caller with nobody
+     * at the page to read one -- the server's AI commands). */
+    refuseOverOtherText?: boolean;
   }>;
   /** Exact current source evidence for one receipt-bound image remove/restore. */
   readonly embeddedImageHistoryAuthority?: Readonly<{
@@ -1950,6 +1958,11 @@ export async function planMraiNativeCommand(
           isPdfNativeEmbeddedFontKey(embeddedAuthority.properties.fontResourceName) ||
           (embeddedAuthority.properties.segments ?? []).some((segment) => isPdfNativeEmbeddedFontKey(segment.fontResourceName)));
         const paragraphFormat = options.listTextParagraphFormat;
+        // The editor's rows, where it sent them: whole offsets, in order.
+        const rowStarts = Array.isArray(options.listTextRowStarts) && options.listTextRowStarts.length > 0 &&
+          options.listTextRowStarts.length <= 128 &&
+          options.listTextRowStarts.every((start, index, all) => Number.isSafeInteger(start) && start > (all[index - 1] ?? 0))
+          ? options.listTextRowStarts : null;
         // A format naming no family the PDF lacks rides the font-extension
         // action for the text's own sake: characters no font of the
         // paragraph has, set in the substitute face with the formats.
@@ -1976,6 +1989,7 @@ export async function planMraiNativeCommand(
             paragraphFormat: { format: paragraphFormat.format,
               ...(paragraphFormat.fontOptions ? { fontOptions: paragraphFormat.fontOptions } : {}) },
             ...(options.listTextParagraphFrame ? { paragraphFrame: options.listTextParagraphFrame } : {}),
+            ...(rowStarts ? { rowStarts } : {}),
           });
         } else if (command.action === MRAI_NATIVE_FONT_EXTENSION_TEXT_ACTION && paragraphFormat && listPayload) {
           fontExtensionPlan = await planPdfNativeEmbeddedFontParagraphFormatEdit({
@@ -1992,6 +2006,7 @@ export async function planMraiNativeCommand(
               paragraphFormat.embeddedFontManifest ?? null),
             transactionId: command.transactionId,
             baseSessionRevision: command.sessionRevision,
+            ...(paragraphFormat.refuseOverOtherText ? { refuseOverOtherText: true } : {}),
           });
         } else if (command.action === MRAI_NATIVE_FONT_EXTENSION_TEXT_ACTION && embeddedDraft && listPayload) {
           // A property edit setting text in a family the PDF does not hold:
@@ -2035,6 +2050,7 @@ export async function planMraiNativeCommand(
             transactionId: command.transactionId,
             baseSessionRevision: command.sessionRevision,
             ...(options.listTextParagraphFrame ? { paragraphFrame: options.listTextParagraphFrame } : {}),
+            ...(rowStarts ? { rowStarts } : {}),
           });
         }
         const historyAuthority = options.listTextHistoryAuthority;
@@ -2121,13 +2137,13 @@ export async function planMraiNativeCommand(
             property ??
             cachedText?.plan ??
             (paragraphFormat && !paragraphFrame
-              ? await planMraiNativeListTextParagraphFormat({
+              ? pdfNativeParagraphPlanClearOfOtherText(await planMraiNativeListTextParagraphFormat({
                 sourceBytes,
                 selection: listPayload.selection,
                 replacementText: listPayload.replacementText,
                 format: paragraphFormat.format,
                 ...(paragraphFormat.fontOptions ? { fontOptions: paragraphFormat.fontOptions } : {}),
-              })
+              }), paragraphFormat.refuseOverOtherText === true)
               : null) ??
             (await planMraiNativeListTextSelectionReplacement({
               sourceBytes,
@@ -2136,6 +2152,7 @@ export async function planMraiNativeCommand(
               ...(paragraphFrame?.right !== undefined ? { paragraphFrameRight: paragraphFrame.right } : {}),
               ...(paragraphFrame?.lineStep !== undefined ? { paragraphLineStep: paragraphFrame.lineStep } : {}),
               ...(paragraphFrame?.sizeScale !== undefined ? { paragraphSizeScale: paragraphFrame.sizeScale } : {}),
+              ...(rowStarts && !paragraphFrame ? { rowStarts } : {}),
             })))
           : null;
         const imagePayload =

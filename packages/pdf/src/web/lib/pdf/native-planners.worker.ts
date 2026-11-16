@@ -9,6 +9,7 @@ import {
   planMraiNativeStructElementAlt,
   readMraiNativeEmbeddedImageMarkedContent,
   readMraiNativeEmbeddedImageObject,
+  listMraiNativeEmbeddedImagePaintsOfObject,
   planMraiNativePictureOrigin,
   readMraiNativePictureOrigin,
   planMraiNativeEmbeddedImageRemoval,
@@ -76,6 +77,7 @@ import {
 import { planPdfNativeTextDecoration } from "./native-text-decoration";
 import { planPdfNativeTextObjectDelete } from "./native-text-object-delete";
 import { planMraiNativeEmbeddedImageClipEscape, planPdfNativeEmbeddedImageReorder } from "./native-embedded-image-reorder";
+import { listMraiNativePageContentUnits, planMraiNativeContentUnitReorder } from "./engine/native/vector-content-transaction";
 import {
   planPdfNativeEmbeddedFontPropertyEditFromPrograms,
   planPdfNativeFontExtensionTextEdit,
@@ -96,6 +98,7 @@ export const PDF_NATIVE_BROWSER_PLANNERS: Readonly<Record<string, Entry>> = Obje
   planMraiNativeStructElementAlt,
   readMraiNativeEmbeddedImageMarkedContent,
   readMraiNativeEmbeddedImageObject,
+  listMraiNativeEmbeddedImagePaintsOfObject,
   planMraiNativePictureOrigin,
   readMraiNativePictureOrigin,
   planMraiNativeEmbeddedImageRemoval,
@@ -166,6 +169,8 @@ export const PDF_NATIVE_BROWSER_PLANNERS: Readonly<Record<string, Entry>> = Obje
   planPdfNativeTextObjectDelete,
   planPdfNativeEmbeddedImageReorder,
   planMraiNativeEmbeddedImageClipEscape,
+  listMraiNativePageContentUnits,
+  planMraiNativeContentUnitReorder,
   planPdfNativeFontExtensionTextEdit,
   // ...with the served font list the editor hands over (its manifest field).
   planPdfNativeEmbeddedFontPropertyEditFromPrograms,

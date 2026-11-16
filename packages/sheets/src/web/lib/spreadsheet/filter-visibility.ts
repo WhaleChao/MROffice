@@ -7,6 +7,7 @@ import { normalizeDataTables, normalizeDataTableFilterColor, type DataTable } fr
 import { normalizeConditionFilter, buildRowPredicate, type ConditionFilter } from "@mrnote/core/web/lib/spreadsheet/filter-conditions.ts";
 import { filterValueKey, filterValueKeys, normalizeFillColor } from "./sort-filter";
 import { parseA1Range } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
+import { applyTextFormatUnpadded } from "@mrnote/core/web/lib/spreadsheet/number-format.ts";
 
 export interface FilterVisibilitySource {
   rowCount: number; columnCount: number; autoFilterRef?: string;
@@ -17,6 +18,24 @@ export interface FilterVisibilityCell {
   display: string; numeric: number | null; fill?: string; font?: string;
   /** A value stored as text: it matches a ticked value by its text alone. */
   text?: boolean;
+  /** What a tick matches when it is not the display: a text cell's format
+   * without the spaces its `_x` reserves ({@link filterMatchText}). */
+  match?: string;
+}
+
+
+
+
+
+
+
+
+export function filterMatchText(cell: { kind?: unknown; value?: unknown; formula?: unknown; style?: { numberFormat?: unknown } } | undefined): string | undefined {
+  if (!cell || cell.formula || typeof cell.value !== "string" || cell.value.startsWith("=")) return undefined;
+  if (cell.kind !== undefined && cell.kind !== "text") return undefined;
+  const format = cell.style?.numberFormat;
+  if (typeof format !== "string" || !format.includes("_") || !format.includes("@")) return undefined;
+  return applyTextFormatUnpadded(cell.value, format);
 }
 export interface FilterVisibilityConstraint {
   column: number; values?: readonly string[]; condition?: ConditionFilter;
@@ -105,7 +124,7 @@ export function* filterVisibilitySteps(groups: PreparedFilterVisibility): Genera
         // The locale reading is a NUMBER's: a text "5.10" is not the "5.1"
         // ticked, as Excel's value filter compares the text it shows
         
-        if (allowed && !allowed.has(filterValueKey(cell.display)) && !(!cell.text && allowedNumbers?.size && localeNumberReadings(cell.display).some(value => allowedNumbers.has(value)))) return false;
+        if (allowed && !allowed.has(filterValueKey(cell.match ?? cell.display)) && !(!cell.text && allowedNumbers?.size && localeNumberReadings(cell.display).some(value => allowedNumbers.has(value)))) return false;
         if (predicate && !predicate(cell.display, cell.numeric)) return false;
         if (constraint.color && colors) {
           const raw = constraint.color.kind === "cell" ? cell.fill : cell.font;

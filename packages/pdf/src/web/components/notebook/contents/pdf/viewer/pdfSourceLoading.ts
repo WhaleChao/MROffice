@@ -108,3 +108,19 @@ export async function readPdfOpenActionPage(
     return null;
   }
 }
+
+/** The view a document asks to open in: its navigation pane (/PageMode) and
+ * the page and fit of its /OpenAction. */
+export interface PdfOpeningView {
+  readonly pageMode: unknown;
+  readonly target: { pageNumber: number; fit: "page" | "width" | null } | null;
+}
+
+/** Both read at once; a part that cannot be read is null. Never rejects. */
+export function readPdfOpeningView(doc: PdfDocument): Promise<PdfOpeningView> {
+  const pageMode = Promise.resolve()
+    .then(() => (doc as unknown as { getPageMode?: () => Promise<unknown> }).getPageMode?.())
+    .then((mode) => mode ?? null, () => null);
+  return Promise.all([pageMode, readPdfOpenActionPage(doc)])
+    .then(([mode, target]) => ({ pageMode: mode, target }));
+}

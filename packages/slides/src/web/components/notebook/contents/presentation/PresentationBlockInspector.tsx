@@ -74,7 +74,10 @@ import type { SlideModel } from "@mrnote/core/web/lib/presentation/deck-model.ts
 import type { PresentationTaskPaneDock } from "../../../../lib/presentation/presentationTaskPaneDock";
 import type { TableAxisSelectionRange } from "@mrnote/core/web/lib/presentation-table-selection.ts";
 import { useEffect, useRef } from "react";
-import { OfficeShapeFormatPaneSections } from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
+import {
+  OfficeShapeFormatPaneSections,
+  revealOfficeShapeFormatPaneSection,
+} from "@mrnote/core/web/components/office-ribbon/OfficeShapeFormatPane.tsx";
 import { officeEffectsPaneSections } from "@mrnote/core/web/components/office-ribbon/officeEffectsPaneSections.tsx";
 import type { OFFICE_GLOW_ACCENTS, OfficePictureEffectKind, OfficePictureEffectValues } from "@mrnote/core/web/lib/office-picture-effects.ts";
 import { presentationPictureEffectsBlocker } from "../../../../lib/presentation-picture-effects";
@@ -114,7 +117,7 @@ export interface PresentationBlockInspectorCtl {
   commitPictureEffect: <K extends OfficePictureEffectKind>(blockId: string, kind: K, value: OfficePictureEffectValues[K] | null) => void;
   deckAccentColors: Readonly<Record<(typeof OFFICE_GLOW_ACCENTS)[number], string>>;
   /** The page Video Effects' 3-D Options... asked for ("effects"). */
-  formatPaneRequestedTab: { readonly id: string; readonly serial: number } | null;
+  formatPaneRequestedTab: { readonly id: string; readonly serial: number; readonly section?: string } | null;
 }
 
 export function PresentationBlockInspector({ ctl }: { ctl: PresentationBlockInspectorCtl }) {
@@ -151,14 +154,17 @@ export function PresentationBlockInspector({ ctl }: { ctl: PresentationBlockInsp
     deckAccentColors,
     formatPaneRequestedTab,
   } = ctl;
-  // Video Effects > 3-D Options... / 3-D Rotation Options...: the pane opens
-  // with its Effects in view, as PowerPoint opens Format Video at Effects.
+  // Video Effects > "... Options" (Glow Options..., 3-D Options..., ...):
+  // the pane opens with its Effects in view, that effect's section first, as
+  // PowerPoint opens Format Video at Effects.
   const videoEffectsRef = useRef<HTMLDivElement>(null);
   const requestedEffects = formatPaneRequestedTab?.id === "effects" ? formatPaneRequestedTab.serial : null;
+  const requestedSection = formatPaneRequestedTab?.id === "effects" ? formatPaneRequestedTab.section : undefined;
   useEffect(() => {
     if (requestedEffects === null) return;
+    if (requestedSection && revealOfficeShapeFormatPaneSection(videoEffectsRef.current, requestedSection)) return;
     videoEffectsRef.current?.scrollIntoView?.({ block: "start" });
-  }, [requestedEffects]);
+  }, [requestedEffects, requestedSection]);
   return (
             <div
               className={`${PRESENTATION_PANE_CHROME} presentation-window__inspector`}

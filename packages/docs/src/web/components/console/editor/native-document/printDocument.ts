@@ -44,7 +44,7 @@ import {
   normalizePageNumberStartSection,
   type PageNumberFormat,
 } from "@mrnote/core/web/components/console/editor/native-document/pageNumberFormat.ts";
-import { watermarkCss, type DocumentWatermark } from "@mrnote/core/web/components/console/editor/native-document/watermark.ts";
+import { washoutPictureStyle, watermarkCss, type DocumentWatermark } from "@mrnote/core/web/components/console/editor/native-document/watermark.ts";
 import { stripFormattingMarks } from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
 import { applyRevisionPolicyToDom } from "@mrnote/core/web/lib/document-export/revision-policy.ts";
 
@@ -439,7 +439,9 @@ export function appendPrintWatermark(
     picture.alt = "";
     picture.style.width = `${watermark.widthPt}pt`;
     picture.style.height = `${watermark.heightPt}pt`;
-    picture.style.opacity = watermark.washout ? "0.3" : "1";
+    const washout = watermark.washout ? washoutPictureStyle(doc) : null;
+    picture.style.opacity = washout ? washout.opacity : "1";
+    if (washout?.filter) picture.style.filter = washout.filter;
     layer.appendChild(picture);
     doc.body.appendChild(layer);
     return layer;

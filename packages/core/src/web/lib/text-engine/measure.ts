@@ -136,7 +136,7 @@ export function onTextEngineChange(listener: () => void): () => void {
 /** The face that draws `codePoint` in a family list, per CSS font fallback. */
 export function resolveFace(
   families: readonly string[], weight: number, italic: boolean, codePoint: number, followLocalOnly = false, approximateInstalled = false,
-): { face: FaceDeclaration; metrics: FaceMetrics; glyph: number; syntheticBold: boolean; approximate?: true } | "pending" | string {
+): { face: FaceDeclaration; metrics: FaceMetrics; glyph: number; syntheticBold: boolean; approximate?: true; installed?: true } | "pending" | string {
   let installedSkipped = false;
   for (const family of families) {
     if (GENERIC_FAMILIES.has(family)) return `generic family ${family}`;
@@ -191,7 +191,8 @@ export function resolveFace(
         const twin = installedTwinVerification(face, metrics);
         if (twin === "pending") return "pending";
         if (twin === "differs") return `installed font: ${family}`;
-        return { face, metrics, glyph, syntheticBold: weight >= 600 && face.weightMax < 600 };
+        // Its widths, not its outlines: the browser draws the installed font.
+        return { face, metrics, glyph, syntheticBold: weight >= 600 && face.weightMax < 600, installed: true };
       }
       const verified = faceVerification(face);
       if (verified === "pending") return "pending";

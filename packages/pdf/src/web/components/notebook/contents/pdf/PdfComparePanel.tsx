@@ -328,6 +328,10 @@ export default function PdfComparePanel({
           flex: 1,
           minHeight: 0,
           overflow: "auto",
+          // Its pages are clientWidth - 32 wide: the bar's room is kept
+          // whether or not it shows, or a bar that comes and goes changes
+          
+          scrollbarGutter: "stable",
           padding: "16px",
         }}
       >

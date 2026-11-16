@@ -15,7 +15,7 @@
 import { compactAiContextText, evenlySpacedAiContextIndices } from "@mrnote/core/web/__cut__/mf740bff044.ts";
 import { pictureObjectTokenSha, pictureObjectUrlSha } from "@mrnote/core/web/lib/page-picture-objects.ts";
 import {
-  normalizeBulletChar,
+  normalizeBlockBulletChar,
   normalizeNativeBulletReceipt,
   normalizeNumberFormat,
   renderParagraphs,
@@ -112,7 +112,7 @@ function presentationReaderBlockText(block: PresentationBlock): string {
   );
   if (!paragraphs?.length) return blockPlainText(block);
   const rendered = renderParagraphs(paragraphs, {
-    bulletChar: normalizeBulletChar((block as { bulletChar?: string }).bulletChar),
+    bulletChar: normalizeBlockBulletChar((block as { bulletChar?: string }).bulletChar),
     numberFormat: normalizeNumberFormat((block as { numberFormat?: string }).numberFormat),
     nativeBullet: normalizeNativeBulletReceipt(
       (block as { nativeBullet?: unknown }).nativeBullet,

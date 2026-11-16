@@ -59,7 +59,7 @@ import { normalizePresentationChartSeriesStyles, normalizePresentationChartSlice
 import { normalizeCharts, normalizeChartSeriesGradientStyles, normalizeChartValueAxisNumberFormat, normalizeSpreadsheetChartColorPalette, normalizeSpreadsheetChartStyle } from "@mrnote/core/web/lib/spreadsheet/chart.ts";
 import { rememberLoadedSpelling } from "../../../../lib/spreadsheet/loaded-spelling";
 import { normalizePivotConfig, pivotWithSharedSnapshot, unifyPivotCacheSnapshots, normalizePivotRange, type PivotConfig } from "@mrnote/core/web/lib/spreadsheet/pivot.ts";
-import { normalizePrintSettings, parseA1Range } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
+import { newSheetPrintSettings, normalizePrintSettings, parseA1Range } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
 import { isSpreadsheetInkShapeStyle, normalizeShapeStyle, repairShapeObjectAnchor } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import { normalizeShadow } from "@mrnote/core/web/lib/spreadsheet/shape-effects.ts";
 import { normalizeRules as normalizeConditionalRules } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
@@ -78,6 +78,7 @@ export function emptySheet(): SheetModel {
     // Excel's 8.43-character default column (XLS-A095).
     defaultColumnWidth: NEW_SHEET_DEFAULT_COLUMN_WIDTH_PX,
     cells: {},
+    printSettings: newSheetPrintSettings(),
   };
 }
 
@@ -234,7 +235,7 @@ export function normalizeObjects(raw: unknown): SpreadsheetObject[] {
               ? object.nativeVisibilityBlocker
               : undefined,
           shadow: normalizeShadow(object.shadow),
-          pictureEffects: normalizeSpreadsheetPictureEffects(object.pictureEffects),
+          pictureEffects: normalizeSpreadsheetPictureEffects(object.pictureEffects, object),
           ...(cropRect && !isIdentityCrop(cropRect) ? { cropRect } : {}),
           nativeImageCropBlocker:
             typeof object.nativeImageCropBlocker === "string"

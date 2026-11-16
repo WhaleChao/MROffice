@@ -44,7 +44,7 @@ import {
   setPresentationPreviewSelection,
 } from "@mrnote/core/web/lib/presentation/text-selection.ts";
 import type { PresentationShapeBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
-import { flippedTextTransform } from "../../../../lib/presentation-shape-text-rect";
+import { flippedTextTransform } from "@mrnote/core/web/lib/presentation-shape-text-rect.ts";
 import { keepRemoteCaret } from "../../../../lib/presentation/remote-caret-hold";
 import { fitOfficeInlineTextEditor, moveOfficeInlineTextCaretHomeEnd, placeOfficeInlineTextCaret, officeInlineTextEditorStyle, typeOfficeInlineTextTab } from "@mrnote/core/web/lib/office-inline-text-editor.ts";
 import { holdOfficeTextBoxForChrome } from "@mrnote/core/web/lib/office-inactive-selection.ts";
@@ -69,7 +69,8 @@ import type { SlideModel } from "@mrnote/core/web/lib/presentation/deck-model.ts
 import type { BlockGeometry } from "@mrnote/core/web/lib/presentation-drag.ts";
 import { smartArtFlat2d } from "@mrnote/core/web/lib/office-smartart/edit-in-2d.ts";
 import { inkLineWidthScaled } from "@mrnote/core/web/lib/office-ink-line-scale.ts";
-import { isTextEditLocked } from "@mrnote/core/web/lib/presentation-text-case.ts";
+import { isTextEditLocked, isTextKeptReadOnly, isTextKeptReadOnlyTruncated } from "@mrnote/core/web/lib/presentation-text-case.ts";
+import { presentationBlockWithGroupPaint } from "../../../../lib/presentation-group-fill";
 import { PresentationLiveGeometryContext } from "./PresentationLiveBlockFrame";
 
 /** The window bindings this tab reads, passed through unchanged. */
@@ -86,7 +87,7 @@ export interface PresentationCanvasShapeBlockCtl {
   cropPreview: { blockId: string; crop: CropRect; } | null;
   fontDisplay: { aliases: Record<string, string>; faces: OfficeFontFace[]; unavailable: boolean; revision: number; requirements: PresentationFontRequirement[]; verifiedVersion: number | undefined; layoutUpdateRequired: boolean | undefined; refreshBindings: () => void; };
   activeSlide: SlideModel;
-  editSmartArtShapeText: (shapeId: string, seed?: string, point?: { x: number; y: number }) => boolean;
+  editSmartArtShapeText: (shapeId: string, seed?: string, point?: { x: number; y: number; word?: boolean }) => boolean;
   /**
    * The label's field changed. `composing`: an IME is still composing the
    * words, so the caret is the IME's and is left alone.
@@ -111,7 +112,9 @@ export interface PresentationCanvasShapeBlockCtl {
   recordShapeTextRange: (blockId: string, start: number, end: number) => void;
   /** The caret a remounted rich label body restores (the last commit's, else
    * -- with `orRecorded`, the default -- the recorded one). */
-  takeShapeRichSelection: (blockId: string, orRecorded?: boolean) => { start: number; end: number } | null;
+  takeShapeRichSelection: (blockId: string, orRecorded?: boolean, shown?: string) => { start: number; end: number } | null;
+  /** The words of a label the window's typing burst holds and has not drawn, else null. */
+  heldBlockWords: (blockId: string) => string | null;
   /** Ctrl/Cmd+B, I or U in the label's words: Home's own toggle. */
   toggleShapeWordsRunStyle: (
     key: "bold" | "italic" | "underline" | "subscript" | "superscript",
@@ -200,6 +203,7 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
     commitShapeRichText,
     recordShapeTextRange,
     takeShapeRichSelection,
+    heldBlockWords,
     toggleShapeWordsRunStyle,
     copyShapeText,
     pasteShapeTextRuns,
@@ -211,8 +215,13 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
     previewGeom,
     smartArtFlat2d: drawFlat2d = false,
   } = ctl;
+  // A shape whose words the file keeps (`noTextEdit`, or kept read-only)
+  // opens no editor however it is asked to: keys typed into one showed in it
+  
+  
   const shapeTextEditable =
     !isPresentationCameoBlock(block) &&
+    !isTextEditLocked(block) &&
     editingShapeTextId === block.id &&
     !readZoomTileMarker(block) &&
     !["ink", "custom-geometry"].includes(normalizeShapeKind(block.shape));
@@ -272,13 +281,15 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
   // past the shape included), so Home formats the highlighted words.
   const richHostRef = useRef<HTMLElement | null>(null);
   const richHost = useCallback(() => richHostRef.current, []);
-  // The body is keyed by its words: every committed edit but a letter typed
-  // in place replaces it whole.
-  const richTypingKey = usePresentationRichTypingKey({
+  // The body keeps its key while its words change, the browser's own edits
+  // put back before React draws the words (`usePresentationRichTypingKey`,
+  // its commit guard rendered below).
+  const { key: richTypingKey, commitGuard: richTypingCommitGuard } = usePresentationRichTypingKey({
     blockId: block.id,
     text: richEditorBlock.text ?? "",
     enabled: richShapeText,
     host: richHost,
+    heldWords: heldBlockWords,
   });
   const shapeReflection = isPresentationCameoBlock(block) ? null : presentationShapeReflectionCss(block);
   useRichTextSelectionFollower(
@@ -305,8 +316,11 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                           ? undefined
                           : (event) => {
                               event.stopPropagation();
-                              // The caret goes where the words were clicked.
-                              if (editSmartArtShapeText(block.id, undefined, { x: event.clientX, y: event.clientY })) return;
+                              // A SmartArt shape's words open with the word under the
+                              // pointer selected, as PowerPoint's double click does
+                              // (the file's diagrams already do, 5675e053ae); any
+                              // other shape's caret goes where the words were clicked.
+                              if (editSmartArtShapeText(block.id, undefined, { x: event.clientX, y: event.clientY, word: true })) return;
                               setSelectedBlockId(block.id);
                               setEditingShapeTextId(block.id);
                             }
@@ -339,7 +353,13 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                             }
                             block={(() => {
                             // Edit in 2-D draws the shape flat; the page keeps its 3-D.
-                            const drawnBlock = drawFlat2d ? smartArtFlat2d(block) : block;
+                            // A member wearing its group's gradient, picture or
+                            // pattern draws its part of it, from the boxes as
+                            // they are now (presentation-group-fill).
+                            const drawnBlock = presentationBlockWithGroupPaint(
+                              drawFlat2d ? smartArtFlat2d(block) : block,
+                              activeSlide.blocks,
+                            );
                             const geometryBlock = previewGeom && !block.groupId && !blockClaimsNativeGroup(block)
                               ? { ...drawnBlock, ...previewGeom, ...inkLinePreview(block, previewGeom) }
                               : liveInkGeom
@@ -471,7 +491,7 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                               // by a caret a command left for it, not by the
                               // last recorded one on every redraw (this ref
                               // runs on each render).
-                              const restore = takeShapeRichSelection(block.id, !host.dataset.caretPlaced);
+                              const restore = takeShapeRichSelection(block.id, !host.dataset.caretPlaced, presentationPreviewPlainText(host));
                               if (!restore && host.dataset.caretPlaced) return;
                               host.dataset.caretPlaced = "true";
                               host.focus({ preventScroll: true });
@@ -904,6 +924,36 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                           />
                         </PresentationTextEngineSurfaceContext.Provider>
                       ) : null}
+                      {isSelected && isTextKeptReadOnly(block) ? (
+                        // A placeholder whose words the import could not make
+                        // editable (PPTX reading row 814): drawn as the file
+                        // has it and kept unchanged; selecting it says so.
+                        <div
+                          role="note"
+                          data-testid="presentation-text-kept-read-only"
+                          style={{
+                            position: "absolute",
+                            left: 0,
+                            top: "100%",
+                            marginTop: 4,
+                            zIndex: 4,
+                            maxWidth: 360,
+                            padding: "4px 8px",
+                            borderRadius: 4,
+                            fontSize: 12,
+                            lineHeight: 1.4,
+                            background: "var(--popover, #fff)",
+                            color: "var(--popover-foreground, #222)",
+                            border: "1px solid var(--border, #d0d0d0)",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                            pointerEvents: "none",
+                            whiteSpace: "normal",
+                          }}
+                        >
+                          {t(isTextKeptReadOnlyTruncated(block) ? "presentation.textKeptReadOnlyTruncated" : "presentation.textKeptReadOnly")}
+                        </div>
+                      ) : null}
+                      {richTypingCommitGuard}
                     </div>
   );
 }

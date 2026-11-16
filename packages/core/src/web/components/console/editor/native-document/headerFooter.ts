@@ -60,7 +60,7 @@ export const MAX_HEADER_FOOTER_LINES = 6;
 
 /** One band entry per Word section; Word sets no limit on sections (the
  * section layout model's own bound, `MAX_SECTION_LAYOUTS`). */
-export const MAX_SECTION_BANDS = 512;
+export const MAX_SECTION_BANDS = 4096;
 
 // C0 control characters (U+0000-U+001F including tab/CR but EXCLUDING the
 // newline U+000A, which is the band's line separator), DEL (U+007F), and the
@@ -478,6 +478,10 @@ export interface BandRichRun {
   charStyleId?: string;
   /** Font > Superscript / Subscript (`w:vertAlign`). */
   vertAlign?: "superscript" | "subscript";
+  /** Font > Advanced > Spacing (`w:spacing w:val`), in points: expanded or condensed. */
+  spacingPt?: number;
+  /** Font > Advanced > Scale (`w:w`), in percent: each character this much as wide. */
+  scalePct?: number;
   font?: BandRunFont;
   text?: string;
   nativeTextId?: string;
@@ -607,6 +611,9 @@ export interface BandRichFrame {
    * was read at, and the band fits the box to its words (a centred PAGE box
    * stays centred whatever the number). Only with `autoHeight`. */
   autoWidth?: true;
+  /** For a turned legacy VML box: Word turns the box, never its words
+   * (`floatAnchor.rotation` places the box, its words stay upright). */
+  textUpright?: true;
   /** For a box that draws `blocks`: how many of the line's runs stand before
    * it. */
   runsBefore?: number;
@@ -656,6 +663,7 @@ type BandFrameExtras = Pick<
   | "textBoxOutline"
   | "autoHeight"
   | "autoWidth"
+  | "textUpright"
   | "runsBefore"
   | "floatAnchor"
   | "inline"
@@ -683,6 +691,10 @@ function normalizeBandFrameExtras(
   if (frame.autoWidth !== undefined) {
     if (frame.autoWidth !== true || frame.autoHeight !== true) return null;
     out.autoWidth = true;
+  }
+  if (frame.textUpright !== undefined) {
+    if (frame.textUpright !== true) return null;
+    out.textUpright = true;
   }
   if (frame.textBoxFill !== undefined) {
     const fill = frame.textBoxFill as Record<string, unknown> | null;
@@ -789,6 +801,41 @@ export interface BandRichImage {
   floatAnchor?: FloatAnchor;
   /** Word's Washout on the picture (a picture watermark's pale look). */
   washout?: true;
+  /** An in-line picture's place among its line's runs: how many of the
+   * line's `runs` come before it (absent: after all of them). A letterhead
+   * logo after a date and a run of spaces stands at the right of that line
+   * (corpus R436-D23). */
+  runsBefore?: number;
+  /** The picture's `a:srcRect` cut, in Word's thousandths of a percent per
+   * edge (`t`, `r`, `b`, `l`; only edges that cut): the band draws the kept
+   * window stretched over the picture's extent (R432-D16's header and footer
+   * are the top and the bottom of one full-page template picture). */
+  crop?: BandRichImageCrop;
+}
+
+export interface BandRichImageCrop {
+  t?: number;
+  r?: number;
+  b?: number;
+  l?: number;
+}
+
+/** A band picture's crop as the API states it (`normalize_band_picture_crop`),
+ * or null when it does not read. */
+export function normalizeBandRichImageCrop(value: unknown): BandRichImageCrop | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const keys = Object.keys(raw);
+  if (keys.length === 0 || keys.some((key) => key !== "t" && key !== "r" && key !== "b" && key !== "l")) return null;
+  const out: BandRichImageCrop = {};
+  for (const edge of ["t", "r", "b", "l"] as const) {
+    if (!(edge in raw)) continue;
+    const cut = raw[edge];
+    if (typeof cut !== "number" || !Number.isInteger(cut) || cut < 1 || cut > 99_999) return null;
+    out[edge] = cut;
+  }
+  if ((out.t ?? 0) + (out.b ?? 0) >= 100_000 || (out.l ?? 0) + (out.r ?? 0) >= 100_000) return null;
+  return out;
 }
 
 /**
@@ -1041,6 +1088,9 @@ export interface BandRichParagraph {
   runs: BandRichRun[];
   images?: BandRichImage[];
   paragraphBorders?: DocumentParagraphBorders;
+  /** The paragraph's fill (`w:pPr/w:shd`, else its style's), `#rrggbb`: a
+   * running head of white words on a red bar (corpus R436-D25). */
+  shading?: string;
   /** Word's horizontal line the paragraph hosts: the body paragraph's own
    * `wordHorizontalRule` (lib/document-word-horizontal-rule.ts). */
   wordHorizontalRule?: WordHorizontalRule;
@@ -1261,6 +1311,9 @@ export interface BandRichTable {
    */
   columnWidthsPct?: number[];
   tableAlign?: "center" | "right";
+  /** Table direction: Right-to-left (`w:bidiVisual`): Word runs the columns
+   * from the right, the first cell on the right (corpus R350-D01). */
+  bidiVisual?: true;
   /** Text Wrapping: Around placed from the page or margin (`w:tblpPr`):
    * Word draws the table there and wraps the body around it. */
   floatPosition?: BandRichTableFloat;
@@ -1508,6 +1561,7 @@ function isOwnedPageNumberLine(block: BandRichParagraph): boolean {
   return (
     !block.images?.length &&
     !block.paragraphBorders &&
+    !block.shading &&
     block.runs.some((run) => run.token === "PAGE" || run.token === "NUMPAGES") &&
     block.runs.every(
       (run) =>
@@ -1615,7 +1669,17 @@ export function updateBandRichPageNumbers(
           (isPageField(all[index - 1]) || isPageField(all[index + 1]))
         ),
     );
-    if (runs.length || block.images?.length || block.paragraphBorders) next.push({ ...block, runs });
+    // An in-line picture keeps its place: before the same run as before.
+    const images = block.images?.map((image) => {
+      if (image.runsBefore === undefined) return image;
+      const kept = block.runs.slice(0, image.runsBefore).filter((run) => runs.includes(run)).length;
+      const moved: BandRichImage = { ...image, runsBefore: kept };
+      if (kept >= runs.length) delete moved.runsBefore;
+      return moved;
+    });
+    if (runs.length || images?.length || block.paragraphBorders || block.shading) {
+      next.push(images ? { ...block, runs, images } : { ...block, runs });
+    }
   }
 
   if (update) {
@@ -2180,6 +2244,7 @@ function isBlankBandParagraph(block: BandRichBlock): boolean {
     !block.list &&
     !block.images?.length &&
     !block.paragraphBorders &&
+    !block.shading &&
     !block.wordHorizontalRule &&
     !block.frames?.length &&
     !block.shapes?.length &&
@@ -2281,6 +2346,25 @@ export function normalizeBandRichBlocks(
         if (isBandCharStyleId(run.charStyleId)) out.charStyleId = run.charStyleId;
         // Font > Superscript / Subscript (Word's `w:vertAlign`).
         if (run.vertAlign === "superscript" || run.vertAlign === "subscript") out.vertAlign = run.vertAlign;
+        // Font > Advanced > Spacing (Word's `w:spacing w:val`).
+        if (
+          typeof run.spacingPt === "number" &&
+          Number.isFinite(run.spacingPt) &&
+          run.spacingPt !== 0 &&
+          Math.abs(run.spacingPt) <= 1_584
+        ) {
+          out.spacingPt = run.spacingPt;
+        }
+        // Font > Advanced > Scale (Word's `w:w`).
+        if (
+          typeof run.scalePct === "number" &&
+          Number.isInteger(run.scalePct) &&
+          run.scalePct >= 1 &&
+          run.scalePct <= 600 &&
+          run.scalePct !== 100
+        ) {
+          out.scalePct = run.scalePct;
+        }
         if (
           typeof run.frame === "number" &&
           Number.isInteger(run.frame) &&
@@ -2318,6 +2402,17 @@ export function normalizeBandRichBlocks(
         if (imageAnchor) out.floatAnchor = imageAnchor;
         else if (isNativeBandObjectId(image.nativeObject)) out.nativeObject = image.nativeObject;
         if (image.washout === true) out.washout = true;
+        if (
+          !imageAnchor &&
+          typeof image.runsBefore === "number" &&
+          Number.isInteger(image.runsBefore) &&
+          image.runsBefore >= 0 &&
+          image.runsBefore <= 10_000
+        ) {
+          out.runsBefore = image.runsBefore;
+        }
+        const crop = image.crop === undefined ? null : normalizeBandRichImageCrop(image.crop);
+        if (crop) out.crop = crop;
         images.push(out);
         imageTotal += 1;
       }
@@ -2362,6 +2457,8 @@ export function normalizeBandRichBlocks(
         if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1584) block[key] = value;
       }
       if (borders) block.paragraphBorders = borders;
+      const shading = typeof record.shading === "string" && /^#[0-9a-f]{6}$/iu.test(record.shading) ? record.shading.toLowerCase() : null;
+      if (shading) block.shading = shading;
       const horizontalRule = normalizeWordHorizontalRule(record.wordHorizontalRule);
       if (horizontalRule) block.wordHorizontalRule = horizontalRule;
       if (record.align === "center" || record.align === "right" || record.align === "justify") {
@@ -2511,6 +2608,7 @@ export function normalizeBandRichBlocks(
         if (clean.some((width) => width > 0)) table.columnWidthsPx = clean;
       }
       if (record.tableAlign === "center" || record.tableAlign === "right") table.tableAlign = record.tableAlign;
+      if (record.bidiVisual === true) table.bidiVisual = true;
       const floatPosition = normalizeBandRichTableFloat(record.floatPosition);
       if (floatPosition) table.floatPosition = floatPosition;
       const nativeGrid = record.nativeColumnWidthsTwips;

@@ -39,6 +39,10 @@ import {
   type OfficeChartText,
   type OfficeChartTextUnderline,
 } from "./chart-text";
+import {
+  PRESENTATION_UNDERLINE_FONT_PAGE,
+  PRESENTATION_UNDERLINE_FROM_FONT_PAGE,
+} from "../presentation-text-decoration";
 
 /** The Word-spelled underline names the shared Font page lists. */
 export type OfficeChartFontDialogUnderline =
@@ -61,28 +65,10 @@ export type OfficeChartFontDialogUnderline =
   | "wavyHeavy"
   | "wavyDouble";
 
-const UNDERLINE_TO_PAGE: Record<OfficeChartTextUnderline, Exclude<OfficeChartFontDialogUnderline, "none">> = {
-  words: "words",
-  single: "single",
-  double: "double",
-  heavy: "thick",
-  dotted: "dotted",
-  dottedHeavy: "dottedHeavy",
-  dash: "dash",
-  dashHeavy: "dashedHeavy",
-  dashLong: "dashLong",
-  dashLongHeavy: "dashLongHeavy",
-  dotDash: "dotDash",
-  dotDashHeavy: "dashDotHeavy",
-  dotDotDash: "dotDotDash",
-  dotDotDashHeavy: "dashDotDotHeavy",
-  wavy: "wavy",
-  wavyHeavy: "wavyHeavy",
-  wavyDouble: "wavyDouble",
-};
-const PAGE_TO_UNDERLINE = Object.fromEntries(
-  Object.entries(UNDERLINE_TO_PAGE).map(([model, page]) => [page, model]),
-) as Record<Exclude<OfficeChartFontDialogUnderline, "none">, OfficeChartTextUnderline>;
+const UNDERLINE_TO_PAGE: Record<OfficeChartTextUnderline, Exclude<OfficeChartFontDialogUnderline, "none">> =
+  PRESENTATION_UNDERLINE_FONT_PAGE;
+const PAGE_TO_UNDERLINE: Record<Exclude<OfficeChartFontDialogUnderline, "none">, OfficeChartTextUnderline> =
+  PRESENTATION_UNDERLINE_FROM_FONT_PAGE;
 
 /** Office's Offset for a newly checked Superscript / Subscript. */
 export const OFFICE_CHART_SUPERSCRIPT_OFFSET = 30;

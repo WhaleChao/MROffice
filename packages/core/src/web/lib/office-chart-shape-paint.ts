@@ -13,8 +13,8 @@ import {
   officeShadowOffset,
   officeShadowCss,
   type OfficeShapeGradient,
-  type OfficeShapeShadow,
-} from "./office-shape-paint";
+  type OfficeGradientRect,
+  type OfficeShapeShadow, officeGradientAngle, officeGradientDrawnStops } from "./office-shape-paint";
 import type { OfficeShapeStyleRecipe } from "./office-shape-style-catalog";
 import {
   OFFICE_STROKE_CAPS,
@@ -111,6 +111,8 @@ export interface OfficeChartShapePaint {
   glow?: OfficeChartGlow;
   /** Format ▸ Effects ▸ Shadow, an Inner one (`a:effectLst/a:innerShdw`). */
   innerShadow?: OfficeChartInnerShadow;
+  /** Format ▸ Effects ▸ Soft Edges (`a:effectLst/a:softEdge`): its size. */
+  softEdge?: OfficeChartSoftEdge;
   /** Format ▸ Effects ▸ 3-D Format ▸ Top bevel (`a:sp3d/a:bevelT`), the shapes' model. */
   bevel?: OfficeBevelEffect;
   /**
@@ -175,6 +177,8 @@ export function normalizeOfficeChartInnerShadow(value: unknown): OfficeChartInne
  * (`chart-render-server`, X-051).
  */
 export const OFFICE_CHART_INNER_SHADOW = "officeInnerShadow";
+/** The itemStyle key a mark's Soft Edges rides on to the picture renderer. */
+export const OFFICE_CHART_SOFT_EDGE = "officeSoftEdge";
 
 /**
  * The width an arrow end is sized from, px: the line's, but never under
@@ -185,6 +189,26 @@ export const OFFICE_CHART_INNER_SHADOW = "officeInnerShadow";
  */
 export function officeLineEndUnitPx(lineWidthPx: number): number {
   return Math.max(lineWidthPx, ptToPx(1.984));
+}
+
+/** A chart element's Soft Edges: how far in from its edge it fades, in points. */
+export interface OfficeChartSoftEdge {
+  readonly radiusPt: number;
+}
+
+/** Office's Soft Edges Size spinner's bound, points (`office_chart_shape_paint.MAX_CHART_SOFT_EDGE_PT`). */
+export const OFFICE_CHART_MAX_SOFT_EDGE_PT = 100;
+
+/** The twin of `office_chart_shape_paint.chart_soft_edge`. */
+export function normalizeOfficeChartSoftEdge(value: unknown): OfficeChartSoftEdge | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) throw Error("invalid_chart_soft_edge");
+  const raw = value as Record<string, unknown>;
+  if (Object.keys(raw).length !== 1 || !("radiusPt" in raw)) throw Error("invalid_chart_soft_edge");
+  const radius = raw.radiusPt;
+  if (typeof radius !== "number" || !Number.isFinite(radius) || radius <= 0 || radius > OFFICE_CHART_MAX_SOFT_EDGE_PT)
+    throw Error("invalid_chart_soft_edge");
+  return { radiusPt: Math.round(radius * 100) / 100 };
 }
 
 /** A chart element's Glow: colour, size (`rad`) in points, opacity (absent = opaque). */
@@ -330,7 +354,21 @@ export type OfficeChartFillPattern = Readonly<{
   preset: (typeof OFFICE_CHART_FILL_PATTERNS)[number];
   foreground: string;
   background: string;
+  
+
+  foregroundOpacity?: number;
+  backgroundOpacity?: number;
 }>;
+const PATTERN_OPACITY_KEYS = ["foregroundOpacity", "backgroundOpacity"] as const;
+/** The pattern's stated opacities (each below 1), for a normalised copy. */
+function patternOpacities(raw: Record<string, unknown>): Pick<OfficeChartFillPattern, "foregroundOpacity" | "backgroundOpacity"> {
+  const out: { foregroundOpacity?: number; backgroundOpacity?: number } = {};
+  for (const key of PATTERN_OPACITY_KEYS) {
+    const value = raw[key];
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 1) out[key] = value;
+  }
+  return out;
+}
 const PATTERN_HEX = /^#[0-9a-fA-F]{6}$/;
 export function normalizeOfficeChartFillPattern(
   value: unknown,
@@ -340,7 +378,8 @@ export function normalizeOfficeChartFillPattern(
   if (
     typeof value !== "object" ||
     Array.isArray(value) ||
-    Object.keys(raw).length !== 3 ||
+    !Object.keys(raw).every((key) => key === "preset" || key === "foreground" || key === "background" || (PATTERN_OPACITY_KEYS as readonly string[]).includes(key)) ||
+    PATTERN_OPACITY_KEYS.some((key) => raw[key] !== undefined && !(typeof raw[key] === "number" && Number.isFinite(raw[key]) && (raw[key] as number) >= 0 && (raw[key] as number) <= 1)) ||
     !(OFFICE_CHART_FILL_PATTERNS as readonly unknown[]).includes(raw.preset) ||
     typeof raw.foreground !== "string" ||
     !PATTERN_HEX.test(raw.foreground) ||
@@ -352,6 +391,7 @@ export function normalizeOfficeChartFillPattern(
     preset: raw.preset as OfficeChartFillPattern["preset"],
     foreground: raw.foreground.toLowerCase(),
     background: raw.background.toLowerCase(),
+    ...patternOpacities(raw),
   };
 }
 /**
@@ -531,30 +571,45 @@ export function officeFillPatternBackground(pattern: OfficeChartFillPattern): {
   backgroundSize: string;
   backgroundPosition: string;
 } {
-  const { marks } = officeFillPatternTile(pattern);
+  const { marks, paperInMarks } = officeFillPatternTile(pattern);
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" shape-rendering="crispEdges">` +
     marks
       .map((mark) =>
         mark.tag === "rect"
-          ? `<rect x="${mark.x}" y="${mark.y}" width="${mark.width}" height="${mark.height}" fill="${pattern.foreground}"/>`
+          ? `<rect x="${mark.x}" y="${mark.y}" width="${mark.width}" height="${mark.height}" fill="${mark.fill ?? pattern.foreground}"${mark.opacity !== undefined ? ` fill-opacity="${mark.opacity}"` : ""}/>`
           : "",
       )
       .join("") +
     "</svg>";
   return {
     backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(svg)}")`,
-    backgroundColor: pattern.background,
-    backgroundSize: `${OFFICE_PATTERN_TILE}px ${OFFICE_PATTERN_TILE}px`,
-    backgroundPosition: "0 0",
+    // A see-through pattern's paper is in its tile.
+    backgroundColor: paperInMarks ? "transparent" : pattern.background,
+    // One bit a CSS pixel on screen, the tiles on the slide's (the page's)
+    // grid: the host's pattern anchor sets these per element
+    // (lib/office-pattern-anchor); outside one, the element's own 8 px tile
+    // from its corner.
+    backgroundSize: `var(--office-pattern-size, ${OFFICE_PATTERN_TILE}px) var(--office-pattern-size, ${OFFICE_PATTERN_TILE}px)`,
+    backgroundPosition: "var(--office-pattern-x, 0px) var(--office-pattern-y, 0px)",
   };
 }
 /** One mark of a pattern tile, in tile units. */
 export type OfficeFillPatternMark =
-  | { readonly tag: "rect"; readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+  | {
+      readonly tag: "rect";
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+      /** A half-tone cell's colour (half way between the two); absent: the foreground. */
+      readonly fill?: string;
+      /** The mark's opacity below 1 (a see-through pattern colour); absent: opaque. */
+      readonly opacity?: number;
+    }
   | { readonly tag: "circle"; readonly cx: number; readonly cy: number; readonly r: number };
 
-/** Office draws a pattern fill as an 8 x 8 bitmap, one device pixel a bit, from the shape's corner. */
+/** Office draws a pattern fill as an 8 x 8 bitmap, one screen point (one CSS pixel) a bit at any zoom, the tiles on the slide's grid (lib/office-pattern-anchor). */
 const OFFICE_PATTERN_TILE = 8;
 
 /**
@@ -621,15 +676,29 @@ const OFFICE_PATTERN_BITMAPS: Readonly<Record<OfficeChartFillPattern["preset"], 
 };
 
 /**
- * A pattern as an SVG tile: Office's 8 x 8 bitmap of it, the set bits of
- * each row drawn as runs in the foreground over the background.
+ * The cells Office draws half way between foreground and background beside
+ * the one-pixel diagonals' ink (PowerPoint for Mac, pattern-presets-probe:
+ * dnDiag, upDiag and diagCross carry a 50% grey cell on each side of the
+ * line, black on white; every other preset is two-tone) -- the mirror of
+ * ``OFFICE_PATTERN_HALF_BITS`` in ``office_chart_shape_paint.py``.
  */
-export function officeFillPatternTile(pattern: OfficeChartFillPattern): {
-  readonly size: number;
-  readonly angle: number;
-  readonly marks: readonly OfficeFillPatternMark[];
-} {
-  const bitmap = OFFICE_PATTERN_BITMAPS[pattern.preset] ?? OFFICE_PATTERN_BITMAPS.pct50;
+const OFFICE_PATTERN_HALF_BITS: Readonly<Partial<Record<OfficeChartFillPattern["preset"], string>>> = {
+  dnDiag: "41a05028140a0582",
+  upDiag: "82050a142850a041",
+  diagCross: "42a55a24245aa542",
+};
+
+/** The colour half way between two `#rrggbb` colours, or null. */
+function officePatternHalfTone(foreground: string, background: string): string | null {
+  const parse = (value: string) => (/^#[0-9a-f]{6}$/i.test(value) ? [1, 3, 5].map((at) => Number.parseInt(value.slice(at, at + 2), 16)) : null);
+  const ink = parse(foreground);
+  const paper = parse(background);
+  if (!ink || !paper) return null;
+  return `#${ink.map((channel, index) => Math.round((channel + paper[index]!) / 2).toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** The runs of set bits of an 8 x 8 bitmap, as tile-unit rectangles. */
+function officePatternRuns(bitmap: string, fill?: string, opacity?: number): OfficeFillPatternMark[] {
   const marks: OfficeFillPatternMark[] = [];
   for (let y = 0; y < OFFICE_PATTERN_TILE; y += 1) {
     const row = Number.parseInt(bitmap.slice(y * 2, y * 2 + 2), 16);
@@ -641,10 +710,44 @@ export function officeFillPatternTile(pattern: OfficeChartFillPattern): {
       }
       const start = x;
       while (x < OFFICE_PATTERN_TILE && row & (0x80 >> x)) x += 1;
-      marks.push({ tag: "rect", x: start, y, width: x - start, height: 1 });
+      marks.push({ tag: "rect", x: start, y, width: x - start, height: 1, ...(fill ? { fill } : {}), ...(opacity !== undefined && opacity < 1 ? { opacity } : {}) });
     }
   }
-  return { size: OFFICE_PATTERN_TILE, angle: 0, marks };
+  return marks;
+}
+
+/**
+ * A pattern as an SVG tile: Office's 8 x 8 bitmap of it, the set bits of
+ * each row drawn as runs in the foreground over the background, and the
+ * one-pixel diagonals' half-tone cells in the colour half way between
+ * (each mark's `fill`, when it states one; else the foreground).
+ */
+export function officeFillPatternTile(pattern: OfficeChartFillPattern): {
+  readonly size: number;
+  readonly angle: number;
+  readonly marks: readonly OfficeFillPatternMark[];
+  /** The background is among the marks (a see-through pattern: each bit its
+   * own colour over what is under the shape, as PowerPoint's tile is): the
+   * host lays no background under them. */
+  readonly paperInMarks: boolean;
+} {
+  const bitmap = OFFICE_PATTERN_BITMAPS[pattern.preset] ?? OFFICE_PATTERN_BITMAPS.pct50;
+  const ink = pattern.foregroundOpacity;
+  const paper = pattern.backgroundOpacity;
+  const seeThrough = (ink !== undefined && ink < 1) || (paper !== undefined && paper < 1);
+  const marks = officePatternRuns(bitmap, undefined, ink);
+  const halfBits = OFFICE_PATTERN_BITMAPS[pattern.preset] ? OFFICE_PATTERN_HALF_BITS[pattern.preset] : undefined;
+  const halfTone = halfBits ? officePatternHalfTone(pattern.foreground, pattern.background) : null;
+  if (halfBits && halfTone) marks.push(...officePatternRuns(halfBits, halfTone, seeThrough ? ((ink ?? 1) + (paper ?? 1)) / 2 : undefined));
+  if (seeThrough) {
+    // The paper where neither the ink nor a half-tone cell is.
+    const taken = (bits: string | undefined, row: number) => (bits ? Number.parseInt(bits.slice(row * 2, row * 2 + 2), 16) : 0);
+    const free = Array.from({ length: OFFICE_PATTERN_TILE }, (_, row) =>
+      ((~(taken(bitmap, row) | taken(halfTone ? halfBits : undefined, row))) & 0xff).toString(16).padStart(2, "0"),
+    ).join("");
+    marks.unshift(...officePatternRuns(free, pattern.background, paper));
+  }
+  return { size: OFFICE_PATTERN_TILE, angle: 0, marks, paperInMarks: seeThrough };
 }
 
 /**
@@ -658,17 +761,23 @@ export function officeFillPatternSvg(pattern: OfficeChartFillPattern, id: string
     for (const [name, value] of Object.entries(attrs)) element.setAttribute(name, String(value));
     return element;
   };
-  const { size, angle, marks } = officeFillPatternTile(pattern);
+  const { size, angle, marks, paperInMarks } = officeFillPatternTile(pattern);
   const tile = make("pattern", {
     id,
+    // Laid on the page's grid, one bit a CSS pixel, by the page's pattern
+    // anchor (lib/office-pattern-anchor).
+    "data-office-pattern": "",
     patternUnits: "userSpaceOnUse",
     width: size,
     height: size,
     ...(angle ? { patternTransform: `rotate(${angle})` } : {}),
   }) as SVGPatternElement;
   tile.append(
-    make("rect", { x: 0, y: 0, width: size, height: size, fill: pattern.background }),
-    ...marks.map(({ tag, ...attrs }) => make(tag, { ...attrs, fill: pattern.foreground })),
+    ...(paperInMarks ? [] : [make("rect", { x: 0, y: 0, width: size, height: size, fill: pattern.background })]),
+    ...marks.map(({ tag, ...attrs }) => {
+      const { opacity, ...rest } = attrs as typeof attrs & { opacity?: number };
+      return make(tag, { ...rest, fill: ("fill" in rest && rest.fill) || pattern.foreground, ...(opacity !== undefined ? { "fill-opacity": opacity } : {}) });
+    }),
   );
   return tile;
 }
@@ -696,7 +805,7 @@ export function officeFillPatternOf(value: unknown): OfficeChartFillPattern | nu
     const foreground = hex(raw.foreground, null);
     const background = hex(raw.background, null);
     return (OFFICE_CHART_FILL_PATTERNS as readonly unknown[]).includes(raw.preset) && foreground && background
-      ? { preset: raw.preset as OfficeChartFillPattern["preset"], foreground, background }
+      ? { preset: raw.preset as OfficeChartFillPattern["preset"], foreground, background, ...patternOpacities(raw) }
       : null;
   }
   const preset = LEGACY_PATTERN_PRESETS[typeof raw.pattern === "string" ? raw.pattern : "dots"];
@@ -773,6 +882,7 @@ export function normalizeOfficeChartShapePaint(
           "lineEnds",
           "glow",
           "innerShadow",
+          "softEdge",
           "bevel",
           "format3d",
         ].includes(key),
@@ -821,6 +931,7 @@ export function normalizeOfficeChartShapePaint(
   const shadow = normalizeOfficeShapeShadow(raw.shadow);
   const glow = normalizeOfficeChartGlow(raw.glow);
   const innerShadow = normalizeOfficeChartInnerShadow(raw.innerShadow);
+  const softEdge = normalizeOfficeChartSoftEdge(raw.softEdge);
   // Format ▸ Effects ▸ 3-D Format, in the shapes' own model (the server's
   // `office_chart_shape_paint.chart_3d_format`).
   const threeD =
@@ -855,6 +966,7 @@ export function normalizeOfficeChartShapePaint(
     !lineEnds &&
     !glow &&
     !innerShadow &&
+    !softEdge &&
     !bevel &&
     !format3d
   )
@@ -876,6 +988,7 @@ export function normalizeOfficeChartShapePaint(
     ...(lineEnds ? { lineEnds } : {}),
     ...(glow ? { glow } : {}),
     ...(innerShadow ? { innerShadow } : {}),
+    ...(softEdge ? { softEdge } : {}),
     ...(bevel ? { bevel } : {}),
     ...(format3d ? { format3d } : {}),
   };
@@ -925,23 +1038,59 @@ export function officeChartBorderStyleCss(value: OfficeChartShapePaint | undefin
   if (value.lineDash === "dot" || value.lineDash === "sysDot") return "dotted";
   return value.lineDash ? "dashed" : undefined;
 }
+/**
+ * A path gradient (`a:gradFill/a:path`) on a chart's element, as the picture
+ * draws it once the chart is laid out (`chart-render-server`): over each
+ * mark's own box (each bar, slice, doughnut segment, area; the legend key,
+ * the plot and chart areas), rectangular contours for a rect (or shape) path
+ * (`officeRectPathGradient`), each ray to a circle about the box's middle for
+ * a circle path (`officeCirclePathGradient`). It rides on the colour the
+ * engine is given (`OFFICE_CHART_PATH_GRADIENT`); the engine's own radial
+ * stands in until then. Windows PowerPoint's print of MRAI-corpus/chart23
+ * probes/chart23-pathgrad-probe(2).pptx: every case within 0.008 along the
+ * stops, each bar and slice over its own box.
+ */
+export const OFFICE_CHART_PATH_GRADIENT = "officePathGradient";
+export interface OfficeChartPathGradient {
+  readonly kind: "rect" | "circle";
+  readonly fillToRect?: OfficeGradientRect;
+  readonly tileRect?: OfficeGradientRect;
+  /** As drawn (`officeGradientDrawnStops`). */
+  readonly stops: readonly { readonly position: number; readonly color: string; readonly alpha?: number }[];
+}
 export function officeChartGradientColor(value: OfficeShapeGradient) {
-  // Each stop at its own transparency (Gradient stops ▸ Transparency).
-  const colorStops = value.stops.map((stop) => ({
+  // Each stop at its own transparency (Gradient stops ▸ Transparency), the
+  // stops drawn as PowerPoint draws them (`officeGradientDrawnStops`).
+  const drawn = officeGradientDrawnStops(value.stops);
+  const colorStops = drawn.map((stop) => ({
     offset: stop.position,
     color: officeChartColorWithOpacity(stop.color, stop.alpha),
   }));
   if (value.path) {
-    // Radial, rectangular and path gradients spread from the focus rectangle
-    // (`a:fillToRect`, from its left and top edges in 1/1000 %) to the
-    // farthest corner; ECharts draws each as the radial one.
+    // The engine's stand-in: a radial from the focus rectangle to the
+    // farthest corner. The picture draws the path gradient itself over the
+    // element's own box (`OFFICE_CHART_PATH_GRADIENT`).
     const rect = value.path.fillToRect;
     const x = Math.min(1, Math.max(0, (rect?.l ?? 50_000) / 100_000));
     const y = Math.min(1, Math.max(0, (rect?.t ?? 50_000) / 100_000));
     const r = Math.max(Math.hypot(x, y), Math.hypot(1 - x, y), Math.hypot(x, 1 - y), Math.hypot(1 - x, 1 - y));
-    return { type: "radial", x, y, r: value.path.kind === "circle" ? r : r / Math.SQRT2, colorStops };
+    const path: OfficeChartPathGradient = {
+      // A shape path over a box is its rectangle's contours (a bar's, exactly).
+      kind: value.path.kind === "circle" ? "circle" : "rect",
+      ...(value.path.fillToRect ? { fillToRect: value.path.fillToRect } : {}),
+      ...(value.tileRect ? { tileRect: value.tileRect } : {}),
+      stops: drawn.map((stop) => ({ position: stop.position, color: stop.color, ...(stop.alpha !== undefined && stop.alpha < 1 ? { alpha: stop.alpha } : {}) })),
+    };
+    return {
+      type: "radial",
+      x,
+      y,
+      r: value.path.kind === "circle" ? r : r / Math.SQRT2,
+      colorStops,
+      [OFFICE_CHART_PATH_GRADIENT]: path,
+    };
   }
-  const angle = ((value.angle - 90) * Math.PI) / 180;
+  const angle = ((officeGradientAngle(value) - 90) * Math.PI) / 180;
   const dx = Math.cos(angle),
     dy = Math.sin(angle);
   return {
@@ -1055,6 +1204,9 @@ export function officeChartShapeEChartsStyle(
         ? { ...officeChartGlowShadow(p.glow, target === "item"), shadowOffsetX: 0, shadowOffsetY: 0 }
         : {}),
     ...(p.innerShadow && target === "item" ? { [OFFICE_CHART_INNER_SHADOW]: p.innerShadow } : {}),
+    // The engine draws no soft edge: the picture renderer fades the mark in
+    // from its edge itself (`chart-render-server`).
+    ...(p.softEdge && target === "item" ? { [OFFICE_CHART_SOFT_EDGE]: p.softEdge } : {}),
     // The engine draws no bevel: the picture renderer lights the mark's
     // rims itself (`chart-render-server`, `office-charts/chart-bevel`).
     ...((p.bevel || p.format3d) && target === "item"

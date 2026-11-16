@@ -114,6 +114,10 @@ export interface PdfPageWindowTextEditSessionModel {
   handleNativeListTextEditorControllerChange: (controller: Readonly<{ readDraft: () => Readonly<{ replacementText: string; properties: PdfNativeTextPropertyDraft | null; dirty: boolean; composing: boolean; canCommit: boolean; commitBlockedReason: string | null; waitingForExactPreview: boolean; layoutFallbackActive: boolean; layout: Readonly<{ id: string; page: number; x: number; y: number; width: number; height: number; angle: number; originX: number; originY: number; originWidth: number; originHeight: number; pageWidthPx: number; pageHeightPx: number; fontSize: number; fontFamily?: string | undefined; sourceFontName?: string | undefined; bold: boolean; italic: boolean; color: string; align: "left" | "center" | "right"; underline?: boolean | undefined; strikethrough?: boolean | undefined; justify?: boolean | undefined; characterSpacing?: number | undefined; wordSpacing?: number | undefined; horizontalScale?: number | undefined; }> | null; }>; readCaret: () => Readonly<{ start: number; end: number; }>; commit: () => Promise<boolean>; finish: () => Promise<boolean>; readFinishing?: (() => boolean) | undefined; focus: (caretOffset?: number | null | undefined, caretPoint?: Readonly<{ x: number; y: number; }> | undefined) => void; applyRibbonAction: (action: PdfTextEditingContextRibbonAction) => boolean; readFormat: () => Readonly<{ bold: boolean; italic: boolean; color: string | null; fontSize: number | null; boxFontSize: number | null; pageHeightPoints: number | null; }>; }> | null) => void;
   /** Words typed in the open line not written yet (the save status). */
   setNativeListTextUnsavedTyping?: (unsaved: boolean) => void;
+  /** The open line's words while they differ from the page's (null once they
+   * do not), as its box reads them: kept past the tab
+   * (lib/pdf/native-text-typing-drafts). */
+  keepNativeListTextTypingDraft?: (draft: Readonly<{ originalText: string; value: string }> | null) => void;
   pdfNativeTransactionsRef: RefObject<JsonValue | undefined>;
   page: PageItem | null;
   dataItemId: string;
@@ -197,6 +201,7 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
     publishNativeListTextDraftState,
     handleNativeListTextEditorControllerChange,
     setNativeListTextUnsavedTyping,
+    keepNativeListTextTypingDraft,
     pdfNativeTransactionsRef,
     page,
     dataItemId,
@@ -406,6 +411,7 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
       onControllerChange={controllerAsCommitted}
       onDraftStateChange={publishDraftAsCommitted}
       onUnsavedTypingChange={setNativeListTextUnsavedTyping}
+      onTypingDraftChange={keepNativeListTextTypingDraft}
       onCancel={closeNativeListTextDialog}
       preparationFailed={nativeListTextPreparationFailed}
       initialDraftText={spelling && initialDraftText === spelling.source ? spelling.reader : initialDraftText}

@@ -1254,7 +1254,8 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
           // part's draft) now, and what is applied is the room with them.
           const shown = optionsRef.current.liveSlides();
           const held = cause === "reset" || room.accepting ? room.content() : content;
-          const slides = session.applyRoomContent(index, held, cause === "reset" ? shown : undefined);
+          const liveById = new Map(shown.map((slide) => [slide.id, slide]));
+          const slides = session.applyRoomContent(index, held, cause === "reset" ? shown : undefined, (id) => liveById.get(id));
           if (slides && slides.size > 0) optionsRef.current.onRoomSlides?.(slides, index, textChanges);
         },
         onHistory: () => optionsRef.current.onRoomsChanged?.(),

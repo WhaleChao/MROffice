@@ -706,6 +706,20 @@ function xyDataFromNativeSeries(
             Number.isFinite(point.y) &&
             (!bubble || Number.isFinite(point.size)),
         );
+      if (points.length === 0) {
+        // A series with no point (its cells deleted, `Sheet!#REF!`) is still
+        // the chart's series, as Excel keeps it: one blank point holds its
+        // place, so the series after it keep their indices -- the styles,
+        // hidden series and labels the model keys by index (R326-X06 E7: a
+        // column delete dropped series 3 of 6 and its styles fell on the
+        // wrong series, the export declined).
+        return {
+          name: boundedText(series.name, `Series ${seriesIndex + 1}`),
+          xValues: [null],
+          yValues: [null],
+          ...(bubble ? { bubbleSizes: [0] } : {}),
+        };
+      }
       return {
         name: boundedText(series.name, `Series ${seriesIndex + 1}`),
         xValues: points.map((point) => point.x),
@@ -714,16 +728,15 @@ function xyDataFromNativeSeries(
           ? { bubbleSizes: points.map((point) => point.size as number) }
           : {}),
       };
-    })
-    .filter((series) => series.xValues.length > 0);
-  if (normalized.length === 0) return null;
+    });
+  if (normalized.every((series) => series.xValues[0] === null)) return null;
   return {
     data: { kind: "xy", series: normalized },
     table: {
       headers: bubble ? ["Series", "X", "Y", "Size"] : ["Series", "X", "Y"],
       headerRoles: bubble ? ["series", "literal", "literal", "size"] : ["series", "literal", "literal"],
       rows: normalized.flatMap((series) =>
-        series.xValues.map((x, index) => [
+        series.xValues[0] === null ? [] : series.xValues.map((x, index) => [
           series.name,
           String(x),
           String(series.yValues[index]),

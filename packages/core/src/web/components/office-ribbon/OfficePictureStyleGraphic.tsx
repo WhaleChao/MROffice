@@ -6,12 +6,22 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { useId, type CSSProperties } from "react";
+
+import { OfficePictureLinePath } from "./OfficePictureLinePath";
+import { officePictureLineCompound } from "../../lib/office-picture-line";
+import { renderPrimitive as renderBevelPrimitive } from "./OfficeShapeEffectsFrame";
+import { officeCameraEyePx } from "../../lib/office-camera-distance";
+import { OFFICE_CAMERA_ROTATIONS } from "../../lib/office-picture-effects";
+import { officeShapeEffectsFilterRegion, officePictureThreeDPaint } from "../../lib/office-shape-effects-paint";
 import {
   nativePictureStyle,
   pictureStylePath,
   type NativePictureStyle,
   type OfficePictureStyleOutline,
 } from "../../lib/office-picture-styles/native";
+
+/** A recipe's `a:ln@cmpd` as the compound words the line is drawn with. */
+const OFFICE_PICTURE_STYLE_COMPOUNDS: Record<string, string> = { dbl: "double", tri: "triple" };
 
 const number = (value: unknown, fallback = 0) =>
   typeof value === "string" || typeof value === "number"
@@ -71,6 +81,13 @@ export interface OfficePictureStyleGraphicProps {
    * Soft Edges, Bevel, 3-D Rotation) picked over the style.
    */
   readonly omitEffects?: ReadonlySet<string>;
+  /**
+   * Draw a flat style's line outside the picture, as PowerPoint for Windows
+   * draws a picture's line (`lib/office-picture-line`), with its compound
+   * lines and its corners; a style drawn in 3-D keeps it centred. The other
+   * editors draw it centred on the frame until their own Office truth says.
+   */
+  readonly lineOutside?: boolean;
   readonly testId?: string;
   readonly imageTestId?: string;
 }
@@ -100,6 +117,7 @@ export function OfficePictureStyleGraphic({
   outline = null,
   geometryPath = null,
   omitEffects,
+  lineOutside = false,
   testId = "office-picture-style-graphic",
   imageTestId = "office-picture-style-image",
 }: OfficePictureStyleGraphicProps) {
@@ -132,7 +150,24 @@ export function OfficePictureStyleGraphic({
     ? undefined
     : style.effects?.find((f) => f.kind === "softEdge");
   const bevel = omitEffects?.has("bevel") ? undefined : style.threeD?.bevel;
-  const bevelWidth = Math.min(px(bevel?.w), Math.min(w, h) / 3);
+  // The top bevel lit as a shape's is (the shared 3-D Format filter on the
+  
+  // Picture Style's bevel as it draws any picture's. A gradient band half
+  // the bevel's width stood in for it -- a 20 px grey frame over Bevel
+  // Rectangle's photo, where PowerPoint lights a few pixels at the edge.
+  const rig = style.threeD?.lightRig;
+  const bevelPaint = bevel
+    ? officePictureThreeDPaint(
+        {
+          bevel: { preset: bevel.prst ?? "circle", width: number(bevel.w, 76200), height: number(bevel.h, 76200) },
+          format3d: {
+            ...(style.threeD?.prstMaterial ? { material: style.threeD.prstMaterial } : {}),
+            ...(rig ? { lighting: { rig: rig.rig, direction: rig.dir, ...(number(rig.rev) ? { angle: number(rig.rev) } : {}) } } : {}),
+          },
+        },
+        { width: w, height: h },
+      )
+    : null;
   const radians = (number(shadow?.dir) * Math.PI) / 10800000;
   const dx = px(shadow?.dist) * Math.cos(radians),
     dy = px(shadow?.dist) * Math.sin(radians);
@@ -148,10 +183,19 @@ export function OfficePictureStyleGraphic({
   const ay = ["tl", "t", "tr"].includes(anchor) ? 0 : ["bl", "b", "br"].includes(anchor) ? h : h / 2;
   const shadowTransform = `translate(${dx + ax} ${dy + ay}) skewX(${angle(shadow?.kx)}) skewY(${angle(shadow?.ky)}) scale(${sx} ${sy}) translate(${-ax} ${-ay})`;
   const camera = omitEffects?.has("rotation3d") ? undefined : style.camera;
-  const fov = Math.max(1, Math.min(179, number(camera?.fov, 1800000) / 60000));
-  const cameraDistance = Math.max(w, h) / (2 * Math.tan((fov * Math.PI) / 360));
+  // Office's camera, as a picture's 3-D Rotation and the picture effect
+  // presets draw it (lib/office-picture-effect-presets): the preset's own
+  // turn unless the style states one, seen from Office's absolute camera
+  // distance for the field of view, turned rotateZ(-rev) rotateX(-lat)
+  // rotateY(-lon) about the centre.
+  const preset = camera ? OFFICE_CAMERA_ROTATIONS[camera.prst] : undefined;
+  const turned = camera && ("lat" in camera || "lon" in camera || "rev" in camera);
+  const lon = turned ? angle(camera?.lon) : (preset?.[0] ?? 0);
+  const lat = turned ? angle(camera?.lat) : (preset?.[1] ?? 0);
+  const rev = turned ? angle(camera?.rev) : (preset?.[2] ?? 0);
+  const fov = camera?.fov !== undefined ? number(camera.fov) / 60000 : (preset?.[3] ?? 45);
   const transform = camera
-    ? `${camera.prst.startsWith("perspective") ? `perspective(${cameraDistance}px) ` : ""}rotateZ(${-angle(camera.rev)}deg) rotateY(${-angle(camera.lon)}deg) rotateX(${-angle(camera.lat)}deg)`
+    ? `${camera.prst.startsWith("perspective") ? `perspective(${officeCameraEyePx({ width: w, height: h }, fov)}px) ` : ""}rotateZ(${-rev}deg) rotateX(${-lat}deg) rotateY(${-lon}deg)`
     : undefined;
   // The outline actually drawn: the style's own, or a Picture Border set
   // over it (same compound line, new paint/width/dash), or none.
@@ -172,8 +216,16 @@ export function OfficePictureStyleGraphic({
         ? `${px(outline.widthEmu) * 3} ${px(outline.widthEmu) * 2}`
         : `${px(outline.widthEmu)} ${px(outline.widthEmu)}`
       : undefined;
-  const baseColor = style.line?.color ?? style.fill?.color ?? "#d9d9d9";
   const lineWidth = px(line?.width);
+  // PowerPoint's place for the line (`lineOutside`): outside a flat picture,
+  // on the style's outline pushed out half the line's width, with the
+  // recipe's corners and its compound lines across the whole width.
+  const drawnIn3d = Boolean(bevel && (number(bevel.w, 76200) > 0 || number(bevel.h, 76200) > 0)) ||
+    number(style.threeD?.extrusionH) > 0;
+  const outsideLine = Boolean(lineOutside && line && lineWidth > 0 && !geometryPath);
+  const lineOutset = outsideLine && !drawnIn3d ? lineWidth / 2 : 0;
+  const lineD = lineOutset > 0 ? pictureStylePath(style, w, h, -lineOutset) : d;
+  const lineJoin = style.line?.join ?? "round";
   const stroke = (width: number) => (
     <path
       d={d}
@@ -239,13 +291,15 @@ export function OfficePictureStyleGraphic({
               ))}
             </linearGradient>
           ) : null}
-          <linearGradient id={`${uid}-bevel`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#ffffff" />
-            <stop offset=".25" stopColor={baseColor} />
-            <stop offset=".52" stopColor="#77766f" />
-            <stop offset=".78" stopColor={baseColor} />
-            <stop offset="1" stopColor="#ffffff" />
-          </linearGradient>
+          {bevelPaint ? (
+            <filter
+              id={`${uid}-bevel`}
+              {...officeShapeEffectsFilterRegion(bevelPaint)}
+              colorInterpolationFilters="sRGB"
+            >
+              {bevelPaint.primitives.map((primitive, index) => renderBevelPrimitive(primitive, index))}
+            </filter>
+          ) : null}
           {shadow ? (
             <filter
               id={`${uid}-shadow`}
@@ -354,8 +408,12 @@ export function OfficePictureStyleGraphic({
           ) : null}
           <g
             id={`${uid}-picture`}
-            filter={inner ? `url(#${uid}-inner)` : undefined}
+            filter={inner && !outsideLine ? `url(#${uid}-inner)` : undefined}
           >
+            {
+}
+            <g filter={inner && outsideLine ? `url(#${uid}-inner)` : undefined}>
+            <g filter={bevelPaint ? `url(#${uid}-bevel)` : undefined}>
             {style.fill ? (
               <path
                 d={d}
@@ -378,20 +436,26 @@ export function OfficePictureStyleGraphic({
                 style={photoFilter ? { filter: photoFilter } : undefined}
               />
             </g>
-            {line ? (
+            {line && !outsideLine ? (
               line.cmpd ? (
                 <g mask={`url(#${uid}-double)`}>{stroke(lineWidth)}</g>
               ) : (
                 stroke(lineWidth)
               )
             ) : null}
-            {bevelWidth > 0 ? (
-              <path
-                d={insetPath(bevelWidth / 4)}
-                fill="none"
-                stroke={`url(#${uid}-bevel)`}
-                strokeWidth={bevelWidth / 2}
-                opacity=".8"
+            </g>
+            </g>
+            {line && outsideLine ? (
+              <OfficePictureLinePath
+                d={lineD}
+                color={lineGradient && !outline ? `url(#${uid}-line)` : line.color}
+                width={lineWidth}
+                opacity={line.opacity}
+                compound={officePictureLineCompound(OFFICE_PICTURE_STYLE_COMPOUNDS[String(line.cmpd)] ?? line.cmpd)}
+                join={lineJoin}
+                dashArray={lineDash}
+                bounds={{ x: -2 * lineWidth, y: -2 * lineWidth, width: w + 4 * lineWidth, height: h + 4 * lineWidth }}
+                testId="office-picture-style-line"
               />
             ) : null}
             {style.threeD?.contour ? (

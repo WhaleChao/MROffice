@@ -11,7 +11,11 @@
  * sets, the font registry and the embedding manifest) are not part of the
  * browser bundle:
  * the API serves them to a signed-in user (`GET /api/v1/office-data/{name}`,
- * app/routers/office_data.py) and this store holds what arrived. The tables
+ * app/routers/office_data.py) and this store holds what arrived. A guest is
+ * served the font registry's mapping alone ({@link officeDataServedToGuests}:
+ * which open face and slice files draw an Office family), so a visitor's
+ * deck registers its fonts as an account's does; the measured tables stay an
+ * account's, and a guest's readers of those draw their fallback. The tables
  * themselves live in the files `lib/office-data/datasets.json` names, which
  * `scripts/check-production-bundle.mjs --source` keeps out of the browser's
  * module graph.
@@ -55,6 +59,15 @@ export const OFFICE_DATA_NAMES: readonly OfficeDataName[] = Object.freeze([
 
 const PARTITIONED: ReadonlySet<OfficeDataName> = new Set<OfficeDataName>(["font-registry", "font-embed-manifest"]);
 
+/** Tables the API also answers a guest (no session): the font registry, as
+ * its mapping (app/services/office_data.py office_data_guest_answer). */
+const SERVED_TO_GUESTS: ReadonlySet<OfficeDataName> = new Set<OfficeDataName>(["font-registry"]);
+
+/** Whether a page without a session is answered this table too. */
+export function officeDataServedToGuests(name: OfficeDataName): boolean {
+  return SERVED_TO_GUESTS.has(name);
+}
+
 /** A table as the files hold it (server-side hosts, tests). */
 export type OfficeDataSource = (name: OfficeDataName) => unknown;
 
@@ -72,7 +85,8 @@ export class OfficeDataUnavailableError extends Error {
 
 /** How the browser asks the API (`./transport`). */
 export interface OfficeDataTransport {
-  /** Whether a request can succeed at all (a signed-in page). */
+  /** Whether a request can succeed at all (a signed-in page; a guest only
+   * for {@link officeDataServedToGuests}). */
   signedIn(): boolean;
   whole(name: OfficeDataWholeName): Promise<unknown>;
   /** The fragment holding these parts, in the table's own shape. */
@@ -280,7 +294,7 @@ export async function loadOfficeDataParts(
   const entry = partitionedEntry(name);
   const now = Date.now();
   const waits: Promise<void>[] = [];
-  const signedIn = signedInNow();
+  const askable = signedInNow() || officeDataServedToGuests(name);
   for (const raw of keys) {
     const key = raw.trim().toLowerCase();
     if (!key || entry.known.has(key)) continue;
@@ -291,7 +305,7 @@ export async function loadOfficeDataParts(
     }
     const failedAt = entry.failedAt.get(key);
     if (failedAt !== undefined && now - failedAt < RETRY_AFTER_MS) continue;
-    if (!signedIn) continue;
+    if (!askable) continue;
     let resolve!: () => void;
     const wait = new Promise<void>((done) => (resolve = done));
     entry.pending.set(key, wait);
@@ -313,9 +327,11 @@ export function officeDataPartKnown(name: OfficeDataPartitionedName, key: string
 }
 
 /** Whether this page can ask the API at all (signed in, or a host that holds
- * the tables): a guest's readers settle for their fallback for good. */
-export function officeDataObtainable(): boolean {
-  return source !== null || signedInNow();
+ * the tables): a guest's readers settle for their fallback for good. With a
+ * name, whether it can ask for that table (a guest can for
+ * {@link officeDataServedToGuests}). */
+export function officeDataObtainable(name?: OfficeDataName): boolean {
+  return source !== null || signedInNow() || (name !== undefined && officeDataServedToGuests(name));
 }
 
 /** What has arrived of a partitioned table (`undefined` when nothing has). */

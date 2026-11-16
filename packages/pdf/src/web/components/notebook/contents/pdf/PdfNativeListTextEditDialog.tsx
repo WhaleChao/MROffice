@@ -12,7 +12,8 @@ import type { PdfTextLineLayout } from "@mrnote/core/web/lib/pdf/text-line-layou
 import { pdfDraftItalic, pdfDraftSyntheticSlantTransform, slantPdfDraftWords } from "../../../../lib/pdf/draft-italic";
 import { carriedTextEdit } from "../../../../lib/pdf/carried-text-edit";
 import { pdfTextPointSize, pdfTextPointSizeOver, pdfUniformTextPointSize } from "../../../../lib/pdf/engine/native/text-point-size";
-import { pdfNativeLineCentredOnPage, pdfNativeLineRightFlushOnPage, pdfNativeTextBoxHandoffOpening } from "../../../../lib/pdf/native-line-centring";
+import { pdfNativeLineCentredOnPage, pdfNativeLineOfPageBody, pdfNativeLineRightFlushOnPage, pdfNativeTextBoxHandoffOpening,
+  pdfTextSourceBlockCentred } from "../../../../lib/pdf/native-line-centring";
 import { pdfNativeFaceNameStyle, pdfNativeFontNameKey, pdfNativeFontNameReadsStyle, pdfNativeTextFontIdentity } from "../../../../lib/pdf/native-font-identity";
 import { sampleTextBoxBackgroundColor } from "../../../../lib/pdf/text-box-background";
 import { officeFaceName } from "@mrnote/core/web/lib/office-fonts/face-names.ts";
@@ -120,6 +121,7 @@ import { pdfNativeTextInputLayoutJoinedRows,
   pdfNativeTextInputDisplayOffset, readPdfNativeTextInputLayout,
   type PdfNativeTextInputLayout,
 } from "../../../../lib/pdf/native-text-input-layout";
+import { notePdfNativeTextRowStarts, pdfNativeTextInputRowStarts } from "../../../../lib/pdf/native-text-row-starts";
 import { RotateCw } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { officeDrawingSelectionStyles } from "@mrnote/core/web/components/office-ribbon/OfficeDrawingSelection.tsx";
 import { ribbonFontFamilyLabel } from "@mrnote/core/web/components/office-ribbon/RibbonFontFamilyPicker.tsx";
@@ -459,6 +461,14 @@ export interface PdfNativeListTextEditDialogProps {
    * proved, or opened while a revision was read in, publishes no draft
    * state, and the page read 「已保存」 over its typing). */
   readonly onUnsavedTypingChange?: (unsaved: boolean) => void;
+  /** The words this line reads now, and those it was opened with, while the
+   * two differ and are not written (null once they are the page's again):
+   * the window keeps them where a reload, a discarded tab or a browser that
+   * goes down leaves them (lib/pdf/native-text-typing-drafts). Both as the
+   * box reads them, which is how they are put back
+   * (lib/pdf/native-text-queued-draft). Closing says nothing here: whether
+   * the words were placed or are still owed is the window's to know. */
+  readonly onTypingDraftChange?: (draft: Readonly<{ originalText: string; value: string }> | null) => void;
   /** Delete the selected run's whole source text object, natively. */
   readonly onDeleteTextObject?: () => void | Promise<unknown>;
   /** The fonts from readers' computers the page keeps (page-fonts.ts):
@@ -596,6 +606,9 @@ export type PdfNativeTextLayoutEvidence = Readonly<{
   selectObject?: boolean;
    
   promoted: boolean;
+  /** The width (a fraction of the page) from the box's left edge to the
+   * next text the page draws on its row, where there is any. */
+  rowRoom?: number;
   
 
   fallbackText?: boolean;
@@ -1866,6 +1879,7 @@ function PdfNativeListTextInlineEditor({
   onControllerChange,
   onDraftStateChange,
   onUnsavedTypingChange,
+  onTypingDraftChange,
   onApply,
   onDeleteTextObject,
   pageFonts = NO_PAGE_FONTS,
@@ -1929,12 +1943,30 @@ function PdfNativeListTextInlineEditor({
   // (read again for each line this editor opens: it stays mounted from one
   // line to the next, and read once it answered for the first only).
   const openedBoxId = initialLayout?.box.id ?? null;
-  const rightFlushLine = useMemo(() => pdfNativeLineRightFlushOnPage(returnFocusRef.current),
+  const rightFlushLine = useMemo(() => {
+    const host = returnFocusRef.current;
+    // (The box's font size is a fraction of the page's height, as its frame is.)
+    const fontSize = Number(initialLayout?.box.fontSize);
+    const pageHeight = host?.closest(".pdf-viewer__page")?.getBoundingClientRect().height ?? 0;
+    return pdfNativeLineRightFlushOnPage(host, pageHeight > 0 && Number.isFinite(fontSize) && fontSize > 0
+      ? fontSize * pageHeight : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the line opened, by its box and words
-    [openedBoxId, originalText, returnFocusRef]);
+  }, [openedBoxId, originalText, returnFocusRef]);
   useEffect(() => {
     if (openedBoxId) markPdfTextLatency("editor.right-flush", { flush: rightFlushLine });
   }, [openedBoxId, rightFlushLine]);
+  // A line of the page's body (several rows, or starting where the page's
+  // other lines start): in the middle of its page by the page's own margins,
+  // not set centred, and never set again so (centredLine).
+  const bodyLine = useMemo(() => {
+    const host = returnFocusRef.current;
+    // (The box's font size is a fraction of the page's height, as its frame is.)
+    const fontSize = Number(initialLayout?.box.fontSize);
+    const pageHeight = host?.closest(".pdf-viewer__page")?.getBoundingClientRect().height ?? 0;
+    return pdfNativeLineOfPageBody(host, pageHeight > 0 && Number.isFinite(fontSize) && fontSize > 0
+      ? fontSize * pageHeight : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the line opened, by its box and words
+  }, [openedBoxId, originalText, returnFocusRef]);
   const [objectSelected, setObjectSelected] = useState(() =>
     Boolean(initialLayout?.selectObject) && !userTextInputStartedRef.current && openingDoublePress === null);
   const objectSelectedRef = useRef(objectSelected);
@@ -2004,7 +2036,19 @@ function PdfNativeListTextInlineEditor({
     unprovenTextBoxFormat));
   const managedPointHeight = initialLayout?.pageHeightPoints ?? initialLayout?.pageHeightPx ?? 1;
   const managedSizeBaseline = Math.round(Number(initialLayout?.box.fontSize) * managedPointHeight * 1e6) / 1e6;
-  const managedAlignmentBaseline = initialLayout?.box.align ?? "left";
+  // A block of several rows the page sets centred (a diagram's label): the
+  // draft the browser lays out is centred too, so its rows stay where the
+  // page draws them until the page's own preview of the edit arrives. Flush
+  // left, every row jumped to the block's left edge at the first key. The
+  // window opens every source box as set left (it does not read alignment);
+  
+  
+  
+  const centredBlockDraft = useMemo(() => !openedOnNewBox && Boolean(initialLayout) && !initialLayout?.promoted &&
+    !initialLayout?.fallbackText && Math.abs(normalizeBoxAngle(initialLayout?.box.angle ?? 0)) <= 0.001 &&
+    pdfTextSourceBlockCentred(sourceGeometry), [initialLayout, openedOnNewBox, sourceGeometry]);
+  const managedAlignmentBaseline = centredBlockDraft && (initialLayout?.box.align ?? "left") === "left"
+    ? "center" : initialLayout?.box.align ?? "left";
   const [layoutTypographyOverride, setLayoutTypographyOverride] = useState<{
     fontSize?: number;
     alignment?: "left" | "center" | "right";
@@ -2395,7 +2439,7 @@ function PdfNativeListTextInlineEditor({
   // from where it started, a title typed on ran to the page's edge (IPCC
   
   // the page show it centred as it is typed.
-  const centredLine = Boolean(!openedOnNewBox && initialLayout &&
+  const centredLine = Boolean(!openedOnNewBox && initialLayout && !bodyLine &&
     !initialLayout.promoted &&
     !initialLayout.fallbackText && !initialLayout.sourceInputLayout?.breaks.length &&
     pdfNativeLineCentredOnPage(initialLayout.box) && Math.abs(normalizeBoxAngle(initialLayout.box.angle ?? 0)) <= 0.001 &&
@@ -2877,7 +2921,28 @@ function PdfNativeListTextInlineEditor({
   // own ink lifted off the page there (native-text-move-lift): the moved
   // frame carries it until the moved block is drawn.
   const [moveStartFrame, setMoveStartFrame] = useState<BoxRect | null>(null);
-  const [moveLift, setMoveLift] = useState<(PdfNativeTextMoveLift & Readonly<{ frame: BoxRect }>) | null>(null);
+  // The lift as shown. It is shown once its pictures are decoded (the lift
+  // cut last is `latestMoveLift`, read in by pictures kept off the page):
+  // put up as cut, the block's draft went out the moment the lift was
+  // known and its picture came a frame later -- a long frame on a loaded
+  
+  
+  const [moveLift, setMoveLift] = useState<(PdfNativeTextMoveLift & Readonly<{ frame: BoxRect; id: number }>) | null>(null);
+  const [latestMoveLift, setLatestMoveLift] =
+    useState<(PdfNativeTextMoveLift & Readonly<{ frame: BoxRect; id: number }>) | null>(null);
+  const moveLiftSeqRef = useRef(0);
+  const moveLiftDecodedRef = useRef<{ id: number; ink: boolean; cover: boolean } | null>(null);
+  const moveLiftPictureDecoded = (lift: PdfNativeTextMoveLift & Readonly<{ frame: BoxRect; id: number }>,
+    part: "ink" | "cover", image: HTMLImageElement) => {
+    const done = () => {
+      const state = moveLiftDecodedRef.current?.id === lift.id ? moveLiftDecodedRef.current
+        : (moveLiftDecodedRef.current = { id: lift.id, ink: false, cover: !lift.cover });
+      state[part] = true;
+      if (state.ink && state.cover) setMoveLift((shown) => (shown && shown.id > lift.id ? shown : lift));
+    };
+    if (typeof image.decode === "function") void image.decode().then(done, done);
+    else done();
+  };
   /** The typing cover: the page's background over the line's own glyphs,
    * cut from the page as a lift's cover is, shown on the page itself while
    * the line's clean surface is still on the way (typingCoverShown). */
@@ -3222,7 +3287,16 @@ function PdfNativeListTextInlineEditor({
     // block: wrapped at the room, a table cell's 「12」 typed on became a
     // column of single letters whose first row overflowed its frame, and
     
-    const measuredRoom = factor === null ? null : Math.min(1 - layoutRect.x, layoutRect.width * factor);
+    // A line saved as a text box has no measure of its own (its run is
+    // hidden): its room on the row is up to the next text the page draws
+    // there, as the line's was. Given the page's whole width, the box of
+    // an equation's left side typed on ran into the fraction after it
+    
+    // and one word wider than it still widens the box, as below.
+    const rowRoom = initialLayout.promoted && typeof initialLayout.rowRoom === "number" &&
+      Number.isFinite(initialLayout.rowRoom) && initialLayout.rowRoom > 0 ? initialLayout.rowRoom : null;
+    const measuredRoom = factor !== null ? Math.min(1 - layoutRect.x, layoutRect.width * factor)
+      : rowRoom !== null ? Math.min(1 - layoutRect.x, rowRoom) : null;
     const room = measuredRoom === null ||
       (draftWidestWord > 0 && draftWidestWord / ownPageWidthPixels > measuredRoom)
       ? Math.max(pageRoom, measuredRoom ?? 0)
@@ -3598,6 +3672,15 @@ function PdfNativeListTextInlineEditor({
   const activeInputLayout = !layoutFallbackActive && sourceInputLayout?.text === replacementText ? sourceInputLayout : null;
   sourceInputLayoutRef.current = activeInputLayout;
   const displayedInputValue = activeInputLayout?.value ?? replacementText;
+  // The rows the input shows this edit in, for its compile: words typed at
+  // the end of a row are told from words typed at the start of the next
+  // (lib/pdf/native-text-row-starts). Kept before the preview is asked for
+  // (a layout effect), forgotten when the input no longer shows the box's
+  // own rows.
+  useLayoutEffect(() => {
+    notePdfNativeTextRowStarts(originalText, replacementText,
+      activeInputLayout?.breaks.length ? pdfNativeTextInputRowStarts(activeInputLayout) : null);
+  }, [activeInputLayout, originalText, replacementText]);
   // The frame turned (the rotate handle). The exact candidate is drawn at
   // the source angle, so the draft itself, which turns with the frame, is
   // what is seen until the box is written, as WPS turns the text with the
@@ -4785,6 +4868,8 @@ function PdfNativeListTextInlineEditor({
   useEffect(() => {
     const returnTarget = returnFocusRef.current;
     const marked = markedHostsRef.current;
+    // (Read while the line's box is on the page.)
+    const editorWindow = returnTarget?.closest<HTMLElement>(".pdf-page-window") ?? null;
     return () => {
       // The boxes this line moved to as its page was read again were marked
       // selected too: left, none of them stays selected (a line left by
@@ -4793,7 +4878,25 @@ function PdfNativeListTextInlineEditor({
       for (const host of marked) {
         if (host !== returnTarget && host.isConnected) host.removeAttribute(NATIVE_TEXT_SELECTED_ATTR);
       }
-      if (!returnTarget?.isConnected) return;
+      if (!returnTarget?.isConnected) {
+        // The line's box is gone with the editor (the line deleted, or made
+        // a formula box): the keyboard goes to the window, whose shortcuts
+        // must hear it, as a shape's frame that goes hands it there. It
+        // fell to the page's body, and Cmd+Z right after 转换为公式 did
+        
+        // holds it: a line opened next, or a control pressed, keeps it.
+        if (restoreFocusOnCloseRef.current && editorWindow) {
+          const giveToWindow = () => {
+            const active = document.activeElement;
+            if (editorWindow.isConnected && (!active || active === document.body)) {
+              editorWindow.focus({ preventScroll: true });
+            }
+          };
+          giveToWindow();
+          requestAnimationFrame(giveToWindow);
+        }
+        return;
+      }
       returnTarget.removeAttribute(NATIVE_TEXT_SELECTED_ATTR);
       if (restoreFocusOnCloseRef.current) {
         returnTarget.focus({ preventScroll: true });
@@ -5003,10 +5106,18 @@ function PdfNativeListTextInlineEditor({
       // typed 你好 was saved upright, walk u-cjk-s1).
       // A face named bold is bold too (r02-23: a MeiryoUI-Bold line the
       // reader styled regular was saved light).
-      bold: managedLayoutTypography ? managedBold : useStoredTypography
+      // Bold pressed on the whole line this session (its rows' format,
+      // written in the page's text when it can be) is the line's too when
+      // it has to become a box: a paragraph a form draws, set bold and then
+      
+      // then written as page text with its bold stroked (the window's
+      // handleCreatedTextBoxCommit). The other formats pressed so are not
+      // carried: only the text-box writer keeps them, and a box it draws
+      // into the page cannot be taken back with the line's delete.
+      bold: managedLayoutTypography ? managedBold : rowFormat?.bold ?? (useStoredTypography
         ? Boolean(initialLayout.box.bold || selected?.bold ||
           pdfNativeFaceNameStyle(sourceFontName ?? "").bold)
-        : (selected?.bold ?? Boolean(initialLayout.box.bold)),
+        : (selected?.bold ?? Boolean(initialLayout.box.bold))),
       italic: managedLayoutTypography ? managedItalic : useStoredTypography
         ? Boolean(initialLayout.box.italic || selected?.italic || pdfNativeFaceNameStyle(sourceFontName ?? "").italic)
         : (selected?.italic ?? Boolean(initialLayout.box.italic)),
@@ -5030,6 +5141,7 @@ function PdfNativeListTextInlineEditor({
         : {}),
     });
   }, [
+    rowFormat?.bold,
     sourceLineLayoutPreserved, paragraphFrameRequest, replacementText,
     wrappedCharacterEm, wrappedWordEm, wrappedHorizontalScale, layoutVerticalAlign,
     draftFontSizePixels,
@@ -5646,6 +5758,7 @@ function PdfNativeListTextInlineEditor({
       (centredDraft ? "center" : rightDraft ? "right" : null) ??
       properties?.alignment ??
       managedAlignment ??
+      (centredBlockDraft ? "center" : null) ??
       initialLayout?.box.align ??
       metrics?.textAlign,
     direction: metrics?.direction,
@@ -6112,7 +6225,7 @@ function PdfNativeListTextInlineEditor({
   // once that is drawn.
   useEffect(() => {
     const surfaceReady = editingSurfaceStatus === "ready";
-    if (!moveStartFrame || (moveLift && (moveLift.exact || !surfaceReady)) ||
+    if (!moveStartFrame || (latestMoveLift && (latestMoveLift.exact || !surfaceReady)) ||
       Math.abs(normalizeBoxAngle(layoutAngle)) > 0.01) return;
     const pageHost = inlineEditorHost?.closest<HTMLElement>(".pdf-viewer__page[data-page-number]");
     const pageCanvas = pageHost?.querySelector<HTMLCanvasElement>("canvas[data-pdf-page]");
@@ -6161,13 +6274,13 @@ function PdfNativeListTextInlineEditor({
         .then((canvas) => {
           if (cancelled) return;
           const lifted = liftNativeTextBlockLayer(canvas, bounds, fillOptions) ?? liftAgainstSurface();
-          if (lifted) setMoveLift(Object.freeze({ ...lifted, frame: moveStartFrame }));
+          if (lifted) setLatestMoveLift(Object.freeze({ ...lifted, frame: moveStartFrame, id: (moveLiftSeqRef.current += 1) }));
         });
       return () => { cancelled = true; };
     }
     const lifted = liftAgainstSurface();
-    if (lifted) setMoveLift(Object.freeze({ ...lifted, frame: moveStartFrame }));
-  }, [moveStartFrame, moveLift, editingSurfaceStatus, layoutAngle, inlineEditorHost, pageWidthPixels,
+    if (lifted) setLatestMoveLift(Object.freeze({ ...lifted, frame: moveStartFrame, id: (moveLiftSeqRef.current += 1) }));
+  }, [moveStartFrame, latestMoveLift, editingSurfaceStatus, layoutAngle, inlineEditorHost, pageWidthPixels,
     pageHeightPixels, draftFontSizePixels, sourceGlyphRects, initialLayout?.sourceInkCover, initialLayout?.origin,
     initialLayout?.box.fontSize, initialLayout?.box.color]);
 
@@ -6366,12 +6479,28 @@ function PdfNativeListTextInlineEditor({
     // Every part pressed this session, in its look (partFormats): one
     
     const display = (offset: number) => activeInputLayout ? pdfNativeTextInputDisplayOffset(activeInputLayout, offset) : offset;
+    // A part freed from its glyph boxes is set at its face's own advances
+    // (anchored-text-draft, no spacing of the draft's): the letter spacing
+    // the run itself is written with (`Tc`, the part's own where it states
+    // one, under the run's horizontal scale) is the part's too.
+    const unitPx = properties && properties.fontSize > 0 && draftFontSizePixels > 0 ? draftFontSizePixels / properties.fontSize : 0;
+    const freedSpacing = (start: number, end: number): Record<string, string> => {
+      if (!properties || !(unitPx > 0)) return {};
+      const own = properties.segments?.find((segment) => segment.start <= start && end <= segment.end)?.characterSpacing;
+      const spacing = own ?? properties.characterSpacing ?? 0;
+      if (Math.abs(spacing) < 1e-6) return {};
+      const scale = properties.horizontalScale > 0 ? properties.horizontalScale / 100 : 1;
+      return { "letter-spacing": `${Math.round(spacing * unitPx * scale * 1000) / 1000}px` };
+    };
     const rowRanges: PdfTextDraftFormatPreview[] = partFormats.flatMap((part) => {
       const start = display(part.start), end = display(part.end);
       if (!(end > start)) return [];
       const css = partFormatDraftCss(part);
       // (Another face sets the part's own glyphs again: out of their boxes.)
-      return Object.keys(css).length ? [{ start, end, css, band: false, ...(css["font-family"] ? { frees: true } : {}) }] : [];
+      const frees = Boolean(css["font-family"]);
+      return Object.keys(css).length
+        ? [{ start, end, css: frees ? { ...freedSpacing(part.start, part.end), ...css } : css, band: false, ...(frees ? { frees: true } : {}) }]
+        : [];
     });
     if (activeInputLayout || !properties?.segments?.length) return rowRanges;
     const pxPerUnit = properties.fontSize > 0 && draftFontSizePixels > 0 ? draftFontSizePixels / properties.fontSize : 0;
@@ -6407,10 +6536,11 @@ function PdfNativeListTextInlineEditor({
         "font-weight": request.bold ? "700" : "400",
         "font-style": request.italic ? "italic" : "normal",
         ...(segment.syntheticBold === true ? {} : { "-webkit-text-stroke-width": "0" }),
+        ...freedSpacing(segment.start, segment.end),
       } }];
     })];
-  }, [activeInputLayout, properties?.segments, properties?.fontSize, properties?.textRise, draftFontSizePixels,
-    partFormats, partFormatDraftCss]);
+  }, [activeInputLayout, properties?.segments, properties?.fontSize, properties?.textRise,
+    properties?.characterSpacing, properties?.horizontalScale, draftFontSizePixels, partFormats, partFormatDraftCss]);
   // A line the page draws in several faces (a bold title with one regular
   // word) is drafted in one: each run's stretch wears its own face under the
   // parts pressed. A part made bold drew the bold words around it regular
@@ -6632,7 +6762,9 @@ function PdfNativeListTextInlineEditor({
       draft.dataset.pdfNativeTextDraftAnchored = "true";
     } else if (anchoredRows && rowsHost && fillPdfAnchoredTextRows(draft, anchoredRows,
       { host: rowsHost, pageWidth: pageWidthPixels, pageHeight: pageHeightPixels, breaks: Boolean(activeInputLayout?.breaks.length),
-        obstacles: rowsObstacles },
+        obstacles: rowsObstacles,
+        centred: centredBlockDraft && draftRowsAnchorGeometry
+          ? { left: draftRowsAnchorGeometry.bounds.left, right: draftRowsAnchorGeometry.bounds.right } : null },
       preview, draftLookRanges) && draft.textContent === displayedInputValue) {
       // Each row where the page draws it (draftRowsAnchorGeometry).
       draft.dataset.pdfNativeTextDraftAnchored = "rows";
@@ -7605,14 +7737,28 @@ function PdfNativeListTextInlineEditor({
     // (Read before it is copied: a block left moved may stand on it already,
     // its lifted picture drawn where it was dropped.)
     const surfaceCarriesLift = editingSurfaceCanvasRef.current?.hasAttribute("data-pdf-native-text-bridge-box") === true;
+    // The surface is drawn and the line's words are its draft's, the layers'
+    // effect that shows the surface still a render behind (typed into and
+    // left within a frame of the surface arriving, a long frame on a loaded
+    // machine): the surface is the line's ghost all the same. Skipped as
+    // "hidden", the ghost kept the line's old drawing and the words typed
+    
+    const liveDraft = visualDraftElementRef.current;
+    const candidateCanvas = publishedPreviewCanvasRef.current;
+    const candidateShown = Boolean(candidateCanvas?.isConnected && candidateCanvas.width > 0 &&
+      getComputedStyle(candidateCanvas).visibility !== "hidden");
+    const draftOverHiddenSurface = editingSurfaceStatusRef.current === "ready" && !candidateShown &&
+      Boolean(liveDraft?.isConnected && frame.contains(liveDraft) && getComputedStyle(liveDraft).visibility !== "hidden");
     for (const source of [editingSurfaceCanvasRef.current, publishedPreviewCanvasRef.current]) {
-      if (!source?.isConnected || source.parentElement !== host || source.width === 0 ||
-        getComputedStyle(source).visibility === "hidden") continue;
+      if (!source?.isConnected || source.parentElement !== host || source.width === 0) continue;
+      const hidden = getComputedStyle(source).visibility === "hidden";
+      if (hidden && !(source === editingSurfaceCanvasRef.current && draftOverHiddenSurface)) continue;
       if (source === publishedPreviewCanvasRef.current) candidateCopied = true;
       else if (editingSurfaceStatusRef.current === "ready") surfaceCopied = true;
       const copy = document.createElement("canvas");
       copy.width = source.width; copy.height = source.height;
       copy.style.cssText = source.style.cssText;
+      if (hidden) copy.style.visibility = "visible";
       const box = source.getBoundingClientRect();
       const scaleX = box.width > 0 ? source.width / box.width : 1, scaleY = box.height > 0 ? source.height / box.height : 1;
       const context = copy.getContext("2d");
@@ -8479,6 +8625,10 @@ function PdfNativeListTextInlineEditor({
   }, [onUnsavedTypingChange, typingUnsaved]);
   // Closed (written, handed to the window, or dropped): nothing of it waits here.
   useEffect(() => () => onUnsavedTypingChange?.(false), [onUnsavedTypingChange]);
+  const typingDraftText = typingUnsaved && replacementText !== originalText ? replacementText : null;
+  useEffect(() => {
+    onTypingDraftChange?.(typingDraftText === null ? null : { originalText, value: typingDraftText });
+  }, [onTypingDraftChange, originalText, typingDraftText]);
 
   useEffect(() => {
     if (!layoutDrag) return;
@@ -10041,9 +10191,18 @@ function PdfNativeListTextInlineEditor({
     previewError === null && replacementText.trim().length > 0
       ? `${finishDraftKey}\u0000${replacementText}`
       : null;
+  /** 转换为公式 was pressed and the window is making the line a formula
+   * box: its words are the box's now. */
+  const convertingToFormulaRef = useRef(false);
   const commitTypingDraft = () => {
     const own = returnFocusRef.current;
     if (!own?.isConnected || objectSelectedRef.current || composing || draftHandedOver() || readerLeftRef.current) return;
+    // The pause after typing does not write the words into the line while
+    // it is being made a box: pressed a few seconds after the last key, the
+    // two ran together -- the line was written and closed first and the
+    // conversion found no line (the page kept the LaTeX as its text), or the
+    
+    if (convertingToFormulaRef.current) return;
     const caret = own.ownerDocument.querySelector<SVGElement>('svg[data-pdf-native-source-caret="true"]')
       ?.getBoundingClientRect();
     const box = own.getBoundingClientRect();
@@ -11900,7 +12059,13 @@ function PdfNativeListTextInlineEditor({
       case "kind":
         // 转换为公式: the window makes the formula box and deletes the line.
         if (action.value !== "formula" || !onConvertToFormula || !formulaConversionLatex) return;
-        void onConvertToFormula(replacementText, formulaConversionLatex);
+        if (convertingToFormulaRef.current) return;
+        convertingToFormulaRef.current = true;
+        // (Converted, the window has closed this line's editor by then;
+        // refused, the line is the reader's again and its words are
+        // written as ever.)
+        const converted = () => { convertingToFormulaRef.current = false; };
+        void onConvertToFormula(replacementText, formulaConversionLatex).then(converted, converted);
         return;
       case "insertText":
         // The line is left as 退出编辑 leaves it; the next click places a box.
@@ -12979,6 +13144,39 @@ function PdfNativeListTextInlineEditor({
       top: tolerance(reach.top, rect.height), bottom: tolerance(reach.bottom, rect.height) };
     return shown.left || shown.right || shown.top || shown.bottom ? shown : null;
   })();
+  // A shape of the page moved a moment ago stays lifted over its page (its
+  // stage above everything, until the page paints it where it shows), and
+  // the stage holds the page's words as they stood when it was lifted. Over
+  // the box being edited it showed those words in place of the draft: half a
+  
+  // red tab dragged over the paragraph). The stage is cut away over the box
+  // and what its draft inks (styles/pdf-viewer.css reads these); the editor's
+  // own drawing of the page shows there.
+  const editingBoxLeft = effectiveLayoutRect ? Math.min(effectiveLayoutRect.x, chromeInk?.left ?? 1) : null;
+  const editingBoxTop = effectiveLayoutRect ? Math.min(effectiveLayoutRect.y, chromeInk?.top ?? 1) : null;
+  const editingBoxRight = effectiveLayoutRect
+    ? Math.max(effectiveLayoutRect.x + effectiveLayoutRect.width, chromeInk?.right ?? 0) : null;
+  const editingBoxBottom = effectiveLayoutRect
+    ? Math.max(effectiveLayoutRect.y + effectiveLayoutRect.height, chromeInk?.bottom ?? 0) : null;
+  const editingBoxLevel = Math.abs(normalizeBoxAngle(layoutAngle)) <= 0.01;
+  useLayoutEffect(() => {
+    const host = inlinePageHost;
+    if (!host || !ownsInlineHost || !editingBoxLevel || editingBoxLeft === null || editingBoxTop === null ||
+      editingBoxRight === null || editingBoxBottom === null) return;
+    // A glyph's side bearing past the frame is the draft's too.
+    const pad = draftFontSizePixels > 0 && pageWidthPixels > 0 ? (draftFontSizePixels * 0.3) / pageWidthPixels : 0;
+    const share = (value: number) => `${Math.max(0, Math.min(1, value)) * 100}%`;
+    host.style.setProperty("--pdf-text-editing-left", share(editingBoxLeft - pad));
+    host.style.setProperty("--pdf-text-editing-top", share(editingBoxTop));
+    host.style.setProperty("--pdf-text-editing-right", share(editingBoxRight + pad));
+    host.style.setProperty("--pdf-text-editing-bottom", share(editingBoxBottom));
+    host.setAttribute("data-pdf-native-text-editing-box", "true");
+    return () => {
+      host.removeAttribute("data-pdf-native-text-editing-box");
+      for (const side of ["left", "top", "right", "bottom"]) host.style.removeProperty(`--pdf-text-editing-${side}`);
+    };
+  }, [inlinePageHost, ownsInlineHost, editingBoxLevel, editingBoxLeft, editingBoxTop, editingBoxRight, editingBoxBottom,
+    draftFontSizePixels, pageWidthPixels]);
   const chromeX = (cx: number) => chromeReach ? cx * (1 + chromeReach.left + chromeReach.right) - chromeReach.left : cx;
   const chromeY = (cy: number) => chromeReach ? cy * (1 + chromeReach.top + chromeReach.bottom) - chromeReach.top : cy;
   const layoutFrame =
@@ -13340,6 +13538,18 @@ function PdfNativeListTextInlineEditor({
             inlinePageHost,
           )
         : null}
+      {latestMoveLift ? (
+        // The lift cut last, read in off the page: shown (above) once decoded.
+        <span aria-hidden="true" data-pdf-native-text-move-lift-preload="true"
+          style={{ position: "fixed", left: 0, top: 0, width: 0, height: 0, overflow: "hidden", visibility: "hidden", pointerEvents: "none" }}>
+          <img key={`ink-${latestMoveLift.id}`} alt="" src={latestMoveLift.url}
+            onLoad={(event) => moveLiftPictureDecoded(latestMoveLift, "ink", event.currentTarget)} />
+          {latestMoveLift.cover ? (
+            <img key={`cover-${latestMoveLift.id}`} alt="" src={latestMoveLift.cover.url}
+              onLoad={(event) => moveLiftPictureDecoded(latestMoveLift, "cover", event.currentTarget)} />
+          ) : null}
+        </span>
+      ) : null}
       {moveLiftCoverShown && moveLift?.cover && inlinePageHost && ownsInlineHost
         ? createPortal(
             <img

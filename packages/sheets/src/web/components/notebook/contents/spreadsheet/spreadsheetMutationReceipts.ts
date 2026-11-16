@@ -157,6 +157,10 @@ export interface PivotCreationDraft {
   readonly authority: InsertMutationReceipt;
   readonly sheetId: string;
   readonly sourceDraft: string;
+  /** Why the source box's entry cannot be summarised (too large, a tiled
+   * sheet not read whole, no range): the dialog shows it, and no preview or
+   * OK over the rows of an earlier entry. Null or absent when it can. */
+  readonly sourceIssue?: string | null;
   /** "Choose where you want the PivotTable to be placed": Excel's default is
    * New Worksheet. */
   readonly destinationKind: "new" | "existing";

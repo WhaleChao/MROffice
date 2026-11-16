@@ -221,29 +221,38 @@ export function cellsAfterUnmerge(cells: CellMap, before: readonly MergeSpan[], 
 
 
 
+
+
+
+
 function anchorsShowTheirCoveredRightEdge(
   cells: CellMap,
   before: CellMap,
   spans: readonly MergeSpan[],
 ): CellMap {
   let next = cells;
+  const sides = [
+    ["right", "borderRight", (span: MergeSpan) => span.colSpan > 1, (span: MergeSpan) => `${span.row}:${span.col + span.colSpan - 1}`],
+    ["bottom", "borderBottom", (span: MergeSpan) => span.rowSpan > 1, (span: MergeSpan) => `${span.row + span.rowSpan - 1}:${span.col}`],
+  ] as const;
   for (const span of spans) {
-    if (span.colSpan < 2) continue;
-    const own = normalizeBorderEdges(before[`${span.row}:${span.col + span.colSpan - 1}`]?.style?.borderEdges);
-    const right = own?.right;
-    if (!right) continue;
-    const key = `${span.row}:${span.col}`;
-    const anchor = next[key];
-    const edges = normalizeBorderEdges(anchor?.style?.borderEdges) ?? {};
-    if (JSON.stringify(edges.right) === JSON.stringify(right)) continue;
-    const style: Record<string, unknown> = {
-      ...(anchor?.style ?? {}),
-      borderEdges: normalizeBorderEdges({ ...edges, right }),
-      borderRight: true,
-    };
-    delete style.border;
-    if (next === cells) next = { ...cells };
-    next[key] = { ...(anchor ?? { value: "", kind: "text" }), style: style as NonNullable<SpreadsheetCell["style"]> } as CellMap[string];
+    for (const [side, flag, spans2, lastKey] of sides) {
+      if (!spans2(span)) continue;
+      const line = normalizeBorderEdges(before[lastKey(span)]?.style?.borderEdges)?.[side];
+      if (!line) continue;
+      const key = `${span.row}:${span.col}`;
+      const anchor = next[key];
+      const edges = normalizeBorderEdges(anchor?.style?.borderEdges) ?? {};
+      if (JSON.stringify(edges[side]) === JSON.stringify(line)) continue;
+      const style: Record<string, unknown> = {
+        ...(anchor?.style ?? {}),
+        borderEdges: normalizeBorderEdges({ ...edges, [side]: line }),
+        [flag]: true,
+      };
+      delete style.border;
+      if (next === cells) next = { ...cells };
+      next[key] = { ...(anchor ?? { value: "", kind: "text" }), style: style as NonNullable<SpreadsheetCell["style"]> } as CellMap[string];
+    }
   }
   return next;
 }

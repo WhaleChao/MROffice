@@ -15,13 +15,18 @@
  */
 
 import { PresentationEngineTableCellText, usePresentationEngineTable } from "./presentationEngineTable";
+import { usePresentationMergedRowHeights } from "./usePresentationMergedRowHeights";
 import { PRESENTATION_TEXT_ENGINE_ATTRIBUTE } from "./PresentationEngineTextBody";
 import { useAutofitMeasureVersion } from "../../../../lib/presentation/autofit-measure-store";
-import { presentationTableCellParagraphStyles, presentationTableCellRunParagraphs } from "../../../../lib/presentation/table-cell-paragraphs";
-import { Fragment, memo, useContext, useMemo, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import {
+  presentationTableCellParagraphBreakStyles,
+  presentationTableCellParagraphStyles,
+  presentationTableCellRunParagraphs,
+} from "../../../../lib/presentation/table-cell-paragraphs";
+import { Fragment, memo, useContext, useId, useMemo, useRef, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
-import { cellCharacterRuns, cellRunSymbolFontFamily, cellRunSymbolPieces, cellTextRunCss } from "@mrnote/core/web/lib/presentation-cell-rich-text.ts";
+import { cellCharacterRuns, cellRunSymbolFontFamily, cellRunSymbolPieces, presentationCellTextRunCss } from "@mrnote/core/web/lib/presentation-cell-rich-text.ts";
 import { PresentationMathRun } from "@mrnote/core/web/components/notebook/contents/presentation/PresentationMathRun.tsx";
 import { cellDisplayText } from "@mrnote/core/web/lib/presentation-cell-soft-break.ts";
 import { presentationThemeGridColors } from "@mrnote/core/web/lib/presentation-theme-color-binding.ts";
@@ -32,9 +37,11 @@ import { normalizeShapeKind, presentationShapeBlendCss } from "@mrnote/core/web/
 import { readVerticalAnchor, verticalAnchorWrapperCss } from "@mrnote/core/web/lib/presentation-vertical-anchor.ts";
 import { anchorCssForColumns } from "@mrnote/core/web/lib/presentation-text-columns.ts";
 import { balanceOverflowingColumns } from "../../../../lib/presentation/text-columns-overflow";
-import { textBodyRotationCss } from "../../../../lib/presentation-shape-text-rect";
+import { textBodyRotationCss } from "@mrnote/core/web/lib/presentation-shape-text-rect.ts";
 import { resolveTextBoxFill, textBoxFillCss, textBoxNativeGeometry } from "@mrnote/core/web/lib/presentation-text-fill.ts";
 import { PresentationTextBoxGeometry } from "./PresentationTextBoxGeometry";
+import { PresentationTextBoxEffectLayers, presentationTextBoxHostCss } from "./PresentationTextBoxEffects";
+import { presentationTextBoxEffectsLook } from "../../../../lib/presentation-text-box-effects";
 import { normalizeCellStyle } from "@mrnote/core/web/lib/presentation-table-style.ts";
 import { normalizeEmbedKind } from "@mrnote/core/web/lib/presentation-embed.ts";
 import { withFooterFieldStacking } from "@mrnote/core/web/lib/presentation-paint-order.ts";
@@ -58,7 +65,7 @@ import {
   presentationAnimationEffect,
 } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
 import type { DeckTheme } from "@mrnote/core/web/lib/presentation-theme.ts";
-import type { SlideMaster } from "@mrnote/core/web/lib/presentation-master.ts";
+import { resolveSlideMaster, type SlideMaster } from "@mrnote/core/web/lib/presentation-master.ts";
 import { readZoomTileMarker } from "../../../../lib/presentation-zoom";
 import { presentationBlockFrameOverflow } from "../../../../lib/presentation/block-frame-overflow";
 import { presentationBlockIsPlaceholder, presentationSlideInk } from "../../../../lib/presentation/slide-ink";
@@ -112,6 +119,7 @@ import {
   PresentationEmbedContent,
   CroppedImageContent,
 } from "./PresentationMediaContent";
+import { PresentationModel3dFrame } from "./PresentationModel3dFrame";
 import { presentationChartHostBackground, PresentationChartVisual } from "./PresentationChartVisual";
 import {
   presentationTextVisualLayout,
@@ -140,8 +148,9 @@ import { smartArtCameraWithOwnTransform } from "@mrnote/core/web/lib/office-smar
  */
 export function ZoomTileLabel({ block }: { block: PresentationShapeBlock }) {
   const marker = readZoomTileMarker(block);
-  if (!marker) return null;
   const label = typeof block.text === "string" ? block.text : "";
+  // A Slide Zoom carries no words: it shows its target slide's picture.
+  if (!marker || !label) return null;
   return (
     <span
       className="presentation-zoom-tile__label"
@@ -322,6 +331,31 @@ function PresentationBlockViewDrawing({
     [block],
   );
   const engineTable = usePresentationEngineTable(engineTableBlock);
+  // Its rows under merged cells as PowerPoint sizes them: a merge's shortfall
+  // on the last row it covers (`usePresentationMergedRowHeights`), where the
+  // browser lays the rows out.
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const baseTableRowStyles = useMemo(
+    () => (engineTableBlock ? tableRowHeightStyles(engineTableBlock) : []),
+    [engineTableBlock],
+  );
+  const mergedTableRowStyles = usePresentationMergedRowHeights(
+    tableRef,
+    baseTableRowStyles,
+    engineTableBlock,
+    engineTableBlock !== null && engineTable.status !== "ok",
+  );
+  // Format Shape > Effects on a text box (a text box is a shape,
+  // `lib/presentation-text-box-effects`): its 3-D turn is the box's own, so
+  // it joins the object's transform below, which the effects compose with.
+  const textBoxEffectsFilterId = `presentation-textbox-effects-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const textBoxEffects =
+    block.type === "text"
+      ? presentationTextBoxEffectsLook(block, {
+          filterUrl: `url(#${textBoxEffectsFilterId})`,
+          hasFrame: resolveTextBoxFill(block as PresentationTextBlock).hasBox,
+        })
+      : null;
   const geometry = hasLayoutGeometry(block);
   // The entrance-animation class is appended to the shared block className so it
   // plays on every block kind when the slide mounts in present mode. `none`
@@ -434,6 +468,7 @@ function PresentationBlockViewDrawing({
         baseStyle.transform !== "none"
           ? baseStyle.transform
           : "",
+        textBoxEffects?.hostTurn ?? "",
         play?.settledTransform ?? "",
       ]
         .filter(Boolean)
@@ -637,9 +672,10 @@ function PresentationBlockViewDrawing({
         data-testid="presentation-present-image"
         data-presentation-block-id={block.id}
       >
+        <PresentationModel3dFrame block={block} live={!staticMedia}>
         <CroppedImageContent
           block={block}
-          themeColors={presentationThemeGridColors(theme)}
+          themeColors={presentationThemeGridColors(theme, resolveSlideMaster(slide, masters))}
           fillParent={geometry}
           imgStyle={{
             ...(importedPptxPictureFrameStyle(block, geometry) ?? {
@@ -651,6 +687,7 @@ function PresentationBlockViewDrawing({
             }),
           }}
         />
+        </PresentationModel3dFrame>
         {!geometry && block.caption ? <figcaption>{block.caption}</figcaption> : null}
       </figure>
     );
@@ -681,7 +718,7 @@ function PresentationBlockViewDrawing({
     const displayedRowStyles =
       engineTable.status === "ok"
         ? engineTable.rowHeightsPx.map((height) => ({ height }))
-        : tableRowHeightStyles(displayedTable);
+        : mergedTableRowStyles;
     content = (
       <div
         {...decorativeAria}
@@ -694,6 +731,7 @@ function PresentationBlockViewDrawing({
         {engineTable.status === "pending" ? <span hidden {...{ [PRESENTATION_TEXT_ENGINE_ATTRIBUTE]: "pending" }} /> : null}
         <PresentationTableShadowFrame block={displayedTable}>
         <table
+          ref={tableRef}
           style={{ ...tableLayoutStyle(displayedTable), ...tableOuterLineHalvesCss(displayedTable) }}
           {...tableDirectionProps(displayedTable)}
         >
@@ -730,18 +768,20 @@ function PresentationBlockViewDrawing({
                           <PresentationEngineTableCellText cell={engineTable.cells[rowIndex][cellIndex]!} />
                         ) : (() => {
                           const drawRun = (run: ReturnType<typeof cellCharacterRuns>[number], index: number) =>
-                            presentationShowTableRun(run, index, cellTextRunCss(run.style, tableCellVisualTextStyle(displayedTable, { ...cellStyle, superscript: false, subscript: false }, block.headerRow === true && rowIndex === 0, false, cell), { superscript: cellStyle.superscript, subscript: cellStyle.subscript }));
+                            presentationShowTableRun(run, index, presentationCellTextRunCss(run.style, tableCellVisualTextStyle(displayedTable, { ...cellStyle, superscript: false, subscript: false }, block.headerRow === true && rowIndex === 0, false, cell), { superscript: cellStyle.superscript, subscript: cellStyle.subscript }));
                           const runs = cellCharacterRuns(cell.text, cell.runs);
                           // The paragraphs' bullets and indents (`textLayout`, look
                           
                           const paragraphs = presentationTableCellParagraphStyles(cell, cell.text);
                           if (!paragraphs) return runs.map(drawRun);
+                          const breakStyles = presentationTableCellParagraphBreakStyles(runs);
                           return presentationTableCellRunParagraphs(runs).map((paragraph, paragraphIndex) => {
                             const drawn = paragraphs[Math.min(paragraphIndex, paragraphs.length - 1)];
                             return (
                               <div key={`p-${paragraphIndex}`} style={drawn.block}>
                                 {drawn.marker ? <span data-testid="presentation-present-table-marker" style={drawn.marker.css}>{drawn.marker.text}</span> : null}
-                                {paragraph.length ? paragraph.map(drawRun) : "\u200b"}
+                                {/* An empty paragraph stands on its end mark (the size its closing break carries, readings row 807). */}
+                                {paragraph.length ? paragraph.map(drawRun) : drawRun({ text: "\u200b", style: breakStyles[paragraphIndex] }, 0)}
                               </div>
                             );
                           });
@@ -907,7 +947,7 @@ function PresentationBlockViewDrawing({
             interactive={false}
             staticFace
             t={t}
-            themeColors={block.kind === "video" ? presentationThemeGridColors(theme) : null}
+            themeColors={block.kind === "video" ? presentationThemeGridColors(theme, resolveSlideMaster(slide, masters)) : null}
           />
         ) : (
           <PresentationEmbedContent
@@ -915,7 +955,7 @@ function PresentationBlockViewDrawing({
             fillParent={geometry}
             interactive
             t={t}
-            themeColors={block.kind === "video" ? presentationThemeGridColors(theme) : null}
+            themeColors={block.kind === "video" ? presentationThemeGridColors(theme, resolveSlideMaster(slide, masters)) : null}
           />
         )}
       </div>
@@ -1003,8 +1043,9 @@ function PresentationBlockViewDrawing({
           ...style,
           // A placeholder's words that state no colour draw in the
           // placeholder ink, as the canvas draws them.
-          ...(geometry && presentationBlockIsPlaceholder(block) ? { color: presentationSlideInk(theme) } : {}),
-          ...fillCss,
+          ...(geometry && presentationBlockIsPlaceholder(block) ? { color: presentationSlideInk(theme, resolveSlideMaster(slide, masters)) } : {}),
+          ...presentationTextBoxHostCss(textBoxEffects, fillCss),
+          ...(textBoxEffects?.frameLayer && !style?.position ? { position: "relative" } : {}),
           ...anchorCss,
           ...boxColorAnimation,
           ...(isImportedPptxBlock(block)
@@ -1020,7 +1061,9 @@ function PresentationBlockViewDrawing({
         }
         data-presentation-block-id={block.id}
       >
-        {textGeometry ? <PresentationTextBoxGeometry block={block} fill={textBoxFill} /> : null}
+        <PresentationTextBoxEffectLayers look={textBoxEffects} filterId={textBoxEffectsFilterId} frameCss={fillCss}>
+          {textGeometry ? <PresentationTextBoxGeometry block={block} fill={textBoxFill} /> : null}
+        </PresentationTextBoxEffectLayers>
         {renderTextBody(play?.settledTextColor)}
         {activeTextColor ? (
           <div

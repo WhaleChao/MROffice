@@ -5,6 +5,11 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import {
+  pdfAnnotationStackRanks,
+  pdfAnnotationStackZIndex,
+  type PdfAnnotsEntry,
+} from "../../../../../lib/pdf/annotation-stack-order";
 import { pdfFormFieldFillableAs, type PdfFormRole } from "../../../../../lib/pdf/form-roles";
 import { OFFICE_WORDART_GALLERY_RECIPES } from "@mrnote/core/web/lib/office-wordart-gallery.ts";
 import { pdfTextBoxTextPaint } from "@mrnote/core/web/lib/pdf/text-box-typography.ts";
@@ -104,6 +109,7 @@ import type {
   MirrorablePercentBox,
 } from "../../../../../lib/pdf/annotation-transform";
 import {
+  type CSSProperties,
   type ReactElement,
   type ReactNode,
   isValidElement,
@@ -119,6 +125,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import type { PdfAnnotationFrameProps } from "../PdfAnnotationFrame";
+import type { PdfPageTextEditPoint } from "./nativeTextDom";
 import { normalizeRotationDegrees } from "@mrnote/core/web/lib/presentation-drag.ts";
 import {
   normalizeSignatureObjectRotation,
@@ -132,6 +139,7 @@ import {
   type RenderedNativeTextNote,
   type HighlightAnnotation,
   type PdfPlacedAnnotationSelection,
+  type PdfPlacedDeleteHold,
   type SelectedPdfLinkContext,
   type RenderedLinkAnnotation,
 } from "./annotationModels";
@@ -245,6 +253,57 @@ function filterAuthoredTextBoxViewOverlays<T extends { readonly id: string }>(
 }
 
 /** How a reader stroke is painted on its page (the wet layer paints it the same, lib/office-wet-ink-layer). */
+/**
+ * A stamp's face: its picture, or its preset label in a coloured frame (a
+ * plain text node, never innerHTML; the colour from the static palette).
+ * Drawn twice: on the stamp layer as its paint, and in the click target in
+ * the page's annotation stack (`hitCopy`), where it is laid out but not
+ * shown -- the target is as big as the stamp and holds its delete button.
+ */
+function pdfStampContent(
+  stamp: StampAnnotation,
+  text: string,
+  color: string,
+  alt: string,
+  hitCopy: boolean,
+): ReactNode {
+  const hidden: CSSProperties | undefined = hitCopy ? { visibility: "hidden" } : undefined;
+  return stamp.kind === "image" ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      className="pdf-viewer__signature-image"
+      src={stamp.image}
+      alt={hitCopy ? alt : ""}
+      data-testid={hitCopy ? "pdf-stamp-image" : undefined}
+      draggable={false}
+      style={hidden}
+    />
+  ) : (
+    <span
+      data-testid={hitCopy ? "pdf-stamp-text" : undefined}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        whiteSpace: "nowrap",
+        fontWeight: 700,
+        fontFamily: '"Helvetica Neue", Arial, sans-serif',
+        fontSize: "clamp(9px, 3vh, 32px)",
+        color,
+        border: `2px solid ${color}`,
+        borderRadius: 6,
+        ...hidden,
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
 export function readerInkPaint(
   points: readonly InkPoint[],
   width: number,
@@ -349,6 +408,7 @@ import {
 import {
   resolveStampPreset,
   stampAnnotationColor,
+  type StampAnnotation,
 } from "../../../../../lib/pdf/stamps-annotation";
 import {
   visualMaskOutputAuthorityMatches,
@@ -438,6 +498,7 @@ import type { PdfSplitPageModeView } from "./hooks/usePdfSplitPageMode";
 import type { PdfEraseToolView } from "./hooks/usePdfEraseTool";
 import { usePdfLiveTransforms, type PdfLiveTransformRoom } from "../pdfLiveTransform";
 import { PdfPeerSelections, usePdfSelectionPresence } from "../pdfPeerSelections";
+import { pdfTextBoxListWithBox } from "../window/textBoxChangeQueue";
 import {
   SNAPSHOT_ROUNDED_RADIUS_CSS,
   type SnapshotShape,
@@ -507,7 +568,13 @@ export interface PdfViewerPagesModel {
   /** The visible ordinals drawn in full (the pages about the view); the
    * others are drawn as their paper only. Null: every page in full. */
   fullPageBand: Readonly<{ first: number; last: number }> | null;
-  setReaderContextMenu: Dispatch<SetStateAction<{ x: number; y: number; } | null>>;
+  setReaderContextMenu: Dispatch<SetStateAction<{ x: number; y: number; textAt?: PdfPageTextEditPoint | null; } | null>>;
+  /** The page's own text under a point, where the reader may edit it (null:
+   * no text there, or a file, page or tool that does not edit text). */
+  pageTextEditTargetAt: (target: EventTarget | null, clientX: number, clientY: number) => PdfPageTextEditPoint | null;
+  /** A double click on the pages: on page text with the Select tool in hand
+   * it opens that line for editing. */
+  onPageTextDoubleClick: (event: ReactMouseEvent<HTMLElement>) => void;
   setFindOpen: Dispatch<SetStateAction<boolean>>;
   findActiveIndex: number;
   findHighlightsByPage: ReadonlyMap<number, PdfFindHighlightRect[]>;
@@ -523,6 +590,11 @@ export interface PdfViewerPagesModel {
   textBoxAuthoring: PdfViewerTextBoxAuthoring | undefined;
   tableAuthoring?: PdfViewerTableAuthoring;
   chartAuthoring?: PdfViewerChartAuthoring;
+  /** Each page's /Annots in the array's order: each annotation's pdf.js
+   * reference and /NM. The text boxes, tables and charts the reader draws
+   * itself, and the click targets of shapes, ink and stamps, are stacked in
+   * it (lib/pdf/annotation-stack-order.ts). */
+  annotationStackOrderByPage?: ReadonlyMap<number, readonly PdfAnnotsEntry[]>;
   chartSelectedId?: string | null;
   onChartSelectionChange?: (id: string | null) => void;
   chartPreview?: { readonly id: string; readonly attrs: unknown } | null;
@@ -678,6 +750,8 @@ export interface PdfViewerPagesModel {
   parkedCanvasObjectLifts: readonly CanvasObjectGhostState[];
   placedLiftWritingRef: RefObject<(liftId: number) => boolean>;
   placedObjectSavingRef: RefObject<boolean>;
+  /** The viewer's waiting Delete, and the note that a frame holds one. */
+  placedDeleteHoldRef: RefObject<PdfPlacedDeleteHold>;
   staleNativeVectorRoutesByPage: ReadonlyMap<number, readonly PdfNativeVectorSelectionRoute[]>;
   setExtraNativeVectorSelections: Dispatch<SetStateAction<readonly PdfNativeVectorSelectionRoute[]>>;
   extraNativeVectorSelections: readonly PdfNativeVectorSelectionRoute[];
@@ -982,6 +1056,7 @@ export function PdfReaderTextBoxLayer({
   onCreateTable,
   onCreateChart,
   onCreateSmartArt,
+  stackRanks,
   t,
 }: {
   authoring: PdfViewerTextBoxAuthoring;
@@ -1001,6 +1076,9 @@ export function PdfReaderTextBoxLayer({
   onCreateChart?: (x: number, y: number, family: string, subtype: string) => void;
   /** 智能图形: the armed layout placed with its top-left at (x, y). */
   onCreateSmartArt?: (x: number, y: number, layoutId: string) => void;
+  /** The page's stack of the annotations the reader draws itself, by
+   * `textbox:<id>` (lib/pdf/annotation-stack-order.ts). */
+  stackRanks?: ReadonlyMap<string, number>;
   t: PdfViewerPagesModel["t"];
 }) {
   const { edits, onEditsChange, onTextBoxHistory, onCreatedBoxCommit, writable, paintedIds, pageDrawnBoxes } = authoring;
@@ -1211,10 +1289,10 @@ export function PdfReaderTextBoxLayer({
         window.setTimeout(() => firstText(edit.id), 0);
       }
       if (!onTextBoxHistory || options?.transient) {
-        onEditsChange((current) => [
-          ...current.filter((e) => !(e.page === edit.page && e.id === edit.id)),
-          edit,
-        ]);
+        // The box in the place the list has it (textBoxChangeQueue.ts): put
+        // at the end, a box that grew by a line went behind every other box
+        // of the list, and was written there.
+        onEditsChange((current) => pdfTextBoxListWithBox(current, edit, edit));
         return;
       }
       onTextBoxHistory({
@@ -1293,6 +1371,16 @@ export function PdfReaderTextBoxLayer({
     },
     [before, onEditsChange, onTextBoxHistory, pageIndex],
   );
+  // The overlay's boxes by their own ids, at their place in the page's stack.
+  const boxStackRanks = useMemo(() => {
+    if (!stackRanks) return undefined;
+    const ranks = new Map<string, number>();
+    for (const box of boxes) {
+      const rank = stackRanks.get(`textbox:${box.id}`);
+      if (rank !== undefined) ranks.set(box.id, rank);
+    }
+    return ranks;
+  }, [boxes, stackRanks]);
   if (!addMode && boxes.length === 0 && !placing && paintedTargets.length === 0) return null;
   return (
     <div
@@ -1324,6 +1412,9 @@ export function PdfReaderTextBoxLayer({
             cursor: "text",
             // The page paints the box; this only takes the click.
             background: "transparent",
+            ...(stackRanks?.has(`textbox:${edit.id}`)
+              ? { zIndex: 1 + 2 * stackRanks.get(`textbox:${edit.id}`)! }
+              : {}),
           }}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
@@ -1356,11 +1447,13 @@ export function PdfReaderTextBoxLayer({
             height: `calc(${cover.rect.height * 100}% + 2px)`,
             background: cover.color,
             pointerEvents: "none",
+            ...(stackRanks?.has(`textbox:${id}`) ? { zIndex: 1 + 2 * stackRanks.get(`textbox:${id}`)! } : {}),
           }}
         />
       ))}
       <PdfTextBoxOverlay
         boxes={boxes}
+        stackRanks={boxStackRanks}
         page={pageIndex}
         pageWidth={cssWidth}
         pageHeight={cssHeight}
@@ -1383,6 +1476,25 @@ export function PdfReaderTextBoxLayer({
 }
 
 export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) {
+  // Each page's annotation stack, worked out again only when what it reads
+  // changes (a page of hundreds of shapes is re-rendered on every pointer
+  // move of a drag; the order is not).
+  const annotationStackRanksCacheRef = useRef(
+    new Map<number, Readonly<{ inputs: readonly unknown[]; ranks: ReadonlyMap<string, number> }>>(),
+  );
+  const annotationStackRanksFor = (
+    pageNumber: number,
+    inputs: readonly unknown[],
+    rank: () => ReadonlyMap<string, number>,
+  ): ReadonlyMap<string, number> => {
+    const cached = annotationStackRanksCacheRef.current.get(pageNumber);
+    if (cached && cached.inputs.length === inputs.length && cached.inputs.every((input, index) => input === inputs[index])) {
+      return cached.ranks;
+    }
+    const ranks = rank();
+    annotationStackRanksCacheRef.current.set(pageNumber, { inputs, ranks });
+    return ranks;
+  };
   const {
     annotationContextWritable,
     onNativeSourceInkDelete,
@@ -1428,6 +1540,8 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
     currentVisibleOrdinal,
     fullPageBand,
     setReaderContextMenu,
+    pageTextEditTargetAt,
+    onPageTextDoubleClick,
     setFindOpen,
     findActiveIndex,
     findHighlightsByPage,
@@ -1443,6 +1557,7 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
     tableSelection,
     onTableSelectionChange,
     chartAuthoring,
+    annotationStackOrderByPage,
     chartSelectedId,
     onChartSelectionChange,
     chartPreview,
@@ -1564,13 +1679,13 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
     previewNativeVectorGroupGesture,
     previewNativeVectorGroupRotation,
     settleCanvasObjectGesture,
-    releaseCanvasObjectGesture,
     previewLiftedGesture,
     previewLiftedRotation,
     nativeVectorFrameFlipRef,
     parkedCanvasObjectLifts,
     placedLiftWritingRef,
     placedObjectSavingRef,
+    placedDeleteHoldRef,
     staleNativeVectorRoutesByPage,
     setExtraNativeVectorSelections,
     extraNativeVectorSelections,
@@ -1786,6 +1901,57 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
     const written = placedLiftWrittenRef.current.get(lift.id) ?? lift.acked.rect;
     return !sameLiftBox(written, lift.pose.rect);
   };
+  // A Delete, a turn, or a move no stage carried, that the frame took while
+  // its object's own save ran is carried out when that save ends, after the
+  // moves that wait (a Delete was dropped without a word and a turn went
+  
+  // taken back by a gesture begun on the object since, and one the save
+  // outlasted by ten seconds is not carried out and says so. A turn or a
+  // move is a gesture already made: it is written though the selection has
+  // moved on (it went back without a word). One command waits per object.
+  const placedFrameHandlersRef = useRef(
+    new Map<string, { saving: boolean; onDelete?: () => void; onRotate?: (rotation: number) => void }>(),
+  );
+  const placedFrameCommandsRef = useRef(
+    new Map<
+      string,
+      {
+        at: number;
+        command:
+          | { kind: "delete" }
+          | { kind: "turn"; rotation: number }
+          | { kind: "move"; box: PercentBox };
+      }
+    >(),
+  );
+  // The turn of an object whose frame is no longer drawn, by the object as
+  // the model now holds it (the frame's last closure may hold the box of
+  // before the save that was waited for).
+  const turnUnselectedPlacedObject = (key: string, rotation: number) => {
+    const cut = key.indexOf(":");
+    const kind = key.slice(0, cut);
+    const id = key.slice(cut + 1);
+    if (kind === "signature") {
+      for (const pageSignatures of signaturesByPage.values()) {
+        const signature = pageSignatures.find((entry) => entry.id === id);
+        if (!signature) continue;
+        void handleSignatureTransform(
+          signature.id,
+          {
+            x: signature.x,
+            y: signature.y,
+            width: signature.width,
+            height: signature.height,
+          },
+          rotation,
+        );
+        return;
+      }
+    } else if (kind === "measurement") {
+      // A measurement turns about its own points: the box is not read.
+      void handleMeasurementTransform(id, { x: 0, y: 0, width: 0, height: 0 }, rotation);
+    }
+  };
   useEffect(() => {
     if (placedObjectSavingRef.current) return;
     for (const ghost of [nativeVectorDragGhost, ...parkedCanvasObjectLifts]) {
@@ -1794,6 +1960,39 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
       if (!commit) continue;
       placedLiftWrittenRef.current.set(ghost.lift.id, ghost.lift.pose.rect);
       commit(ghost.lift.pose.rect);
+      return;
+    }
+    const commands = placedFrameCommandsRef.current;
+    for (const [key, waiting] of [...commands]) {
+      const selected =
+        (selectedPlaced && key === `${selectedPlaced.kind}:${selectedPlaced.id}`) ||
+        (selectedFormFieldContext && key === `formField:${selectedFormFieldContext.field.id}`);
+      const frame = placedFrameHandlersRef.current.get(key);
+      const command = waiting.command;
+      if (command.kind === "delete") {
+        if (!selected || !frame) {
+          commands.delete(key);
+        } else if (Date.now() - waiting.at > 10_000) {
+          commands.delete(key);
+          placedDeleteHoldRef.current?.notCarriedOut?.();
+        } else if (!frame.saving) {
+          commands.delete(key);
+          frame.onDelete?.();
+          return;
+        }
+        continue;
+      }
+      if (selected && frame) {
+        if (frame.saving) continue;
+        commands.delete(key);
+        if (command.kind === "turn") frame.onRotate?.(command.rotation);
+        else placedLiftCommitRef.current.get(key)?.(command.box);
+        return;
+      }
+      // No frame is drawn for it now, and no placed object is saving.
+      commands.delete(key);
+      if (command.kind === "turn") turnUnselectedPlacedObject(key, command.rotation);
+      else placedLiftCommitRef.current.get(key)?.(command.box);
       return;
     }
   });
@@ -1945,8 +2144,13 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
         // surface, so leave the platform menu alone there.
         if (presentationActive) return;
         event.preventDefault();
-        setReaderContextMenu({ x: event.clientX, y: event.clientY });
+        setReaderContextMenu({
+          x: event.clientX,
+          y: event.clientY,
+          textAt: pageTextEditTargetAt(event.target, event.clientX, event.clientY),
+        });
       }}
+      onDoubleClick={onPageTextDoubleClick}
       onPointerDown={(e) => {
         // Click-away lets a picture selected in place go (its frame, tools
         // and the picture targets keep their own presses).
@@ -2238,6 +2442,55 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
             textBoxAuthoring?.edits,
             page.pageNumber - 1,
           );
+          // The text boxes, tables and charts the reader draws itself, stacked
+          // as the page's /Annots paints them (one made here and not yet
+          // saved on top, as the writer appends it).
+          const pageAnnotationStackRanks = annotationStackRanksFor(page.pageNumber, [
+            annotationStackOrderByPage?.get(page.pageNumber),
+            chartAuthoring?.charts,
+            tableAuthoring?.tables,
+            textBoxAuthoring?.edits,
+            pageShapes,
+            pageNativeSourceShapes,
+            pageInks,
+            pageNativeSourceInkStrokes,
+            pageStamps,
+            pageNativeSourceStamps,
+            pageNativeSourceFreeTexts,
+          ], () => pdfAnnotationStackRanks(
+            annotationStackOrderByPage?.get(page.pageNumber),
+            [
+              ...(chartAuthoring?.charts ?? [])
+                .filter((chart) => chart.page === page.pageNumber)
+                .map((chart) => ({ kind: chart.kind === "smartart" ? "smartart" as const : "chart" as const, id: chart.id })),
+              ...(tableAuthoring?.tables ?? [])
+                .filter((table) => table.page === page.pageNumber)
+                .map((table) => ({ kind: "table" as const, id: table.id })),
+              ...(textBoxAuthoring?.edits ?? [])
+                .filter((edit) => edit.page === page.pageNumber - 1 && edit.created && !edit.deleted)
+                .map((edit) => ({ kind: "textbox" as const, id: edit.id })),
+              ...pageShapes.map((shape) => ({ kind: "shape" as const, id: shape.id })),
+              ...pageNativeSourceShapes.map((shape) => ({ key: `nshape:${shape.id}`, ref: shape.nativeSource.objectRef })),
+              ...pageInks.map((stroke) => ({ kind: "ink" as const, id: stroke.id })),
+              ...pageNativeSourceInkStrokes.map((stroke) => ({ key: `nink:${stroke.id}`, ref: stroke.nativeSource.objectRef })),
+              ...pageStamps.map((stamp) => ({ kind: "stamp" as const, id: stamp.id })),
+              ...pageNativeSourceStamps.map((stamp) => ({ key: `nstamp:${stamp.id}`, ref: stamp.nativeSource.objectRef })),
+              ...pageNativeSourceFreeTexts.map((box) => ({ key: `nfreetext:${box.id}`, ref: box.nativeSource.objectRef })),
+            ],
+          ));
+          // Where a click target of a shape, a stroke or a stamp stands in
+          // the page's annotation stack (one with no place yet: in front).
+          const annotationHitZ = (key: string) =>
+            pdfAnnotationStackZIndex(pageAnnotationStackRanks.get(key) ?? pageAnnotationStackRanks.size);
+          const annotationHitSvgStyle = (key: string): CSSProperties => ({
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            overflow: "visible",
+            pointerEvents: "none",
+            zIndex: annotationHitZ(key),
+          });
           const pageLineNumbers =
             lineNumbersByPage.get(page.pageNumber) ?? [];
           // Live link rect (preview before the destination editor opens),
@@ -2401,6 +2654,13 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
             const sy = from.height > 0 ? to.height / from.height : 1;
             return `translate(${to.x} ${to.y}) scale(${sx} ${sy}) translate(${-from.x} ${-from.y})`;
           };
+          const forgetWaitingPlacedDelete = (key: string) => {
+            if (placedFrameCommandsRef.current.get(key)?.command.kind === "delete") {
+              placedFrameCommandsRef.current.delete(key);
+            }
+            const hold = placedDeleteHoldRef.current;
+            if (hold?.waiting?.key === key) hold.waiting = null;
+          };
           const withCanvasObjectGhost = (frame: ReactNode, key: string | null) => {
             if (!key || !isValidElement<PdfAnnotationFrameProps>(frame)) return frame;
             // The object lifted (dropped and not yet landed): its frame
@@ -2415,24 +2675,47 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
             const shownRect = lifted ? lifted.pose.rect : frame.props.rect;
             placedLiftCommitRef.current.set(key, frame.props.onCommit);
             const onDelete = frame.props.onDelete;
+            placedFrameHandlersRef.current.set(key, {
+              saving,
+              onDelete,
+              onRotate: frame.props.onRotate,
+            });
             return cloneElement(frame, {
               rect: shownRect,
               // Busy with this object's own save: the next gesture is
               // lifted and written after it, not ignored.
               busy: saving && !lifted,
-              // Deleting still waits for the save (as the busy frame made it).
-              ...(onDelete ? { onDelete: () => { if (!saving) onDelete(); } } : {}),
+              // Deleting waits for the save, and is carried out after it.
+              ...(onDelete
+                ? {
+                    onDelete: () => {
+                      if (placedFrameHandlersRef.current.get(key)?.saving ?? saving) {
+                        placedFrameCommandsRef.current.set(key, { at: Date.now(), command: { kind: "delete" } });
+                        // The viewer's own key listener leaves the selection.
+                        if (placedDeleteHoldRef.current) placedDeleteHoldRef.current.frameHeldKey = key;
+                        return;
+                      }
+                      onDelete();
+                    },
+                  }
+                : {}),
               onShown: (shown: PercentBox) =>
                 prewarmPlacedObjectLayers(page.pageNumber, key, shown),
               onPreview: (preview: PercentBox | null, start: PercentBox) => {
+                if (preview) forgetWaitingPlacedDelete(key);
                 previewPlacedObjectGesture(page.pageNumber, key, preview, start);
                 // The others see the object go with the hand.
                 pdfLive?.publish(page.pageNumber, key, preview);
               },
               onCommit: (box: PercentBox) => {
                 if (nativeVectorDragGhostRef.current?.key !== key) {
-                  // No stage could carry it: written as it stands.
-                  if (!saving) frame.props.onCommit(box);
+                  // No stage could carry it: written as it stands, after
+                  // the object's own save when one runs (it was dropped).
+                  if (placedFrameHandlersRef.current.get(key)?.saving ?? saving) {
+                    placedFrameCommandsRef.current.set(key, { at: Date.now(), command: { kind: "move", box } });
+                    return;
+                  }
+                  frame.props.onCommit(box);
                   return;
                 }
                 // Lifted at the drop; the writer above writes it.
@@ -2476,15 +2759,11 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   rotation === null
                     ? null
                     : normalizeRotationDegrees(rotation - startRotation);
+                if (turn !== null) forgetWaitingPlacedDelete(key);
                 previewPlacedObjectRotation(page.pageNumber, key, turn, start);
                 pdfLive?.publish(page.pageNumber, key, turn === null ? null : start, turn ?? 0);
               },
               onRotate: (rotation: number) => {
-                // A turn waits for no save: made during one, it goes back.
-                if (saving) {
-                  releaseCanvasObjectGesture(key);
-                  return;
-                }
                 const held = nativeVectorDragGhostRef.current;
                 if (held?.key === key && !held.settled) {
                   settleCanvasObjectGesture(
@@ -2497,7 +2776,16 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                     { kind: "placed", epoch: -1, write: false },
                   );
                 }
-                onRotate(rotation);
+                // A turn let go during the object's own save stands as it
+                // was let go and is written when that save ends (it went
+                // back). The frame calls this as it was when the turn
+                // began, so the save is read as it now is.
+                const now = placedFrameHandlersRef.current.get(key);
+                if (now?.saving ?? saving) {
+                  placedFrameCommandsRef.current.set(key, { at: Date.now(), command: { kind: "turn", rotation } });
+                  return;
+                }
+                (now?.onRotate ?? onRotate)(rotation);
               },
             };
           };
@@ -3781,72 +4069,6 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   pageNativeSourceInkStrokes.length === 0
                 }
               >
-                {pageNativeSourceInkStrokes.map((stroke, index) => {
-                  const d = nativeInkPathD(stroke.points);
-                  if (!d) return null;
-                  const selected =
-                    selectedPlaced?.kind === "nativeInk" &&
-                    selectedPlaced.id === stroke.id;
-                  const select = () =>
-                    selectPlacedAnnotation({
-                      kind: "nativeInk",
-                      id: stroke.id,
-                    });
-                  return (
-                    <path
-                      key={`native-source-${stroke.id ?? index}`}
-                      d={d}
-                      fill="none"
-                      stroke="transparent"
-                      strokeWidth={Math.max(
-                        1.2,
-                        nativeInkWidthToPercent(stroke.width, page),
-                      )}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="pdf-viewer__native-source-ink-target"
-                      data-testid="pdf-native-source-ink-target"
-                      role="button"
-                      tabIndex={
-                        onNativeSourceInkDelete ||
-                        onNativeSourceInkTransform
-                          ? 0
-                          : -1
-                      }
-                      aria-label={
-                        t("pdf.viewer.originalPdfInk")
-                      }
-                      aria-pressed={selected}
-                      style={{
-                        pointerEvents:
-                          onNativeSourceInkDelete ||
-                          onNativeSourceInkTransform
-                          ? "stroke"
-                          : "none",
-                        cursor:
-                          onNativeSourceInkDelete ||
-                          onNativeSourceInkTransform
-                          ? "pointer"
-                          : "default",
-                        outline: selected
-                          ? "2px solid rgba(37, 99, 235, 0.85)"
-                          : undefined,
-                      }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        select();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") {
-                          return;
-                        }
-                        event.preventDefault();
-                        event.stopPropagation();
-                        select();
-                      }}
-                    />
-                  );
-                })}
                 {pageNativeInkStrokes.map((stroke, index) => {
                   const d = nativeInkPathD(stroke.points);
                   if (!d) return null;
@@ -3873,14 +4095,11 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   );
                 })}
                 {pageInks.map((stroke) => {
+                  // The stroke's paint; its click target is in the page's
+                  // annotation stack, at its place in the /Annots order.
                   const selected =
                     selectedPlaced?.kind === "ink" &&
                     selectedPlaced.id === stroke.id;
-                  const select = () =>
-                    selectPlacedAnnotation({
-                      kind: "ink",
-                      id: stroke.id,
-                    });
                   const paint = readerInkPaint(stroke.points, stroke.width, stroke.color, page);
                   return (
                     <path
@@ -3892,47 +4111,15 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                       data-ink-pressure={paint.pressure ? "true" : undefined}
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      data-testid="pdf-ink-stroke"
-                      role="button"
-                      tabIndex={drawMode ? -1 : 0}
-                      aria-label={
-                        t("pdf.viewer.selectInkAnnotation")
-                      }
-                      aria-pressed={selected}
-                      data-selected={selected ? "true" : undefined}
+                      data-testid="pdf-ink-stroke-paint"
+                      aria-hidden
                       style={{
-                        // Selection is non-destructive. Delete remains an
-                        // explicit contextual/keyboard command.
-                        // A pressure stroke is a filled outline: its
-                        // fill is what takes the click.
-                        pointerEvents: drawMode
-                          ? "none"
-                          : paint.pressure
-                            ? "visiblePainted"
-                            : "stroke",
-                        cursor: drawMode ? "crosshair" : "pointer",
+                        pointerEvents: "none",
                         filter: selected
                           ? "drop-shadow(0 0 1.5px rgba(37, 99, 235, 0.95))"
                           : undefined,
                       }}
-                      onClick={(event) => {
-                        if (drawMode) return;
-                        event.stopPropagation();
-                        select();
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") {
-                          return;
-                        }
-                        event.preventDefault();
-                        event.stopPropagation();
-                        select();
-                      }}
-                    >
-                      <title>
-                        {t("pdf.viewer.selectInkAnnotation")}
-                      </title>
-                    </path>
+                    />
                   );
                 })}
                 {wetInkHost ? <g ref={wetInkHost(page.pageNumber)} data-pdf-wet-ink-layer="" /> : null}
@@ -3999,160 +4186,35 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                 }
               >
                 {pageNativeSourceShapes.map((shape) => {
-                  // A NoZoom shape keeps its point size on screen at any
-                  // zoom; the canvas leaves it unpainted and it is drawn
                   
+                  // every source shape's click target is in the page's
+                  // annotation stack, at its place in the /Annots order.
+                  if (!shape.nativeSource.flags?.noZoom) return null;
                   const display = nativeShapeDisplayGeometry(shape, scale);
-                  const fixedOnScreen = Boolean(shape.nativeSource.flags?.noZoom);
-                  const box = shapeBox(display);
-                  const semanticRoute =
-                    shape.nativeSource.subtype === "Square"
-                      ? semanticAppearanceRouteFor(
-                          page.pageNumber,
-                          shape.nativeSource.objectRef,
-                          "Square",
-                          "native-shape",
-                        )
-                      : null;
                   return (
-                    <g
-                      key={shape.id}
-                      role="button"
-                      tabIndex={annotationContextWritable ? 0 : -1}
-                      aria-disabled={!annotationContextWritable}
-                      aria-label={t("pdfShape.select")}
-                      className="pdf-viewer__native-source-shape-target"
-                      data-testid="pdf-native-source-shape"
-                      data-native-source-ref={shape.nativeSource.objectRef}
-                      data-native-shape-nozoom={fixedOnScreen ? "true" : undefined}
-                      data-semantic-appearance-surface={
-                        semanticRoute?.surface
-                      }
-                      style={{
-                        pointerEvents:
-                          !annotationContextWritable ||
-                          shapeMode ||
-                          placementToolArmed ||
-                          nativeSourceShapeSaving
-                            ? "none"
-                            : "all",
-                        cursor: annotationContextWritable
-                          ? shapeMode
-                            ? "crosshair"
-                            : "pointer"
-                          : "default",
-                      }}
-                      onClick={(event) => {
-                        if (
-                          shapeMode ||
-                          placementToolArmed ||
-                          nativeSourceShapeSaving
-                        ) {
-                          return;
-                        }
-                        event.stopPropagation();
-                        selectPlacedAnnotation({
-                          kind: "nativeSourceShape",
-                          id: shape.id,
-                        });
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") {
-                          return;
-                        }
-                        event.preventDefault();
-                        event.stopPropagation();
-                        selectPlacedAnnotation({
-                          kind: "nativeSourceShape",
-                          id: shape.id,
-                        });
-                      }}
-                    >
-                      {fixedOnScreen
-                        ? renderShapeSvg(display, shape.color, shape.width)
-                        : null}
-                      <rect
-                        x={box.x}
-                        y={box.y}
-                        width={box.width}
-                        height={box.height}
-                        fill="transparent"
-                        stroke="transparent"
-                        
-                        // else keeps a visible minimum on screen.
-                        strokeWidth={shape.width === 0 ? 0 : Math.max(0.4, shape.width)}
-                        vectorEffect="non-scaling-stroke"
-                      />
-                      <title>{t("pdfShape.select")}</title>
+                    <g key={shape.id} aria-hidden data-testid="pdf-native-source-shape-paint" style={{ pointerEvents: "none" }}>
+                      {renderShapeSvg(display, shape.color, shape.width)}
                     </g>
                   );
                 })}
                 {pageShapes.map((shape) => (
+                  // The shape's paint; its click target is in the page's
+                  // annotation stack, at its place in the /Annots order.
                   <g
                     key={shape.id}
-                    data-testid="pdf-shape"
+                    aria-hidden
+                    data-testid="pdf-shape-paint"
                     transform={heldShapeTransform(shape)}
-                    data-native-shape={
-                      managedNativeShapeIdSet.has(shape.id)
-                        ? "true"
-                        : undefined
-                    }
                     style={{
-                      // Clickable to SELECT (move/resize/delete frame) only
-                      // while NOT in shape mode (so a drawing drag never
-                      // grabs an existing shape) and not while a
-                      // save/delete is already in flight.
-                      pointerEvents:
-                        !annotationContextWritable ||
-                        shapeMode ||
-                        placementToolArmed ||
-                        shapeSaving
-                          ? "none"
-                          : managedShapeAppearanceReady &&
-                              managedNativeShapeIdSet.has(shape.id)
-                            ? "all"
-                            : "all",
-                      cursor: annotationContextWritable
-                        ? shapeMode
-                          ? "crosshair"
-                          : "pointer"
-                        : "default",
+                      pointerEvents: "none",
                       ...(managedShapeAppearanceReady &&
                       managedNativeShapeIdSet.has(shape.id) &&
                       !pdfLive?.active(page.pageNumber, `shape:${shape.id}`)
                         ? { opacity: 0 }
                         : null),
                     }}
-                    onClick={(e) => {
-                      if (shapeMode || placementToolArmed || shapeSaving) {
-                        return;
-                      }
-                      e.stopPropagation();
-                      selectPlacedAnnotation({
-                        kind: "shape",
-                        id: shape.id,
-                      });
-                    }}
                   >
-                    {(() => {
-                      const box = shapeBox(shape);
-                      const hitWidth = Math.max(box.width, 1);
-                      const hitHeight = Math.max(box.height, 1);
-                      return (
-                        <rect
-                          data-testid="pdf-shape-hit-target"
-                          x={box.x - (hitWidth - box.width) / 2}
-                          y={box.y - (hitHeight - box.height) / 2}
-                          width={hitWidth}
-                          height={hitHeight}
-                          fill="transparent"
-                          stroke="transparent"
-                          pointerEvents="all"
-                        />
-                      );
-                    })()}
                     {renderShapeSvg(shape, shape.color, shape.width)}
-                    <title>{t("pdfShape.select")}</title>
                   </g>
                 ))}
                 {pageDrawingShape ? (
@@ -6351,220 +6413,36 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                 className="pdf-viewer__signature-layer"
                 data-testid="pdf-stamp-layer"
               >
-                {pageNativeSourceFreeTexts.map((box) => (
-                  <div
-                    key={box.id}
-                    role="button"
-                    tabIndex={annotationContextWritable ? 0 : -1}
-                    aria-disabled={!annotationContextWritable}
-                    aria-label={box.text.slice(0, 80) || t("pdf.textbox.label")}
-                    className="pdf-viewer__native-source-stamp-target"
-                    data-testid="pdf-native-source-free-text"
-                    data-native-source-ref={box.nativeSource.objectRef}
-                    style={{
-                      position: "absolute",
-                      left: `${box.x * 100}%`,
-                      top: `${box.y * 100}%`,
-                      width: `${box.width * 100}%`,
-                      height: `${box.height * 100}%`,
-                      pointerEvents:
-                        !annotationContextWritable ||
-                        armedStamp ||
-                        nativeSourceFreeTextSaving ||
-                        // Selected: the frame beneath takes the drag.
-                        (selectedPlaced?.kind === "nativeSourceFreeText" &&
-                          selectedPlaced.id === box.id)
-                          ? "none"
-                          : "all",
-                      cursor: annotationContextWritable ? "move" : "default",
-                      // The page paints the box; this one only takes the
-                      // click (anywhere in it, as WPS takes a text box).
-                      background: "transparent",
-                    }}
-                    onClick={(event) => {
-                      if (armedStamp || nativeSourceFreeTextSaving) return;
-                      event.stopPropagation();
-                      selectPlacedAnnotation({
-                        kind: "nativeSourceFreeText",
-                        id: box.id,
-                      });
-                    }}
-                    onDoubleClick={(event) => {
-                      if (armedStamp || nativeSourceFreeTextSaving || !onNativeSourceFreeTextEdit) return;
-                      event.stopPropagation();
-                      // Its text is edited, as WPS takes a double-click on a
-                      // text box comment.
-                      onNativeSourceFreeTextEdit(box.id);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      selectPlacedAnnotation({
-                        kind: "nativeSourceFreeText",
-                        id: box.id,
-                      });
-                    }}
-                  />
-                ))}
-                {pageNativeSourceStamps.map((stamp) => (
-                  <div
-                    key={stamp.id}
-                    role="button"
-                    tabIndex={annotationContextWritable ? 0 : -1}
-                    aria-disabled={!annotationContextWritable}
-                    aria-label={t("pdfStampTool.modeToggle")}
-                    className="pdf-viewer__native-source-stamp-target"
-                    data-testid="pdf-native-source-stamp"
-                    data-native-source-ref={stamp.nativeSource.objectRef}
-                    style={{
-                      position: "absolute",
-                      left: `${stamp.x}%`,
-                      top: `${stamp.y}%`,
-                      width: `${stamp.width}%`,
-                      height: `${stamp.height}%`,
-                      pointerEvents:
-                        !annotationContextWritable ||
-                        armedStamp ||
-                        nativeSourceStampSaving ||
-                        // Selected: the frame beneath takes the drag.
-                        (selectedPlaced?.kind === "nativeSourceStamp" &&
-                          selectedPlaced.id === stamp.id)
-                          ? "none"
-                          : "all",
-                      cursor: annotationContextWritable
-                        ? armedStamp
-                          ? "crosshair"
-                          : "pointer"
-                        : "default",
-                      // The page paints the stamp; this box only takes
-                      // the click and shows its frame on hover (see
-                      // pdf-viewer.css), never a second stamp.
-                      background: "transparent",
-                    }}
-                    onClick={(event) => {
-                      if (armedStamp || nativeSourceStampSaving) return;
-                      event.stopPropagation();
-                      selectPlacedAnnotation({
-                        kind: "nativeSourceStamp",
-                        id: stamp.id,
-                      });
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ")
-                        return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      selectPlacedAnnotation({
-                        kind: "nativeSourceStamp",
-                        id: stamp.id,
-                      });
-                    }}
-                  />
-                ))}
                 {pageStamps.map((st) => {
+                  // The stamp's paint; its click target (and delete button)
+                  // is in the page's annotation stack, at its place in the
+                  // /Annots order.
                   const presetEntry =
                     st.kind === "preset"
                       ? resolveStampPreset(st.preset)
                       : null;
                   const stampColor = stampAnnotationColor(st);
+                  const held = heldPlacedBox(`stamp:${st.id}`, st);
                   return (
                     <div
                       key={st.id}
                       className="pdf-viewer__signature"
-                      data-testid="pdf-stamp"
-                      data-stamp-kind={st.kind}
-                      data-native-stamp={
-                        managedNativeStampIdSet.has(st.id)
-                          ? "true"
-                          : undefined
-                      }
+                      aria-hidden
+                      data-testid="pdf-stamp-paint"
                       style={{
-                        ...(() => {
-                          const held = heldPlacedBox(`stamp:${st.id}`, st);
-                          return {
-                            left: `${held.x}%`,
-                            top: `${held.y}%`,
-                            width: `${held.width}%`,
-                            height: `${held.height}%`,
-                          };
-                        })(),
-                        cursor: annotationContextWritable
-                          ? "pointer"
-                          : "default",
-                        pointerEvents:
-                          annotationContextWritable &&
-                          !(
-                            selectedPlaced?.kind === "stamp" &&
-                            selectedPlaced.id === st.id
-                          )
-                            ? "auto"
-                            : "none",
+                        left: `${held.x}%`,
+                        top: `${held.y}%`,
+                        width: `${held.width}%`,
+                        height: `${held.height}%`,
+                        pointerEvents: "none",
                         ...(managedStampAppearanceReady &&
                         managedNativeStampIdSet.has(st.id) &&
                         !pdfLive?.active(page.pageNumber, `stamp:${st.id}`)
                           ? { opacity: 0 }
                           : null),
                       }}
-                      onClick={(e) => {
-                        // Select for move/resize (frame + handles).
-                        e.stopPropagation();
-                        selectPlacedAnnotation({
-                          kind: "stamp",
-                          id: st.id,
-                        });
-                      }}
                     >
-                      {st.kind === "image" ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          className="pdf-viewer__signature-image"
-                          src={st.image}
-                          alt={t("pdfStampTool.imageAlt")}
-                          data-testid="pdf-stamp-image"
-                          draggable={false}
-                        />
-                      ) : (
-                        // Preset label as a plain text node in a colored
-                        // border frame (never innerHTML); color comes from
-                        // the static palette (safe hex literals only).
-                        <span
-                          data-testid="pdf-stamp-text"
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            boxSizing: "border-box",
-                            width: "100%",
-                            height: "100%",
-                            overflow: "hidden",
-                            whiteSpace: "nowrap",
-                            fontWeight: 700,
-                            fontFamily:
-                              '"Helvetica Neue", Arial, sans-serif',
-                            fontSize: "clamp(9px, 3vh, 32px)",
-                            color: stampColor,
-                            border: `2px solid ${stampColor}`,
-                            borderRadius: 6,
-                          }}
-                        >
-                          {presetEntry?.text ?? ""}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        className="pdf-viewer__signature-delete"
-                        aria-label={t("pdfStampTool.delete")}
-                        title={t("pdfStampTool.delete")}
-                        data-testid="pdf-stamp-delete"
-                        disabled={stampSaving || !annotationContextWritable}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleStampDelete(st.id);
-                        }}
-                      >
-                        <Trash2 size={12} aria-hidden />
-                      </button>
+                      {pdfStampContent(st, presetEntry?.text ?? "", stampColor, t("pdfStampTool.imageAlt"), false)}
                     </div>
                   );
                 })}
@@ -7036,8 +6914,518 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   {pageMeasureResult.label}
                 </div>
               ) : null}
+              {/* The reader's own annotation layers share one stack, each object
+                  at its place in the page's /Annots (styles/pdf-viewer.css). */}
+              <div className="pdf-viewer__annotation-stack" data-testid="pdf-annotation-stack">
+              {/* The click targets of the page's shapes, ink and stamps (its
+                  own and those made here), each at its place in the page's
+                  /Annots order among the text boxes, tables and charts: a
+                  click where they overlap goes to the one a reader paints in
+                  front. Their paint stays on its own layers. */}
+              <div className="pdf-viewer__annotation-hits" data-testid="pdf-annotation-hits">
+                {pageNativeSourceShapes.map((shape) => {
+                  // A NoZoom shape keeps its point size on screen at any
+                  // zoom; the canvas leaves it unpainted and it is drawn
+                  
+                  const display = nativeShapeDisplayGeometry(shape, scale);
+                  const fixedOnScreen = Boolean(shape.nativeSource.flags?.noZoom);
+                  const box = shapeBox(display);
+                  const semanticRoute =
+                    shape.nativeSource.subtype === "Square"
+                      ? semanticAppearanceRouteFor(
+                          page.pageNumber,
+                          shape.nativeSource.objectRef,
+                          "Square",
+                          "native-shape",
+                        )
+                      : null;
+                  return (
+                    <svg
+                      key={`nshape:${shape.id}`}
+                      className="pdf-viewer__annotation-hit"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                      style={annotationHitSvgStyle(`nshape:${shape.id}`)}
+                    >
+                    <g
+                      key={shape.id}
+                      role="button"
+                      tabIndex={annotationContextWritable ? 0 : -1}
+                      aria-disabled={!annotationContextWritable}
+                      aria-label={t("pdfShape.select")}
+                      className="pdf-viewer__native-source-shape-target"
+                      data-testid="pdf-native-source-shape"
+                      data-native-source-ref={shape.nativeSource.objectRef}
+                      data-native-shape-nozoom={fixedOnScreen ? "true" : undefined}
+                      data-semantic-appearance-surface={
+                        semanticRoute?.surface
+                      }
+                      style={{
+                        pointerEvents:
+                          !annotationContextWritable ||
+                          shapeMode ||
+                          placementToolArmed ||
+                          nativeSourceShapeSaving
+                            ? "none"
+                            : "all",
+                        cursor: annotationContextWritable
+                          ? shapeMode
+                            ? "crosshair"
+                            : "pointer"
+                          : "default",
+                      }}
+                      onClick={(event) => {
+                        if (
+                          shapeMode ||
+                          placementToolArmed ||
+                          nativeSourceShapeSaving
+                        ) {
+                          return;
+                        }
+                        event.stopPropagation();
+                        selectPlacedAnnotation({
+                          kind: "nativeSourceShape",
+                          id: shape.id,
+                        });
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        selectPlacedAnnotation({
+                          kind: "nativeSourceShape",
+                          id: shape.id,
+                        });
+                      }}
+                    >
+                      {/* Its NoZoom paint is the shape layer's; this copy only
+                          takes the click. */}
+                      {fixedOnScreen ? (
+                        <g opacity={0}>{renderShapeSvg(display, shape.color, shape.width)}</g>
+                      ) : null}
+                      <rect
+                        x={box.x}
+                        y={box.y}
+                        width={box.width}
+                        height={box.height}
+                        fill="transparent"
+                        stroke="transparent"
+                        
+                        // else keeps a visible minimum on screen.
+                        strokeWidth={shape.width === 0 ? 0 : Math.max(0.4, shape.width)}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <title>{t("pdfShape.select")}</title>
+                    </g>
+                    </svg>
+                  );
+                })}
+                {pageShapes.map((shape) => (
+                  <svg
+                    key={`shape:${shape.id}`}
+                    className="pdf-viewer__annotation-hit"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    style={annotationHitSvgStyle(`shape:${shape.id}`)}
+                  >
+                  <g
+                    key={shape.id}
+                    data-testid="pdf-shape"
+                    transform={heldShapeTransform(shape)}
+                    data-native-shape={
+                      managedNativeShapeIdSet.has(shape.id)
+                        ? "true"
+                        : undefined
+                    }
+                    style={{
+                      // Clickable to SELECT (move/resize/delete frame) only
+                      // while NOT in shape mode (so a drawing drag never
+                      // grabs an existing shape) and not while a
+                      // save/delete is already in flight.
+                      pointerEvents:
+                        !annotationContextWritable ||
+                        shapeMode ||
+                        placementToolArmed ||
+                        shapeSaving
+                          ? "none"
+                          : managedShapeAppearanceReady &&
+                              managedNativeShapeIdSet.has(shape.id)
+                            ? "all"
+                            : "all",
+                      cursor: annotationContextWritable
+                        ? shapeMode
+                          ? "crosshair"
+                          : "pointer"
+                        : "default",
+                      // The click target only: the shape's paint is the
+                      // shape layer's (pdf-shape-paint).
+                      opacity: 0,
+                    }}
+                    onClick={(e) => {
+                      if (shapeMode || placementToolArmed || shapeSaving) {
+                        return;
+                      }
+                      e.stopPropagation();
+                      selectPlacedAnnotation({
+                        kind: "shape",
+                        id: shape.id,
+                      });
+                    }}
+                  >
+                    {(() => {
+                      const box = shapeBox(shape);
+                      const hitWidth = Math.max(box.width, 1);
+                      const hitHeight = Math.max(box.height, 1);
+                      return (
+                        <rect
+                          data-testid="pdf-shape-hit-target"
+                          x={box.x - (hitWidth - box.width) / 2}
+                          y={box.y - (hitHeight - box.height) / 2}
+                          width={hitWidth}
+                          height={hitHeight}
+                          fill="transparent"
+                          stroke="transparent"
+                          pointerEvents="all"
+                        />
+                      );
+                    })()}
+                    {renderShapeSvg(shape, shape.color, shape.width)}
+                    <title>{t("pdfShape.select")}</title>
+                  </g>
+                  </svg>
+                ))}
+                {pageNativeSourceInkStrokes.map((stroke, index) => {
+                  const d = nativeInkPathD(stroke.points);
+                  if (!d) return null;
+                  const selected =
+                    selectedPlaced?.kind === "nativeInk" &&
+                    selectedPlaced.id === stroke.id;
+                  const select = () =>
+                    selectPlacedAnnotation({
+                      kind: "nativeInk",
+                      id: stroke.id,
+                    });
+                  return (
+                    <svg
+                      key={`nink:${stroke.id}`}
+                      className="pdf-viewer__annotation-hit pdf-viewer__annotation-hit--ink"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                      style={annotationHitSvgStyle(`nink:${stroke.id}`)}
+                    >
+                    <path
+                      key={`native-source-${stroke.id ?? index}`}
+                      d={d}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={Math.max(
+                        1.2,
+                        nativeInkWidthToPercent(stroke.width, page),
+                      )}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="pdf-viewer__native-source-ink-target"
+                      data-testid="pdf-native-source-ink-target"
+                      role="button"
+                      tabIndex={
+                        onNativeSourceInkDelete ||
+                        onNativeSourceInkTransform
+                          ? 0
+                          : -1
+                      }
+                      aria-label={
+                        t("pdf.viewer.originalPdfInk")
+                      }
+                      aria-pressed={selected}
+                      style={{
+                        pointerEvents:
+                          onNativeSourceInkDelete ||
+                          onNativeSourceInkTransform
+                          ? "stroke"
+                          : "none",
+                        cursor:
+                          onNativeSourceInkDelete ||
+                          onNativeSourceInkTransform
+                          ? "pointer"
+                          : "default",
+                        outline: selected
+                          ? "2px solid rgba(37, 99, 235, 0.85)"
+                          : undefined,
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        select();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        select();
+                      }}
+                    />
+                    </svg>
+                  );
+                })}
+                {pageInks.map((stroke) => {
+                  const selected =
+                    selectedPlaced?.kind === "ink" &&
+                    selectedPlaced.id === stroke.id;
+                  const select = () =>
+                    selectPlacedAnnotation({
+                      kind: "ink",
+                      id: stroke.id,
+                    });
+                  const paint = readerInkPaint(stroke.points, stroke.width, stroke.color, page);
+                  return (
+                    <svg
+                      key={`ink:${stroke.id}`}
+                      className="pdf-viewer__annotation-hit pdf-viewer__annotation-hit--ink"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                      style={annotationHitSvgStyle(`ink:${stroke.id}`)}
+                    >
+                    <path
+                      key={stroke.id}
+                      d={paint.d}
+                      // The click target only: the stroke's paint is the
+                      // ink layer's (pdf-ink-stroke-paint).
+                      fill={paint.fill === "none" ? "none" : "transparent"}
+                      stroke={paint.stroke === "none" ? "none" : "transparent"}
+                      strokeWidth={paint.strokeWidth}
+                      data-ink-pressure={paint.pressure ? "true" : undefined}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      data-testid="pdf-ink-stroke"
+                      role="button"
+                      tabIndex={drawMode ? -1 : 0}
+                      aria-label={
+                        t("pdf.viewer.selectInkAnnotation")
+                      }
+                      aria-pressed={selected}
+                      data-selected={selected ? "true" : undefined}
+                      style={{
+                        // Selection is non-destructive. Delete remains an
+                        // explicit contextual/keyboard command.
+                        // A pressure stroke is a filled outline: its
+                        // fill is what takes the click.
+                        pointerEvents: drawMode
+                          ? "none"
+                          : paint.pressure
+                            ? "visiblePainted"
+                            : "stroke",
+                        cursor: drawMode ? "crosshair" : "pointer",
+                      }}
+                      onClick={(event) => {
+                        if (drawMode) return;
+                        event.stopPropagation();
+                        select();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        select();
+                      }}
+                    >
+                      <title>
+                        {t("pdf.viewer.selectInkAnnotation")}
+                      </title>
+                    </path>
+                    </svg>
+                  );
+                })}
+                {pageNativeSourceFreeTexts.map((box) => (
+                  <div
+                    key={box.id}
+                    role="button"
+                    tabIndex={annotationContextWritable ? 0 : -1}
+                    aria-disabled={!annotationContextWritable}
+                    aria-label={box.text.slice(0, 80) || t("pdf.textbox.label")}
+                    className="pdf-viewer__native-source-stamp-target pdf-viewer__annotation-hit"
+                    data-testid="pdf-native-source-free-text"
+                    data-native-source-ref={box.nativeSource.objectRef}
+                    style={{
+                      position: "absolute",
+                      zIndex: annotationHitZ(`nfreetext:${box.id}`),
+                      left: `${box.x * 100}%`,
+                      top: `${box.y * 100}%`,
+                      width: `${box.width * 100}%`,
+                      height: `${box.height * 100}%`,
+                      pointerEvents:
+                        !annotationContextWritable ||
+                        armedStamp ||
+                        nativeSourceFreeTextSaving ||
+                        // Selected: the frame beneath takes the drag.
+                        (selectedPlaced?.kind === "nativeSourceFreeText" &&
+                          selectedPlaced.id === box.id)
+                          ? "none"
+                          : "all",
+                      cursor: annotationContextWritable ? "move" : "default",
+                      // The page paints the box; this one only takes the
+                      // click (anywhere in it, as WPS takes a text box).
+                      background: "transparent",
+                    }}
+                    onClick={(event) => {
+                      if (armedStamp || nativeSourceFreeTextSaving) return;
+                      event.stopPropagation();
+                      selectPlacedAnnotation({
+                        kind: "nativeSourceFreeText",
+                        id: box.id,
+                      });
+                    }}
+                    onDoubleClick={(event) => {
+                      if (armedStamp || nativeSourceFreeTextSaving || !onNativeSourceFreeTextEdit) return;
+                      event.stopPropagation();
+                      // Its text is edited, as WPS takes a double-click on a
+                      // text box comment.
+                      onNativeSourceFreeTextEdit(box.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      selectPlacedAnnotation({
+                        kind: "nativeSourceFreeText",
+                        id: box.id,
+                      });
+                    }}
+                  />
+                ))}
+                {pageNativeSourceStamps.map((stamp) => (
+                  <div
+                    key={stamp.id}
+                    role="button"
+                    tabIndex={annotationContextWritable ? 0 : -1}
+                    aria-disabled={!annotationContextWritable}
+                    aria-label={t("pdfStampTool.modeToggle")}
+                    className="pdf-viewer__native-source-stamp-target pdf-viewer__annotation-hit"
+                    data-testid="pdf-native-source-stamp"
+                    data-native-source-ref={stamp.nativeSource.objectRef}
+                    style={{
+                      position: "absolute",
+                      zIndex: annotationHitZ(`nstamp:${stamp.id}`),
+                      left: `${stamp.x}%`,
+                      top: `${stamp.y}%`,
+                      width: `${stamp.width}%`,
+                      height: `${stamp.height}%`,
+                      pointerEvents:
+                        !annotationContextWritable ||
+                        armedStamp ||
+                        nativeSourceStampSaving ||
+                        // Selected: the frame beneath takes the drag.
+                        (selectedPlaced?.kind === "nativeSourceStamp" &&
+                          selectedPlaced.id === stamp.id)
+                          ? "none"
+                          : "all",
+                      cursor: annotationContextWritable
+                        ? armedStamp
+                          ? "crosshair"
+                          : "pointer"
+                        : "default",
+                      // The page paints the stamp; this box only takes
+                      // the click and shows its frame on hover (see
+                      // pdf-viewer.css), never a second stamp.
+                      background: "transparent",
+                    }}
+                    onClick={(event) => {
+                      if (armedStamp || nativeSourceStampSaving) return;
+                      event.stopPropagation();
+                      selectPlacedAnnotation({
+                        kind: "nativeSourceStamp",
+                        id: stamp.id,
+                      });
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ")
+                        return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      selectPlacedAnnotation({
+                        kind: "nativeSourceStamp",
+                        id: stamp.id,
+                      });
+                    }}
+                  />
+                ))}
+                {pageStamps.map((st) => {
+                  const presetEntry =
+                    st.kind === "preset"
+                      ? resolveStampPreset(st.preset)
+                      : null;
+                  const stampColor = stampAnnotationColor(st);
+                  return (
+                    <div
+                      key={st.id}
+                      className="pdf-viewer__signature pdf-viewer__annotation-hit"
+                      data-testid="pdf-stamp"
+                      data-stamp-kind={st.kind}
+                      data-native-stamp={
+                        managedNativeStampIdSet.has(st.id)
+                          ? "true"
+                          : undefined
+                      }
+                      style={{
+                        ...(() => {
+                          const held = heldPlacedBox(`stamp:${st.id}`, st);
+                          return {
+                            left: `${held.x}%`,
+                            top: `${held.y}%`,
+                            width: `${held.width}%`,
+                            height: `${held.height}%`,
+                          };
+                        })(),
+                        cursor: annotationContextWritable
+                          ? "pointer"
+                          : "default",
+                        pointerEvents:
+                          annotationContextWritable &&
+                          !(
+                            selectedPlaced?.kind === "stamp" &&
+                            selectedPlaced.id === st.id
+                          )
+                            ? "auto"
+                            : "none",
+                        // Above the stamps and shapes made before it, below
+                        // those made after (the page's /Annots order).
+                        zIndex: annotationHitZ(`stamp:${st.id}`),
+                      }}
+                      onClick={(e) => {
+                        // Select for move/resize (frame + handles).
+                        e.stopPropagation();
+                        selectPlacedAnnotation({
+                          kind: "stamp",
+                          id: st.id,
+                        });
+                      }}
+                    >
+                      {pdfStampContent(st, presetEntry?.text ?? "", stampColor, t("pdfStampTool.imageAlt"), true)}
+                      <button
+                        type="button"
+                        className="pdf-viewer__signature-delete"
+                        aria-label={t("pdfStampTool.delete")}
+                        title={t("pdfStampTool.delete")}
+                        data-testid="pdf-stamp-delete"
+                        disabled={stampSaving || !annotationContextWritable}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleStampDelete(st.id);
+                        }}
+                      >
+                        <Trash2 size={12} aria-hidden />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
               {chartAuthoring ? (
                 <PdfChartLayer
+                  stackRanks={pageAnnotationStackRanks}
                   charts={chartAuthoring.charts.filter((chart) => chart.page === page.pageNumber)}
                   cssWidth={(rotated ? page.height : page.width) * scale}
                   cssHeight={(rotated ? page.width : page.height) * scale}
@@ -7058,6 +7446,7 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
               ) : null}
               {tableAuthoring ? (
                 <PdfTableLayer
+                  stackRanks={pageAnnotationStackRanks}
                   tables={tableAuthoring.tables.filter((table) => table.page === page.pageNumber)}
                   cssWidth={(rotated ? page.height : page.width) * scale}
                   cssHeight={(rotated ? page.width : page.height) * scale}
@@ -7074,6 +7463,7 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
               ) : null}
               {textBoxAuthoring ? (
                 <PdfReaderTextBoxLayer
+                  stackRanks={pageAnnotationStackRanks}
                   authoring={textBoxAuthoring}
                   pageIndex={page.pageNumber - 1}
                   cssWidth={(rotated ? page.height : page.width) * scale}
@@ -7142,6 +7532,7 @@ export function PdfViewerPages({ viewport }: { viewport: PdfViewerPagesModel }) 
                   t={t}
                 />
               ) : null}
+              </div>
               <div data-pdf-note-layer className="pdf-viewer__note-layer">
                 {onNativeSourceTextNoteSelect
                   ? pageNativeSourceTextNotes.map((note) => {

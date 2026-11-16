@@ -37,6 +37,7 @@
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { isDocumentLayoutStatusAttribute } from "../../documentLayoutStatus";
 import type { LedgerCut } from "./ledgerTypes";
+import { noteFacesAfterMeasure } from "./ledgerFaceScan";
 
 /** Everything the ledger reads off one fragment. */
 export interface LedgerFragmentMeasure {
@@ -172,6 +173,9 @@ export class LedgerMeasureCache {
   private dirtySheets = new WeakSet<HTMLElement>();
   /** Sheets a pass measured whole (and nothing changed in since). */
   private settledSheets = new WeakSet<HTMLElement>();
+  /** The look at the faces right after each sheet was last measured whole
+   * (ledgerFaceScan). */
+  private settledLooks = new WeakMap<HTMLElement, number>();
   /** Each drawn object's height when its drawing last changed (see record). */
   private objectHeights = new WeakMap<Element, number>();
   private readonly objectsPlaced = new Set<Element>();
@@ -326,7 +330,14 @@ export class LedgerMeasureCache {
 
   /** The sheets this pass measured whole now match their entries. */
   settle(sheets: readonly HTMLElement[]): void {
+    let look: number | null = null;
     for (const sheet of sheets) {
+      // A sheet measured before and unchanged since keeps the look of that
+      // measurement: this pass took its entries, it laid nothing out anew.
+      if (!this.settledSheets.has(sheet) || this.dirtySheets.has(sheet) || !this.settledLooks.has(sheet)) {
+        look ??= noteFacesAfterMeasure(sheet.ownerDocument);
+        this.settledLooks.set(sheet, look);
+      }
       this.dirtySheets.delete(sheet);
       this.dirtyWhy.delete(sheet);
       this.settledSheets.add(sheet);
@@ -373,6 +384,12 @@ export class LedgerMeasureCache {
   markProjected(sheet: HTMLElement, page: PmNode): void {
     this.projected.set(sheet, page);
     this.projectionStale.delete(sheet);
+  }
+
+  /** The look at the faces right after `sheet` was last measured whole
+   * (noteFacesAfterMeasure); undefined for one never measured. */
+  settledLook(sheet: HTMLElement): number | undefined {
+    return this.settledLooks.get(sheet);
   }
 
   /** Whether a pass has ever measured this element whole. */

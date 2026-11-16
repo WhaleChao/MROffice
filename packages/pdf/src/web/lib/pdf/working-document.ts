@@ -3,7 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { createPdfNativeWorkingSession, restorePdfNativeWorkingSession,
+import { advancePdfWorkingRecovery, createPdfNativeWorkingSession, PdfWorkingPlannerUnavailableError, restorePdfNativeWorkingSession,
+  type PdfWorkingRecovery, type PdfWorkingRecoveryLostEdit,
   type PdfWorkingSessionOptions, type PdfWorkingSaveAcknowledgement } from "./native-working-session";
 import { createPdfWorkingRecoveryStore } from "./working-recovery-store";
 import type { PdfEngineSourceIdentity } from "./engine/contracts";
@@ -11,6 +12,11 @@ import type { PdfEngineSourceIdentity } from "./engine/contracts";
 /** One window's local document owner. Stage resolves when native bytes and
  * recovery are local, not when the ordered publication queue finishes. The
  * caller's sink must return a verified receipt after shared hold retirement. */
+/** Per page: how often in a row its kept queue could not be planned again
+ * because the planner was out of reach (see createPdfWorkingDocument). */
+const plannerOutOfReach = new Map<string, number>();
+const PLANNER_OUT_OF_REACH_TRIES = 3;
+
 export async function createPdfWorkingDocument(options: Omit<PdfWorkingSessionOptions,"writeRecovery"|"onChange"> & {
   dataItemId: string;
   recoveryStore?: ReturnType<typeof createPdfWorkingRecoveryStore>;
@@ -18,9 +24,34 @@ export async function createPdfWorkingDocument(options: Omit<PdfWorkingSessionOp
    * saved as what it does (pdf_pending_edits) follows it. */
   onHeldUndone?: (operationId: string) => void;
   onHeldRedone?: (operationId: string) => void;
+  
+
+
+
+  onRecoveryLetGo?: (lost: Readonly<{ operations: number; reason: string;
+    /** Each edit let go: a typed line's words are the window's to keep as that line's draft. */
+    edits: readonly PdfWorkingRecoveryLostEdit[] }>) => void;
+  /** Whether `source` is the version the server holds for the page now (a
+   * queue kept for another version is planned again only on that one). */
+  isCurrentSource?: () => Promise<boolean>;
 }) {
   const store = options.recoveryStore ?? createPdfWorkingRecoveryStore(options);
-  const stored = store.read();
+  let stored = store.read();
+  // The queue's first edits reached the server after the record was kept (a
+  // save on its way when the page went, sent again by the window as it came
+  // back): the page now stands on one of the queue's own outputs, and the
+  // edits after it come back on exactly those bytes. The window's restore
+  // does this when it opens the copy; a copy opened first by anything else
+  // (the first edit after the reload, Save) read the record as another
+  // version's and let the rest of the queue go -- two of five moves, with
+  
+  if (stored?.operations.length && stored.savedSource.sourceSha256 !== options.source.sourceSha256) {
+    const advanced = advancePdfWorkingRecovery(stored, options.source);
+    if (advanced) {
+      store.write(advanced);
+      stored = advanced;
+    }
+  }
   const listeners = new Set<() => void>();
   let closed = false;
   let publishing: Promise<void> | null = null;
@@ -40,14 +71,77 @@ export async function createPdfWorkingDocument(options: Omit<PdfWorkingSessionOp
   // every later save of the page refused with "recovery identity is
   
   // The words typed are kept apart (the editor's retained draft).
+  const plannerKey = `${options.pageId}:${options.dataItemId}`;
   if (stored?.operations.length) {
-    try { session = await restorePdfNativeWorkingSession(input, stored); }
-    catch (error) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn("[pdf-working] stale recovery let go", error instanceof Error ? error.message : error);
+    const kept = stored;
+    // A queue kept for another version of the page's file (another window
+    // saved the page, or it was put back, while this tab's edits waited
+    // across a reload) comes back on the version the page now has: each edit
+    // is planned again there, as the queue of an open window is when its save
+    // meets another window's. An edit that version does not take goes alone
+    // and is said, what was typed kept as its line's draft; the rest is
+    // unsaved again, as it was. Before, the whole queue was let go (and, until
+    
+    const otherVersion = kept.savedSource.sourceSha256 !== options.source.sourceSha256 &&
+      kept.savedSource.resourceId === options.source.resourceId;
+    // (Only on the page's current version: an older one this window happened
+    // to open on would turn away edits the current one takes.)
+    if (otherVersion && options.isCurrentSource && !(await options.isCurrentSource().catch(() => false))) {
+      throw new PdfWorkingPlannerUnavailableError("The page's current version is not known yet.");
+    }
+    const recovery: PdfWorkingRecovery = otherVersion ? Object.freeze({ ...kept, savedSource: options.source,
+      standsOn: Object.freeze({ held: kept.operations[0]!.baseSha256, sameContent: false }) }) : kept;
+    const lost: PdfWorkingRecoveryLostEdit[] = [];
+    const restore = (tolerate: "verdict" | "any") => {
+      lost.length = 0;
+      return restorePdfNativeWorkingSession(input, recovery,
+        otherVersion ? { tolerate, lost: (edit) => { lost.push(edit); } } : undefined);
+    };
+    let failure: unknown = null;
+    try { session = await restore("verdict"); }
+    catch (error) { failure = error; session = null; }
+    if (failure !== null) {
+      const outOfReach = failure instanceof PdfWorkingPlannerUnavailableError;
+      // The planner was out of reach, or (on another version) an edit failed
+      // for a reason that is not the planner's verdict: nothing says the
+      // queue cannot come back. Kept, and the copy does not open this time
+      // (whoever opens it next plans the queue again). The second does not
+      // hold the page for good: the third time, that edit is let go, said.
+      // (A planner out of reach never lets the queue go, however often: the
+      // file is large or the machine busy, and three timeouts in six seconds
+      // threw away up to thirty-one edits. The queue waits; nothing can be
+      // edited without the planner anyway.)
+      if (outOfReach) throw failure;
+      const tries = (plannerOutOfReach.get(plannerKey) ?? 0) + 1;
+      if (otherVersion && tries < PLANNER_OUT_OF_REACH_TRIES) {
+        plannerOutOfReach.set(plannerKey, tries);
+        throw new PdfWorkingPlannerUnavailableError(failure instanceof Error ? failure.message : "The kept edits could not be planned again yet.");
       }
+      if (otherVersion && !outOfReach) {
+        try { session = await restore("any"); failure = null; }
+        catch (error) { failure = error; session = null; }
+      }
+    }
+    plannerOutOfReach.delete(plannerKey);
+    const textOf = (operation: PdfWorkingRecovery["operations"][number]) => operation.kind === "engine" ? {}
+      : { text: Object.freeze({ selection: operation.selection, replacementText: operation.replacementText }) };
+    if (failure !== null || !session) {
+      const reason = failure instanceof Error ? failure.message.slice(0, 160) : "unknown";
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] stale recovery let go", reason);
       store.discardUnsaved();
       session = await createPdfNativeWorkingSession(input);
+      try {
+        options.onRecoveryLetGo?.(Object.freeze({ operations: kept.operations.length, reason,
+          edits: Object.freeze(kept.operations.map((operation) => Object.freeze({ id: operation.id, reason, ...textOf(operation) }))) }));
+      } catch { /* the notice is the window's; the copy is open either way */ }
+    } else if (lost.length) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("[pdf-working] recovered on another version; let go " + JSON.stringify({ lost: lost.length,
+          back: session.snapshot().pendingOperationIds.length, why: lost[0]!.reason.slice(0, 100) }));
+      }
+      try {
+        options.onRecoveryLetGo?.(Object.freeze({ operations: lost.length, reason: lost[0]!.reason, edits: Object.freeze([...lost]) }));
+      } catch { /* the notice is the window's; the copy is open either way */ }
     }
   } else session = await createPdfNativeWorkingSession(input);
   const active = session;
@@ -128,6 +222,18 @@ export async function createPdfWorkingDocument(options: Omit<PdfWorkingSessionOp
     rebaseSaved: (source: PdfEngineSourceIdentity, bytes: Uint8Array,
       options?: Readonly<{ keepPending?: boolean }>): Promise<boolean> =>
       closed ? Promise.resolve(false) : active.rebaseSaved(source, bytes, options),
+    /** A failed queue that another window's save overtook (see the
+     * session's namePeerVersion). */
+    namePeerVersion: (): boolean => !closed && active.namePeerVersion(),
+    /** The queue's oldest edits, which the saved version cannot take, go
+     * alone (see the session's letGoLeading); what is queued behind them is
+     * sent on. */
+    letGoLeading(operationIds: readonly string[]): boolean {
+      if (closed || !active.letGoLeading(operationIds)) return false;
+      // (The send that named them goes on with the rest, as after a reconcile.)
+      if (active.snapshot().pendingOperationIds.length) void publish().catch(() => undefined);
+      return true;
+    },
     redoHeld(): string | null {
       assertOpen();
       const id = active.restageLast();
@@ -136,6 +242,10 @@ export async function createPdfWorkingDocument(options: Omit<PdfWorkingSessionOp
     },
     reconcile(ack: PdfWorkingSaveAcknowledgement) {
       assertOpen();active.reconcile(ack);
+      if (active.snapshot().pendingOperationIds.length) void publish().catch(() => undefined);
+    },
+    reconcileChain(acks: readonly PdfWorkingSaveAcknowledgement[]) {
+      assertOpen();active.reconcileChain(acks);
       if (active.snapshot().pendingOperationIds.length) void publish().catch(() => undefined);
     },
     confirmUnchangedBaseline: (...args: Parameters<typeof active.confirmUnchangedBaseline>) => {

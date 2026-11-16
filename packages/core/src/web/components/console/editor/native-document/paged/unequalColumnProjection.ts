@@ -179,6 +179,76 @@ export interface ColumnBandExclusion {
  * "top,bottom,left,right" in the sheet's content coordinates. */
 export const COLUMN_BAND_EXCLUSION_ATTR = "data-column-band-exclusion";
 
+/**
+ * `data-table-page-frame` of a floating table placed down the page or the
+ * margins on a page of columns (`tablePageFrame` placeColumnPageTable): drawn
+ * at its page point, it costs the column flow nothing, as an overlay.
+ */
+export const COLUMN_TABLE_FRAME = "column";
+
+/** Blocks the column flow does not charge: overlays and page-placed tables. */
+const FLOWLESS_SELECTOR = `[data-float-mode="overlay"], [data-table-page-frame="${COLUMN_TABLE_FRAME}"]`;
+const OUT_OF_FLOW_SELECTOR = `[data-float-mode="float"], ${FLOWLESS_SELECTOR}`;
+
+/**
+ * A floating table placed down the page or the margins, whole, on a page of
+ * columns, that its page can hold: drawn at its page point
+ * (`tablePageFrame` placeColumnPageTable), it is never column content. Read
+ * from the table itself, not from its frame: a table the page planner first
+ * charged and cut in its anchor's column was broken before its frame was
+ * written, and a broken table keeps the flow (corpus R423-D04's sidebar, cut
+ * between column 2 of page 1 and column 1 of page 2, every page after it a
+ * page late). `window.__docsColumnTableFloatOff = true` keeps the older
+ * layout (A/B).
+ */
+export function columnPagePlacedTable(block: Element): boolean {
+  const sheet = block.parentElement;
+  if (!sheet || ownSectionColumnCount(block) < 2) return false;
+  const win = block.ownerDocument.defaultView as (Window & { __docsColumnTableFloatOff?: boolean }) | null;
+  if (win?.__docsColumnTableFloatOff === true) return false;
+  const table = block.matches("table[data-table-positioning]")
+    ? block
+    : block.querySelector(":scope > table[data-table-positioning]");
+  if (!(table instanceof HTMLElement)) return false;
+  if (table.dataset.pageTableContinues === "true" || table.dataset.pageTableContinuation === "true") return false;
+  let anchor: unknown = null;
+  try {
+    anchor = (JSON.parse(table.dataset.tablePositioning ?? "null") as { verticalAnchor?: unknown } | null)?.verticalAnchor;
+  } catch {
+    return false;
+  }
+  if (anchor !== "page" && anchor !== "margin") return false;
+  const style = getComputedStyle(sheet);
+  const room = (Number.parseFloat(style.minHeight) || sheet.offsetHeight) -
+    (Number.parseFloat(style.paddingTop) || 0) - (Number.parseFloat(style.paddingBottom) || 0);
+  return table.offsetHeight > 0 && table.offsetHeight <= room + 0.5;
+}
+
+/**
+ * The column count of the section a block of a page of newspaper columns
+ * stands in: the sheet's own, or -- on a page of stacked sections
+ * (`COLUMN_REGIONS_ATTR`) -- its region's, the section breaks before it
+ * counting the regions. A floating table of a single-column section on such
+ * a page is placed as on a single-column page: drawn at its page point over
+ * the column regions, nothing wrapped the region text round it (corpus
+ * R363-D01 p3: the descriptive-statistics table of a one-column section
+ * between two two-column ones drawn over both columns' text, 16 overlaps).
+ * 1 for a block of no column page.
+ */
+export function ownSectionColumnCount(block: Element): number {
+  const sheet = block.parentElement;
+  if (!sheet) return 1;
+  const regions = sheet.getAttribute(COLUMN_REGIONS_ATTR);
+  if (!regions) return unequalColumnCount(sheet as HTMLElement) ?? 1;
+  let region = 0;
+  for (let sibling = block.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+    if (sibling.matches('[data-type="section-break"]')) region += 1;
+  }
+  const token = regions.split("|")[region];
+  if (!token || token === "1") return 1;
+  return parseUnequalColumnTracks(token)?.length ?? 1;
+}
+
 export function parseColumnBandExclusion(token: string | null): ColumnBandExclusion | null {
   if (!token) return null;
   const values = token.split(",").map(Number);
@@ -402,6 +472,20 @@ function followerStartsPast(
 /** Harness switch (`window.__docsColumnLastStays = true`): a block the last
  * column cannot hold stays in it, over the foot, for the page planner to
  * move on, rather than opening a column past the last track. */
+/** Harness switch (`window.__docsColumnKeepNextOff = true`): a page of
+ * newspaper columns lays its blocks into the columns without their Keep
+ * with next, as it did before (an A/B of one build). */
+function columnKeepNextOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsColumnKeepNextOff?: boolean }).__docsColumnKeepNextOff === true;
+}
+
+/** What `followerStartsPast` reads of the block after a kept one: whether it
+ * may break after its first line, and that line's pitch. */
+function followerFacts(block: HTMLElement | undefined): { splittable?: boolean; lineHeightPx?: number } {
+  if (!block || !block.matches(SPLITTABLE_TEXT_SELECTOR)) return {};
+  return { splittable: true, lineHeightPx: blockLinePitchPx(block) };
+}
+
 function lastColumnHolds(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsColumnLastStays?: boolean }).__docsColumnLastStays === true;
 }
@@ -654,6 +738,36 @@ export interface ColumnRegionBlockMetric extends UnequalColumnBlockMetric {
   /** Word's widow/orphan floor for a break inside it, in rows (2 with widow
    * control, 1 without; blockSplitting's minimumTextSplitLines). */
   minSplitLines?: number;
+  /** A float of a single-column region the text wraps beside (wrap square,
+   * tight or through, floated left or right): the side it stands at and its
+   * drawn width, its margins (Word's distL/distR) not included. */
+  sideFloat?: { side: "left" | "right"; widthPx: number };
+  /** A float anchored in the flow block just before it (its run's first):
+   * Word measures its offset from that paragraph's top, not from below it. */
+  hostIsPrevious?: boolean;
+  /** The inline span its lines are drawn over, px from its border box's
+   * start, at its track's width; null when it draws no line beside a float
+   * (an empty paragraph, a drawing: Word lets floats overlap drawings).
+   * Absent: it fills its box. Read only on a region holding a side float. */
+  inkSpanPx?: readonly [number, number] | null;
+}
+
+/** Harness switch (`window.__docsRegionSideFloatOff = true`): a float of a
+ * single-column region on a page of column regions is drawn at the region's
+ * start and always pushes the flow below it (as before; an A/B of one build). */
+/** The attribute `floatingTextBoxLayout` marks a float with when its host
+ * paragraph is the flow block just before it. */
+export const FLOAT_HOST_BEFORE_ATTR = "data-float-host-before";
+
+/** Harness switch (`window.__docsRegionFloatHostTopOff = true`): a run of
+ * floats on a page of column regions stands below the block before it even
+ * when that block is the paragraph it is anchored in (as before; A/B). */
+function regionFloatHostTopOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsRegionFloatHostTopOff?: boolean }).__docsRegionFloatHostTopOff === true;
+}
+
+function regionSideFloatOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsRegionSideFloatOff?: boolean }).__docsRegionSideFloatOff === true;
 }
 
 export interface ColumnRegionFlowPlan {
@@ -884,6 +998,55 @@ export function balancedColumnHeightPx(
   return Math.ceil(high - 0.05);
 }
 
+/** Harness switch (`window.__docsColumnSeamHeadOff = true`): a balanced
+ * region keeps the balanced height when a cut paragraph's head no longer
+ * fits it (as before; an A/B of one build). */
+function columnSeamHeadOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsColumnSeamHeadOff?: boolean }).__docsColumnSeamHeadOff === true;
+}
+
+/**
+ * The column height that keeps a cut paragraph's head in the column before
+ * its tail, when the plan put the two in one column: where that column's
+ * blocks end, its gap, and the head as tall as it is drawn there. Null when
+ * every head stands in a column before its tail.
+ */
+export function seamHeadColumnHeightPx(
+  placements: readonly UnequalColumnPlacement[],
+  blocks: readonly ColumnRegionBlockMetric[],
+  columns: number,
+): number | null {
+  for (let index = 0; index + 1 < blocks.length; index += 1) {
+    const head = blocks[index];
+    const tail = blocks[index + 1];
+    if (!head.continuesNext || !tail.continuesPrevious || head.flowless) continue;
+    // A block past the last track is drawn in it (the region's placement
+    // clamps it there), over what stands in it.
+    const columnOf = (at: number) => {
+      const placed = placements[at]?.columnIndex;
+      return placed === undefined ? undefined : Math.min(placed, columns - 1);
+    };
+    const column = columnOf(index);
+    if (column === undefined || column !== columnOf(index + 1) || column <= 0) continue;
+    // The column the head was cut for: where the block before it stands.
+    const before = column - 1;
+    let end = 0;
+    let marginBottom = 0;
+    for (let other = 0; other < index; other += 1) {
+      const placed = placements[other];
+      if (!placed || placed.columnIndex !== before || blocks[other].flowless) continue;
+      const bottom = placed.topPx + heightAt(blocks[other], before);
+      if (bottom >= end) {
+        end = bottom;
+        marginBottom = blocks[other].marginBottomPx;
+      }
+    }
+    const gap = end > 0 ? collapseUnequalColumnMargins(marginBottom, head.marginTopPx) : 0;
+    return end + gap + heightAt(head, before);
+  }
+  return null;
+}
+
 /**
  * Place a page holding several sections as regions stacked from the top of
  * its text area: a single-column region flows as the page does, a column
@@ -939,7 +1102,64 @@ export function planColumnRegionFlow(
       let floatBottom = 0;
       let runCursor = cursor;
       let runPrevious: number | null = null;
-      for (const { block, index } of members) {
+      // The top of the last flow block placed, and whether the float run
+      // stands from it (its first float is anchored in it): Word measures a
+      // paragraph-placed float from its paragraph's top (corpus R351-D09 p1:
+      // the "Check for updates" group 3.55pt below an empty paragraph was
+      // drawn under it, and the title 9pt low).
+      let lastFlowTop: number | null = null;
+      let runFromHostTop = false;
+      const hostTop = !regionFloatHostTopOff();
+      // Where the flow resumes after a float run: under the lowest float, but
+      // never above where the next block stands with no float at all.
+      const resumeAfterFloats = () => {
+        const natural = runPrevious === null ? runCursor : runCursor + Math.max(0, runPrevious);
+        if (runFromHostTop && floatBottom <= natural) {
+          cursor = runCursor;
+          previous = runPrevious;
+        } else {
+          cursor = floatBottom;
+          previous = 0;
+        }
+      };
+      const sideFloats = !regionSideFloatOff();
+      // Where a side float stands across the track: at its side, its
+      // margins inside the track (`float: right` on a page not projected).
+      const sideStartOf = (block: ColumnRegionBlockMetric): number | null => {
+        if (!sideFloats || !block.sideFloat) return null;
+        const outer = block.sideFloat.widthPx + Math.max(0, block.marginLeftPx || 0) + Math.max(0, block.marginRightPx || 0);
+        if (!(outer < track.widthPx - 1)) return null;
+        return block.sideFloat.side === "right" ? track.widthPx - outer : 0;
+      };
+      // A side float the text of its region stands beside, in Word's wrap,
+      // with no line of it reaching into the float: it moves the flow
+      // nothing (corpus R351-D09 p1: a journal logo square-wrapped at the
+      // right of the masthead lines; drawn as one more float of the run,
+      // it pushed the page's text 33pt down and its last lines to page 2).
+      // A line that would reach into it keeps the run's push below it.
+      const besideFlow = (position: number, top: number, bottom: number, start: number, end: number): boolean => {
+        let y = cursor;
+        let before = previous;
+        for (let next = position + 1; next < members.length; next += 1) {
+          const other = members[next].block;
+          if (other.sectionBreak) break;
+          if (other.flowless || other.outOfFlow) continue;
+          const height = heightAt(other, 0);
+          const at = before === null ? y : y + collapseUnequalColumnMargins(before, other.marginTopPx);
+          if (at >= bottom) break;
+          if (at + height > top && other.inkSpanPx !== null) {
+            const left = (other.marginLeftPx || 0) + (other.inkSpanPx ? other.inkSpanPx[0] : 0);
+            const right = other.inkSpanPx
+              ? (other.marginLeftPx || 0) + other.inkSpanPx[1]
+              : track.widthPx - (other.marginRightPx || 0);
+            if (right > start + 0.5 && left < end - 0.5) return false;
+          }
+          y = at + height;
+          before = other.marginBottomPx;
+        }
+        return true;
+      };
+      for (const [position, { block, index }] of members.entries()) {
         if (block.sectionBreak) {
           // Drawn where the flow is; the space after the paragraph before it
           // still meets the next block's space before (below or across the
@@ -961,21 +1181,44 @@ export function planColumnRegionFlow(
           continue;
         }
         if (block.outOfFlow && !block.flowless) {
+          const sideStart = sideStartOf(block);
+          if (sideStart !== null && floatBase === null && block.sideFloat) {
+            const height = heightAt(block, 0);
+            const top = (previous === null ? cursor : cursor + Math.max(0, previous)) + Math.max(0, block.marginTopPx || 0);
+            const outerEnd = sideStart + block.sideFloat.widthPx + Math.max(0, block.marginLeftPx || 0) + Math.max(0, block.marginRightPx || 0);
+            if (besideFlow(position, top, top + height + Math.max(0, block.marginBottomPx || 0), sideStart, outerEnd)) {
+              placements[index] = {
+                columnIndex: 0,
+                topPx: top,
+                inlineStartPx: sideStart,
+                widthPx: Math.max(1, block.sideFloat.widthPx),
+                flowStartPx: top,
+                flowEndPx: top + height,
+                clipInline: false,
+                regionColumns: 1,
+                floatAdvancePx: 0,
+              };
+              continue;
+            }
+          }
           if (floatBase === null) {
             runCursor = cursor;
             runPrevious = previous;
-            floatBase = previous === null ? cursor : cursor + Math.max(0, previous);
+            runFromHostTop = hostTop && block.hostIsPrevious === true && lastFlowTop !== null;
+            floatBase = runFromHostTop ? lastFlowTop! : previous === null ? cursor : cursor + Math.max(0, previous);
             floatBottom = floatBase;
           }
           const height = heightAt(block, 0);
           const top = Math.max(floatBase + Math.max(0, block.marginTopPx || 0), floatBottom);
           const outerBottom = top + height + Math.max(0, block.marginBottomPx || 0);
           const horizontal = (block.marginLeftPx || 0) + (block.marginRightPx || 0);
+          // Still at its side when it pushes the flow (a right float was
+          // drawn at the region's left edge).
           placements[index] = {
             columnIndex: 0,
             topPx: top,
-            inlineStartPx: 0,
-            widthPx: Math.max(1, track.widthPx - horizontal),
+            inlineStartPx: sideStart ?? 0,
+            widthPx: Math.max(1, sideStart !== null && block.sideFloat ? block.sideFloat.widthPx : track.widthPx - horizontal),
             flowStartPx: top,
             flowEndPx: top + height,
             clipInline: false,
@@ -991,8 +1234,7 @@ export function planColumnRegionFlow(
           // stands below them (the ledger charges the floats their advance
           // and this block its own space before).
           pushedFromPx = runPrevious === null ? runCursor : runCursor + collapseUnequalColumnMargins(runPrevious, block.marginTopPx);
-          cursor = floatBottom;
-          previous = 0;
+          resumeAfterFloats();
           floatBase = null;
         }
         if (block.flowless) {
@@ -1026,11 +1268,9 @@ export function planColumnRegionFlow(
         };
         cursor = top + height;
         previous = block.marginBottomPx;
+        lastFlowTop = top;
       }
-      if (floatBase !== null) {
-        cursor = floatBottom;
-        previous = 0;
-      }
+      if (floatBase !== null) resumeAfterFloats();
       pageCursor = cursor;
       previousBottomMargin = previous ?? 0;
       // The page's last line may hang its Auto leading below the foot.
@@ -1044,7 +1284,7 @@ export function planColumnRegionFlow(
     // planner, whose column ends already keep a heading with what follows.
     const regionBlocks = members.map((entry) =>
       region.balance ? entry.block : { ...entry.block, keepNext: false, keepLines: false });
-    const height = region.balance
+    let height = region.balance
       ? Math.min(room, Math.max(1, balancedColumnHeightPx(region.tracks.length, regionBlocks)))
       : room;
     // Columns filled to the page's foot take Word's page-bottom credit; a
@@ -1060,7 +1300,25 @@ export function planColumnRegionFlow(
     if (flowOptions.columnCapacitiesPx?.some((foot) => foot !== undefined)) {
       bandTopsPx = flowOptions.columnCapacitiesPx.map((foot) => (foot === undefined ? undefined : regionTop + foot));
     }
-    const plan = planUnequalColumnFlow(region.tracks, height, regionBlocks, flowOptions);
+    let plan = planUnequalColumnFlow(region.tracks, height, regionBlocks, flowOptions);
+    // A paragraph cut at a balanced column's foot keeps its head there: the
+    // balance counts its rows at the paragraph's pitch, and a head holding a
+    // line taller than that (an inline formula's stacked fraction) is taller
+    // than its rows. Placed at the balanced height, the head no longer fit
+    // its column and went on to stand over its own tail in the next one;
+    // the page planner joined the two (a seam inside one track) and never
+    // cut the paragraph again, which stood whole in the next column (corpus
+    // R350-D01: "This article is about ..." whole in column 2, "1.
+    // INTRODUCTION" alone in column 1; Word cuts it after "not universal").
+    // The columns grow to hold the head as it is drawn.
+    if (region.balance && !columnSeamHeadOff()) {
+      for (let pass = 0; pass < 4; pass += 1) {
+        const needed = seamHeadColumnHeightPx(plan.placements, regionBlocks, region.tracks.length);
+        if (needed === null || !(needed > height + 0.5) || needed > room + 0.5) break;
+        height = Math.ceil(needed - 0.05);
+        plan = planUnequalColumnFlow(region.tracks, height, regionBlocks, flowOptions);
+      }
+    }
     let regionBottom = regionTop;
     let regionFlowBottom = regionTop;
     members.forEach(({ block, index }, memberIndex) => {
@@ -1461,6 +1719,64 @@ export function clearUnequalColumnProjection(sheet: HTMLElement): void {
 }
 
 /** The region specs a page's regions token names, or null. */
+/**
+ * A Top and Bottom box wider than its column at the head of a multi-column
+ * section: Word keeps every column's text clear of it, so the columns start
+ * below it (corpus R432-D04, the IJDR journal: the abstract box 551.5 pt wide
+ * anchored in the first paragraph of a two-column section; drawn as a block
+ * of the first column, the second column's text ran over it). The box and the
+ * empty lines before it in the section become a full-width region of their
+ * own, stacked above the section's columns. `regionOf` and `regionTracks` are
+ * rewritten in place.
+ */
+const SPANNING_BAND_SELECTOR = '[data-float-mode="band"], figure[data-document-shape][data-float-band="true"]';
+
+function splitRegionsAtSpanningBands(
+  blocks: readonly HTMLElement[],
+  regionOf: number[],
+  regionTracks: Array<readonly UnequalColumnTrack[]>,
+  printableWidthPx: number,
+): void {
+  for (let region = regionTracks.length - 1; region >= 0; region -= 1) {
+    const tracks = regionTracks[region];
+    if (tracks.length < 2) continue;
+    const widest = Math.max(...tracks.map((track) => track.widthPx));
+    const first = regionOf.indexOf(region);
+    if (first < 0) continue;
+    let band = -1;
+    for (let index = first; index < blocks.length && regionOf[index] === region; index += 1) {
+      const block = blocks[index];
+      // A Top and Bottom picture or box (`data-float-mode="band"`), or a
+      // drawing (`figure[data-document-shape][data-float-band]`), as the
+      // sheet's child or the node view's one figure.
+      const bandElement = block.matches(SPANNING_BAND_SELECTOR)
+        ? block
+        : block.querySelector<HTMLElement>(`:scope > ${SPANNING_BAND_SELECTOR.split(", ").join(", :scope > ")}`);
+      if (bandElement) {
+        // The wrapper keeps to its column (max-width); the box is its frame.
+        const drawnPx = Math.max(
+          bandElement.getBoundingClientRect().width,
+          ...Array.from(bandElement.querySelectorAll<HTMLElement>(":scope > *, :scope > * > *"), (child) => child.getBoundingClientRect().width),
+        ) / Math.max(1e-6, sheetDrawScaleOf(block));
+        if (drawnPx > widest + 2) band = index;
+        break;
+      }
+      // Only empty lines (and section marks) may stand above it in the section.
+      if ((block.textContent ?? "").trim() || block.querySelector("img, svg, table, canvas")) break;
+    }
+    if (band < 0) continue;
+    regionTracks.splice(region, 0, [{ widthPx: printableWidthPx, gapAfterPx: 0 }]);
+    for (let index = 0; index < regionOf.length; index += 1) {
+      if (regionOf[index] > region || (regionOf[index] === region && index > band)) regionOf[index] += 1;
+    }
+  }
+}
+
+function sheetDrawScaleOf(block: HTMLElement): number {
+  const sheet = block.closest<HTMLElement>("article[data-page-sheet]");
+  return sheet ? sheetDrawScale(sheet) : 1;
+}
+
 export function parseColumnRegions(
   value: string | null | undefined,
   printableWidthPx: number,
@@ -1510,6 +1826,50 @@ export function blockLinePitchPx(block: HTMLElement): number {
   return Number.isFinite(auto) && auto > 0 ? auto : 0;
 }
 
+const EMU_PER_PX = 9525;
+
+/** A float the text wraps beside (`float: left|right`, not an overlay): its
+ * side and drawn width, from its anchor's extent and effect extent (the
+ * box the browser floats; its margins are Word's distL/distR). */
+function sideFloatOf(block: HTMLElement): { side: "left" | "right"; widthPx: number } | undefined {
+  if (!block.matches('[data-float-mode="float"]')) return undefined;
+  const side = block.getAttribute("data-float") || block.style.float;
+  if (side !== "left" && side !== "right") return undefined;
+  type AnchorExtent = { widthEmu?: unknown; effectLEmu?: unknown; effectREmu?: unknown };
+  let anchor: AnchorExtent | null;
+  try {
+    anchor = JSON.parse(block.getAttribute("data-float-anchor") ?? "null") as AnchorExtent | null;
+  } catch {
+    return undefined;
+  }
+  const emu = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+  const widthEmu = emu(anchor?.widthEmu);
+  if (!(widthEmu > 0)) return undefined;
+  return { side, widthPx: (widthEmu + Math.max(0, emu(anchor?.effectLEmu)) + Math.max(0, emu(anchor?.effectREmu))) / EMU_PER_PX };
+}
+
+/** The inline span a block's lines are drawn over (layout px from its
+ * border box's start); null for a drawing or a block with no line ink,
+ * undefined for a block taken as filling its box (a table). */
+function blockInkSpanPx(block: HTMLElement, scale: number): readonly [number, number] | null | undefined {
+  if (block.matches("[data-document-shape], [data-float-band], [data-float-mode]")) return null;
+  if (!block.matches(SPLITTABLE_TEXT_SELECTOR)) return undefined;
+  const range = block.ownerDocument.createRange();
+  range.selectNodeContents(block);
+  const box = block.getBoundingClientRect();
+  let start = Number.POSITIVE_INFINITY;
+  let end = Number.NEGATIVE_INFINITY;
+  for (const rect of Array.from(range.getClientRects())) {
+    if (!(rect.width > 0.5) || !(rect.height > 0)) continue;
+    start = Math.min(start, rect.left - box.left);
+    end = Math.max(end, rect.right - box.left);
+  }
+  range.detach?.();
+  if (!(end > start)) return null;
+  const drawn = scale > 0 ? scale : 1;
+  return [start / drawn, end / drawn];
+}
+
 /**
  * Place a page holding several sections (continuous section breaks) as
  * stacked column regions (`planColumnRegionFlow`), with the same editable
@@ -1555,6 +1915,7 @@ function projectColumnRegionSheet(sheet: HTMLElement): UnequalColumnProjection |
   const closing = blocks[blocks.length - 1];
   const endsHere = closing.matches('[data-type="section-break"]') &&
     (closing.getAttribute("data-break-type") ?? "nextPage") === "continuous";
+  splitRegionsAtSpanningBands(blocks, regionOf, regionTracks, printableWidthPx);
   const regions: ColumnRegionSpec[] = regionTracks.map((tracks, index) => ({
     tracks,
     balance: index < regionTracks.length - 1 || endsHere,
@@ -1573,6 +1934,12 @@ function projectColumnRegionSheet(sheet: HTMLElement): UnequalColumnProjection |
   });
   const heightsByBlock = blocks.map(() => [] as number[]);
   const scale = sheetDrawScale(sheet);
+  const sideFloats = blocks.map((block, blockIndex) =>
+    regionTracks[regionOf[blockIndex]].length === 1 && sheetStyle.direction !== "rtl" ? sideFloatOf(block) : undefined);
+  // The lines of a single-column region holding a side float, read at its
+  // width: the float moves the flow only when one reaches into it.
+  const inkRegions = new Set(blocks.flatMap((_block, blockIndex) => (sideFloats[blockIndex] ? [regionOf[blockIndex]] : [])));
+  const inkSpans = new Map<number, readonly [number, number] | null>();
   const widths = new Set<number>();
   regionTracks.forEach((tracks) => tracks.forEach((track) => widths.add(track.widthPx)));
   widths.forEach((widthPx) => {
@@ -1591,6 +1958,10 @@ function projectColumnRegionSheet(sheet: HTMLElement): UnequalColumnProjection |
       tracks.forEach((track, trackIndex) => {
         if (track.widthPx === widthPx) heightsByBlock[blockIndex][trackIndex] = laidOutHeightPx(block, scale);
       });
+      if (inkRegions.has(regionOf[blockIndex]) && tracks[0]?.widthPx === widthPx) {
+        const span = blockInkSpanPx(block, scale);
+        if (span !== undefined) inkSpans.set(blockIndex, span);
+      }
     });
   });
   const metrics = blocks.map<ColumnRegionBlockMetric>((block, blockIndex) => {
@@ -1602,8 +1973,8 @@ function projectColumnRegionSheet(sheet: HTMLElement): UnequalColumnProjection |
       marginBottomPx: margins.bottom,
       marginLeftPx: margins.left,
       forceNextColumnAfter: block.matches('[data-type="column-break"]'),
-      outOfFlow: block.matches('[data-float-mode="overlay"], [data-float-mode="float"]'),
-      flowless: block.matches('[data-float-mode="overlay"]'),
+      outOfFlow: block.matches(OUT_OF_FLOW_SELECTOR) || columnPagePlacedTable(block),
+      flowless: block.matches(FLOWLESS_SELECTOR) || columnPagePlacedTable(block),
       region: regionOf[blockIndex],
       ...(block.matches('[data-type="section-break"]') && heightsByBlock[blockIndex].every((height) => !(height > 0.5))
         ? { sectionBreak: true }
@@ -1617,6 +1988,9 @@ function projectColumnRegionSheet(sheet: HTMLElement): UnequalColumnProjection |
       minSplitLines: block.getAttribute("data-widow-control") === "false" ? 1 : 2,
       ...(domKeepFlag(block, "keepLines") ? { keepLines: true } : {}),
       ...(domKeepFlag(block, "keepNext") ? { keepNext: true } : {}),
+      ...(sideFloats[blockIndex] ? { sideFloat: sideFloats[blockIndex] } : {}),
+      ...(block.getAttribute(FLOAT_HOST_BEFORE_ATTR) === "true" ? { hostIsPrevious: true } : {}),
+      ...(inkSpans.has(blockIndex) ? { inkSpanPx: inkSpans.get(blockIndex)! } : {}),
     };
   });
   // Page-placed top-and-bottom boxes drawn out of the flow
@@ -1753,15 +2127,36 @@ export function projectUnequalColumnSheet(
       marginLeftPx: margins.left,
       forceNextColumnAfter: block.matches('[data-type="column-break"]'),
       inlineExtentsPx: inlineExtentsByBlock[blockIndex],
-      outOfFlow: block.matches('[data-float-mode="overlay"], [data-float-mode="float"]'),
-      flowless: block.matches('[data-float-mode="overlay"]'),
+      outOfFlow: block.matches(OUT_OF_FLOW_SELECTOR) || columnPagePlacedTable(block),
+      flowless: block.matches(FLOWLESS_SELECTOR) || columnPagePlacedTable(block),
       paintsAcrossColumns: block.matches(".tableWrapper, table"),
       footCreditPx: trailingAutoLeadingCreditPx(block),
+      // Keep with next at a column's foot: a heading whose follower's first
+      // lines do not fit below it opens the next column with them, as Word
+      // lays it (docx-look/probes kn_probe.py kn30: "Introduction" after a
+      // column of one-line paragraphs, at the top of column 2 in Word; it was
+      // drawn alone at column 1's foot; corpus R432-D07). The page planner
+      // already charged the column so (ledgerCut's keep chains).
+      ...(!columnKeepNextOff() && domKeepFlag(block, "keepNext") ? { keepNext: true } : {}),
+      ...(!columnKeepNextOff() && blockIndex > 0 && domKeepFlag(blocks[blockIndex - 1], "keepNext")
+        ? followerFacts(block)
+        : {}),
     };
   });
   // The page's columns run from its top edge to its bottom margin: the first
   // block keeps its painted space before, the foot takes Word's credit.
-  const plan = planUnequalColumnFlow(tracks, capacityPx, metrics, { footCredit: true, pageTop: true });
+  // Page-placed blocks drawn out of the flow (a floating table placed down
+  // the page, `tablePageFrame`): a column they stand at the foot of ends
+  // above them, as on a page of column regions.
+  const bands = blocks
+    .map((block) => parseColumnBandExclusion(block.getAttribute(COLUMN_BAND_EXCLUSION_ATTR)))
+    .filter((band): band is ColumnBandExclusion => band !== null);
+  const columnCapacitiesPx = bands.length > 0 ? bandedColumnFeet(tracks, 0, capacityPx, bands) : undefined;
+  const plan = planUnequalColumnFlow(tracks, capacityPx, metrics, {
+    footCredit: true,
+    pageTop: true,
+    ...(columnCapacitiesPx?.some((foot) => foot !== undefined) ? { columnCapacitiesPx } : {}),
+  });
   const rtl = sheetStyle.direction === "rtl";
   let sheetDeclarations: Array<readonly [string, string]> = [
     [COLUMN_RULE_IMAGE_VAR, "none"],

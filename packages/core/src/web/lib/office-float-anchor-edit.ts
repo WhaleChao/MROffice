@@ -333,25 +333,6 @@ export function floatAnchorMovedBy(
   };
 }
 
-/** One step of the floating stack (Word's `relativeHeight`): the object goes
- * just above the next object up, or just below the next one down; Front and
- * Back go past every other one. */
-export function floatStackHeightAfter(
-  current: number,
-  heights: readonly number[],
-  step: "forward" | "backward" | "front" | "back",
-): number | null {
-  const others = heights.filter((height) => height !== current);
-  if (step === "front" || step === "forward") {
-    const above = others.filter((height) => height > current);
-    if (above.length === 0) return null;
-    return Math.min(0xffff_ffff, (step === "front" ? Math.max(...above) : Math.min(...above)) + 1);
-  }
-  const below = others.filter((height) => height < current);
-  if (below.length === 0) return null;
-  return Math.max(0, (step === "back" ? Math.min(...below) : Math.max(...below)) - 1);
-}
-
 // ---------------------------------------------------------------------------
 // The Layout dialog (More Layout Options): Position and Text Wrapping.
 // ---------------------------------------------------------------------------

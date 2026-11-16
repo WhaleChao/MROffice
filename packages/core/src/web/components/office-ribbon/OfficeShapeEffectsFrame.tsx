@@ -28,7 +28,8 @@ import {
 
 const camel = (name: string) => name.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
 
-function renderPrimitive(primitive: OfficeShapeEffectPrimitive, key: number): ReactNode {
+/** One filter primitive of a paint (and its children) as a React element. */
+export function renderPrimitive(primitive: OfficeShapeEffectPrimitive, key: number): ReactNode {
   const props: Record<string, string | number> = { key };
   for (const [name, value] of Object.entries(primitive.attrs)) props[camel(name)] = value;
   return createElement(
@@ -57,6 +58,31 @@ function lights(primitives: readonly OfficeShapeEffectPrimitive[]): boolean {
 
 export const LIGHTING_FILTER_LAYER: CSSProperties = { transform: "rotate(0.001deg)" };
 
+/** The paint's SVG filter (`primitives`) as a zero-size definition, for a
+ * host that applies it by `url(#filterId)`; nothing when it has none. */
+export function OfficeShapeEffectsFilterDefs({ paint, filterId }: { paint: OfficeShapeEffectsPaint; filterId: string }) {
+  if (!paint.primitives.length) return null;
+  return (
+    <svg width="0" height="0" aria-hidden focusable="false" style={{ position: "absolute", overflow: "hidden" }}>
+      <defs>
+        <filter
+          id={filterId}
+          {...officeShapeEffectsFilterRegion(paint)}
+          colorInterpolationFilters="sRGB"
+          data-testid="office-shape-effects-filter"
+        >
+          {paint.primitives.map((primitive, index) => renderPrimitive(primitive, index))}
+        </filter>
+      </defs>
+    </svg>
+  );
+}
+
+/** Whether the paint's filter lights the shape (`LIGHTING_FILTER_LAYER` then applies). */
+export function officeShapeEffectsLight(paint: OfficeShapeEffectsPaint): boolean {
+  return paint.primitives.length > 0 && lights(paint.primitives);
+}
+
 export function OfficeShapeEffectsFrame({
   paint,
   filterId,
@@ -76,26 +102,16 @@ export function OfficeShapeEffectsFrame({
   return (
     <span
       data-office-shape-effects=""
+      // The shape drawn turned (a 3-D rotation, a camera): a host hit-tested
+      // where it is drawn finds it here.
+      data-office-shape-turned={paint.transform ? "" : undefined}
       style={{
         ...LAYER,
         ...(paint.transform ? { transform: paint.transform, transformStyle: "preserve-3d" } : {}),
         ...(paint.reflect ? { WebkitBoxReflect: paint.reflect } : {}),
       } as CSSProperties}
     >
-      {paint.primitives.length ? (
-        <svg width="0" height="0" aria-hidden focusable="false" style={{ position: "absolute", overflow: "hidden" }}>
-          <defs>
-            <filter
-              id={filterId}
-              {...officeShapeEffectsFilterRegion(paint)}
-              colorInterpolationFilters="sRGB"
-              data-testid="office-shape-effects-filter"
-            >
-              {paint.primitives.map((primitive, index) => renderPrimitive(primitive, index))}
-            </filter>
-          </defs>
-        </svg>
-      ) : null}
+      <OfficeShapeEffectsFilterDefs paint={paint} filterId={filterId} />
       {paint.silhouette && silhouette ? (
         <span
           data-office-shape-shadow-silhouette=""
@@ -115,7 +131,7 @@ export function OfficeShapeEffectsFrame({
         style={{
           ...LAYER,
           ...(innerFilter ? { filter: innerFilter } : {}),
-          ...(paint.primitives.length && lights(paint.primitives) ? LIGHTING_FILTER_LAYER : {}),
+          ...(officeShapeEffectsLight(paint) ? LIGHTING_FILTER_LAYER : {}),
         }}
       >
         {children}

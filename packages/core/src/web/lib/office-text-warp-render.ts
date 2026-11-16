@@ -25,6 +25,16 @@
  */
 
 import {
+  OFFICE_TEXT_OUTLINE_COLOR,
+  OFFICE_TEXT_OUTLINE_DASH,
+  OFFICE_TEXT_OUTLINE_JOIN,
+  OFFICE_TEXT_OUTLINE_WIDTH,
+  officeTextOutlineCanvas,
+  officeTextOutlineCanvasFill,
+  officeTextOutlineStrokeOfMarks,
+  type OfficeTextOutlineStroke,
+} from "./office-text-outline/office-text-outline-css";
+import {
   type OfficeTextWarp,
   type TextWarpPath,
   textWarpBands,
@@ -49,6 +59,10 @@ export interface TextWarpGlyph {
   readonly fill: string;
   readonly stroke: string | null;
   readonly strokeWidth: number;
+  /** The outline is Office's: centred on the glyph, over its fill. */
+  readonly strokeOver?: boolean;
+  /** Its join, cap and dash (round and solid where none is stated). */
+  readonly strokeLine?: OfficeTextOutlineStroke;
   readonly line: number;
   /** Ascent / descent of the glyph's font at its size (line metrics). */
   readonly ascent: number;
@@ -160,16 +174,32 @@ type GlyphPart = "all" | "stroke" | "fill" | "silhouette";
 
 function drawGlyph(context: Canvas2D, glyph: TextWarpGlyph, x: number, y: number, part: GlyphPart = "all"): void {
   context.font = glyph.font;
-  if (part !== "fill" && glyph.stroke && glyph.strokeWidth > 0) {
-    context.lineJoin = "round";
+  const stroke = () => {
+    if (part === "fill" || !glyph.stroke || !(glyph.strokeWidth > 0)) return;
+    const line = glyph.strokeLine;
+    context.lineJoin = line?.join ?? "round";
+    context.miterLimit = line?.miterLimit ?? 10;
+    context.lineCap = line?.dash ? line.cap : "round";
+    context.setLineDash(line?.dash ? line.dash.map((length) => length * glyph.strokeWidth) : []);
     context.lineWidth = glyph.strokeWidth;
     context.strokeStyle = glyph.stroke;
-    context.strokeText(glyph.text, x, y);
+    // Office's outline follows each glyph's merged outline (no line inside
+    // where its contours overlap) once the glyphs' outlines are kept.
+    if (!(glyph.strokeOver && officeTextOutlineCanvas(context as CanvasRenderingContext2D, glyph.text, x, y, glyph.strokeWidth))) {
+      context.strokeText(glyph.text, x, y);
+    }
+    context.setLineDash([]);
+  };
+  if (!glyph.strokeOver) stroke();
+  if (part !== "stroke") {
+    // A fill-only pass draws where the words ARE (it is painted afterwards).
+    context.fillStyle = part === "all" ? glyph.fill : "#000000";
+    // An outlined glyph is filled from its band's own outline where an
+    // installed font would draw another one under it.
+    const outlined = glyph.strokeOver && Boolean(glyph.stroke) && glyph.strokeWidth > 0;
+    if (!(outlined && officeTextOutlineCanvasFill(context as CanvasRenderingContext2D, glyph.text, x, y))) context.fillText(glyph.text, x, y);
   }
-  if (part === "stroke") return;
-  // A fill-only pass draws where the words ARE (it is painted afterwards).
-  context.fillStyle = part === "all" ? glyph.fill : "#000000";
-  context.fillText(glyph.text, x, y);
+  if (glyph.strokeOver) stroke();
 }
 
 function inkBounds(context: Canvas2D, width: number, height: number): [number, number, number, number] | null {
@@ -515,8 +545,17 @@ export function collectTextWarpGlyphs(root: HTMLElement): TextWarpGlyph[] {
       ascent = metrics.fontBoundingBoxAscent || ascent;
       descent = metrics.fontBoundingBoxDescent || descent;
     }
-    const strokeWidth = Number.parseFloat(style.getPropertyValue("-webkit-text-stroke-width")) || 0;
-    const stroke = strokeWidth > 0 ? style.getPropertyValue("-webkit-text-stroke-color") || null : null;
+    // An outline stated as Office draws it (office-text-outline-css.ts): a
+    // centred, round stroke of its width over the fill. Otherwise whatever
+    // the words' CSS stroke is, under it.
+    const officeWidthPt = Number.parseFloat(style.getPropertyValue(OFFICE_TEXT_OUTLINE_WIDTH));
+    const officeColor = style.getPropertyValue(OFFICE_TEXT_OUTLINE_COLOR).trim();
+    const office = officeWidthPt > 0 && /^#[0-9a-f]{6}$/i.test(officeColor);
+    const strokeLine = office
+      ? officeTextOutlineStrokeOfMarks(style.getPropertyValue(OFFICE_TEXT_OUTLINE_JOIN), style.getPropertyValue(OFFICE_TEXT_OUTLINE_DASH))
+      : undefined;
+    const strokeWidth = office ? (officeWidthPt * 96) / 72 : Number.parseFloat(style.getPropertyValue("-webkit-text-stroke-width")) || 0;
+    const stroke = strokeWidth > 0 ? (office ? officeColor : style.getPropertyValue("-webkit-text-stroke-color") || null) : null;
     const fill = style.getPropertyValue("--office-text-warp-fill") || style.color;
     let offset = 0;
     for (const text of segments(node.data)) {
@@ -546,6 +585,7 @@ export function collectTextWarpGlyphs(root: HTMLElement): TextWarpGlyph[] {
         fill,
         stroke,
         strokeWidth,
+        ...(office ? { strokeOver: true, strokeLine } : {}),
         line,
         ascent,
         descent,

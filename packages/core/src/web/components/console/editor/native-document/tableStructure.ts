@@ -378,6 +378,29 @@ export function materializedColumnWidths(table: JsonNode): number[] | null {
 }
 
 /**
+ * The imported native grid (`colwidthTwips`) of every grid column, read as
+ * {@link materializedColumnWidths} reads the live widths: the first cell whose
+ * twips state its whole span is authoritative for those columns. Null when a
+ * column has no such cell (the table never carried a native grid).
+ */
+export function materializedColumnWidthsTwips(table: JsonNode): number[] | null {
+  const columns = tableColumnCount(table);
+  if (columns <= 0 || !Array.isArray(table.content)) return null;
+  const widths = new Array<number>(columns).fill(0);
+  for (const row of tableCellColumns(table)) {
+    if (!row) continue;
+    for (const { cell, column, colspan: span } of row) {
+      const native = normalizeTableColumnWidthsTwips(cell.attrs?.colwidthTwips, span);
+      if (!native) continue;
+      for (let offset = 0; offset < span; offset += 1) {
+        if (!(widths[column + offset] > 0)) widths[column + offset] = native[offset]!;
+      }
+    }
+  }
+  return widths.every((width) => width > 0) ? widths : null;
+}
+
+/**
  * Give an unsized table the column widths it is drawn at, so Distribute
  * Columns has a grid to redistribute (a table inserted from the ribbon models
  * no widths until a column is resized). A table that already models every

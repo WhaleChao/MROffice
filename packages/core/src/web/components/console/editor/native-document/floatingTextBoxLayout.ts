@@ -82,6 +82,8 @@ import {
   normalizeDocumentTextBoxFrameExtent,
   normalizeFloatFrameChain,
   FLOAT_PAGE_ROOM_ATTR,
+  BAND_RUN_RIDE_ATTR,
+  BAND_RUN_ROOM_ATTR,
   floatPageRoomPx,
   floatLayoutIsModern,
   placeFloatOnPage,
@@ -107,7 +109,7 @@ import { querySheetsAll } from "./paged/sheetMeasureMemo";
 import { InkAtRest } from "./paged/inkAtRest";
 import { inkPointerArbiter } from "../../../../lib/ink-pointer-policy";
 import { SHEET_DORMANT_ATTR } from "./paged/sheetDormancy";
-import { COLUMN_BAND_EXCLUSION_ATTR, COLUMN_REGIONS_ATTR, unequalColumnPlacementForBlock } from "./paged/unequalColumnProjection";
+import { COLUMN_BAND_EXCLUSION_ATTR, COLUMN_REGIONS_ATTR, FLOAT_HOST_BEFORE_ATTR, unequalColumnPlacementForBlock } from "./paged/unequalColumnProjection";
 import { TextBoxFrameChromeView, recordTextBoxFramePaint } from "./textBoxFrameChrome";
 
 export const FLOATING_TEXT_BOX_META = "floatingTextBoxFlow";
@@ -393,9 +395,10 @@ function applyPicturePlacement(
   if (mode === "overlay" || bothSides || shadowed) {
     // Out of flow: absolute against the nearest positioned ancestor, so the
     // offsets are the anchor's page point less that ancestor's own origin.
+    const applied = appliedOverlayOffsetsPx(wrapper);
     set("position", "absolute");
-    set("left", `${placement.leftPx - parentOriginPx.leftPx}px`);
-    set("top", `${placement.topPx - parentOriginPx.topPx}px`);
+    set("left", `${steadyOverlayOffsetPx(placement.leftPx - parentOriginPx.leftPx, applied.leftPx)}px`);
+    set("top", `${steadyOverlayOffsetPx(placement.topPx - parentOriginPx.topPx, applied.topPx)}px`);
     set("margin", "0");
     set("float", "none");
     set("max-width", "none");
@@ -523,6 +526,34 @@ export function steadyDropPx(nextPx: number, appliedPx: number | null): number {
   return Math.abs(nextPx - appliedPx) <= STEADY_DROP_PX ? appliedPx : nextPx;
 }
 
+/**
+ * The offset to write for a picture out of the flow: the one it has, when the
+ * new one is the same to within the browser's own rounding, as for a drop in
+ * the flow (steadyDropPx). Its anchor's page point is read back from boxes on
+ * the layout's 1/64 px steps: R286-D01's first page set a picture's top at
+ * 117.80046 and 117.80026 px by turns, a write each time its pages came in,
+ * and every one marked the first page changed and laid the document out from
+ * there (continued footnotes: to its end). `window.__docsSteadyOverlayOffset
+ * = false` writes each reading (A/B).
+ */
+export function steadyOverlayOffsetPx(nextPx: number, appliedPx: number | null): number {
+  if (appliedPx === null || !Number.isFinite(appliedPx) || !Number.isFinite(nextPx)) return nextPx;
+  if (typeof window !== "undefined" && (window as Window & { __docsSteadyOverlayOffset?: boolean }).__docsSteadyOverlayOffset === false) return nextPx;
+  return Math.abs(nextPx - appliedPx) <= STEADY_DROP_PX ? appliedPx : nextPx;
+}
+
+/** The offsets `wrapper` carries while out of the flow (null: none written,
+ * or it stands in the flow). */
+function appliedOverlayOffsetsPx(wrapper: HTMLElement): { leftPx: number | null; topPx: number | null } {
+  if (wrapper.style.position !== "absolute") return { leftPx: null, topPx: null };
+  const read = (value: string) => {
+    if (!value.endsWith("px")) return null;
+    const px = Number.parseFloat(value);
+    return Number.isFinite(px) ? px : null;
+  };
+  return { leftPx: read(wrapper.style.left), topPx: read(wrapper.style.top) };
+}
+
 /** The top margin `wrapper` carries as a drop in the flow, or null (out of the
  * flow, or none written yet). */
 function appliedDropPx(wrapper: HTMLElement): number | null {
@@ -568,7 +599,11 @@ function appliedTopMarginShift(wrapper: HTMLElement): number {
  * one before ends; this moves a later one up to Word's place and keeps the
  * text under the lowest of them.
  */
-function layoutBandRuns(candidates: readonly HTMLElement[], hosts: Map<string, HTMLElement>): void {
+function layoutBandRuns(
+  candidates: readonly HTMLElement[],
+  hosts: Map<string, HTMLElement>,
+  textBoxBands: readonly HTMLElement[] = [],
+): void {
   // Read after the pictures were placed: their placement decides which are bands.
   const bands = candidates.filter(
     (element) =>
@@ -578,8 +613,13 @@ function layoutBandRuns(candidates: readonly HTMLElement[], hosts: Map<string, H
   const bandSet = new Set<Element>(bands);
   const isBand = (element: Element | null): element is HTMLElement =>
     element instanceof HTMLElement && bandSet.has(element);
+  // A run holding a text box band or a paragraph between its bands is laid
+  // out after the text boxes are placed (`layoutMixedBandRuns`), whole.
+  const mixed = mixedBandRunStarts(bands, textBoxBands, hosts);
   for (const first of bands) {
     if (isBand(first.previousElementSibling)) continue; // Not the start of a run.
+    const mixedStart = mixed.size > 0 ? mixedRunStartOf(first, bands, textBoxBands, hosts) : null;
+    if (mixedStart && mixed.has(mixedStart)) continue;
     liftShapeBandToItsParagraphTop(first, hosts);
     if (!isBand(first.nextElementSibling)) continue; // A run of one keeps its own placement.
     const scale = paginationLayoutScale(first);
@@ -636,6 +676,426 @@ function layoutBandRuns(candidates: readonly HTMLElement[], hosts: Map<string, H
       previousBottom = Math.max(bottom, lowest);
       lowest = Math.max(lowest, bottom);
     }
+  }
+}
+
+/**
+ * Marks each float on a page of column regions whose host paragraph is the
+ * flow block just before it (floats between them aside), for the region
+ * flow, which measures such a float run from that paragraph's top
+ * (`planColumnRegionFlow`, FLOAT_HOST_BEFORE_ATTR).
+ */
+function markFloatsHostedBefore(elements: readonly HTMLElement[], hosts: Map<string, HTMLElement>): void {
+  for (const element of elements) {
+    let hostedBefore = false;
+    const key = element.dataset.floatHostAnchor;
+    const host = key ? hosts.get(key) : null;
+    if (host && element.parentElement?.hasAttribute(COLUMN_REGIONS_ATTR)) {
+      let previous = element.previousElementSibling;
+      while (previous instanceof HTMLElement && previous.hasAttribute("data-float-host-anchor")) previous = previous.previousElementSibling;
+      hostedBefore = previous === host;
+    }
+    if (!hostedBefore) element.removeAttribute(FLOAT_HOST_BEFORE_ATTR);
+    else if (element.getAttribute(FLOAT_HOST_BEFORE_ATTR) !== "true") element.setAttribute(FLOAT_HOST_BEFORE_ATTR, "true");
+  }
+}
+
+/** Whether runs with text box bands and paragraphs between bands are laid out
+ * whole (`layoutMixedBandRuns`); `window.__docsBandRunTextBoxOff = true`
+ * leaves them to their own placements (A/B). */
+function mixedBandRunsOn(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsBandRunTextBoxOff?: boolean }).__docsBandRunTextBoxOff !== true;
+}
+
+/** Where a text box laid out by a mixed run takes its margins from: the run
+ * writes them ("member"), or only its bottom margin ("first", the run's first
+ * object keeps its own drop). `applyPlacement` leaves those to the run. */
+const BAND_RUN_ATTR = "data-band-run";
+
+/** A text box set as Top and Bottom in the flow (not a band drawn at its page
+ * place as a float). */
+function isTextBoxFlowBand(element: Element | null): element is HTMLElement {
+  return (
+    element instanceof HTMLElement &&
+    element.tagName === "DIV" &&
+    element.hasAttribute("data-text-box") &&
+    element.dataset.floatMode === "band" &&
+    !element.style.float &&
+    !element.closest("td, th")
+  );
+}
+
+/** The block after `element`, on the next page sheet when it closes its own:
+ * a run the paginator cut at a page's foot goes on there. */
+function nextAcrossSheets(element: Element): Element | null {
+  if (element.nextElementSibling) return element.nextElementSibling;
+  const sheet = element.parentElement;
+  if (!sheet?.matches("article[data-page-sheet]")) return null;
+  let next = sheet.nextElementSibling;
+  while (next && !next.matches("article[data-page-sheet]")) next = next.nextElementSibling;
+  return next?.firstElementChild ?? null;
+}
+
+/** The block before `element`, on the page sheet before when it opens its own. */
+function previousAcrossSheets(element: Element): Element | null {
+  if (element.previousElementSibling) return element.previousElementSibling;
+  const sheet = element.parentElement;
+  if (!sheet?.matches("article[data-page-sheet]")) return null;
+  let previous = sheet.previousElementSibling;
+  while (previous && !previous.matches("article[data-page-sheet]")) previous = previous.previousElementSibling;
+  return previous?.lastElementChild ?? null;
+}
+
+/**
+ * A paragraph standing between two bands of a run that hosts the band after
+ * it (`R308-D01`: an empty paragraph holding the citation box and a frame,
+ * after the paragraph holding the abstract, author and article boxes).
+ */
+function isBandRunBridge(
+  element: Element | null,
+  isBand: (element: Element | null) => element is HTMLElement,
+  hosts: Map<string, HTMLElement>,
+): element is HTMLElement {
+  if (!(element instanceof HTMLElement) || !/^(P|H[1-6])$/.test(element.tagName)) return false;
+  if (!isBand(previousAcrossSheets(element))) return false;
+  const next = nextAcrossSheets(element);
+  if (!isBand(next)) return false;
+  const key = next.dataset.floatHostAnchor;
+  return Boolean(key) && hosts.get(key!) === element;
+}
+
+/** The first object of the mixed run `band` is in, or null. */
+function mixedRunStartOf(
+  band: HTMLElement,
+  bands: readonly HTMLElement[],
+  textBoxBands: readonly HTMLElement[],
+  hosts: Map<string, HTMLElement>,
+): HTMLElement | null {
+  if (!mixedBandRunsOn() || textBoxBands.length === 0) return null;
+  const all = new Set<Element>([...bands, ...textBoxBands]);
+  const isBand = (element: Element | null): element is HTMLElement => element instanceof HTMLElement && all.has(element);
+  let first: HTMLElement = band;
+  for (;;) {
+    const previous = previousAcrossSheets(first);
+    if (isBand(previous)) first = previous;
+    else if (isBandRunBridge(previous, isBand, hosts)) first = previousAcrossSheets(previous!) as HTMLElement;
+    else return first;
+  }
+}
+
+/** The run starts `layoutMixedBandRuns` lays out: each run holding a text box
+ * band or a paragraph between its bands. */
+function mixedBandRunStarts(
+  bands: readonly HTMLElement[],
+  textBoxBands: readonly HTMLElement[],
+  hosts: Map<string, HTMLElement>,
+): Set<HTMLElement> {
+  const starts = new Set<HTMLElement>();
+  if (!mixedBandRunsOn()) return starts;
+  const all = new Set<Element>([...bands, ...textBoxBands]);
+  const isBand = (element: Element | null): element is HTMLElement => element instanceof HTMLElement && all.has(element);
+  const textBoxes = new Set<Element>(textBoxBands);
+  for (const first of [...bands, ...textBoxBands]) {
+    const previous = previousAcrossSheets(first);
+    if (isBand(previous) || isBandRunBridge(previous, isBand, hosts)) continue;
+    let isMixed = false;
+    let length = 0;
+    for (let element: Element | null = first; element; element = nextAcrossSheets(element)) {
+      if (isBand(element)) {
+        length++;
+        if (textBoxes.has(element)) isMixed = true;
+        continue;
+      }
+      if (isBandRunBridge(element, isBand, hosts)) {
+        isMixed = true;
+        continue;
+      }
+      break;
+    }
+    if (isMixed && length > 1) starts.add(first);
+  }
+  return starts;
+}
+
+/** Whether a run laid out whole is charged to the paginator as one block
+ * (`BAND_RUN_ROOM_ATTR`); `window.__docsBandRunRideOff = true` charges its
+ * blocks one by one (A/B). */
+function bandRunRidesOn(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsBandRunRideOff?: boolean }).__docsBandRunRideOff !== true;
+}
+
+/** The blocks each editor root's last pass charged as runs. */
+const bandRunCharged = new WeakMap<HTMLElement, Set<HTMLElement>>();
+
+/** Writes this pass's run charges (`BAND_RUN_ROOM_ATTR` px on a run's first
+ * object, `BAND_RUN_RIDE_ATTR` on the rest) and takes back the last pass's
+ * that no longer hold. An unchanged value is not written again: the
+ * paginator measures a sheet again on any attribute that changes. */
+function publishBandRunCharges(root: HTMLElement, charges: ReadonlyMap<HTMLElement, number | "ride">): void {
+  const before = bandRunCharged.get(root);
+  if (before) {
+    for (const element of before) {
+      if (charges.has(element)) continue;
+      element.removeAttribute(BAND_RUN_ROOM_ATTR);
+      element.removeAttribute(BAND_RUN_RIDE_ATTR);
+    }
+  }
+  if (charges.size === 0) {
+    bandRunCharged.delete(root);
+    return;
+  }
+  for (const [element, charge] of charges) {
+    if (charge === "ride") {
+      element.removeAttribute(BAND_RUN_ROOM_ATTR);
+      if (!element.hasAttribute(BAND_RUN_RIDE_ATTR)) element.setAttribute(BAND_RUN_RIDE_ATTR, "");
+      continue;
+    }
+    element.removeAttribute(BAND_RUN_RIDE_ATTR);
+    const value = charge.toFixed(1);
+    if (element.getAttribute(BAND_RUN_ROOM_ATTR) !== value) element.setAttribute(BAND_RUN_ROOM_ATTR, value);
+  }
+  bandRunCharged.set(root, new Set(charges.keys()));
+}
+
+/** The margin that, collapsed with its neighbour's `otherPx` (CSS margin
+ * collapsing: the largest positive plus the most negative), leaves `gapPx`. */
+export function collapsedMarginFor(otherPx: number, gapPx: number): number {
+  if (otherPx >= 0) return gapPx >= otherPx ? gapPx : gapPx - otherPx;
+  return gapPx >= otherPx ? gapPx - otherPx : gapPx;
+}
+
+/**
+ * The first top at or below `fromPx` where a block `heightPx` tall crosses no
+ * band (`[top, bottom)` each, wrap distances included): Word sets a line
+ * between Top and Bottom objects wherever it fits, below them where it does
+ * not.
+ */
+export function firstClearTopPx(fromPx: number, heightPx: number, bands: ReadonlyArray<{ top: number; bottom: number }>): number {
+  let top = fromPx;
+  for (let moved = true, guard = 0; moved && guard < 64; guard++) {
+    moved = false;
+    for (const band of bands) {
+      if (band.top < top + heightPx - 0.5 && band.bottom > top + 0.5) {
+        top = band.bottom;
+        moved = true;
+      }
+    }
+  }
+  return top;
+}
+
+/** Objects past the part of a run that fits its page: they take their own
+ * placements again (a text box's from `applyPlacement` on the next pass). */
+function releaseBandRunTail(tail: readonly HTMLElement[]): void {
+  for (const element of tail) {
+    // A text box (unmarked) and a picture take theirs from their own placement.
+    if (element.tagName !== "FIGURE") continue;
+    if (element.dataset.bandLift === "true") continue;
+    element.style.marginTop = "";
+    element.style.marginBottom = "";
+  }
+}
+
+function setMarginPx(element: HTMLElement, property: "marginTop" | "marginBottom", px: number): void {
+  const current = Number.parseFloat(element.style[property]);
+  if (element.style[property].endsWith("px") && Number.isFinite(current) && Math.abs(current - px) <= STEADY_DROP_PX) return;
+  element.style[property] = `${Math.round(px * 64) / 64}px`;
+}
+
+/**
+ * A run of Top and Bottom objects holding text boxes, or empty paragraphs
+ * between its objects, laid out as Word does after the text boxes were
+ * placed. Word places each object from its OWN paragraph's top, the top that
+ * paragraph has before any object pushed its lines down, and sets each
+ * paragraph's line in the first gap between the objects it fits, below all
+ * of them where none does (Word 16, R308-D01: three boxes 31.4, 60 and
+ * 160.85 pt below one empty paragraph stand there, one over another, and the
+ * citation boxes of the paragraph after stand 7.15 and 69.8 pt below where
+ * that paragraph starts; its empty line takes the 17 pt between the frame and
+ * the abstract). In the flow the objects are consecutive blocks, each one
+ * starting where the one before ends: here each is moved to Word's place by
+ * its top margin, a paragraph between them by the bottom margin of the object
+ * before it, and the last object's bottom margin keeps the text after the run
+ * under the lowest.
+ */
+function layoutMixedBandRuns(
+  root: HTMLElement,
+  candidates: readonly HTMLElement[],
+  textBoxBands: readonly HTMLElement[],
+  hosts: Map<string, HTMLElement>,
+): void {
+  const charges = new Map<HTMLElement, number | "ride">();
+  const bands = candidates.filter(
+    (element) =>
+      (element.matches(PICTURE_LIKE_FLOAT_SELECTOR) && element.dataset.floatMode === "band") ||
+      (element.tagName === "FIGURE" && element.getAttribute("data-float-band") === "true"),
+  );
+  const starts = mixedBandRunStarts(bands, textBoxBands, hosts);
+  const marked = new Set<HTMLElement>();
+  const all = new Set<Element>([...bands, ...textBoxBands]);
+  const isBand = (element: Element | null): element is HTMLElement => element instanceof HTMLElement && all.has(element);
+  for (const first of starts) {
+    const members: HTMLElement[] = [];
+    for (let element: Element | null = first; element instanceof HTMLElement; element = nextAcrossSheets(element)) {
+      if (isBand(element) || isBandRunBridge(element, isBand, hosts)) members.push(element);
+      else break;
+    }
+    // The run is laid out on its first object's page. An object the
+    // paginator has sent to a later page (it stood under the run stacked)
+    // is laid out there too while it fits on that page: its margins bring
+    // it back. One that does not fit goes on as it was.
+    const sheet = first.parentElement;
+    const contentBottom = sheet?.matches("article[data-page-sheet]")
+      ? sheet.getBoundingClientRect().bottom / (paginationLayoutScale(first).y || 1) -
+        (Number.parseFloat(getComputedStyle(sheet).paddingBottom) || 0)
+      : Number.POSITIVE_INFINITY;
+    liftShapeBandToItsParagraphTop(first, hosts);
+    const scaleY = paginationLayoutScale(first).y || 1;
+    const read = (element: HTMLElement) => {
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top / scaleY, bottom: rect.bottom / scaleY, height: rect.height / scaleY };
+    };
+    // A band's wrapped extent, relative to its own top: a shape's canvas
+    // stands inside its figure, below by its offset.
+    const extentOf = (element: HTMLElement): { from: number; to: number } => {
+      const own = read(element);
+      const anchor = normalizeFloatAnchor(parseJson(element, "data-float-anchor"));
+      const distances = anchor ? floatWrapDistancesPx(anchor) : { topPx: 0, bottomPx: 0 };
+      const canvas = element.tagName === "FIGURE"
+        ? element.querySelector<HTMLElement>(":scope > div > [data-document-shape-canvas]")
+        : null;
+      if (canvas) {
+        const inner = read(canvas);
+        return { from: inner.top - own.top - distances.topPx, to: inner.bottom - own.top + distances.bottomPx };
+      }
+      return { from: -distances.topPx, to: own.height + distances.bottomPx };
+    };
+    const firstRect = read(first);
+    const firstApplied = Number.parseFloat(first.style.marginTop) || 0;
+    // Where the paragraph after the first object's own would start with no
+    // object at all.
+    const runStartTop = firstRect.top - firstApplied;
+    const firstExtent = extentOf(first);
+    const placed: Array<{ top: number; bottom: number }> = [
+      { top: firstRect.top + firstExtent.from, bottom: firstRect.top + firstExtent.to },
+    ];
+    const firstHost = first.dataset.floatHostAnchor ? hosts.get(first.dataset.floatHostAnchor) ?? null : null;
+    const bridgeTops = new Map<HTMLElement, number>();
+    // Each band's place: `null` keeps it under everything above it.
+    const targetOf = (band: HTMLElement, chainTop: number): number | null => {
+      const host = band.dataset.floatHostAnchor ? hosts.get(band.dataset.floatHostAnchor) ?? null : null;
+      let unpushedTop: number | null = null;
+      if (host && bridgeTops.has(host)) unpushedTop = bridgeTops.get(host)!;
+      else if (host && host.isConnected) {
+        const hostFollows = Boolean(band.compareDocumentPosition(host) & Node.DOCUMENT_POSITION_FOLLOWING);
+        unpushedTop = hostFollows ? chainTop : bandHostTopPx(host, scaleY);
+      } else if (band.dataset.floatBandPage === "true") {
+        unpushedTop = chainTop;
+      }
+      if (unpushedTop === null) return null;
+      let offsetPx = 0;
+      if (band.matches(PICTURE_LIKE_FLOAT_SELECTOR)) {
+        const anchor = normalizeFloatAnchor(parseJson(band, "data-float-anchor"));
+        const vertical = anchor?.vertical as { offsetEmu?: number; relativeFrom?: string } | undefined;
+        if (!anchor || (vertical?.relativeFrom !== "paragraph" && vertical?.relativeFrom !== "line")) return null;
+        offsetPx = (vertical.offsetEmu ?? 0) / EMU_PER_PX + floatWrapDistancesPx(anchor).topPx;
+      } else if (band.tagName === "DIV") {
+        const drop = Number.parseFloat(band.dataset.bandDrop ?? "");
+        if (!Number.isFinite(drop)) return null;
+        offsetPx = drop;
+      }
+      let top = unpushedTop + offsetPx;
+      // The paragraph above the run keeps its own lines over its objects.
+      if (host && host === firstHost && !bridgeTops.has(host) && band.tagName === "DIV") {
+        top = Math.max(top, host.getBoundingClientRect().bottom / scaleY);
+      }
+      return top;
+    };
+    const heights = new Map<HTMLElement, number>(members.map((element) => [element, read(element).height]));
+    const extents = new Map<HTMLElement, { from: number; to: number }>();
+    for (const element of members) if (element !== first && isBand(element)) extents.set(element, extentOf(element));
+    const margins = (element: HTMLElement) => {
+      const style = getComputedStyle(element);
+      return { before: Number.parseFloat(style.marginTop) || 0, after: Number.parseFloat(style.marginBottom) || 0 };
+    };
+    // The blocks after the first the run sets in place (the rest released).
+    const laidOut: HTMLElement[] = [];
+    let previous: HTMLElement = first;
+    let previousBottom = firstRect.bottom;
+    let previousAfter = 0; // The run writes it: none, unless a paragraph follows.
+    let chainTop = runStartTop;
+    let lowest = placed[0]!.bottom;
+    const ownedBottom = new Map<HTMLElement, number>();
+    for (let index = 1; index < members.length; index++) {
+      const element = members[index]!;
+      // (A set lookup, not the guard: every member is an HTMLElement, and
+      // the guard's false branch narrows it to `never`.)
+      if (!all.has(element)) {
+        // A paragraph between the bands: its objects measure from where it
+        // starts; its line goes to the first gap it fits.
+        const { before, after } = margins(element);
+        bridgeTops.set(element, chainTop);
+        const height = heights.get(element)!;
+        const own: Array<{ top: number; bottom: number }> = [];
+        for (let next = index + 1; next < members.length && isBand(members[next]!); next++) {
+          const band = members[next]!;
+          if (band.dataset.floatHostAnchor && hosts.get(band.dataset.floatHostAnchor) !== element) continue;
+          const top = targetOf(band, chainTop);
+          if (top === null) continue;
+          const extent = extents.get(band)!;
+          own.push({ top: top + extent.from, bottom: top + extent.to });
+        }
+        const top = firstClearTopPx(chainTop + before, height, [...placed, ...own]);
+        if (element.parentElement !== sheet && top + height > contentBottom) {
+          releaseBandRunTail(members.slice(index));
+          break;
+        }
+        laidOut.push(element);
+        ownedBottom.set(previous, collapsedMarginFor(before, top - previousBottom));
+        previous = element;
+        previousBottom = top + height;
+        previousAfter = after;
+        chainTop = previousBottom + after;
+        lowest = Math.max(lowest, previousBottom + after);
+        continue;
+      }
+      const target = targetOf(element, chainTop);
+      const extent = extents.get(element)!;
+      const top = target ?? Math.max(lowest, previousBottom) - extent.from;
+      if (element.parentElement !== sheet && top + heights.get(element)! > contentBottom) {
+        releaseBandRunTail(members.slice(index));
+        break;
+      }
+      laidOut.push(element);
+      const marginTop = collapsedMarginFor(previousAfter, top - previousBottom);
+      if (element.tagName === "DIV") marked.add(element);
+      setMarginPx(element, "marginTop", marginTop);
+      delete element.dataset.bandLift;
+      if (!ownedBottom.has(previous)) ownedBottom.set(previous, 0);
+      placed.push({ top: top + extent.from, bottom: top + extent.to });
+      lowest = Math.max(lowest, top + extent.to);
+      previous = element;
+      previousBottom = top + heights.get(element)!;
+      previousAfter = 0;
+    }
+    ownedBottom.set(previous, Math.max(0, lowest - previousBottom));
+    for (const [element, px] of ownedBottom) {
+      if (!isBand(element)) continue; // A paragraph's own margins stay its own.
+      if (element.tagName === "DIV") marked.add(element);
+      setMarginPx(element, "marginBottom", px);
+    }
+    // The paginator charges the run as one block, on its first object: down
+    // to the lowest object, the rest riding on it.
+    if (laidOut.length > 0 && bandRunRidesOn()) {
+      charges.set(first, Math.max(0, lowest - firstRect.bottom));
+      for (const element of laidOut) charges.set(element, "ride");
+    }
+  }
+  publishBandRunCharges(root, charges);
+  for (const wrapper of textBoxBands) {
+    const value = marked.has(wrapper) ? (starts.has(wrapper) ? "first" : "member") : null;
+    if (value === null) wrapper.removeAttribute(BAND_RUN_ATTR);
+    else if (wrapper.getAttribute(BAND_RUN_ATTR) !== value) wrapper.setAttribute(BAND_RUN_ATTR, value);
   }
 }
 
@@ -801,19 +1261,12 @@ function layoutPictures(
       ? wrapper.closest<HTMLElement>(".react-renderer")
       : null;
     const flowRect = flowBlock?.getBoundingClientRect();
-    const outOfFlowOrigin =
-      !flowRect && !wrapper.dataset.floatHostAnchor && getComputedStyle(wrapper).position === "absolute"
-        ? inFlowPlaceOf(wrapper, sheetRect, scale)
-        : null;
     const originPx = flowRect
       ? {
           leftPx: (flowRect.left - sheetRect.left) / (scale.x || 1),
           topPx: (flowRect.top - sheetRect.top) / (scale.y || 1),
         }
-      : outOfFlowOrigin ?? {
-          leftPx: (wrapperRect.left - sheetRect.left) / (scale.x || 1) - applied.left,
-          topPx: (wrapperRect.top - sheetRect.top) / (scale.y || 1) - applied.top,
-        };
+      : pictureFlowOrigin(wrapper, wrapperRect, sheetRect, scale, applied);
     // An absolutely placed overlay measures from its positioned ancestor.
     const parent = wrapper.offsetParent instanceof HTMLElement ? wrapper.offsetParent : container;
     const parentRect = parent.getBoundingClientRect();
@@ -854,6 +1307,38 @@ function layoutPictures(
 }
 
 const floatPaints = new WeakMap<HTMLElement, FloatPaint>();
+
+/**
+ * A picture's place in the flow, in px from `sheetRect`: what its paragraph
+ * offsets are measured from when its host paragraph is not on its page.
+ * Placed out of the flow by an earlier pass (absolute), its own box is where
+ * that pass put it, not a place in the flow: measured from it, the paragraph
+ * offset was added to the last placement again. R286-D01 opening (pages cut
+ * provisionally, host paragraphs on the page before): nine pictures behind the
+ * text 61.86 px higher at each pass, seven passes running, off the top of
+ * their pages. So an absolute picture stands where the flow would put it
+ * (under the block before it), with or without a host of its own; one in the
+ * flow is its own box less the margins its placement gave it.
+ * `window.__docsPictureOwnBoxOrigin = true` measures a hosted absolute picture
+ * from its own box, as before (A/B).
+ */
+export function pictureFlowOrigin(
+  wrapper: HTMLElement,
+  wrapperRect: DOMRect,
+  sheetRect: DOMRect,
+  scale: { x: number; y: number },
+  applied: { left: number; top: number },
+): { leftPx: number; topPx: number } {
+  const ownBox = typeof window !== "undefined" &&
+    (window as Window & { __docsPictureOwnBoxOrigin?: boolean }).__docsPictureOwnBoxOrigin === true;
+  const outOfFlow = (!ownBox || !wrapper.dataset.floatHostAnchor) && getComputedStyle(wrapper).position === "absolute"
+    ? inFlowPlaceOf(wrapper, sheetRect, scale)
+    : null;
+  return outOfFlow ?? {
+    leftPx: (wrapperRect.left - sheetRect.left) / (scale.x || 1) - applied.left,
+    topPx: (wrapperRect.top - sheetRect.top) / (scale.y || 1) - applied.top,
+  };
+}
 
 /**
  * Where a block placed out of the flow would stand in it, in px from
@@ -2244,10 +2729,18 @@ function applyPlacement(
     wrapper.style.float = "";
     wrapper.style.shapeOutside = "";
     wrapper.style.clear = "both";
+    // How far below its paragraph's top Word puts the box, for a run of
+    // bands laid out whole (layoutMixedBandRuns).
+    const fromParagraph = ["paragraph", "line"].includes(String(vertical?.relativeFrom ?? ""));
+    const bandDrop = fromParagraph ? (Math.round((placement.topPx - flowTopPx) * 64) / 64).toString() : null;
+    if (bandDrop === null) delete wrapper.dataset.bandDrop;
+    else if (wrapper.dataset.bandDrop !== bandDrop) wrapper.dataset.bandDrop = bandDrop;
+    // A run laid out whole sets these margins itself.
+    const run = mixedBandRunsOn() ? wrapper.getAttribute(BAND_RUN_ATTR) : null;
     // From its paragraph's top, as a picture band is (a box 0.4" below its
     // paragraph was drawn at the paragraph's first line).
-    wrapper.style.marginTop = `${dropPx}px`;
-    wrapper.style.marginBottom = `${distances.bottomPx}px`;
+    if (run !== "member") wrapper.style.marginTop = `${dropPx}px`;
+    if (run === null) wrapper.style.marginBottom = `${distances.bottomPx}px`;
     wrapper.style.marginLeft = `${Math.max(0, placement.leftPx - originPx.leftPx)}px`;
     frame.style.shapeOutside = "";
     return;
@@ -2809,6 +3302,7 @@ function layout(view: EditorView): LayoutObjects | null {
   const keepOnPage = bodyKeepOnPage(view);
   const hosts = layoutShapes(view, shapes, keepOnPage);
   for (const [id, host] of hostParagraphElements(view, [...wrappers, ...pictures, ...bandShapes])) hosts.set(id, host);
+  markFloatsHostedBefore([...wrappers, ...pictures, ...shapes], hosts);
   // Word's floating stack is per document, not per page and not per family:
   // `relativeHeight` is one ordering across every anchor in the body, shapes
   // and text boxes alike. Read from the DOCUMENT rather than from the painted
@@ -2817,9 +3311,16 @@ function layout(view: EditorView): LayoutObjects | null {
   const stack = documentFloatingStack(view.state.doc).heights;
   layoutPictures(view, pictures, hosts, stack, keepOnPage);
   placeBandShapesAcross(bandShapes);
-  layoutBandRuns(objects.bandCandidates, hosts);
+  // Text boxes set as bands by the last pass: a run holding one is laid out
+  // whole once they are placed again (layoutMixedBandRuns).
+  const textBoxBandsBefore = mixedBandRunsOn() ? wrappers.filter(isTextBoxFlowBand) : [];
+  layoutBandRuns(objects.bandCandidates, hosts, textBoxBandsBefore);
   publishShapeBandRooms(objects.bandCandidates, hosts, keepOnPage);
-  if (wrappers.length === 0) return objects;
+  if (wrappers.length === 0) {
+    if (mixedBandRunsOn()) layoutMixedBandRuns(root, objects.bandCandidates, [], hosts);
+    else publishBandRunCharges(root, new Map());
+    return objects;
+  }
   for (const wrapper of wrappers) {
     const anchor = normalizeFloatAnchor(parseJson(wrapper, "data-float-anchor"));
     const frame = wrapper.querySelector<HTMLElement>(":scope > [data-text-box-frame]");
@@ -2905,6 +3406,11 @@ function layout(view: EditorView): LayoutObjects | null {
       : { leftPx: 0, topPx: 0 };
     recordFramePaint(wrapper, anchor, { ...geometry, flowTopPx }, scale, cellShift);
     chromes.get(wrapper)?.sync();
+  }
+  if (mixedBandRunsOn()) layoutMixedBandRuns(root, objects.bandCandidates, wrappers.filter(isTextBoxFlowBand), hosts);
+  else {
+    for (const wrapper of wrappers) wrapper.removeAttribute(BAND_RUN_ATTR);
+    publishBandRunCharges(root, new Map());
   }
   return objects;
 }

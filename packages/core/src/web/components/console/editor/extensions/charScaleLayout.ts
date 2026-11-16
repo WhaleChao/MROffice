@@ -54,6 +54,22 @@ const NO_LINE_START = /^[、。，．：；？！）〕］｝〉》」』】〙�
 /** May not end a line: kept with the character after it. */
 const NO_LINE_END = /^[（〔［｛〈《「『【〘〖〝｟«‘“([{]$/u;
 const LINE_SPACE = /^[^\S\t\n\r\u2028\u2029]+$/u;
+/** Hyphens a word may break after (hyphen-minus, hyphen, en dash). */
+const BREAK_AFTER_HYPHEN = /^[-\u2010\u2013]$/u;
+const WORD_CHARACTER = /^[\p{L}\p{N}]/u;
+
+/** A line may break after a hyphen that joins two words or a word and a
+ * number ("Hingoli-|431513", "pre-|2025"), as Word and the browsers break
+ * them; a minus sign opening a number ("-5") stays with it (line-break.ts).
+ * A scaled piece held such a word whole: corpus R281-D06's 105% address line
+ * put "Hingoli-431513," on the second line, where Word ends the first after
+ * "Hingoli-". */
+function breaksAfterHyphen(text: string, unitFrom: number, at: number, next: string): boolean {
+  const hyphen = text[at - 1];
+  if (hyphen === undefined || !BREAK_AFTER_HYPHEN.test(hyphen) || !WORD_CHARACTER.test(next)) return false;
+  const before = at - 2 >= unitFrom ? text[at - 2] : undefined;
+  return before !== undefined && WORD_CHARACTER.test(before);
+}
 
 /**
  * Cut a scaled run's text into the pieces it may break between. PURE.
@@ -84,7 +100,7 @@ export function charScalePieces(text: string): CharScalePiece[] {
       continue;
     }
     const cjk = CJK_BREAKABLE.test(grapheme);
-    if (lastUnit && lastUnit.word && !cjk && !NO_LINE_END.test(grapheme)) {
+    if (lastUnit && lastUnit.word && !cjk && !NO_LINE_END.test(grapheme) && !breaksAfterHyphen(text, lastUnit.from, from, grapheme)) {
       lastUnit.to = to;
       continue;
     }

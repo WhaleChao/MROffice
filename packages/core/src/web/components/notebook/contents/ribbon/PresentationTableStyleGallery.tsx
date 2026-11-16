@@ -37,6 +37,8 @@ export interface PresentationTableStyleGalleryLabels {
 export interface PresentationTableStyleGalleryProps {
   readonly table: PresentationTableBlock;
   readonly accentColors?: readonly string[];
+  /** The deck's Dark 1 / Light 1 / Dark 2 / Light 2 and colour map (`presentationTableStyleSchemeColors`). */
+  readonly schemeColors?: TableStyleSchemeColors;
   readonly deckLooks: readonly TableStyleLook[];
   readonly disabled?: boolean;
   readonly disabledReason?: string;
@@ -59,6 +61,7 @@ import {
   createWebTableStyleGallery,
   isNativeWebTableStyleId,
   nativeWebTableStyleSlot,
+  type TableStyleSchemeColors,
 } from "../../../../lib/presentation-table-web-gallery";
 import { useOfficeData } from "../../../../lib/office-data/use-office-data";
 
@@ -93,6 +96,7 @@ export function PresentationTableStyleGallery({
   table,
   deckLooks: deckLooksRead,
   accentColors: accentColorsRead,
+  schemeColors: schemeColorsRead,
   disabled = false,
   disabledReason,
   labels,
@@ -127,6 +131,10 @@ export function PresentationTableStyleGallery({
   // `accentColorsKey` stands for `accentColorsRead`.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const accentColors = useMemo(() => accentColorsRead, [accentColorsKey]);
+  const schemeColorsKey = schemeColorsRead === undefined ? "" : JSON.stringify(schemeColorsRead);
+  // `schemeColorsKey` stands for `schemeColorsRead`.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const schemeColors = useMemo(() => schemeColorsRead, [schemeColorsKey]);
   const styledTable = useMemo(
     () => ({
       tableStyleId, tableStyleLook, headerRow, bandedRows, totalRow,
@@ -149,7 +157,7 @@ export function PresentationTableStyleGallery({
     if (currentLook) nativeLooks.set(currentLook.styleId, currentLook);
     // The served looks, or the recipe's until they land (`servedCatalog` is
     // this memo's reason to draw again).
-    const catalog = createWebTableStyleGallery(accentColors).map((entry) => ({
+    const catalog = createWebTableStyleGallery(accentColors, "en", schemeColors).map((entry) => ({
       ...entry,
       look: nativeLooks.get(entry.look.styleId) ?? entry.look,
     }));
@@ -234,7 +242,7 @@ export function PresentationTableStyleGallery({
     // `servedCatalog` is not read here: `createWebTableStyleGallery` reads
     // the store itself, and the memo draws again when the served looks land.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accentColors, deckLooks, unavailableLabel, servedCatalog, styledTable]);
+  }, [accentColors, schemeColors, deckLooks, unavailableLabel, servedCatalog, styledTable]);
   // By the words: the host hands a new labels object at every render.
   const { ariaLabel, more, clear, deck } = labels;
   const galleryLabels = useMemo(

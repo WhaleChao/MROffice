@@ -19,6 +19,7 @@ import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { type Editor } from "@tiptap/core";
 import { toast } from "@mrnote/core/web/hooks/use-toast.ts";
 import { normalizeWordCompatibilityMode } from "@mrnote/core/web/components/console/editor/native-document/documentOverflowPunctuation.ts";
+import { documentMissingFontSubstitutes } from "@mrnote/core/web/components/console/editor/native-document/documentDisplayFonts.ts";
 import { footnoteTextStyleFromDocAttrs } from "@mrnote/core/web/components/console/editor/native-document/noteTextStyle.ts";
 import { printStructuralSheets, type StructuralPrintOptions } from "./structuralPrint";
 import type { PrintRevisionMarkup } from "./printRevisionMarkup";
@@ -155,6 +156,7 @@ export function useDocumentStructuralPrintOptions({
         bandStyleDefinitions: isUsableEditor(editor)
           ? editor.state.doc.attrs.styleDefinitions
           : null,
+        bandMissingFontSubstitutes: isUsableEditor(editor) ? documentMissingFontSubstitutes(editor.state) : null,
         bandWordCompatibilityMode: isUsableEditor(editor)
           ? normalizeWordCompatibilityMode(editor.state.doc.attrs.wordCompatibilityMode)
           : null,

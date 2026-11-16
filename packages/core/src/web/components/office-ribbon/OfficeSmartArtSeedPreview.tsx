@@ -27,7 +27,7 @@
  * Docs and Spreadsheet need no host import at all.
  */
 
-import { useId, type ReactNode } from "react";
+import { memo, useId, type ReactNode } from "react";
 
 import {
   OfficeSmartArtBevelFilter,
@@ -380,7 +380,7 @@ export function prefetchOfficeSmartArtSeedPreviews(
   for (const card of cards) smartArtPreviewNodes(officeSmartArtSeedPreviewSpec(card));
 }
 
-export function OfficeSmartArtSeedPreview({
+function OfficeSmartArtSeedPreviewScene({
   layoutId,
   layoutUrn,
   items,
@@ -618,3 +618,35 @@ export function OfficeSmartArtSeedPreview({
     </svg>
   );
 }
+
+
+function sameList<T>(a: readonly T[] | undefined | null, b: readonly T[] | undefined | null): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) if (a[index] !== b[index]) return false;
+  return true;
+}
+
+
+
+
+
+
+function sameSeedPreview(a: OfficeSmartArtSeedPreviewProps, b: OfficeSmartArtSeedPreviewProps): boolean {
+  return (
+    a.layoutId === b.layoutId &&
+    a.layoutUrn === b.layoutUrn &&
+    sameList(a.items, b.items) &&
+    sameList(a.levels, b.levels) &&
+    a.itemLabel === b.itemLabel &&
+    a.rootLabel === b.rootLabel &&
+    (a.bounds === b.bounds || (a.bounds?.width === b.bounds?.width && a.bounds?.height === b.bounds?.height)) &&
+    a.style === b.style &&
+    a.renderShape === b.renderShape &&
+    a.nodes === b.nodes &&
+    a.fit === b.fit &&
+    a.labels === b.labels
+  );
+}
+
+export const OfficeSmartArtSeedPreview = memo(OfficeSmartArtSeedPreviewScene, sameSeedPreview);

@@ -404,13 +404,25 @@ function roomKeepsWords(held: { room?: DeckPartRoomPort }): boolean {
   return held.room?.reading === true || held.room?.unsaved === true;
 }
 
+
+
+
+
+const writtenWithoutVisibility = new WeakMap<object, string>();
+
+function slideWithoutVisibilityJson(slide: DeckSlideLike): string {
+  const kept = writtenWithoutVisibility.get(slide);
+  if (kept !== undefined) return kept;
+  const { hidden: _hidden, ...rest } = slide as DeckSlideLike & Rec;
+  void _hidden;
+  const json = JSON.stringify(rest);
+  writtenWithoutVisibility.set(slide, json);
+  return json;
+}
+
 function sameSlideButVisibility(a: DeckSlideLike, b: DeckSlideLike): boolean {
   if (a === b) return true;
-  const { hidden: _a, ...restA } = a as DeckSlideLike & Rec;
-  const { hidden: _b, ...restB } = b as DeckSlideLike & Rec;
-  void _a;
-  void _b;
-  return JSON.stringify(restA) === JSON.stringify(restB);
+  return slideWithoutVisibilityJson(a) === slideWithoutVisibilityJson(b);
 }
 
 function sameIds(a: readonly string[], b: readonly string[]): boolean {
@@ -1372,12 +1384,22 @@ export class DeckPartsSession<S extends DeckSlideLike> {
       const records = partRecords.get(index) ?? [];
       const liveOf = new Map<string, S | undefined>();
       let changed = false;
+      // A part with a live room: a slide that is another object than the one
+      // the room last took is published, and the room itself finds a step
+      // that changes nothing (DocumentPartRoom.publish compares what it holds
+      // with what it is given) -- an Undo back to it writes no step and saves
+      // nothing. The slide is not written out here to be compared first: the
+      
+      // slide, at a quarter CPU speed: 18 ms each, 276 ms over 41 keys).
+      const byIdentity = held.room?.accepting === true;
       for (const { id, record } of records) {
         const now = liveById?.get(id);
         liveOf.set(id, now);
         const saved = held.saved.get(id);
         if (!saved) {
           changed = true;
+        } else if (byIdentity) {
+          if (!now || now !== saved) changed = true;
         } else if (now) {
           if (now === saved) {
             if (!held.savedStore.has(id)) held.savedStore.set(id, slideRecordJson(record));
@@ -1455,7 +1477,8 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     for (const { id, record } of records) {
       const now = liveOf.get(id);
       const saved = held.saved.get(id);
-      if (!saved || !now || (now !== saved && !sameSlideButVisibility(now, saved))) changedRecords.set(id, record);
+      // Another object than the room last took: the room compares (above).
+      if (!saved || !now || now !== saved) changedRecords.set(id, record);
     }
     if (changedRecords.size === 0) return false;
     const nextSlides = baseSlides.map((slide) => {
@@ -1520,6 +1543,9 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     /** The room read afresh (a reseed), with the slides this window shows: no
      * text change says what moved while it was away, so they are compared. */
     shownBefore?: readonly S[],
+    /** The slide as this window holds it now, by id: a slide the room gives
+     * exactly as the window holds it stays the window's object (below). */
+    currentOf?: (id: string) => S | undefined,
   ): ReadonlyMap<string, S> | null {
     const held = this.parts.get(index);
     if (!held || !Array.isArray(content.slides)) return null;
@@ -1541,13 +1567,36 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     }
     if (shownBefore) this.noteWordsMoved(shownBefore, slides.filter((slide) => !typed.has(slide.id)));
     const shown = new Map<string, S>();
-    held.byId = new Map(slides.map((slide) => [slide.id, typed.get(slide.id)?.now ?? slide]));
+    // A slide the room gives exactly as the window holds it (its whole
+    // normalized record, written out afresh on both sides: an object is never
+    // taken for its content by a cache) stays the window's object, as the
+    // part's saved slide too, and is not handed back: a room's first read, or
+    // another member's change to one slide, made every slide of the part a
+    // new object, held as saved and drawn again, and each was then compared
+    
+    
+    // field the window holds and the room does not included -- is handed back
+    // as before.
+    const kept = new Map<string, S>();
+    for (const slide of slides) {
+      if (typed.has(slide.id)) continue;
+      const current = currentOf?.(slide.id);
+      if (!current) continue;
+      const view = this.shown(slide);
+      if (view === current || JSON.stringify(view) === JSON.stringify(current)) kept.set(slide.id, current);
+    }
+    held.byId = new Map(slides.map((slide) => [slide.id, typed.get(slide.id)?.now ?? kept.get(slide.id) ?? slide]));
     held.saved.clear();
     held.savedStore.clear();
     for (const slide of slides) {
       const mine = typed.get(slide.id);
       if (mine) {
         held.saved.set(slide.id, mine.saved);
+        continue;
+      }
+      const same = kept.get(slide.id);
+      if (same) {
+        held.saved.set(slide.id, same);
         continue;
       }
       const view = this.shown(slide);

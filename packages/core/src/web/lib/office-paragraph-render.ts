@@ -36,6 +36,7 @@ import {
   OFFICE_BULLET_STYLE_GLYPHS,
   POWERPOINT_BULLET_CHARS,
   POWERPOINT_DEFAULT_BULLET_GLYPH_BY_LEVEL,
+  POWERPOINT_NATIVE_BULLET_CHARS,
   POWERPOINT_WEB_BULLET_STYLE_TYPES,
   POWERPOINT_WEB_NUMBER_FORMATS,
 } from "./office-list-catalog";
@@ -90,6 +91,22 @@ export function normalizeBulletChar(value: unknown): BulletChar | undefined {
   if (typeof value !== "string") return undefined;
   const candidate = value.trim();
   return BULLET_CHAR_SET.has(candidate) ? (candidate as BulletChar) : undefined;
+}
+
+/**
+ * The glyphs a text BLOCK's own `bulletChar` may hold: the gallery's, plus the
+ * middle dot an imported box states for all its bulleted rows (reading row
+ * 817). Rows keep the gallery vocabulary ({@link normalizeBulletChar}).
+ */
+export const BLOCK_BULLET_CHARS = POWERPOINT_NATIVE_BULLET_CHARS;
+export type BlockBulletChar = (typeof BLOCK_BULLET_CHARS)[number];
+const BLOCK_BULLET_CHAR_SET: ReadonlySet<string> = new Set(BLOCK_BULLET_CHARS);
+
+/** {@link normalizeBulletChar} for a block's own marker. */
+export function normalizeBlockBulletChar(value: unknown): BlockBulletChar | undefined {
+  if (typeof value !== "string") return undefined;
+  const candidate = value.trim();
+  return BLOCK_BULLET_CHAR_SET.has(candidate) ? (candidate as BlockBulletChar) : undefined;
 }
 
 /**
@@ -349,6 +366,11 @@ export interface RenderableParagraph {
    * receipt below.
    */
   bulletFormat?: RenderableMarker;
+  /**
+   * A list row whose marker its layout does not draw (a SmartArt layout's
+   * level-1 words, `SlideParagraph.markerHidden`): drawn as a row with none.
+   */
+  markerHidden?: true;
 }
 
 /** The marker identity this renderer reads off one row's receipt. */
@@ -374,7 +396,7 @@ export interface RenderedParagraph {
  * a block that never picked a glyph/format renders byte-for-byte as before.
  */
 export interface MarkerOptions {
-  bulletChar?: BulletChar;
+  bulletChar?: BlockBulletChar;
   numberFormat?: NumberFormat;
   /**
    * The `nativeBullet` receipt, aligned to the rows by index. Where a row's
@@ -404,7 +426,7 @@ export function renderParagraphs(
   paragraphs: readonly RenderableParagraph[],
   options?: MarkerOptions,
 ): RenderedParagraph[] {
-  const bulletChar = normalizeBulletChar(options?.bulletChar);
+  const bulletChar = normalizeBlockBulletChar(options?.bulletChar);
   const numberFormat = normalizeNumberFormat(options?.numberFormat);
   // Read POSITIONALLY, so a length that no longer matches the rows means the
   // rows were rewritten under it and the receipt says nothing (the rule every
@@ -424,6 +446,13 @@ export function renderParagraphs(
   };
   return paragraphs.map((paragraph, index) => {
     const level = clampLevel(paragraph.level);
+    if (paragraph.markerHidden === true && paragraph.bullet !== "none") {
+      // Drawn as PowerPoint draws it: no marker, and the level's numbering
+      // run broken, as a row without one breaks it.
+      runs.delete(level);
+      clearDeeperThan(level);
+      return { text: paragraph.text, level, marker: null };
+    }
     const rowBulletChar = normalizeBulletChar(paragraph.bulletChar) ?? bulletChar;
     const rowNumberFormat =
       normalizeNumberFormat(paragraph.numberFormat) ?? numberFormat;

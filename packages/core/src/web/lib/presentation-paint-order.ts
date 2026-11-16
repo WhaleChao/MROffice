@@ -225,6 +225,46 @@ export function presentationPaintOrder(
     .flatMap((unit) => unit.members);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationListInPaintOrder(list: readonly object[]): number[] | null {
+  const blocks = list as readonly PaintedBlock[];
+  const places = statedPlaces(blocks, false);
+  const units: Array<{ place: number; order: number; members: number[] }> = [];
+  let front = -Infinity;
+  let index = 0;
+  while (index < blocks.length) {
+    const key = authoredDiagramKey(blocks[index]);
+    let end = index + 1;
+    if (key !== null) {
+      while (end < blocks.length && authoredDiagramKey(blocks[end]) === key) end += 1;
+    }
+    const place = key === null ? (places[index] ?? front) : front;
+    units.push({
+      place,
+      order: units.length,
+      members: Array.from({ length: end - index }, (_, offset) => index + offset),
+    });
+    front = Math.max(front, place);
+    index = end;
+  }
+  const ordered = units
+    .sort((a, b) => (a.place === b.place ? a.order - b.order : a.place < b.place ? -1 : 1))
+    .flatMap((unit) => unit.members);
+  return ordered.every((at, position) => at === position) ? null : ordered;
+}
+
 /**
  * The place the first of `blocks` to state one paints at, or null when none
  * does (an imported SmartArt diagram's members all state their frame's).

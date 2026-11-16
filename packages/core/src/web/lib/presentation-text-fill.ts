@@ -70,6 +70,11 @@ export interface TextBoxFillInput {
   outlineAlign?: unknown;
   /** Soft drop shadow. */
   shadow?: unknown;
+  /**
+   * Format Shape > Effects (the shape's one model). A box that states them
+   * draws its shadow from them, so the soft-shadow switch draws nothing.
+   */
+  shapeEffects?: unknown;
 }
 
 /** A resolved, render-ready text-box fill / outline descriptor. */
@@ -149,7 +154,7 @@ export function resolveTextBoxFill(
     outlineWidth > 0
       ? normalizeShapeColor(input?.outlineColorTo, null)
       : null;
-  const shadow = input?.shadow === true;
+  const shadow = input?.shadow === true && (input.shapeEffects === undefined || input.shapeEffects === null);
   const transparency = input?.fillTransparency;
   const fillTransparency =
     fill !== null &&

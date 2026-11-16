@@ -30,7 +30,7 @@ import { isNativeScene3d, isNativeShape3d, isSmartArtScene3d, isSmartArtShape3d,
 import { normalizeSignedCropRect } from "./presentation-crop-group";
 import { MAX_COLUMN_WIDTH_PX, MAX_DRAWING_LAYER_X_PX, MAX_DRAWING_LAYER_Y_PX, MAX_GRID_COLUMN_SIZE_OVERRIDES, MAX_GRID_COLUMNS, MAX_GRID_ROW_SIZE_OVERRIDES, MAX_GRID_ROWS, MAX_ROW_HEIGHT_PX, MIN_COLUMN_WIDTH_PX, MIN_ROW_HEIGHT_PX } from "./spreadsheet/grid-sizing";
 import { ICON_SET_FAMILIES, iconSetCount, MAX_RANGE_COL, MAX_RANGE_ROW, normalizeHexColor, sanitizeHyperlink } from "./spreadsheet/conditional-format";
-import { DATA_TABLE_ICON_FILTER_SETS, DATA_TABLE_RELATIVE_DATE_PERIODS, normalizeDataTableColumnFilter, normalizeDataTableSortState, type DataTableColumnFilter, type DataTableSortState } from "./spreadsheet/data-table";
+import { DATA_TABLE_ICON_FILTER_SETS, DATA_TABLE_RELATIVE_DATE_PERIODS, MAX_DATA_TABLES, normalizeDataTableColumnFilter, normalizeDataTableSortState, type DataTableColumnFilter, type DataTableSortState } from "./spreadsheet/data-table";
 import { normalizeFilterDateGroups, type FilterDateGroup } from "./spreadsheet/date-filter-tree";
 import { parseInternalLink, parseNamedLink } from "./spreadsheet/sheet-interactions";
 import { blankCellFormatsArea, blankCellFormatsIssue, MAX_BLANK_CELL_FORMAT_GROUPS, MAX_BLANK_CELL_FORMAT_RANGES, MAX_BLANK_CELL_FORMAT_REF_LENGTH, MAX_BLANK_CELL_FORMAT_WORKBOOK_AREA } from "./spreadsheet/blank-cell-formats";
@@ -306,6 +306,50 @@ export const spreadsheetCellSchema = z
     
     
     hyperlinkInArea: z.boolean().optional(),
+    // The link over several cells beneath this cell's own (the file lists the
+    // cell's first): a sort that takes the cell's own away leaves this one on
+    // the place (xlsxHyperlinkAreaUnder, R294-X08). Its address is checked as
+    // `hyperlink` is.
+    hyperlinkArea: z
+      .object({
+        hyperlink: z
+          .string()
+          .max(65_530)
+          .refine(
+            (value) =>
+              sanitizeHyperlink(value) !== null || parseInternalLink(value) !== null || parseNamedLink(value) !== null,
+          ),
+        hyperlinkTooltip: z.string().max(255).optional(),
+        hyperlinkDisplay: z.string().max(65_530).optional(),
+        // Its place in the file's list of links (xlsxHyperlinkOwnUnder).
+        hyperlinkRank: z.number().int().min(0).max(10_000_000).optional(),
+      })
+      .strict()
+      .optional(),
+    // The place in the file's list of links of the link the cell shows, on a
+    // sheet with a link over several cells: a sort reads which of two links over
+    // one place is first, as Excel's keeps their order (xlsxHyperlinkOwnUnder,
+    
+    hyperlinkRank: z.number().int().min(0).max(10_000_000).optional(),
+    // The cell's own one-cell link the file lists after the area's link the cell
+    // shows (`hyperlinkInArea`): a sort moves it with the cell and leaves the
+    // area's on the place (xlsxHyperlinkOwnUnder, Windows Excel x35). Its address
+    // is checked as `hyperlink` is.
+    hyperlinkOwnUnder: z
+      .object({
+        hyperlink: z
+          .string()
+          .max(65_530)
+          .refine(
+            (value) =>
+              sanitizeHyperlink(value) !== null || parseInternalLink(value) !== null || parseNamedLink(value) !== null,
+          ),
+        hyperlinkTooltip: z.string().max(255).optional(),
+        hyperlinkDisplay: z.string().max(65_530).optional(),
+        hyperlinkRank: z.number().int().min(0).max(10_000_000).optional(),
+      })
+      .strict()
+      .optional(),
     hyperlink: z
       .string()
       .max(65_530)
@@ -1026,6 +1070,9 @@ export const spreadsheetShapeObjectSchema = z
             scene3d: z.custom<SmartArtScene3d>(isNativeScene3d).optional(),
           })
           .optional(),
+        // The camera of the group it came out of (`xdr:grpSpPr/a:scene3d`),
+        // DISPLAY-ONLY like `nativeShape3d`: the group keeps it in the file.
+        nativeGroupScene3d: z.custom<SmartArtScene3d>(isNativeScene3d).optional(),
         scene3d:smartArtScene3dSchema.optional(),
         textShape3d:smartArtTextShape3dSchema.optional(),
         smartArtStyle:smartArtStyleIdSchema.optional(),
@@ -2674,7 +2721,9 @@ export const spreadsheetSheetSchema = z
           })
           .passthrough(),
       )
-      .max(1_000)
+      // MAX_VALIDATION_RULES (data-validation.ts): one a rectangle, as the
+      // import splits a rule's sqref (xlsx-rounds R422-X46: 1,024 of one rule).
+      .max(10_000)
       .optional(),
     // Conditional formatting (Excel/WPS parity): per-range rules that restyle
     // covered cells. A discriminated union on `kind` (additive — see
@@ -2793,6 +2842,9 @@ export const spreadsheetSheetSchema = z
               kind: z.literal("textContains"),
               range: conditionalRangeSchema,
               text: z.string().min(1).max(1_000),
+              // The rule's own formula (another program's, testing a cell
+              // away from the one it paints), which Excel evaluates.
+              formula: z.string().min(1).max(1_000).optional(),
               operator: z.enum([
                 "contains",
                 "notContains",
@@ -3375,7 +3427,8 @@ export const spreadsheetSheetSchema = z
           })
           .passthrough(),
       )
-      .max(64)
+      // The page's own bound: a sheet past 64 tables had every table set aside, unmoved by line edits (R312-X25).
+      .max(MAX_DATA_TABLES)
       .optional(),
     // Print / Page Setup (Excel/WPS parity): per-sheet print settings that control
     // what is exported to PDF.  All fields are optional; absent means "use the
@@ -4168,6 +4221,30 @@ export const presentationThemeColorsSchema = z
     outlineColor: presentationThemeColorRefSchema.optional(),
   })
   .strict();
+// A reference with every transform in order (a shape's `p:style` line
+
+// client before it refuses any key a swatch reference does not state
+// (`presentation-theme-color-binding`'s THEMECOLORS_TRANSFORMED key).
+const presentationThemeColorStepSchema = z.union([
+  z.tuple([z.enum(["shade", "tint"]), z.number().int().min(0).max(100_000)]),
+  z.tuple([z.enum(["lumMod", "satMod", "hueMod"]), z.number().int().min(0).max(10_000_000)]),
+  z.tuple([z.enum(["lumOff", "satOff"]), z.number().int().min(-100_000).max(100_000)]),
+  z.tuple([z.literal("hueOff"), z.number().int().min(-21_600_000).max(21_600_000)]),
+]);
+export const presentationThemeColorTransformedRefSchema = z
+  .object({
+    slot: presentationThemeColorRefSchema.shape.slot,
+    transforms: z.array(presentationThemeColorStepSchema).min(1).max(8),
+    rgb: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  })
+  .strict();
+export const presentationThemeColorsTransformedSchema = z
+  .object({
+    fill: presentationThemeColorTransformedRefSchema.optional(),
+    stroke: presentationThemeColorTransformedRefSchema.optional(),
+    outlineColor: presentationThemeColorTransformedRefSchema.optional(),
+  })
+  .strict();
 
 /** WordArt Transform on a text box's or a shape's words: the ONE warp value
  * of `@/lib/office-text-warp` (TEXT-WARP.md). */
@@ -4298,6 +4375,8 @@ export const presentationShapeBlockSchema = z.preprocess(presentationShapeBlockA
     decorative: z.boolean().optional(),
     // The label's WordArt Transform (`a:prstTxWarp`).
     textWarp: presentationTextWarpSchema.optional(),
+    // Format Shape > 3-D Rotation > Keep text flat (`a:flatTx`), only when checked.
+    keepTextFlat: z.literal(true).optional(),
     // Optional CENTERED text label inside the shape (PowerPoint / WPS "add text
     // to shape" parity). Additive — pre-existing shape blocks carry no `text`
     // and still validate byte-for-byte. Bounded here; the render + serialize
@@ -4339,6 +4418,7 @@ export const presentationShapeBlockSchema = z.preprocess(presentationShapeBlockA
     // whole percentage; PPTX `a:alpha` on the line colour.
     outlineTransparency: z.number().int().min(1).max(100).optional(),
     themeColors: presentationThemeColorsSchema.optional(),
+    themeColorsTransformed: presentationThemeColorsTransformedSchema.optional(),
     strokeTo: presentationHexColorSchema.optional(),
     // The OUTLINE's whole gradient -- the same model, reader and writer as
     // `fillGradient`. `strokeTo`/`strokeGradientAngle` stay beside it as the
@@ -4510,6 +4590,11 @@ export const presentationShapeBlockSchema = z.preprocess(presentationShapeBlockA
     // The groups nested inside `groupId` this block also belongs to,
     // outermost first (presentation-crop-group `blockGroupPath`).
     groupPath: z.array(presentationGroupIdSchema).min(1).max(7).optional(),
+    // `a:grpFill` worn as the part of the group's own gradient, picture or
+    // pattern under the block (`presentation-group-fill`).
+    fillFromGroup: z.literal(true).optional(),
+    groupFill: z.record(z.string(), z.unknown()).optional(),
+    groupFillDepth: z.number().int().min(1).max(8).optional(),
   })
   .passthrough()
   .superRefine((block, ctx) => {

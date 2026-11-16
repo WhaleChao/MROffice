@@ -5,6 +5,8 @@
  */
 import { readSmartArtGraphicEffect, smartArtGraphicFormatStyle } from "../../../../lib/spreadsheet/smartart-background";
 import { EMU_PER_PT, EMU_PER_PX, ptToPx } from "../../../../lib/office-units";
+import { textHasEastAsian } from "./noteTextStyle";
+import { wordGridFontLineMetrics } from "./wordFontMetrics";
 import { inkLightStandIn, inkStrokeRestsInLayer, LightInkView, placeWokenInkStage, restInkStrokeSoon } from "./paged/inkLightLayer";
 import { documentThemeBodyLatin } from "../../../../lib/document-design";
 import { smartArtSlotPictureFormatOf } from "../../../../lib/office-smartart/slot-picture-format";
@@ -35,19 +37,23 @@ import {
   normalizeOfficeLineSketch,
   officeShapeEffectsFilterRegion,
   officeShapeEffectsPaint,
+  officeShapeTextTurn,
   officeSketchSeed,
   officeShapeShadowDropShadow,
   type OfficeShapeEffectPrimitive,
 } from "../../../../lib/office-shape-effects-paint";
 import { holdOfficeTextBoxForChrome } from "../../../../lib/office-inactive-selection";
+import { officeCircleRadialSvgAttrs, officeRectPathGradient, wordCirclePathGradient } from "../../../../lib/office-path-gradient";
 import { Extension, Node, mergeAttributes } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
 import { Fragment, Slice, type Mark, type Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
-import { subscribeSmartArtPreparation } from "../../../../lib/office-smartart/prepared-conversion";
+import { SMARTART_PREPARE_RETRY_MS, subscribeSmartArtPreparation } from "../../../../lib/office-smartart/prepared-conversion";
 import type { SmartArtRefusal } from "../../../../lib/office-smartart/convert-refusal-message";
 import {
   DOCUMENT_SMARTART_REFUSED_EVENT,
+  documentSmartArtAbsentDrawingScene,
+  documentSmartArtDrawingAbsent,
   documentSmartArtPreparation,
   documentSmartArtPreparedMemberId,
   documentSmartArtPreparedNode,
@@ -96,6 +102,7 @@ import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { yUndoPluginKey } from "@tiptap/y-tiptap";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { EditorView, NodeView, NodeViewConstructor } from "@tiptap/pm/view";
+import { documentGroupMembersReorderable, documentGroupMembersWithout } from "../../../../lib/document-shape-group-tree";
 
 import {
   HOLLOW_PATH_KINDS,
@@ -153,7 +160,7 @@ import {
 } from "../../../../lib/presentation-authored-preset-geometry";
 import { nativeLineEndPath, nativeLineEndPlacements, nativePathFillColor, readNativeLineEnd, type NativeLineEnd } from "../../../../lib/native-drawing-geometry";
 import { buildBlockTransform, constrainedMoveAxis, RESIZE_HANDLES, type ResizeHandle } from "../../../../lib/presentation-drag";
-import { SMARTART_PICTURE_PLACEHOLDER_ICON_SRC } from "../../../../lib/office-smartart/model";
+import { OFFICE_SCENE_LABEL_LINE_SPACING, SMARTART_PICTURE_PLACEHOLDER_ICON_SRC } from "../../../../lib/office-smartart/model";
 import { smartArtMemberTextItem } from "../../../../lib/office-smartart/interaction-model";
 import { normalizeBandRichBlocks } from "./headerFooter";
 import { buildBandRichDom } from "./paged/bandRichDom";
@@ -164,7 +171,12 @@ import {
   type PreservedSlotPicture,
 } from "../../../../lib/office-smartart/preserved-slot-pictures";
 import { smartArtTextBoxInsetPercents } from "../../../../lib/office-smartart/text-box";
-import { documentSmartArtLabelFontPx } from "../../../../lib/office-smartart/document-shapes-model";
+import {
+  DOCUMENT_SMARTART_LABEL_LINE_HEIGHT,
+  documentSmartArtLabelFontPx,
+  documentSmartArtMemberLabelPx,
+  documentSmartArtOfficeLabelScale,
+} from "../../../../lib/office-smartart/document-shapes-model";
 import { normalizeEastAsianFontFamilies, orderEastAsianFontFamiliesForText } from "../../../../lib/document-word-line-metrics";
 import { withOfficeFontSubstitutes } from "../../../../lib/office-fonts/substitutes";
 // The SmartArt quick styles' 3-D, approximated in 2-D exactly the way the
@@ -226,7 +238,7 @@ import {
   officeEditPathFromPreset,
   type OfficeEditPath,
 } from "../../../../lib/office-custom-path-edit";
-import {normalizeOfficeShapeGradient,normalizeOfficeShapeShadow} from "../../../../lib/office-shape-paint";
+import {normalizeOfficeShapeGradient,normalizeOfficeShapeShadow,officeGradientAngle,officeGradientAngleForBox,officeGradientDrawnStops,type OfficeShapeGradient} from "../../../../lib/office-shape-paint";
 import {
   isOfficeInsetStroke,
   officeStrokeAlign,
@@ -276,6 +288,7 @@ import {
   normalizeDocumentInkTool,
   normalizeDocumentShapeAttrs,
   documentShapeMemberLeafAttrs,
+  documentShapeMemberWithGroupPaint,
   normalizeDocumentShapeEffects,
   normalizeDocumentShapePictureFill,
   normalizeDocumentShapeText,
@@ -321,6 +334,7 @@ import styles from "./DocumentShapeBlock.module.css";
 import { tryCapturePointer } from "./pointerCapture";
 import { beginObjectDragGesture } from "../../../../lib/object-drag-gesture";
 import { attachOfficeTextWarp } from "../../../../lib/office-text-warp-render";
+import { attachOfficeTextShadowCopy, officeTextShadowTransformed } from "../../../../lib/office-text-shadow-copy";
 import { touchMultiSelectScopeFor } from "../../../../lib/touch-multi-select";
 import {
   isCompatMouseFromTouch,
@@ -379,6 +393,24 @@ export const DOCUMENT_SMARTART_PICTURE_SLOT_EVENT =
 export interface DocumentSmartArtPictureSlotDetail {
   readonly groupId: string;
   readonly memberId: string;
+}
+
+/**
+ * One authored SmartArt shape resized by its handles: Word keeps the size as
+ * the shape's custScaleX/Y and lays the WHOLE graphic out again around it,
+ * which is a served relayout the toolbar owns (its engine queue, one Undo).
+ * The canvas asks for it with this cancelable event; the toolbar claims it
+ * with `preventDefault()`. Unclaimed (no toolbar mounted), the resize is the
+ * plain box edit the canvas previewed.
+ */
+export const DOCUMENT_SMARTART_ITEM_RESIZE_EVENT =
+  "mrai:document-smartart-item-resize";
+
+export interface DocumentSmartArtItemResizeDetail {
+  readonly groupId: string;
+  readonly itemId: string;
+  /** Against the shape as it is now, per axis. */
+  readonly factor: { readonly x: number; readonly y: number };
 }
 
 /** The box a connector route with a zero axis is evaluated in, across that
@@ -554,6 +586,86 @@ function appendPreservedSlotPicture(
  * node view at that position enters the shared vertex editor.
  */
 export const DOCUMENT_SHAPE_EDIT_POINTS_EVENT = "mrai:document-shape-edit-points";
+/**
+ * The Selection Pane picks one object of a group (Microsoft Support, "Manage
+ * objects with the Selection pane": a group's objects are listed under it and
+ * each can be selected): the node view at `position` selects the group and
+ * that member in it, as a press on the member does.
+ */
+export const DOCUMENT_SHAPE_SELECT_MEMBER_EVENT = "mrai:document-shape-select-member";
+export interface DocumentShapeSelectMemberDetail {
+  readonly position: number;
+  readonly memberId: string;
+}
+/**
+ * Said (on `window`) whenever an object picked inside a plain group (not a
+ * SmartArt graphic) is picked or let go, so the ribbon's Arrange commands
+ * read it again ({@link documentShapePickedGroupMember}).
+ */
+export const DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT = "mrai:document-shape-group-member-pick";
+
+/** Each view's object picked inside a plain group: its group's place, read live. */
+const pickedGroupMembers = new WeakMap<EditorView, { readonly position: () => number | undefined; readonly memberId: string }>();
+
+/**
+ * Delete on an object picked in a plain group (the group at `position`):
+ * that object only, in one Undo step, the group staying selected; the
+ * group's last object takes the group with it (Word deletes the item
+ * selected inside its group). False, changing nothing, when the group
+ * cannot lose it here: a connector glued to it, a SmartArt graphic, a
+ * group whose objects were not read with their groups.
+ */
+export function deleteDocumentShapeGroupMember(view: EditorView, position: number, memberId: string): boolean {
+  const { state } = view;
+  const current = state.doc.nodeAt(position);
+  const members = current?.attrs.groupMembers as readonly DocumentShapeGroupMember[] | null | undefined;
+  if (!view.editable || !current || current.type.name !== "documentShape" || !members?.some((member) => member.memberId === memberId)) {
+    return false;
+  }
+  if (typeof current.attrs.smartArtKind === "string" || documentShapeIsPreservedNativeSmartArt(current.attrs)) return false;
+  if (members.length === 1) {
+    view.dispatch(closeHistory(state.tr.delete(position, position + current.nodeSize)));
+    return true;
+  }
+  if (!documentGroupMembersReorderable(current)) return false;
+  const groupMembers = documentGroupMembersWithout(members, memberId);
+  if (!groupMembers) return false;
+  const transaction = closeHistory(
+    state.tr.setNodeMarkup(position, undefined, { ...current.attrs, groupMembers }, current.marks),
+  );
+  view.dispatch(transaction.setSelection(NodeSelection.create(transaction.doc, position)));
+  return true;
+}
+
+/**
+ * The object picked inside the selected plain group (select the group, then
+ * the object; or its row in the Selection Pane): what Word's Bring Forward /
+ * Send Backward and Delete act on (Microsoft Support, "Group shapes,
+ * pictures, or other objects in Word": "To work with an individual item in
+ * the group, select the group, and then select the item"). Null when the
+ * group itself is what is selected, or the group is a SmartArt graphic.
+ */
+export function documentShapePickedGroupMember(
+  editor: Pick<Editor, "isDestroyed" | "state" | "view">,
+): { readonly pos: number; readonly node: ProseMirrorNode; readonly memberId: string } | null {
+  if (editor.isDestroyed) return null;
+  const picked = pickedGroupMembers.get(editor.view);
+  if (!picked) return null;
+  const { selection } = editor.state;
+  const pos = picked.position();
+  if (!(selection instanceof NodeSelection) || pos === undefined || selection.from !== pos) return null;
+  const node = selection.node;
+  const members = node.attrs.groupMembers as readonly DocumentShapeGroupMember[] | null | undefined;
+  if (
+    node.type.name !== "documentShape" ||
+    typeof node.attrs.smartArtKind === "string" ||
+    documentShapeIsPreservedNativeSmartArt(node.attrs) ||
+    !members?.some((member) => member.memberId === picked.memberId)
+  ) {
+    return null;
+  }
+  return { pos, node, memberId: picked.memberId };
+}
 /**
  * Asks a shape's node view to open its in-shape text editor (dispatched on
  * the node's DOM, cancelable: the view cancels it when it opened). `seed`
@@ -995,6 +1107,37 @@ function inlineEffectExtentMargin(source: unknown): string {
   }
   const [left, top, right, bottom] = (extent as number[]).map((value) => `${Number((value / EMU_PER_PX).toFixed(3))}px`);
   return `${top} ${right} ${bottom} ${left}`;
+}
+
+/** `window.__docsSmartArtRunShadingOff = true`: an in-line drawing does not
+ * paint the shading of its run (as before; A/B). */
+function smartArtRunShadingOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsSmartArtRunShadingOff?: boolean }).__docsSmartArtRunShadingOff === true;
+}
+
+/**
+ * The shading of the run holding an in-line drawing (`source.hostRunShading`,
+ * reading 49): Word lays it behind the whole drawing, its effect extent
+ * included (corpus R441-D03: a SmartArt in a run shaded 4F6228 stands on a
+ * dark green panel). The drawing's own box is filled; its effect extent
+ * (laid out as the stage's margin in line) by one shadow per side.
+ */
+function inlineHostRunShading(source: unknown): { color: string; shadow: string } | null {
+  if (smartArtRunShadingOff()) return null;
+  const shading = source && typeof source === "object" ? (source as { hostRunShading?: unknown }).hostRunShading : null;
+  if (typeof shading !== "string" || !/^#[0-9a-f]{6}$/i.test(shading)) return null;
+  const extent = source && typeof source === "object" ? (source as { inlineEffectExtent?: unknown }).inlineEffectExtent : null;
+  const sides = Array.isArray(extent) && extent.length === 4 && extent.every((value) => typeof value === "number" && Number.isFinite(value) && value >= 0)
+    ? (extent as number[]).map((value) => Number((value / EMU_PER_PX).toFixed(3)))
+    : [0, 0, 0, 0];
+  const [left, top, right, bottom] = sides;
+  const shadows = [
+    top > 0 ? `0 ${-top}px 0 0 ${shading}` : "",
+    bottom > 0 ? `0 ${bottom}px 0 0 ${shading}` : "",
+    left > 0 ? `${-left}px 0 0 0 ${shading}` : "",
+    right > 0 ? `${right}px 0 0 0 ${shading}` : "",
+  ].filter(Boolean);
+  return { color: shading, shadow: shadows.join(", ") };
 }
 
 function percentMovePatch(
@@ -1937,6 +2080,8 @@ function documentShapeLineEnds(attrs: DocumentShapeAttrs): {
 function documentShapeEffectsPaint(
   svg: SVGSVGElement,
   attrs: DocumentShapeAttrs,
+  /** The group's flips around a member's (`DocumentShapePaintOptions.groupFlip`). */
+  groupFlip?: { readonly flipH?: boolean; readonly flipV?: boolean } | null,
 ): { filter: string; reflect: string; transform: string; outerShadow: boolean } {
   const effects = attrs.shapeEffects ? normalizeDocumentShapeEffects(attrs.shapeEffects) : null;
   // Shape Outline > Sketched; a shape Word already sketched carries the drawn
@@ -1952,7 +2097,20 @@ function documentShapeEffectsPaint(
           width: Math.max(1, attrs.widthEmu / EMU_PER_PX),
           height: Math.max(1, attrs.heightEmu / EMU_PER_PX),
         },
-        { sketch, seed: officeSketchSeed(`${attrs.preset}:${attrs.widthEmu}x${attrs.heightEmu}`) },
+        {
+          sketch,
+          seed: officeSketchSeed(`${attrs.preset}:${attrs.widthEmu}x${attrs.heightEmu}`),
+          // The svg wears its flips OUTSIDE the painted turn (the shape's
+          // mirror is written in front of it; a member's box and its group's
+          // layer mirror around it), so the 3-D turn is taken through them:
+          // a group's mirror composed with its member's is one flip on each
+          // axis that either flips.
+          frame: {
+            rotation: attrs.rotation,
+            flipH: (attrs.flipH === true) !== (groupFlip?.flipH === true),
+            flipV: (attrs.flipV === true) !== (groupFlip?.flipV === true),
+          },
+        },
       )
     : null;
   if (!paint) return { filter: "", reflect: "", transform: "", outerShadow: false };
@@ -1982,6 +2140,61 @@ function documentShapeEffectsPaint(
   filters.push(...paint.cssFilters, ...(paint.silhouette && shadow ? [officeShapeShadowDropShadow(shadow)] : []));
   const outerShadow = Boolean(shadow && !shadow.inner);
   return { filter: filters.join(" "), reflect: paint.reflect, transform: paint.transform, outerShadow };
+}
+
+/** Stop elements of a gradient as drawn (`officeGradientDrawnStops`: the eased two-stop ramp). */
+function documentGradientStopElements(gradient: OfficeShapeGradient): SVGElement[] {
+  return officeGradientDrawnStops(gradient.stops).map((stop) => svgElement("stop", {
+    offset: stop.position,
+    "stop-color": stop.color,
+    ...((stop as { alpha?: number }).alpha !== undefined ? { "stop-opacity": (stop as { alpha?: number }).alpha } : {}),
+  }));
+}
+
+/**
+ * A circular path gradient as Windows Word draws a shape's fill: concentric
+ * circles about the middle of the tile rectangle (or the box), round in the
+ * shape's own box (`wordCirclePathGradient`).
+ */
+function documentCirclePathGradientElement(id: string, gradient: OfficeShapeGradient, widthEmu: number, heightEmu: number): SVGElement {
+  const circle = wordCirclePathGradient(gradient.tileRect, widthEmu, heightEmu);
+  const element = svgElement("radialGradient", { id, ...officeCircleRadialSvgAttrs(circle, widthEmu, heightEmu) });
+  for (const stop of documentGradientStopElements(gradient)) element.append(stop);
+  return element;
+}
+
+/**
+ * A rectangular path gradient (`rect`, and `shape` on the box) over the
+ * shape's box: rectangular contours from the focus rectangle to the bounds
+ * (`officeRectPathGradient`), as an SVG pattern in box units -- the last
+ * stop's colour, each trapezoid a linear gradient across it stroked with
+ * itself so no seam shows, the focus rectangle in the first stop's colour.
+ * The slide shapes' `RectPathGradientPattern`, built as DOM.
+ */
+function documentRectPathGradientElement(id: string, gradient: OfficeShapeGradient): SVGElement {
+  const shape = officeRectPathGradient(gradient.path?.fillToRect, gradient.tileRect);
+  const stops = officeGradientDrawnStops(gradient.stops);
+  const pattern = svgElement("pattern", { id, patternUnits: "objectBoundingBox", patternContentUnits: "objectBoundingBox", x: 0, y: 0, width: 1, height: 1, "data-path-gradient": "rect" });
+  const opacity = (stop: { alpha?: number } | undefined): Record<string, number> =>
+    stop?.alpha !== undefined ? { "fill-opacity": stop.alpha } : {};
+  const last = stops[stops.length - 1];
+  const first = stops[0];
+  if (last) pattern.append(svgElement("rect", { x: 0, y: 0, width: 1, height: 1, fill: last.color, ...opacity(last as { alpha?: number }) }));
+  shape.regions.forEach((region, index) => {
+    const regionId = `${id}-r${index}`;
+    const ramp = svgElement("linearGradient", { id: regionId, gradientUnits: "userSpaceOnUse", x1: region.from[0], y1: region.from[1], x2: region.to[0], y2: region.to[1] });
+    for (const stop of documentGradientStopElements(gradient)) ramp.append(stop);
+    pattern.append(ramp, svgElement("polygon", {
+      points: region.points.map(([x, y]) => `${x},${y}`).join(" "),
+      fill: `url(#${regionId})`,
+      stroke: `url(#${regionId})`,
+      "stroke-width": 0.002,
+      "stroke-linejoin": "round",
+    }));
+  });
+  const [fl, ft, fr, fb] = shape.focus;
+  if (first && fr > fl && fb > ft) pattern.append(svgElement("rect", { x: fl, y: ft, width: fr - fl, height: fb - ft, fill: first.color, ...opacity(first as { alpha?: number }) }));
+  return pattern;
 }
 
 /**
@@ -2015,14 +2228,35 @@ function paintShapeGeometry(
   let fill = attrs.fill === "none" ? "transparent" : attrs.fill;
   if(attrs.fillGradient){
     const id=svg.dataset.fillId??`document-shape-fill-${++documentShapeMarkerSequence}`;svg.dataset.fillId=id;
-    const defs=svgElement("defs",{}),g=svgElement("linearGradient",{id,...gradientVector(attrs.fillGradient.angle)});
-    for(const stop of attrs.fillGradient.stops)g.append(svgElement("stop",{offset:stop.position,"stop-color":stop.color}));
-    defs.append(g);svg.append(defs);fill=`url(#${id})`;
+    // A gradient stating its literal angle (`a:lin@scaled="0"`; a member's
+    // part of its group's sweep) is drawn at that angle in the box's own
+    // aspect; a scaled one in the unit box, which is what scaling means.
+    const defs=svgElement("defs",{});
+    const path=attrs.fillGradient.path;
+    if(path){
+      // A path gradient (`a:path`) as Windows Word draws a shape's fill
+      // (docx-look/probes focus*.docx): rect and shape paths in rectangular
+      // contours from the `a:fillToRect` focus, a circle about the middle of
+      // its bounds whatever the focus says. Drawn as a linear ramp they were
+      // a left-to-right sweep (every path gradient in a Word shape).
+      defs.append(path.kind==="circle"
+        ? documentCirclePathGradientElement(id,attrs.fillGradient,attrs.widthEmu,attrs.heightEmu)
+        : documentRectPathGradientElement(id,attrs.fillGradient));
+    }else{
+      const vector = attrs.fillGradient.scaled === false
+        ? gradientVector(officeGradientAngleForBox(attrs.fillGradient, attrs.widthEmu, attrs.heightEmu), attrs.widthEmu, attrs.heightEmu)
+        : gradientVector(officeGradientAngle(attrs.fillGradient));
+      const g=svgElement("linearGradient",{id,...vector});
+      for(const stop of officeGradientDrawnStops(attrs.fillGradient.stops))g.append(svgElement("stop",{offset:stop.position,"stop-color":stop.color}));
+      defs.append(g);
+    }
+    svg.append(defs);fill=`url(#${id})`;
   }
   // Format Shape > Fill > Pattern fill (a shape's own, or a group member's):
   // the shared pattern drawn as an SVG tile.
   const fillPattern = member?.fillPattern ?? attrs.fillPattern ?? null;
-  const fillPicture = member ? null : attrs.fillPicture ?? null;
+  // A member's picture is its part of its group's (`fillFromGroup`).
+  const fillPicture = attrs.fillPicture ?? null;
   if (fillPicture) {
     // Format Shape > Fill > Picture or texture fill: the picture stretched
     // into its fill rectangle or tiled over the geometry's box and clipped to
@@ -2073,7 +2307,7 @@ function paintShapeGeometry(
   }
   // The shape's own effects (`shapeEffects`, the editors' shared effect model):
   // when they state an outer shadow it replaces the older custom shadow.
-  const carried = documentShapeEffectsPaint(svg, attrs);
+  const carried = documentShapeEffectsPaint(svg, attrs, options?.groupFlip);
   const customShadow = attrs.shapeShadow && !carried.outerShadow
     ? `drop-shadow(0 ${attrs.shapeShadow.distance}px ${attrs.shapeShadow.blur / 2}px ${attrs.shapeShadow.color}${Math.round(attrs.shapeShadow.opacity * 255).toString(16).padStart(2, "0")})`
     : "";
@@ -2142,8 +2376,8 @@ function paintShapeGeometry(
     if (attrs.outlineGradient) {
       // A gradient line: the stops along the line's own angle.
       const id=svg.dataset.strokeId??`document-shape-stroke-${++documentShapeMarkerSequence}`;svg.dataset.strokeId=id;
-      const defs=svgElement("defs",{}),g=svgElement("linearGradient",{id,...gradientVector(attrs.outlineGradient.angle)});
-      for(const stop of attrs.outlineGradient.stops)g.append(svgElement("stop",{offset:stop.position,"stop-color":stop.color}));
+      const defs=svgElement("defs",{}),g=svgElement("linearGradient",{id,...gradientVector(officeGradientAngle(attrs.outlineGradient))});
+      for(const stop of officeGradientDrawnStops(attrs.outlineGradient.stops))g.append(svgElement("stop",{offset:stop.position,"stop-color":stop.color}));
       defs.append(g);svg.append(defs);stroke=`url(#${id})`;
     } else if (attrs.outlineTransparency) {
       stroke = officeChartColorWithOpacity(attrs.outline, (100 - attrs.outlineTransparency) / 100);
@@ -2766,6 +3000,28 @@ export interface DocumentShapePaintOptions {
    * lights a face by its height in the whole graphic, as the slide does.
    */
   readonly faceSpan?: { readonly top: number; readonly bottom: number; readonly left?: number; readonly right?: number } | null;
+  /**
+   * A group member's group's own flips: the group's layer mirrors the
+   * member's box, so the member's 3-D turn is taken through both mirrors.
+   */
+  readonly groupFlip?: { readonly flipH?: boolean; readonly flipV?: boolean } | null;
+}
+
+/**
+ * One shape member of a group, painted as the group draws it: wearing its
+ * part of its group's fill when it states `a:grpFill` (`fillFromGroup`),
+ * worked out from the group's box and the member's box as they are NOW -- a
+ * moved or resized member, a resized group or a new group fill is drawn at
+ * once (`office-shape-group-fill`).
+ */
+export function paintDocumentShapeGroupMember(
+  svg: SVGSVGElement,
+  group: DocumentShapeAttrs,
+  member: DocumentShapeGroupMember,
+  options?: DocumentShapePaintOptions,
+): void {
+  const drawn = documentShapeMemberWithGroupPaint(group, member);
+  paintShape(svg, documentShapeMemberLeafAttrs(drawn), drawn, options);
 }
 
 export function paintShape(
@@ -2921,6 +3177,42 @@ function documentShapeTextInsetCss(
 }
 
 /**
+ * The turn (degrees clockwise) a shape's words take in the shape's own
+ * plane, before any 3-D turn: Rotate All Text 270° is the vertical words'
+ * sideways glyphs a further half turn (read bottom-up), and Flip Vertical
+ * turns the words a half turn -- Word never mirrors a shape's words: a flipH
+ * shape's read as the plain one's, a flipV shape's upside down, turned with
+ * the shape's face in 3-D as the plain one's are (text3d-flip-probe-word.pdf:
+ * X 40 Y 20 perspective, horizontal and vert270 words, Keep Text Flat on and
+ * off). The label is drawn outside the shape's flips, so it takes none.
+ */
+export function documentShapeTextPlaneTurn(
+  attrs: Partial<Pick<DocumentShapeAttrs, "textDirection" | "flipV">>,
+): number {
+  return ((attrs.textDirection === "rotate270" ? 180 : 0) + (attrs.flipV === true ? 180 : 0)) % 360;
+}
+
+/**
+ * The shape's centre in its label box's own px (the box
+ * `documentShapeTextInsetCss` lays out): where the label turns with the
+ * shape's 3-D rotation, so the words stay on the turned face.
+ */
+function documentShapeTextOriginPx(
+  attrs: DocumentShapeAttrs,
+  widthPx: number,
+  heightPx: number,
+): { readonly x: number; readonly y: number } {
+  const definition = documentShapeDefinition(attrs.preset);
+  const rect =
+    (!attrs.customPath && !definition.lineLike
+      ? officePresetTextRect(definition.drawingPreset, widthPx, heightPx, attrs.adjustments)
+      : null) ?? { left: 0, top: 0, right: 1, bottom: 1 };
+  const left = rect.left * widthPx + (attrs.textBody?.insetLeftEmu ?? 91_440) / DOCUMENT_SHAPE_EMU_PER_PX;
+  const top = rect.top * heightPx + (attrs.textBody?.insetTopEmu ?? 45_720) / DOCUMENT_SHAPE_EMU_PER_PX;
+  return { x: widthPx / 2 - left, y: heightPx / 2 - top };
+}
+
+/**
  * How one `w:txbxContent` paragraph is drawn: its block (`w:jc`, `w:spacing`
  * line and before / after) and the type its unformatted runs take (its size,
  * or the document's Normal size when the shape states none, and its face).
@@ -2944,6 +3236,11 @@ export function shapeTextBodyParagraphCss(
   };
   font: { fontSize?: string; fontFamily?: string };
 } {
+  const lineHeight = wordStory
+    ? wordStoryLineHeight(paragraph)
+    : paragraph.lineHeight !== undefined
+      ? String(paragraph.lineHeight)
+      : undefined;
   return {
     block: {
       margin: "0",
@@ -2968,7 +3265,7 @@ export function shapeTextBodyParagraphCss(
       ...(paragraph.indentRightPt !== undefined ? { marginRight: `${paragraph.indentRightPt}pt` } : {}),
       ...(paragraph.firstLineIndentPt !== undefined ? { textIndent: `${paragraph.firstLineIndentPt}pt` } : {}),
       ...(paragraph.align !== undefined ? { textAlign: paragraph.align } : {}),
-      ...(paragraph.lineHeight !== undefined ? { lineHeight: String(paragraph.lineHeight) } : {}),
+      ...(lineHeight !== undefined ? { lineHeight } : {}),
     },
     font: {
       ...(paragraph.fontSizePt !== undefined
@@ -2981,6 +3278,45 @@ export function shapeTextBodyParagraphCss(
         : {}),
     },
   };
+}
+
+/**
+ * A Word story's line height (`w:spacing w:line w:lineRule="auto"`, a multiple
+ * of single, or the document's default multiple when the paragraph states
+ * none). Word counts the
+ * multiple in the face's single line (ascender + descender + line gap: 1.149
+ * em for Times New Roman), as it does in the body; a CSS multiple counts em,
+ * so `line-height: 1.15` set a Times New Roman text box 13 % short of Word's
+ * (R432-D10, R432-D04 abstract boxes: 16.9 px lines for Word's 19.4 px). A
+ * paragraph whose face Word's metrics do not record, or that holds East Asian
+ * text (set in another face, with Word's own 1.3x box), keeps the plain
+ * multiple.
+ */
+function wordStoryLineHeight(paragraph: DocumentShapeTextBody["paragraphs"][number]): string | undefined {
+  const multiple = paragraph.lineHeight;
+  const family = paragraph.fontFamily;
+  const metrics = family && !textHasEastAsian(paragraph.text) ? wordGridFontLineMetrics(family) : null;
+  const single = metrics ? metrics.box + metrics.lineGap : 0;
+  // An exact line is that length whatever the text (R432-D15's title box:
+  // blank lines 11 pt and 0.9 pt exactly); an at-least line is the face's
+  // single line, never less than the length.
+  if (paragraph.lineHeightPt !== undefined && paragraph.lineHeightRule === "exact") {
+    return `${paragraph.lineHeightPt}pt`;
+  }
+  if (paragraph.lineHeightPt !== undefined && paragraph.lineHeightRule === "atLeast") {
+    return single > 0 && Number.isFinite(single)
+      ? `max(${paragraph.lineHeightPt}pt, ${Math.round(single * 10_000) / 10_000}em)`
+      : `${paragraph.lineHeightPt}pt`;
+  }
+  if (!(Number.isFinite(single) && single > 0)) return multiple !== undefined ? String(multiple) : undefined;
+  const singleEm = Math.round(single * 10_000) / 10_000;
+  // A paragraph stating no spacing of its own is set in its style's, which a
+  // shape's story does not resolve (`_shape_text_body`): the document's
+  // default multiple (Word 2013's Normal: 1.08), as its spacing before and
+  // after take the document's defaults.
+  return multiple !== undefined
+    ? String(Math.round(multiple * single * 10_000) / 10_000)
+    : `calc(var(--doc-default-line-height, 1) * ${singleEm})`;
 }
 
 /**
@@ -3161,6 +3497,62 @@ function scheduleShapeFitTextLayout(span: HTMLSpanElement): void {
           );
     layOutFitTextRegion(region.includes(span) ? region : [span]);
   });
+}
+
+/**
+ * The runs a preserved Office diagram's label is drawn in, read off the file's
+ * own drawing (the view's host-neutral member, `textStyle.paragraphs[].runs`),
+ * when they are formatted in part: Word draws "Be" bold red and "ta" in the
+ * layout's white (SmartArt probe W24), and the member's one `textFill` /
+ * `textBold` -- the first run's -- painted the whole word red and bold. For
+ * DRAWING only: the page and its save keep the member as it is. `null` when
+ * the words are uniform, edited since the import, or not the file's.
+ */
+function preservedSmartArtMemberRuns(
+  attrs: DocumentShapeAttrs,
+  member: DocumentShapeGroupMember,
+): TextRun[] | null {
+  if (!documentShapeIsPreservedNativeSmartArt(attrs) || member.textRuns?.length) return null;
+  const view = attrs.source?.nativeSmartArtView as { members?: unknown } | undefined;
+  const drawn = Array.isArray(view?.members)
+    ? (view!.members as Array<Record<string, unknown>>).find((entry) => entry?.memberId === member.memberId)
+    : undefined;
+  const paragraphs = (drawn?.textStyle as { paragraphs?: unknown } | undefined)?.paragraphs;
+  if (!drawn || drawn.role !== "text" || drawn.text !== member.text || !Array.isArray(paragraphs)) return null;
+  const runs: TextRun[] = [];
+  paragraphs.forEach((paragraph, index) => {
+    const own = (paragraph as { runs?: unknown })?.runs;
+    if (index > 0) runs.push({ text: "\n" });
+    for (const run of Array.isArray(own) ? own : []) {
+      const text = (run as { text?: unknown })?.text;
+      if (typeof text !== "string" || !text) continue;
+      const style = ((run as { style?: unknown }).style ?? {}) as Record<string, unknown>;
+      runs.push({
+        text,
+        style: {
+          bold: style.bold === true,
+          italic: style.italic === true,
+          ...(typeof style.color === "string" && /^#[0-9a-f]{6}$/i.test(style.color) ? { color: style.color } : {}),
+        },
+      });
+    }
+  });
+  if (runs.map((run) => run.text).join("") !== member.text) return null;
+  const worded = runs.filter((run) => run.text.trim());
+  const key = (run: TextRun) => JSON.stringify(run.style ?? {});
+  return worded.length > 1 && worded.some((run) => key(run) !== key(worded[0])) ? runs : null;
+}
+
+/**
+ * A shape's words formatted in part, as ONE line of runs. The `.text` box is a
+ * grid that centres its child, so each run handed to it as a child of its own
+ * stood on a row of its own: a label whose "Be" alone was bold and red drew
+ * "Be" over "ta" (SmartArt probe W24; Word draws "Beta" on one line).
+ */
+function shapeTextRunsLine(runs: readonly TextRun[], shape: DocumentShapeAttrs): HTMLSpanElement {
+  const line = document.createElement("span");
+  line.append(...runs.map((run) => shapeTextRunSpan(run, shape)));
+  return line;
 }
 
 function shapeTextRunSpan(run: TextRun, shape: DocumentShapeAttrs): HTMLSpanElement {
@@ -3404,6 +3796,7 @@ const SHAPE_CLIPBOARD_PAYLOAD_KEYS = [
   "textBody",
   "textRuns",
   "textWarp",
+  "keepTextFlat",
   "adjustments",
   "headEnd",
   "tailEnd",
@@ -3415,6 +3808,7 @@ const SHAPE_CLIPBOARD_PAYLOAD_KEYS = [
   "groupMembers",
   "groupCoordinateWidthEmu",
   "groupCoordinateHeightEmu",
+  "groupFill",
   "smartArtKind",
   "smartArtGroupId",
   "smartArtStyle",
@@ -3599,11 +3993,19 @@ function createDocumentShapeNodeView(
   // WordArt: the warped words are painted over the shape (and over each
   // member) by the shared painter; these dispose the live surfaces.
   let shapeWarp: { key: string; overlay: HTMLDivElement; dispose: () => void } | null = null;
+  /** The words' turn in the shape's own plane, degrees (`documentShapeTextPlaneTurn`). */
+  let textPlaneTurn = 0;
   const memberWarps: (() => void)[] = [];
+  // Text Effects > Shadow > Perspective on straight words: the shared shadow
+  // copy behind them (`office-text-shadow-copy`; a warped shape's shadow is
+  // the warp painter's).
+  let shapeShadowCopy: { key: string; dispose: () => void } | null = null;
   const disposeShapeWarp = () => {
     shapeWarp?.dispose();
     shapeWarp?.overlay.remove();
     shapeWarp = null;
+    shapeShadowCopy?.dispose();
+    shapeShadowCopy = null;
   };
   /**
    * Each member's text host (box and frame inside) and field, by member id,
@@ -4028,6 +4430,17 @@ function createDocumentShapeNodeView(
     syncDrawingOverlays();
   };
   window.addEventListener(DOCUMENT_SHAPE_EDIT_POINTS_EVENT, onEditPointsRequest);
+  const onSelectMemberRequest = (event: Event): void => {
+    const detail = (event as CustomEvent<DocumentShapeSelectMemberDetail>).detail;
+    if (!detail || detail.position !== getPos() || destroyed) return;
+    const members = attrs().groupMembers ?? [];
+    if (!members.some((member) => member.memberId === detail.memberId)) return;
+    // The group first (its node view's `selectNode` runs in that dispatch),
+    // then the member painted on it.
+    selectCurrentNode(false);
+    selectMember(detail.memberId, false);
+  };
+  window.addEventListener(DOCUMENT_SHAPE_SELECT_MEMBER_EVENT, onSelectMemberRequest);
 
   /** The authored diagram this node is, when its shapes may be edited one by one. */
   const editableSmartArt = (): DocumentSmartArtDiagram | null =>
@@ -4044,6 +4457,38 @@ function createDocumentShapeNodeView(
    */
   const preparedConversion = (): ProseMirrorNode | null =>
     editor.isEditable ? documentSmartArtPreparedNode(node) : null;
+
+  /**
+   * What this node is drawn as. A file's diagram with no cached drawing holds
+   * only its frame, so it is drawn as its conversion (read-only or not), asked
+   * for as it opens: the conversion's shapes in the file's own frame, under the
+   * file's own source -- nothing is written, and its first real edit lands the
+   * same conversion. Every other node is drawn as it is.
+   */
+  let shownFrom: { readonly attrs: unknown; readonly scene: ProseMirrorNode | null; readonly value: DocumentShapeAttrs } | null =
+    null;
+  const shownAttrs = (): DocumentShapeAttrs => {
+    const current = attrs();
+    const scene = documentSmartArtDrawingAbsent(node.attrs)
+      ? documentSmartArtAbsentDrawingScene(editor, node, getPageId?.())
+      : null;
+    if (!scene) return current;
+    if (shownFrom?.attrs === node.attrs && shownFrom.scene === scene) return shownFrom.value;
+    const laid = normalizeDocumentShapeAttrs(scene.attrs);
+    const value: DocumentShapeAttrs = {
+      ...laid,
+      // Where the file places it, and whose it is: the file's own diagram.
+      xEmu: current.xEmu,
+      yEmu: current.yEmu,
+      widthEmu: current.widthEmu,
+      heightEmu: current.heightEmu,
+      wrapMode: current.wrapMode,
+      altText: current.altText,
+      source: current.source,
+    };
+    shownFrom = { attrs: node.attrs, scene, value };
+    return value;
+  };
 
   /**
    * Format > Shapes > Edit in 2-D (lib/office-smartart/edit-in-2d): the key of
@@ -4078,6 +4523,20 @@ function createDocumentShapeNodeView(
    */
   const movablePreservedSmartArt = (): boolean =>
     editor.isEditable && documentShapeIsPreservedNativeSmartArt(node.attrs);
+
+  /**
+   * A plain group (not a SmartArt graphic, which picks its shapes at the
+   * first press): its objects are picked as in Word, the group first and then
+   * the object (Microsoft Support, "Group shapes, pictures, or other objects
+   * in Word": "To work with an individual item in the group, select the
+   * group, and then select the item").
+   */
+  const plainGroupPicksObjects = (): boolean =>
+    Boolean(node.attrs.groupMembers?.length) &&
+    typeof node.attrs.smartArtKind !== "string" &&
+    !documentShapeIsPreservedNativeSmartArt(node.attrs) &&
+    !editableSmartArt() &&
+    !preparedConversion();
 
   /**
    * The members that are one SmartArt shape with `memberId` (authored or
@@ -4148,6 +4607,19 @@ function createDocumentShapeNodeView(
   };
 
   const announceMemberSelection = (): void => {
+    // A plain group's picked object, for the ribbon's Arrange commands and
+    // Delete (documentShapePickedGroupMember).
+    if (!editor.isDestroyed) {
+      const plain = !editableSmartArt() && !movablePreservedSmartArt() && !preparedConversion();
+      const held = pickedGroupMembers.get(editor.view);
+      if (plain && selected && selectedMemberId) {
+        pickedGroupMembers.set(editor.view, { position: () => (destroyed ? undefined : getPos()), memberId: selectedMemberId });
+        window.dispatchEvent(new Event(DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT));
+      } else if (held && held.position() === getPos()) {
+        pickedGroupMembers.delete(editor.view);
+        window.dispatchEvent(new Event(DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT));
+      }
+    }
     // The conversion's commands act on the conversion's shape for it.
     const conversion = preparedConversion();
     const diagram = conversion ? readDocumentSmartArtDiagram(conversion.attrs) : editableSmartArt();
@@ -4526,7 +4998,7 @@ function createDocumentShapeNodeView(
     ),
   );
   const renderShape = (): void => {
-    const current = attrs();
+    const current = shownAttrs();
     // Edit in 2-D draws every member without its 3-D (camera and solid); the
     // node keeps it, and nothing below writes a member back from this list.
     const groupMembers = drawnIn2d()
@@ -4662,6 +5134,12 @@ function createDocumentShapeNodeView(
       officeShapeEffectReflectionCss(current.effect),
     );
     if (!inlineHost && stage.style.margin) stage.style.margin = "";
+    // The shading of the run holding an in-line drawing (Word paints it
+    // behind the whole drawing, its effect extent too). Only an in-line
+    // drawing states one, standing in its run or alone in its paragraph.
+    const runShading = inlineHostRunShading(node.attrs.source);
+    shape.style.backgroundColor = runShading?.color ?? "";
+    shape.style.boxShadow = runShading?.shadow ?? "";
     if (floating) {
       // Out of the flow the stage reserves nothing: an overlay costs its page
       // no height (Word's In Front Of / Behind Text), and a float is sized by
@@ -4797,9 +5275,7 @@ function createDocumentShapeNodeView(
       } else if (linkedFlow) {
         if (paintText.firstChild !== linkedFlow || paintText.childNodes.length !== 1) paintText.replaceChildren(linkedFlow);
       } else if (current.textRuns?.length && linkedText === current.text) {
-        paintText.replaceChildren(
-          ...current.textRuns.map((run) => shapeTextRunSpan(run, current)),
-        );
+        paintText.replaceChildren(shapeTextRunsLine(current.textRuns, current));
       } else {
         paintText.textContent = linkedText;
       }
@@ -4865,12 +5341,10 @@ function createDocumentShapeNodeView(
           : current.textDirection === "horizontal"
             ? "mixed"
             : "sideways";
-      text.style.rotate =
-        current.textDirection === "rotate270"
-          ? "180deg"
-          : current.textDirection === "rotate90"
-            ? "0deg"
-            : "";
+      // rotate270 reads bottom-up (the sideways words a further half turn),
+      // and a flipped shape's words turn in its plane, never mirrored:
+      // drawn with the 3-D turn below.
+      textPlaneTurn = documentShapeTextPlaneTurn(current);
       text.style.whiteSpace = current.textWrap ? "pre-wrap" : "pre";
       if (storyMode()) {
         // The story is laid in the label's rectangle; the label's font, colour
@@ -4936,6 +5410,44 @@ function createDocumentShapeNodeView(
           };
         }
         if (shapeWarp) shapeWarp.overlay.style.inset = text.style.inset;
+        const copiedShadow = !warp && officeTextShadowTransformed(warpShadow) ? warpShadow : null;
+        const copyKey = copiedShadow ? JSON.stringify(copiedShadow) : "";
+        if (shapeShadowCopy && shapeShadowCopy.key !== copyKey) {
+          shapeShadowCopy.dispose();
+          shapeShadowCopy = null;
+        }
+        if (copiedShadow && !shapeShadowCopy) {
+          shapeShadowCopy = {
+            key: copyKey,
+            dispose: attachOfficeTextShadowCopy({ source: text, host: paint, shadow: copiedShadow, insetsFromPadding: true }),
+          };
+        }
+      }
+    }
+    // Format Shape > 3-D Rotation: the words lie on the shape's front and turn
+    // with it unless Keep text flat is checked; typed into, they lie flat, as
+    // Office edits them. Turned about the SHAPE's centre, as its drawing is.
+    {
+      const textTurn = isGroup
+        ? null
+        : officeShapeTextTurn(
+            current.shapeEffects ? normalizeDocumentShapeEffects(current.shapeEffects) : null,
+            { width: Math.max(1, width), height: Math.max(1, height) },
+            { keepTextFlat: current.keepTextFlat, editing: textEditing },
+          );
+      const origin = textTurn ? documentShapeTextOriginPx(current, width, height) : null;
+      for (const layer of [text, shapeWarp?.overlay]) {
+        if (!layer) continue;
+        // The words' turn in the plane is taken BEFORE the 3-D turn, as
+        // Word lays them on the shape's front and turns the front
+        // (text3d-flip-probe-word.pdf: a flipV shape's and a vert270
+        // shape's words lean and foreshorten with the shape's face). A
+        // WordArt overlay is horizontal: it takes the flip's half turn only.
+        const plane = isGroup ? 0 : layer === text ? textPlaneTurn : documentShapeTextPlaneTurn({ flipV: current.flipV });
+        layer.style.transform = textTurn ? `${textTurn.transform}${plane ? ` rotate(${plane}deg)` : ""}` : "";
+        layer.style.rotate = !textTurn && plane ? `${plane}deg` : "";
+        layer.style.transformStyle = textTurn?.transformStyle ?? "";
+        layer.style.transformOrigin = origin ? `${origin.x}px ${origin.y}px` : "";
       }
     }
     // A later box of a linked chain shows the words that overflow from the
@@ -5092,6 +5604,8 @@ function createDocumentShapeNodeView(
     // frame, as Office sizes a graphic's text (the shared fit); every other
     // group keeps the `.text` rule's size.
     const smartArtLabelPx = documentSmartArtLabelFontPx(current);
+    // A converted Word diagram's words at the sizes Office's autofit gave them.
+    const officeLabelScale = documentSmartArtOfficeLabelScale(current);
     // An authored diagram's shapes open their item's words; its connecting
     // shapes and picture placeholders open none (the rule the three editors
     // share, `smartArtMemberTextItem`). An ordinary group's members all do.
@@ -5142,10 +5656,15 @@ function createDocumentShapeNodeView(
       // origin moved onto the group's shared centre. Both boxes are in the
       // group's own child coordinate space, which is what `smartArtCameraCss`
       // wants, and the member's own rotation still composes on top.
+      // A nested group's camera turns only its own leaves, about that
+      // nested group's box (`scene3dFrame`, group-scene3d-probe2 W2).
+      const pivot = member.scene3dFrame;
       const camera = member.scene3d
         ? smartArtCameraCss(
             member.scene3d,
-            { left: 0, top: 0, width: coordinateWidth, height: coordinateHeight },
+            pivot
+              ? { left: pivot.xEmu, top: pivot.yEmu, width: pivot.widthEmu, height: pivot.heightEmu }
+              : { left: 0, top: 0, width: coordinateWidth, height: coordinateHeight },
             {
               left: member.xEmu,
               top: member.yEmu,
@@ -5201,12 +5720,32 @@ function createDocumentShapeNodeView(
           })()
         : null;
       if (memberTextInset) memberText.style.inset = memberTextInset;
-      // The line spacing the author gave the item's words (a converted
-      // point's `a:lnSpc`): the `.text` rule's 1.25 stands for the layout's
-      // 90%, so the author's spacing scales it.
+      // A SmartArt item's words stand at Office's SmartArt line (the single
+      // line's 90 %, as the engine fits them and Word draws them), and the line
+      // spacing the author gave them (a converted point's `a:lnSpc`) scales the
+      // single line itself.
       if (typeof member.smartArtLineSpacing === "number" && Number.isFinite(member.smartArtLineSpacing)) {
-        memberText.style.lineHeight = String(Math.round(((1.25 * member.smartArtLineSpacing) / 0.9) * 1000) / 1000);
+        memberText.style.lineHeight = String(
+          Math.round(((DOCUMENT_SMARTART_LABEL_LINE_HEIGHT * member.smartArtLineSpacing) / OFFICE_SCENE_LABEL_LINE_SPACING) * 1000) / 1000,
+        );
+      } else if (typeof (current as { smartArtKind?: unknown }).smartArtKind === "string" && member.smartArtRole !== undefined) {
+        memberText.style.lineHeight = String(Math.round(DOCUMENT_SMARTART_LABEL_LINE_HEIGHT * 1000) / 1000);
       }
+      // A SmartArt item's words longer than their shape spill above and
+      // below it, centred, as Word draws them (DrawingML's `vertOverflow`
+      // default), never cut by the `.text` rule's clip.
+      if (member.smartArtRole !== undefined || documentShapeIsPreservedNativeSmartArt(current)) {
+        memberText.style.overflow = "visible";
+      }
+      // The words' own alignment (a converted point's `algn`, Align Text):
+      // the line stands at that side of the box, its lines aligned so.
+      if (member.textHorizontalAlign && member.textHorizontalAlign !== "center") {
+        memberText.style.textAlign = member.textHorizontalAlign;
+        memberText.style.justifyItems =
+          member.textHorizontalAlign === "right" ? "end" : member.textHorizontalAlign === "left" ? "start" : "stretch";
+      }
+      // …and the capitals they are set in (`cap="all"`), the words untouched.
+      if (member.smartArtTextCapitals === true) memberText.style.textTransform = "uppercase";
       // Format Shape > Text Box on the member (Word: each shape in a group
       // keeps its own): where the words anchor, which way they run, and
       // whether they wrap. The defaults are the `.text` rule's own.
@@ -5241,7 +5780,7 @@ function createDocumentShapeNodeView(
           ? documentShapePointsToPx(member.textFontSizePt)
           : authoredGroup
             ? documentShapePointsToPx(member.textFontSizePt ?? DOCUMENT_SHAPE_DEFAULT_TEXT_FONT_SIZE_PT)
-            : smartArtLabelPx;
+            : (documentSmartArtMemberLabelPx(member, officeLabelScale) ?? smartArtLabelPx);
       const memberWeight = member.textBold === true ? "700" : "400";
       // `flipH` mirrors the member's GEOMETRY, never its words: Word and
       // PowerPoint draw a horizontally flipped shape's text unmirrored. The
@@ -5258,14 +5797,17 @@ function createDocumentShapeNodeView(
       if (memberTextMirrored) {
         memberText.style.transform = "scaleX(-1)";
       }
+      // A preserved diagram's label formatted in part is drawn run by run, as
+      // the file's own drawing states its runs (display only).
+      const memberRuns = member.textRuns?.length ? member.textRuns : preservedSmartArtMemberRuns(current, member);
       const memberBodyApplied = applyShapeTextBody(
         memberText,
         member.textBody,
         member.textFontSizePt === undefined ||
           member.textFontSizePt === DOCUMENT_SHAPE_DEFAULT_TEXT_FONT_SIZE_PT,
-        member.textRuns?.length
+        memberRuns?.length
           ? {
-              runs: member.textRuns,
+              runs: memberRuns,
               shape: documentShapeMemberLeafAttrs(member),
             }
           : undefined,
@@ -5279,11 +5821,9 @@ function createDocumentShapeNodeView(
       if (!memberBodyApplied) {
         // Words formatted in part draw run by run (a run's field over the
         // member's), as a standalone shape's do.
-        if (member.textRuns?.length) {
+        if (memberRuns?.length) {
           const leaf = documentShapeMemberLeafAttrs(member);
-          memberText.replaceChildren(
-            ...member.textRuns.map((run) => shapeTextRunSpan(run, leaf)),
-          );
+          memberText.replaceChildren(shapeTextRunsLine(memberRuns, leaf));
         } else if (
           member.text === "" &&
           editableSmartArt() &&
@@ -5607,12 +6147,10 @@ function createDocumentShapeNodeView(
         });
         memberElement.append(memberSvg, memberText, labelInput);
       } else {
-        paintShape(
-          memberSvg,
-          documentShapeMemberLeafAttrs(member),
-          member,
-          { faceSpan: faceSpanOf(member) },
-        );
+        paintDocumentShapeGroupMember(memberSvg, current, member, {
+          faceSpan: faceSpanOf(member),
+          groupFlip: current,
+        });
         // A wash (a Venn's discs, a Grouped List's plate) is the member's own
         // transparency; its label stays opaque.
         if (member.opacity !== undefined) {
@@ -5860,7 +6398,7 @@ function createDocumentShapeNodeView(
             // The node as it is NOW: the field may have outlived a render of
             // the graphic (another shape moved, a decoration changed).
             const live = attrs();
-            const liveMember = live.groupMembers?.find((candidate) => candidate.memberId === member.memberId);
+            const liveMember = shownAttrs().groupMembers?.find((candidate) => candidate.memberId === member.memberId);
             if (!liveMember) return;
             const typed = memberField.content();
             const value = normalizeDocumentShapeText(typed.text);
@@ -6130,6 +6668,9 @@ function createDocumentShapeNodeView(
           // lifts it whole. Begun here at once, the move was the browser's
           // pan and was cancelled, and the swipe selected the group.
           if (isTouchLikePointer(event) && root.dataset.selected !== "true") return;
+          // Word: "select the group, and then select the item" -- a click on
+          // an object of a plain group already selected picks that object.
+          const picksObject = selected && plainGroupPicksObjects();
           const startX = event.clientX;
           const startY = event.clientY;
           const startMemberX = member.xEmu;
@@ -6180,7 +6721,8 @@ function createDocumentShapeNodeView(
               // 376 members, a 1.2 MB page grown to 2.3 MB, and a save the
               // Word file then refused).
               if (preview === current) {
-                selectCurrentNode(true);
+                if (picksObject) selectMember(member.memberId);
+                else selectCurrentNode(true);
                 return;
               }
               commitConnectorCanvas(
@@ -6214,9 +6756,14 @@ function createDocumentShapeNodeView(
         announceMemberSelection();
       }
     }
+    // A plain group's object picked in the Selection Pane stays picked while
+    // the group holds it; a diagram's only while it is one of its shapes.
+    const plainGroup = !editableSmartArt() && !movablePreservedSmartArt();
     if (
       selectedMemberId &&
-      smartArtShapeMemberIds(selectedMemberId).length === 0
+      (plainGroup
+        ? !(attrs().groupMembers ?? []).some((member) => member.memberId === selectedMemberId)
+        : smartArtShapeMemberIds(selectedMemberId).length === 0)
     ) {
       selectedMemberId = null;
       selectedItemId = null;
@@ -6435,6 +6982,18 @@ function createDocumentShapeNodeView(
           paintMemberSelection();
           return;
         }
+        if (smartArtItemResizeClaimed(memberId, preview)) {
+          // The relayout lands as its own change; until it does the shapes
+          // stand where they were.
+          paintMemberSelection();
+          const committed = attrs();
+          applyGroupMemberLayout(
+            committed.groupMembers ?? [],
+            committed.groupCoordinateWidthEmu ?? committed.widthEmu,
+            committed.groupCoordinateHeightEmu ?? committed.heightEmu,
+          );
+          return;
+        }
         commitConnectorCanvas(
           expectedDoc,
           node,
@@ -6446,6 +7005,49 @@ function createDocumentShapeNodeView(
     );
     selectMember(memberId);
     return true;
+  };
+
+  /**
+   * A resize of one authored item's shape, handed to the toolbar's relayout
+   * (`DOCUMENT_SMARTART_ITEM_RESIZE_EVENT`): true when it took it. A move, a
+   * turn or a connector's own resize stays the canvas's box edit.
+   */
+  const smartArtItemResizeClaimed = (memberId: string, preview: DocumentShapeAttrs): boolean => {
+    // A file's diagram resizes as its conversion: the shape of the file's
+    // drawing names its item there, and the relayout lands the conversion with
+    // it, in one step (`documentSmartArtPrepared`; PowerPoint converts nothing,
+    // but lays the diagram out again just the same).
+    const authored = editableSmartArt();
+    const conversion = authored ? null : preparedConversion();
+    const diagram = authored ?? (conversion ? readDocumentSmartArtDiagram(conversion.attrs) : null);
+    if (!diagram) return false;
+    const before = attrs().groupMembers?.find((member) => member.memberId === memberId);
+    const after = preview.groupMembers?.find((member) => member.memberId === memberId);
+    const convertedId = conversion ? documentSmartArtPreparedMemberId(node, conversion, memberId) : memberId;
+    const itemShape = convertedId ? diagram.members.find((member) => member.memberId === convertedId) : undefined;
+    const itemId = itemShape?.smartArtItemId;
+    if (
+      !before ||
+      !after ||
+      typeof itemId !== "string" ||
+      (itemShape?.smartArtRole !== "node" && itemShape?.smartArtRole !== "label") ||
+      !(before.widthEmu > 0) ||
+      !(before.heightEmu > 0) ||
+      (after.rotation ?? 0) !== (before.rotation ?? 0) ||
+      (Math.abs(after.widthEmu - before.widthEmu) < 1 && Math.abs(after.heightEmu - before.heightEmu) < 1)
+    ) {
+      return false;
+    }
+    return !window.dispatchEvent(
+      new CustomEvent<DocumentSmartArtItemResizeDetail>(DOCUMENT_SMARTART_ITEM_RESIZE_EVENT, {
+        cancelable: true,
+        detail: {
+          groupId: diagram.groupId,
+          itemId,
+          factor: { x: after.widthEmu / before.widthEmu, y: after.heightEmu / before.heightEmu },
+        },
+      }),
+    );
   };
 
   function wireMemberChrome(built: HTMLDivElement): void {
@@ -6651,7 +7253,33 @@ function createDocumentShapeNodeView(
     if (element?.closest("[data-document-shape-text-editor]")) return;
     const diagram = editableSmartArt();
     const preserved = !diagram && movablePreservedSmartArt();
-    if (!diagram && !preserved) return;
+    if (!diagram && !preserved) {
+      // A plain group's object picked in the Selection Pane: Escape goes
+      // back to the group, as in Word.
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        selectMember(null);
+        return;
+      }
+      // Delete takes that object out of its group, never the whole group
+      // (Word deletes the item selected inside its group). One the group
+      // cannot lose here (a connector glued to it, a group whose objects
+      // were not read with their groups) stays, and so does the group.
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        editor.isEditable
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        const position = getPos();
+        if (typeof position === "number") deleteDocumentShapeGroupMember(editor.view, position, selectedMemberId);
+      }
+      return;
+    }
     const memberId = selectedMemberId;
     const itemMembers = smartArtShapeMemberIds(memberId);
     const consume = (): void => {
@@ -6967,6 +7595,11 @@ function createDocumentShapeNodeView(
         return;
       }
     }
+    // A press on an object of a plain group already selected that takes no
+    // press of its own (a picture, a chart, a line; a group whose objects take
+    // no words): released where it began, it picks that object, as in Word.
+    // A drag still moves the whole group.
+    const pressedObject = selectedAtPress && plainGroupPicksObjects() ? groupObjectAt(event) : null;
     // A press on the graphic's frame (not on one of its shapes, which stop
     // the event) selects the graphic again, as in Office.
     if (selectedMemberId) selectMember(null);
@@ -7133,7 +7766,57 @@ function createDocumentShapeNodeView(
       return;
     }
     startMove();
+    if (pressedObject) pickObjectOnRelease(event, pressedObject);
   });
+
+  /** The object of this group under a press, the topmost first. */
+  function groupObjectAt(event: PointerEvent): string | null {
+    const members = attrs().groupMembers ?? [];
+    const target = event.target instanceof Element ? event.target : null;
+    const hit = target?.closest<HTMLElement>("[data-document-shape-group-member]");
+    const hitId = hit && groupLayer.contains(hit) ? hit.dataset.documentShapeGroupMember : undefined;
+    if (hitId && members.some((member) => member.memberId === hitId)) return hitId;
+    // An object that takes no presses is found by its box.
+    for (const element of Array.from(groupLayer.children).reverse()) {
+      if (!(element instanceof HTMLElement) || element.style.display === "none") continue;
+      const id = element.dataset.documentShapeGroupMember;
+      if (!id || !members.some((member) => member.memberId === id)) continue;
+      const box = element.getBoundingClientRect();
+      if (
+        box.width > 0 &&
+        box.height > 0 &&
+        event.clientX >= box.left &&
+        event.clientX <= box.right &&
+        event.clientY >= box.top &&
+        event.clientY <= box.bottom
+      ) {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  /** Picks `memberId` when the press ends with nothing moved. */
+  function pickObjectOnRelease(event: PointerEvent, memberId: string): void {
+    const pressedDoc = editor.state.doc;
+    const end = (): void => {
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+    };
+    const cancel = (next: PointerEvent): void => {
+      if (next.pointerId === event.pointerId) end();
+    };
+    const up = (next: PointerEvent): void => {
+      if (next.pointerId !== event.pointerId) return;
+      end();
+      if (destroyed || !selected || editor.state.doc !== pressedDoc) return;
+      if (!(attrs().groupMembers ?? []).some((member) => member.memberId === memberId)) return;
+      selectMember(memberId);
+    };
+    // After the move's own release listener: it writes nothing for a click.
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+  }
 
   function wireChromeHandles(): void {
   for (const [handle, button] of resizeHandles) {
@@ -7412,7 +8095,7 @@ function createDocumentShapeNodeView(
     // With the writing mode alone, a 270deg label flipped over while it was
     
     shapeTextBox.style.writingMode = text.style.writingMode;
-    shapeTextBox.style.rotate = text.style.rotate;
+    shapeTextBox.style.rotate = textPlaneTurn ? `${textPlaneTurn}deg` : "";
     shapeTextBox.style.textOrientation = text.style.textOrientation;
     const label = getComputedStyle(text);
     const clear = label.color === "rgba(0, 0, 0, 0)" || label.color === "transparent";
@@ -7562,10 +8245,91 @@ function createDocumentShapeNodeView(
   // set to what its words take (the label box plus its rectangle's margins),
   // growing or shrinking, as Word re-sizes the shape on every text change.
   let autofitFrame = 0;
+  // A group member with "Resize shape to fit text" (`a:spAutoFit` in its own
+  // `wps:bodyPr`): Windows Word sets its words and insets at their own size,
+  // grows the member to them, and the group's box and the group's line with
+  // it (docx-look probe grp1: a Google Docs caption box, the next line 80 pt
+  // lower; corpus R406-D01, every page after its first drawing). Drawn so,
+  // on every surface, and never written: the group's stored frame and child
+  // space stay the package's, so a save writes only the members edited.
+  // `window.__docsGroupAutofitOff = true` draws the stored box, for an A/B of
+  // one build.
+  let groupGrowthPx = 0;
+  const fitGroupMembersToText = (current: DocumentShapeAttrs): void => {
+    const members = current.groupMembers ?? [];
+    const off =
+      typeof window !== "undefined" &&
+      (window as Window & { __docsGroupAutofitOff?: boolean }).__docsGroupAutofitOff === true;
+    const heightPx = documentShapeEmuToPx(current.heightEmu);
+    const coordinateHeight = current.groupCoordinateHeightEmu ?? current.heightEmu;
+    let bottomPx = heightPx;
+    if (
+      !off &&
+      heightPx > 0 &&
+      coordinateHeight > 0 &&
+      !current.rotation &&
+      !current.flipV &&
+      members.some((member) => member.textAutofit === "shape")
+    ) {
+      const pxPerUnit = heightPx / coordinateHeight;
+      for (const member of members) {
+        if (member.textAutofit !== "shape" || member.rotation) continue;
+        const element = Array.from(groupLayer.children).find(
+          (child): child is HTMLElement =>
+            child instanceof HTMLElement && child.dataset.documentShapeGroupMember === member.memberId,
+        );
+        const words = element
+          ? Array.from(element.children).find(
+              (child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains(styles.text),
+            )
+          : undefined;
+        if (!element || !words) continue;
+        const statedPx = member.heightEmu * pxPerUnit;
+        element.style.height = `${(member.heightEmu / coordinateHeight) * 100}%`;
+        const content = Array.from(words.children).reduce(
+          (sum, child) => sum + (child as HTMLElement).offsetHeight,
+          0,
+        );
+        if (!(content > 0) || !(words.clientHeight > 0)) continue;
+        const needed = Math.ceil(element.offsetHeight - words.clientHeight + content);
+        if (needed <= statedPx + 0.5) continue;
+        element.style.height = `${needed}px`;
+        bottomPx = Math.max(bottomPx, member.yEmu * pxPerUnit + needed);
+      }
+    }
+    const growth = bottomPx - heightPx > 0.5 ? bottomPx - heightPx : 0;
+    if (growth > 0) {
+      // The members keep their places in the stated box; the box grows below.
+      groupLayer.style.bottom = "auto";
+      groupLayer.style.height = `${heightPx}px`;
+      shape.style.height = `${Math.max(heightPx, 1) + growth}px`;
+    } else if (groupLayer.style.height) {
+      // Back on the stored box (`inset: 0`, as the layer is made).
+      groupLayer.style.bottom = "0";
+      groupLayer.style.height = "";
+    }
+    if (Math.abs(growth - groupGrowthPx) > 0.5) {
+      groupGrowthPx = growth;
+      // The line the group stands in changed height: the page plan measures
+      // it again, as for a picture whose size arrived late.
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("mrn-page-rebalance"));
+    }
+  };
+  // A face arriving late sets a fitted member's words again: fitted again.
+  const groupFonts = typeof document !== "undefined" ? document.fonts : undefined;
+  const refitGroupOnFonts = (): void => {
+    if (destroyed || !attrs().groupMembers?.some((member) => member.textAutofit === "shape")) return;
+    fitGroupMembersToText(attrs());
+  };
+  groupFonts?.addEventListener("loadingdone", refitGroupOnFonts);
   const fitShapeToText = (): void => {
     autofitFrame = 0;
     // Ink never fits text: out before its path is read.
     if (destroyed || node.attrs.inkTool) return;
+    if (attrs().groupMembers?.length) {
+      fitGroupMembersToText(attrs());
+      return;
+    }
     // A read-only page keeps its stored size, except on the print surface:
     // a document no writer has opened yet (a fresh import) prints its boxes
     // fitted, as the editor shows them once opened; never saved from there.
@@ -7617,6 +8381,11 @@ function createDocumentShapeNodeView(
   const render = (): void => {
     renderShape();
     firstRenderDone = true;
+    // A group's fitted members are drawn in the same paint as the group, so
+    // no measure of the page sees the stored box between the two.
+    if (attrs().groupMembers?.some((member) => member.textAutofit === "shape")) {
+      fitGroupMembersToText(attrs());
+    }
     syncDrawingOverlays();
     if (!autofitFrame && typeof requestAnimationFrame === "function") {
       autofitFrame = requestAnimationFrame(fitShapeToText);
@@ -7630,9 +8399,21 @@ function createDocumentShapeNodeView(
   // The selected diagram's conversion is ready: its frame's grips and its words
   // open on what the first real edit will write. The drawing does not change.
   let wordsAwaited: { x: number; y: number } | null = null;
+  let absentRetry: ReturnType<typeof setTimeout> | null = null;
   const unsubscribePreparation = subscribeSmartArtPreparation(() => {
     if (destroyed) return;
     const preparation = documentSmartArtPreparation(node);
+    if (documentSmartArtDrawingAbsent(node.attrs)) {
+      // A diagram drawn as its conversion is drawn again when the conversion
+      // arrives; one the engine did not answer for is asked again.
+      if (preparation?.state === "ready" && shownFrom?.scene !== preparation.value) render();
+      if (preparation?.state === "failed" && absentRetry === null) {
+        absentRetry = setTimeout(() => {
+          absentRetry = null;
+          if (!destroyed) render();
+        }, SMARTART_PREPARE_RETRY_MS);
+      }
+    }
     if (deleteAwaited) {
       const pressed = deleteAwaited;
       if (preparation?.state === "refused" || preparation?.state === "failed") {
@@ -7859,7 +8640,9 @@ function createDocumentShapeNodeView(
     },
     destroy() {
       destroyed = true;
+      groupFonts?.removeEventListener("loadingdone", refitGroupOnFonts);
       unsubscribePreparation();
+      if (absentRetry !== null) clearTimeout(absentRetry);
       unregisterLiveTarget();
       shapeStackRankers(editor).delete(applyStackRank);
       shapeTextField?.destroy();
@@ -7869,6 +8652,7 @@ function createDocumentShapeNodeView(
       for (const dispose of memberWarps.splice(0)) dispose();
       if (autofitFrame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(autofitFrame);
       window.removeEventListener(DOCUMENT_SHAPE_EDIT_POINTS_EVENT, onEditPointsRequest);
+      window.removeEventListener(DOCUMENT_SHAPE_SELECT_MEMBER_EVENT, onSelectMemberRequest);
       adjustOverlay?.destroy();
       editPointsOverlay?.destroy();
       unwatchWriteAuthority();
@@ -8429,6 +9213,9 @@ export const DocumentShapeBlock = Node.create<DocumentShapeOptions>({
       // The words' WordArt transform (`a:prstTxWarp`), the ONE warp value of
       // `@/lib/office-text-warp`; drawn by `@/lib/office-text-warp-render`.
       textWarp: shapeClipboardPayloadAttr("textWarp"),
+      // Format Shape > 3-D Rotation > Keep text flat (`a:flatTx`): the words
+      // stay flat on the front of a shape its 3-D rotation turns.
+      keepTextFlat: shapeClipboardPayloadAttr("keepTextFlat"),
       linkedTextBoxStoryId: {
         default: undefined,
         parseHTML: (element) => {
@@ -8473,6 +9260,9 @@ export const DocumentShapeBlock = Node.create<DocumentShapeOptions>({
       groupMembers: shapeClipboardPayloadAttr("groupMembers"),
       groupCoordinateWidthEmu: shapeClipboardPayloadAttr("groupCoordinateWidthEmu"),
       groupCoordinateHeightEmu: shapeClipboardPayloadAttr("groupCoordinateHeightEmu"),
+      // The group's own fill its `a:grpFill` members wear: undeclared,
+      // ProseMirror drops it and those members draw their fallback colour.
+      groupFill: shapeClipboardPayloadAttr("groupFill"),
       // The identity a group that IS a SmartArt carries (`document-shapes.ts`,
       // all-or-nothing). The schema has to declare it or ProseMirror drops it
       // on the way in, and neither an inserted diagram nor an imported one

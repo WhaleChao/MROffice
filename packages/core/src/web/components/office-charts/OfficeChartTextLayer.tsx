@@ -23,6 +23,7 @@
  * scaled or resized frame keeps the words on their place.
  */
 
+import { chartTextSmallCapsPieces, chartWholePointSpacing, officeSmallCapsSizePx } from "../../lib/office-charts/chart-letter-spacing";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 
 import type { ChartRenderPicture, ChartTextFrame, ChartTextLook, ChartTextPart } from "../../lib/engine-host/charts-types";
@@ -43,13 +44,48 @@ import type { OfficeChartTextEdit } from "../../lib/office-charts/chart-text-edi
 import { officeBlurWentIntoChrome } from "../../lib/office-inactive-selection";
 import { normalizeOfficeTextPaint, officeTextPaintCss } from "../../lib/office-text-paint";
 import { cssFontFamilyOrUndefined } from "../../lib/css-font-family";
+import { isImeKeydown } from "../../lib/soft-keyboard";
 
 const PARTS: readonly ChartTextPart[] = ["title", "axisX", "axisY"];
 
 /** How long a committed edit's words stand in for a picture still being drawn. */
 const PENDING_MS = 8000;
 
-function lookCss(look: ChartTextLook | undefined, painted: boolean, wraps = false): CSSProperties {
+let measureContext: CanvasRenderingContext2D | null | undefined;
+
+/** The browser's own width of `text` in `font` (a CSS font), NaN where it has no canvas to measure with. */
+function browserTextWidth(text: string, font: string): number {
+  if (measureContext === undefined) {
+    try {
+      measureContext = typeof document === "undefined" ? null : document.createElement("canvas").getContext("2d");
+    } catch {
+      measureContext = null;
+    }
+  }
+  if (!measureContext) return Number.NaN;
+  measureContext.font = font;
+  return measureContext.measureText(text).width;
+}
+
+/**
+ * A run of a fractional size (10.64 pt) drawn as the picture draws it: its
+ * glyphs at whole points, as wide as its own size lays it out -- the whole
+ * size and, on top of the run's own spacing, the share of the difference each
+ * character takes (`chartWholePointSpacing`, measured by this browser in the
+ * face it draws). The words stay one text: typed in, the caret and the
+ * selection walk the same characters; a character typed into the run takes
+ * the run's share until the words are laid out again.
+ */
+function wholePointCss(look: ChartTextLook, words: string | undefined): CSSProperties {
+  if (words === undefined) return {};
+  const family = cssFontFamilyOrUndefined(look.fontFamily) ?? "sans-serif";
+  const whole = chartWholePointSpacing(words, { ...look, fontFamily: family }, browserTextWidth);
+  if (!whole || !Number.isFinite(whole.spacing)) return {};
+  const spacing = (look.letterSpacing ?? 0) + whole.spacing;
+  return { fontSize: whole.fontSize, ...(spacing ? { letterSpacing: spacing } : {}) };
+}
+
+function lookCss(look: ChartTextLook | undefined, painted: boolean, wraps = false, shown = false, words?: string): CSSProperties {
   // Every run keeps its line breaks and spaces (a page's span rules, such
   // as the deck's `nowrap`, would fold a new line into a space); a text the
   // drawing wrapped (`ChartTextFrame.wrapWidth`) also wraps at its spaces.
@@ -61,8 +97,14 @@ function lookCss(look: ChartTextLook | undefined, painted: boolean, wraps = fals
     fontSize: look.fontSize,
     fontWeight: look.fontWeight as CSSProperties["fontWeight"],
     fontStyle: look.fontStyle,
+    // Character Spacing and Small Caps, as the picture draws them (`chart-letter-spacing`).
+    ...(look.letterSpacing ? { letterSpacing: look.letterSpacing } : {}),
+    // (Shown, Small Caps are drawn as smaller capitals; typed in, the
+    // browser's small capitals stand for them: the words stay as typed.)
+    ...(look.caps === "small" ? (shown ? {} : { fontVariantCaps: "small-caps" }) : look.caps === "all" ? { textTransform: "uppercase" } : {}),
     // WordArt paints every run from the text box itself.
     ...(painted ? {} : { color: look.color }),
+    ...wholePointCss(look, words),
   };
 }
 
@@ -113,7 +155,7 @@ function fillHost(host: HTMLElement, pieces: { text: string; run: number }[], fr
     if (!piece.text) continue;
     span = doc.createElement("span");
     span.setAttribute(CHART_TEXT_RUN_ATTRIBUTE, String(piece.run));
-    Object.assign(span.style, domCss(lookCss(looks.get(piece.run) ?? fallback, painted, Boolean(frame.wrapWidth))));
+    Object.assign(span.style, domCss(lookCss(looks.get(piece.run) ?? fallback, painted, Boolean(frame.wrapWidth), false, piece.text)));
     // A line break as a `<br>`, the one a browser edits (chart-text-editing).
     piece.text.split("\n").forEach((line, index) => {
       if (index > 0) span!.appendChild(doc.createElement("br"));
@@ -428,7 +470,7 @@ function ChartTextBox({
     const looks = Array.from(host.querySelectorAll<HTMLElement>(`[${CHART_TEXT_RUN_ATTRIBUTE}]`)).map((span) => span.style.cssText);
     const next = current.runs.map((run) => {
       const probe = host.ownerDocument.createElement("span");
-      Object.assign(probe.style, domCss(lookCss(run.look, Boolean(painted))));
+      Object.assign(probe.style, domCss(lookCss(run.look, Boolean(painted), Boolean(current.wrapWidth), false, run.text)));
       return probe.style.cssText;
     });
     if (sameRuns && looks.length === next.length && looks.every((css, index) => css === next[index])) return;
@@ -503,7 +545,7 @@ function ChartTextBox({
             ? (event) => {
                 // The chart's own keys (Delete, the arrows, Enter) stay in the text.
                 event.stopPropagation();
-                if (event.nativeEvent.isComposing) return;
+                if (isImeKeydown(event)) return;
                 if (event.key === "Enter") {
                   event.preventDefault();
                   insertChartText(event.currentTarget, "\n");
@@ -567,11 +609,25 @@ function ChartTextBox({
           ? null
           : shownRuns.map((run, index) =>
               run.text ? (
-                <span key={index} data-chart-run={run.run} style={lookCss(run.look, Boolean(painted), Boolean(frame.wrapWidth))}>
+                <span key={index} data-chart-run={run.run} style={lookCss(run.look, Boolean(painted), Boolean(frame.wrapWidth), true, frame.stacked ? undefined : run.text)}>
                   {/* Stacked: Excel stands each word in a column of its own
                       ("Vertical" beside "Title", O13); a line break is the
                       next column in vertical writing. */}
-                  {frame.stacked ? run.text.replace(/ +/g, "\n") : run.text}
+                  {frame.stacked
+                    ? run.text.replace(/ +/g, "\n")
+                    : run.look.caps === "small"
+                      ? // Small Caps as the picture draws them: a lower-case
+                        // letter as its capital at Office's smaller size.
+                        chartTextSmallCapsPieces(run.text).map((piece, at) =>
+                          piece.small ? (
+                            <span key={at} style={{ fontSize: officeSmallCapsSizePx(run.look.fontSize) }}>
+                              {piece.text}
+                            </span>
+                          ) : (
+                            piece.text
+                          ),
+                        )
+                      : run.text}
                 </span>
               ) : null,
             )}

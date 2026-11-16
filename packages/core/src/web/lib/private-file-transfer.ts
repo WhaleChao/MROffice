@@ -41,7 +41,26 @@ export function getFileTransferOrigin(): string | null {
 }
 
 /** Only exact owner-configured file routes may receive product credentials. */
+/** The desktop app's stored files: on the page's own origin, by an opaque
+ * account-bound token (apps/api app/desktop/file_delivery.py), the stand-in
+ * for the site's file host. Its web server and API both want the window's
+ * cookies, so these are fetched with them like the file host's files. */
+const DESKTOP_FILE_PATH = /^\/api\/v1\/desktop\/files\/[A-Za-z0-9_-]{40,8192}$/;
+
+function isDesktopFileUrl(value: string, method: string): boolean {
+  if (process.env.NEXT_PUBLIC_MRAI_DESKTOP !== "classic" || typeof window === "undefined") return false;
+  if (method.toUpperCase() !== "GET" && method.toUpperCase() !== "HEAD") return false;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin && !url.username && !url.password && !url.search &&
+      DESKTOP_FILE_PATH.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
 export function isPrivateFileUrl(value: string, method = "GET"): boolean {
+  if (isDesktopFileUrl(value, method)) return true;
   const origin = getFileTransferOrigin();
   if (!origin) return false;
   const url = new URL(value, typeof window === "undefined" ? origin : window.location.origin);

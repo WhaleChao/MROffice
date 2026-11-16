@@ -25,7 +25,15 @@
  * once that the draft is kept, and it lands in that line (same text, same
  * page) when the reader opens it again -- then without finishing on its own,
  * so the reader sees it before it is written.
+ *
+ * Keys typed ahead for a line that was not open at all (it was being written
+ * under the reader's caret, and the reader moved on before it opened again)
+ * are carried too, as `typedAhead`: there is no draft of a box to compare,
+ * so the line is known by `typedAhead.line` and the keys go in at the
+ * reopened box's caret, as they do when the line opens in time.
  */
+import { insertPdfNativeTextTypeAhead } from "./native-text-continuation";
+
 export type PdfNativeTextQueuedDraft = Readonly<{
   /** The line's text when the queued box opened. */
   originalText: string;
@@ -40,6 +48,14 @@ export type PdfNativeTextQueuedDraft = Readonly<{
   /** The page the line is on (its inline input's page host); a late carry
    * lands only on a box of this page. */
   pageNumber?: number;
+  
+
+
+
+
+
+
+  typedAhead?: Readonly<{ text: string; caretMove: "start" | "end" | null; line: (value: string) => boolean }>;
 }>;
 
 /** How long a late carry stays waiting for the reader to reopen its line. */
@@ -107,6 +123,11 @@ export function rereadPdfNativeTextQueuedDraft(current: string, carry: PdfNative
  * Returns false (and changes nothing) when the box is another text (a line
  * whose font was read right meanwhile takes the draft read the same way). */
 export function applyPdfNativeTextQueuedDraft(input: HTMLTextAreaElement, carry: PdfNativeTextQueuedDraft): boolean {
+  if (carry.typedAhead) {
+    if (!carry.typedAhead.line(input.value)) return false;
+    insertPdfNativeTextTypeAhead(input, carry.typedAhead.text, carry.typedAhead.caretMove);
+    return true;
+  }
   if (input.value !== carry.originalText) {
     const reread = rereadPdfNativeTextQueuedDraft(input.value, carry);
     return reread !== null && applyPdfNativeTextQueuedDraft(input, reread);

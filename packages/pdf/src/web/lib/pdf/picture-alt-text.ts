@@ -14,6 +14,7 @@
  */
 
 import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRef, PDFString, type PDFObject } from "pdf-lib";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 export type PdfPictureAltTarget = Readonly<{
   element: Readonly<{ objectNumber: number; generation: number }>;
@@ -62,7 +63,7 @@ export async function readPdfPictureAltTarget(
   page: Readonly<{ objectNumber: number; generation: number }>,
   mcid: number,
 ): Promise<PdfPictureAltTarget | "untagged" | null> {
-  const document = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
+  const document = await PDFDocument.load(bytes, { parseSpeed: pdfLibParseSpeed(), ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
   const root = lookup(document, document.catalog.get(PDFName.of("StructTreeRoot")));
   if (!(root instanceof PDFDict)) return "untagged";
   const pageDict = document.context.lookup(PDFRef.of(page.objectNumber, page.generation));

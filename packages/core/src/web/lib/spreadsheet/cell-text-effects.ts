@@ -51,6 +51,19 @@ type EffectStyle =
  * the same scale the header/footer runs use (header-footer-rich-text). */
 export const SPREADSHEET_SCRIPT_FONT_SCALE = 0.75;
 
+/** Printed, Windows Excel sets a superscript or subscript at two thirds of
+ * its size and raises a superscript's baseline half the size above the
+ * line's (lookwin p108-lw: Arial 9 / 12, Calibri 11 / 20 at 6.0 / 8.04 /
+ * 7.32 / 13.32 pt, raised 0.49-0.51 em; the API's run_look). */
+const PRINTED_SCRIPT_FONT_SCALE = 2 / 3;
+const PRINTED_SUPERSCRIPT_RISE = 0.5;
+let printedScripts = false;
+/** Whether scripts are set as Excel prints them (the print page, with the
+ * printer's resolution: native-typography setNativeTextPrinterDpi). */
+export function setPrintedCellScripts(on: boolean): void {
+  printedScripts = on;
+}
+
 /** The underline a cell wears, or null when it has none. */
 export function cellUnderlineKind(style: EffectStyle): SpreadsheetUnderlineKind | null {
   if (style?.underline !== true) return null;
@@ -162,12 +175,20 @@ export function scriptBaselineCss(
   script: "superscript" | "subscript",
   fontSize?: CSSProperties["fontSize"],
 ): CSSProperties {
+  const numeric = typeof fontSize === "number" && Number.isFinite(fontSize);
+  if (printedScripts) {
+    return {
+      // A length raises the text off its parent's baseline: half the line's
+      // size, or three quarters of its own (two thirds of the line's).
+      verticalAlign: script === "superscript"
+        ? numeric ? `${fontSize * PRINTED_SUPERSCRIPT_RISE}px` : `${PRINTED_SUPERSCRIPT_RISE / PRINTED_SCRIPT_FONT_SCALE}em`
+        : "sub",
+      fontSize: numeric ? fontSize * PRINTED_SCRIPT_FONT_SCALE : `${PRINTED_SCRIPT_FONT_SCALE * 100}%`,
+    };
+  }
   return {
     verticalAlign: script === "superscript" ? "super" : "sub",
-    fontSize:
-      typeof fontSize === "number" && Number.isFinite(fontSize)
-        ? fontSize * SPREADSHEET_SCRIPT_FONT_SCALE
-        : `${SPREADSHEET_SCRIPT_FONT_SCALE * 100}%`,
+    fontSize: numeric ? fontSize * SPREADSHEET_SCRIPT_FONT_SCALE : `${SPREADSHEET_SCRIPT_FONT_SCALE * 100}%`,
   };
 }
 
@@ -222,6 +243,7 @@ export function scriptBaselineShiftPx(
   script: "superscript" | "subscript",
   lineFontPx: number,
 ): number {
+  if (printedScripts && script === "superscript") return -lineFontPx * PRINTED_SUPERSCRIPT_RISE;
   return script === "superscript" ? -lineFontPx / 3 : lineFontPx / 5;
 }
 
@@ -256,6 +278,17 @@ export function cellResolvedTextDirection(style: EffectStyle, text: string): "lt
     if (/\p{L}/u.test(char)) return "ltr";
   }
   return "ltr";
+}
+
+/**
+ * Where General alignment sets text: at the right edge when its first strong
+ * character reads right to left, else the left, whatever the cell's reading
+ * order (Windows Excel, lookwin p82-lw: General "كابل" and "كابل Kabul 12"
+ * sit right in Context, Left-to-Right and Right-to-Left alike, "Kabul كابل 12"
+ * left in all three). The reading order sets only the line's base direction.
+ */
+export function generalTextAlignment(text: string): "left" | "right" {
+  return cellResolvedTextDirection(undefined, text) === "rtl" ? "right" : "left";
 }
 
 /** Fill alignment applies: set, and not overridden by Center Across Selection.

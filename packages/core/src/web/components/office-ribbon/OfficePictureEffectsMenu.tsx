@@ -61,12 +61,18 @@ export interface OfficePictureEffectsMenuLabels {
   /** "Preset N" (PowerPoint's names). */
   readonly preset: (preset: number) => string;
   readonly noPresets: string;
+  /** Preset / Bevel > 3-D Options.... */
   readonly threeDOptions: string;
-  /** Why 3-D Options... is not offered (no 3-D Format pane). */
-  readonly threeDOptionsUnavailable: string;
-  /** 3-D Rotation > 3-D Rotation Options...; absent, the 3-D Rotation
-   * submenu lists no options row. */
-  readonly threeDRotationOptions?: string;
+  /** Why a submenu's "... Options" row is greyed: the object has no Format
+   * pane to open (a host's `optionsUnavailableReason` says it more
+   * precisely). */
+  readonly optionsUnavailable: string;
+  /** 3-D Rotation > 3-D Rotation Options.... */
+  readonly threeDRotationOptions: string;
+  /** Shadow / Reflection / Glow / Soft Edges > "... Options" (Shadow
+   * Options..., Reflection Options..., Glow Options..., Soft Edges
+   * Options...). */
+  readonly effectOptions: (kind: "shadow" | "reflection" | "glow" | "softEdge") => string;
   readonly category: (kind: OfficePictureEffectKind) => string;
   readonly none: (kind: OfficePictureEffectKind) => string;
   readonly variations: (kind: "reflection" | "glow" | "softEdge") => string;
@@ -101,15 +107,53 @@ export interface OfficePictureEffectsMenuProps {
   readonly kinds?: readonly OfficePictureEffectKind[];
   /** Host rows after the categories (Text Effects > Transform). */
   readonly extra?: ReactNode;
+  /**
+   * Categories listed but greyed, each with the reason shown on it: what the
+   * object cannot wear (a whole SmartArt graphic's background holds no 3-D;
+   * a shape in a 3-D scene is turned by the scene).
+   */
+  readonly unavailable?: Partial<Record<OfficePictureEffectKind, string>>;
   /** The trigger's glyph; absent, Shape Effects'. */
   readonly iconSemanticId?: OfficeSemanticIconId;
   readonly onPick: <K extends OfficePictureEffectKind>(kind: K, value: OfficePictureEffectValues[K] | null) => void;
-  /** 3-D Options... (Preset, Bevel) and 3-D Rotation Options...: the host's
-   * Format pane at its Effects page, as Office opens it ("format" for 3-D
-   * Format, "rotation" for 3-D Rotation). Absent, the rows are disabled
-   * with `labels.threeDOptionsUnavailable`. */
-  readonly onThreeDOptions?: (section: "format" | "rotation") => void;
+  /**
+   * Each submenu's last row -- Shadow Options..., Reflection Options...,
+   * Glow Options..., Soft Edges Options..., 3-D Options... (Preset, Bevel),
+   * 3-D Rotation Options... (Microsoft Support, "Add a fill or effect to a
+   * shape or text box"): the host's Format pane opened at its Effects page
+   * with that effect's section in view (`OFFICE_EFFECT_OPTIONS_SECTIONS`,
+   * the ids `officeEffectsPaneSections` gives its sections). Absent, the
+   * rows are greyed with `optionsUnavailableReason` or
+   * `labels.optionsUnavailable`.
+   */
+  readonly onEffectOptions?: (section: OfficeEffectsPaneSectionId) => void;
+  /** Why this object's "... Options" rows are greyed (no Format pane). */
+  readonly optionsUnavailableReason?: string;
 }
+
+/** The Effects page's sections (`officeEffectsPaneSections`' ids). */
+export type OfficeEffectsPaneSectionId =
+  | "effects-shadow"
+  | "effects-reflection"
+  | "effects-glow"
+  | "effects-soft-edge"
+  | "effects-bevel"
+  | "effects-rotation";
+
+/**
+ * The section each submenu's "... Options" opens: Preset's and Bevel's 3-D
+ * Options... are 3-D Format; 3-D Format beyond the bevel is there too.
+ */
+export const OFFICE_EFFECT_OPTIONS_SECTIONS: Readonly<Record<OfficePictureEffectKind, OfficeEffectsPaneSectionId>> = {
+  preset: "effects-bevel",
+  shadow: "effects-shadow",
+  reflection: "effects-reflection",
+  glow: "effects-glow",
+  softEdge: "effects-soft-edge",
+  bevel: "effects-bevel",
+  rotation3d: "effects-rotation",
+  format3d: "effects-bevel",
+};
 
 const PREVIEW = { width: 34, height: 26 };
 /** Gallery thumbnails draw each effect at this fraction of its size. */
@@ -139,7 +183,7 @@ function Preview<K extends OfficePictureEffectKind>({ kind, value }: { kind: K; 
       : officePictureEffectsCss({ [kind]: scaled(kind, value) }, PREVIEW);
   return (
     <span className={styles.previewCell} aria-hidden="true">
-      <span className={styles.preview} style={css?.wrapper as CSSProperties | undefined}>
+      <span className={styles.preview} style={{ ...css?.wrapper, ...css?.softEdge } as CSSProperties}>
         {css?.bevel ? <span style={css.bevel} /> : null}
       </span>
     </span>
@@ -159,11 +203,29 @@ export function OfficePictureEffectsMenu({
   displayLabel,
   kinds,
   extra,
+  unavailable,
   iconSemanticId,
   onPick,
-  onThreeDOptions,
+  onEffectOptions,
+  optionsUnavailableReason,
 }: OfficePictureEffectsMenuProps) {
   const shows = (kind: OfficePictureEffectKind) => !kinds || kinds.includes(kind);
+  // A category the object cannot wear: its row, greyed, saying why.
+  function greyed(kind: OfficePictureEffectKind, rowTestId: string, label: string) {
+    const reason = unavailable?.[kind];
+    if (!reason) return null;
+    return (
+      <DropdownMenuItem
+        key={kind}
+        disabled
+        data-testid={rowTestId}
+        data-disabled-reason={reason}
+        title={reason}
+      >
+        {label}
+      </DropdownMenuItem>
+    );
+  }
   const current = normalizeOfficePictureEffects(effects) ?? {};
   const active = shadow || Object.values(current).some((value) => value !== "none");
   const has = (kind: OfficePictureEffectKind) => {
@@ -171,18 +233,22 @@ export function OfficePictureEffectsMenu({
     return value !== undefined ? value !== "none" : styleEffects?.has(kind) === true;
   };
 
-  // Office ends Preset and Bevel with 3-D Options... and 3-D Rotation with
-  // 3-D Rotation Options...: the Format pane at its Effects page.
-  function threeDOptionsRow(section: "format" | "rotation", label: string, rowTestId: string) {
+  // Office ends every submenu with its "... Options" row: the Format pane
+  // at its Effects page, that effect's section in view. The row is the
+  // pane's way in, so it stays live on a read-only object (the pane itself
+  // greys what cannot be written); without a pane it is greyed, saying so.
+  const unavailableOptions = optionsUnavailableReason ?? labels.optionsUnavailable;
+  function optionsRow(kind: OfficePictureEffectKind, label: string, rowTestId: string) {
     return (
       <>
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          disabled={!onThreeDOptions || disabled}
+          disabled={!onEffectOptions}
           data-testid={rowTestId}
-          data-disabled-reason={onThreeDOptions ? undefined : labels.threeDOptionsUnavailable}
-          title={onThreeDOptions ? undefined : labels.threeDOptionsUnavailable}
-          onSelect={() => onThreeDOptions?.(section)}
+          data-section={OFFICE_EFFECT_OPTIONS_SECTIONS[kind]}
+          data-disabled-reason={onEffectOptions ? undefined : unavailableOptions}
+          title={onEffectOptions ? undefined : unavailableOptions}
+          onSelect={() => onEffectOptions?.(OFFICE_EFFECT_OPTIONS_SECTIONS[kind])}
         >
           {label}
         </DropdownMenuItem>
@@ -197,6 +263,8 @@ export function OfficePictureEffectsMenu({
     after?: ReactNode,
   ) {
     if (!shows(kind)) return null;
+    const blocked = greyed(kind, `${testId}-${kind}-menu`, labels.category(kind));
+    if (blocked) return blocked;
     return (
       <DropdownMenuSub key={kind}>
         <DropdownMenuSubTrigger data-testid={`${testId}-${kind}-menu`}>
@@ -255,7 +323,10 @@ export function OfficePictureEffectsMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className={styles.menu}>
-        {shows("preset") ? (
+        {shows("preset") && unavailable?.preset
+          ? greyed("preset", `${testId}-presets`, labels.presets)
+          : null}
+        {shows("preset") && !unavailable?.preset ? (
         <DropdownMenuSub>
           <DropdownMenuSubTrigger data-testid={`${testId}-presets`}>{labels.presets}</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className={styles.menu}>
@@ -272,11 +343,14 @@ export function OfficePictureEffectsMenu({
             <div className={styles.grid} style={{ "--columns": 4 } as CSSProperties}>
               {OFFICE_PICTURE_EFFECT_PRESETS.map((preset) => tile("preset", String(preset), preset, labels.preset(preset)))}
             </div>
-            {threeDOptionsRow("format", labels.threeDOptions, `${testId}-three-d-options`)}
+            {optionsRow("preset", labels.threeDOptions, `${testId}-three-d-options`)}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         ) : null}
-        {shows("shadow") ? (
+        {shows("shadow") && unavailable?.shadow
+          ? greyed("shadow", `${testId}-shadow-menu`, labels.category("shadow"))
+          : null}
+        {shows("shadow") && !unavailable?.shadow ? (
         <DropdownMenuSub>
           <DropdownMenuSubTrigger data-testid={`${testId}-shadow-menu`}>
             {labels.category("shadow")}
@@ -293,6 +367,7 @@ export function OfficePictureEffectsMenu({
               testId={testId}
               onPick={(value) => onPick("shadow", value)}
             />
+            {optionsRow("shadow", labels.effectOptions("shadow"), `${testId}-shadow-options`)}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         ) : null}
@@ -304,6 +379,7 @@ export function OfficePictureEffectsMenu({
             )}
           </div>,
           "reflection",
+          optionsRow("reflection", labels.effectOptions("reflection"), `${testId}-reflection-options`),
         )}
         {category(
           "glow",
@@ -320,6 +396,7 @@ export function OfficePictureEffectsMenu({
             )}
           </div>,
           "glow",
+          optionsRow("glow", labels.effectOptions("glow"), `${testId}-glow-options`),
         )}
         {category(
           "softEdge",
@@ -340,6 +417,7 @@ export function OfficePictureEffectsMenu({
             })}
           </div>,
           "softEdge",
+          optionsRow("softEdge", labels.effectOptions("softEdge"), `${testId}-softEdge-options`),
         )}
         {category(
           "bevel",
@@ -349,7 +427,7 @@ export function OfficePictureEffectsMenu({
             )}
           </div>,
           undefined,
-          threeDOptionsRow("format", labels.threeDOptions, `${testId}-bevel-three-d-options`),
+          optionsRow("bevel", labels.threeDOptions, `${testId}-bevel-three-d-options`),
         )}
         {category(
           "rotation3d",
@@ -366,9 +444,7 @@ export function OfficePictureEffectsMenu({
             ))}
           </>,
           undefined,
-          labels.threeDRotationOptions
-            ? threeDOptionsRow("rotation", labels.threeDRotationOptions, `${testId}-rotation3d-options`)
-            : null,
+          optionsRow("rotation3d", labels.threeDRotationOptions, `${testId}-rotation3d-options`),
         )}
         {extra ? (
           <>

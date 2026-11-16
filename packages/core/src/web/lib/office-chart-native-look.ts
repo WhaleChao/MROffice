@@ -115,8 +115,14 @@ export type ChartNativeLookTransform = [string, number];
  */
 export interface ChartNativeLookBuiltInStyle {
   style: number;
-  /** `angle`: DrawingML's `a:lin@ang` in degrees (90 = top to bottom). */
-  fill?: { angle: number; stops: { position: number; transforms: ChartNativeLookTransform[] }[] };
+  /** `angle`: DrawingML's `a:lin@ang` in degrees (90 = top to bottom); a
+   * path gradient (the theme's third fill `a:path`, reading row 822) states
+   * `path` instead, its focus `fillToRect` in 1/1000 %. */
+  fill?: {
+    angle?: number;
+    path?: { kind: "circle" | "rect" | "shape"; fillToRect?: { l?: number; t?: number; r?: number; b?: number } };
+    stops: { position: number; transforms: ChartNativeLookTransform[] }[];
+  };
   line?: { widthPt: number; color?: string; transforms?: ChartNativeLookTransform[] };
   shadow?: { color: string; opacity: number; blur: number; distance: number; direction: number };
   own?: { series: number; fill?: true; line?: true; effect?: true; unfilled?: true; points?: number[] }[];
@@ -137,6 +143,10 @@ export interface ChartNativeLook {
 
 
   labelRoom?: boolean;
+  /** The text insets (pt) the chart's data labels' box states
+   * (`c:dLbls/c:txPr/a:bodyPr`, the import's `source.dataLabelInsets`,
+   * reading row 821); absent is DrawingML's 7.2 / 3.6pt. Display only. */
+  dataLabelInsets?: { l: number; t: number; r: number; b: number };
   /** Office's built-in chart style 9-48 paint for unpainted filled series. */
   builtInStyle?: ChartNativeLookBuiltInStyle;
   styleId?: string;
@@ -367,15 +377,28 @@ export function normalizeChartNativeLookBuiltInStyle(raw: unknown): ChartNativeL
   // Styles 1-8 paint nothing past the series' colours: only their line
   // series' first-line-style transforms are stated (X-257).
   const gallery = (raw.style as number) >= 9;
-  if (gallery && isRecord(raw.fill) && finite(raw.fill.angle, 0, 360) && Array.isArray(raw.fill.stops)) {
+  const fillPath = isRecord(raw.fill) && isRecord(raw.fill.path) && ["circle", "rect", "shape"].includes(String(raw.fill.path.kind))
+    ? raw.fill.path
+    : undefined;
+  if (gallery && isRecord(raw.fill) && (finite(raw.fill.angle, 0, 360) || fillPath) && Array.isArray(raw.fill.stops)) {
     const fillStops = raw.fill.stops.slice(0, 8).map((stop) =>
       isRecord(stop) && finite(stop.position, 0, 1) ? { position: stop.position, transforms: transforms(stop.transforms) } : undefined,
     );
     if (fillStops.length >= 2 && fillStops.every((stop) => stop?.transforms)) {
-      result.fill = {
-        angle: raw.fill.angle,
-        stops: fillStops as { position: number; transforms: ChartNativeLookTransform[] }[],
-      };
+      const stops = fillStops as { position: number; transforms: ChartNativeLookTransform[] }[];
+      if (finite(raw.fill.angle, 0, 360)) {
+        result.fill = { angle: raw.fill.angle as number, stops };
+      } else if (fillPath) {
+        const focus = isRecord(fillPath.fillToRect) ? fillPath.fillToRect : {};
+        const rect: { l?: number; t?: number; r?: number; b?: number } = {};
+        for (const side of ["l", "t", "r", "b"] as const) {
+          if (finite(focus[side], -1_000_000, 1_000_000)) rect[side] = focus[side] as number;
+        }
+        result.fill = {
+          path: { kind: fillPath.kind as "circle" | "rect" | "shape", ...(Object.keys(rect).length ? { fillToRect: rect } : {}) },
+          stops,
+        };
+      }
     }
   }
   if (gallery && isRecord(raw.line) && finite(raw.line.widthPt, 0, 48)) {
@@ -421,11 +444,21 @@ export function normalizeChartNativeLookBuiltInStyle(raw: unknown): ChartNativeL
   return result.fill || result.line || result.shadow || result.seriesLine ? result : undefined;
 }
 
+/** A chart's data labels' text insets (pt, each 0..100), or undefined. */
+export function chartLabelInsets(raw: unknown): ChartNativeLook["dataLabelInsets"] {
+  if (!isRecord(raw)) return undefined;
+  const sides = ["l", "t", "r", "b"] as const;
+  if (!sides.every((side) => finite(raw[side], 0, 100))) return undefined;
+  return { l: raw.l as number, t: raw.t as number, r: raw.r as number, b: raw.b as number };
+}
+
 /** A bounded reading of the server's look; anything malformed is simply left out. */
 export function normalizeChartNativeLook(raw: unknown): ChartNativeLook | undefined {
   if (!isRecord(raw)) return undefined;
   const result: ChartNativeLook = {};
   if (raw.labelRoom === true) result.labelRoom = true;
+  const insets = chartLabelInsets(raw.dataLabelInsets);
+  if (insets) result.dataLabelInsets = insets;
   const builtInStyle = normalizeChartNativeLookBuiltInStyle(raw.builtInStyle);
   if (builtInStyle) result.builtInStyle = builtInStyle;
   if (typeof raw.styleId === "string" && /^\d{1,6}$/.test(raw.styleId)) result.styleId = raw.styleId;

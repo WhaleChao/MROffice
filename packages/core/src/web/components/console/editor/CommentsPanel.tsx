@@ -69,6 +69,7 @@ import {
 } from "./native-document/comments";
 import { isImeCompositionActive } from "./native-document/imeCompositionGuard";
 import { useCurrentPageId } from "./PageIdContext";
+import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
 
 interface CommentsPanelProps {
   editor: Editor;
@@ -189,7 +190,7 @@ function commentDraftKeyAction(
 function formatTimestamp(timestamp: number | null): string | null {
   if (timestamp === null) return null;
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(pageInterfaceLocale(), {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(timestamp));

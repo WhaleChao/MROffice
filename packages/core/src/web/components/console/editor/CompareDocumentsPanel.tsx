@@ -51,6 +51,7 @@ import { documentPageContentSchema } from "../../../lib/native-page-schemas";
 import { TRACK_CHANGES_SKIP_META } from "./native-document/trackChangesExtension";
 import { flattenPagedDocumentForStorage } from "./native-document/paged/serialization";
 import { wrapBlocksIntoPages } from "./native-document/paged/pageBlockExtension";
+import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
 
 /** The panel's word for each reason the server gives for not comparing. */
 const COMPARE_REFUSAL_MESSAGE: Record<DocumentCompareRefusal, string> = {
@@ -483,7 +484,7 @@ export default function CompareDocumentsPanel({
     (version: PageVersionItem): string =>
       t("compare.versionOption", {
         version: version.version_no,
-        date: new Date(version.created_at).toLocaleString(),
+        date: new Date(version.created_at).toLocaleString(pageInterfaceLocale()),
         source: sourceLabel(version.source),
       }),
     [sourceLabel, t],
@@ -1053,7 +1054,7 @@ export default function CompareDocumentsPanel({
                 color: "var(--office-pane-muted, #6b7280)",
               }}
             >
-              {new Date(version.created_at).toLocaleString()}
+              {new Date(version.created_at).toLocaleString(pageInterfaceLocale())}
             </span>
             <span style={{ whiteSpace: "nowrap" }}>
               {sourceLabel(version.source)}

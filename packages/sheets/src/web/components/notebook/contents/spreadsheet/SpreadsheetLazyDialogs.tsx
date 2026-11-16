@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { Component, lazy, Suspense, useState, type ComponentType, type ReactNode } from "react";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import type { SpreadsheetFunctionDialogsProps } from "./SpreadsheetFunctionDialogs";
@@ -32,7 +33,7 @@ export type SpreadsheetLazyRecoveryState = "idle" | "saving" | "unsaved";
 // would share that registration's context, so a module-level reload kept
 // after unregistering would hold the closed window's recover closure (and its
 // whole render scope, grid DOM and workbook) alive.
-const reloadWindow = () => window.location.reload();
+const reloadWindow = () => reloadPage("spreadsheet_dialog");
 interface SpreadsheetLazyWriter {
   recover: SpreadsheetLazyRecovery;
   reload: () => void;

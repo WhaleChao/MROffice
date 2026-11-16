@@ -46,7 +46,11 @@ function paragraphMarkup(node: ProseMirrorNode): ProseMirrorNode {
   // first piece states none is still the same paragraph (corpus R73-D22:
   // every break paragraph drew its mark as a bordered blank line on the
   // next page, which Word does not draw).
-  for (const key of ["source", "block_id", "anchor_id", "toc_anchor_id", "paragraphMarkMarks"]) delete attrs[key];
+  // The empty paragraph's size the mark gives (`paragraphFontSize`) is the
+  // mark's too (corpus R280-D19: a tail stating 12 pt after a head stating
+  // none drew its line at the top of page 2 and pushed the floating table
+  // there 13.8 pt down).
+  for (const key of ["source", "block_id", "anchor_id", "toc_anchor_id", "paragraphMarkMarks", "paragraphFontSize"]) delete attrs[key];
   return node.type.create(attrs, null, node.marks);
 }
 

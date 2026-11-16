@@ -119,10 +119,14 @@ interface SheetMeasurement {
   lines: MeasuredLine[];
   sectionIndex: number;
   sheetIndex: number;
-  /** Each column's number position, sheet-local px (left of its text). */
+  /** Each column's number position, sheet-local px (left of its text, or
+   * right of it in a right-to-left section). */
   columnSheetLefts: number[];
   /** The sheet's offset inside the overlay container. */
   offsetLeft: number;
+  /** A right-to-left section's numbers stand right of the text, their left
+   * edge at the position. */
+  rightSide?: boolean;
 }
 
 /**
@@ -177,6 +181,8 @@ function sectionColumnBoxes(
 export interface DocumentLineNumber {
   key: string;
   left: number;
+  /** Set in a right-to-left section: `left` is the number's left edge. */
+  rightSide?: boolean;
   sheetIndex: number;
   sheetLeft: number;
   sheetTop: number;
@@ -199,6 +205,7 @@ function sameNumbers(
       (item, index) =>
         item.key === next[index]?.key &&
         item.left === next[index]?.left &&
+        item.rightSide === next[index]?.rightSide &&
         item.sheetIndex === next[index]?.sheetIndex &&
         item.sheetLeft === next[index]?.sheetLeft &&
         item.sheetTop === next[index]?.sheetTop &&
@@ -236,7 +243,7 @@ function meaningfulRects(rects: DOMRect[], columnOf: ColumnOf = ONE_COLUMN): Mea
     .map((rect) => ({ top: rect.top, bottom: rect.bottom, column: columnOf(rect.left + rect.width / 2) }));
 }
 
-function groupCharacterFragmentsIntoLines(
+export function groupCharacterFragmentsIntoLines(
   fragments: readonly CharacterFragmentRect[],
   columnOf: ColumnOf = ONE_COLUMN,
 ): MeasuredBlockLine[] {
@@ -274,11 +281,24 @@ function groupCharacterFragmentsIntoLines(
     // start well above normal text on the SAME baseline, while a drop cap can
     // overlap two or three FOLLOWING rows. Never compare against an accumulated
     // union box: that is what chain-merged six visible drop-cap rows into five.
+    // A fragment shorter than the row whose middle stands inside it (a
+    // field's mark, a lowered or raised run) is on that row: counted as one
+    // of its own, it numbered a line Word does not (corpus R432-D06: "45 46"
+    // and "50 51" on the lines of two citation fields, two numbers ahead of
+    // Word from there on).
+    const middle = (rect.top + rect.bottom) / 2;
+    const insideRow =
+      current !== undefined &&
+      !rect.spansRows &&
+      rect.height < current.height &&
+      middle > current.top &&
+      middle < current.bottom;
     if (
       current &&
       current.column === rect.column &&
       (Math.abs(rect.top - current.top) <= rowTolerance ||
-        Math.abs(rect.bottom - current.bottom) <= rowTolerance)
+        Math.abs(rect.bottom - current.bottom) <= rowTolerance ||
+        insideRow)
     ) {
       // A drop-cap glyph is not the row's line box. Once any ordinary fragment
       // is available, use that fragment as the stable top/bottom anchor. For
@@ -461,17 +481,22 @@ function measuredBlockRects(
   return unique;
 }
 
-function sheetHasOnlyRepresentableFlow(sheet: HTMLElement): boolean {
+function rtlLineNumbersOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsRtlLineNumbersOff?: boolean }).__docsRtlLineNumbersOff === true;
+}
+
+function sheetHasOnlyRepresentableFlow(sheet: HTMLElement, rightToLeftSections = false): boolean {
   // Newspaper columns and continuous sections stacked on one page are
   // numbered (each column on its own, each section by its own settings); a
-  // sheet that scrolls over several pages, right-to-left or vertical text is
-  // not, and draws no guessed numbers.
+  // sheet that scrolls over several pages, right-to-left text outside a
+  // right-to-left section, or vertical text is not, and draws no guessed
+  // numbers.
   if (sheet.hasAttribute("data-page-span")) return false;
   const sheetStyle = getComputedStyle(sheet);
   if (
-    sheetStyle.direction === "rtl" ||
     sheetStyle.writingMode.startsWith("vertical") ||
-    sheet.querySelector('[dir="rtl"]')
+    (!rightToLeftSections && (sheetStyle.direction === "rtl" || sheet.querySelector('[dir="rtl"]')))
   ) {
     return false;
   }
@@ -895,7 +920,9 @@ export function measureDocumentLineNumbers(
       }
       continue;
     }
-    if (!sheetHasOnlyRepresentableFlow(sheet)) continue;
+    const rightToLeftSections = !rtlLineNumbersOff() &&
+      sections.every((section) => sectionLayouts?.[section]?.rightToLeft === true);
+    if (!sheetHasOnlyRepresentableFlow(sheet, rightToLeftSections)) continue;
     const offset = offsetInside(sheet, overlayContainer);
     if (!offset) continue;
 
@@ -983,13 +1010,21 @@ export function measureDocumentLineNumbers(
       const distance =
         part.config?.distancePx ??
         (part.columns.length > 1 ? COLUMNS_AUTO_DISTANCE_PX : DEFAULT_AUTO_DISTANCE_PX);
+      // A right-to-left section (w:bidi) numbers its lines beside the text's
+      // right edge, each number's left edge the distance past it (corpus
+      // R404-D02: Word's 1, 38 and 125 all start at 536.26 pt, the text
+      // ending at 523.5, distance 12.75 pt). `window.__docsRtlLineNumbersOff
+      // = true` asks the older reading, for an A/B of one build.
+      const rightSide = sectionLayouts?.[section]?.rightToLeft === true && !rtlLineNumbersOff();
       measurements.push({
         config: part.config,
         lines: part.lines,
         sectionIndex: section,
         sheetIndex,
-        columnSheetLefts: part.columns.map((column) => column.left - distance),
+        columnSheetLefts: part.columns.map((column) =>
+          rightSide ? column.left + column.width + distance : column.left - distance),
         offsetLeft: offset.left,
+        ...(rightSide ? { rightSide } : {}),
       });
     }
   }
@@ -1033,6 +1068,7 @@ export function measureDocumentLineNumbers(
         output.push({
           key: `${partIndex}:${lineIndex}:${value}`,
           left: measurement.offsetLeft + sheetLeft,
+          ...(measurement.rightSide ? { rightSide: true } : {}),
           sheetIndex: measurement.sheetIndex,
           sheetLeft,
           sheetTop: line.sheetTop,
@@ -1187,6 +1223,7 @@ export default function LineNumberOverlay({
           data-line-number-sheet-left={number.sheetLeft}
           data-line-number-sheet-top={number.sheetTop}
           data-line-number-value={number.value}
+          data-line-number-side={number.rightSide ? "right" : undefined}
           style={{ left: number.left, top: number.top }}
         >
           {number.value}

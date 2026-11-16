@@ -2,6 +2,20 @@
    so every page that loads this skin, not only the ribbon chassis, has it. */
 @import "./office-motion.css";
 
+/* Symbol's own encoding as a web face (symbolCharMark.ts symbolFontStack):
+   Wine's Symbol, served beside the office faces, maps U+F020-U+F0FF as Word
+   reads a w:sym in Symbol. No local() source: the Mac's Symbol has no glyph
+   in that range. */
+@font-face {
+  font-family: "MRAI Symbol PUA";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/office/wine-symbol/400.woff2) format("woff2");
+  unicode-range: U+F020-F0FF;
+}
+
+
 /* The rules Tiptap injects in a <style> all its editors share (@tiptap/core
    style.ts). Any editor unmounting while no ".tiptap" stands in the document
    removes that tag for good, the others still running. Without it the separator
@@ -671,6 +685,9 @@ body.note-editor-object-moving * {
 .note-editor-content .node-inlineChart {
   display: inline-block;
   vertical-align: baseline;
+  /* What the line multiple adds to a picture's line stands above it
+     (documentAutoLineSpacing PICTURE_LINE_MULTIPLE_SHARE). */
+  margin-top: var(--picture-line-extra, 0px);
   line-height: normal;
   max-width: 100%;
   white-space: normal;
@@ -799,6 +816,25 @@ body.note-editor-object-moving * {
 
 .note-editor-content .note-editor-image-row > .note-editor-image-resizable {
   flex: 0 0 auto;
+}
+
+/* On a line grid Word sets a picture paragraph's line in whole slots: two
+   inline pictures 132.25 pt tall on a 15.6 pt grid stand 9 slots, 140.4 pt
+   (Word 16.86, corpus R432-D02: the caption under them at 230.8 pt). Drawn at
+   the pictures' height, the caption stood 7 pt high and the next table's
+   caption stayed on the page before its table. The paginator charges the same
+   slots (lineGridSlotHeightPx, its 0.75 px tolerance). */
+[data-doc-grid="lines"] .note-editor-content .note-editor-image-row[style*="--image-row-height"] {
+  min-height: round(up, calc(var(--image-row-height) - 0.75px), var(--doc-grid-pitch, 0.01px));
+}
+/* A Word chart alone on its line, handed over as a block (ChartBlock
+   wordLineBlock): on a line grid its line is whole slots too (Windows Word 16,
+   corpus R287-D06: a 170 pt chart on an 18 pt grid stands 180 pt from the
+   next). */
+[data-doc-grid="lines"] .note-editor-content [data-chart-word-line="true"][style*="--chart-line-height"] {
+  margin-bottom: calc(
+    round(up, calc(var(--chart-line-height) - 0.75px), var(--doc-grid-pitch, 0.01px)) - var(--chart-line-height)
+  ) !important;
 }
 .note-editor-image-handle {
   position: absolute;
@@ -1244,6 +1280,14 @@ body.note-editor-object-moving * {
   content: none !important;
 }
 
+/* Word w:noWrap (tableNoWrap.ts): the cell's words do not wrap. `pre`, not
+   `nowrap`: the editor's text keeps its spaces (pre-wrap), only the line does
+   not break. */
+.ProseMirror td[data-word-no-wrap="true"] > :is(p, h1, h2, h3, h4, h5, h6),
+.ProseMirror th[data-word-no-wrap="true"] > :is(p, h1, h2, h3, h4, h5, h6) {
+  white-space: pre;
+}
+
 /* Word w:hideMark (tableHideMark.ts): an empty cell's end mark takes no
    height, so the cell adds nothing to its row -- a spacer row of empty cells
    is a hairline, as Word draws it. */
@@ -1281,10 +1325,25 @@ body.note-editor-object-moving * {
   display: none !important;
 }
 
+/* The spaces a paragraph whose mark is deleted leaves, leading the next
+   paragraph it joins in the views that hide deletions (sectionMarkParagraph.ts,
+   corpus R380-D02). One literal label the line engine measures as it does a
+   list marker's. */
+.ProseMirror:is([data-track-changes-markup-filter="none"], [data-track-changes-markup-filter="simple"], [data-track-changes-markup-filter="insertions"]) [data-tc-final-join-lead]::before {
+  content: var(--tc-join-lead, "");
+  display: inline-block;
+  white-space: pre;
+}
+
 /* An empty paragraph holding only a continuous section break's mark takes
    no room on Word's page (sectionMarkParagraph.ts). */
 .ProseMirror p[data-section-mark-only="true"],
-.ProseMirror:not([data-show-hidden-text]) p[data-hidden-mark-only="true"] {
+.ProseMirror:not([data-show-hidden-text]) p[data-hidden-mark-only="true"],
+/* A paragraph deleted mark and all (trackChanges) joins the next one in the
+   views that hide deletions: nothing of it is left (sectionMarkParagraph.ts). */
+.ProseMirror[data-track-changes-markup-filter="none"] [data-tc-final-gone="true"],
+.ProseMirror[data-track-changes-markup-filter="simple"] [data-tc-final-gone="true"],
+.ProseMirror[data-track-changes-markup-filter="insertions"] [data-tc-final-gone="true"] {
   height: 0 !important;
   min-height: 0 !important;
   margin-top: 0 !important;
@@ -1394,6 +1453,39 @@ body.note-editor-object-moving * {
      (wordGridRunLineHeightSpecs). */
   line-height: calc(
     var(--doc-grid-pitch) * max(1, var(--doc-line-factor, var(--doc-default-line-height, 1)))
+  ) !important;
+}
+
+/* An "At least" line on the grid stands on the grid too: the larger of its
+   floor and the whole pitches its own single line takes. Windows Word
+   (docx-look/probes al_probe.py, a 16.3 pt grid): Palatino 10 pt at least
+   14 or 16 pt is 16.3 pt a line, at least 17 or 20 pt is 17 / 20 pt, 14 and
+   20 pt text at least 14 pt is 32.6 pt (two pitches), at least 34 pt 34 pt.
+   Kept at its floor, R404-D02's whole body ran 14 pt a line, two lines short
+   a page. The single line is the editor's 1.2em; without round() the floor
+   or one pitch, the larger. `data-docs-grid-at-least-off` on <html> asks the
+   older floor for an A/B of one build. */
+:where(html:not([data-docs-grid-at-least-off])) [data-doc-grid="lines"]
+  :is(
+    .note-editor-content,
+    .note-editor-content > article[data-page-sheet],
+    .paged-fragment,
+    .paged-fragment__inner
+  )
+  > :is(p, h1, h2, h3, h4, h5, h6)[data-line-height-rule="atLeast"]:not([data-snap-to-grid="false"]),
+:where(html:not([data-docs-grid-at-least-off])) .paged-measured-flow[data-doc-grid="lines"]
+  > :is(p, h1, h2, h3, h4, h5, h6)[data-line-height-rule="atLeast"]:not([data-snap-to-grid="false"]),
+:where(html:not([data-docs-grid-at-least-off])) [data-doc-grid="lines"]
+  :is(.note-editor-content, .paged-fragment, .paged-fragment__inner)
+  li
+  > p[data-line-height-rule="atLeast"]:not([data-snap-to-grid="false"], td p, th p),
+:where(html:not([data-docs-grid-at-least-off])) .paged-measured-flow[data-doc-grid="lines"]
+  li
+  > p[data-line-height-rule="atLeast"]:not([data-snap-to-grid="false"], td p, th p) {
+  line-height: max(var(--doc-line-height-min, 0px), var(--doc-grid-pitch)) !important;
+  line-height: max(
+    var(--doc-line-height-min, 0px),
+    round(up, 1.2em, var(--doc-grid-pitch))
   ) !important;
 }
 
@@ -1924,6 +2016,7 @@ body.note-editor-object-moving * {
    editor's own wrapper div — is re-evaluated on every keystroke, and
    Chromium recalculated the editor's 52k elements each time (250 ms). */
 .note-editor-content-columns[data-editor-initial-settling="true"]:not([data-editor-settle-shown]) > .sheet-band-overlay,
+.note-editor-content-columns[data-editor-initial-settling="true"]:not([data-editor-settle-shown]) > .sheet-paper-underlay,
 .note-editor-content-columns[data-editor-initial-settling="true"]:not([data-editor-settle-shown]) > .sheet-footnote-overlay,
 .note-editor-content-columns[data-editor-initial-settling="true"]:not([data-editor-settle-shown]) > .sheet-band-edit-layer {
   visibility: hidden;
@@ -2279,6 +2372,8 @@ body.note-editor-object-moving * {
      again on every page) scrolled the page under a pointer resting on
      visible text, and an upward drag selection raced through the document. */
   scroll-padding-top: calc(var(--note-editor-toolbar-stack-block-size, 0px) + 24px);
+   
+  scrollbar-gutter: stable;
 }
 /* Focus in the ribbon (a spin box, a font size): no padding, so typing in a
    field that sits under it does not scroll the page (scrollportToolbarInset). */
@@ -4313,6 +4408,10 @@ br[data-docx-break-run-marks] {
     font-size: inherit;
     line-height: inherit;
     margin-top: 0;
+    /* Word sets the text at the letter's advance plus the Distance from
+       text, nothing more (Windows Word 16, probes/dropcap: R441-D01's 38pt
+       "D" with no w:hSpace, its first line at 27.4pt = the advance). */
+    margin-inline-end: var(--drop-cap-distance, 0pt);
     -webkit-initial-letter: var(--drop-cap-lines, 3);
     initial-letter: var(--drop-cap-lines, 3);
   }
@@ -4477,8 +4576,10 @@ br[data-docx-break-run-marks] {
 :is(.note-editor-content-columns, .note-editor-page-preview)[data-doc-default-kinsoku="true"] {
   line-break: var(--doc-kinsoku-line-break, normal);
 }
+/* Off: Latin words still wrap between words; the East Asian runs are
+   decorated `line-break: anywhere` (DocumentFormatting, R324-D01). */
 :is(.note-editor-content-columns, .note-editor-page-preview)[data-doc-default-kinsoku="false"] {
-  line-break: anywhere;
+  line-break: normal;
 }
 
 /* Editable roots have a UA line-break value that shadows their ancestor.
@@ -5495,13 +5596,24 @@ br[data-docx-break-run-marks] {
 
 .note-editor-content ul[data-type="taskList"] li {
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   gap: 0.5rem;
 }
 
+ 
 .note-editor-content ul[data-type="taskList"] li > label {
   flex-shrink: 0;
-  margin-top: 0.25rem;
+  display: inline-flex;
+  align-items: baseline;
+  line-height: 1;
+}
+
+.note-editor-content ul[data-type="taskList"] li > label::before {
+  content: "\200b";
+}
+
+.note-editor-content ul[data-type="taskList"] li > label > input {
+  align-self: center;
 }
 
 .note-editor-content ul[data-type="taskList"] li > div {
@@ -6270,6 +6382,49 @@ br[data-docx-break-run-marks] {
 [data-math-wraps] > .katex {
   margin-inline: -4%;
   max-width: 108%;
+}
+/* A breakable formula that fits on its line stands centred at its own width.
+   Chromium never sizes a box below its narrowest breaking (min-content), and
+   with the inch-in padding that is a later piece plus an inch: P(x) =
+   |ψ(x)|², its `= |ψ(x)|²` + 1in, 155.6 px for a 93.6 px formula, drawn at
+   that box's left, the box centred: 31 px left of centre (WebKit sizes it
+   93.6 px). The inch-in is a hanging indent instead, a percentage (as any
+   cyclic one, nothing while the box is sized, the inch at layout), and the
+   allowance past the column is the preview's centring of an overflow: one
+   formula as wide, one line long or broken, as before. A line of a group
+   (several m:oMath) stands at the group's left with no margin either (the
+   -4% drew every one 4% of its width left of the group's edge); one past
+   its column centres its overflow, as a single formula's preview does.
+   Where `hanging` is not understood (Chromium before ~150), the formula
+   carries its one-line width (lazyKatex DISPLAY_MATH_LINE_WIDTH_PROPERTY,
+   from KaTeX's own layout) and no box is wider than that. */
+[data-math-wraps] > .katex {
+  flex-shrink: 0;
+  margin-inline: 0;
+}
+.word-math-line[data-math-wraps] {
+  justify-content: center;
+}
+@supports (text-indent: 1px hanging) {
+  [data-math-wraps] > .katex {
+    padding-inline-start: 0;
+    text-indent: min(1in, 100000%) hanging;
+  }
+}
+@supports not (text-indent: 1px hanging) {
+  .math-block-preview[data-math-wraps] {
+    max-width: min(100%, var(--math-line-width, 100%));
+  }
+  /* A group's width is its lines' (a percentage would not hold it); a line
+     never runs past the group's column anyway. */
+  .word-math-line[data-math-wraps] {
+    max-width: var(--math-line-width, 100%);
+  }
+  [data-math-wraps] > .katex {
+    max-width: min(108%, var(--math-line-width, 108%));
+    padding-inline-start: min(1in, var(--math-line-width, 1in));
+    text-indent: calc(-1 * min(1in, var(--math-line-width, 1in)));
+  }
 }
 
 /* An imported Word formula's italic letters take Cambria Math's italic
@@ -7665,15 +7820,6 @@ input.floating-toolbar-code__field {
 
 .ai-panel-empty svg {
   color: var(--console-text-tertiary, #a3a3a3);
-}
-
-/* The empty panel's first tries: the workspace chat's scene cards
-   (StarterCards), three to a row where the panel is wide enough. */
-.ai-panel-starters {
-  width: 100%;
-  max-width: calc(3 * 132px + 2 * 10px);
-  padding: 0 12px;
-  box-sizing: content-box;
 }
 
 /* Readable measure: on a maximized window the transcript used to stretch
@@ -11298,6 +11444,17 @@ body[data-copilot-stack-front="true"] .code-inline-copilot:has([data-copilot-dra
 .note-editor-content table[data-word-autofit-measure="min"] :is(td, th) > * {
   width: min-content !important;
 }
+/* A word's narrowest box is the word: the space after it hangs, as Word sizes
+   an AutoFit column (Windows Word, corpus R287-D30 Table A2: TNR 12
+   "Managerial/professional" is 116.62 pt, and Word's columns come out of the
+   narrowest contents without the space -- 120.9 / 128.8 / 187.5 pt of text;
+   a Word cell's preserved spaces (white-space: pre-wrap) counted it in
+   min-content, 119.67 pt, and the first column drew 2.8 pt wide). Collapsing
+   leaves wrapping as the cell states it (a w:noWrap cell stays one piece).
+   `data-docs-autofit-min-space-off` on the root counts it as before (A/B). */
+:root:not([data-docs-autofit-min-space-off]) .note-editor-content table[data-word-autofit-measure="min"] :is(td, th) > * {
+  white-space-collapse: collapse !important;
+}
 
 /* w:bidiVisual: the columns run from the right; the cells' text keeps its own
    direction (stableTableColumnResizeView). */
@@ -12149,7 +12306,8 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 .note-editor-content .note-editor-toc__entry-label {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  tab-size: var(--doc-default-tab-size, 48px);
+  /* The row's first left tab stop (nativeRowCss), else the default interval. */
+  tab-size: var(--toc-row-tab-size, var(--doc-default-tab-size, 48px));
 }
 
 /* The entry's paragraph alignment (Modify Style on TOC 1-9). */
@@ -12163,12 +12321,20 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 /* A Word numbering's number before an imported heading: in the hanging
    indent, its tab reaching the text (min-width set inline), a little room
    after a number wider than the hang, as Word's tab moves on to the next stop. */
-.note-editor-content .mrnote-heading-number--list {
+/* (The widget is contenteditable=false: Tiptap's `.ProseMirror
+   [contenteditable="false"] { white-space: normal }`, as specific and later,
+   took the space a "space" suffix ends the number with -- corpus R283-D02's
+   "3.2Physical Sampling" for Word's "3.2 Physical Sampling".) */
+.note-editor-content .mrnote-heading-number--list[contenteditable="false"] {
   display: inline-block;
   /* Word draws the number in the heading's own look. */
   color: inherit;
   margin-right: 0;
   white-space: pre;
+  /* An inline block takes the heading's hanging first-line indent for its
+     own first line: the number's glyphs were drawn one hang left of its box,
+     out in the margin (corpus R279-D12: "1.1" 28.8 pt left of Word's). */
+  text-indent: 0;
 }
 .note-editor-content .mrnote-heading-number--list[data-suffix="tab"] {
   padding-right: 0.5em;
@@ -12891,6 +13057,15 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 /* ============================================================
    Footnotes / endnotes (Word/WPS parity)
    ============================================================ */
+
+/* Word sets superscript and subscript at 66 % of the run's size (Word 16.86,
+   corpus R432-D06: 12 pt Times New Roman, its subscripts 7.92 pt). The
+   browser's `smaller` (83 %) drew them a quarter wider, and lines full of
+   chemistry and band-ratio notation broke earlier than Word's, two line
+   numbers ahead by page 4. */
+.note-editor-content :is(sub, sup):not(.mrnote-footnote-ref) {
+  font-size: 66%;
+}
 
 .note-editor-content .mrnote-footnote-ref {
   font-size: 0.7em;
@@ -15670,6 +15845,17 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 .note-editor-content p[data-toc-level="9"] {
   padding-left: 12.8em;
 }
+/* A Word "toc N" paragraph stands at its own (its style's) indent and no
+   more: Windows Word draws toc 2 with no indent of its own at the margin,
+   toc 3 and toc 4 at their 11.9 / 24 pt (corpus R358-D01, a field whose end
+   sits in the heading after it, so its rows stay paragraphs). The level
+   padding above put toc 4 81 pt in, the long rows wrapped one line more and
+   the contents ran a page long, every page after it one page late.
+   `data-docs-toc-level-padding` on <html> asks the older padding for an A/B
+   of one build. */
+:where(html:not([data-docs-toc-level-padding])) .note-editor-content p[data-toc-level][data-docx-style-id]:not([data-toc-entry-leader]) {
+  padding-left: 0;
+}
 
 /* Word TOC entries are wrapped in a hyperlink — but ProseMirror renders the
    link MARK as one <a> per contiguous inline run, so an entry whose caption
@@ -15912,18 +16098,23 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
      net read are unaffected. */
   contain: size;
   /* The paper takes the document's page colour (Word 页面颜色), white when
-     the document has none. */
-  background: var(--doc-page-background, #ffffff);
+     the document has none. A sheet whose paper is drawn by the paper layer
+     under the header and footer (.sheet-paper-underlay, paperUnderlay.ts) is
+     clear: --doc-sheet-paper is transparent there. */
+  background: var(--doc-sheet-paper, var(--doc-page-background, #ffffff));
   /* ...and its Fill Effects gradient over that colour, along the page box. */
-  background-image: var(--doc-page-background-image, none);
+  background-image: var(--doc-sheet-paper-image, var(--doc-page-background-image, none));
   /* Paper chrome is paint-only. A real border inside this border-box removed
      1px from each side of Word's printable width (and 2px vertically) even
      though pageRebalance correctly treats paper height as page minus margins.
      The inset shadow preserves the same hairline without changing geometry. */
   border: 0;
+  /* The drop shadow is the paper's: the paper layer's own box draws it when
+     it draws the paper (--doc-sheet-drop), or it fell over the clear page
+     below this one. */
   box-shadow:
     inset 0 0 0 1px rgba(15, 23, 42, 0.08),
-    0 18px 48px rgba(15, 23, 42, 0.12);
+    var(--doc-sheet-drop, 0 18px 48px rgba(15, 23, 42, 0.12));
   border-radius: 2px;
    
   padding: calc(
@@ -16062,7 +16253,9 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
   }
   /* The boxes stand on the sheets; the overlay itself takes no room below the
      last one (it spanned the screen gaps, a page of its own on paper). */
-  html[data-docs-native-print] .sheet-band-overlay[data-docs-native-print-target] {
+  html[data-docs-native-print] .sheet-band-overlay[data-docs-native-print-target],
+  html[data-docs-native-print] [data-docs-native-print-target] .sheet-paper-underlay,
+  html[data-docs-native-print] [data-docs-native-print-target] .sheet-watermark-overlay {
     bottom: auto !important;
     height: 0 !important;
   }
@@ -16562,16 +16755,28 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
   pointer-events: none;
   user-select: none;
 }
+/* Word sets line numbers in the Line Number style: the document's default
+   face and size, in its text colour (Word 16.86, corpus R432-D06: 11 pt
+   Calibri numbers, the defaults' face, beside 12 pt Times New Roman lines;
+   drawn 11 px grey). A page without a default of its own keeps the overlay's
+   small grey numbers. */
 .document-line-number-overlay__number {
   position: absolute;
   min-width: 2ch;
-  color: color-mix(in srgb, var(--console-fg, #0f172a) 58%, transparent);
-  font-size: 11px;
+  color: var(--doc-default-text-color, color-mix(in srgb, var(--console-fg, #0f172a) 58%, transparent));
+  font-family: var(--doc-default-font, inherit);
+  font-size: var(--doc-default-font-size, 11px);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   text-align: right;
   transform: translate(-100%, -50%);
   white-space: nowrap;
+}
+/* A right-to-left section's numbers stand right of the text, left-aligned
+   from their position (Word, corpus R404-D02). */
+.document-line-number-overlay__number[data-line-number-side="right"] {
+  text-align: left;
+  transform: translate(0, -50%);
 }
 .note-editor-parity-blank-sheet {
   position: absolute;
@@ -16954,6 +17159,43 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 .sheet-band-overlay:has(img[data-band-behind-text]) {
   mix-blend-mode: multiply;
 }
+/* So does a band whose header or footer places an object in the body's area
+   (paged/bandObjectHoles markBandsOverBody): Word draws the header and footer
+   under the whole body, its text and its objects; the body's objects mask the
+   band where they paint, and the body's text stands on the band's picture. */
+.sheet-band-overlay:has([data-band-over-body]) {
+  mix-blend-mode: multiply;
+}
+/* Both of those are what the layers were before the paper was drawn as a
+   layer of its own (paperUnderlay.ts, `__docsPaperUnderlayOff`). Now, as in
+   Word, the page's paper is drawn first, then the watermark and the header
+   and footer, then the body over them: its text, and its objects, Behind
+   Text ones included. Nothing blends: the page colour and a picture
+   watermark keep their own colours. */
+.note-editor-content-columns[data-docs-paper-underlay] > .sheet-paper-underlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  user-select: none;
+}
+.sheet-paper-underlay > .sheet-paper {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--doc-page-background, #ffffff);
+  background-image: var(--doc-page-background-image, none);
+  border-radius: 2px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.12);
+}
+.note-editor-content-columns[data-docs-paper-underlay] > .sheet-watermark-overlay,
+.note-editor-content-columns[data-docs-paper-underlay] > .sheet-band-overlay {
+  z-index: -1;
+  mix-blend-mode: normal;
+}
+.note-editor-content-columns[data-docs-paper-underlay] > .sheet-watermark-overlay .note-editor-watermark__text,
+.note-editor-content-columns[data-docs-paper-underlay] > .sheet-watermark-overlay .note-editor-watermark__picture {
+  mix-blend-mode: normal;
+}
 .sheet-band-box {
   position: absolute;
   pointer-events: none;
@@ -17080,6 +17322,20 @@ span.document-auto-linebox .document-auto-line-fraction,
 .note-editor-content :is(p, h1, h2, h3, h4, h5, h6)[data-document-auto-intermediates="true"] span:not(.document-auto-linebox):not(.document-auto-line-fraction):not(.document-word-linebox):not(.document-word-line-fraction):not(span.document-auto-linebox *):not(span.document-auto-line-fraction *):not(span.document-word-linebox *):not(span.document-word-line-fraction *) {
   line-height: 0 !important;
 }
+/* A raised or lowered run (`data-text-position`, Word's w:position) and the
+   format wrappers inside a superscript or subscript take no line of their
+   own in a projected paragraph: its leaves own the line height
+   (documentAutoLineSpacing gives a positioned leaf its face's line and the
+   line's height a strut at its top). Such a paragraph holds no
+   intermediates proof (`sub`, `sup` are non-text layout there), so each
+   wrapper inherited the paragraph's whole line, centred on the script's
+   smaller face or moved with the run, and stretched every line it stood on:
+   corpus R283-D02, "CaCO3" in a Subscript style lowered 2 pt under an At
+   least 14 pt line, 22 px lines for Word's 18.67. */
+.note-editor-content :is(p, h1, h2, h3, h4, h5, h6).document-auto-linebox [data-text-position]:not(.document-auto-linebox, .document-auto-line-fraction, span.document-auto-linebox *, span.document-auto-line-fraction *),
+.note-editor-content :is(p, h1, h2, h3, h4, h5, h6).document-auto-linebox :is(sub, sup, [data-text-position]) span:not(.document-auto-linebox, .document-auto-line-fraction, .document-word-linebox, .document-word-line-fraction, span.document-auto-linebox *, span.document-auto-line-fraction *, span.document-word-linebox *, span.document-word-line-fraction *) {
+  line-height: 0;
+}
 /* A native line box is one inline box per source run, or two nested boxes
    where WebKit floors the fractional height: the outer box allocates the
    native ascent (baseline shift), the inner box adds only the measured missing
@@ -17128,11 +17384,15 @@ span.document-auto-linebox .document-auto-line-fraction,
   font-family: var(--doc-default-font, var(--font-dm-sans, var(--font-sans)));
 }
 /* Word's Header and Footer styles are based on Normal: a line that states no
-   size of its own is set at the document's default size, as the body is. */
+   size of its own is set at the document's default size, as the body is, and
+   a line in Automatic colour is set in the document's own text colour, as
+   Word prints it (black in an imported document; corpus R412-D12's page
+   number and R350-D01's masthead stood in slate grey). Pages that state no
+   colour keep the band's grey. */
 .sheet-band-rich {
   font-size: var(--doc-default-font-size, 1rem);
   line-height: 1.35;
-  color: #374151;
+  color: var(--doc-default-text-color, #374151);
 }
 /* Plain multi-line text band rendered through the overlay (per-section
    documents suppress the pseudo-element band). */
@@ -17162,11 +17422,18 @@ span.document-auto-linebox .document-auto-line-fraction,
 }
 /* A line of pictures alone (bandRichDom data-band-picture-line) is the
    pictures' height: no strut, no descent under them. */
-.sheet-band-rich__p[data-band-picture-line] {
+.sheet-band-rich__p[data-band-picture-line=""] {
   line-height: 0 !important;
 }
-.sheet-band-rich__p[data-band-picture-line] > .sheet-band-rich__img {
+.sheet-band-rich__p[data-band-picture-line=""] > .sheet-band-rich__img {
   vertical-align: top;
+}
+/* Word's reading (probes/inlshape): the drawings stand on the line's bottom,
+   the line keeps the paragraph mark's height unless a drawing is taller. */
+.sheet-band-rich__p[data-band-picture-line="bottom"] > .sheet-band-rich__img,
+.sheet-band-rich__p[data-band-picture-line="bottom"] > .sheet-band-rich__shape,
+.sheet-band-rich__p[data-band-picture-line="bottom"] > .sheet-band-rich__chart {
+  vertical-align: bottom !important;
 }
 .sheet-band-rich__table {
   width: 100%;
@@ -19355,6 +19622,50 @@ button.office-ribbon-group-launcher.office-ribbon-group-launcher[aria-pressed="t
   [data-page-table-block-continues="true"]
   > br:not(.ProseMirror-trailingBreak) + br.ProseMirror-trailingBreak {
   display: none;
+}
+
+/* The same head, its blank last line held up by an empty-line strut
+   (documentAutoLineSpacing emptyLineStrut: the line a closing break leaves,
+   which Word draws for a whole paragraph). A head cut after a break leaves no
+   such line in Word: the break ends the line above the page's foot (Windows
+   Word, tables/probes/rest r1: "L1<br>L2<br>ID", L1 and L2 on page 1; the
+   strut's row pushed L2 over). The strut stands right after the break, then
+   the closing widgets (a cell-end formatting mark, inline-block by its own
+   style; ProseMirror's separator and trailing <br>), each of which would hold
+   that blank row up on its own. `data-docs-head-break-blank-off` on the root
+   draws it as before (A/B). */
+:root:not([data-docs-head-break-blank-off]) .note-editor-content
+  :is([data-page-table-block-continues="true"], [data-page-split-continues="true"])
+  > br:not(.ProseMirror-trailingBreak) + .document-auto-line-strut,
+:root:not([data-docs-head-break-blank-off]) .note-editor-content
+  :is([data-page-table-block-continues="true"], [data-page-split-continues="true"])
+  > br:not(.ProseMirror-trailingBreak) + .document-auto-line-strut
+  ~ :is(.mrnote-formatting-mark, img.ProseMirror-separator, br.ProseMirror-trailingBreak) {
+  display: none !important;
+}
+
+/* The head half of a cell paragraph a row cut goes through: its space after
+   belongs to its last line, on the next page (Word: corpus R417-D03; the
+   planner fits the head without it, tablePaginationAttrsExtension.ts). */
+.note-editor-content
+  :is(p, h1, h2, h3, h4, h5, h6)[data-page-table-block-space-dropped="true"] {
+  margin-bottom: 0 !important;
+}
+
+/* The empty rest of a cell whose content all stood on the page before: Word
+   draws nothing there, the row's rest is its other cells' lines (probes
+   tables/probes/tail t1-t4, corpus R417-D03; tablePaginationAttrsExtension.ts). */
+.note-editor-content
+  [data-page-table-cell-rest-flat="true"]
+  > [data-page-table-block-continuation="true"] {
+  height: 0 !important;
+  min-height: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: 0 !important;
+  overflow: hidden;
 }
 
 /* A long heading is still one logical heading when it crosses a physical
@@ -24583,4 +24894,31 @@ button.office-ribbon-group-launcher.office-ribbon-group-launcher[aria-pressed="t
   overflow: visible;
   pointer-events: none;
   will-change: transform;
+}
+
+ 
+.ai-panel-main > .ai-panel-landing-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: var(--ai-foot-h, 0px);
+  z-index: 2;
+  padding: 0 16px;
+}
+.ai-panel-main[data-landing] > :is(.ai-panel-landing-title, .ai-panel-composer) {
+  transform: translate3d(0, calc(-1 * var(--ai-landing-lift, 0px)), 0);
+}
+.ai-panel-main[data-landing-motion] > :is(.ai-panel-landing-title, .ai-panel-composer) {
+  transition:
+    transform 560ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 220ms ease;
+}
+.ai-panel-main[data-landing="leaving"] > .ai-panel-landing-title {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-panel-main[data-landing-motion] > :is(.ai-panel-landing-title, .ai-panel-composer) {
+    transition: none;
+  }
 }

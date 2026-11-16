@@ -34,6 +34,7 @@ import {
 } from "./documentOfficeTableStyles";
 import { nativeTableGridWidths } from "./nativeTableGridView";
 import { normalizeCellBackgroundColor, normalizeCellMargins, tableDefaultCellMargins } from "./tableCellStyle";
+import { TABLE_CELL_DECORATION_STYLE_PROPERTIES } from "./tableCellMarginsPlugin";
 import { wordAutoTextAttributes } from "./wordAutoTextColor";
 import { normalizeCellShadingPattern, shadingPatternImage } from "./tableShading";
 import { wordDoubleBorderWidthPx } from "../../../../lib/document-borders";
@@ -860,6 +861,50 @@ function hairlineShadow(edge: PhysicalCellEdge, line: DocumentTableBorderLine): 
   return `inset ${offset} 0 0 ${line.color ?? "currentColor"}`;
 }
 
+/** `window.__docsTableOuterRuleExcess = true` gives the table's outer rules
+ * back too (tableOuterRuleExcessPx). Off by default until measured. */
+function tableOuterRuleExcessOn(): boolean {
+  return (globalThis as { __docsTableOuterRuleExcess?: boolean }).__docsTableOuterRuleExcess === true;
+}
+
+/**
+ * What a Word table off the uniform grid is taller than Word's beyond its
+ * rows, given back by the cells of its last row.
+ *
+ * Word: a row is its text plus one rule at its w:sz (0.5pt = 0.667 px), and
+ * the table is its rows plus the last rule below the last row: R281-D19's
+ * floating form, Word's PDF: rules 168.96 ... 918.08 px apart by its rows,
+ * the bottom rule 0.64 px thick, the first note's line at 918.72.
+ * The browser: a collapsed-border row is its text plus half of the rule above
+ * and half of the rule below, each drawn at its snapped width (0.5pt at 1 px,
+ * nativeBorderUsedWidth), so a row is its text plus 1 px, and each cell gives
+ * back (used - sz) for its two halves (the row excess above): text + 0.667,
+ * Word's row. The table's box then adds half of its top rule and half of its
+ * bottom rule outside the rows: 0.5 + 0.5 = 1 px where Word adds 0.667, so
+ * the table is
+ *   (usedTop - szTop) / 2 + (usedBottom - szBottom) / 2
+ * taller than Word's (0.333 px for 0.5pt rules). R281-D19: ours 168.97 ->
+ * 918.97 px, Word's 168.96 -> 918.72; the same 918.97 at device pixel ratio
+ * 2 (measured), so this is the layout width, not the painting. With the 2 px
+ * of frame padding gone (tablePageFrame), these 0.333 px left the last note
+ * line 0.02 px past the bottom margin, on a page of its own (Word 13 pages,
+ * ours 14).
+ */
+function tableOuterRuleExcessPx(
+  table: ProseMirrorNode,
+  cell: TableCellGeometry,
+  dimensions: { rows: number; cols: number },
+  cells: readonly TableCellGeometry[],
+  styleLayers: ReadonlyMap<number, DocumentTableStyleVisualLayer>,
+  bottom: DocumentTableBorderLine | undefined,
+  lineExcess: (line: DocumentTableBorderLine | undefined) => number,
+): number {
+  const above = cells.find((other) => other.row1 === 0 && other.col1 <= cell.col1 && other.col2 >= cell.col1);
+  if (!above) return 0;
+  const top = renderableCellEdges(table, above, dimensions, cells, styleLayers).top;
+  return (lineExcess(top) + lineExcess(bottom)) / 2;
+}
+
 function cellDecorationAttributes(
   table: ProseMirrorNode,
   cell: TableCellGeometry,
@@ -1045,9 +1090,27 @@ function cellDecorationAttributes(
     // the text box was 0.75pt narrower and both words were cut in two.
     const direct = normalizeCellMargins(cell.node.attrs.cellMargin);
     const inherited = tableDefaultCellMargins(table.attrs);
+    // An edge this cell states nil (or leaves to its neighbour) still holds half
+    // of the line the neighbour draws along it: the collapsed border is one
+    // rule shared by both cells, and the browser puts half of it in each. Word
+    // 16.86 truth PDF, corpus R280-D15 p4: a third-level nested cell of 473
+    // twips, left nil beside a cell whose right line is 0.5pt single, sets
+    // "IZV." (12.80pt) and "552" on one line between rules 23.76pt apart;
+    // charged only for its right line, its text box was 16.6px for the 17.1 it
+    // needs and both were cut in two (so were "INDEKS", "IZVOR", "112.384.899,60").
+    const sharedLine = (side: "left" | "right"): DocumentTableBorderLine | undefined => {
+      const opposite = side === "left" ? "right" : "left";
+      const across = adjacentCellsForEdge(cell, cells, side).map((neighbour) =>
+        renderableCellEdges(table, neighbour, dimensions, cells, styleLayers)[opposite]);
+      const first = across[0];
+      return first && first !== MIXED_EDGE_DELEGATE && across.every((line) => line && sameBorderLine(line, first))
+        ? first : undefined;
+    };
     for (const side of ["left", "right"] as const) {
       const margin = direct?.[side] ?? inherited?.[side];
-      const line = effective[side];
+      const own = effective[side];
+      const line = own === undefined || (own !== MIXED_EDGE_DELEGATE && cssLineStyle(own.style) === "none")
+        ? sharedLine(side) : own;
       if (margin === undefined || !line || line === MIXED_EDGE_DELEGATE || isWordHairline(line) ||
           cssLineStyle(line.style) === "none") continue;
       const used = nativeBorderUsedWidth(borderCss(line));
@@ -1080,8 +1143,13 @@ function cellDecorationAttributes(
       const used = nativeBorderUsedWidth(borderCss(line));
       return used === null ? 0 : Math.max(0, used - ptToPx(line.sizePt));
     };
-    const excess = (lineExcess(effective.top) + lineExcess(effective.bottom)) / 2;
-    if (excess > 0.001 && excess < 1) {
+    const rowExcess = (lineExcess(effective.top) + lineExcess(effective.bottom)) / 2;
+    // Off (the default) this is exactly the row's own give-back, as before.
+    const outerExcess = rowExcess < 1 && cell.row2 === dimensions.rows - 1 && tableOuterRuleExcessOn()
+      ? tableOuterRuleExcessPx(table, cell, dimensions, cells, styleLayers, effective.bottom, lineExcess)
+      : 0;
+    const excess = rowExcess + outerExcess;
+    if (excess > 0.001 && excess < (outerExcess > 0 ? 1.5 : 1)) {
       wordRuleExcess = Number(excess.toFixed(3));
       style.push(`--doc-cell-rule-excess:${wordRuleExcess}px`);
     }
@@ -1142,12 +1210,51 @@ export const documentTableBorderPluginKey =
  * style again (no document change, no history step). */
 const OFFICE_TABLE_STYLES_ARRIVED_META = "documentTableBorders:officeTableStyles";
 
+/** One node decoration of a table, its range from the table's own start. */
+type TableDecorationItem = readonly [from: number, to: number, attrs: Record<string, string>, spec?: Record<string, unknown>];
+
+
+
+
+
+
+
+
+
+const tableDecorationMemo = new WeakMap<ProseMirrorNode, { key: string; items: readonly TableDecorationItem[]; descend: boolean }>();
+const docAttrsIds = new WeakMap<object, number>();
+let nextDocAttrsId = 1;
+/** The document attributes a table's look reads (its style catalogue,
+ * definitions, theme), by identity: a document copied for a step keeps them. */
+function docAttrsId(doc: ProseMirrorNode): number {
+  const attrs = doc.attrs as object;
+  let id = docAttrsIds.get(attrs);
+  if (id === undefined) {
+    id = nextDocAttrsId++;
+    docAttrsIds.set(attrs, id);
+  }
+  return id;
+}
+
+/** Harness switch (`window.__docsCellPaddingOwnedOff = true`): the cell view
+ * syncs its own side padding over the border decoration's (A/B). */
+function cellPaddingOwnedOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCellPaddingOwnedOff?: boolean }).__docsCellPaddingOwnedOff === true;
+}
+
+/** `window.__docsTableBorderMemo = false` draws every table again each time (A/B). */
+function tableBorderMemoOn(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsTableBorderMemo?: boolean }).__docsTableBorderMemo !== false;
+}
+
 function tableBorderDecorations(
   doc: ProseMirrorNode,
   gridlines: boolean,
   preview: DocumentTableStylePreview | null,
 ): DecorationSet {
   const decorations: Decoration[] = [];
+  const memoOn = tableBorderMemoOn();
+  const lookKey = `${docAttrsId(doc)}|${gridlines ? 1 : 0}|${officeDataVersion("word-table-styles")}`;
   // A table the pages cut is one table: its style's row bands, first and
   
   // continuation restarted the bands, so a row's colour followed the page).
@@ -1179,17 +1286,33 @@ function tableBorderDecorations(
     if (node.type.name !== "table") return true;
     const nestedInWordTable = pos < wordTableEnd && !isWordTable(node);
     if (isWordTable(node)) wordTableEnd = Math.max(wordTableEnd, pos + node.nodeSize);
+    const fragmentId = node.attrs?.[TABLE_FRAGMENT_ID_ATTR];
+    const fragmentRows = typeof fragmentId === "string" && fragmentId ? logicalRows.get(fragmentId) ?? 0 : 0;
+    // A table the style preview paints is drawn fresh, and not kept.
+    const key = memoOn && preview?.tablePos !== pos ? `${lookKey}|${nestedInWordTable ? 1 : 0}|${fragmentRows}` : null;
+    const kept = key === null ? undefined : tableDecorationMemo.get(node);
+    if (kept && kept.key === key) {
+      for (const [from, to, attrs, spec] of kept.items) decorations.push(Decoration.node(pos + from, pos + to, attrs, spec));
+      // Go on into the cells all the same: a table nested in one is a table of its own.
+      return kept.descend;
+    }
+    const items: TableDecorationItem[] = [];
+    const add = (from: number, to: number, attrs: Record<string, string>, spec?: Record<string, unknown>) => {
+      items.push(spec ? [from - pos, to - pos, attrs, spec] : [from - pos, to - pos, attrs]);
+      decorations.push(Decoration.node(from, to, attrs, spec));
+    };
     const tableAttrs: Record<string, string> = {
       ...tableBordersAttributes(node.attrs.tableBorders),
       ...(node.attrs.borderless === true ? { "data-borderless": "true" } : {}),
     };
     if (Object.keys(tableAttrs).length > 0) {
-      decorations.push(Decoration.node(pos, pos + node.nodeSize, tableAttrs));
+      add(pos, pos + node.nodeSize, tableAttrs);
     }
     let map: TableMap;
     try {
       map = TableMap.get(node);
     } catch {
+      if (key !== null) tableDecorationMemo.set(node, { key, items, descend: false });
       return false;
     }
     const cells = tableCells(node, pos);
@@ -1205,8 +1328,7 @@ function tableBorderDecorations(
       : null;
     const styleLayers = new Map<number, DocumentTableStyleVisualLayer>();
     if (visual && state) {
-      const fragmentId = node.attrs?.[TABLE_FRAGMENT_ID_ATTR];
-      const rows = (typeof fragmentId === "string" && logicalRows.get(fragmentId)) || map.height;
+      const rows = fragmentRows || map.height;
       const sourceRow = (local: number): number => logicalTableRow(node, local);
       for (const cell of cells) {
         const layer = resolveDocumentTableStyleCellVisual(visual, state.look, {
@@ -1227,9 +1349,9 @@ function tableBorderDecorations(
     const nativeGrid = nativeGridBorderProfile(
       node, { rows: map.height, cols: map.width }, cells, styleLayers,
     );
-    if (nativeGrid) decorations.push(Decoration.node(pos, pos + node.nodeSize, {
+    if (nativeGrid) add(pos, pos + node.nodeSize, {
       "data-native-grid-border-box": nativeGrid.css,
-    }));
+    });
     for (const cell of cells) {
       const attrs = cellDecorationAttributes(
         node,
@@ -1243,16 +1365,28 @@ function tableBorderDecorations(
         nestedInWordTable,
       );
       if (attrs) {
-        decorations.push(
-          Decoration.node(cell.pos, cell.pos + cell.node.nodeSize, attrs, {
-            nativeGridPadding: attrs["data-native-grid-cell-padding"] ?? null,
-          }),
-        );
+        // The side padding a Word cell gives back for the half line the
+        // browser draws inside it (cellDecorationAttributes) is this
+        // decoration's: the cell view leaves it to it when it syncs the cell's
+        // own styles. Off the native grid it wrote the cell's own margins back
+        // on the cell's first update, and the text box lost the line's half
+        // again (corpus R351-D12, a table in a content control: "Slice
+        // thickness (mm)" on four lines for Word's three, 40.27pt of 41).
+        // `window.__docsCellPaddingOwnedOff = true`: as before (A/B).
+        const owned = attrs["data-native-grid-cell-padding"] === undefined && !cellPaddingOwnedOff()
+          ? (attrs.style ?? "").split(";").map((declaration) => declaration.split(":")[0]!.trim())
+            .filter((name) => name === "padding-left" || name === "padding-right")
+          : [];
+        add(cell.pos, cell.pos + cell.node.nodeSize, attrs, {
+          nativeGridPadding: attrs["data-native-grid-cell-padding"] ?? null,
+          ...(owned.length > 0 ? { [TABLE_CELL_DECORATION_STYLE_PROPERTIES]: owned } : {}),
+        });
       }
     }
-    decorations.push(...atLeastRowRuleDecorations(
+    for (const [from, to, attrs] of atLeastRowRuleDecorations(
       node, pos, { rows: map.height, cols: map.width }, cells, styleLayers,
-    ));
+    )) add(from, to, attrs);
+    if (key !== null) tableDecorationMemo.set(node, { key, items, descend: true });
     // Go on into the cells: a table nested in one is a table of its own, with
     
     return true;
@@ -1270,6 +1404,22 @@ function tableBorderDecorations(
  * HTML table counts the line inside the row's height, so each such row is
  * given the line's width on top of it. A row the paginator split keeps its
  * pieces' own heights; a row with no stated height already grows by its line.
+ *
+ * Its height is also the cells' text area: Word adds the row's largest top
+ * and bottom cell margins to it (Word 16 probe rowh: a 720-twip row of
+ * 288-twip margins stands 65.3pt, of 113/142 49.2pt; corpus R280-D19's
+ * form, rows 1008-1202 twips tall, each 13.3pt taller than our CSS height,
+ * which counts the cells' padding inside it). An "Exactly" row is its height
+ * and the bottom margin alone (the same probe: 720 twips over 288-twip
+ * margins 50.4pt, over a 288-twip top margin alone 36.0pt).
+ *
+ * The rest of an "At least" row the paginator split (the piece on the next
+ * page) is that height again, its margins and line on top: Windows Word lays
+ * the one line left of a 280-twip row of 100-twip margins 24.5pt tall (20.3
+ * without the height), 18pt -> 28.5, 20pt -> 30.5, in compatibility modes 14
+ * and 15 alike (docx-look tables/probes/rest r1/q1-q9; corpus R417-D03 page
+ * 10, the "Machinery" header's "ID" 24.6pt where we drew 19.8). The head
+ * keeps its own height (it stands to its page's foot).
  */
 function atLeastRowRuleDecorations(
   table: ProseMirrorNode,
@@ -1277,19 +1427,20 @@ function atLeastRowRuleDecorations(
   dimensions: { rows: number; cols: number },
   cells: readonly TableCellGeometry[],
   styleLayers: ReadonlyMap<number, DocumentTableStyleVisualLayer>,
-): Decoration[] {
-  const heights: Array<{ index: number; pos: number; size: number; px: number }> = [];
+): TableDecorationItem[] {
+  const heights: Array<{ index: number; pos: number; size: number; px: number; exact: boolean }> = [];
   let rowPos = tablePos + 1;
   table.forEach((row, _offset, index) => {
     const attrs = row.attrs ?? {};
+    const heightRule = normalizeTableRowHeightRule(attrs.rowHeightRule);
     if (
-      normalizeTableRowHeightRule(attrs.rowHeightRule) === "atLeast" &&
+      heightRule !== null &&
       attrs[TABLE_ROW_CONTINUES_ATTR] !== true &&
-      attrs[TABLE_ROW_CONTINUATION_ATTR] !== true
+      (attrs[TABLE_ROW_CONTINUATION_ATTR] !== true || (heightRule === "atLeast" && !splitRestFloorPadOff()))
     ) {
       const twips = normalizeTableRowHeightTwips(attrs.rowHeightTwips);
       const px = twips !== null ? twips / 15 : normalizeTableRowHeight(attrs.rowHeight);
-      if (px !== null) heights.push({ index, pos: rowPos, size: row.nodeSize, px });
+      if (px !== null) heights.push({ index, pos: rowPos, size: row.nodeSize, px, exact: heightRule === "exact" });
     }
     rowPos += row.nodeSize;
   });
@@ -1300,8 +1451,16 @@ function atLeastRowRuleDecorations(
     return line.style === "double" ? wordDoubleBorderWidthPx(widthPx) : widthPx;
   };
   const rule = new Map<number, number>();
+  const tableMargins = tableDefaultCellMargins(table.attrs);
+  const marginTop = new Map<number, number>();
+  const marginBottom = new Map<number, number>();
   for (const cell of cells) {
     if (isGridFillerCell(cell.node)) continue;
+    const own = normalizeCellMargins(cell.node.attrs.cellMargin);
+    const top = own?.top ?? tableMargins?.top ?? 0;
+    const bottom = own?.bottom ?? tableMargins?.bottom ?? 0;
+    marginTop.set(cell.row1, Math.max(marginTop.get(cell.row1) ?? 0, top));
+    marginBottom.set(cell.row2, Math.max(marginBottom.get(cell.row2) ?? 0, bottom));
     const edges = renderableCellEdges(table, cell, dimensions, cells, styleLayers);
     rule.set(cell.row1, Math.max(rule.get(cell.row1) ?? 0, drawnWidthPx(edges.top)));
     // The line between two rows is one line, whichever cell states it: a
@@ -1313,14 +1472,22 @@ function atLeastRowRuleDecorations(
       rule.set(cell.row2 + 1, Math.max(rule.get(cell.row2 + 1) ?? 0, drawnWidthPx(edges.bottom)));
     }
   }
-  return heights.flatMap(({ index, pos, size, px }) => {
-    const extra = rule.get(index) ?? 0;
+  return heights.flatMap(({ index, pos, size, px, exact }): TableDecorationItem[] => {
+    const extra = exact
+      ? marginBottom.get(index) ?? 0
+      : (rule.get(index) ?? 0) + (marginTop.get(index) ?? 0) + (marginBottom.get(index) ?? 0);
     if (extra <= 0) return [];
-    return [Decoration.node(pos, pos + size, {
+    return [[pos, pos + size, {
       style: `height:${Math.round((px + extra) * 1000) / 1000}px`,
       "data-row-height-rule-extra": String(Math.round(extra * 1000) / 1000),
-    })];
+    }]];
   });
+}
+
+/** Harness switch (`window.__docsSplitRestFloorPadOff = true`): the rest of
+ * a split "At least" row is its height with its margins inside it (A/B). */
+function splitRestFloorPadOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsSplitRestFloorPadOff?: boolean }).__docsSplitRestFloorPadOff === true;
 }
 
 export function createDocumentTableBorderPlugin(): Plugin<TableBorderPluginState> {

@@ -252,7 +252,12 @@ export function presentationBlockWithTextPaintIn(
         textPaint: paint ?? undefined,
         // The paint owns the glyphs' fill and outline now (`a:rPr`'s fill
         // group and `a:ln` are the paint's), as the import reads them.
-        ...(paint ? { color: undefined, textOutline: undefined } : {}),
+        ...(paint
+          ? {
+            color: undefined, textOutline: undefined, textOutlineWidthPt: undefined, textOutlineJoin: undefined,
+            textOutlineMiterLimit: undefined, textOutlineCap: undefined, textOutlineDash: undefined,
+          }
+          : {}),
       };
     },
   );

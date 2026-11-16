@@ -33,7 +33,7 @@ import {
   MAX_EXACT_LINE_SPACING_PT,
   MAX_PARAGRAPH_SPACING_PT,
 } from "./presentation-line-spacing";
-import type { ParagraphAlign } from "./presentation-paragraphs";
+import type { ParagraphAlign, PresentationFontAlign } from "./presentation-paragraphs";
 import type { PresentationParagraphFormatPatch } from "./presentation-text-buttons";
 
 export const PRESENTATION_LINE_SPACING_MENU = [1, 1.5, 2, 2.5, 3] as const;
@@ -56,6 +56,12 @@ export interface PresentationParagraphDialogSource {
    */
   readonly marL?: number;
   readonly indent?: number;
+  /**
+   * Asian Typography > Text alignment of the selected rows: each row's own
+   * `fontAlgn`, else what its level inherits, else Auto; "mixed" where they
+   * differ. Absent where the target has no rows to state it (objects).
+   */
+  readonly fontAlign?: PresentationFontAlign | "mixed";
 }
 
 export type PresentationSpecialIndent = "none" | "firstLine" | "hanging";
@@ -69,6 +75,8 @@ export interface PresentationParagraphDialogDraft {
   beforeText: string;
   special: PresentationSpecialIndent;
   specialBy: string;
+  /** Asian Typography > Text alignment; "" where the rows differ. */
+  fontAlign: PresentationFontAlign | "";
   /** The locale's unit the lengths above are typed in. */
   readonly unit?: PresentationMeasurementUnit;
 }
@@ -116,6 +124,7 @@ export function presentationParagraphDialogDraft(
     beforeText: formatPresentationMeasurement(source.marL ?? 0, unit),
     special: indent === 0 ? "none" : indent > 0 ? "firstLine" : "hanging",
     specialBy: indent === 0 ? "" : formatPresentationMeasurement(Math.abs(indent), unit),
+    fontAlign: source.fontAlign === "mixed" ? "" : (source.fontAlign ?? "auto"),
     unit,
   };
 }
@@ -171,6 +180,8 @@ export interface PresentationParagraphDialogResult {
   readonly exactPoints?: number;
   /** Before text / Special / By, only where the person changed them. */
   readonly indentation?: PresentationParagraphIndentChange;
+  /** Asian Typography > Text alignment, written as each selected row's own `fontAlgn`. */
+  readonly fontAlign?: PresentationFontAlign;
 }
 
 function parseNumber(raw: string): number | null {
@@ -244,5 +255,6 @@ export function presentationParagraphDialogResult(
     patch,
     ...(exactPoints === undefined ? {} : { exactPoints }),
     ...(indentation === undefined ? {} : { indentation }),
+    ...(touched.has("fontAlign") && draft.fontAlign ? { fontAlign: draft.fontAlign } : {}),
   };
 }

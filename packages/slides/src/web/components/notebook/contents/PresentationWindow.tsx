@@ -5,6 +5,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
+import { listLevelGreyedForSmartArtShape } from "../../../lib/presentation-smartart-shape-selection";
 import { createInkPenDynamics, type InkPenDynamics } from "@mrnote/core/web/lib/office-ink-pen-dynamics.ts";
 import { inkPenGestures } from "@mrnote/core/web/lib/office-ink-pen-gestures.ts";
 import {
@@ -13,6 +15,7 @@ import {
   type PresentationSmartArtHostTheme,
 } from "../../../lib/presentation-smartart-theme";
 import { pxToPtRounded } from "@mrnote/core/web/lib/office-units.ts";
+import { officeCaretFontScale, setOfficeCaretFontScale } from "@mrnote/core/web/lib/office-painted-caret.ts";
 import { POINT_TEXT_UNIT, presentationFontSizeUnit } from "@mrnote/core/web/lib/presentation/text-units-block.ts";
 import { lineWeightDesignPxToPoints, lineWeightPointsToDesignPx, pointsToDesignPx } from "@mrnote/core/web/lib/presentation/text-units.ts";
 import { useInkArmedFocusRelease } from "@mrnote/ink/web/lib/ink-armed-focus.ts";
@@ -31,6 +34,7 @@ import {
 import { officeStrokeDash } from "@mrnote/core/web/lib/office-stroke-dash.ts";
 import { OFFICE_TEXT_EFFECT_KINDS, officeTextPaintOfficeEffects, withOfficeTextEffect } from "@mrnote/core/web/lib/office-text-effects.ts";
 import { stepOfficeFontSize } from "@mrnote/core/web/components/office-ribbon/officeFontSizeCatalog.ts";
+import { useOfficePatternAnchor } from "@mrnote/core/web/components/office-pattern/useOfficePatternAnchor.ts";
 import { officeAutosaveLabels } from "@mrnote/core/web/lib/office-autosave-preference.ts";
 import {
   chartWithDataLabelOverride,
@@ -92,7 +96,7 @@ import {
   officeLineWeightPxAsPointText,
   officeLineWeightSteppedPx,
 } from "@mrnote/core/web/lib/office-line-weight.ts";
-import { nativeSmartArtConversionAtDrawnBoxes, nativeSmartArtConversionLikeness, nativeSmartArtConversionLooksLikeDrawing, nativeSmartArtConvertsFromOwnDefinition, readNativeSmartArtGroup, readNativeSmartArtView, updateNativeSmartArtText, type NativeSmartArtView } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
+import { nativeSmartArtConversionAtDrawnBoxes, nativeSmartArtConversionLikeness, nativeSmartArtConversionLooksLikeDrawing, nativeSmartArtConvertedShapeAt, nativeSmartArtConvertedShapeOf, nativeSmartArtConvertsFromOwnDefinition, nativeSmartArtConversionIdPrefix, nativeSmartArtDrawingAbsent, nativeSmartArtWordsOntoConversion, smartArtAnswerWithWords, isNativeSmartArtMember, readNativeSmartArtGroup, readNativeSmartArtView, updateNativeSmartArtText, type NativeSmartArtView } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
 import { registerSmartArtDefinitionPage } from "@mrnote/core/web/lib/office-smartart/layout-definition-client.ts";
 import { reportOfficeExperience } from "@mrnote/core/web/lib/office-experience-report.ts";
 import { SMARTART_OWN_DEFINITION_LIKENESS_LIMIT } from "@mrnote/core/web/lib/office-smartart/drawing-likeness.ts";
@@ -236,7 +240,7 @@ import {
 } from "react";
 import { lazyNamed, preloadWhenIdle } from "@mrnote/core/web/lib/lazy-preload.ts";
 import { skipDevOwnerStacksForThisRender } from "@mrnote/core/web/lib/react/dev-owner-stacks.ts";
-import { inputIsLetterInPlace } from "./presentation/usePresentationRichTypingKey";
+import { inputIsLetterInPlace, PRESENTATION_HOST_RETYPE_EVENT } from "./presentation/usePresentationRichTypingKey";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "@mrnote/core/web/styles/note-editor.css";
@@ -340,9 +344,10 @@ import type { OfficeFontFace } from "@mrnote/core/web/components/office-ribbon/o
 import { captureSavedPageHotCacheScope, isSavedPageHotCacheScopeCurrent } from "@mrnote/core/web/lib/saved-page-hot-cache.ts";
 import { mergePresentationFontFace, normalizePresentationFontFaces,
   presentationFontFacesForPersist, presentationFontResolutionSavedMatches, readPresentationFontCanonicalSave, requestPresentationFontResolutionPlan,
-  readPresentationLayoutUpdateState, presentationFontRefreshedSnapshot } from "@mrnote/core/web/lib/presentation-font-faces.ts";
+  readPresentationLayoutUpdateState, presentationFontRefreshedSnapshot, presentationServedBodyFontStyle } from "@mrnote/core/web/lib/presentation-font-faces.ts";
 import { readPresentationSettledSave } from "../../../lib/presentation-settled-save";
 import { PresentationFontAliasesContext, usePresentationFontFaces } from "./presentation/usePresentationFontFaces";
+import { announceFirstSlidePainted } from "../../../lib/presentation/first-slide-painted";
 import { PresentationAutofitMeasurer } from "./presentation/PresentationAutofitMeasurer";
 const PresentationVideoExportDialog = lazyNamed(() => import("./presentation/PresentationVideoExportDialog"), "PresentationVideoExportDialog");
 import {
@@ -406,6 +411,10 @@ import "./presentation/PresentationMediaFadeFields";
 import { PresentationSmartArtFormatTab } from "./presentation/PresentationSmartArtFormatTab";
 import {
   presentationSmartArtBlocksWithNodePatch,
+  presentationSmartArtBlocksWithNodePatches,
+  presentationSmartArtBlocksWithShapeEffect,
+  presentationSmartArtShapeEffects,
+  presentationSmartArtStyleEffects,
   presentationSmartArtBlocksWithStyle,
   presentationSmartArtBlocksWithTextFill,
   presentationSmartArtBlocksWithTextPaint,
@@ -511,6 +520,7 @@ import { OfficePictureEffectsMenu } from "@mrnote/core/web/components/office-rib
 import { OfficeOutlineMenuContent } from "@mrnote/core/web/components/office-ribbon/OfficeOutlineMenuContent.tsx";
 import { OFFICE_GLOW_ACCENTS, OFFICE_GLOW_SIZES_PT, officeGlowVariation } from "@mrnote/core/web/lib/office-picture-effects.ts";
 import { effectPlayDurationMs } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
+import { readPresentationEmbeddedFontsAnswer } from "../../../lib/presentation-embedded-fonts";
 import type {
   OfficeBevelPreset,
   OfficePictureEffectKind,
@@ -522,7 +532,13 @@ import {
   presentationPictureEffectsBlocker,
   presentationPictureStyleEffects,
 } from "../../../lib/presentation-picture-effects";
-import { blocksWithShapeEffect, presentationShapeEffects } from "../../../lib/presentation-shape-effects";
+import {
+  blocksWithShapeEffect,
+  presentationShapeEffects,
+  presentationTextFrameWithEffectsPatch,
+} from "../../../lib/presentation-shape-effects";
+import type { PresentationShapeEffectsPanePatch } from "./presentation/presentationShapeEffectsPane";
+import type { OfficeGroupCameraControl } from "@mrnote/core/web/lib/office-group-camera.ts";
 import { presentationEffectsMenuLabels } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEffectsLabels.ts";
 import {
   canApplyNativePictureStyle,
@@ -718,7 +734,6 @@ import {
   smartArtOutlineAfterTextEdit,
   SMARTART_NO_OUTLINE_COMMANDS,
   SMARTART_SHAPE_SIZE_STEP,
-  resizeSmartArtItem,
   smartArtOutlineAfterInsert,
   smartArtOutlineAfterMove,
   smartArtOutlineCommandState,
@@ -802,6 +817,7 @@ import {
 } from "@mrnote/core/web/lib/office-theme-color-grid.ts";
 import {
   presentationThemeGridColors,
+  presentationThemeMarkedCustom,
   presentationThemeSlotPicks,
   reconcilePresentationBlocksThemeColors,
   presentationBlocksWithPickedThemeColors,
@@ -878,6 +894,10 @@ import {
   OfficeSelectionPaneList,
   OfficeSelectionPaneRow,
 } from "@mrnote/core/web/components/office-ribbon/OfficeSelectionPaneList.tsx";
+import {
+  planSelectionPaneReorder,
+  type OfficeSelectionPaneMove,
+} from "@mrnote/core/web/components/office-ribbon/officeSelectionPaneReorder.ts";
 import "@mrnote/core/web/components/office-ribbon/OfficeInsertGallery.module.css";
 import {
   ribbonFontFamilyLabel,
@@ -985,6 +1005,7 @@ import {
   type PresentationViewAidKind,
 } from "@mrnote/core/web/lib/presentation-feature-capabilities.ts";
 import { parseSlideOutline } from "../../../lib/presentation-outline";
+import { presentationListLevelRestyle } from "@mrnote/core/web/lib/presentation-level-styles.ts";
 import { slidesFromOutline } from "../../../lib/presentation-outline-slides";
 import {
   NUMBER_FORMATS,
@@ -993,6 +1014,7 @@ import {
   adjustParagraphLevelAt,
   dropNativeParagraphReceipts,
   materializeNativeBulletReceipt,
+  normalizeBlockBulletChar,
   normalizeBulletChar,
   normalizeNumberFormat,
   normalizeParagraphs,
@@ -1199,6 +1221,11 @@ import {
   type PresentationSlideShowType,
 } from "@mrnote/core/web/lib/presentation/rehearse-timings.ts";
 import {
+  rehearsedClickDelaysMs,
+  slideGroupBuildsMs,
+  timedClickPlan,
+} from "../../../lib/presentation/slide-click-schedule";
+import {
   addPresentationCustomShow,
   copyPresentationCustomShow,
   deletePresentationCustomShow,
@@ -1302,6 +1329,7 @@ import {
   handoutExportLayoutForSlidesPerPage,
   handoutLayoutForSlidesPerPage,
   normalizePresentationPrintSettings,
+  printHiddenSlidesAnswer,
   resolvePresentationPrintSettings,
   type PresentationPrintSettings,
 } from "@mrnote/core/web/lib/presentation-print-settings.ts";
@@ -1609,7 +1637,6 @@ import {
   createPresentationPictureAltTextCommandAdapter,
   createPresentationPictureArrangeCommandAdapter,
   applyPresentationNativeObjectOrder,
-  applyPresentationNativeOrderCommand,
   applyPresentationNativeSelectionPaneOrderStep,
   createPresentationPictureBorderCommandAdapter,
   createPresentationPictureColorCommandAdapter,
@@ -1899,6 +1926,7 @@ import {
   slideDrawnAsSlide,
   isImportedPptxBlock,
   presentationImportedOrderChanged,
+  presentationNativeRestack,
   isPresentationCameoBlock,
   quarterTurnBlocks,
   resolvePresentationAltTextPaneTarget,
@@ -1978,6 +2006,7 @@ import {
   textBlockWithListToggle,
   textBlockWithParagraphFormat,
   textBlockWithExactLineSpacing,
+  textBlockWithParagraphFontAlign,
   textBlockWithParagraphIndent,
   textBlockWithListRows,
   paragraphDialogSelectionExtras,
@@ -2011,18 +2040,20 @@ import {
 import {
   caretSplice,
   carryKeystrokeToLive,
-  cellKeystrokeSplice,
+  cellKeystrokeEdit,
   deliveredAnchoredCaret,
   deliveredBlockTextDelta,
   keyAtDeliveredCaret,
   focusedTableCellField,
   focusedRichPreviewCaret,
+  focusedWordsCaret,
   keystrokeSplice,
   mapTextRangeThroughChange,
   recordUnrenderedTextChange,
   slideBlockTextPath,
   tableCellTextPath,
   textContainerOf,
+  type KeystrokeRead,
   type UnrenderedTextChanges,
 } from "../../../lib/presentation/collab-caret";
 import { holdRemoteCaret } from "../../../lib/presentation/remote-caret-hold";
@@ -2043,6 +2074,7 @@ import {
   smartArtResetPlan,
   smartArtRestylePlan,
   withPresentationSmartArtAlt,
+  smartArtResizePlan,
   type SmartArtRebuildPlan,
 } from "../../../lib/presentation-smartart-buttons";
 import {
@@ -2158,7 +2190,8 @@ import {
   presentationTextFitFrame,
   textFitAlign,
   type TextFitAnchor,
-} from "../../../lib/presentation-text-fit";
+} from "@mrnote/core/web/lib/presentation-text-fit.ts";
+import { presentationTextFrameChangeShapeIsNoop } from "@mrnote/core/web/lib/presentation-change-shape-fit.ts";
 import {
   addComment,
   addReply,
@@ -2209,7 +2242,6 @@ import {
   defaultPresentationTheme,
   presentationThemeDefaultShapeStyle,
   resolveOfficeThemeDesign,
-  markThemeSelectionCustom,
   normalizeTheme,
   normalizeThemeFontFamily,
   customizedThemeFontScheme,
@@ -2224,6 +2256,7 @@ import {
   resolveTitleTextStyle,
   presentationHyperlinkStyle,
   presentationBodyFontStyle,
+  presentationEffectGalleryValue,
   type DeckTheme,
   type PresentationThemeVariantId,
 } from "@mrnote/core/web/lib/presentation-theme.ts";
@@ -2313,6 +2346,7 @@ import {
   resolveSlideNativeLayout,
   resolveSlideMaster,
   mergeMasterTheme,
+  mastersTakingThemePick,
   presentationSlideChartBodyFont,
   type SlideMaster,
   type SlideMasterLayout,
@@ -2324,6 +2358,7 @@ import {
 import {
   presentationFirstStatedPlace,
   presentationInPaintOrder,
+  presentationBlockOverFooterFieldsZIndex,
   withFooterFieldStacking,
   presentationListIndexForPlace,
   presentationSlideReordersNativeObjects,
@@ -2517,6 +2552,7 @@ import {
   adjustCropEdge,
   panCropRect,
   blockGroupId,
+  blockGroupPath,
   IDENTITY_CROP,
   expandSelectionForGroup,
   isIdentityCrop,
@@ -2689,6 +2725,7 @@ import { usePageLocate } from "@mrnote/core/web/hooks/usePageLocate.ts";
 import {
   PAGE_LOCATE_SNIPPET_PREFIX,
   revealLocatedElement,
+  tableRangeCells,
   type PageLocateRequest,
 } from "@mrnote/core/web/lib/page-locate.ts";
 import {
@@ -2739,6 +2776,8 @@ import {
 import {
   persistPreparedSlideAs,
   preparedAfterCommit,
+  preparedOverDelivery,
+  servedSmartArtMembersLive,
   slidesToPersist,
   type PreparedSmartArt,
 } from "../../../lib/presentation-smartart-prepared";
@@ -2779,6 +2818,7 @@ import {
   type PresentationFontSizeUnit,
 } from "../../../lib/presentation/text-layout-css";
 import { presentationSmartArtMembersAsShapes } from "../../../lib/presentation-smartart-shapes";
+import { outlineWithStoredRunColours } from "@mrnote/core/web/lib/office-smartart/stored-run-colours.ts";
 import {
   PresentationSlideNumberContext,
 } from "./presentation/PresentationRunsText";
@@ -2793,6 +2833,10 @@ import {
   presentationPreviewPlainText,
   presentationPreviewDomPoint,
   presentationPreviewOffsetAtPoint,
+  presentationTurnedPreviewOffsetAtPoint,
+  presentationPreviewNearestOffset,
+  presentationDoubleClickWord,
+  presentationClickedWord,
   setPresentationPreviewSelection,
   type EffectiveFontFamilyState,
 } from "@mrnote/core/web/lib/presentation/text-selection.ts";
@@ -2826,7 +2870,6 @@ import {
 } from "./presentation/PresentationCameo";
 import {
   PRESENTATION_VIEW_ZOOM_BOUNDS,
-  PRESENTATION_FIT_VIEWPORT_INSET_PX,
   PRESENTATION_ZOOM_DIALOG_PRESETS,
   PRESENTATION_ZOOM_KEYBOARD_STEP_PERCENT,
   PRESENTATION_ZOOM_KEYBOARD_PAGE_PERCENT,
@@ -2835,6 +2878,7 @@ import {
   presentationZoomPercentFromPosition,
   presentationCanvasScrollsToward,
   presentationFitZoom,
+  presentationFitViewportInset,
   presentationSteppedZoom,
   presentationZoomAnchoredScroll,
   PRESENTATION_RULER_BAND_PX,
@@ -2902,6 +2946,11 @@ import {
   type PresentationSmartArtGroup,
 } from "../../../lib/presentation/selection-geometry";
 import {
+  emptySlideStubFrame,
+  isFramelessImportedText,
+  slidesWithFramedStubWords,
+} from "../../../lib/presentation/empty-slide-stub";
+import {
   cssEscapeAttr,
   PRESENTATION_MINI_TOOLBAR_CELL_HOST,
   presentationTextEditingHost,
@@ -2951,6 +3000,12 @@ import {
   SlideSizeFitChoiceDialog,
   PresentationPrintSettingsDialog,
 } from "./presentation/PresentationSlideSizeDialogs";
+import {
+  DEFAULT_PRESENTATION_PDF_OPTIONS,
+  PresentationPdfOptionsDialog,
+  presentationPdfExportLayout,
+  type PresentationPdfOptions,
+} from "./presentation/PresentationPdfOptionsDialog";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "./presentation/PresentationChartVisual";
 // Kept for stylesheet order only (its named imports moved out of this file).
@@ -3070,6 +3125,13 @@ import { PresentationSmartArtObjectContextMenu } from "./presentation/Presentati
 import { PresentationSlideRailMenuContent } from "./presentation/PresentationSlideRailMenuContent";
 import { PresentationThemePropertiesPanel } from "./presentation/PresentationThemePropertiesPanel";
 import { PresentationThumbnailRail } from "./presentation/PresentationThumbnailRail";
+import {
+  PresentationNormalViewSplitters,
+  readPresentationCommentsPaneOpen,
+  usePresentationCommentsDock,
+  usePresentationNormalViewPanes,
+  writePresentationCommentsPaneOpen,
+} from "./presentation/PresentationNormalViewPanes";
 import { PresentationCanvasTextBlock } from "./presentation/PresentationCanvasTextBlock";
 import { PresentationCanvasEmbedBlock } from "./presentation/PresentationCanvasEmbedBlock";
 import { PresentationCanvasShapeBlock } from "./presentation/PresentationCanvasShapeBlock";
@@ -3084,6 +3146,7 @@ import {
   reauthLoginUrl,
   useDeckSaveResilience,
 } from "./presentation/useDeckSaveResilience";
+import { registerUnsavedWorkFlush } from "@mrnote/core/web/lib/unsaved-work-hold.ts";
 import { useDeckRoomsUnsaved } from "../../../lib/presentation/useDeckRoomsUnsaved";
 import { PresentationCanvasImageBlock } from "./presentation/PresentationCanvasImageBlock";
 import { PresentationBlockHandles } from "./presentation/PresentationBlockHandles";
@@ -3104,7 +3167,7 @@ import { PresentationSmartArtGroupFrame } from "./presentation/PresentationSmart
 import { attachRibbonKeysReturn } from "@mrnote/core/web/components/office-ribbon/ribbonKeysReturn.ts";
 import { smartArtMemberDeletedItemId } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import { presentationBlocksWithSmartArtBackground, presentationSmartArtBackgroundsAfterReset, presentationSmartArtBackgroundsCarried } from "../../../lib/presentation/smartart-background";
-import { readSmartArtGraphicEffect, readSmartArtGraphicFormat, sheetSmartArtBackgroundStyle, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
+import { readSmartArtGraphicEffect, readSmartArtGraphicFormat, sheetSmartArtBackgroundStyle, smartArtGraphicEffects, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
 import { PresentationSmartArtGraphicHitLayer, presentationShapeGeometryHitClassName } from "./presentation/PresentationSmartArtGraphicHitArea";
 import {
   PresentationLiveBlockFrame,
@@ -3208,6 +3271,7 @@ import {
 
 import { documentInkPressureOf } from "@mrnote/core/web/lib/document-ink.ts";
 import { cssFontFamilyOrUndefined } from "@mrnote/core/web/lib/css-font-family.ts";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 /** Slide EMU per CSS pixel, the scale ink strokes are drawn and read in. */
 const INK_EMU_PER_CSS_PX = 9_525;
 /** The focused-cell row that stands for every cell of a table selected by its frame. */
@@ -3322,6 +3386,14 @@ type CaretTypingFormat = {
  * already empty: clearing nothing then schedules no render of this window and
  * hands its children no new value (a slide switch clears all of them).
  */
+/** The words a table cell was drawn with on `slide` (the slide on screen). */
+function drawnCellText(slide: SlideModel, blockId: string, rowIndex: number, cellIndex: number): string | undefined {
+  const block = slide.blocks.find((item) => item.id === blockId);
+  if (!block || block.type !== "table") return undefined;
+  const text = (block as PresentationTableBlock).rows[rowIndex]?.[cellIndex]?.text;
+  return typeof text === "string" ? text : undefined;
+}
+
 function emptiedList<T>(current: T[]): T[] {
   return current.length === 0 ? current : [];
 }
@@ -3386,6 +3458,12 @@ interface ServedSmartArtPlan<A> {
   members: readonly PresentationBlock[];
   ask: (signal: AbortSignal) => Promise<A>;
   apply: (blocks: PresentationBlock[], answer: A) => PresentationBlock[] | null;
+  /**
+   * The answer with words another window wrote in the members while it was
+   * on its way (by outline place), so they are not taken back by it; absent,
+   * such a step is planned again instead.
+   */
+  withWords?: (answer: Awaited<A>, words: ReadonlyMap<number, string>) => Awaited<A> | null;
   /** After the commit (selection, the text pane). */
   done?: () => void;
   /**
@@ -3611,6 +3689,8 @@ function smartArtColorThemeOf(
 }
 
 const PRESENTATION_SMARTART_PREPARATIONS = createSmartArtPreparations<PresentationBlock, PresentationBlock[]>();
+/** How long a double click's SmartArt words may take to open, the keys meanwhile theirs (`smartArtWordsOpeningRef`). */
+const SMARTART_WORDS_OPENING_MS = 5000;
 
 /** Words typed on a prepared diagram, written on its preserved members; null if it cannot take them. */
 function nativeSmartArtWithWords(
@@ -3704,6 +3784,9 @@ type DeckLossGatedExportFormat = "pptx" | "odp" | "ppt" | "potx" | "ppsx";
 function isDeckLossGatedExportFormat(format: PageExportFormat): format is DeckLossGatedExportFormat {
   return format === "pptx" || format === "odp" || format === "ppt" || format === "potx" || format === "ppsx";
 }
+
+/** A notes draft left in its box this long is written onto its slide. */
+const NOTES_DRAFT_SETTLE_MS = 800;
 
 export default function PresentationWindow({
   pageId,
@@ -4391,10 +4474,12 @@ export default function PresentationWindow({
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [commandSearchOpen, setCommandSearchOpen] = useState(false);
   const commandSearchTriggerRef = useRef<HTMLButtonElement | null>(null);
-  // The page a command opens Format Shape at (More Rotation Options...).
+  // The page a command opens Format Shape at (More Rotation Options...),
+  // and the section it brings into view (Glow Options...).
   const [formatPaneRequestedTab, setFormatPaneRequestedTab] = useState<{
     readonly id: string;
     readonly serial: number;
+    readonly section?: string;
   } | null>(null);
   const [smartArtTextPaneOpen, setSmartArtTextPaneOpen] = useState(false);
   const [smartArtOutlineSelectionId, setSmartArtOutlineSelectionIdState] =
@@ -4699,6 +4784,11 @@ export default function PresentationWindow({
   }, [customSlideShows]);
   // Print Settings dialog open state (a popover near the export menu).
   const [printSettingsOpen, setPrintSettingsOpen] = useState(false);
+  // Export ▸ PDF Options…: PowerPoint's Save as PDF ▸ Options. Its last
+  // answer is kept for the session, as PowerPoint's Publish dialog keeps it;
+  // null until it is first opened (then seeded from the print layout).
+  const [pdfOptionsOpen, setPdfOptionsOpen] = useState(false);
+  const pdfOptionsRef = useRef<PresentationPdfOptions | null>(null);
   // A single "now" captured when the editor mounts, so an AUTO date field shows
   // the moment the deck was OPENED (PowerPoint's "update automatically") and the
   // overlay doesn't churn / flicker across unrelated re-renders within a session.
@@ -6384,6 +6474,15 @@ export default function PresentationWindow({
    * slides in the editor. */
   const deckPartRoomsRef = useRef<() => ReadonlyMap<number, DocumentPartRoom>>(() => new Map());
   const applyDeckRoomSlidesRef = useRef<(slides: ReadonlyMap<string, SlideModel>) => void>(() => undefined);
+  /** A room's slides arriving over this window's prepared SmartArt conversion,
+   * with the conversion placed again on them (set where the conversion is). */
+  const preparedThroughDeliveryRef = useRef<(before: readonly SlideModel[], delivered: SlideModel[]) => SlideModel[]>(
+    (_before, delivered) => delivered,
+  );
+  /** The words of a prepared conversion's shape being typed in when a room's
+   * delivery arrived over it: the same shape after it (the same id), its caret
+   * given back if the delivery's drawing took the focus. */
+  const landedCaretRef = useRef<{ blockId: string; start: number; end: number; words: string } | null>(null);
   /** Where a keystroke's exact place is noted: the room holding its slide
    * (set with useDeckPageParts further down; the page's room until then). */
   const noteSlideTextEditRef = useRef<(edit: PageCollaborativeTextEdit) => PageTextEditOutcome | void>((edit) =>
@@ -6554,10 +6653,15 @@ export default function PresentationWindow({
     },
     [],
   );
-  // An AI answer's "Locate" for this deck: go to its slide, then flash the
-  // object whose words start the quoted snippet (else the slide).
+  // An AI answer's "Locate" for this deck: go to its slide (by id, else by
+  // place, else the one holding the object or the quoted words), then flash
+  // the cited table cells, else the object (by id, else the one whose words
+  // start the snippet), else the slide.
   const resolvePresentationLocate = useCallback(
-    (_scope: Element, request: PageLocateRequest): HTMLElement | null => {
+    (
+      _scope: Element,
+      request: PageLocateRequest,
+    ): HTMLElement | HTMLElement[] | null => {
       const liveSlides = slidesRef.current;
       const needle = String(request.snippet ?? "")
         .replace(/\s+/g, " ")
@@ -6567,11 +6671,22 @@ export default function PresentationWindow({
       const blockHasNeedle = (block: PresentationBlock) =>
         needle.length > 0 &&
         blockPlainText(block).replace(/\s+/g, " ").includes(needle);
-      let slideIndex =
+      const objectId = request.blockId?.trim() || null;
+      let slideIndex = request.slideId
+        ? liveSlides.findIndex((slide) => slide.id === request.slideId)
+        : -1;
+      if (
+        slideIndex < 0 &&
         typeof request.slideIndex === "number" &&
         request.slideIndex < liveSlides.length
-          ? request.slideIndex
-          : -1;
+      ) {
+        slideIndex = request.slideIndex;
+      }
+      if (slideIndex < 0 && objectId) {
+        slideIndex = liveSlides.findIndex((slide) =>
+          slide.blocks.some((block) => block.id === objectId),
+        );
+      }
       if (slideIndex < 0 && needle) {
         slideIndex = liveSlides.findIndex((slide) =>
           slide.blocks.some(blockHasNeedle),
@@ -6583,7 +6698,18 @@ export default function PresentationWindow({
         activateSlideFromRail(slideIndex);
         return null; // Asked again once the slide is on the canvas.
       }
-      const block = slide.blocks.find(blockHasNeedle);
+      const named =
+        objectId && slide.blocks.some((block) => block.id === objectId)
+          ? objectId
+          : null;
+      if (named && request.table && request.table.blockId === named) {
+        const table = locatedSlideElement(named)?.querySelector<HTMLElement>("table");
+        const cells = table ? tableRangeCells([table], request.table) : [];
+        if (cells.length > 0) return cells;
+      }
+      const block = named
+        ? { id: named }
+        : slide.blocks.find(blockHasNeedle);
       return locatedSlideElement(block?.id);
     },
     [activateSlideFromRail, locatedSlideElement],
@@ -6690,7 +6816,27 @@ export default function PresentationWindow({
         });
       }
     }
-    if (followedRichCaret && previousActiveSlideId) {
+    // The body being typed in was just replaced by the drawing of an earlier
+    // delivery, and the focus went with it (focusout to nothing) before it is
+    // given back: the caret followed is the one that delivery carried.
+    const active = rootRef.current?.ownerDocument.activeElement ?? null;
+    const lostWithBody = !followedCaret && !followedRichCaret && deliveredBodyCaretRef.current !== null &&
+      (active === null || active === rootRef.current?.ownerDocument.body);
+    // Nothing carried yet (the key the room carried is this delivery's own):
+    // the caret the room holds for the object selected, where it stood before.
+    const lostFocus = !followedCaret && !followedRichCaret && (active === null || active === rootRef.current?.ownerDocument.body);
+    const selectedBlock = selectedBlockIdRef.current;
+    const roomCaret = lostFocus && !lostWithBody && previousActiveSlideId && selectedBlock
+      ? detail?.carets?.find((candidate) => candidate.path.join("\u0000") ===
+        slideBlockTextPath(previousActiveSlideId, selectedBlock).join("\u0000")) : undefined;
+    const followedBody = followedRichCaret ?? (lostWithBody && deliveredBodyCaretRef.current ? {
+      blockId: deliveredBodyCaretRef.current.blockId,
+      text: deliveredBodyCaretRef.current.words,
+      range: { start: deliveredBodyCaretRef.current.start, end: deliveredBodyCaretRef.current.end },
+    } : roomCaret && selectedBlock ? {
+      blockId: selectedBlock, text: roomCaret.from.text, range: { start: roomCaret.from.start, end: roomCaret.from.end },
+    } : null);
+    if (followedBody && previousActiveSlideId) {
       // A drawn body (a text box's, or a shape's label) is keyed by its
       // words, so the delivery replaces it; the caret it hands to its
       // replacement is the one carried here, by the room's own change of the
@@ -6699,15 +6845,29 @@ export default function PresentationWindow({
       // before it left it that many characters back, and the next keys went
       
       // this member's own commit is still putting back is the one carried.
-      const { blockId } = followedRichCaret;
+      const { blockId } = followedBody;
       const kind = slidesBeforeDelivery.find((slide) => slide.id === previousActiveSlideId)?.blocks
         .find((candidate) => candidate.id === blockId)?.type;
       const next = wordsOf(loadedSlides, previousActiveSlideId, blockId);
       const pending = kind === "shape" ? pendingShapeRichSelectionRef.current : pendingPreviewCaretRef.current;
       const pendingOwn = pending && pending.blockId === blockId && pending.intent === textSelectionIntentRef.current
         ? wordsOf(slidesBeforeDelivery, previousActiveSlideId, blockId) : null;
-      const before = pendingOwn ?? followedRichCaret.text;
-      const range = pendingOwn !== null && pending ? { start: pending.start, end: pending.end } : followedRichCaret.range;
+      // A caret an earlier delivery carried that the body has not been drawn
+      // with yet (it shows older words, or it went with the focus; and no key,
+      // press or caret key since: each clears it): the
+      // caret is that one, in those words. Read from the body instead, a second
+      // delivery right after a key carried past a collaborator's letters
+      // carried the caret's old place, and the member's next keys all went in
+      
+      const undrawn = deliveredBodyCaretRef.current;
+      const undrawnWords = undrawn?.blockId === blockId ? wordsOf(slidesBeforeDelivery, previousActiveSlideId, blockId) : null;
+      // (A body that shows those words already has its caret where the member
+      // left it: theirs, however it was put there.)
+      const carriedBefore = undrawn && undrawnWords !== null && undrawn.words === undrawnWords && pendingOwn === null &&
+        (!followedRichCaret || followedRichCaret.text !== undrawn.words) ? undrawn : null;
+      const before = carriedBefore?.words ?? pendingOwn ?? followedBody.text;
+      const range = carriedBefore ? { start: carriedBefore.start, end: carriedBefore.end }
+        : pendingOwn !== null && pending ? { start: pending.start, end: pending.end } : followedBody.range;
       const composing = kind === "shape" ? false : composingImportedPreviewRef.current;
       if (next !== null && next !== before && !composing) {
         const carried = deliveredAnchoredCaret(detail, slideBlockTextPath(previousActiveSlideId, blockId), before, range, next) ??
@@ -6715,14 +6875,14 @@ export default function PresentationWindow({
         deliveredBodyCaretRef.current = { blockId, words: next, ...carried };
         if (kind === "shape") {
           // The label's replacement takes it (takeShapeRichSelection).
-          pendingShapeRichSelectionRef.current = { blockId, ...carried, intent: textSelectionIntentRef.current };
+          pendingShapeRichSelectionRef.current = { blockId, ...carried, intent: textSelectionIntentRef.current, words: next };
           textSelectionRef.current = { blockId, ...carried };
         } else {
           followRemoteRichCaretRef.current?.(blockId, carried.start, carried.end);
         }
       }
     }
-    const cell = !followedCaret && !followedRichCaret && previousActiveSlideId && detail?.carets?.length
+    const cell = !followedCaret && !followedBody && previousActiveSlideId && detail?.carets?.length
       ? focusedTableCellField(rootRef.current) : null;
     if (cell && previousActiveSlideId) {
       // A table cell being typed in: its field takes the caret the room
@@ -6785,12 +6945,17 @@ export default function PresentationWindow({
     
     const collaborative = source === "remote" || source === "history";
     const room = collaborative
-      ? repairContentTextLayers(loadedPage.content_json)
+      ? repairContentTextLayers(loadedPage.content_json, slidesRef.current)
       : { content: loadedPage.content_json, repaired: false };
     const readIssues: PresentationReadIssue[] = [];
     const roomSlides = readDeckSlides(room.content, readIssues, collaborative);
+    // A collaborator's delivery holds the file's diagram this window has
+    // prepared to edit: the conversion is placed on it again, not let go under
+    // the shape being edited or dragged.
     const loadedSlides = collaborative
-      ? reconcileCollaborativeSlideText(slidesRef.current, roomSlides)
+      ? source === "remote"
+        ? preparedThroughDeliveryRef.current(slidesRef.current, reconcileCollaborativeSlideText(slidesRef.current, roomSlides))
+        : reconcileCollaborativeSlideText(slidesRef.current, roomSlides)
       : roomSlides;
     // The history step itself is what this window saves (and what the room
     // now holds): when it had to be mended, the mended deck is written again,
@@ -7087,7 +7252,11 @@ export default function PresentationWindow({
   const prepareDeckPartsDraft = useCallback((draft: PageDocumentDraft): PageDocumentDraft => {
     const content = draft.content_json;
     if (!deckParts.active || !content || typeof content !== "object") return draft;
-    const body = deckParts.prepareBody(content as Record<string, unknown>, slidesRef.current);
+    // The slides as they are saved (a prepared diagram's slide as the file's
+    // drawing it stands for), as the content is: what a part's room took is
+    // remembered as that, and a body read after it shows the file's drawing,
+    // not this window's conversion (which then read as another window's).
+    const body = deckParts.prepareBody(content as Record<string, unknown>, slidesToPersist(slidesRef.current));
     return body === content ? draft : { ...draft, content_json: body as PageDocumentDraft["content_json"] };
   }, [deckParts]);
   // A body save refused because the order or parts it was made for moved on
@@ -7304,6 +7473,8 @@ export default function PresentationWindow({
   const deckStructureSettledRef = useRef<(() => Promise<void> | null) | null>(null);
   const latestUndoRef = useRef<() => void>(() => undefined);
   const latestRedoRef = useRef<() => void>(() => undefined);
+  /** Undo / Redo in words being typed: the caret goes where the step changed them (set below). */
+  const caretToHistoryEditRef = useRef<(before: readonly SlideModel[]) => void>(() => undefined);
   const finishCollaborationGesture = useCallback(() => {
     if (usesCollaborationHistory && autosave.flushCollaboration?.()) {
       autosave.collaborationHistory?.stopCapturing();
@@ -8179,6 +8350,12 @@ export default function PresentationWindow({
     () => resolveSlideMaster(activeSlide, masters),
     [activeSlide, masters],
   );
+  // The active slide's master for handlers that read the slide's ink
+  // (`presentationSlideInk`: a master with its own colour map, row 850).
+  const activeMasterRef = useRef(activeMaster);
+  useEffect(() => {
+    activeMasterRef.current = activeMaster;
+  }, [activeMaster]);
   const activeNativeLayout = useMemo(
     () => resolveSlideNativeLayout(activeSlide, masters),
     [activeSlide, masters],
@@ -8324,7 +8501,7 @@ export default function PresentationWindow({
         : undefined;
     const hyperlink = {
       ...presentationHyperlinkStyle(activeEffectiveTheme, activeMaster?.linkColors),
-      ...presentationBodyFontStyle(activeEffectiveTheme),
+      ...presentationServedBodyFontStyle(presentationBodyFontStyle(activeEffectiveTheme)),
     } as CSSProperties;
     if (!aspect && !bg && !richBackgroundCss && !Object.keys(hyperlink).length) return undefined;
     return {
@@ -8528,8 +8705,8 @@ export default function PresentationWindow({
   // window lists them, named as PowerPoint names them, and a swatch picked
   // from them is kept as its theme reference beside the colour it writes.
   const deckThemeGridColors = useMemo(
-    () => presentationThemeGridColors(activeEffectiveTheme),
-    [activeEffectiveTheme],
+    () => presentationThemeGridColors(activeEffectiveTheme, activeMaster),
+    [activeEffectiveTheme, activeMaster],
   );
   const deckThemeGrid = useMemo(
     () => officeThemeColorGrid(deckThemeGridColors),
@@ -8572,8 +8749,9 @@ export default function PresentationWindow({
     (slide: { masterId?: unknown; layoutId?: unknown }, hostTheme?: NativeSmartArtView["hostTheme"]) => SmartArtColorTheme | null
   >(() => null);
   smartArtColorThemeForSlideRef.current = (slide, hostTheme) => {
-    const effective = mergeMasterTheme(theme, resolveSlideMaster(slide, masters));
-    return smartArtColorThemeOf(effective, presentationThemeGridColors(effective), hostTheme);
+    const slideMaster = resolveSlideMaster(slide, masters);
+    const effective = mergeMasterTheme(theme, slideMaster);
+    return smartArtColorThemeOf(effective, presentationThemeGridColors(effective, slideMaster), hostTheme);
   };
   /**
    * The theme a converted diagram on the active slide is rebuilt or restyled
@@ -9166,6 +9344,13 @@ export default function PresentationWindow({
   // The selected diagram's conversion, on screen and not saved until it is
   // really changed (lib/presentation-smartart-prepared).
   const preparedSmartArtRef = useRef<PreparedSmartArt<PresentationBlock, SlideModel> | null>(null);
+  /** Slides typed into (a typing burst's, not yet committed) saved as their
+   * commit will save them: a prepared diagram's words on the file's drawing
+   * (`preparedAfterCommit` says what the typed slide stands for). */
+  const persistPreparedTyping = useCallback((slides: readonly SlideModel[]): void => {
+    const prepared = preparedSmartArtRef.current;
+    if (prepared) preparedAfterCommit<PresentationBlock, SlideModel>(prepared, slides, nativeSmartArtWithWords);
+  }, []);
   const [preparedSmartArt, setPreparedSmartArtState] = useState<PreparedSmartArt<PresentationBlock, SlideModel> | null>(null);
   const setPreparedSmartArt = useCallback((next: PreparedSmartArt<PresentationBlock, SlideModel> | null) => {
     preparedSmartArtRef.current = next;
@@ -9238,6 +9423,24 @@ export default function PresentationWindow({
       ? primaryMarker
       : null;
   }, [activeSlide.blocks, selectionAuthority.primary]);
+  // Format Shape on the shapes selected inside a SmartArt graphic (its
+  // 3-D Options... / 3-D Rotation Options..., or the pane opened over one):
+  // the shape pane over those items' node shapes, written through the
+  // SmartArt node writer, never the frame-moved members around them. The
+  // whole graphic selected has no shape pane of its own here.
+  const formatPaneSmartArtNodes = useMemo<readonly PresentationShapeBlock[] | null>(() => {
+    if (!contextualSmartArtMarker || contextualNativeSmartArt || smartArtGraphicOnly) return null;
+    const target = presentationSmartArtFormatTarget(activeSlide.blocks, selectedBlockIds, selectedBlockId);
+    const nodes = target ? presentationSmartArtTargetNodes(activeSlide.blocks, target) : [];
+    return nodes.length ? nodes : null;
+  }, [
+    activeSlide.blocks,
+    contextualSmartArtMarker,
+    contextualNativeSmartArt,
+    smartArtGraphicOnly,
+    selectedBlockIds,
+    selectedBlockId,
+  ]);
   const contextualSmartArtBlocks = useMemo<readonly PresentationBlock[]>(
     () =>
       contextualSmartArtMarker
@@ -10947,6 +11150,11 @@ export default function PresentationWindow({
   const serverExportErrorMessage = useCallback((error: unknown) =>
     isApiRequestError(error) && error.code === "page_version_conflict"
       ? t("presentation.exportVersionChanged")
+      // Every slide hidden, Include hidden slides off: no PDF, as PowerPoint's
+      // Export > Create PDF/XPS writes none and says so ("...or choose to
+      // include hidden slides"): the option is PDF Options' own.
+      : isApiRequestError(error) && error.code === "presentation_all_slides_hidden"
+        ? t("presentation.exportAllSlidesHidden", { option: t("presentation.pdfOptions.includeHiddenSlides") })
       // A file the server writes from the deck's PPTX (ODP, PPT, POTX, PPSX)
       // that it could not write: named by its type, in the reader's language.
       : isApiRequestError(error) && error.code === "odf_export_failed" && typeof error.details?.format === "string"
@@ -11030,7 +11238,12 @@ export default function PresentationWindow({
     window.setTimeout(() => serverExportTriggerRef.current?.focus({ preventScroll: true }), 0);
   }, []);
   const runServerExport = useCallback(
-    async (format: PageExportFormat, layout?: string) => {
+    async (
+      format: PageExportFormat,
+      layout?: string,
+      // A deck PDF's Include hidden slides (PDF Options); absent, left out.
+      exportOptions?: { readonly hiddenSlides?: "include" | "exclude" },
+    ) => {
       if (guestNeedsAccount(onGuestExportRequestRef)) return;
       if (serverExportInFlightRef.current) {
         // An export already running: say so, rather than a click that does
@@ -11055,6 +11268,7 @@ export default function PresentationWindow({
           format,
           layout,
           expectedContentVersion,
+          ...(exportOptions?.hiddenSlides ? { hiddenSlides: exportOptions.hiddenSlides } : {}),
         }), { onRetry: (newer) => { savedContentVersion = newer; } });
         setPendingPptxRepair((pending) => pending?.pageId === pageId ? null : pending);
         setServerExportStatus({ phase: "ready", format: exportFormat });
@@ -11418,7 +11632,7 @@ export default function PresentationWindow({
   // autosave path: every Design theme or variant change must enter the same
   // atomic deck history as slides, masters and templates.
   const commitDeckThemeRef = useRef<
-    (nextTheme: DeckTheme | undefined) => void
+    (nextTheme: DeckTheme | undefined, options?: { replaceMasterBackgrounds?: boolean }) => void
   >(() => undefined);
 
   /**
@@ -11428,7 +11642,7 @@ export default function PresentationWindow({
    * per-slide / per-block overrides keep winning over the theme.
    */
   const applyDeckTheme = useCallback(
-    (nextTheme: DeckTheme | undefined) => {
+    (nextTheme: DeckTheme | undefined, options?: { replaceMasterBackgrounds?: boolean }) => {
       if (
         !presentationThemeSelectionIsWritable(
           slidesRef.current,
@@ -11440,8 +11654,13 @@ export default function PresentationWindow({
       const normalized = normalizeTheme(nextTheme);
       // A re-selected tile or variant is a true no-op: do not manufacture a
       // dirty/save event that patchback would later have to misclassify.
-      if (deckThemesEqual(themeRef.current, normalized)) return;
-      commitDeckThemeRef.current(normalized);
+      if (
+        deckThemesEqual(themeRef.current, normalized) &&
+        !(options?.replaceMasterBackgrounds && mastersTakingThemePick(mastersRef.current))
+      ) {
+        return;
+      }
+      commitDeckThemeRef.current(normalized, options);
     },
     [],
   );
@@ -11570,7 +11789,9 @@ export default function PresentationWindow({
         return;
       }
       const next = themeAfterPreset(themeRef.current, presetId);
-      if (next) applyDeckTheme(next.theme);
+      // Design > Themes puts the theme's master in: a master's own
+      // background and Master Font go (`mastersTakingThemePick`).
+      if (next) applyDeckTheme(next.theme, { replaceMasterBackgrounds: true });
     },
     [applyDeckTheme],
   );
@@ -11746,7 +11967,7 @@ export default function PresentationWindow({
       ) {
         delete merged.colorSchemeId;
       }
-      applyDeckTheme(markThemeSelectionCustom(merged));
+      applyDeckTheme(presentationThemeMarkedCustom(merged, themeRef.current));
     },
     [applyDeckTheme],
   );
@@ -11857,6 +12078,14 @@ export default function PresentationWindow({
     ) => {
       // A preview is read: no command that reached this far changes its deck.
       if (previewMode) return;
+      // The first words typed into an imported slide's empty-slide stub state
+      // the frame it is drawn at, in this same step (one Undo takes both).
+      nextSlides = slidesWithFramedStubWords(
+        nextSlides,
+        slidesRef.current,
+        (slide) => slideBounds(slide as unknown as Record<string, unknown>),
+        nextMasters,
+      );
       if (
         typingLetterRef.current &&
         coalesceKey?.startsWith("text:") &&
@@ -11894,6 +12123,15 @@ export default function PresentationWindow({
             burst.publishedAt = Date.now();
             const roomStep = deckRoomsUndoRef.current;
             if (roomStep) deckRoomHistory.settle();
+            // Letters typed in a prepared SmartArt's words are published as
+            // their commit saves them: on the file's own drawing. Built from the
+            // deck as typed, the conversion itself went out (the typed slide is
+            // no commit's, so nothing said what it stands for): every other
+            // window received the diagram converted under it -- its own prepared
+            // conversion let go, a shape's resize being dragged there never
+            
+            // file's drawing back.
+            persistPreparedTyping(slidesRef.current);
             autosave.queueSave({
               title,
               content_json: buildContent(
@@ -12184,7 +12422,7 @@ export default function PresentationWindow({
       if (roomStep) deckRoomHistory.settle(!coalesce && !fitOnly);
     },
     [announceDeckPartsRefusal, autosave, boundedHistory, deckParts, deckRoomHistory, finishCollaborationGesture,
-      previewMode, title],
+      persistPreparedTyping, previewMode, title],
   );
 
   // A visitor's homepage edits (classic mode): rebased onto this deck as it
@@ -12288,7 +12526,7 @@ export default function PresentationWindow({
   }, [classicDeckReady, pageId]);
 
   useEffect(() => {
-    commitDeckThemeRef.current = (nextTheme) => {
+    commitDeckThemeRef.current = (nextTheme, options) => {
       // A table made here with a built-in style follows the theme: its stored
       // look is resolved again against the new accents, in the same undo
       // step as the theme (PPT-B274).
@@ -12303,7 +12541,7 @@ export default function PresentationWindow({
       // "theme argument omitted" signal for other commitDeck callers.
       commitDeck(
         nextSlides,
-        mastersRef.current,
+        (options?.replaceMasterBackgrounds && mastersTakingThemePick(mastersRef.current)) || mastersRef.current,
         undefined,
         nextTheme ?? null,
       );
@@ -14092,6 +14330,7 @@ export default function PresentationWindow({
   // stayed tall and Redo was over.
   const tableFitFromHistoryRef = useRef(false);
   const undo = useCallback(() => {
+    caretToHistoryEditRef.current(slidesRef.current);
     // A pen stroke still wet on the Draw surface (it lands when the hand
     // pauses, lib/office-wet-ink) is the last thing done: it lands first, so
     // Undo takes that stroke back, as PowerPoint's does. Left wet, Undo took
@@ -14198,6 +14437,7 @@ export default function PresentationWindow({
   latestUndoRef.current = undo;
 
   const redo = useCallback(() => {
+    caretToHistoryEditRef.current(slidesRef.current);
     // A wet stroke is a newer step than anything Redo could bring back.
     inkWetRef.current?.flush();
     setGestureCancellationRevision((value) => value + 1);
@@ -15288,6 +15528,93 @@ export default function PresentationWindow({
   useEffect(() => {
     presentEnteredRef.current = presentMode ? { index: presentIndex, at: performance.now() } : null;
   }, [presentIndex, presentMode]);
+  // When the slide's current build was revealed, and whether Use Timings
+  // revealed it (`timedClickPlan`) rather than the presenter.
+  const presentStepAtRef = useRef<{ index: number; step: number; at: number; timed: boolean } | null>(null);
+  const timedClickPendingRef = useRef<{ index: number; step: number } | null>(null);
+  useEffect(() => {
+    const pending = timedClickPendingRef.current;
+    timedClickPendingRef.current = null;
+    presentStepAtRef.current = presentMode
+      ? {
+          index: presentIndex,
+          step: presentStep,
+          at: performance.now(),
+          timed: pending !== null && pending.index === presentIndex && pending.step === presentStep,
+        }
+      : null;
+  }, [presentIndex, presentMode, presentStep]);
+  // Under Use Timings a slide whose clicks were rehearsed (its tag TIMING,
+  // `rehearsedClickTimingsMs`, timing every click it has) plays them then, as
+  // PowerPoint's show and video do (`timedClickPlan`; a self-running show no
+  // longer waits for a click nobody gives). A click the presenter gives first
+  // comes first. A slide with no rehearsal of its clicks still waits for
+  // them: that PowerPoint's show shares its After among them, as its video
+  // does, is not documented (the video's share is `PresentationVideoExporter`'s).
+  const timedClickPlanAt = useCallback(
+    (index: number) => {
+      const slide = presentSlides[index];
+      if (!slide || !showSlideShowAnimations || !isTransitionAdvanceAfterMs(slide.transitionAdvanceAfterMs)) return null;
+      const first = initialPresentStepAt(index);
+      const clicks = groupCountAt(index) - first;
+      if (clicks <= 0) return null;
+      const rehearsed = rehearsedClickDelaysMs(slide, clicks);
+      if (!rehearsed) return null;
+      const playOf = (step: TimelineStep) =>
+        effectPlayDurationMs(step, slide.blocks.find((block) => block.id === step.blockId));
+      return {
+        first,
+        plan: timedClickPlan({
+          slideMs: slide.transitionAdvanceAfterMs,
+          clicks,
+          groupBuildsMs: slideGroupBuildsMs(slide, playOf),
+          initialAuto: first > 0,
+          rehearsed,
+        }),
+      };
+    },
+    [groupCountAt, initialPresentStepAt, presentSlides, showSlideShowAnimations],
+  );
+  useEffect(() => {
+    if (!presentMode || autoPlaying || rehearsing || !useRecordedSlideTimings || presentEnded) return;
+    const timed = timedClickPlanAt(presentIndex);
+    if (!timed) return;
+    const click = presentStep - timed.first + 1;
+    if (click < 1 || click > timed.plan.delaysMs.length) return;
+    const slide = presentSlides[presentIndex]!;
+    const now = performance.now();
+    let since: number;
+    if (click === 1) {
+      // The first counts from the end of the slide's transition.
+      const entered = presentEnteredRef.current;
+      const timelineAt =
+        entered && entered.index === presentIndex
+          ? entered.at + slideEntranceTransitionMs(slide, previousConfiguredShowIndex(presentIndex) !== -1)
+          : now;
+      since = now - timelineAt;
+    } else {
+      const at = presentStepAtRef.current;
+      since = at && at.index === presentIndex && at.step === presentStep ? now - at.at : 0;
+    }
+    const wait = Math.max(0, (timed.plan.delaysMs[click - 1] ?? 0) - since);
+    const id = window.setTimeout(() => {
+      timedClickPendingRef.current = { index: presentIndex, step: presentStep + 1 };
+      advancePresent("control");
+    }, Math.min(wait, 0x7fff_ffff));
+    return () => window.clearTimeout(id);
+  }, [
+    advancePresent,
+    autoPlaying,
+    presentEnded,
+    presentIndex,
+    presentMode,
+    presentSlides,
+    presentStep,
+    previousConfiguredShowIndex,
+    rehearsing,
+    timedClickPlanAt,
+    useRecordedSlideTimings,
+  ]);
   // Native slide `After` timing is independent from the kiosk loop. It arms
   // only after the final normal click group is revealed, waits for that
   // group's last animation to finish, then waits `advTm`. A permitted audience
@@ -15351,11 +15678,19 @@ export default function PresentationWindow({
               performance.now(),
           )
         : 0;
-    let remainingMs =
-      transitionLeftMs +
-      (finalGroupStartsOnClick
-        ? finalGroupDurationMs + slide.transitionAdvanceAfterMs
-        : Math.max(finalGroupDurationMs, slide.transitionAdvanceAfterMs));
+    // Its last click given by Use Timings: the slide stays its plan's time
+    // after that click (`timedClickPlan`: its After from its start).
+    const stepAt = presentStepAtRef.current;
+    const timedPlan =
+      stepAt && stepAt.timed && stepAt.index === presentIndex && stepAt.step === presentStep
+        ? timedClickPlanAt(presentIndex)
+        : null;
+    let remainingMs = timedPlan && stepAt
+      ? Math.max(0, timedPlan.plan.afterLastMs - (performance.now() - stepAt.at))
+      : transitionLeftMs +
+        (finalGroupStartsOnClick
+          ? finalGroupDurationMs + slide.transitionAdvanceAfterMs
+          : Math.max(finalGroupDurationMs, slide.transitionAdvanceAfterMs));
     let timerId: number | null = null;
     let cancelled = false;
     const schedule = () => {
@@ -15387,6 +15722,7 @@ export default function PresentationWindow({
     rehearsing,
     presentSlides,
     showSlideShowAnimations,
+    timedClickPlanAt,
     useRecordedSlideTimings,
   ]);
 
@@ -16737,7 +17073,9 @@ export default function PresentationWindow({
     // The frame is the slide at its actual size; Fit is the whole percent
     // that puts all of it in the canvas less its room (and the ruler's band
     // along the top and left, when the ruler is shown).
-    const inset = embeddedFillViewportRef.current ? 0 : PRESENTATION_FIT_VIEWPORT_INSET_PX;
+    const inset = embeddedFillViewportRef.current
+      ? 0
+      : presentationFitViewportInset(viewportWidth, viewportHeight);
     const ruler = viewAidStateRef.current.ruler ? PRESENTATION_RULER_BAND_PX : 0;
     return presentationFitZoom(
       viewportWidth,
@@ -16935,6 +17273,17 @@ export default function PresentationWindow({
   // collapses it so the canvas reclaims the space. Notes are a bottom pane,
   // not part of the slide canvas.
   const [notesVisible, setNotesVisible] = useState(true);
+  // A deck whose file closed the Notes pane (`p:normalViewPr
+  // @horzBarState="maximized"`) opens with it closed, as PowerPoint opens it.
+  const fileClosedNotesPane = viewSettings?.normalView?.notesHidden === true;
+  useEffect(() => {
+    if (fileClosedNotesPane) setNotesVisible(false);
+  }, [fileClosedNotesPane, pageId]);
+  // Normal view's pane sizes: the thumbnail pane's width and the Notes
+  // pane's height, as the file states them (PresentationNormalViewPanes).
+  const normalViewPanes = usePresentationNormalViewPanes(pageId, viewSettings?.normalView);
+  const presentationNotesPaneShown = notesVisible && viewMode !== "sorter" && !previewMode;
+  const [paneWorkspace, setPaneWorkspace] = useState<HTMLDivElement | null>(null);
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
   const notesFocusRequestedRef = useRef(false);
   // Speaker-notes draft. Edits buffer locally per keystroke and commit ONE
@@ -17059,6 +17408,141 @@ export default function PresentationWindow({
     setNotesDraft(null);
   }, [commitNotesDraftTo, notesDraft, slides]);
   flushNotesDraftRef.current = commitNotesDraft;
+  // Notes typed and left in the box reach the deck after a pause, as a
+  // slide's words do: they were committed only on blur, a slide switch, Save
+  // or the pane closing, so notes typed and then the app quit with the box
+  
+  // The box keeps its draft (no re-render under the caret); the blur's
+  // commit then finds the slide already holding it and adds no step.
+  useEffect(() => {
+    if (notesDraft === null) return;
+    const slideId = notesDraftSlideIdRef.current;
+    const timer = window.setTimeout(() => {
+      if (notesDraftRef.current !== notesDraft) return;
+      commitNotesDraftTo(notesDraft, slideId, slidesRef.current);
+    }, NOTES_DRAFT_SETTLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [commitNotesDraftTo, notesDraft]);
+  // The window closing or the app quitting (lib/unsaved-work-hold): a notes
+  // draft and a typing burst are written in first, then the deck is saved
+  // now. A page hiding writes them in at once (its own save goes on
+  // pagehide); a page about to unload with a draft still in a box asks
+  // before leaving, as with any unsaved edit.
+  const saveNowRef = useRef(saveNow);
+  saveNowRef.current = saveNow;
+  
+
+
+
+
+
+  const keyNotTakenRef = useRef<{ readonly blockId: string; readonly block: unknown } | null>(null);
+  const liveBlockOf = useCallback((blockId: string): unknown => {
+    for (const slide of slidesRef.current) {
+      const block = slide.blocks.find((candidate) => candidate.id === blockId);
+      if (block) return block;
+    }
+    return undefined;
+  }, []);
+  const canvasKeyNotTaken = useCallback(() => {
+    const held = keyNotTakenRef.current;
+    if (!held) return false;
+    if (liveBlockOf(held.blockId) !== held.block) {
+      keyNotTakenRef.current = null;
+      return false;
+    }
+    return true;
+  }, [liveBlockOf]);
+  useEffect(() => {
+    if (guestMode) return undefined;
+    // One key is a beforeinput and (unless its editor took it there) an input:
+    // the key's block as it began, read before any handler (capture, on the
+    // window), is compared with the block after every handler (bubble, on the
+    // window) at the key's last event. A block that took the key is another
+    // object (a slide's block never changes in place).
+    let keyStart: { readonly blockId: string; readonly block: unknown } | null = null;
+    const blockIdOf = (target: EventTarget | null): string | null => {
+      if (!(target instanceof HTMLElement)) return null;
+      if (!(target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement || target.isContentEditable)) return null;
+      if (!target.closest('[data-testid="presentation-slide-canvas"]')) return null;
+      return target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId ?? null;
+    };
+    const began = (event: Event) => {
+      const blockId = blockIdOf(event.target);
+      if (!blockId) return;
+      if (event.type === "beforeinput" || keyStart?.blockId !== blockId) keyStart = { blockId, block: liveBlockOf(blockId) };
+    };
+    const ended = (event: Event) => {
+      const blockId = blockIdOf(event.target);
+      if (!blockId || keyStart?.blockId !== blockId) return;
+      // A beforeinput its editor did not stop is followed by its input.
+      if (event.type === "beforeinput" && !event.defaultPrevented) return;
+      const start = keyStart;
+      keyStart = null;
+      const now = liveBlockOf(blockId);
+      if (start.block === undefined || now !== start.block) keyNotTakenRef.current = null;
+      else keyNotTakenRef.current = { blockId, block: now };
+    };
+    window.addEventListener("beforeinput", began, true);
+    window.addEventListener("input", began, true);
+    window.addEventListener("beforeinput", ended);
+    window.addEventListener("input", ended);
+    return () => {
+      window.removeEventListener("beforeinput", began, true);
+      window.removeEventListener("input", began, true);
+      window.removeEventListener("beforeinput", ended);
+      window.removeEventListener("input", ended);
+    };
+  }, [guestMode, liveBlockOf]);
+  /** The deck's part rooms (set once useDeckPageParts is here, below). */
+  const deckPartsRoomsRef = useRef<() => ReadonlyMap<number, { readonly unsaved: boolean; saveNow(): Promise<unknown> }>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    if (guestMode) return undefined;
+    // A draft the slide does not hold yet (one written after its pause, the
+    // box keeping it, is no longer held).
+    const notesHeld = () => {
+      const draft = notesDraftRef.current;
+      if (draft === null) return false;
+      const owner = notesDraftSlideIdRef.current;
+      const slide = slidesRef.current.find((entry) => entry.id === owner) ?? slidesRef.current[activeIndexRef.current];
+      return Boolean(slide) && slideWithNotes(slide, draft) !== slide;
+    };
+    const writeIn = () => {
+      const held = notesHeld() || typingBurstRef.current !== null;
+      flushNotesDraftRef.current?.();
+      flushTypingRef.current(true);
+      return held;
+    };
+    // Saved now only when a draft was just written in: a deck with nothing
+    
+    // 238 slides) outlasted the quit's wait, so the window asked "Leave?"
+    
+    const unregister = registerUnsavedWorkFlush(`presentation:${pageId}`, () => {
+      const held = writeIn();
+      // A part room's typing goes into its part now, not after its pause.
+      const rooms = [...deckPartsRoomsRef.current().values()].filter((room) => room.unsaved);
+      for (const room of rooms) void room.saveNow();
+      if (held) return saveNowRef.current();
+      return undefined;
+    });
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!writeIn()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const onPageHide = () => {
+      writeIn();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload, true);
+    window.addEventListener("pagehide", onPageHide, true);
+    return () => {
+      unregister();
+      window.removeEventListener("beforeunload", onBeforeUnload, true);
+      window.removeEventListener("pagehide", onPageHide, true);
+    };
+  }, [guestMode, pageId]);
   const togglePresentationNotesPane = useCallback(() => {
     if (notesVisible) {
       // Flush before the textarea unmounts. Relying on blur alone loses a draft
@@ -17247,7 +17731,17 @@ export default function PresentationWindow({
     [activeComments],
   );
   // Comments review panel open state + the new-comment composer draft.
-  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
+  // Docked at the window's right edge as PowerPoint's Comments pane is; a
+  // deck reopens with the pane it was left with (kept per deck, here).
+  const [commentsPanelOpen, setCommentsPanelOpen] = useState(() => readPresentationCommentsPaneOpen(pageId));
+  useEffect(() => {
+    if (!previewMode) writePresentationCommentsPaneOpen(pageId, commentsPanelOpen);
+  }, [commentsPanelOpen, pageId, previewMode]);
+  const commentsDock = usePresentationCommentsDock(paneWorkspace);
+  const presentationWorkspaceStyle = useMemo(
+    () => ({ ...normalViewPanes.style, ...commentsDock.style }),
+    [commentsDock.style, normalViewPanes.style],
+  );
   const [showProofingErrors, setShowProofingErrors] = useState(true);
   // Review ▸ Spelling (PPT-A098): the slide the check starts from, or null.
   const [spellingStartIndex, setSpellingStartIndex] = useState<number | null>(
@@ -21113,6 +21607,7 @@ export default function PresentationWindow({
   deckPartsTitleRef.current = title;
   const resaveDeckParts = useCallback(() => {
     if (!deckParts.active || autosave.readOnly) return;
+    persistPreparedTyping(slidesRef.current);
     autosave.queueSave({
       title: deckPartsTitleRef.current,
       content_json: buildContent(
@@ -21121,13 +21616,15 @@ export default function PresentationWindow({
         slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
       ),
     });
-  }, [autosave, deckParts]);
+  }, [autosave, deckParts, persistPreparedTyping]);
   deckPartsResaveRef.current = resaveDeckParts;
   const readLiveDeckSlides = useCallback(() => {
     // Whoever asks is about to compare with them or put something over them.
     flushTypingRef.current(true);
     return slidesRef.current;
   }, []);
+  // The live deck, letters held included, without drawing them (`heldSlides`).
+  const readHeldDeckSlides = useCallback(() => slidesRef.current, []);
   const readLiveDeckFields = useCallback(() => ({
     theme: themeRef.current,
     masters: mastersRef.current,
@@ -21163,7 +21660,9 @@ export default function PresentationWindow({
     const followedRichCaret = followedCaret ? null : focusedRichPreviewCaret(rootRef.current);
     followRemoteSlideText(before, delivered, textChanges ? { textChanges: [...textChanges] } : undefined, activeId, true,
       followedCaret, followedRichCaret);
-    installDeckSlides(() => delivered);
+    // A prepared SmartArt conversion is placed again on the slide that
+    // arrived, as the deck stands once the letters held are in it.
+    installDeckSlides((list) => (list === slidesRef.current ? preparedThroughDeliveryRef.current(list, delivered) : delivered));
   }, [followRemoteSlideText, installDeckSlides]);
   /** A caret placed in a slide's words, for the room that holds the slide. */
   anchorSlideTextCaretRef.current = (caret) => {
@@ -21281,11 +21780,18 @@ export default function PresentationWindow({
     title,
     autosave,
     liveSlides: readLiveDeckSlides,
+    heldSlides: readHeldDeckSlides,
     liveDeckFields: readLiveDeckFields,
-    roomsAwaitingServer: () => deckPartsView.structureUnsaved() ||
-      [...deckPartsView.rooms().values()].some((room) => room.unacknowledged),
+    // A part room's typing not saved into its part yet holds the deck as
+    // unsaved too: the deck's leave check asks over it, and the app's quit
+    
+    
+    roomsAwaitingServer: () => canvasKeyNotTaken() || deckPartsView.structureUnsaved() ||
+      [...deckPartsView.rooms().values()].some((room) => room.unsaved),
+    roomOperations: () => latestAutosaveRef.current.collaborationOperations?.() ?? null,
   });
   deckEditKeptRef.current = deckResilience.noteEdit;
+  deckPartsRoomsRef.current = deckPartsView.rooms;
   deckStructureSettledRef.current = deckPartsView.whenStructureSettled;
   const duplicateDeckSlides = deckPartsView.duplicateSlides;
   const deckDuplicateBusyRef = useRef(false);
@@ -22121,7 +22627,9 @@ export default function PresentationWindow({
       tab?.focus({ preventScroll: true });
     });
   }, []);
-  const formatPaneShowing = formatPaneOpen && (inspectorBlock !== null || formatPaneShapeGroup !== null);
+  const formatPaneShowing =
+    formatPaneOpen &&
+    (inspectorBlock !== null || formatPaneShapeGroup !== null || formatPaneSmartArtNodes !== null);
   const taskPaneDock = usePresentationTaskPaneDock(
     {
       format: formatPaneOpen,
@@ -22162,7 +22670,7 @@ export default function PresentationWindow({
             : t(
                 `presentation.block.${inspectorBlock.type}` as "presentation.block.text",
               )
-        : formatPaneShapeGroup
+        : formatPaneShapeGroup || formatPaneSmartArtNodes
           ? t("presentation.ui.shapeFormatPane.title")
           : "",
       background: t("presentation.backgroundPane.title"),
@@ -22221,12 +22729,15 @@ export default function PresentationWindow({
     }));
     openFormatPane();
   };
-  // 3-D Options... and 3-D Rotation Options... (Picture / Shape / Video
-  // Effects) open Format Picture or Format Shape at its Effects page.
-  const openFormatPaneAtEffects = (page: "effects" | "office-effects" | "text") => {
+  // Each Effects submenu's "... Options" (Shadow Options..., Glow
+  // Options..., 3-D Options..., ...: Picture / Shape / Video / Text
+  // Effects) opens Format Picture or Format Shape at its Effects page, that
+  // effect's section in view.
+  const openFormatPaneAtEffects = (page: "effects" | "office-effects" | "text", section?: string) => {
     setFormatPaneRequestedTab((current) => ({
       id: page,
       serial: (current?.serial ?? 0) + 1,
+      ...(section ? { section } : {}),
     }));
     openFormatPane();
   };
@@ -22386,7 +22897,10 @@ export default function PresentationWindow({
   const textOptionsTabFor = (block: PresentationTextFrameBlock): OfficeShapeFormatPaneTab =>
     presentationTextOptionsTab({
       block,
-      t: (key) => t(key as "presentation.unit.cm"),
+      // The values too: a label with placeholders (the Text Effects page's
+      // glow presets) was translated without them -- "Glow: {size} point"
+      // raised IntlError and drew its key.
+      t: (key, values) => t(key as "presentation.unit.cm", values as never),
       unit: sizeUnit,
       unitLabel: sizeUnitLabel,
       textColor:
@@ -22467,6 +22981,31 @@ export default function PresentationWindow({
       },
     ];
   };
+  // Format Shape > 3-D Rotation of a group (`p:grpSpPr/a:scene3d`): with a
+  // member of a group that has one, or the whole of a native group selected,
+  // the pane edits the GROUP's camera -- on every member as `scene3d`, which
+  // the writer puts back on the group -- as Office's pane does; a member's
+  // own camera is not drawn under it (group-scene3d-probe V3).
+  const groupCameraFor = (block: PresentationBlock): OfficeGroupCameraControl | undefined => {
+    const groupId = blockGroupId(block);
+    if (!groupId || readSmartArtBlockMarker(block)) return undefined;
+    const members = activeSlide.blocks.filter((member) => blockGroupId(member) === groupId);
+    // Only a group the file holds and the writer can state a camera on.
+    if (!members.some((member) => asRecord(asRecord(member.source)?.nativeGroupAuthority))) return undefined;
+    const scene3d = (block as { scene3d?: SmartArtScene3d }).scene3d;
+    if (!scene3d && !members.every((member) => selectedBlockIdsRef.current.has(member.id))) return undefined;
+    return {
+      scene3d,
+      write: (next) =>
+        commitLiveActiveBlocks((blocks) =>
+          blocks.map((member) => {
+            if (blockGroupId(member) !== groupId || !["shape", "text", "image"].includes(member.type)) return member;
+            const { scene3d: _previous, ...rest } = member as PresentationBlock & { scene3d?: SmartArtScene3d };
+            return (next ? { ...rest, scene3d: next } : rest) as PresentationBlock;
+          }),
+        ),
+    };
+  };
   const shapeFormatPaneCtl = (group?: BuildShapeFormatPaneCtl["group"]): BuildShapeFormatPaneCtl => ({
       t,
       formatPaneOpen,
@@ -22494,6 +23033,7 @@ export default function PresentationWindow({
         write: (ends) => applyShapeLineEnds(ends),
       },
       group,
+      groupCameraFor,
     });
   const renderShapeFormatPane = (block: PresentationShapeBlock): ReactNode =>
     buildShapeFormatPane(shapeFormatPaneCtl())(block);
@@ -22503,6 +23043,28 @@ export default function PresentationWindow({
     buildShapeFormatPane(
       shapeFormatPaneCtl({ blocks, update: updateShapeGroup, remove: deleteLiveHomeSelection }),
     )(blocks[0]);
+  // The shapes selected inside a SmartArt graphic: the same pane, reading the
+  // first, each change worked out on every one and written through the
+  // SmartArt node writer (their formatting the author's, as Office keeps it
+  // on the item's point) as one save and one Undo.
+  const renderSmartArtShapeFormatPane = (nodes: readonly PresentationShapeBlock[]): ReactNode =>
+    buildShapeFormatPane(
+      shapeFormatPaneCtl({
+        blocks: nodes,
+        update: (patchOf) =>
+          commitLiveActiveBlocks((blocks) => {
+            const target = presentationSmartArtFormatTarget(
+              blocks,
+              selectedBlockIdsRef.current,
+              selectedBlockIdRef.current,
+            );
+            return target
+              ? presentationSmartArtBlocksWithNodePatches(blocks, target, patchOf, canManipulateBlock)
+              : null;
+          }),
+        remove: deleteLiveHomeSelection,
+      }),
+    )(nodes[0]);
   // A text box's own Format Shape pane (PPT-A050): PowerPoint's Shape
   // Options (the box's fill, outline and shadow), Size & Properties and Text
   // Options, in the shared pane. The deck's own text tools (the inspector's
@@ -22789,19 +23351,8 @@ export default function PresentationWindow({
                     ))}
                   </select>
                 </label>
-                <label style={inspectorChipStyle}>
-                  <input
-                    type="checkbox"
-                    checked={block.shadow === true}
-                    onChange={(event) =>
-                      updateTextBoxFill(id, {
-                        shadow: event.target.checked ? true : undefined,
-                      })
-                    }
-                    data-testid="presentation-textbox-shadow"
-                  />
-                  {t("presentation.shapeShadow")}
-                </label>
+                {/* The box's shadow is Format Shape > Effects > Shadow (the
+                    Effects tab, the shape's model), as PowerPoint lays it out. */}
               </div>
             );
           })()
@@ -22990,7 +23541,7 @@ export default function PresentationWindow({
                   const allNumber =
                     !!paras?.length &&
                     paras.every((p) => p.bullet === "number");
-                  const currentBulletChar = normalizeBulletChar(
+                  const currentBulletChar = normalizeBlockBulletChar(
                     (inspectorBlock as PresentationTextBlock)
                       .bulletChar,
                   );
@@ -23940,6 +24491,9 @@ export default function PresentationWindow({
       renderTextBoxFillLine,
       renderTextBoxTextTools,
       deleteBlock,
+      themeAccentColors,
+      updateTextBoxEffects,
+      groupCameraFor,
     })(block);
   // PowerPoint's Format Picture pane (PPT-B025): the shared Format Shape
   // pane with a picture's pages (presentationPictureFormatPaneTabs); each
@@ -23947,6 +24501,13 @@ export default function PresentationWindow({
   const renderPictureFormatPane = (block: PresentationImageBlock): ReactNode =>
     buildPictureFormatPane({
       t,
+      pageId: pageId ?? null,
+      commitLiveBlock: (blockId, change) =>
+        commitLiveActiveBlocks((blocks) => {
+          const index = blocks.findIndex((candidate) => candidate.id === blockId);
+          const next = index >= 0 ? change(blocks[index]) : null;
+          return next ? blocks.map((candidate, at) => (at === index ? next : candidate)) : null;
+        }),
       pictureReplaceBusy,
       pictureCorrectionsOptionsRef,
       pictureTransparencyOptionsRef,
@@ -24462,6 +25023,8 @@ export default function PresentationWindow({
       text: string,
       editSelection?: TextEditSelection,
       insertedLineBreaksAreSoft = false,
+      /** The collapsed caret the keystroke left, when known. */
+      caretAfter?: number,
     ): number => {
       // A SmartArt item holds what its Text Pane row can: an edit past the
       // bound is refused whole, with a word, as a shape's label is (PPT-B318:
@@ -24501,13 +25064,16 @@ export default function PresentationWindow({
       };
       let selection = editSelection;
       let shift = 0;
+      let keystrokeRead: KeystrokeRead | null = null;
       if (liveSlide && liveTarget?.type === "text") {
         const keystroke = carryKeystrokeToLive({
           changes: unrenderedTextChangesRef.current, slideId: activeSlide.id, blockId,
           rendered: presentationEditableText(target as PresentationTextBlock),
           live: presentationEditableText(liveTarget as PresentationTextBlock),
-          typed: text, selection: editSelection,
+          typed: text, selection: editSelection, caretAfter,
         });
+        keystrokeRead = keystroke.read;
+        noteTextEditOutcome(`box-read-${keystroke.read}`);
         if (keystroke.onLive) {
           base = { slide: liveSlide, block: liveTarget as PresentationTextBlock, carried: true };
           text = keystroke.text;
@@ -24579,7 +25145,7 @@ export default function PresentationWindow({
         for (const patch of held.patches) {
           formatted =
             formatPresentationTextRuns(formatted, blockId, range, patch, {
-              automaticFill: presentationSlideInk(themeRef.current),
+              automaticFill: presentationSlideInk(themeRef.current, activeMasterRef.current),
             }) ?? formatted;
         }
         updated = formatted;
@@ -24592,8 +25158,12 @@ export default function PresentationWindow({
       // replacing its letters, an autocorrection) is the one change between
       // the two: the room's words are the ones it was made in (each key is
       // written when typed), so it lands on the same characters.
+      // A key read against drawn words the live ones have moved past
+      // (`stale`, carryKeystrokeToLive) is not compared into the room: the
+      // box keeps it as typed and the next publication merges it.
       const typed = words !== null && source0.text === before && words !== before
-        ? keystrokeSplice(before, words, selection) ?? textSplice(before, words) : null;
+        ? keystrokeSplice(before, words, selection) ??
+          (keystrokeRead !== "stale" ? textSplice(before, words) : null) : null;
       if (!typed && words !== before) noteTextEditOutcome("box-not-noted");
       let outcome: PageTextEditOutcome | void = undefined;
       if (typed) {
@@ -24710,6 +25280,19 @@ export default function PresentationWindow({
     end: number;
     intent: number;
   } | null>(null);
+  /**
+   * The words of a body (a text box's, a shape's label) the typing burst holds
+   * and the deck drawn does not: the live deck's, while a burst holds letters
+   * (a delivery drawn meanwhile is merged into it), else null.
+   */
+  const heldBlockWords = useCallback((blockId: string): string | null => {
+    if (!typingBurstRef.current) return null;
+    for (const slide of slidesRef.current) {
+      const block = slide.blocks.find((candidate) => candidate.id === blockId);
+      if (block) return typeof (block as { text?: unknown }).text === "string" ? (block as { text: string }).text : null;
+    }
+    return null;
+  }, []);
   const pendingImportedPreviewCaret = useCallback((blockId: string) => {
     const pending = pendingPreviewCaretRef.current;
     return pending &&
@@ -24727,10 +25310,28 @@ export default function PresentationWindow({
       publishTextSelectionSnapshot({ blockId, start, end });
       const intent = ++textSelectionIntentRef.current;
       pendingPreviewCaretRef.current = { blockId, start, end, intent };
+      if (coeditTraceOn()) coeditTrace("rich-caret-pending", { start, end, intent });
       const ownerPage = textSelectionPageRef.current;
       const ownerSlide = slidesRef.current[activeIndexRef.current]?.id;
       const ownerGeneration = deckContentGenerationRef.current;
       requestAnimationFrame(() => {
+        // Words not drawn yet (a collaborator's delivery still being drawn):
+        // the caret is theirs, not these words'; the drawing puts it back
+        // (`usePresentationRichTypingKey`, from the pending caret kept here).
+        // Put into the words still shown, it stood that many characters on
+        
+        const shownHost = slideCanvasRef.current?.querySelector<HTMLElement>(
+          `[data-block-id="${cssEscapeAttr(blockId)}"] [data-selection-owner="rich-preview"]`,
+        );
+        const liveBlock = slidesRef.current[activeIndexRef.current]?.blocks.find((candidate) => candidate.id === blockId);
+        if (
+          shownHost &&
+          liveBlock?.type === "text" &&
+          typeof (liveBlock as PresentationTextBlock).text === "string" &&
+          presentationPreviewPlainText(shownHost) !== (liveBlock as PresentationTextBlock).text
+        ) {
+          return;
+        }
         if (pendingPreviewCaretRef.current?.intent === intent) {
           pendingPreviewCaretRef.current = null;
         }
@@ -24786,8 +25387,10 @@ export default function PresentationWindow({
         !composingTextRef.current &&
         inputIsLetterInPlace(event.nativeEvent);
       let shift = 0;
+      const caretAfter = textarea.selectionStart !== null && textarea.selectionStart === textarea.selectionEnd
+        ? textarea.selectionStart : undefined;
       try {
-        shift = updateTextBlock(blockId, nextText, consumeTextEditSelection(blockId));
+        shift = updateTextBlock(blockId, nextText, consumeTextEditSelection(blockId), false, caretAfter);
       } finally {
         typingLetterRef.current = false;
       }
@@ -24892,6 +25495,14 @@ export default function PresentationWindow({
     const onHidden = () => {
       if (document.visibilityState === "hidden") draw();
     };
+    // A body this member's edit was typed again into holds the letters where
+    // it shows them, the caret after them: a delivered caret no longer stands
+    // (moved to it, the key that reads them put the letter one place on from
+    // the body, PRESENTATION_HOST_RETYPE_EVENT).
+    const onRetyped = (event: Event) => {
+      const blockId = (event as CustomEvent<{ blockId?: string }>).detail?.blockId;
+      if (deliveredBodyCaretRef.current && deliveredBodyCaretRef.current.blockId === blockId) deliveredBodyCaretRef.current = null;
+    };
     const onFocusOut = (event: FocusEvent) => {
       const describe = (node: EventTarget | null) => node instanceof HTMLElement
         ? `${node.tagName}:${node.closest("[data-block-id]")?.getAttribute("data-block-id") ?? "-"}:${node.getAttribute("data-testid") ?? ""}:${node.isConnected}`
@@ -24904,9 +25515,11 @@ export default function PresentationWindow({
     document.addEventListener("compositionstart", draw, true);
     document.addEventListener("focusout", onFocusOut, true);
     document.addEventListener("visibilitychange", onHidden);
+    document.addEventListener(PRESENTATION_HOST_RETYPE_EVENT, onRetyped, true);
     window.addEventListener("beforeunload", draw, true);
     window.addEventListener("pagehide", draw);
     return () => {
+      document.removeEventListener(PRESENTATION_HOST_RETYPE_EVENT, onRetyped, true);
       document.removeEventListener("pointerdown", onPointer, true);
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("compositionstart", draw, true);
@@ -24936,7 +25549,8 @@ export default function PresentationWindow({
       typingLetterRef.current = letterTyped;
       let shift = 0;
       try {
-        shift = updateTextBlock(blockId, nextText, consumeTextEditSelection(blockId));
+        shift = updateTextBlock(blockId, nextText, consumeTextEditSelection(blockId), false,
+          range.start === range.end ? range.start : undefined);
       } finally {
         typingLetterRef.current = false;
       }
@@ -24967,6 +25581,53 @@ export default function PresentationWindow({
       updateTextBlock,
     ],
   );
+
+  // Undo or Redo of words being typed in a text box puts the caret where the
+  // step changed them, as PowerPoint does: before letters Undo took away, after
+  // letters it (or Redo) brought back. The box's words were drawn anew and the
+  
+  // "RFC 9129", Undo, and the next letter went to the box's start or past the
+  // line's break). The step's own change of the deck is read once it has
+  // landed: at once for the deck's own history, a frame later for a room's.
+  caretToHistoryEditRef.current = (before) => {
+    const blockId = selectedBlockIdRef.current;
+    if (!blockId) return;
+    const hostOf = () => slideCanvasRef.current?.querySelector<HTMLElement>(
+      `[data-block-id="${cssEscapeAttr(blockId)}"] [data-selection-owner="rich-preview"]`,
+    ) ?? null;
+    const typingIn = (host: HTMLElement | null): host is HTMLElement =>
+      Boolean(host && host.contains(host.ownerDocument.activeElement));
+    if (!typingIn(hostOf())) return;
+    const wordsIn = (slides: readonly SlideModel[]) => {
+      for (const slide of slides) {
+        const found = slide.blocks.find((block) => block.id === blockId);
+        if (found) return found.type === "text" ? presentationEditableText(found as PresentationTextBlock) : null;
+      }
+      return null;
+    };
+    const was = wordsIn(before);
+    if (was === null) return;
+    // Once the step has landed and the box is drawn with it (the host keyed
+    // by its words is mounted anew, its caret handed over where it was).
+    const place = (tries: number) => {
+      const now = wordsIn(slidesRef.current);
+      const host = hostOf();
+      if (now === null || !typingIn(host)) return;
+      if (now === was) {
+        if (tries > 0) requestAnimationFrame(() => place(tries - 1));
+        return;
+      }
+      const limit = Math.min(was.length, now.length);
+      let prefix = 0;
+      while (prefix < limit && was.charCodeAt(prefix) === now.charCodeAt(prefix)) prefix += 1;
+      let suffix = 0;
+      while (suffix < limit - prefix && was.charCodeAt(was.length - 1 - suffix) === now.charCodeAt(now.length - 1 - suffix)) suffix += 1;
+      const caret = now.length - suffix;
+      setPresentationPreviewSelection(host, caret, caret);
+      restoreImportedPreviewSelectionAfterCommit(blockId, caret, caret);
+    };
+    requestAnimationFrame(() => place(2));
+  };
 
   const replaceImportedPreviewSelection = useCallback(
     (
@@ -25403,7 +26064,7 @@ export default function PresentationWindow({
           written,
           new Set(targets.text.map((block) => block.id)),
           patch.color ?? undefined,
-          presentationSlideInk(themeRef.current),
+          presentationSlideInk(themeRef.current, activeMasterRef.current),
         );
       }),
     [commitLiveHomeObjectBlocks],
@@ -25578,6 +26239,22 @@ export default function PresentationWindow({
   );
 
   /**
+   * Format Shape > Effects on a text box (a text box is a shape): the shape's
+   * own fields (`shapeEffects`, `keepTextFlat`), one undo step.
+   */
+  const updateTextBoxEffects = useCallback(
+    (blockId: string, patch: PresentationShapeEffectsPanePatch): boolean =>
+      commitLiveTextBlockChange(blockId, (block) =>
+        presentationTextFrameWithEffectsPatch(block, {
+          ...("shapeEffects" in patch ? { shapeEffects: patch.shapeEffects } : {}),
+          ...("shadow" in patch ? { shadow: patch.shadow === true ? true : undefined } : {}),
+          ...("keepTextFlat" in patch ? { keepTextFlat: patch.keepTextFlat } : {}),
+        }),
+      ),
+    [commitLiveTextBlockChange],
+  );
+
+  /**
    * Set a text block's BODY COLUMN count (PowerPoint "Text Options → Columns").
    * A count of 1 (the default) DROPS the `columnCount` key so a single-column box
    * serializes byte-for-byte as before; 2 / 3 persist the normalized value. One
@@ -25743,6 +26420,9 @@ export default function PresentationWindow({
       const target = resolveLiveTextBlock(undefined, true);
       if (!target) return false;
       const selection = liveWordsSelection(target.block.id);
+      // A SmartArt graphic's shape selected whole takes no list level (the
+      // button is greyed, as PowerPoint's; Tab / Shift+Alt+Right land here).
+      if (listLevelGreyedForSmartArtShape(target.block, selection?.blockId)) return false;
       const committed = commitLiveTextBlockChange(target.block.id, (block) =>
         livePlaceholderListCommand(block, (listed) =>
           textBlockWithIndentShift(listed, delta, selection),
@@ -25978,7 +26658,7 @@ export default function PresentationWindow({
           patch,
           // Font Color reaches the paint the words wear (a WordArt style, a
           // Text Fill): it drew them in the old colour.
-          { automaticFill: presentationSlideInk(themeRef.current) },
+          { automaticFill: presentationSlideInk(themeRef.current, activeMasterRef.current) },
         ),
       );
       return restoreTextSelectionAfterFormatCommit(
@@ -26020,7 +26700,7 @@ export default function PresentationWindow({
         for (const { from, to, style } of styled) {
           // A pasted word's colour is its fill in a box that wears a paint.
           const formatted = formatPresentationTextRuns(next, blockId, { blockId, start: start + from, end: start + to }, style, {
-            automaticFill: presentationSlideInk(themeRef.current),
+            automaticFill: presentationSlideInk(themeRef.current, activeMasterRef.current),
           });
           if (formatted) next = formatted;
         }
@@ -26250,8 +26930,11 @@ export default function PresentationWindow({
         end: selectionEnd,
       });
       let nextParagraphs: SlideParagraphWithRuns[] = paragraphs as SlideParagraphWithRuns[];
+      // The ribbon's Increase / Decrease List Level path: an imported body's
+      
+      const restyle = presentationListLevelRestyle(textBlock);
       for (let index = first; index <= last; index += 1) {
-        nextParagraphs = adjustParagraphLevelAt(nextParagraphs, index, delta) as SlideParagraphWithRuns[];
+        nextParagraphs = adjustParagraphLevelAt(nextParagraphs, index, delta, restyle) as SlideParagraphWithRuns[];
       }
       // Reference-equal ⇒ clamped at a bound / no-op ⇒ nothing to commit.
       if (nextParagraphs === paragraphs) return true;
@@ -26775,7 +27458,7 @@ export default function PresentationWindow({
         formatPresentationTextRuns(block, block.id, selection,
           typeof patch.fontSize === "number" && presentationTextUsesPoints(block)
             ? { ...patch, fontSize: Math.round(patch.fontSize / CSS_PX_PER_POINT * 100) / 100 } : patch, {
-          automaticFill: presentationSlideInk(themeRef.current),
+          automaticFill: presentationSlideInk(themeRef.current, activeMasterRef.current),
         }),
       );
       if (shapeWords !== null) return shapeWords;
@@ -26965,8 +27648,11 @@ export default function PresentationWindow({
       (
         target.block.style as { textShadow?: unknown } | null | undefined
       )?.textShadow === true;
+    // On is Home > Text Shadow's own shadow, off is none: either way the
+    // shadow the words stated (`textShadowEffect`, row 805) is no longer it.
     updateTextBlockStyle(target.block.id, {
       textShadow: active ? undefined : true,
+      textShadowEffect: undefined,
     } as Parameters<typeof updateTextBlockStyle>[1]);
     return true;
   }, [resolveLiveRibbonTextContext, updateTextBlockStyle]);
@@ -27080,6 +27766,11 @@ export default function PresentationWindow({
   // the block still exists in it; if either check fails the commit is ABORTED
   // (the gesture is discarded so geometry is never written to the wrong slide or
   // a deleted block). Returns true only when a commit actually happened.
+  // A SmartArt item resized by its handle, laid out again as a whole (set below,
+  // once the served relayout exists): true when it took the gesture.
+  const relayoutSmartArtItemResizeRef = useRef<
+    ((itemId: string, factor: { x: number; y: number }, primary: PresentationBlock) => boolean) | null
+  >(null);
   const commitGestureGeometry = useCallback(
     (
       slideId: string,
@@ -27122,6 +27813,33 @@ export default function PresentationWindow({
         );
         return scaled === strokeWidth ? after : ({ ...after, strokeWidth: scaled } as PresentationBlock);
       };
+      // One SmartArt shape resized by its handle: PowerPoint keeps the size as the
+      // shape's custScaleX/Y and lays the whole graphic out again around it, so the
+      // gesture becomes that relayout (one change, one Undo) rather than a box edit.
+      // (The item's own label rides the same gesture; anything else in it --
+      // another item, a frame -- keeps it a box edit.)
+      const resized = flip ? undefined : targetSlide.blocks.find((block) => block.id === blockId);
+      const resizedMarker = resized ? readSmartArtBlockMarker(resized) : null;
+      if (
+        resizedMarker?.itemId &&
+        [...(groupGeoms?.keys() ?? [])].every((id) => {
+          const rider = readSmartArtBlockMarker(targetSlide.blocks.find((block) => block.id === id));
+          return rider?.groupId === resizedMarker.groupId && rider.itemId === resizedMarker.itemId;
+        })
+      ) {
+        const record = resized as unknown as Record<string, unknown> | undefined;
+        const itemId = resizedMarker.itemId;
+        const width = Number(record?.width);
+        const height = Number(record?.height);
+        if (
+          resized && (resizedMarker.role === "node" || resizedMarker.role === "label") &&
+          readSmartArtBlockMarker(resized) && width > 0 && height > 0 &&
+          (Math.abs(geom.width - width) > 0.5 || Math.abs(geom.height - height) > 0.5) &&
+          relayoutSmartArtItemResizeRef.current?.(itemId, { x: geom.width / width, y: geom.height / height }, resized)
+        ) {
+          return true;
+        }
+      }
       const movedBlocks = smartArtBlocksAfterBoxEdit(targetSlide.blocks, targetSlide.blocks.map((block) => {
         if (block.id === blockId) {
           const sized = block.type === "table"
@@ -30935,15 +31653,50 @@ export default function PresentationWindow({
   const updateShapeTextRef = useRef<
     ((blockId: string, raw: string) => void) | null
   >(null);
+  // A double click waiting for the diagram's conversion: where it was, on the
+  // screen and on the slide (the drawing's item there is the one it opens),
+  // and the drawing's member the press took, where it was drawn.
+  const smartArtEditAwaitingRef = useRef<{ x: number; y: number; slide: { x: number; y: number } | null; memberId?: string } | null>(null);
+  
+
+
+
+
+
+
+
+  const smartArtWordsOpeningRef = useRef<{ ids: ReadonlySet<string>; until: number } | null>(null);
+  const noteSmartArtWordsOpening = useCallback((ids: Iterable<string> | null) => {
+    smartArtWordsOpeningRef.current = ids ? { ids: new Set(ids), until: performance.now() + SMARTART_WORDS_OPENING_MS } : null;
+  }, []);
+  /** Whether a key on the selection now is one a double click's words opening were meant to take. */
+  const smartArtWordsOpening = useCallback((): boolean => {
+    const opening = smartArtWordsOpeningRef.current;
+    if (!opening) return false;
+    if (performance.now() >= opening.until) {
+      smartArtWordsOpeningRef.current = null;
+      return false;
+    }
+    const selected = selectedBlockIdsRef.current;
+    const primary = selectedBlockIdRef.current;
+    return [...opening.ids].some((id) => selected.has(id) || primary === id);
+  }, []);
   /**
    * Put the caret in a SmartArt shape's words: its label strip becomes the
    * block being typed in (its chrome stays on the shape) and takes the
    * focus with every word selected, as Enter / F2 / a double click on a
-   * selected shape does in PowerPoint. A typed `seed` starts the words over.
+   * selected shape does in PowerPoint. A typed `seed` starts the words over;
+   * a `caret` carried from the same words elsewhere (the file's drawing of
+   * them) is put back at the same characters.
    * False when the shape has no editable words of its own.
    */
   const editSmartArtShapeText = useCallback(
-    (shapeId: string, seed?: string, point?: { x: number; y: number }): boolean => {
+    (
+      shapeId: string,
+      seed?: string,
+      point?: { x: number; y: number; word?: boolean },
+      caret?: { start: number; end: number; words: string },
+    ): boolean => {
       const liveSlide = slidesRef.current[activeIndexRef.current];
       const shape = liveSlide?.blocks.find((candidate) => candidate.id === shapeId);
       const label = liveSlide && shape
@@ -30951,37 +31704,95 @@ export default function PresentationWindow({
         : null;
       if (!label) return false;
       if (autosave.readOnly || isTextEditLocked(label)) return true;
+      // Words drawn turned in 3-D lie flat once open, as PowerPoint edits
+      // them: the character a press landed on is read where they are drawn
+      
+      // words read "Федерации" there). Words drawn flat are read open.
+      const restHost = point && seed === undefined
+        ? slideCanvasRef.current?.querySelector<HTMLElement>(`[data-block-id="${cssEscapeAttr(label.id)}"]`)
+        : null;
+      const restPreview = restHost?.querySelector<HTMLElement>(".presentation-window__paragraph-preview");
+      const pressedAt =
+        point && restHost && restPreview && !restPreview.isContentEditable
+          ? presentationTurnedPreviewOffsetAtPoint(restHost, restPreview, point.x, point.y, (label as PresentationTextBlock).text.length)
+          : null;
       if (seed !== undefined) updateTextBlock(label.id, seed);
       selectedBlockIdRef.current = label.id;
       setSelectedBlockId(label.id);
+      const asked = performance.now();
+      if (point) noteSmartArtWordsOpening([label.id, shapeId]);
+      const opened = () => {
+        if (smartArtWordsOpeningRef.current?.ids.has(label.id)) noteSmartArtWordsOpening(null);
+      };
       const putCaret = (attempt: number) => {
         const host = slideCanvasRef.current?.querySelector<HTMLElement>(
           `[data-block-id="${cssEscapeAttr(label.id)}"]`,
         );
-        if (!host?.isConnected) return;
+        if (!host?.isConnected) {
+          // Words just put on the slide (a SmartArt's conversion landing
+          // under a double click) a window still drawing has not drawn yet:
+          // they open once drawn, unless something else was selected
+          // meanwhile. Given up on, the double click opened nothing and the
+          // graphic stayed selected whole under the next Backspace (fe
+          
+          if (selectedBlockIdRef.current === label.id && performance.now() - asked < SMARTART_WORDS_OPENING_MS) {
+            requestAnimationFrame(() => putCaret(attempt));
+          }
+          return;
+        }
         const rich = host.querySelector<HTMLElement>(
           '[data-selection-owner="rich-preview"][contenteditable="true"]',
         );
         if (rich) {
+          opened();
+          // A double click's second press already selected the word under
+          // it (`selectPresentationPreviewWordAtPress`, or through the move
+          // band): the caret the first press asked for does not undo it.
+          const live = rich.ownerDocument.getSelection();
+          if (
+            point &&
+            seed === undefined &&
+            live &&
+            !live.isCollapsed &&
+            rich.contains(live.anchorNode) &&
+            rich.contains(live.focusNode)
+          ) {
+            return;
+          }
           rich.focus({ preventScroll: true });
-          // A double click puts the caret where the words were clicked, as it
-          // does in Docs' and the sheet's shapes (a click off the words, and
-          // Enter / F2, select them all); a typed key leaves it after them.
+          if (caret && seed === undefined) {
+            // The same characters, when these are the same words; else after them.
+            const words = presentationPreviewPlainText(rich);
+            const same = words === caret.words;
+            setPresentationPreviewSelection(rich, same ? caret.start : words.length, same ? caret.end : words.length);
+            return;
+          }
+          // A click puts the caret where the words were clicked, as it does
+          // in Docs' and the sheet's shapes, and one beside them at the
+          // nearest character, as PowerPoint does (Enter / F2 select them
+          // all); a typed key leaves it after them. The label's move bands
+          // straddle its frame, over the words of a label as tight as its
+          // text (a turned one most of all): the point is read through them,
+          
           const length = (label as PresentationTextBlock).text.length;
           const field = host.querySelector<HTMLTextAreaElement>("textarea");
+          const see = [
+            ...(field ? [field] : []),
+            ...host.querySelectorAll<HTMLElement>(".presentation-window__text-move-band"),
+          ];
           const at =
             point && seed === undefined
-              ? presentationPreviewOffsetAtPoint(
-                  rich,
-                  point.x,
-                  point.y,
-                  length,
-                  undefined,
-                  field ? [field] : [],
-                )
+              ? (pressedAt !== null ? Math.min(length, pressedAt) : null) ??
+                presentationPreviewOffsetAtPoint(rich, point.x, point.y, length, undefined, see) ??
+                presentationPreviewNearestOffset(rich, point.x, point.y, length) ??
+                length
               : null;
           if (at !== null) {
-            setPresentationPreviewSelection(rich, at, at);
+            // A double click on a word selects it, as PowerPoint's does in a
+            // SmartArt shape's words (and as the second press does on words
+            // already open, `selectPresentationPreviewWordAtPress`).
+            const [start, end] = point?.word ? presentationDoubleClickWord(presentationPreviewPlainText(rich), at) : [at, at];
+            setPresentationPreviewSelection(rich, start, end);
             return;
           }
           const selection = rich.ownerDocument.getSelection();
@@ -31003,12 +31814,11 @@ export default function PresentationWindow({
           // The body takes the keyboard once it is editable, below.
           field.focus({ preventScroll: true });
           const end = field.value.length;
-          field.setSelectionRange(seed !== undefined ? end : 0, end);
-          textSelectionRef.current = {
-            blockId: label.id,
-            start: seed !== undefined ? end : 0,
-            end,
-          };
+          const carried = caret && seed === undefined && field.value === caret.words ? caret : null;
+          const from = carried ? carried.start : seed !== undefined ? end : 0;
+          const to = carried ? carried.end : end;
+          field.setSelectionRange(from, to);
+          textSelectionRef.current = { blockId: label.id, start: from, end: to };
         } else if (host.ownerDocument.activeElement !== field) {
           // The keyboard went elsewhere meanwhile (another shape, Esc).
           return;
@@ -31018,7 +31828,7 @@ export default function PresentationWindow({
       requestAnimationFrame(() => putCaret(0));
       return true;
     },
-    [autosave.readOnly, updateTextBlock],
+    [autosave.readOnly, noteSmartArtWordsOpening, updateTextBlock],
   );
 
   
@@ -31085,6 +31895,7 @@ export default function PresentationWindow({
         return;
       }
       if (editSmartArtShapeText(blockId, undefined, point)) return;
+      if (block.type === "shape" && isTextEditLocked(block)) return;
       setSelectedBlockId(blockId);
       setEditingShapeTextId(blockId);
     },
@@ -31332,9 +32143,16 @@ export default function PresentationWindow({
       }
       // PowerPoint: Enter / F2 on a selected shape edit its words, and a key
       // typed on it starts them over (the shared reading of those keys).
+      // A shape whose words the file keeps (`noTextEdit`) takes no key, as
+      
+      // editor, no change, no notice): the editor opened on it showed the
+      
+      // Windows' Edit Text (on a Mac PowerPoint it is Cut); on such a shape
+      // it does nothing, and never removes it.
       const shapeTextKey =
         block.type === "shape" &&
         !autosave.readOnly &&
+        !isTextEditLocked(block) &&
         presentationShapeTextHost(activeSlide.blocks, block) !== null
           ? officeObjectTextKey(event)
           : null;
@@ -31470,6 +32288,9 @@ export default function PresentationWindow({
           // to a browser back-navigation.
           event.preventDefault();
           if (!canEditBlockContent(block)) return;
+          // A double click is opening a SmartArt's words (the file's drawing
+          // took the key meanwhile): the key was meant for them.
+          if (smartArtWordsOpening()) return;
           if (selectedBlockIdsRef.current.has(blockId)) {
             deleteLiveHomeSelection();
           } else {
@@ -31529,6 +32350,7 @@ export default function PresentationWindow({
       retireBlockSelection,
       selectBlockFromClick,
       selectReviewComment,
+      smartArtWordsOpening,
     ],
   );
 
@@ -33867,6 +34689,28 @@ export default function PresentationWindow({
       ),
     [activeSlide.blocks, contextualImageBlocks],
   );
+  // The live selection's own answer, for the commands that act on it (Home ▸
+  // Arrange, the right-click menus, the chart's Arrange): PowerPoint greys
+  // Bring Forward / Bring to Front when nothing can come forward, and Send
+  // Backward / Send to Back when nothing can go back.
+  const selectionLayerCapability = useMemo(
+    () =>
+      presentationSelectionLayerCapability(
+        activeSlide.blocks,
+        activeSlide.blocks.filter((block) => selectedBlockIds.has(block.id)),
+      ),
+    [activeSlide.blocks, selectedBlockIds],
+  );
+  const selectionLayerDisabledReason = (
+    action: "bringToFront" | "sendToBack" | "bringForward" | "sendBackward",
+  ): string | null =>
+    action === "bringToFront" || action === "bringForward"
+      ? selectionLayerCapability.canMoveForward
+        ? null
+        : t("presentation.bringForwardAtFront")
+      : selectionLayerCapability.canMoveBackward
+        ? null
+        : t("presentation.sendBackwardAtBack");
   const contextualChartLayerCapability = useMemo(
     () =>
       presentationSelectionLayerCapability(
@@ -33904,26 +34748,20 @@ export default function PresentationWindow({
   const contextualImageUsesNativeStepAuthority =
     contextualImageBlock !== null &&
     contextualImageSelectionHasImportedBlock;
+  // An imported picture comes forward and goes back as any object does, as
+  // Home ▸ Arrange moves it: on the picture's own native step where that can
+  
+  // on the picture step alone greyed all four commands on a picture of a
+  // slide that also holds an object the author added, of a group, or after
+  // 32 steps, and Bring to Front / Send to Back on every imported picture.
   const contextualImageCanMoveForward =
     drawingImageSelectionIsEligible &&
-    contextualImageLayerCapability.canMoveForward &&
-    (contextualImageUsesNativeStepAuthority
-      ? pictureArrangeCommand.canExecute("forward")
-      : !contextualImageSelectionHasImportedBlock);
+    contextualImageLayerCapability.canMoveForward;
   const contextualImageCanMoveBackward =
     drawingImageSelectionIsEligible &&
-    contextualImageLayerCapability.canMoveBackward &&
-    (contextualImageUsesNativeStepAuthority
-      ? pictureArrangeCommand.canExecute("backward")
-      : !contextualImageSelectionHasImportedBlock);
-  const contextualImageCanMoveToFront =
-    drawingImageSelectionIsEligible &&
-    !contextualImageSelectionHasImportedBlock &&
-    contextualImageLayerCapability.canMoveForward;
-  const contextualImageCanMoveToBack =
-    drawingImageSelectionIsEligible &&
-    !contextualImageSelectionHasImportedBlock &&
     contextualImageLayerCapability.canMoveBackward;
+  const contextualImageCanMoveToFront = contextualImageCanMoveForward;
+  const contextualImageCanMoveToBack = contextualImageCanMoveBackward;
   // Two shapes are selected, but at least one has no fillable outline (a line /
   // arrow / ink stroke / curved custom geometry): Merge Shapes is refused up
   // front rather than after the inputs are gone.
@@ -34153,11 +34991,7 @@ export default function PresentationWindow({
           listed &&
           presentationImportedOrderChanged(liveSlide.blocks, listed)
         ) {
-          const nextSlide = applyPresentationNativeOrderCommand(
-            liveSlide,
-            liveTargets.map((block) => block.id),
-            command,
-          );
+          const nextSlide = presentationNativeRestack(liveSlide, liveTargets, command, listed);
           // Bring Forward / Send Backward are never refused (PowerPoint):
           // where the native journal cannot step the object, the slide
           // takes the new order in the page and a save that cannot write it
@@ -34257,6 +35091,86 @@ export default function PresentationWindow({
         explicitIds,
       ),
     [reorderLiveDrawingSelection],
+  );
+
+  // The Selection Pane's drag and Ctrl+Shift+F / Ctrl+Shift+B (Microsoft
+  // Support, "Manage objects with the Selection pane"). A unit is a pane row:
+  // a slide object or group (container ""), or an object of one group
+  // (container: the group's row), which moves only among its group. A drop
+  // is reached by Arrange's own moves on the slide's list (`reorderBlocks`,
+  // run by `planSelectionPaneReorder`) and committed once, an imported
+  // object's steps on the slide's native order journal as Reorder Objects
+  // takes them: one Undo step, one save, one update for a second window.
+  const movePresentationPaneUnits = useCallback(
+    (move: OfficeSelectionPaneMove) => {
+      if (move.kind === "step") {
+        const ids =
+          move.container === ""
+            ? (() => {
+                const slide = slidesRef.current[activeIndexRef.current];
+                const rows = slide
+                  ? selectionPaneRows(slide.blocks.filter((block) => !isLayoutGraphicOnSlide(block)), blockAriaName)
+                  : [];
+                return rows.filter((row) => move.keys.includes(row.objectId)).flatMap((row) => row.blockIds);
+              })()
+            : [...move.keys];
+        const first = ids[0];
+        if (!first) return;
+        // One row of the slide steps as its rail does; several rows, or a
+        // group's objects, as Bring Forward / Send Backward move a selection.
+        const single = move.container === "" && move.keys.length === 1;
+        if (move.direction === "forward") bringBlockForward(first, true, single, ids);
+        else sendBlockBackward(first, true, single, ids);
+        return;
+      }
+      const liveSlides = slidesRef.current;
+      const liveIndex = activeIndexRef.current;
+      const liveSlide = liveSlides[liveIndex];
+      if (!liveSlide) return;
+      const paneRowsOf = (blocks: readonly PresentationBlock[]) =>
+        selectionPaneRows(blocks.filter((block) => !isLayoutGraphicOnSlide(block)), blockAriaName);
+      const order = (blocks: PresentationBlock[]): string[] | null => {
+        const rows = paneRowsOf(blocks);
+        if (move.container === "") return rows.map((row) => row.objectId);
+        const group = rows.find((row) => row.objectId === move.container);
+        return group
+          ? [...group.blocks].reverse().filter((member) => !isSmartArtHiddenMember(member)).map((member) => member.id)
+          : null;
+      };
+      const targetsOf = (blocks: readonly PresentationBlock[]) => {
+        const wanted = new Set(
+          move.container === ""
+            ? paneRowsOf(blocks).filter((row) => move.keys.includes(row.objectId)).flatMap((row) => row.blockIds)
+            : move.keys,
+        );
+        return blocks.filter((block) => wanted.has(block.id));
+      };
+      const targets = targetsOf(liveSlide.blocks);
+      if (targets.length === 0 || !targets.every((block) => canReorderBlock(block))) return;
+      const listed = planSelectionPaneReorder<PresentationBlock[]>({
+        model: [...liveSlide.blocks],
+        order,
+        moving: move.keys,
+        slot: move.slot,
+        step: (blocks, command) => {
+          const moving = targetsOf(blocks);
+          return moving.length === targets.length ? reorderBlocks(blocks, moving, command) : null;
+        },
+      });
+      if (!listed) return;
+      if (presentationImportedOrderChanged(liveSlide.blocks, listed)) {
+        const nextSlide = presentationNativeRestack(liveSlide, targets, null, listed);
+        // As Reorder Objects: an order the journal cannot step is still the
+        // order asked for; the slide takes it in the page.
+        const restacked = nextSlide === null ? { ...liveSlide, blocks: listed } : nextSlide;
+        if (restacked !== "unchanged") {
+          commitSlides(liveSlides.map((slide, index) => (index === liveIndex ? restacked : slide)));
+        }
+        return;
+      }
+      commitLiveActiveBlocks((blocks, slide) => (slide.id === liveSlide.id && blocks.length === listed.length ? listed : null));
+    },
+    [blockAriaName, bringBlockForward, commitLiveActiveBlocks, commitSlides, sendBlockBackward],
   );
 
   // Selection-pane hide/show (PowerPoint "Arrange ▸ Selection Pane"): a hidden
@@ -36779,7 +37693,9 @@ export default function PresentationWindow({
           !presentationTextFrameHasShapeAuthority(target) ||
           !presentationTextFrameCanChangeShape(target) ||
           presentationTextFrameLabelTooLong(target) ||
-          !presentationCanChangeToShape(kind)
+          !presentationCanChangeToShape(kind) ||
+          // A text frame is already a rectangle: PowerPoint changes nothing.
+          presentationTextFrameChangeShapeIsNoop(kind)
         ) {
           return null;
         }
@@ -36877,7 +37793,11 @@ export default function PresentationWindow({
       commitLiveActiveBlocks((blocks) => {
         const targets = resolveLiveDrawingTargets(
           blocks,
-          (block) => canEditBlockContent(block) && block.type === "shape",
+          // A text box is a shape: the same Effects (`shapeEffects`).
+          (block) =>
+            canEditBlockContent(block) &&
+            (block.type === "shape" ||
+              (block.type === "text" && presentationTextFrameHasShapeAuthority(block))),
         );
         return targets
           ? blocksWithShapeEffect(blocks, targets, kind, value, deckThemeGridColorsRef.current.accent1)
@@ -37166,6 +38086,7 @@ export default function PresentationWindow({
       let shift = 0;
       let before: string | null = null;
       let selection: TextEditSelection | undefined = edit?.selection;
+      let keystrokeRead: KeystrokeRead | null = null;
       if (target?.type === "shape" && typeof (target as { text?: unknown }).text === "string") {
         before = (target as { text: string }).text;
         if (liveSlide && liveTarget?.type === "shape" && typeof (liveTarget as { text?: unknown }).text === "string") {
@@ -37174,6 +38095,8 @@ export default function PresentationWindow({
             rendered: before, live: (liveTarget as { text: string }).text,
             typed: raw, selection: edit?.selection, caretAfter,
           });
+          keystrokeRead = keystroke.read;
+          noteTextEditOutcome(`shape-read-${keystroke.read}`);
           selection = keystroke.selection;
           if (keystroke.onLive) {
             baseSlide = liveSlide;
@@ -37207,13 +38130,18 @@ export default function PresentationWindow({
         shapeAfter = retyped;
         return retyped;
       });
-      // The room writes the words where they were typed, when they are.
+      // The room writes the words where they were typed, when they are. A
+      // key read against drawn words the live ones have moved past
+      // (`stale`) is not compared into the room: the label keeps it as typed
+      // and the next publication merges it with the live words.
       const typed = before !== null && written !== null
         ? keystrokeSplice(before, written, selection) ??
           caretSplice(before, written, caretAfter === undefined ? undefined : caretAfter + shift) ??
-          (before !== written ? textSplice(before, written) : null)
+          (before !== written && keystrokeRead !== "stale" ? textSplice(before, written) : null)
         : null;
       if (!typed) noteTextEditOutcome(before === null ? "shape-no-words" : "shape-not-noted");
+      if (coeditTraceOn()) coeditTrace("shape-input", { raw: raw.length, before: before?.length ?? null, written: written === null ? null : (written as string).length,
+        caretAfter: caretAfter ?? null, shift, noted: Boolean(typed), burst: Boolean(typingBurstRef.current), onLive: baseSlide !== drawnSlide });
       let outcome: PageTextEditOutcome | void = undefined;
       if (typed && before !== null) {
         outcome = noteSlideTextEditRef.current({
@@ -37270,7 +38198,9 @@ export default function PresentationWindow({
       );
       typingLetterRef.current = !composing && event.nativeEvent !== undefined && inputIsLetterInPlace(event.nativeEvent);
       try {
-        updateShapeText(blockId, nextText);
+        // The caret the key left, so the key is read where it was typed
+        // (carryKeystrokeToLive), not by comparing words.
+        updateShapeText(blockId, nextText, undefined, start === end ? start : undefined);
       } finally {
         typingLetterRef.current = false;
       }
@@ -37496,12 +38426,22 @@ export default function PresentationWindow({
         ) {
           const runStylePatch = formatPaintRunStylePatch(plan);
           // The target's live textarea/rich-preview selection is resolved at
-          // dispatch time; a collapsed/absent range intentionally falls back
-          // to the whole target text/paragraph span.
-          const targetSelection =
+          // dispatch time: a drag's range is itself; a click (a bare caret)
+          // is the word it landed on, as Office's brush paints the word it is
+          
+          // range (the box's border) or a click on no word falls back to the
+          // whole target text/paragraph span.
+          let targetSelection =
             textSelectionRef.current?.blockId === block.id
               ? textSelectionRef.current
               : null;
+          if (targetSelection && targetSelection.start === targetSelection.end) {
+            const word = presentationClickedWord(
+              presentationEditableText(block as unknown as PresentationTextBlock),
+              targetSelection.start,
+            );
+            targetSelection = word ? { ...targetSelection, start: word[0], end: word[1] } : null;
+          }
           let painted = block as unknown as PresentationTextBlock;
           if (runStylePatch) {
             // A selected target span may visually inherit font properties
@@ -37521,7 +38461,7 @@ export default function PresentationWindow({
                 block.id,
                 targetSelection,
                 runStylePatch,
-                { automaticFill: presentationSlideInk(themeRef.current) },
+                { automaticFill: presentationSlideInk(themeRef.current, activeMasterRef.current) },
               ) ?? painted;
           }
           if (plan.paragraphPatch) {
@@ -37598,12 +38538,25 @@ export default function PresentationWindow({
               return;
             }
             let stale = false;
-            const accepted = commitLiveActiveBlocks((blocks) => {
-              if (!plan.members.every((member) => blocks.includes(member))) {
+            const accepted = commitLiveActiveBlocks((live) => {
+              // The members by id: another window's words arriving meanwhile
+              // made new objects of them (a prepared diagram's words are carried
+              // onto it, `preparedOverDelivery`), and the answer, asked before,
+              // lands with those words in it rather than being dropped and
+              
+              // resize never landed while the other window typed).
+              const rebased = servedSmartArtMembersLive(plan.members, live);
+              const words = rebased?.words.size ? rebased.words : null;
+              const withWords = words ? plan.withWords?.(answer, words) ?? null : null;
+              if (!rebased || (words && withWords === null)) {
                 stale = true;
                 return null;
               }
-              const applied = plan.apply(blocks, answer);
+              const carried: typeof answer = withWords ?? answer;
+              // The plan's own members stand in for theirs: its apply finds
+              // them where they are; the answer replaces them.
+              const blocks = rebased.planned.size ? live.map((block) => rebased.planned.get(block.id) ?? block) : live;
+              const applied = plan.apply(blocks, carried);
               if (!applied) return applied;
               // Reset Graphic keeps the background colour applied to the
               // whole graphic and takes off its line and effect (Microsoft
@@ -37769,6 +38722,8 @@ export default function PresentationWindow({
       signal?: AbortSignal,
       /** The theme of the slide the diagram stands on (its own master's). */
       slideColorTheme?: SmartArtColorTheme | null,
+      /** Ids the blocks take instead of fresh ones: this and a count (`withRealIds`). */
+      idPrefix?: string,
     ): Promise<PresentationBlock[] | null> => {
       // A pick of the layout an aligned alias stands for converts it as
       // ITSELF (hProcess9 stays a Continuous Arrow Process).
@@ -37779,6 +38734,9 @@ export default function PresentationWindow({
       // answer about a preserved diagram, so MRAI's own record — if the file
       // even has one — says nothing about it; only the automatic reopen sends
       // it, and the engine proves it against this outline first.
+      // Runs in a theme colour the page's reading predates, read from the
+      
+      const outline = layoutIdentity ? await outlineWithStoredRunColours(pageId, view.outline, view.slotMediaView) : view.outline;
       const converted = layoutIdentity
         ? (
             await smartArtEngine(
@@ -37791,7 +38749,7 @@ export default function PresentationWindow({
                 ...(!layoutId && view.layoutDefinition && nativeSmartArtConvertsFromOwnDefinition(view)
                   ? { layoutDefinitionRef: { urn: view.layoutIdentity, sha256: view.layoutDefinition.sha256 } }
                   : {}),
-                outline: [...view.outline],
+                outline: [...outline],
                 frameEmu: view.frameEmu,
                 smartArtStyle: view.smartArtStyle,
                 // A diagram Office runs Right to Left converts mirrored.
@@ -37800,6 +38758,8 @@ export default function PresentationWindow({
                 ...(view.colorsId ? { colorsId: view.colorsId } : {}),
                 // The author's hand changes, laid out as PowerPoint lays them out.
                 ...(view.customizations ? { customizations: view.customizations } : {}),
+                // The graphic's own 3-D Rotation, one scene over its style's.
+                ...(view.graphicScene3d ? { graphicScene3d: view.graphicScene3d } : {}),
                 ...((() => {
                   // The diagram's own master's theme when the file states one
                   // (a deck of several themes), else its slide's, else the deck's.
@@ -37828,7 +38788,7 @@ export default function PresentationWindow({
                 // No placeholder words: an empty Office point stays empty and
                 // the slide draws its `[Text]` prompt (PPT-G013).
               },
-              { signal },
+              { signal, ...(idPrefix ? { idPrefix } : {}) },
             )
           ).nodes
         : null;
@@ -37862,6 +38822,7 @@ export default function PresentationWindow({
             ...(graphic.background && "fill" in graphic.background ? { fill: graphic.background.fill } : {}),
             ...(graphic.line ? { line: graphic.line } : {}),
             ...(graphic.effect ? { effect: graphic.effect } : {}),
+            ...(graphic.effects ? { effects: graphic.effects } : {}),
           }
         : null;
       if (!converted?.length) return null;
@@ -37878,7 +38839,7 @@ export default function PresentationWindow({
       const asRead = smartArtAsReadOf(members);
       return (asRead ? [{ ...members[0], smartArtAsRead: asRead }, ...members.slice(1)] : members) as unknown as PresentationBlock[];
     },
-    [],
+    [pageId],
   );
 
   /** Put the converted diagram exactly where the native one sat in z-order. */
@@ -37930,7 +38891,22 @@ export default function PresentationWindow({
 
   const refuseSmartArtConversionRef = useRef<(refusal: SmartArtRefusal) => void>(() => undefined);
   const reportSmartArtEngineErrorRef = useRef<(error: unknown) => void>(() => undefined);
-  const smartArtEditAwaitingRef = useRef<{ x: number; y: number } | null>(null);
+  // The diagram the prepared conversion stands for, and when a press last
+  // brought the conversion out from under the file's drawing: a double click
+  // whose first press did that was aimed at the drawing.
+  const preparedSmartArtViewRef = useRef<NativeSmartArtView | null>(null);
+  const smartArtRevealPressRef = useRef(Number.NEGATIVE_INFINITY);
+  const slidePointOfClient = useCallback(
+    (x: number, y: number): { x: number; y: number } | null => {
+      const rect = slideCanvasRef.current?.getBoundingClientRect();
+      if (!rect || !(rect.width > 0) || !(rect.height > 0)) return null;
+      return {
+        x: ((x - rect.left) / rect.width) * activeSlideBounds.width,
+        y: ((y - rect.top) / rect.height) * activeSlideBounds.height,
+      };
+    },
+    [activeSlideBounds.height, activeSlideBounds.width],
+  );
   const smartArtMayPrepare =
     !(guestMode && !enableGuestSmartArtOpenConversion) &&
     !embeddedPresentation &&
@@ -37982,6 +38958,11 @@ export default function PresentationWindow({
           images,
           undefined,
           smartArtColorThemeForSlideRef.current(slideAtStart, view.hostTheme),
+          // Every window converts this diagram into the same blocks: two
+          // people's first edits of it meet in one set of members instead of
+          // each window's own (the second set stood beside the first, and an
+          // edit made in the other window's went with its deleted members).
+          nativeSmartArtConversionIdPrefix(slideAtStart.id, view.frameShapeId),
         );
       } catch (error) {
         // A diagram laid out from its own file's definition (SMARTART-GAP.md
@@ -38233,13 +39214,16 @@ export default function PresentationWindow({
     () => toast({ title: t("toolbar.smartartContext.preparing") }),
   );
   const smartArtPreparationVersion = useSmartArtPreparationVersion();
-  const selectedConvertsOnEdit =
-    smartArtMayPrepare && !aiOpen && !preparedSmartArt && contextualNativeSmartArtView &&
-    (nativeLayoutConvertsOnOpen(contextualNativeSmartArtView.layoutIdentity) ||
+  /** `view` when its diagram is converted as it is edited: a layout the
+   * conversion lays out as the file does… */
+  const nativeSmartArtConvertsOnEdit = (view: NativeSmartArtView | null): NativeSmartArtView | null =>
+    smartArtMayPrepare && !aiOpen && view &&
+    (nativeLayoutConvertsOnOpen(view.layoutIdentity) ||
       // …or one laid out from its own file's definition (SMARTART-GAP.md §8.6).
-      nativeSmartArtConvertsFromOwnDefinition(contextualNativeSmartArtView))
-      ? contextualNativeSmartArtView
+      nativeSmartArtConvertsFromOwnDefinition(view))
+      ? view
       : null;
+  const selectedConvertsOnEdit = preparedSmartArt ? null : nativeSmartArtConvertsOnEdit(contextualNativeSmartArtView);
   // A diagram's answer is kept by its first member, which an edit replaces.
   const selectedSmartArtPreparation = selectedConvertsOnEdit
     ? PRESENTATION_SMARTART_PREPARATIONS.read(selectedConvertsOnEdit.members[0])
@@ -38284,6 +39268,17 @@ export default function PresentationWindow({
       }
       return;
     }
+    // The file's words open under the caret (a press on a label puts the
+    // caret in its words before the conversion is ready, as PowerPoint puts it
+    // where the words were clicked): the conversion takes their place with the
+    // caret in the same words, at the same characters. It took the label from
+    // under the caret: the keyboard went to the slide, the whole diagram was
+    // selected instead, and the double click that followed landed on the
+    
+    const openWords = smartArtEditAwaitingRef.current ? null : focusedWordsCaret(slideCanvasRef.current);
+    const carriedInto = openWords && own.has(openWords.blockId)
+      ? nativeSmartArtConvertedShapeOf(view, converted, openWords.blockId)
+      : null;
     persistPreparedSlideAs(slide, slideNow);
     const selection = new Set(converted.map((block) => block.id));
     selectedBlockIdsRef.current = selection;
@@ -38299,6 +39294,7 @@ export default function PresentationWindow({
     setSlides(next);
     const awaiting = smartArtEditAwaitingRef.current;
     smartArtEditAwaitingRef.current = null;
+    preparedSmartArtViewRef.current = view;
     setPreparedSmartArt({
       slideId: slide.id,
       frameShapeId: view.frameShapeId,
@@ -38306,10 +39302,33 @@ export default function PresentationWindow({
       original: slideNow,
       originals: view.members,
       converted,
-      // A double click that was waiting for this opens the words under it.
-      revealed: awaiting !== null,
+      // A double click that was waiting for this opens the words under it. A
+      // diagram with no drawing of its own has nothing to show but this
+      // conversion (what its laid-out scene showed): it is drawn at once, and
+      // its shapes take the next click and double click as any SmartArt's.
+      revealed: awaiting !== null || carriedInto !== null || view.members.some(nativeSmartArtDrawingAbsent),
     });
-    if (awaiting) {
+    // The words of the item double-clicked on the drawing open, wherever the
+    // conversion now draws them; a point on no single item is hit again.
+    // The item of the drawing's member the double click took -- the one drawn
+    // under the pointer, turned in 3-D or not -- else of the member whose box
+    // holds the point (a box of a diagram drawn in 3-D is not where it shows:
+    
+    const opens =
+      (awaiting?.memberId ? nativeSmartArtConvertedShapeOf(view, converted, awaiting.memberId) : null) ??
+      (awaiting?.slide ? nativeSmartArtConvertedShapeAt(view, converted, awaiting.slide) : null);
+    // The words still opening are the conversion's now (selected whole until they do).
+    if (awaiting) noteSmartArtWordsOpening(converted.map((block) => block.id));
+    if (awaiting && opens) {
+      window.requestAnimationFrame(() => {
+        editSmartArtShapeText(opens, undefined, { x: awaiting.x, y: awaiting.y, word: true });
+      });
+    } else if (carriedInto && openWords) {
+      const { start, end } = openWords.range;
+      window.requestAnimationFrame(() => {
+        editSmartArtShapeText(carriedInto, undefined, undefined, { start, end, words: openWords.text });
+      });
+    } else if (awaiting) {
       window.requestAnimationFrame(() => {
         document.elementFromPoint?.(awaiting.x, awaiting.y)?.dispatchEvent(
           new MouseEvent("dblclick", {
@@ -38325,7 +39344,7 @@ export default function PresentationWindow({
       // the arrows and typing still reach the selection.
       window.requestAnimationFrame(() => slideCanvasRef.current?.focus({ preventScroll: true }));
     }
-  }, [selectedConvertsOnEdit, selectedSmartArtPreparation, setPreparedSmartArt, slideWithConvertedSmartArt]);
+  }, [editSmartArtShapeText, noteSmartArtWordsOpening, selectedConvertsOnEdit, selectedSmartArtPreparation, setPreparedSmartArt, slideWithConvertedSmartArt]);
   // An edit already asked for answers now, instead of doing nothing.
   useEffect(() => {
     if (!smartArtEditAwaitingRef.current) return;
@@ -38337,6 +39356,83 @@ export default function PresentationWindow({
       reportSmartArtEngineErrorRef.current(selectedSmartArtPreparation.error);
     }
   }, [selectedSmartArtPreparation]);
+
+  // A room's slides arriving while a diagram is prepared hold the file's
+  // diagram, as the room does: on the slide that arrived the conversion is
+  // placed again (the other window's words on it carried over), so the shape
+  // being typed in, dragged or double-clicked stays under the pointer and the
+  // caret. Anything else the other window changed on the diagram, or its words
+  // in the very shape being edited here, lets the conversion go as before; the
+  // other window's own conversion arriving (the same blocks in every window)
+  // simply takes its place.
+  preparedThroughDeliveryRef.current = (before, delivered) => {
+    const prepared = preparedSmartArtRef.current;
+    const view = preparedSmartArtViewRef.current;
+    if (!prepared || !view || !before.includes(prepared.prepared)) return delivered;
+    const at = delivered.findIndex((slide) => slide.id === prepared.slideId);
+    if (at < 0 || delivered[at] === prepared.prepared) return delivered;
+    const editing = editingShapeTextIdRef.current;
+    // The words being typed in, as they stand before the delivery is drawn.
+    const caret = focusedRichPreviewCaret(rootRef.current);
+    const outcome = preparedOverDelivery<PresentationBlock, SlideModel>(prepared, delivered[at], {
+      words: (converted, was, now) => {
+        const carried = nativeSmartArtWordsOntoConversion(converted, was, now, view.outline);
+        const edited = editing ? converted.findIndex((block) => block.id === editing) : -1;
+        return carried && edited >= 0 && carried[edited] !== converted[edited] ? null : carried;
+      },
+      place: (slide, converted) => slideWithConvertedSmartArt(slide, view, converted),
+    });
+    if (coeditTraceOn()) coeditTrace("prepared-delivery", { kind: outcome.kind, slide: prepared.slideId, editing, caret: caret?.blockId ?? null });
+    if (outcome.kind !== "changed") {
+      // The shape being typed in is still there by its id: in the conversion
+      // placed again, or in the other window's conversion of the diagram. Its
+      
+      // focus went to nothing and the next words with it): the caret is given
+      // back there, in the same words, once the delivery is drawn.
+      const drawn = outcome.kind === "kept" ? outcome.prepared.prepared : delivered[at];
+      const still = caret ? drawn.blocks.find((block) => block.id === caret.blockId) : undefined;
+      landedCaretRef.current = caret && still && prepared.converted.some((block) => block.id === caret.blockId) &&
+        (still as { text?: unknown }).text === caret.text
+        ? { blockId: caret.blockId, start: caret.range.start, end: caret.range.end, words: caret.text }
+        : null;
+    }
+    if (outcome.kind !== "kept") return delivered;
+    if (outcome.prepared !== prepared) setPreparedSmartArt(outcome.prepared);
+    const next = delivered.slice();
+    next[at] = outcome.prepared.prepared;
+    return next;
+  };
+
+  // The caret of words the other window's conversion arrived under, given back
+  // in the same shape if its drawing took the focus (`landedCaretRef`): at the
+  // delivery's commit, and once more a frame later, where a body drawn anew
+  // gives the keyboard to the canvas.
+  useLayoutEffect(() => {
+    const pending = landedCaretRef.current;
+    if (!pending) return;
+    landedCaretRef.current = null;
+    const giveBack = (): boolean => {
+      const doc = rootRef.current?.ownerDocument;
+      const canvas = slideCanvasRef.current;
+      const active = doc?.activeElement ?? null;
+      const wrapper = canvas?.querySelector<HTMLElement>(`[data-block-id="${cssEscapeAttr(pending.blockId)}"]`);
+      const preview = wrapper?.querySelector<HTMLElement>('[data-selection-owner="rich-preview"]');
+      if (!doc || !canvas || !preview?.isConnected) return false;
+      // Still in its words, or somewhere the person went since: theirs.
+      if (active && active !== doc.body && active !== canvas) return true;
+      if (presentationPreviewPlainText(preview) !== pending.words) return false;
+      preview.focus({ preventScroll: true });
+      setPresentationPreviewSelection(preview, pending.start, pending.end);
+      textSelectionRef.current = { blockId: pending.blockId, start: pending.start, end: pending.end };
+      if (coeditTraceOn()) coeditTrace("landed-caret", { blockId: pending.blockId, start: pending.start });
+      return true;
+    };
+    giveBack();
+    // (Not cancelled by the next delivery's drawing: it asks the page as it is then.)
+    window.requestAnimationFrame(() => {
+      giveBack();
+    });
+  }, [slides]);
 
   // Something else selected with nothing changed: the file's own diagram again,
   // as if it had never been selected. A deck replaced under it just lets it go.
@@ -38632,6 +39728,7 @@ export default function PresentationWindow({
           members: plan.members,
           ask: plan.ask,
           ...(plan.resetsGraphicFormat ? { resetsGraphicFormat: true } : {}),
+          withWords: (answer, words) => (answer ? smartArtAnswerWithWords(answer, words) : answer),
           apply: (current, answer) => {
             if (!answer?.length) return null;
             generated = answer;
@@ -38949,63 +40046,49 @@ export default function PresentationWindow({
    * INCLUDING a shape's size: the layout is rebuilt in its own frame at the
    * catalog colours and the default style, in one undo step.
    */
+  // One item resized by `factor` (against its shape as it is now) and the whole
+  // graphic laid out again around it, as PowerPoint does (its `custScaleX/Y`): the
+  // engine rebuilds the diagram with the new factor and the answer lands as one
+  // change, so one Undo puts every shape back. Planned again from the live slide
+  // when its turn comes (another window's edit meanwhile is not overwritten).
+  const relayoutSmartArtItemResize = useCallback(
+    (
+      itemId: string | null,
+      factor: number | { x: number; y: number },
+      primaryOf: (blocks: PresentationBlock[]) => PresentationBlock | null | undefined,
+    ): boolean =>
+      relayoutContextualSmartArt((blocks) => {
+        const primary = primaryOf(blocks);
+        const target = itemId ?? readSmartArtBlockMarker(primary)?.itemId;
+        if (!target) return null;
+        const planned = smartArtResizePlan(blocks, primary, target, factor, canManipulateBlock);
+        if (!planned) return null;
+        return {
+          members: planned.plan.members,
+          ask: servedSmartArtRebuild(planned.plan, planned.sent),
+          outlineItemId: target,
+        };
+      }),
+    [canManipulateBlock, relayoutContextualSmartArt, servedSmartArtRebuild],
+  );
+  useEffect(() => {
+    relayoutSmartArtItemResizeRef.current = (itemId, factor, primary) =>
+      relayoutSmartArtItemResize(itemId, factor, (blocks) => blocks.find((block) => block.id === primary.id) ?? null);
+  }, [relayoutSmartArtItemResize]);
   const resizeContextualSmartArtShape = useCallback(
     // Larger / Smaller, or SmartArt Format's Height / Width as a per-axis scale.
-    (direction: "larger" | "smaller" | { x: number; y: number }): boolean => {
-      const itemId = smartArtOutlineSelectionIdRef.current;
-      return commitLiveActiveBlocks((blocks) => {
-        const liveSelection = resolvePresentationSelectionAuthority(
-          blocks,
-          selectedBlockIdRef.current,
-          selectedBlockIdsRef.current,
-        );
-        const group = presentationSmartArtGroup(blocks, liveSelection.primary);
-        const target =
-          itemId ?? readSmartArtBlockMarker(liveSelection.primary)?.itemId;
-        const frame = group ? presentationSmartArtBounds(group) : null;
-        if (!group || !target || !frame) return null;
-        if (group.members.some((block) => !canManipulateBlock(block))) {
-          return null;
-        }
-        const resized = resizeSmartArtItem(
-          group.members,
-          target,
-          typeof direction === "object"
-            ? direction
-            : direction === "larger"
-              ? SMARTART_SHAPE_SIZE_STEP
-              : 1 / SMARTART_SHAPE_SIZE_STEP,
-          (block) => {
-            const record = block as Record<string, unknown>;
-            return typeof record.left === "number" &&
-              typeof record.top === "number" &&
-              typeof record.width === "number" &&
-              typeof record.height === "number"
-              ? {
-                  left: record.left,
-                  top: record.top,
-                  width: record.width,
-                  height: record.height,
-                }
-              : null;
-          },
-          (block, box) =>
-            ({
-              ...block,
-              left: Math.round(box.left),
-              top: Math.round(box.top),
-              width: Math.round(box.width),
-              height: Math.round(box.height),
-            }) as PresentationBlock,
-          12_700,
-          frame,
-        );
-        if (!resized) return null;
-        const byId = new Map(resized.map((block) => [block.id, block]));
-        return blocks.map((block) => byId.get(block.id) ?? block);
-      });
-    },
-    [canManipulateBlock, commitLiveActiveBlocks],
+    (direction: "larger" | "smaller" | { x: number; y: number }): boolean =>
+      relayoutSmartArtItemResize(
+        smartArtOutlineSelectionIdRef.current,
+        typeof direction === "object"
+          ? direction
+          : direction === "larger"
+            ? SMARTART_SHAPE_SIZE_STEP
+            : 1 / SMARTART_SHAPE_SIZE_STEP,
+        (blocks) =>
+          resolvePresentationSelectionAuthority(blocks, selectedBlockIdRef.current, selectedBlockIdsRef.current).primary,
+      ),
+    [relayoutSmartArtItemResize],
   );
 
   /**
@@ -39566,6 +40649,10 @@ export default function PresentationWindow({
         return {
           members: plan.members,
           ask: (signal) => smartArtEngine("presentation.restyle", plan.request, { signal }),
+          withWords: (answer, words) => {
+            const members = smartArtAnswerWithWords(answer.members as unknown as PresentationBlock[], words);
+            return members ? { ...answer, members: members as unknown as typeof answer.members } : null;
+          },
           apply: (current, answer) => {
             const members = new Set<PresentationBlock>(plan.members);
             const restyled = (answer.members as unknown as PresentationBlock[]).filter(
@@ -40904,7 +41991,10 @@ export default function PresentationWindow({
           ? contextualImageCanMoveForward
           : contextualImageCanMoveBackward;
       if (!canExecute) return;
-      if (contextualImageUsesNativeStepAuthority) {
+      if (
+        contextualImageUsesNativeStepAuthority &&
+        pictureArrangeCommand.canExecute(direction)
+      ) {
         invokePictureArrangeStep(direction);
         return;
       }
@@ -40920,6 +42010,7 @@ export default function PresentationWindow({
       contextualImageCanMoveForward,
       contextualImageUsesNativeStepAuthority,
       invokePictureArrangeStep,
+      pictureArrangeCommand,
       sendBlockBackward,
     ],
   );
@@ -42282,7 +43373,7 @@ export default function PresentationWindow({
         edit.base.slice(0, edit.start) + edit.insert + edit.base.slice(edit.end) === cellAfter.text
         ? edit
         : cellBefore && cellAfter && typeof cellAfter.text === "string"
-          ? (() => { const splice = cellKeystrokeSplice(was, cellAfter.text, caretAfter); return splice ? { base: was, ...splice } : null; })()
+          ? cellKeystrokeEdit(was, drawnCellText(activeSlide, blockId, rowIndex, cellIndex), cellAfter.text, caretAfter)
           : null;
       if (typed && cellBefore) {
         noteSlideTextEditRef.current({
@@ -45049,12 +46140,10 @@ export default function PresentationWindow({
       disabled={themeSelectionDisabled}
       locale={locale}
       paletteId={theme?.colorSchemeId ?? "office"}
-      value={
-        theme?.effectSchemeId ??
-        (theme?.identity?.selectionKind === "office"
-          ? (OFFICE_THEMES.find((entry) => entry.id === theme.identity?.themeId)?.effects ?? "")
-          : "")
-      }
+      value={presentationEffectGalleryValue(
+        theme,
+        (themeId) => OFFICE_THEMES.find((entry) => entry.id === themeId)?.effects,
+      )}
       onValueChange={applyThemeEffectScheme}
       testId={`presentation-${host}-effect-gallery`}
       itemTestIdPrefix={`presentation-${host}-effect-`}
@@ -45809,6 +46898,8 @@ export default function PresentationWindow({
     end: number;
     /** The selection intent it was left at: a press or key since ends it. */
     intent: number;
+    /** The words it is in, when it is for words not drawn yet (a delivery's). */
+    words?: string;
   } | null>(null);
   shapeCaretAfterTypingRef.current = ({ blockId, start, end }) => {
     pendingShapeRichSelectionRef.current = { blockId, start, end, intent: textSelectionIntentRef.current };
@@ -45865,8 +46956,12 @@ export default function PresentationWindow({
       recordShapeTextRange(blockId, start + shift, end + shift);
     }
   };
-  const takeShapeRichSelection = (blockId: string, orRecorded = true) => {
+  const takeShapeRichSelection = (blockId: string, orRecorded = true, shown?: string) => {
     const pending = pendingShapeRichSelectionRef.current;
+    // A caret for a delivery's words waits for the drawing of them: put into
+    // the words still shown (a drawing of the label for something else came
+    
+    if (pending?.blockId === blockId && pending.words !== undefined && shown !== undefined && shown !== pending.words) return null;
     if (pending?.blockId === blockId) {
       pendingShapeRichSelectionRef.current = null;
       if (pending.intent === textSelectionIntentRef.current) {
@@ -45913,7 +47008,7 @@ export default function PresentationWindow({
         for (const { from, to, style } of styled) {
           formatted =
             formatPresentationTextRuns(formatted, blockId, { blockId, start: range.start + from, end: range.start + to }, style, {
-              automaticFill: presentationSlideInk(themeRef.current),
+              automaticFill: presentationSlideInk(themeRef.current, activeMasterRef.current),
             }) ?? formatted;
         }
         if (formatted === (candidate as unknown as PresentationTextBlock)) return candidate;
@@ -46180,10 +47275,12 @@ export default function PresentationWindow({
         run: () => ungroupSelectedBlocks(),
         disabledReason: selectedHasGroupedBlock ? null : t("presentation.ui.contextMenu.nothingGrouped"),
       },
-      bringToFront: { run: () => bringBlockToFront(block.id, true) },
-      bringForward: { run: () => bringBlockForward(block.id, true) },
-      sendToBack: { run: () => sendBlockToBack(block.id, true) },
-      sendBackward: { run: () => sendBlockBackward(block.id, true) },
+      // On the whole selection, as Home ▸ Arrange (a chart selected with
+      // other objects, or in a group selected whole, moves with them).
+      bringToFront: { run: () => bringBlockToFront(block.id), disabledReason: refused ?? selectionLayerDisabledReason("bringToFront") },
+      bringForward: { run: () => bringBlockForward(block.id), disabledReason: refused ?? selectionLayerDisabledReason("bringForward") },
+      sendToBack: { run: () => sendBlockToBack(block.id), disabledReason: refused ?? selectionLayerDisabledReason("sendToBack") },
+      sendBackward: { run: () => sendBlockBackward(block.id), disabledReason: refused ?? selectionLayerDisabledReason("sendBackward") },
       // Edit Alt Text…: the deck's Alt Text pane, on this chart.
       altText: { run: () => openAltTextPane() },
       formatChartArea: {
@@ -47024,8 +48121,12 @@ export default function PresentationWindow({
     controlId?: string;
     kinds?: readonly OfficePictureEffectKind[];
     extra?: ReactNode;
-    /** The Format pane page 3-D Options... opens (absent: not offered). */
+    /** Categories listed greyed, each with its reason. */
+    unavailable?: Partial<Record<OfficePictureEffectKind, string>>;
+    /** The Format pane page the "... Options" rows open (absent: greyed). */
     effectsPage?: "effects" | "office-effects" | "text";
+    /** Why the "... Options" rows are greyed, when not the generic reason. */
+    optionsUnavailableReason?: string;
     onPick: <K extends OfficePictureEffectKind>(kind: K, value: OfficePictureEffectValues[K] | null) => void;
   }) => {
     const options = { label: args.label, testId: args.testId, controlId: args.controlId };
@@ -47049,9 +48150,13 @@ export default function PresentationWindow({
         displayLabel={args.displayLabel}
         kinds={args.kinds}
         extra={args.extra}
+        unavailable={args.unavailable}
         labels={presentationEffectsMenuLabels(t, options.label)}
         onPick={args.onPick}
-        onThreeDOptions={args.effectsPage ? () => openFormatPaneAtEffects(args.effectsPage!) : undefined}
+        onEffectOptions={
+          args.effectsPage ? (section) => openFormatPaneAtEffects(args.effectsPage!, section) : undefined
+        }
+        optionsUnavailableReason={args.optionsUnavailableReason}
       />
     );
   };
@@ -48070,6 +49175,10 @@ export default function PresentationWindow({
   // being the slide's actual size -- times the view zoom): the selection
   // grips are drawn at its reciprocal.
   const slideScreenScale = slideDesignScale * slideZoom;
+  // Pattern fills: one bit a CSS pixel at every zoom, the tiles on the
+  // slide's grid from its top-left corner, as PowerPoint's window draws them
+  // (lib/office-pattern-anchor).
+  useOfficePatternAnchor(slideCanvasRef, `${slideScreenScale}:${activeIndex}`);
   // The box the canvas lays out for the slide: the slide's size on screen.
   // (A slide reviewed in place keeps its host's box: no box of its own.)
   const slideZoomBoxStyle = useMemo<CSSProperties>(
@@ -50313,13 +51422,16 @@ export default function PresentationWindow({
   // (Ctrl+M; Shift+Cmd+N when the browser hands it over), Duplicate Slide
   // (Ctrl/Cmd+Shift+D), Group / Ungroup (Ctrl+G / Ctrl+Shift+G, Option+Cmd+G
   // / Option+Shift+Cmd+G) and Page Down / Page Up through the slides in the
-  // editing views (PPT-E001 E002 E004 E007). They run the same commands as
-  // the ribbon; words being typed keep every key.
+  // editing views (PPT-E001 E002 E004 E007), and the show's start keys
+  // (F5 / Shift+F5; Cmd+Shift+Return / Cmd+Return on a Mac). They run the
+  // same commands as the ribbon; words being typed keep every other key.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.isComposing) return;
       const command = presentationDesktopShortcutFor(event);
       if (!command) return;
+      // the show's start keys are taken on the way down (handleShowKeyDown)
+      if (command === "slideShowFromStart" || command === "slideShowFromCurrent") return;
       const root = rootRef.current;
       const active = document.activeElement;
       if (presentModeRef.current || !nativeOfficeOwnsFocus(root, active)) return;
@@ -50368,8 +51480,41 @@ export default function PresentationWindow({
       } else if (command === "group") groupSelectedBlocks();
       else if (command === "ungroup") ungroupSelectedBlocks();
     };
+    // F5 / Shift+F5 (Cmd+Shift+Return / Cmd+Return on a Mac) start the show
+    // while the deck has the focus, even mid-sentence in a text box or on a
+    // thumbnail (whose own Enter would otherwise take Cmd+Return first), as
+    // PowerPoint does. F5 is the browser's Reload too: in the deck it never
+    // reloads the page -- not in a running show, nor in a dialog, menu or
+    // field, which keep their other keys and start nothing.
+    const handleShowKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing) return;
+      const command = presentationDesktopShortcutFor(event);
+      if (command !== "slideShowFromStart" && command !== "slideShowFromCurrent") return;
+      if (presentModeRef.current) {
+        event.preventDefault();
+        return;
+      }
+      const active = document.activeElement;
+      if (!nativeOfficeOwnsFocus(rootRef.current, active)) return;
+      event.preventDefault();
+      if (
+        active?.closest(
+          '[role="dialog"][aria-modal="true"], [role="menu"], [role="listbox"], input, select, textarea',
+        )
+      ) {
+        return;
+      }
+      event.stopPropagation();
+      executePresentationFeature(
+        command === "slideShowFromStart" ? "slideshow.fromStart" : "slideshow.fromCurrent",
+      );
+    };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleShowKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleShowKeyDown, true);
+    };
   }, [
     activateSlideFromRail,
     duplicateSlideCommand.featureId,
@@ -50491,6 +51636,9 @@ export default function PresentationWindow({
   // is bold draws every word bold, and Bold showed off at a caret or a word
   // selected there while pressing it took the bold away -- the writer reads
   // the same inheritance (`textBlockWithRunToggle`).
+  // The style of the character before a caret that holds a format, without
+  // that format: what the caret is drawn beside.
+  let ribbonCaretBesideStyle: ReturnType<typeof runStyleAtBodySelection> | undefined;
   const ribbonTextRunStyle = ribbonTextBlock
     ? ribbonCaretTypingFormat || ribbonCaretInText
       ? (() => {
@@ -50508,6 +51656,7 @@ export default function PresentationWindow({
             `${text.slice(0, caret)}\u2060${text.slice(caret)}`,
             { start: caret, end: caret },
           );
+          if (ribbonCaretTypingFormat) ribbonCaretBesideStyle = runStyleAtBodySelection(probe, range);
           for (const patch of ribbonCaretTypingFormat?.patches ?? []) {
             probe = formatTextBlockRunSelection(probe, textBlock.id, range, patch) ?? probe;
           }
@@ -50518,6 +51667,24 @@ export default function PresentationWindow({
           textSelectionSnapshot,
         )
     : undefined;
+  // A size held at the caret (Grow Font with nothing highlighted) draws the
+  // caret at that size, on the box being typed in: the browser's own caret
+  // kept the height of the words already there while the next character
+  
+  const ribbonCaretHeldFontScale = ribbonCaretTypingFormat
+    ? officeCaretFontScale(ribbonTextRunStyle?.fontSize, ribbonCaretBesideStyle?.fontSize)
+    : null;
+  const ribbonCaretHeldBlockId = ribbonCaretHeldFontScale !== null ? (ribbonTextBlock?.id ?? null) : null;
+  const caretHeldFontScaleHolderRef = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    const holder = ribbonCaretHeldBlockId
+      ? slideCanvasRef.current?.querySelector(`[data-block-id="${cssEscapeAttr(ribbonCaretHeldBlockId)}"]`) ?? null
+      : null;
+    const previous = caretHeldFontScaleHolderRef.current;
+    if (previous && previous !== holder) setOfficeCaretFontScale(previous, null);
+    caretHeldFontScaleHolderRef.current = holder;
+    if (holder) setOfficeCaretFontScale(holder, ribbonCaretHeldFontScale);
+  }, [ribbonCaretHeldBlockId, ribbonCaretHeldFontScale]);
   // The selected objects Home formats as objects (a shape, a SmartArt
   // graphic, a multi-selection, a chart), and what Home shows for them —
   // "mixed" where their runs or the objects disagree. A single plain text
@@ -51194,7 +52361,7 @@ export default function PresentationWindow({
         // The dialog's Font Color reaches the paint the words wear, as Home's does.
         const formatted =
           formatPresentationTextRuns(live, block.id, selection, runPatch, {
-            automaticFill: presentationSlideInk(themeRef.current),
+            automaticFill: presentationSlideInk(themeRef.current, activeMasterRef.current),
           }) ?? live;
         // The spacing on the same characters (`presentationBlockWithLetterSpacingIn`).
         const spaced = presentationBlockWithLetterSpacingIn(formatted, selection, points) as
@@ -51221,10 +52388,13 @@ export default function PresentationWindow({
   const applyParagraphDialogResult = (
     result: PresentationParagraphDialogResult,
   ): boolean => {
-    if (result.indentation !== undefined) {
+    // Indentation and Text alignment are the rows' own: the rest of the
+    // dialog's change goes into the same commit (one Undo).
+    if (result.indentation !== undefined || result.fontAlign !== undefined) {
       if (!ribbonTextBlock) return false;
       const selection = textSelectionRef.current;
       const indentation = result.indentation;
+      const fontAlign = result.fontAlign;
       const inherited = ribbonInheritedListIndents;
       const committed = commitLiveTextBlockChange(ribbonTextBlock.id, (block) => {
         if (refuseParagraphCommandOnOverlongText(block)) return null;
@@ -51239,7 +52409,12 @@ export default function PresentationWindow({
         if (result.exactPoints !== undefined) {
           next = textBlockWithExactLineSpacing(next, result.exactPoints, selection) ?? next;
         }
-        next = textBlockWithParagraphIndent(next, indentation, selection, inherited) ?? next;
+        if (indentation !== undefined) {
+          next = textBlockWithParagraphIndent(next, indentation, selection, inherited) ?? next;
+        }
+        if (fontAlign !== undefined) {
+          next = textBlockWithParagraphFontAlign(next, fontAlign, selection) ?? next;
+        }
         return next === block ? null : next;
       });
       return committed || true;
@@ -52303,6 +53478,18 @@ export default function PresentationWindow({
     },
     [],
   );
+  // "mrai:presentation-first-slide-painted" (lib/presentation/first-slide-painted):
+  // once per deck this editor shows, when its first paint is released and the
+  // fonts its slide asked for are in. The desktop window's instant view of a
+  // double-clicked deck (lib/desktop-instant.ts) stays until then; keep it.
+  const firstSlidePaintedForRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (guestMode || surfaceMode !== "editor" || !surfaceDeckSettled) return;
+    if (firstSlidePaintedForRef.current === pageId) return;
+    return announceFirstSlidePainted({ pageId, slideIndex: activeIndex }, () => {
+      firstSlidePaintedForRef.current = pageId;
+    });
+  }, [activeIndex, guestMode, pageId, surfaceDeckSettled, surfaceMode]);
   // A preview is read, not edited: of the keyboard only moving through the
   // deck and between controls reaches the window (and its window-level
   // shortcuts); edits, clipboard, menus and drops are refused before any
@@ -52791,7 +53978,10 @@ export default function PresentationWindow({
     order: {
       // One shape of a SmartArt graphic keeps the layout's order (the file has
       // no z-order field for it); the whole graphic moves as one object.
-      isDisabled: () => !canFlipSelection || (selectedSmartArtGroup !== null && !smartArtGraphicOnly),
+      isDisabled: (action: "bringToFront" | "sendToBack" | "bringForward" | "sendBackward") =>
+        !canFlipSelection ||
+        (selectedSmartArtGroup !== null && !smartArtGraphicOnly) ||
+        selectionLayerDisabledReason(action) !== null,
       onAction: (action: "bringToFront" | "sendToBack" | "bringForward" | "sendBackward") => {
         if (action === "bringToFront") bringBlockToFront();
         else if (action === "sendToBack") sendBlockToBack();
@@ -53354,6 +54544,7 @@ export default function PresentationWindow({
     exportSlideAsImage,
     exportDeckAsHtml,
     openVideoExport: setVideoExportFormat,
+    openPdfOptions: () => setPdfOptionsOpen(true),
   });
   // Print stands in the title row ahead of Export, as it does in Docs and
   // the sheet; the deck has no File tab (Save is the rail's own status
@@ -53375,15 +54566,15 @@ export default function PresentationWindow({
       flushNotesDraftRef.current?.();
       const embeddedFonts = guestMode
         ? undefined
-        : await apiGet<unknown>(`/api/v1/pages/${encodeURIComponent(pageId)}/presentation-embedded-fonts`).catch(
-            () => undefined,
-          );
+        : await readPresentationEmbeddedFontsAnswer(pageId, { maxWaitMs: 120_000 }).catch(() => undefined);
       const printed = await printDeckInBrowser({
         content: expandPictureObjectRecords(
           expandPresentationMedia(readPresentationCopilotSource() as unknown as Record<string, unknown>),
         ),
         ...(printLayout ? { layout: printLayout } : {}),
-        include_hidden: printSettingsRef.current?.printHiddenSlides === true,
+        // File > Print's Print Hidden Slides: on unless turned off, as
+        // PowerPoint's Print pane (the PDF export's default is the opposite).
+        include_hidden: printSettingsRef.current?.printHiddenSlides !== false,
         embedded_fonts: embeddedFonts,
         now_ms: Date.now(),
       });
@@ -53396,12 +54587,20 @@ export default function PresentationWindow({
         format: "pdf",
         expectedContentVersion,
         ...(printLayout ? { layout: printLayout } : {}),
+        // The same Print Hidden Slides, said to the export (whose own
+        // default leaves them out).
+        hiddenSlides: printSettingsRef.current?.printHiddenSlides === false ? "exclude" : "include",
       }));
       if ((await printPdfBlob(pdf, { name: `${title || t("pages.defaultPresentationTitle")}.pdf` })) === "blocked") {
         toast({ title: t("presentation.printBlocked"), variant: "destructive" });
       }
     } catch (error) {
-      toast({ title: serverExportErrorMessage(error), variant: "destructive" });
+      // Every slide hidden with Print Hidden Slides off: the Print's own
+      // option is named, not the PDF's.
+      const message = isApiRequestError(error) && error.code === "presentation_all_slides_hidden"
+        ? t("presentation.printAllSlidesHidden", { option: t("presentation.printHiddenSlides") })
+        : serverExportErrorMessage(error);
+      toast({ title: message, variant: "destructive" });
     } finally {
       serverExportInFlightRef.current = false;
       setServerExporting(false);
@@ -53414,7 +54613,8 @@ export default function PresentationWindow({
     if (guestMode || serverExportInFlightRef.current) return;
     try {
       const savedVersion = await savedVersionForServerExport();
-      const key = `${pageId}:${savedVersion}:${printLayout ?? ""}`;
+      const hiddenSlides = printSettingsRef.current?.printHiddenSlides === false ? "exclude" : "include";
+      const key = `${pageId}:${savedVersion}:${printLayout ?? ""}:${hiddenSlides}`;
       if (lastPreparedPrintRef.current === key || serverExportInFlightRef.current) return;
       lastPreparedPrintRef.current = key;
       await preparePageExport({
@@ -53422,6 +54622,7 @@ export default function PresentationWindow({
         format: "pdf",
         expectedContentVersion: savedVersion,
         ...(printLayout ? { layout: printLayout } : {}),
+        hiddenSlides,
       });
     } catch {
       // Not prepared: Print draws it as before.
@@ -53735,6 +54936,73 @@ export default function PresentationWindow({
     smartArtGraphicHasScene(contextualSmartArtStyleId, contextualSmartArtBlocks);
   const smartArtEditIn2dOn = smartArtEditingIn2d(smartArtEditIn2dGraphicKey);
   const smartArtShapesLocked = smartArtEditIn2dAvailable && !smartArtEditIn2dOn;
+  // SmartArt Format > Shape Effects on the shapes the selection names inside
+  // the graphic: the deck's shared Effects menu (every Preset, Shadow,
+  // Reflection, Glow, Soft Edges, Bevel and 3-D Rotation variation) writing
+  // each shape's own `shapeEffects`, as one save and one Undo. A shape in a
+  // 3-D scene style is turned by the scene until Edit in 2-D: its Preset,
+  // Bevel and 3-D Rotation are greyed with the reason.
+  const smartArtFormatWritable =
+    contextualSmartArtSelectionIsWritable && !contextualNativeSmartArt && smartArtFormatTarget !== null;
+  const renderSmartArtShapeEffectsMenu = (trigger: {
+    label: string;
+    displayLabel: string;
+    testId: string;
+    controlId?: string;
+  }) => {
+    if (smartArtGraphicTurnRefused) {
+      // The WHOLE graphic: its background's effects (`dgm:bg`), which hold
+      // Shadow, Reflection, Glow and Soft Edges with every variation and no
+      // 3-D (CT_BackgroundFormatting): Preset, Bevel and 3-D Rotation are
+      // greyed, saying so.
+      const writable = contextualSmartArtSelectionIsWritable && !contextualNativeSmartArt;
+      const no3d = t("presentation.smartartContext.graphicEffectsNo3d");
+      return renderOfficeEffectsMenu({
+        effects:
+          smartArtGraphicEffects(readSmartArtGraphicFormat(contextualSmartArtBlocks[0])) ?? undefined,
+        shadow: false,
+        disabled: !writable,
+        disabledReason: writable ? undefined : t("presentation.smartartContext.formatReadOnly"),
+        ...trigger,
+        unavailable: { preset: no3d, bevel: no3d, rotation3d: no3d },
+        // No Format Shape pane over the whole graphic's background here: the
+        // "... Options" rows are greyed, saying to select a shape in it.
+        optionsUnavailableReason: t("presentation.smartartContext.graphicEffectOptionsUnavailable"),
+        onPick: (kind, value) => {
+          if (liveSmartArtGraphicSelected()) commitLiveSmartArtGraphicFormat({ effectPick: { kind, value } });
+        },
+      });
+    }
+    const locked3d = smartArtShapesLocked ? t("presentation.smartartContext.effects3dInScene") : undefined;
+    return renderOfficeEffectsMenu({
+      effects: presentationSmartArtShapeEffects(smartArtFormatNodes, deckThemeGridColors.accent1),
+      shadow: false,
+      // The SmartArt Style's bevel: No Bevel reads unchecked and takes it off.
+      styleEffects: presentationSmartArtStyleEffects(smartArtFormatNodes),
+      disabled: !smartArtFormatWritable,
+      disabledReason: smartArtFormatWritable
+        ? undefined
+        : !contextualSmartArtSelectionIsWritable || contextualNativeSmartArt
+          ? t("presentation.smartartContext.formatReadOnly")
+          : t("presentation.smartartContext.formatSelectShape"),
+      ...trigger,
+      unavailable: locked3d ? { preset: locked3d, bevel: locked3d, rotation3d: locked3d } : undefined,
+      // 3-D Options... / 3-D Rotation Options...: Format Shape at Effects,
+      // on the same shapes (the pane's SmartArt reading below).
+      effectsPage: "office-effects",
+      onPick: (kind, value) =>
+        commitSmartArtFormat((blocks, target) =>
+          presentationSmartArtBlocksWithShapeEffect(
+            blocks,
+            target,
+            kind,
+            value,
+            deckThemeGridColorsRef.current.accent1,
+            canManipulateBlock,
+          ),
+        ),
+    });
+  };
   const smartArtFormatTab = activeRibbonTab === "smartart-format" ? (
     <PresentationSmartArtFormatTab
       labels={presentationShapeFormatLabels()}
@@ -53768,6 +55036,7 @@ export default function PresentationWindow({
         },
       }}
       graphicSelected={smartArtGraphicTurnRefused}
+      effectsMenu={renderSmartArtShapeEffectsMenu}
       graphicOutline={readSmartArtGraphicFormat(contextualSmartArtBlocks[0])?.line?.color ?? null}
       picture={
         smartArtSlotPicture
@@ -54116,7 +55385,7 @@ export default function PresentationWindow({
     if (live.type !== "shape" || !presentationCanChangeShape(live) || live.shape === selection) {
       return false;
     }
-    return updateShapeBlock(live.id, presentationShapeConversionPatch(selection));
+    return updateShapeBlock(live.id, presentationShapeConversionPatch(selection, live as PresentationShapeBlock));
   };
   /* --------------------------------------------------------------------- *
    * PowerPoint for the DESKTOP's right-click menus (audit PN8, PPT-C001..C016;
@@ -54183,17 +55452,25 @@ export default function PresentationWindow({
         | "presentation.contextMenu.bringForward"
         | "presentation.contextMenu.sendBackward"
         | "presentation.contextMenu.sendToBack",
-      run: (blockId: string, explicit: true) => unknown,
-    ): PointerContextMenuAction => ({
-      id,
-      label: t(labelKey),
-      icon: officeContextMenuIcon(id.startsWith("bring") ? "bringForward" : "sendBackward"),
-      disabled,
-      testId: `presentation-context-${id}`,
-      onSelect: () => {
-        run(blockId, true);
-      },
-    });
+      run: (blockId: string) => unknown,
+    ): PointerContextMenuAction => {
+      // On the whole selection the right-click kept (a group selected whole
+      // moves as one object; several objects keep their relative order).
+      const atEnd = selectionLayerDisabledReason(
+        id.startsWith("bring") ? "bringForward" : "sendBackward",
+      );
+      return {
+        id,
+        label: t(labelKey),
+        icon: officeContextMenuIcon(id.startsWith("bring") ? "bringForward" : "sendBackward"),
+        disabled: disabled || atEnd !== null,
+        ...(!disabled && atEnd !== null ? { disabledReason: atEnd } : {}),
+        testId: `presentation-context-${id}`,
+        onSelect: () => {
+          run(blockId);
+        },
+      };
+    };
     return [
       {
         id: "bring-to-front-menu",
@@ -55046,7 +56323,7 @@ export default function PresentationWindow({
             ) : null}
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               {deckResilience.accountChanged ? (
-                <button type="button" className={windowNoticeStyles.action} onClick={() => window.location.reload()}>
+                <button type="button" className={windowNoticeStyles.action} onClick={() => reloadPage("presentation_notice")}>
                   {t("pages.signedOut.reload")}
                 </button>
               ) : (
@@ -55066,12 +56343,17 @@ export default function PresentationWindow({
           description={t("pages.recoveredCopy.body")}
           scopeKey={`${pageId}:recovered-copy:${deckResilience.offered.map((copy) => copy.slot).join(",")}`}
           autoOpen
+          // In the window's corner, as PowerPoint's Document Recovery pane sits
+          // beside the slides: the copies are read a few seconds after the deck
+          // opens, and a notice that then took the window and the keyboard
+          
+          passive
           testId="presentation-recovered-copy-notice"
         >
           <ul className={windowNoticeStyles.list}>
             {deckResilience.offered.map((copy) => (
               <li key={copy.slot} data-testid="presentation-recovered-copy" className={windowNoticeStyles.item}>
-                <p>{t("pages.recoveredCopy.savedAt", { time: new Date(copy.savedAt).toLocaleString() })}</p>
+                <p>{t("pages.recoveredCopy.savedAt", { time: new Date(copy.savedAt).toLocaleString(pageInterfaceLocale()) })}</p>
                 <button type="button" className={windowNoticeStyles.action} data-testid="presentation-recovered-copy-restore"
                   disabled={autosave.readOnly}
                   onClick={() => {
@@ -55461,8 +56743,12 @@ export default function PresentationWindow({
                     // (the sheet and the document do the same).
                     // Not yet written, but the server's live room holds every
                     // edit: "synced", never a failure.
-                    status: guestMode ? "unsaved" : deckShowsSynced ? "synced" : autosave.error && autosave.saveStatus === "unsaved" ? "error" : deckSaveStatus,
-                    statusLabel: guestMode ? t("pages.unsaved") : deckShowsSynced ? t("pages.synced") : t(`pages.${deckSaveStatus}` as "pages.saving"),
+                    // Edits held on this device because the deck's room cannot
+                    // take them (lib/collab/room-unreachable): said so.
+                    status: guestMode ? "unsaved" : deckShowsSynced ? "synced" : autosave.notConnected ? "offline"
+                      : autosave.error && autosave.saveStatus === "unsaved" ? "error" : deckSaveStatus,
+                    statusLabel: guestMode ? t("pages.unsaved") : deckShowsSynced ? t("pages.synced")
+                      : autosave.notConnected ? t("pages.notConnectedKeptOnDevice") : t(`pages.${deckSaveStatus}` as "pages.saving"),
                     failureReason: !guestMode && autosave.error ? autosave.error : undefined,
                     failureTestId: "presentation-save-failure-reason",
                     actionLabel: t("pages.save"), autosave: officeAutosaveLabels(t), onSave: saveNow,
@@ -55514,6 +56800,10 @@ export default function PresentationWindow({
                   <PresentationHomeRibbonTab
                     ctl={{
                       ribbonParagraphBlock,
+                      ribbonListLevelGreyed: listLevelGreyedForSmartArtShape(
+                        exclusivelySelectedBlock,
+                        textSelectionSnapshot?.blockId,
+                      ),
                       ribbonTableListsWritable: ribbonTableListRows !== null,
                       t,
                       smartArtPlaceholders,
@@ -55870,9 +57160,8 @@ export default function PresentationWindow({
                       </DropdownMenu>
                     </OfficeHomeRibbonGroup>,
                     arrange: (() => {
-                      const at = activeSlide.blocks.indexOf(block);
                       const blocked = readOnly || !canFlipSelection;
-                      const atFront = at >= activeSlide.blocks.length - 1, atBack = at <= 0;
+                      const atFront = !selectionLayerCapability.canMoveForward, atBack = !selectionLayerCapability.canMoveBackward;
                       const run = (fn: () => void) => () => { if (currentBlock()) fn(); };
                       return <OfficeHomeRibbonGroup ribbon="chartFormat" label={t("presentation.home.arrange")} testId="presentation-chart-format-arrange-group">
                         <DropdownMenu><DropdownMenuTrigger asChild><OfficeHomeMenuTrigger variant="large" hasMenuIndicator icon={<IconArrangeMenu size={24}/>} label={t("presentation.home.arrange")} testId="presentation-chart-format-arrange"/></DropdownMenuTrigger>
@@ -55925,6 +57214,7 @@ export default function PresentationWindow({
                     formatFocus={chartFormatFocus ?? undefined}
                     elementHit={chartElementHit}
                     onAreaChange={(area) => setOfficeChartSelectedArea(deckChartSelectionKey(block.id), area)}
+                    selectedArea={selectedBlockId === block.id ? selectedChartElementArea : null}
                     onOpenFormat={(area) => {
                       chartFormatFocusTokenRef.current += 1;
                       setChartFormatFocus({ area, token: chartFormatFocusTokenRef.current });
@@ -57698,11 +58988,16 @@ export default function PresentationWindow({
       /></Suspense> : null}
       <PresentationAuthoringRegion key={`workspace-${pageId}`} frozen={presentMode} render={() => (<>
       <div
+        ref={setPaneWorkspace}
         className={`presentation-window__body ${presentationChrome.workspace}`}
-        data-comments-dock={commentsPanelOpen ? "open" : "closed"}
+        data-comments-dock={commentsPanelOpen && !previewMode ? "open" : "closed"}
         // Slide Sorter hides the thumbnail pane; its grid column goes with it,
         // or the stage is laid out in that 196px column.
         data-rail={viewMode === "sorter" ? "hidden" : "shown"}
+        // The Notes pane is under the slide, beside the thumbnail pane (which
+        // runs the workspace's full height), as in PowerPoint's Normal view.
+        data-notes={presentationNotesPaneShown ? "shown" : "hidden"}
+        style={presentationWorkspaceStyle}
       >
         {/* Show Changes outlines the objects others changed on this slide. */}
         {showChanges && (deckChanges?.slides.get(activeSlide.id)?.length ?? 0) > 0 ? (
@@ -58515,8 +59810,8 @@ export default function PresentationWindow({
                 ...(activeSlideStyle ?? {}),
                 // Words that state no colour: the slide's own ink, the one the
                 // show and the thumbnails draw them in (lib/presentation/slide-ink).
-                color: presentationSlideInk(theme),
-                ...({ [PRESENTATION_PLACEHOLDER_INK_VAR]: presentationSlideInk(theme) } as CSSProperties),
+                color: presentationSlideInk(theme, activeMaster),
+                ...({ [PRESENTATION_PLACEHOLDER_INK_VAR]: presentationSlideInk(theme, activeMaster) } as CSSProperties),
                 // Always contain high-z preview descendants inside the slide.
                 // Explicit isolation keeps canvas-external menus above the local
                 // stack even when this fixed surface has no scale transform.
@@ -58615,14 +59910,37 @@ export default function PresentationWindow({
               onPointerDown={beginMarqueeSelection}
               onPointerDownCapture={(event) => {
                 tableDrawReleaseClickRef.current = false;
+                // A new press is a new intent: a double click's words still
+                // opening no longer hold Delete back.
+                noteSmartArtWordsOpening(null);
                 // A press on a prepared diagram: it is being worked on, so it is
                 // drawn as what it will be. Nothing is saved until it changes.
                 {
                   const prepared = preparedSmartArtRef.current;
+                  // (Not a press in words already open on the file's drawing: the
+                  // conversion would replace them under the press, and a double
+                  
+                  // The words convert with their first edit.)
+                  const typing = event.target instanceof Element ? event.target.ownerDocument.activeElement : null;
+                  const inOpenWords =
+                    typing instanceof HTMLElement && typing.isContentEditable && event.target instanceof Element &&
+                    !!event.target.closest("[data-block-id]")?.contains(typing);
+                  // (The conversion's own hit areas too -- its frame's, and the words of
+                  // a shape that paints nothing: where the conversion draws no shape
+                  // under a word of the drawing, they took the press, selected the
+                  // graphic, and the drawing's words there could never be opened,
+                  
+                  const hitArea = event.target instanceof Element
+                    ? event.target.closest<HTMLElement>(".presentation-window__smartart-hit-area,.presentation-window__smartart-words-hit")
+                    : null;
+                  const ownHitArea = !!hitArea && !!prepared && prepared.converted.some((block) =>
+                    block.id === hitArea.dataset.labelId ||
+                    (hitArea.dataset.groupId !== undefined && (block as { groupId?: unknown }).groupId === hitArea.dataset.groupId));
                   if (
-                    prepared && !prepared.revealed && event.target instanceof Element &&
-                    event.target.closest('[data-smartart-prepared="converted"],.presentation-window__smartart-group-frame')
+                    prepared && !prepared.revealed && !inOpenWords && event.target instanceof Element &&
+                    (ownHitArea || event.target.closest('[data-smartart-prepared="converted"],.presentation-window__smartart-group-frame'))
                   ) {
+                    smartArtRevealPressRef.current = event.timeStamp;
                     setPreparedSmartArt({ ...prepared, revealed: true });
                   }
                 }
@@ -58649,14 +59967,91 @@ export default function PresentationWindow({
               onDoubleClickCapture={(event) => {
                 if (swallowInkReleaseClick(event)) return;
                 handleCanvasTouchDoubleClick(event);
+                // A double click on the file's own drawing, its first press the
+                // one that brought the conversion out: the words of the item
+                // drawn there open, as PowerPoint opens the shape double-clicked,
+                // not whatever the conversion lays over that point (Horizontal
+                // Bullet List's column behind the words, nobevel-style-probe
+                
+                {
+                  const prepared = preparedSmartArtRef.current;
+                  const view = preparedSmartArtViewRef.current;
+                  const point = slidePointOfClient(event.clientX, event.clientY);
+                  const opens =
+                    prepared && view && point && event.timeStamp - smartArtRevealPressRef.current < 1000 &&
+                    view.frameShapeId === prepared.frameShapeId
+                      ? nativeSmartArtConvertedShapeAt(view, prepared.converted, point)
+                      : null;
+                  if (opens && editSmartArtShapeText(opens, undefined, { x: event.clientX, y: event.clientY, word: true })) {
+                    smartArtRevealPressRef.current = Number.NEGATIVE_INFINITY;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                  }
+                }
+                // A double click on a SmartArt shape opens its words with the
+                // word under the pointer selected, as PowerPoint's does, wherever
+                // its presses landed: on the shape's own frame (the shape drawn
+                // under its words) it reached no handler of the shape's, and the
+                // words kept the bare caret its first press, a click on the
+                
+                
+                {
+                  const live = slidesRef.current[activeIndexRef.current];
+                  const hitId = event.target instanceof Element
+                    ? event.target.closest("[data-block-id]")?.getAttribute("data-block-id")
+                    : null;
+                  const hit = live && hitId ? live.blocks.find((block) => block.id === hitId) : undefined;
+                  const words = hit && live ? presentationSmartArtShapeLabel(live.blocks, hit) : null;
+                  if (
+                    hit && words && words.id !== hit.id &&
+                    editSmartArtShapeText(hit.id, undefined, { x: event.clientX, y: event.clientY, word: true })
+                  ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                  }
+                }
                 // Words on a diagram being prepared: they open when it is ready.
-                // One that cannot be prepared says why, never nothing.
-                if (selectedConvertsOnEdit && selectedSmartArtPreparation) {
-                  if (selectedSmartArtPreparation.state === "refused") {
-                    refuseSmartArtConversion(selectedSmartArtPreparation.refusal);
-                  } else if (selectedSmartArtPreparation.state !== "ready") {
-                    smartArtEditAwaitingRef.current = { x: event.clientX, y: event.clientY };
-                    if (selectedSmartArtPreparation.state === "failed") retrySelectedSmartArtPreparation();
+                // One that cannot be prepared says why, never nothing. The
+                // diagram is the one pressed, read now, not the last drawn
+                // selection: the double click's first press selected it, and
+                // a window still drawing that selection (a busy machine)
+                // took the double click with nothing selected -- nothing
+                // waited, and its words never opened, the graphic left
+                // selected whole under the next Backspace (fe nobevel
+                
+                // conversion ready but not yet put in place drop it.
+                {
+                  const live = slidesRef.current[activeIndexRef.current];
+                  const pressedId = event.target instanceof Element
+                    ? event.target.closest("[data-block-id]")?.getAttribute("data-block-id")
+                    : null;
+                  const pressed = live && pressedId ? live.blocks.find((block) => block.id === pressedId) : undefined;
+                  // (A conversion already in place, if not yet drawn, opens
+                  // the words itself, above.)
+                  const view = preparedSmartArtRef.current
+                    ? null
+                    : selectedConvertsOnEdit ??
+                      (live && pressed ? nativeSmartArtConvertsOnEdit(readNativeSmartArtView(live.blocks, pressed)) : null);
+                  const preparation = view
+                    ? view === selectedConvertsOnEdit
+                      ? selectedSmartArtPreparation
+                      : PRESENTATION_SMARTART_PREPARATIONS.read(view.members[0])
+                    : null;
+                  if (view && preparation?.state === "refused") {
+                    refuseSmartArtConversion(preparation.refusal);
+                  } else if (view) {
+                    smartArtEditAwaitingRef.current = {
+                      x: event.clientX,
+                      y: event.clientY,
+                      slide: slidePointOfClient(event.clientX, event.clientY),
+                      memberId: pressed && view.members.some((member) => member.id === pressed.id) ? pressed.id : undefined,
+                    };
+                    noteSmartArtWordsOpening(view.members.map((block) => block.id));
+                    if (preparation?.state === "failed" && live) {
+                      PRESENTATION_SMARTART_PREPARATIONS.retry(view.members[0], () => askSmartArtConversion(view, live));
+                    }
                   }
                 }
               }}
@@ -58682,6 +60077,13 @@ export default function PresentationWindow({
                 }
                 if (event.key !== "Delete" && event.key !== "Backspace") return;
                 if (event.metaKey || event.ctrlKey || event.altKey) return;
+                // Words a double click is opening (a SmartArt's, its conversion
+                // still on its way or not drawn yet): the key was meant for
+                // them, never to delete the graphic selected whole meanwhile.
+                if (smartArtWordsOpening()) {
+                  event.preventDefault();
+                  return;
+                }
                 if (!resolveLiveHomeDeleteSelection()) return;
                 event.preventDefault();
                 deleteLiveHomeSelection();
@@ -59105,7 +60507,9 @@ export default function PresentationWindow({
                   }
                   return [...graphics].map(([groupId, { member, rects }]) => {
                     const box = smartArtGraphicFrameBox(null, rects);
-                    const paint = sheetSmartArtBackgroundStyle(member);
+                    const paint = box
+                      ? sheetSmartArtBackgroundStyle(member, { width: box.width / 9525, height: box.height / 9525 })
+                      : null;
                     if (!box || !paint) return null;
                     return (
                       <div
@@ -59135,11 +60539,15 @@ export default function PresentationWindow({
                         ? block
                         : ({
                             ...block,
-                            ...canvasFallbackGeometry(
-                              block,
-                              index,
-                              activeSlideBounds,
-                            ),
+                            // An imported slide's empty-slide stub stands where its
+                            // first words will be written (lib/presentation/empty-slide-stub).
+                            ...(isFramelessImportedText(activeSlide, block)
+                              ? emptySlideStubFrame(activeSlide, activeSlideBounds, masters)
+                              : canvasFallbackGeometry(
+                                  block,
+                                  index,
+                                  activeSlideBounds,
+                                )),
                           } as PresentationBlock),
                     )
                   : activeSlide.blocks),
@@ -59654,7 +61062,7 @@ export default function PresentationWindow({
                         ),
                 ));
               return (
-                <PresentationSmartArtGraphicHitLayer key={`${block.id}:${blockIndex}`} ctl={{ blocks: activeSlideVisibleBlocks, block, activeSlideBounds, primaryId: selectionAuthority.primary?.id ?? null, inert: previewMode || Boolean(activeCustomGeometryTool), selectBlockFromClick, setSmartArtGraphicOnly, beginBlockGesture, setBlockContextMenu, editSmartArtShapeText }}>
+                <PresentationSmartArtGraphicHitLayer key={`${block.id}:${blockIndex}`} ctl={{ blocks: activeSlideVisibleBlocks, block, activeSlideBounds, primaryId: selectionAuthority.primary?.id ?? null, inert: previewMode || Boolean(activeCustomGeometryTool), selectBlockFromClick, setSmartArtGraphicOnly, beginBlockGesture, setBlockContextMenu, editSmartArtShapeText, zIndex: presentationBlockOverFooterFieldsZIndex(activeSlide, block) }}>
                 <PresentationLiveBlockFrame
                   key={`${block.id}:${blockIndex}`}
                   className={
@@ -59703,6 +61111,17 @@ export default function PresentationWindow({
                   data-smartart-role={
                     typeof (block as Record<string, unknown>).smartArtRole === "string"
                       ? String((block as Record<string, unknown>).smartArtRole)
+                      : undefined
+                  }
+                  // A SmartArt member is pressed where it is drawn: drawn turned
+                  // in 3-D, by its turned layer, not by its flat box, which
+                  // stood over the next item's words (native-page-window.css).
+                  // Not a label letting its presses through to its shape, nor
+                  // a shape already hit by its painted geometry.
+                  data-hit-where-drawn={
+                    !previewMode &&
+                    (isNativeSmartArtMember(block) || (smartArtMember && block.type === "text" && !smartArtLabelYieldsToShape))
+                      ? ""
                       : undefined
                   }
                   // A11y: each block is a labelled group item with an accessible
@@ -59860,6 +61279,47 @@ export default function PresentationWindow({
                     beginBlockGesture(block.id, "move", event);
                   }}
                   onMouseDown={(event) => {
+                    // A double click on the words of a SmartArt shape being
+                    // typed in selects the word under it, as PowerPoint does,
+                    // where the label's move band straddles a frame as tight
+                    // as its words: the band took the second press, and the
+                    
+                    if (
+                      event.button === 0 &&
+                      event.detail === 2 &&
+                      block.type === "text" &&
+                      event.target instanceof Element &&
+                      event.target.closest(".presentation-window__text-move-band") &&
+                      // (A converted diagram's label, or the words of a file's own
+                      // drawing opened before it converts: the band straddles both.)
+                      (presentationSmartArtLabelShape(activeSlide.blocks, block) !== null ||
+                        readNativeSmartArtView(activeSlide.blocks, block) !== null)
+                    ) {
+                      const rich = event.currentTarget.querySelector<HTMLElement>(
+                        '[data-selection-owner="rich-preview"][contenteditable="true"]',
+                      );
+                      const words = rich ? presentationPreviewPlainText(rich) : "";
+                      const hit = rich && words
+                        ? presentationPreviewOffsetAtPoint(
+                            rich,
+                            event.clientX,
+                            event.clientY,
+                            words.length,
+                            undefined,
+                            [...event.currentTarget.querySelectorAll<HTMLElement>(
+                              "textarea, .presentation-window__text-move-band",
+                            )],
+                          )
+                        : null;
+                      if (rich && hit !== null) {
+                        const [start, end] = presentationDoubleClickWord(words, hit);
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (rich.ownerDocument.activeElement !== rich) rich.focus({ preventScroll: true });
+                        setPresentationPreviewSelection(rich, start, end);
+                        return;
+                      }
+                    }
                     // A finger's first tap on a text box selects the box, not
                     // its text: no caret, no keyboard (the tap's compatibility
                     // mousedown would focus the field). The next tap types.
@@ -60383,6 +61843,9 @@ export default function PresentationWindow({
                         pictureNotDrawn: selectedBlockIds.has(block.id) && picturesNotDrawn.has(
                           pictureObjectTokenSha(block.src) ?? pictureObjectUrlSha(block.src) ?? "",
                         ),
+                        model3dFailureNotice: selectedBlockIds.has(block.id)
+                          ? t("presentation.preservedObject.model3d")
+                          : null,
                       }}
                     />
                   ) : block.type === "chart" ? (
@@ -60512,6 +61975,7 @@ export default function PresentationWindow({
                         commitShapeRichText,
                         recordShapeTextRange,
                         takeShapeRichSelection,
+                        heldBlockWords,
                         toggleShapeWordsRunStyle: (key) => {
                           toggleLiveRibbonRunStyle(key);
                         },
@@ -60572,6 +62036,7 @@ export default function PresentationWindow({
                         followImportedRichTextSelection,
                         restoreImportedPreviewSelectionAfterCommit,
                         pendingImportedPreviewCaret,
+                        heldBlockWords,
                         commitImportedPreviewText,
                         replaceImportedPreviewSelection,
                         clearLiveRibbonList,
@@ -61253,7 +62718,7 @@ export default function PresentationWindow({
                           editSmartArtShapeText(blockId);
                           return;
                         }
-                        if (writable && host === "own") {
+                        if (writable && host === "own" && !isTextEditLocked(live)) {
                           setSelectedBlockId(blockId);
                           setEditingShapeTextId(blockId);
                           return;
@@ -61391,19 +62856,27 @@ export default function PresentationWindow({
                       testId: "presentation-context-regroup",
                     },
                     bringToFront: {
-                      onSelect: run(() => bringBlockToFront(blockId, true)),
+                      onSelect: run(() => bringBlockToFront(blockId)),
+                      disabled: selectionLayerDisabledReason("bringToFront") !== null,
+                      disabledReason: selectionLayerDisabledReason("bringToFront") ?? undefined,
                       testId: "presentation-context-bring-to-front",
                     },
                     bringForward: {
-                      onSelect: run(() => bringBlockForward(blockId, true)),
+                      onSelect: run(() => bringBlockForward(blockId)),
+                      disabled: selectionLayerDisabledReason("bringForward") !== null,
+                      disabledReason: selectionLayerDisabledReason("bringForward") ?? undefined,
                       testId: "presentation-context-bring-forward",
                     },
                     sendToBack: {
-                      onSelect: run(() => sendBlockToBack(blockId, true)),
+                      onSelect: run(() => sendBlockToBack(blockId)),
+                      disabled: selectionLayerDisabledReason("sendToBack") !== null,
+                      disabledReason: selectionLayerDisabledReason("sendToBack") ?? undefined,
                       testId: "presentation-context-send-to-back",
                     },
                     sendBackward: {
-                      onSelect: run(() => sendBlockBackward(blockId, true)),
+                      onSelect: run(() => sendBlockBackward(blockId)),
+                      disabled: selectionLayerDisabledReason("sendBackward") !== null,
+                      disabledReason: selectionLayerDisabledReason("sendBackward") ?? undefined,
                       testId: "presentation-context-send-backward",
                     },
                     editAltText: {
@@ -61601,7 +63074,9 @@ export default function PresentationWindow({
             heldKey={
               inspectorBlock
                 ? `${inspectorBlock.type}:${inspectorBlock.id}`
-                : formatPaneShapeGroup
+                : formatPaneSmartArtNodes
+                  ? `smartart:${formatPaneSmartArtNodes.map((block) => block.id).join(",")}`
+                  : formatPaneShapeGroup
                   ? `group:${formatPaneShapeGroup.map((block) => block.id).join(",")}`
                   : ""
             }
@@ -61609,7 +63084,10 @@ export default function PresentationWindow({
             {inspectorBlock && inspectorBlock.type === "shape"
               ? renderShapeFormatPane(inspectorBlock as PresentationShapeBlock)
               : null}
-            {!inspectorBlock && formatPaneShapeGroup
+            {!inspectorBlock && formatPaneSmartArtNodes
+              ? renderSmartArtShapeFormatPane(formatPaneSmartArtNodes)
+              : null}
+            {!inspectorBlock && !formatPaneSmartArtNodes && formatPaneShapeGroup
               ? renderShapeGroupFormatPane(formatPaneShapeGroup)
               : null}
             {inspectorBlock && inspectorBlock.type === "image"
@@ -61733,6 +63211,58 @@ export default function PresentationWindow({
             />
           ) : null}
         </main>
+        {presentationNotesPaneShown ? (
+          <section
+            className={presentationChrome.statusNotesPane}
+            data-testid="presentation-notes-editor"
+            data-office-chrome-reveal={chromeReveal ? "bottom" : undefined}
+            aria-label={t("presentation.speakerNotes")}
+          >
+            <label
+              className={presentationChrome.statusNotesLabel}
+              htmlFor={`presentation-notes-${pageId}`}
+            >
+              {t("presentation.speakerNotes")}
+            </label>
+            <textarea
+              ref={notesInputRef}
+              id={`presentation-notes-${pageId}`}
+              className={presentationChrome.statusNotesInput}
+              value={
+                notesDraft ??
+                (typeof activeSlide.notes === "string" ? activeSlide.notes : "")
+              }
+              placeholder={t("presentation.speakerNotesPlaceholder")}
+              maxLength={SPEAKER_NOTES_MAX_LENGTH}
+              rows={2}
+              onChange={(event) => {
+                notesDraftSlideIdRef.current = activeSlide.id;
+                setNotesDraft(event.target.value);
+              }}
+              onBlur={commitNotesDraft}
+              // The notes are typed here now: the slide's words selected before
+              
+              // Bold with the notes selected bolded the title's word chosen
+              // earlier). The notes are plain text, so Home's font commands
+              // stand down, as they do once the slide is clicked away.
+              onFocus={() => {
+                clearTextSelectionAuthority();
+                retireBlockSelection();
+              }}
+              data-testid="presentation-slide-notes"
+            />
+          </section>
+        ) : null}
+        <PresentationNormalViewSplitters
+          workspace={paneWorkspace}
+          panes={normalViewPanes}
+          showRail={viewMode !== "sorter"}
+          showNotes={presentationNotesPaneShown}
+          labels={{
+            rail: t("presentation.sorter.viewRail"),
+            notes: t("presentation.speakerNotes"),
+          }}
+        />
         {commentsPanelOpen && !previewMode ? (
           <Suspense fallback={null}><PresentationCommentsPane
             ctl={{
@@ -61759,52 +63289,16 @@ export default function PresentationWindow({
               presentationCommentThreadAdapter,
               presentationCommentPaneAdapter,
               renderPresentationCommentThread,
+              // Office keeps the document 500 px beside a task pane.
+              resize: commentsDock.resize(
+                paneWorkspace?.offsetWidth
+                  ? paneWorkspace.offsetWidth * (1 - normalViewPanes.railPct / 100)
+                  : Number.POSITIVE_INFINITY,
+              ),
             }}
           /></Suspense>
         ) : null}
       </div>
-      {notesVisible && viewMode !== "sorter" && !previewMode ? (
-        <section
-          className={presentationChrome.statusNotesPane}
-          data-testid="presentation-notes-editor"
-          data-office-chrome-reveal={chromeReveal ? "bottom" : undefined}
-          aria-label={t("presentation.speakerNotes")}
-        >
-          <label
-            className={presentationChrome.statusNotesLabel}
-            htmlFor={`presentation-notes-${pageId}`}
-          >
-            {t("presentation.speakerNotes")}
-          </label>
-          <textarea
-            ref={notesInputRef}
-            id={`presentation-notes-${pageId}`}
-            className={presentationChrome.statusNotesInput}
-            value={
-              notesDraft ??
-              (typeof activeSlide.notes === "string" ? activeSlide.notes : "")
-            }
-            placeholder={t("presentation.speakerNotesPlaceholder")}
-            maxLength={SPEAKER_NOTES_MAX_LENGTH}
-            rows={2}
-            onChange={(event) => {
-              notesDraftSlideIdRef.current = activeSlide.id;
-              setNotesDraft(event.target.value);
-            }}
-            onBlur={commitNotesDraft}
-            // The notes are typed here now: the slide's words selected before
-            
-            // Bold with the notes selected bolded the title's word chosen
-            // earlier). The notes are plain text, so Home's font commands
-            // stand down, as they do once the slide is clicked away.
-            onFocus={() => {
-              clearTextSelectionAuthority();
-              retireBlockSelection();
-            }}
-            data-testid="presentation-slide-notes"
-          />
-        </section>
-      ) : null}
       {chromeHidden ? null : (
       <PresentationStatusBar
         ctl={{
@@ -61910,20 +63404,52 @@ export default function PresentationWindow({
         <PresentationPrintSettingsDialog
           current={resolvedPrintSettings}
           onApply={(settings) => {
-            applyPrintSettings(settings);
+            applyPrintSettings({
+              ...settings,
+              // Three-way: on is PowerPoint's default (nothing stored) unless
+              // the deck stated it, off is stored (`printHiddenSlidesAnswer`).
+              printHiddenSlides: printHiddenSlidesAnswer(
+                settings.printHiddenSlides !== false,
+                printSettingsRef.current?.printHiddenSlides,
+              ),
+            });
             setPrintSettingsOpen(false);
           }}
           onReset={() => {
-            // Reset to the export default → persists as "no print settings"
-            // (byte-clean) and the handout export reverts to handout-2.
+            // Reset to the defaults → persists as "no print settings"
+            // (byte-clean): full-page slides, 100 %, Print Hidden Slides on.
             applyPrintSettings({
               slidesPerPage: DEFAULT_SLIDES_PER_PAGE,
               scale: DEFAULT_PRINT_SCALE,
-              printHiddenSlides: false,
+              printHiddenSlides: undefined,
             });
             setPrintSettingsOpen(false);
           }}
           onClose={() => setPrintSettingsOpen(false)}
+          t={t}
+        />
+      ) : null}
+      {pdfOptionsOpen ? (
+        <PresentationPdfOptionsDialog
+          initial={pdfOptionsRef.current ?? {
+            ...DEFAULT_PRESENTATION_PDF_OPTIONS,
+            // Handouts start at the deck's print layout, as the menu's handout row.
+            handoutSlidesPerPage: resolvedPrintSettings.slidesPerPage > 1
+              ? resolvedPrintSettings.slidesPerPage
+              : DEFAULT_PRESENTATION_PDF_OPTIONS.handoutSlidesPerPage,
+          }}
+          busy={serverExporting}
+          returnFocusRef={serverExportTriggerRef}
+          onExport={(options) => {
+            pdfOptionsRef.current = options;
+            setPdfOptionsOpen(false);
+            void runServerExport(
+              "pdf",
+              presentationPdfExportLayout(options),
+              options.includeHiddenSlides ? { hiddenSlides: "include" } : undefined,
+            );
+          }}
+          onCancel={() => setPdfOptionsOpen(false)}
           t={t}
         />
       ) : null}
@@ -62113,6 +63639,19 @@ export default function PresentationWindow({
             isEmpty={activeSlide.blocks.length === 0}
             emptyLabel={t("presentation.selectionPane.empty")}
             listLabel={t("toolbar.selectionPane")}
+            reorder={{
+              onMove: movePresentationPaneUnits,
+              hint: t("presentation.selectionPane.reorderHelp"),
+              // Alt+Shift+9 / Alt+Shift+1: every group of the slide open / closed.
+              onExpandAll: (expanded) =>
+                setExpandedPaneGroups(
+                  new Map(
+                    selectionPaneRows(activeSlide.blocks.filter((block) => !isLayoutGraphicOnSlide(block)), blockAriaName)
+                      .filter((row) => row.blockIds.length > 1 && row.objectId.startsWith("group:"))
+                      .map((row) => [row.objectId, expanded]),
+                  ),
+                ),
+            }}
           >
             {/* A layout's graphic drawn on the slide is not one of the
                 slide's objects: PowerPoint's pane does not list it (the CDC
@@ -62206,6 +63745,13 @@ export default function PresentationWindow({
                   <Fragment key={row.objectId}>
                   <OfficeSelectionPaneRow
                     level={0}
+                    drag={{
+                      key: row.objectId,
+                      container: "",
+                      movable:
+                        row.blocks.every((rowBlock) => canReorderBlock(rowBlock)) &&
+                        (rowUsesNativeAuthority || selectionPaneModelOrderIsWritable),
+                    }}
                     expansion={
                       paneGroup
                         ? {
@@ -62418,6 +63964,23 @@ export default function PresentationWindow({
                           <OfficeSelectionPaneRow
                             key={`${row.objectId}/${member.id}`}
                             level={1}
+                            // A group's object moves only among its group's
+                            // objects; a SmartArt graphic's items keep the
+                            // order its layout gives them, and an object of a
+                            // group nested in this one moves with that group.
+                            drag={{
+                              key: member.id,
+                              container: row.objectId,
+                              movable:
+                                memberWritable &&
+                                canReorderBlock(member) &&
+                                blockGroupPath(member).length === 0 &&
+                                !row.blocks.some(
+                                  (sibling) =>
+                                    blockGroupPath(sibling).length > 0 ||
+                                    Object.keys(sibling).some((key) => key.startsWith("smartArt")),
+                                ),
+                            }}
                             icon={
                               <OfficeSemanticIcon
                                 semanticId={selectionPaneTypeIcon(member, 1)}
@@ -62873,10 +64436,12 @@ export default function PresentationWindow({
           spaceAfter: ribbonParagraphFormatState?.spaceAfter,
           marL: ribbonParagraphDialogExtras?.marL,
           indent: ribbonParagraphDialogExtras?.indent,
+          fontAlign: ribbonParagraphDialogExtras?.fontAlign,
         }}
         exactWritable={ribbonTextBlock !== null}
         spacingWritable={ribbonTextBlock !== null}
         indentWritable={ribbonTextBlock !== null}
+        fontAlignWritable={ribbonTextBlock !== null}
         onApply={applyParagraphDialogResult}
         onCancel={() => setParagraphDialogOpen(false)}
       />

@@ -202,6 +202,78 @@ function nearlyEqual(left: number, right: number): boolean {
   return Math.abs(left - right) <= NATIVE_SIGNATURE_SYNC_EPSILON;
 }
 
+/** How far the height a turned signature's appearance should have may sit
+ * from the height read out of the file, in percent of the page. The file keeps
+ * the box in points to a few places; an unrelated stamp would have to share
+ * the signature's centre and this height at once to pass. */
+const NATIVE_SIGNATURE_APPEARANCE_SIZE_EPSILON = 0.01;
+const NATIVE_SIGNATURE_APPEARANCE_CENTRE_EPSILON = 0.001;
+
+/**
+ * Whether a `/Stamp` read out of the file is the appearance the server wrote
+ * for this signature, so it is the signature and not an imported stamp lying
+ * over it.
+ *
+ * An upright signature's appearance keeps the signature's own box. A turned
+ * one is written as the upright bounds of that box turned about its centre,
+ * measured in points (`_rotated_managed_stamp_rect`): wider and taller than
+ * the record, same centre. The record is in percent of the page and does not
+ * carry the page's shape, so the shape is read off the width and has to give
+ * the height.
+ */
+export function isManagedNativeSignatureAppearanceBox(
+  signature: Pick<
+    ManagedNativeSignatureAnnotation,
+    "page" | "x" | "y" | "width" | "height" | "objectRotation"
+  >,
+  box: { page: number; x: number; y: number; width: number; height: number },
+): boolean {
+  if (signature.page !== box.page) return false;
+  const radians =
+    (normalizeSignatureObjectRotation(signature.objectRotation) * Math.PI) /
+    180;
+  const sine = Math.abs(Math.sin(radians));
+  const cosine = Math.abs(Math.cos(radians));
+  if (sine <= 1e-9) {
+    return (
+      nearlyEqual(signature.x, box.x) &&
+      nearlyEqual(signature.y, box.y) &&
+      nearlyEqual(signature.width, box.width) &&
+      nearlyEqual(signature.height, box.height)
+    );
+  }
+  if (
+    !(signature.width > 0) ||
+    !(signature.height > 0) ||
+    !(box.width > 0) ||
+    !(box.height > 0)
+  ) {
+    return false;
+  }
+  if (
+    Math.abs(
+      signature.x + signature.width / 2 - (box.x + box.width / 2),
+    ) > NATIVE_SIGNATURE_APPEARANCE_CENTRE_EPSILON ||
+    Math.abs(
+      signature.y + signature.height / 2 - (box.y + box.height / 2),
+    ) > NATIVE_SIGNATURE_APPEARANCE_CENTRE_EPSILON
+  ) {
+    return false;
+  }
+  // Height over width of the page as it is shown, from the one equation the
+  // width gives.
+  const pageShape =
+    (box.width - cosine * signature.width) / (sine * signature.height);
+  if (!Number.isFinite(pageShape) || pageShape <= 0) return false;
+  return (
+    Math.abs(
+      (sine * signature.width) / pageShape +
+        cosine * signature.height -
+        box.height,
+    ) <= NATIVE_SIGNATURE_APPEARANCE_SIZE_EPSILON
+  );
+}
+
 export function isManagedNativeSignatureEquivalent(
   readerSignature: SignatureAnnotation,
   nativeSignature: ManagedNativeSignatureAnnotation,

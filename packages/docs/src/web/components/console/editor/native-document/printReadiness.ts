@@ -12,6 +12,7 @@
  * contract shared by every client-side document print path.
  */
 import { layoutPending } from "@mrnote/core/web/components/console/editor/native-document/paged/layoutPending.ts";
+import { officeTextOutlinesPending } from "@mrnote/core/web/lib/office-text-outline/office-text-outline-css.ts";
 
 export const PRINT_ASSET_TIMEOUT_MS = 10_000;
 /** How long the pages must hold still before they are copied for printing. */
@@ -113,6 +114,8 @@ export function documentPrintSourceReadiness(root: HTMLElement): "ready" | "pend
   // line boxes measured from it): Print pressed while a page just opened
   
   if ((root.ownerDocument.fonts as FontFaceSet | undefined)?.status === "loading" || layoutPending(root)) return "pending";
+  // WordArt outlines still to be drawn over their words (office-text-outline-overlay.ts).
+  if (officeTextOutlinesPending()) return "pending";
   return root.matches("[data-docs-exact-line-pending],[data-docs-auto-line-spacing-pending],[data-docs-display-fonts-pending],[data-docs-display-fonts-settling],[data-pagination-initial-settling],[data-pagination-background],[data-paged-bulk-filling],[data-pagination-stalled],[data-docs-page-bands-pending],[data-docs-word-cjk-spacing-pending]") ? "pending" : "ready";
 }
 

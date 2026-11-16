@@ -12,8 +12,9 @@
  * deck's pictures, graphics and videos, the worksheet's pictures), so a
  * picture's effects look the same wherever it is.
  *
- * Glow, reflection, soft edges, shadow and the 3-D Rotation camera are the
- * CSS of `officePictureEffectsCss`; a 3-D Format (bevel, depth, contour,
+ * Glow, reflection, shadow and the 3-D Rotation camera are the CSS of
+ * `officePictureEffectsCss` on the frame, its soft edges a mask on a layer
+ * inside it (so the reflection shows, softened); a 3-D Format (bevel, depth, contour,
  * material, lighting) is the shapes' SVG filter on the picture's own alpha
  * (`officePictureThreeDPaint`), as Office lights a bevelled or extruded
  * picture with the same DrawingML 3-D a shape wears.
@@ -64,16 +65,8 @@ export function OfficePictureEffectsFrame({
   const threeD = officePictureThreeDPaint(effects, size);
   if (!css && !threeD) return <>{children}</>;
   const block: CSSProperties = fillParent ? { display: "block", width: "100%", height: "100%" } : { display: "inline-block" };
-  return (
-    <span
-      data-testid={testId}
-      data-office-picture-effects=""
-      style={{
-        position: "relative",
-        ...block,
-        ...(css?.wrapper ?? {}),
-      }}
-    >
+  const layers = (
+    <>
       {css?.shadowUnder ? (
         <span aria-hidden="true" data-testid={shadowTestIds?.under ?? `${testId}-shadow-under`} style={css.shadowUnder} />
       ) : null}
@@ -107,6 +100,31 @@ export function OfficePictureEffectsFrame({
       {css?.shadowOver ? (
         <span aria-hidden="true" data-testid={shadowTestIds?.over ?? `${testId}-shadow-over`} style={css.shadowOver} />
       ) : null}
+    </>
+  );
+  return (
+    <span
+      data-testid={testId}
+      data-office-picture-effects=""
+      style={{
+        position: "relative",
+        ...block,
+        ...(css?.wrapper ?? {}),
+      }}
+    >
+      {/* Soft Edges mask the layer that draws the picture, inside the
+          wrapper: the wrapper's reflection and glow mirror and halo the
+          softened picture instead of being masked away with it. */}
+      {css?.softEdge ? (
+        <span
+          data-office-picture-soft-edge=""
+          style={{ position: "relative", ...block, ...(fillParent ? {} : { verticalAlign: "top" }), ...css.softEdge }}
+        >
+          {layers}
+        </span>
+      ) : (
+        layers
+      )}
     </span>
   );
 }

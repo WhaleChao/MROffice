@@ -10,6 +10,7 @@ import {
   PDFName,
   PDFRef,
 } from "pdf-lib";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 export type OcVisibilityPolicy = "AnyOn" | "AllOn" | "AnyOff" | "AllOff";
 
@@ -33,6 +34,7 @@ export async function readAnnotationOptionalContent(
   const memberships = new Map<string, AnnotationOcMembership>();
   try {
     const doc = await PDFDocument.load(bytes, {
+      parseSpeed: pdfLibParseSpeed(),
       ignoreEncryption: true,
       updateMetadata: false,
       throwOnInvalidObject: false,

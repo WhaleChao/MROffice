@@ -260,7 +260,7 @@ function declaredMediaType(file: Blob, filename: string, kind: OfficeImportSourc
   if (lower.endsWith(".xltm")) return "application/vnd.ms-excel.template.macroenabled.12";
   // Excel's other workbook files: the server names each by its extension
   // (a browser gives .numbers or .et no type, or a generic one).
-  if (/\.(xlt|xlsb|ods|fods|et|ett|slk|dif|dbf|numbers|xml)$/.test(lower)) return "application/octet-stream";
+  if (/\.(xlt|xlsb|ods|fods|ots|sxc|wk1|wks|et|ett|slk|dif|dbf|numbers|xml)$/.test(lower)) return "application/octet-stream";
   const type = (file.type || "").split(";", 1)[0].trim().toLowerCase();
   return type && type !== "application/octet-stream" ? type : MEDIA_TYPES[kind];
 }
@@ -328,7 +328,7 @@ export async function requestOfficeImportProjection<T extends OfficeImportTarget
 export function officeImportSourceKind(file: { name: string; type?: string }): OfficeImportSourceKind | null {
   const name = file.name.toLowerCase();
   if (name.endsWith(".docx") || name.endsWith(".docm")) return "docx";
-  if (/\.(xlsx|xls|xlsm|xltx|xltm|xlt|xlsb|ods|fods|et|ett|slk|dif|dbf|numbers)$/.test(name)) return "xlsx";
+  if (/\.(xlsx|xls|xlsm|xltx|xltm|xlt|xlsb|ods|fods|ots|sxc|wk1|wks|et|ett|slk|dif|dbf|numbers)$/.test(name)) return "xlsx";
   if (name.endsWith(".pptx")) return "pptx";
   const type = (file.type || "").split(";", 1)[0].toLowerCase();
   if (

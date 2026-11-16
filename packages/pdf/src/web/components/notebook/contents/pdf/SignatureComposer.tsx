@@ -26,6 +26,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
 
 import {
+  SIGNATURE_MAX_IMAGE_BYTES,
   DEFAULT_SIGNATURE_FONT,
   SIGNATURE_FONT_KEYS,
   SIGNATURE_MAX_TEXT,
@@ -37,6 +38,7 @@ import {
   validateSignatureImageFile,
   type SignatureKind,
 } from "@mrnote/core/web/lib/pdf/signatures.ts";
+import { pdfStampPictureForWriter } from "../../../../lib/pdf/stamp-picture-check";
 
 // Keep the full panel and its focus ring inside the clipped PDF page.
 const COMPOSER_EDGE_INSET = 16;
@@ -319,7 +321,21 @@ export default function SignatureComposer({
           onChange({ ...draft, kind: "image", image: null });
           return;
         }
-        onChange({ ...draft, kind: "image", image: safe });
+        // The picture as the PDF's writer takes it (stamp-picture-check.ts):
+        // a file a browser draws though its data is damaged or cut short,
+        // or one larger than the writer reads, is kept as the browser draws
+        // it, encoded again -- taken as it was, the signature's row was
+        // refused by the writer and every later write of the page with it.
+        void pdfStampPictureForWriter({ dataUrl: safe, maxBytes: SIGNATURE_MAX_IMAGE_BYTES }).then((taken) => {
+          if (uploadReadRunRef.current !== uploadReadRun) return;
+          const picture = taken ? sanitizeSignatureImage(taken) : null;
+          if (!picture) {
+            setUploadError(t("pdfSign.uploadErrorRead"));
+            onChange({ ...draft, kind: "image", image: null });
+            return;
+          }
+          onChange({ ...draft, kind: "image", image: picture });
+        });
       };
       reader.onerror = () => {
         if (uploadReadRunRef.current !== uploadReadRun) return;

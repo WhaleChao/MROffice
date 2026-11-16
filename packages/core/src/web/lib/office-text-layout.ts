@@ -86,6 +86,12 @@ export interface OfficeTextParagraph {
   nativeBullet?: NativeBulletMarker;
   /** `a:lnSpc/a:spcPct` as a multiple of single spacing. */
   lineSpacing?: number;
+  /** `a:lnSpc/a:spcPts`: Line Spacing > Exactly, in points (a slide table
+   * cell's rows, readings row 832). */
+  lineSpacingPoints?: number;
+  /** `a:pPr@rtl="1"`: the paragraph's base direction is right to left (a
+   * slide table cell's rows, readings row 831). */
+  dir?: "rtl";
   /** `a:spcBef/a:spcPts` and `a:spcAft/a:spcPts`, in points. */
   spaceBefore?: number;
   spaceAfter?: number;
@@ -219,6 +225,15 @@ function normalizeParagraph(value: unknown): OfficeTextParagraph | undefined {
   }
   const tab = normalizeParagraphIndentEmu(value.defTabSz, { signed: false });
   if (tab !== undefined && tab > 0) row.defTabSz = tab;
+  if (
+    typeof value.lineSpacingPoints === "number" &&
+    Number.isFinite(value.lineSpacingPoints) &&
+    value.lineSpacingPoints > 0 &&
+    value.lineSpacingPoints <= 1584
+  ) {
+    row.lineSpacingPoints = value.lineSpacingPoints;
+  }
+  if (value.dir === "rtl") row.dir = "rtl";
   return row;
 }
 
@@ -276,6 +291,10 @@ export interface OfficeTextLine {
   markerSizePt?: number;
   /** The paragraph's line spacing multiple, when stated (single otherwise). */
   lineSpacing?: number;
+  /** The paragraph's Line Spacing > Exactly, in points, when stated. */
+  lineSpacingPoints?: number;
+  /** The paragraph's base direction, when right to left. */
+  dir?: "rtl";
   /** Space before / after the paragraph in CSS px; only on its first / last line. */
   spaceBeforePx?: number;
   spaceAfterPx?: number;
@@ -339,6 +358,8 @@ export function officeTextLayoutLines(
     };
     if (row.align) line.align = row.align;
     if (row.lineSpacing !== undefined) line.lineSpacing = row.lineSpacing;
+    if (row.lineSpacingPoints !== undefined) line.lineSpacingPoints = row.lineSpacingPoints;
+    if (row.dir === "rtl") line.dir = "rtl";
     if (row.spaceBefore) line.spaceBeforePx = row.spaceBefore * PX_PER_POINT;
     if (row.spaceAfter) line.spaceAfterPx = row.spaceAfter * PX_PER_POINT;
     if (marker !== null && row.nativeBullet) {

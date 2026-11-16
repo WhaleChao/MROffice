@@ -9,6 +9,7 @@ import { officeCompoundStrokeLayers } from "../../../../lib/office-stroke-detail
 import { useId } from "react";
 import { OfficeShapePreview, type OfficeShapePreviewProps } from "../../../office-ribbon/OfficeShapeCatalogPanel";
 import { officeFillPatternTile } from "../../../../lib/office-chart-shape-paint";
+import { officeGradientAngle, officeGradientDrawnStops } from "../../../../lib/office-shape-paint";
 import { officePictureFillPattern, officePictureNaturalSize } from "../../../../lib/office-picture-fill-options";
 import { presentationConnectorRouteGeometry, presentationPresetGeometryForKind } from "../../../../lib/presentation-authored-preset-geometry";
 import { nativePathFillColor, type NativePathFill } from "../../../../lib/native-drawing-geometry";
@@ -43,6 +44,12 @@ export function PresentationPresetShapePreview(props: OfficeShapePreviewProps) {
   const instanceId = useId().replace(/[^A-Za-z0-9_-]/g, "");
   const { kind, fill = "#f6ddd5", stroke = "#a33417", strokeWidth = 4, strokeStyle = "solid", shadow, fillGradient, className } = props;
   const [boxWidth, boxHeight] = presetPreviewBox(props.boxWidthPx, props.boxHeightPx);
+  // A line drawn level or upright has no height or no width (a sheet's
+  // dimension arrow: a:ext cy="0"); its host gives it a 1 px box. Its route
+  // is evaluated flat, so it draws level along the box's edge, as Office
+  // does, not as a 1 px diagonal (lookwin probe p13).
+  const flat = (side: unknown) => typeof side === "number" && side > 0 && side < 1.5;
+  const flatWidth = flat(props.boxWidthPx), flatHeight = flat(props.boxHeightPx);
   // …with the shape's OWN dragged handles, so a corner someone pulled in Excel
   // or Word is drawn where they pulled it instead of at the preset's default.
   const presetGeometry = presentationPresetGeometryForKind(kind, boxWidth, boxHeight, props.adjustments);
@@ -62,8 +69,14 @@ export function PresentationPresetShapePreview(props: OfficeShapePreviewProps) {
     : normalizePresentationConnectorSpec(connectorInput);
   const connector = presetGeometry || props.points || props.customPath ? null
     : (statedConnector ?? normalizePresentationConnectorSpec({ shape: kind }));
-  const geometry = presetGeometry ??
+  const routed = presetGeometry ??
     (connector ? presentationConnectorRouteGeometry(connector.connectorPreset, boxWidth, boxHeight) : null);
+  // A straight line's points (moveTo / lineTo) put level or upright.
+  const geometry = routed && connector && (flatWidth || flatHeight) ? {
+    ...routed,
+    paths: routed.paths.map((path) => ({ ...path, d: path.d.replace(/([ML])\s*(-?[\d.]+)[ ,]\s*(-?[\d.]+)/g,
+      (_, command: string, x: string, y: string) => `${command}${flatWidth ? 0 : x} ${flatHeight ? 0 : y}`) })),
+  } : routed;
   // An explicit outline says the caller's shape is not this preset at all, so
   // the preset geometry must not overwrite it.
   if (!geometry || props.points || props.customPath) return <OfficeShapePreview {...props} />;
@@ -155,20 +168,22 @@ export function PresentationPresetShapePreview(props: OfficeShapePreviewProps) {
     data-presentation-shape-preview={kind} data-presentation-preset-preview="true"
     data-presentation-connector-route={connector?.route}
     style={shadow ? { filter: "drop-shadow(4px 4px 3px rgba(15,23,42,.28))" } : undefined}>
-    {fillGradient ? <defs><linearGradient id={`${instanceId}-fill`} {...gradientVector(fillGradient.angle)}>
-      {fillGradient.stops.map(stop => <stop key={stop.position} offset={stop.position} stopColor={stop.color} />)}
+    {fillGradient ? <defs><linearGradient id={`${instanceId}-fill`} {...gradientVector(officeGradientAngle(fillGradient))}>
+      {officeGradientDrawnStops(fillGradient.stops).map(stop => <stop key={stop.position} offset={stop.position} stopColor={stop.color} />)}
     </linearGradient></defs> : null}
     {props.fillPattern && patternTile ? <defs>
       <pattern id={`${instanceId}-pattern`} patternUnits="userSpaceOnUse" width={patternTile.size} height={patternTile.size}
         patternTransform={[patternScale !== 1 ? `scale(${patternScale})` : "", patternTile.angle ? `rotate(${patternTile.angle})` : ""].filter(Boolean).join(" ") || undefined}>
-        <rect x="0" y="0" width={patternTile.size} height={patternTile.size} fill={props.fillPattern.background} />
-        {patternTile.marks.map(({ tag, ...attrs }, index) => tag === "circle"
-          ? <circle key={index} {...attrs} fill={props.fillPattern!.foreground} />
-          : <rect key={index} {...attrs} fill={props.fillPattern!.foreground} />)}
+        {patternTile.paperInMarks ? null : <rect x="0" y="0" width={patternTile.size} height={patternTile.size} fill={props.fillPattern.background} />}
+        {patternTile.marks.map(({ tag, ...attrs }, index) => {
+          if (tag === "circle") return <circle key={index} {...attrs} fill={props.fillPattern!.foreground} />;
+          const { opacity, ...rest } = attrs as typeof attrs & { opacity?: number };
+          return <rect key={index} {...rest} fill={("fill" in rest && rest.fill) || props.fillPattern!.foreground} fillOpacity={opacity} />;
+        })}
       </pattern>
     </defs> : null}
-    {props.strokeGradient ? <defs><linearGradient id={`${instanceId}-stroke`} {...gradientVector(props.strokeGradient.angle)}>
-      {props.strokeGradient.stops.map(stop => <stop key={stop.position} offset={stop.position} stopColor={stop.color} />)}
+    {props.strokeGradient ? <defs><linearGradient id={`${instanceId}-stroke`} {...gradientVector(officeGradientAngle(props.strokeGradient))}>
+      {officeGradientDrawnStops(props.strokeGradient.stops).map(stop => <stop key={stop.position} offset={stop.position} stopColor={stop.color} />)}
     </linearGradient></defs> : null}
     {props.fillImage && pictureGeometry ? <defs>
       {/* The shared picture-fill pattern is in fractions of the box; the
@@ -184,7 +199,8 @@ export function PresentationPresetShapePreview(props: OfficeShapePreviewProps) {
         ))}
       </pattern>
     </defs> : null}
-    <OfficeLineEndMarkers id={markerId} head={headEnd} tail={tailEnd} stroke={stroke} />
+    <OfficeLineEndMarkers id={markerId} head={headEnd} tail={tailEnd} stroke={stroke}
+      lineWeight={props.lineEndsAtLineWeight && longerSidePx > 0 ? { px: strokeWidth, unitsPerPx: 100 / longerSidePx } : undefined} />
     {/* `a:ln@algn="in"`: the whole stroke belongs inside the geometry path
         (Office's `LineFormat.InsetPen`). SVG has no stroke-alignment, so the
         ink is doubled and clipped to the path -- the fill boundary does not

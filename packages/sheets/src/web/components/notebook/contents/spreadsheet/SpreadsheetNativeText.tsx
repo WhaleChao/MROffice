@@ -90,11 +90,15 @@ const spacingCache = new Map<string, number>();
 let spacingCacheGeneration = "";
 /** The width a text is drawn at in this style, px: the sum of its native
  * advances (the widths the native layout sets each glyph at); undefined when
- * the layout cannot give every glyph one (bidi text, no canvas). */
-export function spreadsheetNativeTextWidthPx(text: string, style: CSSProperties, dpi: number): number | undefined {
+ * the layout cannot give every glyph one (bidi text, no canvas). "paint":
+ * the advances it is painted at, on the print page the printer's (or a
+ * designed line's design widths: setNativeTextPrinterDpi), where "measure"
+ * is the screen's, which lines break at. */
+export function spreadsheetNativeTextWidthPx(text: string, style: CSSProperties, dpi: number,
+  purpose: "paint" | "measure" = "measure"): number | undefined {
   const resolvedStyle = resolveSpreadsheetTextStyle(style, text, dpi);
   let width = 0;
-  for (const run of nativeTextAdvances(text, spreadsheetNativeFontCss(resolvedStyle), dpi, 1, "measure")) {
+  for (const run of nativeTextAdvances(text, spreadsheetNativeFontCss(resolvedStyle), dpi, 1, purpose)) {
     if (typeof run.advance !== "number" || !Number.isFinite(run.advance)) return undefined;
     width += run.advance;
   }

@@ -481,6 +481,25 @@ export interface SpreadsheetShapeStyle extends OfficeShapeTextFont {
    * (docs/office-graphics/SHAPE-IMPORT-AUDIT.md §44.4).
    */
   nativeShape3d?: { shape3d: SmartArtShape3d; scene3d?: SmartArtScene3d };
+  /**
+   * The 3-D Rotation of the group this shape came out of (the nearest
+   * `xdr:grpSpPr/a:scene3d`), DISPLAY-ONLY as {@link nativeShape3d} is: Excel
+   * turns the whole group by it as one object, about the group's centre, and
+   * the group keeps it in the file -- no writer reads this.
+   */
+  nativeGroupScene3d?: SmartArtScene3d;
+}
+
+/**
+ * The camera a sheet shape is drawn through: a SmartArt member's diagram
+ * camera (`scene3d`), else the camera of the group it came out of
+ * (`nativeGroupScene3d`). Either turns all of its group as one object, about
+ * the group's centre.
+ */
+export function spreadsheetShapeSceneCamera(
+  shape: Pick<SpreadsheetShapeStyle, "scene3d" | "nativeGroupScene3d"> | null | undefined,
+): SmartArtScene3d | undefined {
+  return shape?.scene3d ?? shape?.nativeGroupScene3d;
 }
 
 /**
@@ -972,6 +991,7 @@ export function normalizeShapeStyle(value: unknown): SpreadsheetShapeStyle {
       };
     }
   }
+  if (isNativeScene3d(o.nativeGroupScene3d)) style.nativeGroupScene3d = o.nativeGroupScene3d;
   if (isSmartArtScene3d(o.scene3d)) style.scene3d = o.scene3d;
   if (isSmartArtTextShape3d(o.textShape3d)) style.textShape3d = o.textShape3d;
   if (isSmartArtStyleId(o.smartArtStyle)) style.smartArtStyle = o.smartArtStyle;

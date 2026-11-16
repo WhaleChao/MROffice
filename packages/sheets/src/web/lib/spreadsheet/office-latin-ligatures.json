@@ -1,0 +1,154 @@
+{
+ "description": "Latin letter sequences each Office face's GSUB 'liga' feature joins into a glyph no code point maps to (Calibri's ti, tt, ft, fb ...; not the presentation forms U+FB00..FB04 that fi, fl, ff, ffi, ffl map to), measured from the Office faces by lookwin tools/ligature_table.py (which sequences form such a ligature, nothing of the outlines). Windows Excel's real print draws a wrap-off text with a line break holding one of them unclipped (lookwin p102f/p102g/p102h-lw).",
+ "faces": {
+  "aptos": [
+   "ff"
+  ],
+  "aptos black": [
+   "ff"
+  ],
+  "aptos extrabold": [
+   "ff"
+  ],
+  "aptos light": [
+   "ff"
+  ],
+  "aptos narrow": [
+   "ff"
+  ],
+  "aptos semibold": [
+   "ff"
+  ],
+  "calibri": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffj",
+   "ffk",
+   "fft",
+   "ffì",
+   "ffí",
+   "ffî",
+   "ffï",
+   "fh",
+   "fj",
+   "fk",
+   "ft",
+   "fì",
+   "fí",
+   "fî",
+   "fï",
+   "tf",
+   "ti",
+   "tt",
+   "ttf",
+   "tti",
+   "ttì",
+   "ttí",
+   "ttî",
+   "ttï",
+   "tì",
+   "tí",
+   "tî",
+   "tï"
+  ],
+  "calibri light": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffj",
+   "ffk",
+   "fft",
+   "ffì",
+   "ffí",
+   "ffî",
+   "ffï",
+   "fh",
+   "fj",
+   "fk",
+   "ft",
+   "fì",
+   "fí",
+   "fî",
+   "fï",
+   "tf",
+   "ti",
+   "tt",
+   "ttf",
+   "tti",
+   "ttì",
+   "ttí",
+   "ttî",
+   "ttï",
+   "tì",
+   "tí",
+   "tî",
+   "tï"
+  ],
+  "candara": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffj",
+   "ffk",
+   "fh",
+   "fj",
+   "fk"
+  ],
+  "constantia": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffj",
+   "ffk",
+   "fh",
+   "fj",
+   "fk"
+  ],
+  "corbel": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffj",
+   "ffk",
+   "fh",
+   "fj",
+   "fk"
+  ],
+  "gabriola": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffj",
+   "ffk",
+   "ffr",
+   "fft",
+   "fh",
+   "fj",
+   "fk",
+   "fr",
+   "tt"
+  ],
+  "nyala": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffj",
+   "ffk",
+   "fh",
+   "fj",
+   "fk"
+  ],
+  "palatino linotype": [
+   "fb",
+   "ffb",
+   "ffh",
+   "ffk",
+   "fh",
+   "fj",
+   "fk",
+   "tt",
+   "tz"
+  ]
+ }
+}

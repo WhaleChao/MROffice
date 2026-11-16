@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ Para todos os recursos, instale o aplicativo para desktop do MR Office (grátis)
->
-> O aplicativo para desktop MR Office é gratuito, traz estes editores e o serviço completo, e funciona offline no seu próprio computador. Ele acrescenta o que os editores de código aberto não têm:
->
-> - Abrir e salvar arquivos do Word, Excel e PowerPoint (.docx, .xlsx, .pptx)
-> - Calcular fórmulas com funções (SOMA, SE, PROCV …)
-> - Gráficos
-> - Edição de SmartArt
-> - Gravar no arquivo as edições feitas em um PDF
->
-> **[Baixar o MR Office em Releases →](https://github.com/XinaTian/MROffice/releases)** · [ou em mroffice.ai](https://mroffice.ai)
+<p align="center"><b>Os editores de código aberto do MR Office — documentos, planilhas, apresentações, PDF, escrita à mão e código — no navegador.</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">Experimente no MR Office →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ Experimente a demonstração online — sem instalar</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Baixar o MR Office em Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> Os editores de código aberto do MR Office — documentos, planilhas, apresentações, PDF, escrita à mão e código — no navegador.
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="Documentos" width="100%"></a><br><b>Documentos</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="Planilhas" width="100%"></a><br><b>Planilhas</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="Apresentações" width="100%"></a><br><b>Apresentações</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="Escrita à mão" width="100%"></a><br><b>Escrita à mão</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="Código" width="100%"></a><br><b>Código</b></td>
+</tr>
+</table>
 
 O MR Office é um espaço de trabalho para notas, IA e arquivos reais. Este repositório publica o código-fonte dos seus editores: os mesmos editores que rodam no MR Office, que você pode compilar, executar e incorporar por conta própria. São editores de código aberto, não um pacote Office de código aberto completo: a leitura e a gravação de arquivos do Microsoft Office ficam no MR Office (veja abaixo).
 
@@ -33,16 +36,9 @@ O que cada editor faz neste repositório:
 
 O cálculo de fórmulas com funções, o desenho de gráficos e o layout de SmartArt são feitos pelo motor do próprio MR Office, no aplicativo para desktop MR Office: os editores de código aberto preservam as fórmulas, os gráficos e os SmartArt de um arquivo, e mostram os SmartArt como foram salvos.
 
-## Arquivos do Word, Excel, PowerPoint e PDF
-
-Abrir e salvar arquivos do Word, Excel e PowerPoint (.docx, .xlsx, .pptx), e gravar no arquivo as edições feitas em um PDF, são recursos do aplicativo para desktop MR Office (grátis), que traz todos estes editores e funciona offline no seu próprio computador:
-
-- **MR Office** (aplicativo de desktop gratuito): https://github.com/XinaTian/MROffice/releases
-- **Site**: https://mroffice.ai
-
-[Todas as versões →](https://github.com/XinaTian/MROffice/releases)
-
 ## Executar os editores
+
+**▶ [Experimente a demonstração online — sem instalar](https://demo.mroffice.ai)**
 
 Os seis editores estão em `packages/` (`@mrnote/docs`, `sheets`, `slides`, `pdf`, `ink`, `code`, que compartilham `@mrnote/core`) e rodam juntos em `apps/playground`:
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` inicia um servidor de desenvolvimento no mesmo endereço e `npm run smoke` verifica uma compilação. O README de cada pacote detalha o que ele faz e como incorporá-lo.
+
+## Para todos os recursos, instale o aplicativo para desktop do MR Office (grátis)
+
+O aplicativo para desktop MR Office é gratuito, traz estes editores e o serviço completo, e funciona offline no seu próprio computador. Ele acrescenta o que os editores de código aberto não têm:
+
+- Abrir e salvar arquivos do Word, Excel e PowerPoint (.docx, .xlsx, .pptx)
+- Calcular fórmulas com funções (SOMA, SE, PROCV …)
+- Gráficos
+- Edição de SmartArt
+- Gravar no arquivo as edições feitas em um PDF
+
+**[Baixar o MR Office em Releases →](https://github.com/XinaTian/MROffice/releases)** · [ou em mroffice.ai](https://mroffice.ai)
+
+### Arquivos do Word, Excel, PowerPoint e PDF
+
+Abrir e salvar arquivos do Word, Excel e PowerPoint (.docx, .xlsx, .pptx), e gravar no arquivo as edições feitas em um PDF, são recursos do aplicativo para desktop MR Office (grátis), que traz todos estes editores e funciona offline no seu próprio computador:
 
 ## Licença
 

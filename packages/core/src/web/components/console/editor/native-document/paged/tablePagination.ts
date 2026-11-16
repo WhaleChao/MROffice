@@ -1410,7 +1410,6 @@ const CELL_RUNTIME_ATTRS = new Set([
  * schema's own, which also keep the tail item's marker off). */
 const LIST_ITEM_CONTINUES_ATTR = "pageSplitItemContinues";
 const LIST_ITEM_CONTINUATION_ATTR = "pageSplitItemContinuation";
-const LIST_ITEM_RUNTIME_ATTRS = new Set([LIST_ITEM_CONTINUES_ATTR, LIST_ITEM_CONTINUATION_ATTR]);
 /** containerSplitting's LIST_ITEM_SPLIT_BRIDGE_ATTR (that module reads this one). */
 const LIST_ITEM_BRIDGE_ATTR = "pageSplitListItemBridge";
 
@@ -1554,7 +1553,7 @@ function joinContinuedBlocks(left: TableJsonNode[], right: TableJsonNode[]): Tab
             ...headContent.slice(0, -1),
             {
               ...headItem,
-              attrs: stripAttrs(headItem.attrs, LIST_ITEM_RUNTIME_ATTRS),
+              attrs: keepOuterSeams(headItem.attrs, tailItem.attrs, LIST_ITEM_CONTINUATION_ATTR, LIST_ITEM_CONTINUES_ATTR),
               content: joinContinuedBlocks(
                 Array.isArray(headItem.content) ? headItem.content : [],
                 withoutListItemBridge(Array.isArray(tailItem.content) ? tailItem.content : []),
@@ -1565,12 +1564,39 @@ function joinContinuedBlocks(left: TableJsonNode[], right: TableJsonNode[]): Tab
         : joinInlineFragments(headContent, tailContent);
     const joined: TableJsonNode = {
       ...last,
-      attrs: stripAttrs(last.attrs, BLOCK_RUNTIME_ATTRS),
+      attrs: keepOuterSeams(last.attrs, first.attrs, TABLE_BLOCK_CONTINUATION_ATTR, TABLE_BLOCK_CONTINUES_ATTR),
       content: joinedContent,
     };
     return [...left.slice(0, -1), joined, ...right.slice(1)];
   }
   return [...left, ...right];
+}
+
+/**
+ * The attrs of a block joined back across one seam: that seam's two marks go,
+ * and the seams on its outer sides stay -- the head half's own continuation of
+ * a page before it, the tail half's continuing onto a page after it. A row cut
+ * over three pages whose last two pieces joined first lost the middle piece's
+ * continuation, and the first seam never joined again: the paragraph stood in
+ * two on one page, the head's hard line break a blank row between them, and
+ * the pages after it a line lower on the opens that joined in that order
+ * (corpus R284-D30: "A3_1" on page 8 or page 9). `window.__docsBlockSeamKeepOff
+ * = true` drops both marks, as before.
+ */
+function keepOuterSeams(
+  head: Record<string, unknown> | undefined,
+  tail: Record<string, unknown> | undefined,
+  continuation: string,
+  continues: string,
+): Record<string, unknown> | undefined {
+  const stripped = stripAttrs(head, new Set([continuation, continues]));
+  const off = typeof window !== "undefined" && (window as Window & { __docsBlockSeamKeepOff?: boolean }).__docsBlockSeamKeepOff === true;
+  if (off) return stripped;
+  const outer = {
+    ...(head?.[continuation] === true ? { [continuation]: true } : {}),
+    ...(tail?.[continues] === true ? { [continues]: true } : {}),
+  };
+  return Object.keys(outer).length ? { ...stripped, ...outer } : stripped;
 }
 
 function mergeRowFragments(rows: TableJsonNode[]): TableJsonNode {

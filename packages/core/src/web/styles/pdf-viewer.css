@@ -2063,6 +2063,8 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+   
+  scrollbar-gutter: stable;
   padding: 20px 16px 32px;
   display: flex;
   flex-direction: column;
@@ -2824,7 +2826,8 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
 .pdf-viewer[data-pdf-comment-mode="inactive"] .pdf-viewer__measure-layer,
 .pdf-viewer[data-pdf-comment-mode="inactive"] .pdf-viewer__measure-readout,
 .pdf-viewer[data-pdf-comment-mode="inactive"] .pdf-viewer__note-layer,
-.pdf-viewer[data-pdf-comment-mode="inactive"] :is( .pdf-viewer__highlight-rect, .pdf-viewer__native-text-markup-target, .pdf-viewer__ink-layer, .pdf-viewer__shape-layer, [data-pdf-stamp-layer], [data-pdf-measurement], .pdf-viewer__measure-layer, .pdf-viewer__measure-readout, .pdf-viewer__note-layer ) * {
+.pdf-viewer[data-pdf-comment-mode="inactive"] .pdf-viewer__annotation-hits,
+.pdf-viewer[data-pdf-comment-mode="inactive"] :is( .pdf-viewer__highlight-rect, .pdf-viewer__native-text-markup-target, .pdf-viewer__ink-layer, .pdf-viewer__shape-layer, [data-pdf-stamp-layer], [data-pdf-measurement], .pdf-viewer__measure-layer, .pdf-viewer__measure-readout, .pdf-viewer__note-layer, .pdf-viewer__annotation-hits ) * {
   pointer-events: none !important;
 }
 
@@ -2836,7 +2839,8 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
 .pdf-viewer[data-pdf-comments-hidden="true"] [data-pdf-measurement],
 .pdf-viewer[data-pdf-comments-hidden="true"] .pdf-viewer__measure-layer,
 .pdf-viewer[data-pdf-comments-hidden="true"] .pdf-viewer__measure-readout,
-.pdf-viewer[data-pdf-comments-hidden="true"] .pdf-viewer__note-layer {
+.pdf-viewer[data-pdf-comments-hidden="true"] .pdf-viewer__note-layer,
+.pdf-viewer[data-pdf-comments-hidden="true"] .pdf-viewer__annotation-hits {
   display: none !important;
 }
 
@@ -2855,6 +2859,40 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
   pointer-events: none;
 }
 
+/* The reader's own annotation layers (charts and SmartArt, tables, text
+   boxes) share one stack, at the text box layer's height: each object's slot
+   is stacked at its place in the page's /Annots (lib/pdf/annotation-stack-
+   order.ts), the order every reader paints annotations in, so a table made
+   after a text box is in front of it here too. A text box layer placing or
+   holding a box keeps the whole stack's front while it does. */
+.pdf-viewer__annotation-stack {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  isolation: isolate;
+}
+
+.pdf-viewer__annotation-stack > .pdf-viewer__chart-layer,
+.pdf-viewer__annotation-stack > .pdf-viewer__table-layer,
+.pdf-viewer__annotation-stack > .pdf-viewer__text-box-layer {
+  z-index: auto;
+}
+
+/* The click targets of shapes, ink and stamps (PdfViewerPages): each at its
+   own place in the stack, so their container makes no stacking context of
+   its own (z-index auto). It takes no pointer; the targets do. */
+.pdf-viewer__annotation-stack > .pdf-viewer__annotation-hits {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf-viewer__annotation-stack > .pdf-viewer__text-box-layer--placing,
+.pdf-viewer__annotation-stack > .pdf-viewer__text-box-layer--holding {
+  z-index: 2000000;
+}
+
 /* 表格: the page's tables made in MRAI (PdfTableLayer). The page's revision
    paints a saved one; the layer keeps only its hit target until it is
    selected, then shows its own over a cover of the page's copy. */
@@ -2868,6 +2906,14 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
 .pdf-viewer__table,
 .pdf-viewer__table-cover {
   position: absolute;
+}
+
+/* The words of a table, chart or SmartArt the page draws as its own content
+   are in the text layer too (found and copied as page text). The pointer
+   goes through them to the object's layer: over an Edit Content text layer a
+   press on a cell's word would otherwise reach nothing. */
+.pdf-viewer__text-layer span[data-pdf-managed-object-text="true"] {
+  pointer-events: none !important;
 }
 
 .pdf-viewer__table {
@@ -3647,6 +3693,21 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
   z-index: 7;
 }
 
+/* Over a text box being edited the stage is cut away: it holds the page's
+   words as they stood when its shape was lifted, and showed them in place of
+   the box's draft (the editor sets the box's edges on its page). */
+.pdf-viewer__page[data-pdf-native-text-editing-box="true"] .pdf-viewer__native-vector-drag-ghost {
+  clip-path: polygon(
+    evenodd,
+    0 0, 100% 0, 100% 100%, 0 100%, 0 0,
+    var(--pdf-text-editing-left) var(--pdf-text-editing-top),
+    var(--pdf-text-editing-left) var(--pdf-text-editing-bottom),
+    var(--pdf-text-editing-right) var(--pdf-text-editing-bottom),
+    var(--pdf-text-editing-right) var(--pdf-text-editing-top),
+    var(--pdf-text-editing-left) var(--pdf-text-editing-top)
+  );
+}
+
 .pdf-viewer__native-text-note-icon {
   display: block;
   width: 100%;
@@ -3843,7 +3904,8 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
   cursor: none;
   touch-action: none;
 }
-.pdf-viewer[data-pdf-ink-tool="eraser"] .pdf-viewer__ink-layer path {
+.pdf-viewer[data-pdf-ink-tool="eraser"] .pdf-viewer__ink-layer path,
+.pdf-viewer[data-pdf-ink-tool="eraser"] .pdf-viewer__annotation-hit--ink path {
   pointer-events: none !important;
 }
 .pdf-viewer__ink-eraser-ring {
@@ -5910,9 +5972,10 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
   .pdf-page-window
     .pdf-page-window__body--annotations-open
     > .pdf-page-window__side {
-    bottom: 8px;
+     
+    bottom: calc(8px + var(--pdf-pages-bar-x, 0px));
     position: absolute;
-    right: 8px;
+    right: calc(8px + var(--pdf-pages-bar, 0px));
     top: calc(var(--pdf-comments-pane-top, 0px) + 6px);
     width: 360px;
     z-index: 30;
@@ -5937,11 +6000,11 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
   .pdf-page-window.pdf-page-window
     .pdf-page-window__body
     > .pdf-page-window__side {
-    bottom: 8px;
+    bottom: calc(8px + var(--pdf-pages-bar-x, 0px));
     height: auto;
     overflow: visible;
     position: absolute;
-    right: 8px;
+    right: calc(8px + var(--pdf-pages-bar, 0px));
     top: calc(var(--pdf-comments-pane-top, 0px) + 6px);
     transition:
       transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
@@ -5956,7 +6019,7 @@ textarea[data-pdf-native-text-format-preview="true"] + [data-office-inactive-sel
     > .pdf-page-window__side.pdf-page-window__side--collapsed {
     opacity: 0;
     pointer-events: none;
-    transform: translateX(calc(100% + 16px));
+    transform: translateX(calc(100% + 16px + var(--pdf-pages-bar, 0px)));
     transition:
       transform 200ms cubic-bezier(0.4, 0, 1, 1),
       opacity 160ms ease 40ms,

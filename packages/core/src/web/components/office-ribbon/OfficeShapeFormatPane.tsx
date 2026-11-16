@@ -203,6 +203,64 @@ export interface OfficeShapeFormatPaneTab {
   readonly sections: readonly OfficeShapeFormatPaneSection[];
 }
 
+/**
+ * A host command's page of the pane: the tab `id`, and the `section` it
+ * brings into view (`officeEffectsPaneSections`' `effects-glow`, ...). A new
+ * `serial` is a new request (the same page asked for twice scrolls again).
+ */
+export interface OfficeShapeFormatPaneRequest {
+  readonly id: string;
+  readonly serial: number;
+  readonly section?: string;
+}
+
+/** The attribute every pane section carries, naming its section id. */
+const SECTION_ATTRIBUTE = "data-format-section";
+
+/**
+ * Bring one section of a Format pane into view (the Effects menu's "...
+ * Options" rows, as Office opens the pane at that effect): the section under
+ * `root` whose id is `section` scrolls to the top of the pane's body and is
+ * marked `data-format-section-revealed`. False when the page holds no such
+ * section. Every pane the shared builders draw (this pane, its sections in a
+ * host's own pane) answers it.
+ */
+export function revealOfficeShapeFormatPaneSection(
+  root: ParentNode | null | undefined,
+  section: string,
+): boolean {
+  if (!root) return false;
+  let found: HTMLElement | null = null;
+  for (const element of Array.from(root.querySelectorAll<HTMLElement>(`[${SECTION_ATTRIBUTE}]`))) {
+    if (element.getAttribute(SECTION_ATTRIBUTE) === section && !found) {
+      found = element;
+      element.setAttribute("data-format-section-revealed", "true");
+    } else {
+      element.removeAttribute("data-format-section-revealed");
+    }
+  }
+  found?.scrollIntoView?.({ block: "start" });
+  return found !== null;
+}
+
+/**
+ * Reveal `request.section` under `root` after each new request has rendered
+ * (and on mount, for a pane opened by the request).
+ */
+export function useRevealOfficeShapeFormatPaneSection(
+  root: { readonly current: ParentNode | null },
+  request: { readonly serial: number; readonly section?: string } | null | undefined,
+) {
+  const serial = request?.serial;
+  const section = request?.section;
+  useEffect(() => {
+    if (!section) return;
+    revealOfficeShapeFormatPaneSection(root.current, section);
+    // A new serial is a new request; the ref is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serial, section]);
+}
+
 export interface OfficeShapeFormatPaneProps {
   /** `document-shape-format-pane`, `spreadsheet-shape-format-pane`, … */
   readonly testIdPrefix: string;
@@ -217,9 +275,11 @@ export interface OfficeShapeFormatPaneProps {
   readonly tabs: readonly OfficeShapeFormatPaneTab[];
   readonly initialTab?: string;
   /** A host command that opens the pane at one page (PowerPoint's More
-   * Rotation Options... opens Size & Properties): each new `serial` selects
-   * that tab, later clicks on the tabs are the user's own. */
-  readonly requestedTab?: { readonly id: string; readonly serial: number };
+   * Rotation Options... opens Size & Properties), and at one section of it
+   * (Glow Options... opens Effects at Glow): each new `serial` selects that
+   * tab and scrolls the section into view; later clicks on the tabs are the
+   * user's own. */
+  readonly requestedTab?: OfficeShapeFormatPaneRequest;
   /** False greys every writing control; tabs, Close and Cancel stay live. */
   readonly writable: boolean;
   readonly onClose: () => void;
@@ -727,6 +787,7 @@ export function OfficeShapeFormatPaneSections({
       {sections.map((section) => (
         <fieldset
           className={styles.section}
+          data-format-section={section.id}
           data-testid={section.testId ?? `${testIdPrefix}-section-${section.id}`}
           key={section.id}
         >
@@ -782,6 +843,8 @@ export function OfficeShapeFormatPane({
   }
   const tab = tabs.find((entry) => entry.id === selected) ?? tabs[0];
   const conflictId = `${testIdPrefix}-draft-conflict`;
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useRevealOfficeShapeFormatPaneSection(bodyRef, requestedTab);
 
   const { draftFor } = useOfficeShapeFormatDrafts();
   // The typed fields on the selected tab are drafted here, in the pane's own
@@ -806,6 +869,7 @@ export function OfficeShapeFormatPane({
   const sections = (tab?.sections ?? []).map((section) => (
     <fieldset
       className={styles.section}
+      data-format-section={section.id}
       data-testid={section.testId ?? `${testIdPrefix}-section-${section.id}`}
       key={section.id}
     >
@@ -864,7 +928,7 @@ export function OfficeShapeFormatPane({
           ))}
         </div>
       ) : null}
-      <div aria-disabled={!writable} className={styles.body} role="group">
+      <div aria-disabled={!writable} className={styles.body} ref={bodyRef} role="group">
         {conflicting.length > 0 && labels.draftConflict && labels.useLatestDraft ? (
           <div
             className={styles.conflict}

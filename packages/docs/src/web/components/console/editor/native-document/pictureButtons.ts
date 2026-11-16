@@ -16,7 +16,19 @@ import {
   type OfficePictureEffectKind,
   type OfficePictureEffectValues,
 } from "@mrnote/core/web/lib/office-picture-effects.ts";
-import { PICTURE_THREE_D_KINDS, normalizePicture3d, picture3dBlocker } from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
+import {
+  PICTURE_THREE_D_KINDS,
+  normalizePicture3d,
+  picture3dBlocker,
+  PICTURE_LOOK_EFFECT_KINDS,
+  pictureLookEffectAttrs,
+  pictureLookEffects,
+  pictureLookEffectsBlocker,
+  pictureShadowBlocker,
+  pictureShadowEffect,
+  pictureShadowEffectAttrs,
+  type PictureLookEffectKind,
+} from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
 import type { Editor } from "@tiptap/react";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { closeHistory } from "@tiptap/pm/history";
@@ -1360,3 +1372,42 @@ export function setPicture3dEffect<K extends OfficePictureEffectKind>(
   return updateLiveImageFormatting(editor, { picture3d: next, picture3dEditable: true });
 }
 
+/**
+ * Picture Format > Picture Effects > Glow / Reflection / Soft Edges on the
+ * selected picture (reading row 545): its `pictureGlow` / `pictureReflection`
+ * / `pictureSoftEdge` in Word's forms, `null` / "none" taking one off.
+ */
+export function setPictureLookEffect<K extends OfficePictureEffectKind>(
+  editor: Editor,
+  kind: K,
+  value: OfficePictureEffectValues[K] | "none" | null,
+): boolean {
+  if (!(PICTURE_LOOK_EFFECT_KINDS as readonly string[]).includes(kind)) return false;
+  const target = liveImageAltTarget(editor);
+  if (!target) return false;
+  const attrs = target.attrs as Record<string, unknown>;
+  if (pictureLookEffectsBlocker(attrs)) return false;
+  const patch = pictureLookEffectAttrs(attrs, kind as PictureLookEffectKind, value);
+  const before = pictureLookEffects(attrs)[kind as PictureLookEffectKind];
+  const after = pictureLookEffects({ ...attrs, ...patch })[kind as PictureLookEffectKind];
+  if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) return false;
+  return updateLiveImageFormatting(editor, { ...patch, pictureEffectsEditable: true });
+}
+
+
+/**
+ * Picture Format > Picture Effects > Shadow on the selected picture (reading
+ * row 547): its `pictureShadowEffect` in the shared shadow model, `null` /
+ * "none" taking it off.
+ */
+export function setPictureShadowEffect(editor: Editor, value: unknown): boolean {
+  const target = liveImageAltTarget(editor);
+  if (!target) return false;
+  const attrs = target.attrs as Record<string, unknown>;
+  if (pictureShadowBlocker(attrs)) return false;
+  const patch = pictureShadowEffectAttrs(value);
+  if (JSON.stringify(pictureShadowEffect(attrs)) === JSON.stringify(pictureShadowEffect({ ...attrs, ...patch }))) {
+    return false;
+  }
+  return updateLiveImageFormatting(editor, { ...patch, pictureShadowEditable: true });
+}

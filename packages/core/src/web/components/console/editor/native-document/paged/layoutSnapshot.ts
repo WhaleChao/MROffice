@@ -35,6 +35,7 @@ import {
   LAYOUT_CODE_VERSION,
   printPartsOf,
   printRowsOf,
+  layoutRowExtraAccepted,
   layoutEngineName,
   layoutSnapshotRows,
   storeLayoutSnapshots,
@@ -46,6 +47,10 @@ import { canonicalProjectionDocument, capturePaginationProjectionRecipe, layoutC
 import { provisionalPageSizesForJson } from "./provisionalPages";
 import { PAGINATION_RUNTIME_ATTRIBUTES, splitPieceRoot } from "./paginationProjectionKeys";
 import { blockVerified, encodedBlockMeasure, forgetBlockMeasure, seedBlockMeasure } from "./ledger/ledgerAtoms";
+import {
+  autoLinesKeptOn, encodedBlockAutoLines, encodedBlockLines, engineLinesKeptOn, forgetSeededBlockLines, seedBlockAutoLines, seedBlockLines,
+  type KeptAutoLineItem,
+} from "../engineLinesKept";
 import { withProjectionJsonMemo } from "./projectionJsonMemo";
 import { mergePagedRuntimeContinuationsJson } from "./serialization";
 import { markProbeStartedFaces, unloadedFacesOf } from "./ledger/ledgerFontRanges";
@@ -118,6 +123,22 @@ export function documentIsLongForLayoutSnapshot(content: unknown, partCount: num
   return partCount > 1 || (Array.isArray(record?.content) && record!.content.length >= 120);
 }
 
+
+
+
+
+
+
+
+
+
+export function openingAsksForRows(pageId: string, partCount: number): boolean {
+  if ((globalThis as { __docsSnapshotShortKeep?: boolean }).__docsSnapshotShortKeep === true) return true;
+  const first = openedParts.get(pageId)?.get(0);
+  if (!first) return true;
+  return documentIsLongForLayoutSnapshot(first.content, partCount);
+}
+
 /* ---- A print: the whole document at once --------------------------------- */
 
 /**
@@ -148,7 +169,8 @@ export async function printLayoutToKeep(pageId: string, doc: PmNode): Promise<Ar
       const same = handed.find((row) => row.part === part.part && (row.segment ?? 0) === (part.segment ?? 0) &&
         row.captureId === part.captureId && row.contentHash === part.contentHash &&
         row.layout === LAYOUT_CODE_VERSION && row.fontsKey === fontsKey);
-      if (!same || JSON.stringify(same.pages) !== JSON.stringify(part.pages)) {
+      // A row kept before its lines were (engineLinesKept) is kept again with them.
+      if (!same || JSON.stringify(same.pages) !== JSON.stringify(part.pages) || (part.lines && !same.lines) || (part.autoLines && !same.autoLines)) {
         if (fontsKey) {
           out.push({
             ...rowOut(part),
@@ -326,6 +348,50 @@ function familyList(family: string): string {
   }).join(", ");
 }
 
+
+
+
+
+
+
+
+
+
+
+
+function fontsKeySettles(): boolean {
+  return (globalThis as { __docsFontsKeySettled?: boolean }).__docsFontsKeySettled === true;
+}
+
+const SETTLE_READS = 5;
+
+/** The next frame, or 100 ms where frames do not come (a hidden page). */
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, 100);
+    if (typeof requestAnimationFrame !== "function") return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      clearTimeout(timer);
+      resolve();
+    }));
+  });
+}
+
+/** `read` once the page's font loads are over (for a while) and two readings a
+ * frame apart agree; at most SETTLE_READS frames. */
+export async function settledReading(read: () => string[]): Promise<string[]> {
+  const ready = typeof document !== "undefined" ? document.fonts?.ready : undefined;
+  if (ready) await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, FONT_LOAD_WAIT_MS))]);
+  let last = read();
+  for (let attempt = 0; attempt < SETTLE_READS; attempt += 1) {
+    await nextFrame();
+    const now = read();
+    if (now.every((part, index) => part === last[index])) return now;
+    last = now;
+  }
+  return last;
+}
+
 /**
  * What these families measure here, as a digest: another version of a font,
  * a substitute, one missing (the browser's fallback measures otherwise) all
@@ -347,13 +413,13 @@ export async function fontsKeyFor(families: readonly string[]): Promise<string |
   const loads = Promise.allSettled(faces.map(([font, sample]) => document.fonts.load(font, sample)));
   markProbeStartedFaces(unloaded);
   await Promise.race([loads, new Promise((resolve) => setTimeout(resolve, FONT_LOAD_WAIT_MS))]);
-  const parts: string[] = [];
-  const still = unloaded.filter((face) => face.status === "unloaded");
-  for (const [font, sample] of faces) {
+  const read = () => faces.map(([font, sample]) => {
     context.font = font;
     const metrics = context.measureText(sample);
-    parts.push(`${metrics.width.toFixed(2)}/${(metrics.fontBoundingBoxAscent ?? 0).toFixed(1)}/${(metrics.fontBoundingBoxDescent ?? 0).toFixed(1)}`);
-  }
+    return `${metrics.width.toFixed(2)}/${(metrics.fontBoundingBoxAscent ?? 0).toFixed(1)}/${(metrics.fontBoundingBoxDescent ?? 0).toFixed(1)}`;
+  });
+  const parts = fontsKeySettles() ? await settledReading(read) : read();
+  const still = unloaded.filter((face) => face.status === "unloaded");
   // A face the wait gave up on is asked for by the measuring itself.
   markProbeStartedFaces(still);
   traceLayoutSnapshot(`fonts ${faces.map(([font], index) => `${font.slice(0, 40)}=${parts[index]}`).join(" ; ").slice(0, 1600)}`);
@@ -416,7 +482,56 @@ export function seedPartMeasures(pages: readonly (readonly PmNode[])[], row: Lay
     return false;
   }
   pages.forEach((page, index) => page.forEach((node, inner) => seedBlockMeasure(node, row.measures[index]![inner])));
+  seedPartLines(pages, row);
   return true;
+}
+
+/** The engine's line corrections the row's pages drew (engineLinesKept), for
+ * the line pass to take back: all of them or none. */
+function seedPartLines(pages: readonly (readonly PmNode[])[], row: LayoutSnapshotRow): void {
+  seedPartAutoLines(pages, row);
+  const lines = row.lines;
+  if (!lines || !engineLinesKeptOn()) return;
+  if (lines.length !== pages.length || pages.some((page, index) => page.length !== lines[index]!.length)) {
+    traceLayoutSnapshot(`part ${row.part}: its lines do not fit its sheets`);
+    return;
+  }
+  const fitted = pages.every((page, index) => page.every((node, inner) => seedBlockLines(node, lines[index]![inner])));
+  if (!fitted) {
+    pages.forEach((page) => page.forEach((node) => forgetSeededBlockLines(node)));
+    traceLayoutSnapshot(`part ${row.part}: its lines do not fit its blocks`);
+  }
+}
+
+/** Auto line spacing's boxes the row's pages drew (engineLinesKept). */
+function seedPartAutoLines(pages: readonly (readonly PmNode[])[], row: LayoutSnapshotRow): void {
+  const lines = row.autoLines;
+  if (!lines || !autoLinesKeptOn()) return;
+  if (lines.length !== pages.length || pages.some((page, index) => page.length !== lines[index]!.length)) {
+    traceLayoutSnapshot(`part ${row.part}: its line boxes do not fit its sheets`);
+    return;
+  }
+  const fitted = pages.every((page, index) => page.every((node, inner) => seedBlockAutoLines(node, lines[index]![inner])));
+  if (!fitted) {
+    pages.forEach((page) => page.forEach((node) => forgetSeededBlockLines(node)));
+    traceLayoutSnapshot(`part ${row.part}: its line boxes do not fit its blocks`);
+  }
+}
+
+/** Each block's line boxes as a row keeps them. */
+function capturedAutoLines(pages: readonly (readonly PmNode[])[]): AutoLinesOut | undefined {
+  if (!autoLinesKeptOn()) return undefined;
+  const lines = pages.map((page) => page.map((node) => encodedBlockAutoLines(node)));
+  return lines.some((page) => page.some((block) => block !== null)) ? lines : undefined;
+}
+
+type AutoLinesOut = (Array<Array<[string, KeptAutoLineItem[]] | null> | null>)[];
+
+/** Each block's lines as a row keeps them (null: no block noted, no lines). */
+function capturedLines(pages: readonly (readonly PmNode[])[]): ((number[] | null)[])[] | undefined {
+  if (!engineLinesKeptOn()) return undefined;
+  const lines = pages.map((page) => page.map((node) => encodedBlockLines(node)));
+  return lines.some((page) => page.some((block) => block !== null)) ? lines : undefined;
 }
 
 /** The nodes of the doc's sheets from `fromSheet` on, by sheet. */
@@ -432,7 +547,10 @@ export function sheetNodes(doc: PmNode, fromSheet = 0): PmNode[][] {
 }
 
 export function forgetSeededMeasures(doc: PmNode): void {
-  doc.forEach((page) => page.forEach((child) => forgetBlockMeasure(child)));
+  doc.forEach((page) => page.forEach((child) => {
+    forgetBlockMeasure(child);
+    forgetSeededBlockLines(child);
+  }));
 }
 
 /* ---- What the room or the store opened (a row names that form) ----------- */
@@ -531,6 +649,25 @@ function rememberOpenedPart(pageId: string, part: number, hash: string | (() => 
  * the hydration starts over.
  */
 const roomForms = new Map<string, Map<number, JSONContent>>();
+
+/**
+ * The room's form of the blocks a capture laid out (`flat`, from `firstBlock`
+ * of the part on), while nothing was edited since the room handed the part
+ * over and its blocks stand one for one; else null (the caller names its own).
+ * A whole part (`segment` false) is named so only when the room handed exactly
+ * these blocks. `window.__docsSnapshotWholeAsOpened = true` names a whole part
+ * as it was last opened, by the room or the stored form (old, A/B).
+ */
+function roomFormNaming(pageId: string, part: number, editSeq: number, firstBlock: number, flat: JSONContent, segment = false): JSONContent | null {
+  if (editSeq !== 0) return null;
+  if (!segment && (globalThis as { __docsSnapshotWholeAsOpened?: boolean }).__docsSnapshotWholeAsOpened === true) return null;
+  const room = roomForms.get(pageId)?.get(part);
+  const blocks = flat.content ?? [];
+  if (!room?.content || (!segment && room.content.length !== blocks.length)) return null;
+  const slice = room.content.slice(firstBlock, firstBlock + blocks.length);
+  if (slice.length !== blocks.length || !slice.every((block, at) => block.type === blocks[at]!.type)) return null;
+  return partDocument(room.attrs, slice);
+}
 
 function rememberRoomForm(pageId: string, part: number, root: JSONContent): void {
   let parts = roomForms.get(pageId);
@@ -639,6 +776,9 @@ export function captureChangedPart(
   if (!next) return { part: null, left: false };
   const left = waiting.length > 1;
   const measures = next.pages.map((page) => page.map((node) => encodedBlockMeasure(node)));
+  // Only for a server that keeps them (an older one refuses the whole part).
+  const lines = layoutRowExtraAccepted(pageId, "lines") ? capturedLines(next.pages) : undefined;
+  const autoLines = layoutRowExtraAccepted(pageId, "autoLines") ? capturedAutoLines(next.pages) : undefined;
   const inexact = drawn ? 0 : next.pages.reduce((sum, page) => sum + page.filter((node, index) => measures[next.pages.indexOf(page)]![index] === null || !blockVerified(node)).length, 0);
   if (inexact) {
     traceLayoutSnapshot(`part ${next.part}: ${inexact} blocks not read exactly`);
@@ -654,7 +794,7 @@ export function captureChangedPart(
   // that cannot fit is let go before it is built.
   const estimated = estimatedRecipeBytes(json);
   if (estimated > recipeBudget) {
-    return captureSegment(pageId, next, json, measures, known, left, editSeq);
+    return captureSegment(pageId, next, json, measures, known, left, editSeq, lines, autoLines);
   }
   return withProjectionJsonMemo(() => {
     const recipe = capturePaginationProjectionRecipe(json, next.pages.map(() => NO_PAGE_GEOMETRY), (reason) => traceLayoutSnapshot(`part ${next.part}: capture refused ${reason}`));
@@ -669,12 +809,21 @@ export function captureChangedPart(
     // An edit names its own content: a save stores the editor's form.
     if (opened && editSeq === 0) opened.runtime = hash;
     const asOpened = Boolean(opened && opened.blocks === blockCount && opened.runtime === hash);
-    const contentHash = asOpened ? opened!.hash : hash;
+    // A page opened through its room is named in the room's form, as a part
+    // kept in segments is (captureSegment): the room's binding is what lays
+    // the next opening out, and the stored form's hydration asks too, in
+    // either order, so "as opened" was whichever asked last. R283-D03 (one
+    // part of 44 sheets): a capture after hydration asked last named the
+    // stored form, and the next opening's room found no row of its own
+    // ("no row of 1 names it"); the one after a room that asked last restored.
+    const roomNamed = roomFormNaming(pageId, next.part, editSeq, 0, flat);
+    const named = roomNamed ?? (asOpened ? opened!.content : null);
+    const contentHash = roomNamed ? layoutContentHash(roomNamed) : asOpened ? opened!.hash : hash;
     return {
       left,
       // The families read from the form the next opening reads them from: an
       // editor fills in defaults that name others.
-      part: { part: next.part, contentHash, blockCount, continues: next.continues, pages: recipe.pages, measures, families: fontFamiliesOf(asOpened ? opened!.content : flat) },
+      part: { part: next.part, contentHash, blockCount, continues: next.continues, pages: recipe.pages, measures, ...(lines ? { lines } : {}), ...(autoLines ? { autoLines } : {}), families: fontFamiliesOf(named ?? flat) },
     };
   });
 }
@@ -683,6 +832,8 @@ export function captureChangedPart(
 function rowOut(part: CapturedPart): LayoutSnapshotPartOut {
   return {
     part: part.part, contentHash: part.contentHash, blockCount: part.blockCount, continues: part.continues, pages: part.pages, measures: part.measures,
+    ...(part.lines ? { lines: part.lines } : {}),
+    ...(part.autoLines ? { autoLines: part.autoLines } : {}),
     ...(part.segments && part.segments > 1
       ? { segment: part.segment, segments: part.segments, firstBlock: part.firstBlock, captureId: part.captureId }
       : {}),
@@ -763,6 +914,8 @@ function captureSegment(
   known: Map<number, readonly (readonly PmNode[])[]>,
   left: boolean,
   editSeq: number,
+  lines?: ((number[] | null)[])[],
+  autoLines?: AutoLinesOut,
 ): { part: CapturedPart | null; left: boolean; passed?: number } {
   let byPart = segmentedCaptures.get(pageId);
   if (!byPart) segmentedCaptures.set(pageId, (byPart = new Map()));
@@ -807,13 +960,10 @@ function captureSegment(
     // and the next opening's room named neither). An edit names the editor's
     // own form, which a save hands the room. Restoring still holds the pages
     // to the content they are restored onto.
-    const room = editSeq === 0 ? roomForms.get(pageId)?.get(next.part) : undefined;
-    const roomSlice = room?.content?.slice(firstBlock, firstBlock + blockCount);
-    const named = roomSlice && roomSlice.length === blockCount && roomSlice.every((block, at) => block.type === flat.content![at]!.type)
-      ? partDocument(room!.attrs, roomSlice)
-      : flat;
+    const named = roomFormNaming(pageId, next.part, editSeq, firstBlock, flat, true) ?? flat;
     if (auditing()) {
-      auditSegmentAgainstRoom(next.part, index, firstBlock, roomSlice, flat.content ?? []);
+      const room = editSeq === 0 ? roomForms.get(pageId)?.get(next.part) : undefined;
+      auditSegmentAgainstRoom(next.part, index, firstBlock, room?.content?.slice(firstBlock, firstBlock + blockCount), flat.content ?? []);
       if (named === flat) traceLayoutSnapshot(`part ${next.part} segment ${index} named in the editor's form`);
     }
     const segments = state!.ranges.length;
@@ -829,7 +979,8 @@ function captureSegment(
       part: {
         part: next.part, segment: index, segments, firstBlock, captureId: state!.captureId, done,
         contentHash: layoutContentHash(named), blockCount, continues: index === 0 ? next.continues : false,
-        pages: recipe.pages, measures: measures.slice(from, to), families: state!.families,
+        pages: recipe.pages, measures: measures.slice(from, to), ...(lines ? { lines: lines.slice(from, to) } : {}),
+        ...(autoLines ? { autoLines: autoLines.slice(from, to) } : {}), families: state!.families,
       },
     };
   });
@@ -880,6 +1031,9 @@ export function wholePartRows(rows: readonly LayoutSnapshotRow[]): LayoutSnapsho
       continues: ordered[0]!.continues,
       pages: ordered.flatMap((row) => row.pages.map((page) => page.map((recipe) => shiftedRecipe(recipe, row.firstBlock ?? 0)))),
       measures: ordered.flatMap((row) => row.measures),
+      // Lines only from a capture whose every segment kept them.
+      lines: ordered.every((row) => row.lines && row.lines.length === row.measures.length) ? ordered.flatMap((row) => row.lines!) : undefined,
+      autoLines: ordered.every((row) => row.autoLines && row.autoLines.length === row.measures.length) ? ordered.flatMap((row) => row.autoLines!) : undefined,
       segmentHashes: ordered.map((row) => [row.firstBlock ?? 0, row.blockCount, row.contentHash] as const),
     });
   }
@@ -908,6 +1062,11 @@ const SEGMENTS_PER_WRITE = 4;
 const MAX_SEGMENTS = 64;
 let recipeBudget = RECIPE_BYTES_BUDGET;
 /** Tests only: a smaller budget, so a small document is kept in segments. */
+/** Tests: a part as an opening asked for it (its blocks, as snapshotReceiptFor remembers them). */
+export function rememberOpenedPartForTests(pageId: string, part: number, blocks: readonly unknown[]): void {
+  rememberOpenedPart(pageId, part, "test", blocks.length, partDocument(undefined, blocks));
+}
+
 export function setRecipeBudgetForTests(bytes: number | null): void {
   recipeBudget = bytes ?? RECIPE_BYTES_BUDGET;
 }
@@ -949,6 +1108,10 @@ export async function keepLayoutSnapshots(view: EditorView, pageId: string, busy
   if (layoutLooksFarTooLong(started, busy)) return;
   const owner = documentPartOwnersOf(pageId);
   const total = documentPartsCountOfOwners(owner);
+  if (!openingAsksForRows(pageId, total)) {
+    traceLayoutSnapshot("too short to be asked for: nothing kept");
+    return;
+  }
   const skip = new Set<number>();
   /** Each segmented part's capture and the fonts its first segment read. */
   const segmentFonts = new Map<number, { captureId: string; key: string }>();

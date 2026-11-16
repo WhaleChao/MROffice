@@ -394,6 +394,72 @@ export function unsavedCreatedPdfTextBoxEdits(
   });
 }
 
+/**
+ * The created boxes only this window holds, kept over a page read in under
+ * them (another window's save, the reload after a refused write): a box
+ * being typed or waiting for Save, one whose write is on its way, one a
+ * refused write left for Retry. The page read in does not hold them, and the
+ * window's boxes replaced by the page's dropped them -- off the page, their
+ * write finding no box, the window reading saved. `windowOnly` names them
+ * (the window's own bookkeeping); a box the page holds is the page's.
+ */
+export function windowOnlyCreatedPdfTextBoxEdits(
+  local: readonly PdfTextBoxEdit[],
+  loaded: readonly PdfTextBoxEdit[],
+  windowOnly: (edit: PdfTextBoxEdit) => boolean,
+): PdfTextBoxEdit[] {
+  const candidates = local.filter((edit) => edit.created === true && !edit.deleted);
+  if (candidates.length === 0) return candidates;
+  const held = new Set(loaded.map((edit) => `${edit.page}:${edit.id}`));
+  return candidates.filter((edit) => !held.has(`${edit.page}:${edit.id}`) && windowOnly(edit));
+}
+
+/**
+ * The formula sources typed and not applied (by box, `page:id`), over a
+ * page read in under them: those whose box the window still shows stay --
+ * the only copy of a source that is not valid LaTeX yet (or of one read off
+ * the page for review), and what keeps the window reading unsaved. One whose
+ * box is gone goes with it.
+ *
+ * `fileBoxesBefore` is given when the file's own text boxes stand as they
+ * were (pdfFileTextBoxesStand): the window's boxes before the load. A draft
+ * on a formula of the file itself has no box among the page's -- it stays,
+ * unless it was typed on a box this window had made, which is gone.
+ */
+export function keptPdfFormulaDrafts(
+  drafts: Record<string, string>,
+  shown: readonly PdfTextBoxEdit[],
+  fileBoxesBefore?: readonly PdfTextBoxEdit[] | null,
+): Record<string, string> {
+  const keys = Object.keys(drafts);
+  if (keys.length === 0) return drafts;
+  const boxes = new Set(shown.filter((edit) => !edit.deleted).map((edit) => `${edit.page}:${edit.id}`));
+  const named = fileBoxesBefore ? new Set(shown.map((edit) => `${edit.page}:${edit.id}`)) : null;
+  const made = new Set((fileBoxesBefore ?? []).filter((edit) => edit.created === true)
+    .map((edit) => `${edit.page}:${edit.id}`));
+  const kept = keys.filter((key) => boxes.has(key) || (named !== null && !named.has(key) && !made.has(key)));
+  return kept.length === keys.length ? drafts : Object.fromEntries(kept.map((key) => [key, drafts[key]]));
+}
+
+const PDF_FILE_TEXT_BOX_KEYS = ["dataItemId", "source", "pdfNativeTransactions", "pageTransforms",
+  "deletedPages", "insertedPages", "pageMoves", "cropBoxes"] as const;
+
+/**
+ * Whether the text boxes of the file itself are the ones they were between
+ * two bodies of a page: the same source, no native write since, the same
+ * pages in the same places. (Their ids are positions in the file's text; a
+ * body that differs in any of these may number them differently, and a
+ * draft kept by id would land on another box.)
+ */
+export function pdfFileTextBoxesStand(
+  before: Readonly<Record<string, unknown>> | null | undefined,
+  after: Readonly<Record<string, unknown>> | null | undefined,
+): boolean {
+  if (!before || !after) return false;
+  const told = (value: unknown) => JSON.stringify(Array.isArray(value) && value.length === 0 ? null : value ?? null);
+  return PDF_FILE_TEXT_BOX_KEYS.every((key) => told(before[key]) === told(after[key]));
+}
+
 export function commandWithCurrentPdfPage(
   command: ApplyDocumentEditCommandDetail["command"],
   pageNumber: number,

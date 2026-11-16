@@ -44,7 +44,7 @@
   --ppt-rail: #f5f8f7;
   --ppt-rail-divider: #d8dedd;
   --ppt-rail-ink: #3f3f3f;
-  --ppt-rail-number: #555555;
+  --ppt-rail-number: #262626;
   background: var(--ppt-canvas);
   color: var(--ppt-text);
   container-name: presentation-shell;
@@ -88,54 +88,84 @@
   white-space: nowrap;
 }
 
+/* PowerPoint's status bar keeps Notes, Comments and the view buttons at its
+   right, beside the zoom (Mac and Windows); the left holds the slide
+   counter and Accessibility. */
 .sessionStatusGroup {
   align-items: center;
   display: inline-flex;
   gap: 4px;
-  margin-right: auto;
+  margin-left: auto;
+  margin-right: 6px;
 }
 
-.statusNotesPane {
-  align-items: start;
-  background: var(--ppt-chrome);
-  border-top: 1px solid var(--ppt-border);
-  box-sizing: border-box;
-  display: grid;
-  flex: 0 0 auto;
-  gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr);
-  max-height: min(160px, 28cqh);
-  padding: 7px 10px;
-}
-
-.statusNotesLabel {
-  color: var(--ppt-muted);
+/* "Notes" and "Comments" are worded beside their icons, as PowerPoint words
+   them; a narrow window keeps the icons. */
+.statusPaneLabel {
   font-size: 11px;
-  font-weight: 600;
-  line-height: 28px;
+  margin-left: 4px;
   white-space: nowrap;
 }
 
+@container presentation-shell (max-width: 720px) {
+  .statusPaneLabel {
+    display: none;
+  }
+}
+
+.statusNotesPane {
+  /* PowerPoint's Notes pane (Normal view): under the slide only, beside the
+     thumbnail pane, parted from the slide by one thin line; its words start
+     a few points in, on the pane's own ground -- no caption, no field box.
+     Its height is the workspace's grid row (PresentationNormalViewPanes). */
+  background: var(--ppt-rail, #f5f8f7);
+  border-top: 1px solid var(--ppt-rail-divider, #d8dedd);
+  box-sizing: border-box;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* The caption is for assistive technology only: PowerPoint draws none. */
+.statusNotesLabel {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
 .statusNotesInput {
-  background: var(--ppt-field, #ffffff);
-  border: 1px solid var(--ppt-border);
-  border-radius: 5px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   box-sizing: border-box;
   color: var(--ppt-text);
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.45;
-  max-height: 132px;
-  min-height: 44px;
+  flex: 1 1 auto;
+   
+  font-family:
+    Aptos,
+    Calibri,
+    Inter,
+    -apple-system,
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
+  font-size: 14px;
+  height: 100%;
+  line-height: 1.2;
+  min-height: 0;
   outline: none;
-  padding: 6px 8px;
-  resize: vertical;
+  padding: 6px 10px 4px 7px;
+  resize: none;
   width: 100%;
 }
 
-.statusNotesInput:focus-visible {
-  border-color: var(--ppt-accent);
-  box-shadow: 0 0 0 2px var(--ppt-accent-soft);
+.statusNotesInput::placeholder {
+  color: var(--ppt-muted);
 }
 
 .zoomStatusControls {
@@ -4484,46 +4514,178 @@
 }
 
 .workspace {
-  --ppt-comments-dock-width: clamp(340px, 24vw, 380px);
+   
+  --ppt-comments-dock-width: 300px;
 
   background: var(--ppt-canvas);
-  grid-template-columns: clamp(142px, 16%, 196px) minmax(0, 1fr);
   overflow: hidden;
-  /* The Comments card floats over the stage's right edge. */
   position: relative;
+}
+
+/* PowerPoint's Normal view: the thumbnail pane takes its share of the
+   window's width (`p:restoredLeft`, 15.62 % in a new deck) and runs the
+   full height; the slide and, under it, the Notes pane share the rest
+   (`p:restoredTop`: the slide 94.66 %, the Notes pane 5.34 %). The shares
+   are the workspace's --ppt-rail-width / --ppt-notes-height
+   (PresentationNormalViewPanes), so the panes keep their proportions as
+   the window changes size. */
+.workspace[data-rail] {
+  grid-template-columns:
+    clamp(96px, var(--ppt-rail-width, 15.62%), 50%)
+    minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.workspace[data-notes="shown"] {
+  grid-template-rows:
+    minmax(0, 1fr)
+    clamp(28px, var(--ppt-notes-height, 5.34%), 60%);
+}
+
+.workspace > .slideRail {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+.workspace > .stage.stage {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.workspace > .statusNotesPane {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.workspace[data-rail="hidden"] > .stage.stage,
+.workspace[data-rail="hidden"] > .statusNotesPane {
+  grid-column: 1;
+}
+
+/* The two borders: drawn over the panes' edges, a few pixels either side. */
+.railSplitter,
+.notesSplitter {
+  background: transparent;
+  outline: none;
+  position: relative;
+  touch-action: none;
+  z-index: 6;
+}
+
+.railSplitter {
+  cursor: col-resize;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  justify-self: end;
+  margin-right: -3px;
+  width: 6px;
+}
+
+.notesSplitter {
+  align-self: start;
+  cursor: row-resize;
+  grid-column: 2;
+  grid-row: 2;
+  height: 6px;
+  margin-top: -3px;
+}
+
+.railSplitter:focus-visible,
+.notesSplitter:focus-visible {
+  background: var(--ppt-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--ppt-accent);
 }
 
 /* Slide Sorter: the thumbnail pane is not drawn (display: none), so its
    column must not be either. With it kept, the stage auto-placed into that
-   first 142-196px column and the sorter was one clipped column of slides. */
+   first column and the sorter was one clipped column of slides. */
 .workspace[data-rail="hidden"] {
   grid-template-columns: minmax(0, 1fr);
 }
 
  
+.workspace[data-rail][data-comments-dock="open"] {
+  grid-template-columns:
+    clamp(96px, var(--ppt-rail-width, 15.62%), 50%)
+    minmax(0, 1fr)
+    var(--ppt-comments-dock-width);
+}
+
+.workspace[data-rail="hidden"][data-comments-dock="open"] {
+  grid-template-columns: minmax(0, 1fr) var(--ppt-comments-dock-width);
+}
+
 .commentsDock {
-  bottom: 8px;
+  background: var(--ppt-surface, #fff);
+  border-left: 1px solid var(--ppt-rail-divider, #d8dedd);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  grid-column: -2 / -1;
+  grid-row: 1 / -1;
   min-height: 0;
   min-width: 0;
-  position: absolute;
-  right: 8px;
-  top: 8px;
-  width: var(--ppt-comments-dock-width);
-  z-index: 31;
+  position: relative;
+  z-index: 7;
 }
 
-.commentsDock > * {
+/* Docked, the shared pane is the column itself, not a card on it. */
+.commentsDock.commentsDock > :not(.commentsResize) {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.workspace[data-comments-dock="open"]
-  .stage
-  [data-office-task-pane-edge="right"] {
-  right: calc(var(--ppt-comments-dock-width) + 16px);
+.commentsResize {
+  bottom: 0;
+  cursor: col-resize;
+  left: -3px;
+  outline: none;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  width: 6px;
+  z-index: 2;
+}
+
+.commentsResize:focus-visible {
+  background: var(--ppt-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--ppt-accent);
+}
+
+/* A narrow window has no column to give: PowerPoint's pane would leave the
+   slide a sliver (it keeps the document at least 500 px beside a task pane),
+   so under 900 px the pane stands over the slide's right edge as a card and
+   the slide keeps its room. */
+@container presentation-shell (max-width: 900px) {
+  .workspace[data-rail][data-comments-dock="open"] {
+    grid-template-columns:
+      clamp(96px, var(--ppt-rail-width, 15.62%), 50%)
+      minmax(0, 1fr);
+  }
+
+  .workspace[data-rail="hidden"][data-comments-dock="open"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .commentsDock {
+    border: 1px solid var(--ppt-border);
+    border-radius: 8px;
+    bottom: 8px;
+    box-shadow: 0 8px 24px rgb(15 23 42 / 14%);
+    overflow: hidden;
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    width: min(var(--ppt-comments-dock-width), calc(100% - 16px));
+    z-index: 31;
+  }
+
+  .commentsResize {
+    display: none;
+  }
 }
 
 /* The pane's New command is the shared Comments pane's own (under the
@@ -4610,13 +4772,14 @@
 
 .slideRail {
   background: var(--ppt-rail, #f5f8f7);
-  border-right-color: var(--ppt-border);
+  border-right-color: var(--ppt-rail-divider, #d8dedd);
   gap: 8px;
   overflow: hidden;
-  padding: 8px 8px 10px;
+  padding: 0;
   position: relative;
 }
 
+ 
 .railViewport {
   display: flex;
   flex: 1 1 auto;
@@ -4624,16 +4787,24 @@
   gap: 7px;
   min-height: 0;
   overflow: auto;
-  padding-right: 2px;
+  padding: 8px 0 12px;
   scrollbar-color: #c3c9c8 transparent;
   scrollbar-width: thin;
+}
+
+/* The default section's slides stand as far apart as the pane's own. */
+.slideRail :global(.presentation-window__rail-section) {
+  gap: 7px;
 }
 
 .slideRail > button:not(:global(.presentation-window__rail-action)) {
   border: 0;
   border-radius: 4px;
   gap: 5px;
-  padding: 4px 7px 8px 24px;
+  /* The page's narrow-screen strip gives a tile 150px; in the pane a tile is
+     the pane's width (the strip below, at 760px, keeps its own). */
+  min-width: 0;
+  padding: 0 22px 0 31px;
   position: relative;
 }
 
@@ -4641,7 +4812,10 @@
   border: 0;
   border-radius: 4px;
   gap: 5px;
-  padding: 4px 7px 8px 24px;
+  /* The page's narrow-screen strip gives a tile 150px; in the pane a tile is
+     the pane's width (the strip below, at 760px, keeps its own). */
+  min-width: 0;
+  padding: 0 22px 0 31px;
   position: relative;
 }
 
@@ -4654,10 +4828,14 @@
 .slideRail > button:not(:global(.presentation-window__rail-action))::before,
 .slideRail :global(.presentation-window__rail-section) > button::before {
   content: attr(data-slide-number);
-  font-size: 11px;
-  left: 2px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  left: 0;
+  line-height: 16px;
   position: absolute;
-  top: 7px;
+  text-align: center;
+  top: 0;
+  width: 26px;
 }
 
 .slideRail > button:not(:global(.presentation-window__rail-action)):not(:global(.office-ribbon-control))::before,
@@ -4665,9 +4843,18 @@
   color: var(--ppt-rail-number, #555);
 }
 
-/* A slide in a several-slide selection wears the current slide's frame. */
+ 
+.slideRail button:global(.is-active) :global(.presentation-window__rail-mini-preview),
 .slideRail button[data-rail-selected="true"] :global(.presentation-window__rail-mini-preview) {
-  border: 2px solid var(--office-control-border, var(--ppt-accent));
+  box-shadow: 0 0 0 1px var(--ppt-field, #fff);
+  outline: 3px solid var(--ppt-accent);
+  outline-offset: 1px;
+}
+
+.slideRail button:not(:global(.is-active)):not([data-rail-selected="true"]):hover
+  :global(.presentation-window__rail-mini-preview) {
+  outline: 3px solid var(--ppt-rail-divider, #d8dedd);
+  outline-offset: 1px;
 }
 
 /* Review > Show Changes (E045): a dot by each slide others changed since
@@ -4691,6 +4878,7 @@
    under the thumbnail. */
 .slideRail > button[data-hidden="true"]::before,
 .slideRail :global(.presentation-window__rail-section) > button[data-hidden="true"]::before {
+  width: auto;
   background: linear-gradient(
     to top right,
     transparent calc(50% - 0.6px),
@@ -4700,12 +4888,12 @@
   );
   border: 1px solid currentColor;
   box-sizing: border-box;
-  left: 0;
+  left: 6px;
   line-height: 13px;
   min-width: 15px;
   padding: 0 1px;
   text-align: center;
-  top: 5px;
+  top: 1px;
 }
 
 .slideRail button[data-hidden="true"] :global(.presentation-window__rail-mini-preview) {
@@ -4723,9 +4911,8 @@
 
 .slideRail :global(.presentation-window__rail-mini-preview) {
   background: #fff;
-  border: 1px solid #bdbdbd;
-  border-radius: 1px;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 7%);
+  border: 1px solid #cccccc;
+  border-radius: 3px;
 }
 
 .slideRail button:global(.is-active) {
@@ -4735,18 +4922,6 @@
 .slideRail button:global(.is-active):not(:global(.office-ribbon-control)) {
   background: transparent;
   box-shadow: none;
-}
-
-.slideRail
-  button:global(.is-active)
-  :global(.presentation-window__rail-mini-preview) {
-  border: 2px solid var(--office-control-border, var(--ppt-accent));
-}
-
-.slideRail
-  button:global(.is-active)
-  :global(.presentation-window__rail-mini-preview):not(:global(.office-ribbon-control)) {
-  box-shadow: 0 0 0 2px rgba(196, 62, 28, 0.12);
 }
 
 .slideRail :global(.presentation-window__rail-slide-label) {
@@ -6616,21 +6791,6 @@
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 4%);
 }
 
-@media (max-width: 1080px) {
-  .workspace {
-    --ppt-comments-dock-width: 340px;
-
-    grid-template-columns: 184px minmax(0, 1fr);
-  }
-}
-
-@container presentation-shell (max-width: 920px) {
-  .workspace {
-    --ppt-comments-dock-width: 340px;
-
-    grid-template-columns: 142px minmax(0, 1fr);
-  }
-}
 
 @media (max-width: 760px) {
   .workspace {
@@ -6643,6 +6803,16 @@
      (an iPad mini held upright, 744px; Split View on any iPad). */
   .workspace > .stage.stage {
     flex: 1 1 auto;
+  }
+
+  /* Stacked, the Notes pane is two lines under the slide and does not drag. */
+  .workspace > .statusNotesPane {
+    flex: 0 0 52px;
+  }
+
+  .railSplitter,
+  .notesSplitter {
+    display: none;
   }
 
   .slideRail {

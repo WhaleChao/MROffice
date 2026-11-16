@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { nativeNoteIdToken } from "./native-note-roundtrip";
+import { pdfLibParseSpeed } from "./pdf-lib-pacing";
 
 export type PdfManagedNoteSourceIdentity =
   | { readonly kind: "managed"; readonly id: string; readonly text: string | null }
@@ -33,7 +34,7 @@ export async function readManagedPdfTextNoteIdentities(
   if (!sourceBytes.byteLength || sourceBytes.byteLength > 134_217_728) return null;
   try {
     const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFBool, PDFString, PDFHexString } = await import("pdf-lib");
-    const document = await PDFDocument.load(sourceBytes, { updateMetadata: false });
+    const document = await PDFDocument.load(sourceBytes, { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
     if (document.isEncrypted || document.getPageCount() > 10_000) return null;
     const index = new Map<string, PdfManagedNoteSourceIdentity>();
     const claims = new Map<string, string[]>();
@@ -140,6 +141,26 @@ export async function readManagedPdfShapeIdentities(
   );
 }
 
+
+
+
+
+
+
+
+
+
+
+export async function readManagedPdfTextMarkupIdentities(
+  sourceBytes: Uint8Array,
+): Promise<ReadonlyMap<string, string> | null> {
+  return readManagedPdfIdentities(
+    sourceBytes,
+    new Set(["Highlight", "Underline", "StrikeOut", "Squiggly"]),
+    "",
+  );
+}
+
 async function readManagedPdfIdentities(
   sourceBytes: Uint8Array,
   subtypes: ReadonlySet<string>,
@@ -149,7 +170,7 @@ async function readManagedPdfIdentities(
   if (!sourceBytes.byteLength || sourceBytes.byteLength > 134_217_728) return null;
   try {
     const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFBool, PDFString, PDFHexString } = await import("pdf-lib");
-    const document = await PDFDocument.load(sourceBytes, { updateMetadata: false });
+    const document = await PDFDocument.load(sourceBytes, { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
     if (document.isEncrypted || document.getPageCount() > 10_000) return null;
     const byRef = new Map<string, string>();
     const claims = new Map<string, number>();
@@ -199,6 +220,19 @@ async function readManagedPdfIdentities(
 
 const inkIdentitiesByDocument = new WeakMap<PdfDataSource, Promise<ReadonlyMap<string, string> | null>>();
 const shapeIdentitiesByDocument = new WeakMap<PdfDataSource, Promise<ReadonlyMap<string, string> | null>>();
+const textMarkupIdentitiesByDocument = new WeakMap<PdfDataSource, Promise<ReadonlyMap<string, string> | null>>();
+
+/** One bounded read per pdf.js document incarnation, like the ink index. */
+export function managedPdfTextMarkupIdentitiesForDocument(
+  document: PdfDataSource,
+): Promise<ReadonlyMap<string, string> | null> {
+  let pending = textMarkupIdentitiesByDocument.get(document);
+  if (!pending) {
+    pending = document.getData().then(readManagedPdfTextMarkupIdentities).catch(() => null);
+    textMarkupIdentitiesByDocument.set(document, pending);
+  }
+  return pending;
+}
 
 /** One bounded read per pdf.js document incarnation, like the ink index. */
 export function managedPdfShapeIdentitiesForDocument(
@@ -235,7 +269,7 @@ export async function readManagedPdfAnnotationNames(
   if (!sourceBytes.byteLength || sourceBytes.byteLength > 134_217_728) return null;
   try {
     const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef, PDFString, PDFHexString } = await import("pdf-lib");
-    const document = await PDFDocument.load(sourceBytes, { updateMetadata: false });
+    const document = await PDFDocument.load(sourceBytes, { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
     if (document.isEncrypted || document.getPageCount() > 10_000) return null;
     const byRef = new Map<string, string>();
     const claims = new Map<string, number>();

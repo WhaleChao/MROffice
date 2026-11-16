@@ -66,7 +66,7 @@
  "pdf.largeFile.title": "Large file, read-only",
  "pdf.largeFile.body": "This PDF is {size}, past {limit}: its pages load as you read and it can be read and searched; to annotate or edit it, download the original.",
  "pdf.largeFile.readOnlyReason": "This PDF is {size}, past {limit}, so it can only be read; download the original to edit it.",
- "pages.importUploadingPercent": "Uploading {percent}%",
+ "pages.importUploadingPercent": "Importing {percent}%",
  "pages.importMakingPage": "Making the file…",
  "pages.importFailedTitle": "Couldn't import files",
  "pages.importFailedForFile": "Couldn't import {file}",
@@ -1842,5 +1842,8 @@
  "spreadsheet.chartLoadingDeferred": "Loading chart…",
  "spreadsheet.chartsLoadingStructureBlocked": "Charts are still loading. Wait a few seconds, then insert or delete again.",
  "spreadsheet.sheetLoadingOpensSoon": "This sheet is still loading. It opens in a moment.",
- "spreadsheet.chartsLoadingMoveBlocked": "Charts are still loading. Wait a few seconds, then move the cells again."
+ "spreadsheet.chartsLoadingMoveBlocked": "Charts are still loading. Wait a few seconds, then move the cells again.",
+ "spreadsheet.tiledWorkbook.pivotSourceReading": "A PivotTable reads {sheet} ({cells} cells). Its report shows once those rows are read.",
+ "spreadsheet.tiledWorkbook.pivotSourceReady": "{sheet} is read. Its PivotTable reports now total every row.",
+ "spreadsheet.tiledWorkbook.pivotRefreshWaitsForSource": "Reading {sheet} ({cells} cells) first. Refresh the PivotTable again when it's done."
 }

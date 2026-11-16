@@ -75,6 +75,14 @@ const layoutStatusNames = new Set([
   PAGE_LEDGER_BACKGROUND_ATTR,
   PAGED_BULK_FILL_ATTR,
   PAGE_LEDGER_CYCLE_ATTR,
+  // A document's parts coming in (NoteEditor, from lib/document-page-parts):
+  // read by the ledger as state, styled by nothing. Taken as authored, each
+  // part's loading true/false and count left cleared every page's measures:
+  // R286-D01 (5 parts) measured all its pages again on each part, five times
+  
+  "data-document-parts-loading",
+  "data-document-parts-left",
+  "data-document-parts-eager",
 ]);
 
 const layoutStatusChangedAt = new WeakMap<HTMLElement, number>();

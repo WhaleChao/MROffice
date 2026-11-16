@@ -41,10 +41,70 @@ const CODE = /^[A-Za-z0-9_.:-]{1,96}$/u;
 const REPEAT_AFTER_MS = 10 * 60 * 1000;
 const lastReported = new Map<string, number>();
 
+/** One declined change as a code pair: the control (`object:text`,
+ *  `background`, `slideEdits`, `deck:<name>`...) and the server's reason code
+ *  (`not_yet`, `readback_mismatch`...). Never a word of the page. */
+export interface OfficeExperienceDeclined {
+  readonly control?: unknown;
+  readonly reason?: unknown;
+}
+
+/** Where the 监控 page can find what was shown without the page's content: a
+ *  hashed page id (FNV-1a 64, hex) matchable against the server's own page
+ *  ids, the declined controls with their reason codes, and a failed write's
+ *  reason code (its first two segments: `pptx_patchback_rejected:text_not_patchable`). */
+export interface OfficeExperienceDetail {
+  readonly declined?: readonly OfficeExperienceDeclined[] | null;
+  readonly failure?: unknown;
+}
+
+const MAX_DECLINED_CODES = 8;
+
+/** FNV-1a 64 of ``value``, 16 hex digits: a page's reference in a report. */
+export function officeExperiencePageRef(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(value)) {
+    hash ^= BigInt(byte);
+    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+function codeOf(value: unknown, segments?: number): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = (segments ? value.split(":").slice(0, segments).join(":") : value).trim();
+  return CODE.test(trimmed) ? trimmed : null;
+}
+
+/** The report's message: the code, then the page's reference and what was
+ *  declined or why the write failed, as codes only. */
+export function officeExperienceMessage(code: string, pageId: string, detail?: OfficeExperienceDetail): string {
+  const parts = [code, `page=${officeExperiencePageRef(pageId)}`];
+  const declined: string[] = [];
+  for (const entry of detail?.declined ?? []) {
+    if (!entry || typeof entry !== "object") continue;
+    const control = codeOf(entry.control);
+    if (!control) continue;
+    const reason = codeOf(entry.reason);
+    const item = reason ? `${control}/${reason}` : control;
+    if (!declined.includes(item)) declined.push(item);
+    if (declined.length >= MAX_DECLINED_CODES) break;
+  }
+  if (declined.length) parts.push(`declined=${declined.join(",")}`);
+  const failure = codeOf(detail?.failure, 2);
+  if (failure) parts.push(`failure=${failure}`);
+  return parts.join(" ");
+}
+
 /** Returns whether a report went out. Never throws. */
 export function reportOfficeExperience(
   kind: OfficeExperienceKind,
-  input: { pageId: string; pageType: string | null | undefined; code: string | null | undefined },
+  input: {
+    pageId: string;
+    pageType: string | null | undefined;
+    code: string | null | undefined;
+    detail?: OfficeExperienceDetail;
+  },
   now = Date.now(),
 ): boolean {
   try {
@@ -58,7 +118,9 @@ export function reportOfficeExperience(
     if (lastReported.size > 500) lastReported.clear();
     sendErrorBeacon({
       name: NAMES[kind],
-      message: code,
+      // The digest stays the bare code (the 监控 page counts by it); the
+      // message adds the page's hashed reference and the declined codes.
+      message: input.detail ? officeExperienceMessage(code, input.pageId, input.detail) : code,
       digest: code,
       // The kind of window, not which page: the path holds no page's id here.
       path: "/office",

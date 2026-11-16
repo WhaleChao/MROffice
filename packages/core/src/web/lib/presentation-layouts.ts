@@ -23,6 +23,7 @@
  * keeps a layout correct regardless of the deck's actual slide dimensions.
  */
 
+import { normalizeOfficeShapeShadow } from "./office-shape-paint";
 import { ptToPx } from "./office-units";
 import {
   dropNativeParagraphReceipts,
@@ -1112,6 +1113,8 @@ const NATIVE_LAYOUT_NESTED_STYLE_KEYS = [
   "spaceAfter",
   "letterSpacing",
   "textShadow",
+  // The shadow as the layout's text style states it (PPTX readings row 805).
+  "textShadowEffect",
   "indentLevel",
   // A master title drawn in capitals (`a:defRPr@cap`, PPT-B362) and a
   // double underline (`@u="dbl"`), as the box's own style states them.
@@ -1380,6 +1383,20 @@ function nativeLayoutStyle(value: unknown): Record<string, unknown> | null {
     }
     if (key === "tabStops") {
       if (!nativeLayoutTabStops(item)) return null;
+      continue;
+    }
+    if (key === "textShadowEffect") {
+      // The shadow the layout's text style states (reading row 805), in the
+      // shape shadow model: an object, refused as a scalar here, which made
+      // every slide on a layout whose placeholder casts a stated shadow a
+      
+      
+      // "native layout cascade receipt is malformed" on every slide).
+      try {
+        if (!normalizeOfficeShapeShadow(item)) return null;
+      } catch {
+        return null;
+      }
       continue;
     }
     if (key === "textInsets") {

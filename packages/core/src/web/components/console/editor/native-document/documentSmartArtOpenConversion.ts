@@ -23,7 +23,7 @@ import {
   smartArtThemeEffectShadows,
   smartArtThemeFillStyles,
 } from "../../../../lib/office-smartart/theme-effects";
-import { normalizeDocumentDesign } from "../../../../lib/document-design";
+import { documentThemeBodyLatin, normalizeDocumentDesign } from "../../../../lib/document-design";
 
 import {
   documentShapeIsPreservedNativeSmartArt,
@@ -87,6 +87,13 @@ export function documentSmartArtColorTheme(
   design?: unknown,
   /** The diagram's view's `hostTheme`: the file's own theme lists, as imported. */
   hostTheme?: { readonly effects?: string | null; readonly xml?: string | null } | null,
+  /**
+   * The document theme's body face (`documentSmartArtBodyFace`): Word fits a
+   * diagram's words by it, so the engine does too. Without it the engine fit
+   * them by Aptos's approximation -- W24ui, a Cambria document, 25.13 pt where
+   * Word set 28 (SMARTART-GAP.md §8.38).
+   */
+  bodyFace?: string | null,
 ): Partial<SmartArtColorTheme> | null {
   // The theme's style matrix a quick style's `a:fillRef` / `a:effectRef`
   // names (Design > Effects, or the document's own theme as imported): 3-D
@@ -99,15 +106,17 @@ export function documentSmartArtColorTheme(
   );
   const effectShadows = smartArtThemeEffectShadows(source);
   const fillStyles = smartArtThemeFillStyles(source);
+  const face = typeof bodyFace === "string" && bodyFace.trim() ? { bodyFace: bodyFace.trim() } : {};
   const effects = { ...(effectShadows ? { effectShadows } : {}), ...(fillStyles ? { fillStyles } : {}) };
   const stated = effectShadows !== undefined || fillStyles !== undefined;
-  if (!value || typeof value !== "object") return stated ? effects : null;
+  if (!value || typeof value !== "object") return stated ? { ...effects, ...face } : null;
   const record = value as Record<string, unknown>;
   const hex = (key: string) => (typeof record[key] === "string" && /^#[0-9a-f]{6}$/i.test(record[key] as string) ? (record[key] as string) : null);
   const accents = [1, 2, 3, 4, 5, 6].map((n) => hex(`accent${n}`));
-  if (accents.some((accent) => accent === null)) return stated ? effects : null;
+  if (accents.some((accent) => accent === null)) return stated ? { ...effects, ...face } : null;
   return {
     ...effects,
+    ...face,
     accents: accents as string[],
     ...(hex("text1") ? { dk1: hex("text1")! } : {}),
     ...(hex("background1") ? { lt1: hex("background1")! } : {}),
@@ -117,19 +126,38 @@ export function documentSmartArtColorTheme(
 }
 
 /**
+ * The face a Docs diagram's words are fitted by: the document theme's body
+ * face (`documentThemeBodyLatin`), as Word fits them -- Chinese Word's 等线
+ * (DengXian) too. Word's own layouts of a Basic List in a 等线 document (probes
+ * W26_D0-D4, Word for Mac laying each out on open) set 32 / 17 / 13 / 17 pt
+ * for one-line, two-line, three-line and Chinese labels; fitted by DengXian
+ * the engine gives 31.88 / 16.88 / 13.13 / 16.88, by its default measure
+ * 31.13 / 19.13 / 15 / 16.13. Only words the author spaced 1.5 lines stand
+ * a point under Word's (15 for 16, SMARTART-GAP.md §8.41).
+ */
+export function documentSmartArtBodyFace(documentDesign: unknown, defaultFontFamily: unknown): string | null {
+  const face = documentThemeBodyLatin(documentDesign, defaultFontFamily);
+  return face || null;
+}
+
+/**
  * The theme one Docs diagram is rebuilt through: the document's colours and
  * Design > Effects over the file's own theme lists its view (or its
  * conversion's receipt) carries -- the theme the conversion drew it through.
  * Every rebuild, repaint and reset of a Docs diagram asks with it.
  */
 export function documentSmartArtHostColorTheme(
-  documentAttrs: { readonly documentThemeColors?: unknown; readonly documentDesign?: unknown } | null | undefined,
+  documentAttrs:
+    | { readonly documentThemeColors?: unknown; readonly documentDesign?: unknown; readonly defaultFontFamily?: unknown }
+    | null
+    | undefined,
   nodeAttrs: unknown,
 ): Partial<SmartArtColorTheme> | null {
   return documentSmartArtColorTheme(
     documentAttrs?.documentThemeColors,
     documentAttrs?.documentDesign,
     documentSmartArtNodeHostTheme(nodeAttrs) ?? null,
+    documentAttrs ? documentSmartArtBodyFace(documentAttrs.documentDesign, documentAttrs.defaultFontFamily) : null,
   );
 }
 
@@ -162,8 +190,10 @@ export async function convertedDocumentSmartArtAttrs(
   signal?: AbortSignal,
   /** The document's `documentThemeColors` (its root's attrs). */
   documentThemeColors?: unknown,
-  /** The document's `documentDesign` (its root's attrs): the theme's effects. */
+  /** The document's `documentDesign` (its root's attrs): the theme's effects and body face. */
   documentDesign?: unknown,
+  /** The document's `defaultFontFamily` (its root's attrs): its body face when it states no theme. */
+  defaultFontFamily?: unknown,
 ): Promise<Record<string, unknown> | null> {
   if (!documentShapeIsPreservedNativeSmartArt(nodeAttrs)) return null;
   const view = documentNativeSmartArtView(nodeAttrs);
@@ -190,7 +220,12 @@ export async function convertedDocumentSmartArtAttrs(
         ? { layoutDefinitionRef: documentSmartArtOwnDefinitionRef(view, layoutId)! }
         : {}),
       ...(() => {
-        const colorTheme = documentSmartArtColorTheme(documentThemeColors, documentDesign, view.hostTheme);
+        const colorTheme = documentSmartArtColorTheme(
+          documentThemeColors,
+          documentDesign,
+          view.hostTheme,
+          documentSmartArtBodyFace(documentDesign, defaultFontFamily),
+        );
         return colorTheme ? { colorTheme } : {};
       })(),
     },

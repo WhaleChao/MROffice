@@ -271,6 +271,15 @@ export function pdfNativeListTextTargetKey(
   return `${selection.pageNumber}:${itemIndexes.join(",")}`;
 }
 
+/** The words of the line a selection names, as the file has them: what a
+ * draft kept for the line is held to on other bytes
+ * (lib/pdf/native-text-draft-retention `lineText`). */
+export function pdfNativeListTextTargetText(
+  selection: PdfNativeListTextSelectionEvidence,
+): string {
+  return (selection.items?.map((item) => item.str) ?? [selection.item.str]).join("\n");
+}
+
 /** Visual rows of a planned replacement, in the dialog's display convention
  * (no trailing spaces; the summary owns the separators). Fixed-frame plans
  * describe rows through their line plan; positioned paragraphs through

@@ -27,6 +27,7 @@ import {
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import { OfficeSemanticIcon } from "@mrnote/core/web/components/office-ribbon/icons/OfficeSemanticIcon.tsx";
 import { PresentationTableStyleGallery } from "@mrnote/core/web/components/notebook/contents/ribbon/PresentationTableStyleGallery.tsx";
+import { presentationTableStyleSchemeColors } from "../../../../lib/presentation/table-style-scheme";
 import {
   PresentationTableCellColorMenu,
   TABLE_CELL_BEVEL_LABELS,
@@ -273,6 +274,7 @@ export function PresentationTableDesignRibbonTab({ ctl }: { ctl: PresentationTab
                     >
                       <PresentationTableStyleGallery
                         accentColors={activeEffectiveTheme?.accentColors}
+                        schemeColors={presentationTableStyleSchemeColors(activeEffectiveTheme)}
                         deckLooks={deckTableStyleLooks}
                         disabled={!contextualTableSelectionIsWritable}
                         disabledReason={t(

@@ -493,6 +493,202 @@ export function mapIndexThroughTextDelta(
  * events (they are only readable while the events are dispatched). A text
  * whose change is not a plain character delta is left out.
  */
+
+
+
+
+
+
+
+
+
+
+
+
+export function withUndrawnDelivery(current: JsonValue, source: JsonValue, delivered: JsonValue): JsonValue {
+  return undrawn(current, source, delivered)[0];
+}
+
+/** [the result, whether `current` is exactly `source`]. One walk: a part is
+ * compared once, on the way down. `delivered` undefined: the delivery took
+ * the part out. */
+function undrawn(current: JsonValue, source: JsonValue, delivered: JsonValue | undefined): [JsonValue, boolean] {
+  if (current === source) return [delivered ?? current, true];
+  if (current === null || typeof current !== "object" || source === null || typeof source !== "object") {
+    return Object.is(current, source) ? [delivered ?? current, true] : [current, false];
+  }
+  if (Array.isArray(current)) {
+    if (!Array.isArray(source)) return [current, false];
+    const deliveredList = Array.isArray(delivered) ? delivered : [];
+    const idOf = (entry: JsonValue) => isPlainObject(entry) && typeof entry.id === "string" ? entry.id : null;
+    const keyed = current.length > 0 && current.every((entry) => idOf(entry) !== null);
+    const sourceById = new Map<string, number>();
+    const deliveredById = new Map<string, JsonValue>();
+    if (keyed) {
+      source.forEach((entry, at) => { const id = idOf(entry); if (id !== null) sourceById.set(id, at); });
+      for (const entry of deliveredList) { const id = idOf(entry); if (id !== null) deliveredById.set(id, entry); }
+    }
+    let same = current.length === source.length;
+    let changed = false;
+    const out = current.map((entry, at) => {
+      const id = keyed ? idOf(entry)! : null;
+      const sourceAt = id !== null ? sourceById.get(id) : at;
+      if (sourceAt === undefined || sourceAt >= source.length) { same = false; return entry; }
+      if (sourceAt !== at) same = false;
+      const now = id !== null ? deliveredById.get(id) : deliveredList[at];
+      const [next, entrySame] = undrawn(entry, source[sourceAt]!, now);
+      if (!entrySame) same = false;
+      if (next !== entry) changed = true;
+      return next;
+    });
+    if (same && delivered !== undefined) return [delivered, true];
+    return [changed ? out : current, same];
+  }
+  if (!isPlainObject(current) || !isPlainObject(source)) return [current, false];
+  const deliveredRecord = isPlainObject(delivered) ? delivered : undefined;
+  const keys = Object.keys(current);
+  let same = keys.length === Object.keys(source).length;
+  let changed = false;
+  const out: Record<string, JsonValue> = {};
+  for (const key of keys) {
+    const value = current[key]!;
+    if (!hasJsonProperty(source, key)) { same = false; out[key] = value; continue; }
+    const now = deliveredRecord && hasJsonProperty(deliveredRecord, key) ? deliveredRecord[key] : undefined;
+    const [next, keySame] = undrawn(value, source[key]!, now);
+    if (!keySame) same = false;
+    if (keySame && now === undefined && deliveredRecord) { changed = true; continue; } // the delivery took it out
+    if (next !== value) changed = true;
+    out[key] = next;
+  }
+  if (same && delivered !== undefined) return [delivered, true];
+  // A field the delivery brought that the editor was not handed (nor holds) is
+  // the delivery's, however else the editor changed the object meanwhile: a
+  // collaborator's Georgia on a whole box, the slow editor's autofit refitting
+  
+  // editor's own and the room lost the face).
+  if (deliveredRecord) {
+    for (const key of Object.keys(deliveredRecord)) {
+      if (hasJsonProperty(current, key) || hasJsonProperty(source, key)) continue;
+      out[key] = deliveredRecord[key]!;
+      changed = true;
+    }
+  }
+  return [changed ? out : current, same];
+}
+
+/**
+ * `next` with every part equal to the same part of `reference` taken from
+ * `reference` itself (a list's entries matched by their `id` where they have
+ * one, else by position). A merge builds its result afresh; handed on as it
+ * is, every slide of a deck read as changed and the window read and drew the
+ * whole deck again at each collaborator's key. `next` is not changed.
+ */
+export function shareUnchangedJson<T>(next: T, reference: unknown): T {
+  if (Object.is(next, reference)) return reference as T;
+  if (next === null || reference === null || typeof next !== "object" || typeof reference !== "object") return next;
+  if (Array.isArray(next)) {
+    if (!Array.isArray(reference)) return next;
+    const byId = new Map<string, unknown>();
+    for (const entry of reference) {
+      const id = entry !== null && typeof entry === "object" && !Array.isArray(entry) ? (entry as { id?: unknown }).id : undefined;
+      if (typeof id === "string" && !byId.has(id)) byId.set(id, entry);
+    }
+    let same = next.length === reference.length;
+    let changed = false;
+    const out = next.map((entry, at) => {
+      const id = entry !== null && typeof entry === "object" && !Array.isArray(entry) ? (entry as { id?: unknown }).id : undefined;
+      const counterpart = typeof id === "string" && byId.has(id) ? byId.get(id) : reference[at];
+      const shared = shareUnchangedJson(entry, counterpart);
+      if (shared !== reference[at]) same = false;
+      if (shared !== entry) changed = true;
+      return shared;
+    });
+    if (same) return reference as T;
+    return (changed ? out : next) as T;
+  }
+  if (Array.isArray(reference)) return next;
+  const nextRecord = next as Record<string, unknown>;
+  const referenceRecord = reference as Record<string, unknown>;
+  const keys = Object.keys(nextRecord);
+  let same = keys.length === Object.keys(referenceRecord).length;
+  let changed = false;
+  const out: Record<string, unknown> = {};
+  for (const key of keys) {
+    const has = Object.prototype.hasOwnProperty.call(referenceRecord, key);
+    const shared = has ? shareUnchangedJson(nextRecord[key], referenceRecord[key]) : nextRecord[key];
+    if (!has || shared !== referenceRecord[key]) same = false;
+    if (shared !== nextRecord[key]) changed = true;
+    out[key] = shared;
+  }
+  if (same) return reference as T;
+  return (changed ? out : next) as T;
+}
+
+/**
+ * One text delta that does what `first` then `second` do (operational
+ * composition of retain / insert / delete). A delivery that stands for
+ * several of a room's updates hands each text's changes over as one delta
+ * from what the editor last had to what it gets now.
+ */
+export function composeCollaborativeTextDeltas(
+  first: readonly CollaborativeTextDeltaOp[],
+  second: readonly CollaborativeTextDeltaOp[],
+): CollaborativeTextDeltaOp[] {
+  type Op = CollaborativeTextDeltaOp;
+  const lengthOf = (op: Op) => ("retain" in op ? op.retain : "delete" in op ? op.delete : op.insert.length);
+  const take = (ops: Op[], at: { i: number; offset: number }, max: number): Op | null => {
+    const op = ops[at.i];
+    if (!op) return null;
+    const rest = lengthOf(op) - at.offset;
+    const n = Math.min(rest, max);
+    const piece: Op = "retain" in op ? { retain: n } : "delete" in op ? { delete: n }
+      : { insert: op.insert.slice(at.offset, at.offset + n) };
+    if (n === rest) { at.i += 1; at.offset = 0; } else at.offset += n;
+    return piece;
+  };
+  const a = first.filter((op) => lengthOf(op) > 0) as Op[];
+  const b = second.filter((op) => lengthOf(op) > 0) as Op[];
+  const atA = { i: 0, offset: 0 }, atB = { i: 0, offset: 0 };
+  const out: Op[] = [];
+  const push = (op: Op) => {
+    const last = out[out.length - 1];
+    if (last && "retain" in last && "retain" in op) last.retain += op.retain;
+    else if (last && "delete" in last && "delete" in op) last.delete += op.delete;
+    else if (last && "insert" in last && "insert" in op) out[out.length - 1] = { insert: last.insert + op.insert };
+    else out.push({ ...op } as Op);
+  };
+  while (atA.i < a.length || atB.i < b.length) {
+    const nextB = b[atB.i];
+    if (nextB && "insert" in nextB) { push(take(b, atB, Infinity)!); continue; }
+    const nextA = a[atA.i];
+    if (nextA && "delete" in nextA) { push(take(a, atA, Infinity)!); continue; }
+    const restA = nextA ? lengthOf(nextA) - atA.offset : Infinity;
+    const restB = nextB ? lengthOf(nextB) - atB.offset : Infinity;
+    const n = Math.min(restA, restB);
+    if (n === Infinity) break;
+    const opA: Op = nextA ? take(a, atA, n)! : { retain: n };
+    const opB: Op = nextB ? take(b, atB, n)! : { retain: n };
+    if ("retain" in opB) push(opA);
+    else if ("retain" in opA) push({ delete: n });
+    // a deletion of what `first` inserted: neither is left
+  }
+  while (out.length && "retain" in out[out.length - 1]) out.pop();
+  return out;
+}
+
+/** Several deliveries' changes as one: each text once, its deltas composed in order. */
+export function composeCollaborativeTextChanges(
+  changes: readonly CollaborativeTextChange[],
+): CollaborativeTextChange[] {
+  const byPath = new Map<string, CollaborativeTextChange>();
+  for (const change of changes) {
+    const key = change.path.join("\u0000");
+    const seen = byPath.get(key);
+    byPath.set(key, seen ? { path: seen.path, delta: composeCollaborativeTextDeltas(seen.delta, change.delta) } : change);
+  }
+  return [...byPath.values()];
+}
+
 export function collaborativeTextChanges(events: readonly Y.YEvent<never>[]): CollaborativeTextChange[] {
   const out: CollaborativeTextChange[] = [];
   for (const event of events) {
@@ -593,7 +789,17 @@ export function writeCollaborativeTextContainer(
 ): Record<string, JsonValue> | null {
   const container = textContainerAt(root, path);
   if (!container) return null;
-  const { map, itemOf } = container;
+  return writeTextContainerMap(container.map, container.itemOf, previous, next, edit);
+}
+
+/** `writeCollaborativeTextContainer` of the container's own map. */
+function writeTextContainerMap(
+  map: Y.Map<unknown>,
+  itemOf: string,
+  previous: Record<string, JsonValue>,
+  next: Record<string, JsonValue>,
+  edit?: CollaborativeTextEdit,
+): Record<string, JsonValue> | null {
   // The words and their formatting must be the ones typed in (the edit and
   // the formatting delta are measured from them); any other field is written
   // as a delta, as a publication writes it.
@@ -790,6 +996,53 @@ function formattingJson(kind: FormatKind, text: string, units: readonly Attribut
  * field the edit changed is changed. Null when the formatting of the two is
  * not of one kind (the caller publishes the edit as before).
  */
+
+
+
+
+
+
+
+
+
+
+
+
+
+function typedUnitsFollowingTheRoom(
+  typed: Attributes[],
+  insert: string,
+  viewUnits: readonly Attributes[] | null,
+  edit: { start: number; end: number },
+  roomUnits: readonly Attributes[],
+  at: { start: number; end: number },
+): Attributes[] {
+  if (!viewUnits || typed.length === 0) return typed;
+  // The character the words were typed beside: the one before, or at the very
+  // start the one after; the same character in the room (a key's insertion
+  // goes right behind the character it was typed after, `carryTextEditThroughDeltas`).
+  const viewNeighbour = edit.start > 0 ? viewUnits[edit.start - 1] : viewUnits[edit.end];
+  const roomNeighbour = at.start > 0 ? roomUnits[at.start - 1] : roomUnits[at.end];
+  if (!viewNeighbour || !roomNeighbour) return typed;
+  const viewStyle = runStyleOf(viewNeighbour);
+  const roomStyle = runStyleOf(roomNeighbour);
+  if (jsonEquals(viewStyle as JsonValue, roomStyle as JsonValue)) return typed;
+  return typed.map((unit, index) => {
+    if (insert[index] === "\n") return unit;
+    const own = runStyleOf(unit);
+    // The neighbour's format as the room has it, and what the author set
+    // apart from the neighbour on top of it, key by key.
+    const style: Attributes = { ...roomStyle };
+    for (const key of new Set([...Object.keys(own), ...Object.keys(viewStyle)])) {
+      if (jsonEquals((own[key] ?? null) as JsonValue, (viewStyle[key] ?? null) as JsonValue)) continue;
+      if (own[key] === undefined) delete style[key];
+      else style[key] = own[key]!;
+    }
+    for (const [key, value] of Object.entries(unit)) if (key.startsWith(PARAGRAPH_ATTRIBUTE)) style[key] = value;
+    return style;
+  });
+}
+
 export function textContainerWithEditAt(
   room: Record<string, JsonValue>,
   previous: Record<string, JsonValue>,
@@ -823,10 +1076,17 @@ export function textContainerWithEditAt(
     return hasFormatting(room) || hasFormatting(next) ? null : out;
   }
   if (!roomFormat || !nextFormat || roomFormat.kind !== nextFormat.kind) return null;
-  const typed = nextFormat.units.slice(edit.start, edit.start + edit.insert.length);
+  const previousFormat = encodeFormatting(previous);
+  const typed = typedUnitsFollowingTheRoom(
+    nextFormat.units.slice(edit.start, edit.start + edit.insert.length),
+    edit.insert,
+    previousFormat?.kind === roomFormat.kind ? previousFormat.units : null,
+    edit,
+    roomFormat.units,
+    at,
+  );
   if (typed.length !== edit.insert.length) return null;
   const units = [...roomFormat.units.slice(0, at.start), ...typed, ...roomFormat.units.slice(at.end)];
-  const previousFormat = encodeFormatting(previous);
   const tailChanged = previousFormat?.kind === nextFormat.kind &&
     stableJson((previousFormat.tail ?? null) as JsonValue) !== stableJson((nextFormat.tail ?? null) as JsonValue);
   const tail = tailChanged ? nextFormat.tail : roomFormat.tail;
@@ -885,6 +1145,175 @@ export function resolveCollaborativeTextAnchor(text: Y.Text, anchor: Y.RelativeP
 
 /** The edits `applyJsonDelta` writes exactly, by the room text they edit. */
 let exactTextEdits: ReadonlyMap<Y.Text, CollaborativeTextEdit> | null = null;
+/** The characters a comparison of strings must not delete; set for one `applyJsonDelta`. */
+let undrawnTextItems: UndrawnTextItems | null = null;
+
+
+
+
+
+
+
+
+
+
+
+
+export interface UndrawnTextItems {
+  /** The room's state vector before characters of this text the editor may
+   *  not have drawn arrived; null when it has drawn them all. */
+  drawnTo(text: Y.Text): ReadonlyMap<number, number> | null;
+  /** The editor's text was found to be the room's own. */
+  drawn(text: Y.Text): void;
+  /** A comparison would have deleted `count` such characters; they were kept. */
+  kept(text: Y.Text, count: number): void;
+}
+
+
+
+
+
+
+
+const UNDRAWN_ALIGN_CELLS = 600_000;
+
+/**
+ * `spliceYText` for a publication of the editor's document. A room text that
+ * holds collaborators' characters the editor may not have drawn
+ * (`undrawnTextItems`) is not compared with the editor's as two strings --
+ * that read an undrawn character missing from the editor's text as deleted,
+ * and an editor's character equal to an undrawn one as the same character.
+ * The two are aligned instead, a character the editor drew counting more
+ * than an undrawn one: what the editor's text holds of the room's stays
+ * (undrawn characters it already shows included, never written twice), a
+ * drawn character it lacks is deleted, an undrawn one it lacks is kept, and
+ * the editor's own characters are written where it typed them.
+ */
+function spliceYTextKeepingUndrawn(text: Y.Text, next: string): boolean {
+  const guard = undrawnTextItems;
+  const drawnTo = guard?.drawnTo(text) ?? null;
+  if (!guard || !drawnTo) return spliceYText(text, next);
+  const current = text.toString();
+  if (current === next) {
+    guard.drawn(text);
+    return false;
+  }
+  const self = text.doc?.clientID;
+  // Each character of the room's text: drawn or not, by its id.
+  const undrawn = new Uint8Array(current.length);
+  let undrawnCount = 0;
+  let index = 0;
+  for (let item = text._start; item; item = item.right) {
+    if (item.deleted || !item.countable) continue;
+    if (item.id.client !== self) {
+      const firstUndrawn = Math.max(0, (drawnTo.get(item.id.client) ?? 0) - item.id.clock);
+      for (let at = firstUndrawn; at < item.length; at += 1) {
+        undrawn[index + at] = 1;
+        undrawnCount += 1;
+      }
+    }
+    index += item.length;
+  }
+  const plain = textSplice(current, next);
+  // Nothing undrawn, or nothing deleted: the comparison takes no one's characters.
+  if (undrawnCount === 0 || plain.end <= plain.start) return spliceYText(text, next);
+  // The window to align: equal ends of drawn characters only (an undrawn
+  // character equal to the editor's is not taken as the editor's own).
+  let head = 0;
+  while (head < current.length && head < next.length && undrawn[head] === 0 && current[head] === next[head]) head += 1;
+  let tail = 0;
+  while (tail < current.length - head && tail < next.length - head &&
+    undrawn[current.length - 1 - tail] === 0 && current[current.length - 1 - tail] === next[next.length - 1 - tail]) tail += 1;
+  const roomEnd = current.length - tail;
+  const nextEnd = next.length - tail;
+  const n = roomEnd - head;
+  const m = nextEnd - head;
+  type Step = { keep: number } | { remove: number } | { write: string };
+  const steps: Step[] = [];
+  let kept = 0;
+  if (n * m <= UNDRAWN_ALIGN_CELLS) {
+    // Weighted longest common subsequence: a drawn character 2, an undrawn 1.
+    const width = m + 1;
+    const score = new Int32Array((n + 1) * width);
+    for (let i = n - 1; i >= 0; i -= 1) {
+      const room = current.charCodeAt(head + i);
+      const weight = undrawn[head + i] === 1 ? 1 : 2;
+      for (let j = m - 1; j >= 0; j -= 1) {
+        let best = Math.max(score[(i + 1) * width + j]!, score[i * width + j + 1]!);
+        if (room === next.charCodeAt(head + j)) best = Math.max(best, weight + score[(i + 1) * width + j + 1]!);
+        score[i * width + j] = best;
+      }
+    }
+    const push = (step: Step) => {
+      const last = steps[steps.length - 1];
+      if (last && "keep" in last && "keep" in step) last.keep += step.keep;
+      else if (last && "remove" in last && "remove" in step) last.remove += step.remove;
+      else if (last && "write" in last && "write" in step) last.write += step.write;
+      else steps.push(step);
+    };
+    let i = 0;
+    let j = 0;
+    while (i < n || j < m) {
+      const here = score[i * width + j]!;
+      if (i < n && j < m && current.charCodeAt(head + i) === next.charCodeAt(head + j) &&
+          here === (undrawn[head + i] === 1 ? 1 : 2) + score[(i + 1) * width + j + 1]!) {
+        push({ keep: 1 });
+        i += 1;
+        j += 1;
+      } else if (i < n && undrawn[head + i] === 1 && here === score[(i + 1) * width + j]!) {
+        // A collaborator's character the editor has not drawn stays where
+        // they put it; the editor's own characters land after it, where its
+        // own (deleted or kept) ones stand.
+        kept += 1;
+        push({ keep: 1 });
+        i += 1;
+      } else if (j < m && (i >= n || here === score[i * width + j + 1]!)) {
+        // The editor's own character, before a drawn one of the room's it deleted.
+        push({ write: next[head + j]! });
+        j += 1;
+      } else {
+        if (undrawn[head + i] === 1) {
+          kept += 1;
+          push({ keep: 1 });
+        } else {
+          push({ remove: 1 });
+        }
+        i += 1;
+      }
+    }
+  } else {
+    // Too long to align: the drawn characters of the compared range go, the
+    // undrawn stay where they stand, the editor's change is written before them.
+    let from = plain.start;
+    for (let at = plain.start; at <= plain.end; at += 1) {
+      if (at < plain.end && undrawn[at] === 0) continue;
+      if (at > from) steps.push({ remove: at - from });
+      if (at < plain.end) {
+        kept += 1;
+        steps.push({ keep: 1 });
+      }
+      from = at + 1;
+    }
+    if (plain.insert) steps.unshift({ write: plain.insert });
+    steps.unshift({ keep: plain.start - head });
+  }
+  if (kept === 0) return spliceYText(text, next);
+  guard.kept(text, kept);
+  let at = head;
+  let touched = false;
+  for (const step of steps) {
+    if ("keep" in step) at += step.keep;
+    else if ("remove" in step) {
+      text.delete(at, step.remove);
+      touched = true;
+    } else {
+      text.insert(at, step.write);
+      at += step.write.length;
+      touched = true;
+    }
+  }
+  return touched;
+}
 /** Whether an exact edit typed on a text the base had moved past is rebased
  *  onto the room (`staleEditBase`); set for one `applyJsonDelta`. */
 let rebaseStaleTextEdits = false;
@@ -1158,6 +1587,32 @@ export function isSharedJsonRead(value: unknown): boolean {
   return value !== null && typeof value === "object" && sharedJsonReads.has(value);
 }
 
+
+
+
+
+
+
+
+
+
+
+function forgetPendingSharedJson(doc: Y.Doc): void {
+  const pending = doc._transactionCleanups;
+  if (pending.length === 0) return;
+  for (const transaction of pending) {
+    for (const type of transaction.changed.keys()) {
+      for (
+        let current: Y.AbstractType<unknown> | null = type as unknown as Y.AbstractType<unknown>;
+        current;
+        current = (current._item?.parent as Y.AbstractType<unknown> | undefined) ?? null
+      ) {
+        sharedJsonOf.delete(current);
+      }
+    }
+  }
+}
+
 function followSharedJson(doc: Y.Doc): void {
   if (sharedJsonDocs.has(doc)) return;
   sharedJsonDocs.add(doc);
@@ -1184,6 +1639,7 @@ function followSharedJson(doc: Y.Doc): void {
 export function yToJsonShared(value: unknown): JsonValue {
   if (!(value instanceof Y.AbstractType) || !value.doc) return readYJson(value, yToJsonShared);
   followSharedJson(value.doc);
+  forgetPendingSharedJson(value.doc);
   const cached = sharedJsonOf.get(value);
   if (cached !== undefined) return cached;
   const json = readYJson(value, yToJsonShared);
@@ -1606,7 +2062,7 @@ function applyJsonEntry(
 
   if (typeof value === "string" && isCollaborativeTextField(key, parentItemOf)) {
     if (current instanceof Y.Text) {
-      spliceYText(current, value);
+      spliceYTextKeepingUndrawn(current, value);
       return;
     }
     // A legacy scalar (or absent) text becomes a Y.Text on its first change;
@@ -1658,8 +2114,20 @@ export function applyJsonDelta(
      *  content). Several notes of one text must then come as one edit
      *  (`collaborativeTextEditsFor`). */
     rebaseStaleEdits?: boolean;
+    /** Collaborators' characters the editor may not have drawn: a text's
+     *  comparison with the room never deletes them (`UndrawnTextItems`). */
+    undrawn?: UndrawnTextItems;
   },
 ): boolean {
+  if (options?.undrawn) {
+    const outer = undrawnTextItems;
+    undrawnTextItems = options.undrawn;
+    try {
+      return applyJsonDelta(target, next, previous, { ...options, undrawn: undefined });
+    } finally {
+      undrawnTextItems = outer;
+    }
+  }
   if (options?.textEdits?.size) {
     const outer = exactTextEdits;
     const outerRebase = rebaseStaleTextEdits;
@@ -2098,7 +2566,7 @@ function applyFormattedText(
     const before = typedOn === null && kind === wanted.kind && !valueFormatting && previous ? encodeFormatting(previous) : null;
     if (applyFormattingDelta(block, text, typedOn ?? previousText, before?.kind === wanted.kind ? before : null, nextText, wanted)) touched = true;
   } else {
-    if (spliceYText(text, nextText)) touched = true;
+    if (spliceYTextKeepingUndrawn(text, nextText)) touched = true;
     if (syncFormatting(block, text, wanted)) touched = true;
   }
   if (valueFormatting) {
@@ -2127,6 +2595,230 @@ function dropFormatting(block: Y.Map<unknown>): boolean {
   block.delete(FORMAT_MARKER);
   block.delete(FORMAT_TAIL);
   return true;
+}
+
+
+
+
+
+
+
+
+
+
+
+interface KeyedCreation {
+  items: Y.Map<unknown>;
+  id: string;
+  /** The entry as the room holds it for this member now. */
+  value: Y.Map<unknown>;
+  itemOf: string;
+  at: number;
+  /** The entry as it last stood (after this member's or a peer's change). */
+  last: Record<string, JsonValue>;
+  /** This member's own changes of the entry since creating it, in order:
+   * what is written again over an entry kept instead of it. A peer's change
+   * is never one (a peer whose entry was dropped writes its own). */
+  steps: Array<{ before: Record<string, JsonValue>; after: Record<string, JsonValue> }>;
+  /** The transaction that created it, while it runs (`noteKeyedCreationEdits`). */
+  transaction: Y.Transaction | null;
+  /** How many of `steps` are keys the creation itself held. */
+  included: number;
+}
+
+interface KeyedCreationWatch {
+  localOrigin: unknown;
+  ttlMs: number;
+  creations: KeyedCreation[];
+}
+
+const keyedCreationWatches = new WeakMap<Y.Doc, KeyedCreationWatch>();
+
+function noteKeyedCreation(items: Y.Map<unknown>, id: string, item: JsonValue, itemOf: string): void {
+  const doc = items.doc;
+  const watch = doc ? keyedCreationWatches.get(doc) : undefined;
+  if (!doc || !watch || doc._transaction?.origin !== watch.localOrigin || !isPlainObject(item)) return;
+  const value = items.get(id);
+  if (!(value instanceof Y.Map) || isListMap(value)) return;
+  watch.creations.push({
+    items, id, value, itemOf, at: Date.now(), last: yToJson(value) as Record<string, JsonValue>, steps: [],
+    transaction: doc._transaction, included: 0,
+  });
+}
+
+
+
+
+
+
+
+
+
+
+
+function replayKeyedCreationStep(
+  entry: KeyedCreation,
+  step: { before: Record<string, JsonValue>; after: Record<string, JsonValue> },
+): void {
+  const { before, after } = step;
+  const map = entry.value;
+  const words = map.get(COLLABORATIVE_TEXT_KEY);
+  if (words instanceof Y.Text && typeof before.text === "string" && typeof after.text === "string" &&
+      before.text !== after.text) {
+    const room = yToJson(map) as Record<string, JsonValue>;
+    const roomText = words.toString();
+    const splice = textSplice(before.text, after.text);
+    const edit = { base: before.text, ...splice };
+    const peer = textSplice(before.text, roomText);
+    const carried = roomText === before.text
+      ? { start: splice.start, end: splice.end }
+      : carryTextEditThroughDeltas(before.text, splice, [spliceAsDelta(peer)]);
+    const roomNext = carried ? textContainerWithEditAt(room, before, after, edit, carried) : null;
+    if (carried && roomNext &&
+        writeTextContainerMap(map, entry.itemOf, room, roomNext, { base: roomText, start: carried.start, end: carried.end, insert: splice.insert })) {
+      return;
+    }
+  }
+  applyMapDelta(map, after, before, entry.itemOf);
+}
+
+/** A splice of a text as a Y.Text delta of it. */
+function spliceAsDelta({ start, end, insert }: TextSplice): CollaborativeTextDeltaOp[] {
+  const delta: CollaborativeTextDeltaOp[] = [];
+  if (start > 0) delta.push({ retain: start });
+  if (end > start) delta.push({ delete: end - start });
+  if (insert) delta.push({ insert });
+  return delta;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function noteKeyedCreationEdits(
+  root: Y.Map<unknown>,
+  edits: ReadonlyArray<{ path: readonly string[]; container?: { previous: Record<string, JsonValue>; next: Record<string, JsonValue> } }>,
+): void {
+  const doc = root.doc;
+  const watch = doc ? keyedCreationWatches.get(doc) : undefined;
+  const transaction = doc?._transaction ?? null;
+  if (!watch || !transaction || watch.creations.length === 0) return;
+  for (const edit of edits) {
+    if (!edit.container) continue;
+    const container = sharedNodeAt(root, edit.path.slice(0, -1));
+    if (!(container instanceof Y.Map)) continue;
+    // The entry holding the container (a block, or the block of a cell),
+    // and the container's place in it.
+    let entry: KeyedCreation | undefined;
+    const inside: string[] = [];
+    let node = container as unknown as Y.AbstractType<unknown>;
+    for (;;) {
+      entry = watch.creations.find((creation) => creation.value === node && creation.transaction === transaction);
+      if (entry) break;
+      const item = node._item;
+      const parent = item?.parent;
+      if (!item || !(parent instanceof Y.AbstractType)) break;
+      if (parent instanceof Y.Array) inside.unshift(String(parent.toArray().indexOf(node)));
+      else if (typeof item.parentSub === "string" && item.parentSub !== LIST_ITEMS) inside.unshift(item.parentSub);
+      node = parent as Y.AbstractType<unknown>;
+    }
+    if (!entry) continue;
+    const created = yToJson(entry.value) as Record<string, JsonValue>;
+    const before = inside.length === 0 ? edit.container.previous
+      : withJsonValueAt(created, inside, edit.container.previous) as Record<string, JsonValue>;
+    const after = inside.length === 0 ? edit.container.next
+      : withJsonValueAt(created, inside, edit.container.next) as Record<string, JsonValue>;
+    entry.steps.splice(entry.included, 0, { before, after });
+    entry.included += 1;
+  }
+}
+
+/**
+ * Watch the entries this member creates in `root`'s keyed lists: when a
+ * peer's concurrent write of the same id is the one the room keeps, this
+ * member writes its own changes of the entry again -- each of its steps
+ * since creating it (typing, formatting, its Undo and Redo), in order --
+ * over the entry kept. Peers' changes are not this member's to write: of
+ * three windows converting at once, each whose entry was dropped writes only
+ * its own, as many times as its entry (or the one it wrote into) is dropped,
+ * and a window that changed nothing writes nothing.
+ *
+ * The repair is a transaction of this member's own (`localOrigin`, so it is
+ * a step of its Undo history and is sent to the room as its input), begun
+ * while the peer's update is being cleaned up -- after Yjs has closed that
+ * transaction (`doc._transaction` is null in `beforeObserverCalls`), so it
+ * is not merged into it -- and run at once, before the peer's update is
+ * handed to the room's observers: the editor is handed the room with this
+ * member's words still in it. Returns the function that stops watching.
+ */
+export function watchConcurrentKeyedCreations(
+  root: Y.Map<unknown>,
+  options: { localOrigin: unknown; ttlMs?: number },
+): () => void {
+  const doc = root.doc;
+  if (!doc) throw new Error("watchConcurrentKeyedCreations requires an attached document.");
+  const watch: KeyedCreationWatch = { localOrigin: options.localOrigin, ttlMs: options.ttlMs ?? 120_000, creations: [] };
+  keyedCreationWatches.set(doc, watch);
+  let repairing = false;
+  const afterTransaction = (transaction: Y.Transaction) => {
+    for (const entry of watch.creations) if (entry.transaction === transaction) entry.transaction = null;
+    if (watch.creations.length === 0 || repairing) return;
+    const now = Date.now();
+    watch.creations = watch.creations.filter((entry) => now - entry.at <= watch.ttlMs);
+    for (const entry of watch.creations) {
+      if (entry.items.get(entry.id) !== entry.value || !transaction.changedParentTypes.has(entry.value as never)) continue;
+      const after = yToJson(entry.value) as Record<string, JsonValue>;
+      if (jsonEquals(after, entry.last)) continue;
+      // Any transaction of this document's own (typing, a format, an Undo or
+      // Redo) is this member's step; a peer's update only moves `last` on.
+      if (transaction.local) entry.steps.push({ before: entry.last, after });
+      entry.last = after;
+    }
+  };
+  const beforeObserverCalls = (transaction: Y.Transaction) => {
+    if (watch.creations.length === 0 || transaction.local) return;
+    const dropped = watch.creations.filter((entry) => entry.items.get(entry.id) !== entry.value);
+    if (dropped.length === 0) return;
+    const writes: KeyedCreation[] = [];
+    for (const entry of dropped) {
+      const kept = entry.items.get(entry.id);
+      if (!(kept instanceof Y.Map) || isListMap(kept)) {
+        // Deleted by the peer, or no longer an entry: nothing to write into.
+        watch.creations = watch.creations.filter((other) => other !== entry);
+        continue;
+      }
+      entry.value = kept;
+      if (entry.steps.length > 0) writes.push(entry);
+      else entry.last = yToJson(kept) as Record<string, JsonValue>;
+    }
+    if (writes.length === 0) return;
+    repairing = true;
+    try {
+      doc.transact(() => {
+        for (const entry of writes) {
+          for (const step of entry.steps) replayKeyedCreationStep(entry, step);
+        }
+      }, watch.localOrigin);
+    } finally {
+      repairing = false;
+    }
+    for (const entry of writes) entry.last = yToJson(entry.value) as Record<string, JsonValue>;
+  };
+  doc.on("afterTransaction", afterTransaction);
+  doc.on("beforeObserverCalls", beforeObserverCalls);
+  return () => {
+    doc.off("afterTransaction", afterTransaction);
+    doc.off("beforeObserverCalls", beforeObserverCalls);
+    if (keyedCreationWatches.get(doc) === watch) keyedCreationWatches.delete(doc);
+    watch.creations = [];
+  };
 }
 
 /** `itemOf` / `parentItemOf`: as for `applyJsonEntry`. */
@@ -2169,7 +2861,9 @@ function applyJsonDeltaEntry(
       const id = nextIds[index] as string;
       const before = prevById.get(id);
       if (before && jsonEquals(item, before)) continue;
+      const created = before === undefined && !items.has(id);
       if (applyJsonDeltaEntry(items, id, item, before, key)) touched = true;
+      if (created) noteKeyedCreation(items, id, item, key);
     }
     const currentOrder = order.toArray();
     const orderChangedLocally =
@@ -2365,7 +3059,14 @@ function applyTextDelta(
   if (current instanceof Y.Text) {
     const room = current.toString();
     const edit = exactTextEdits?.get(current);
+    if (room === next) {
+      // The editor's text is the room's: every character of it was drawn.
+      undrawnTextItems?.drawn(current);
+      return false;
+    }
     if (edit && room === previous && validTextEdit(edit, previous, next)) {
+      // Typed on the room's very text: the editor had drawn all of it.
+      undrawnTextItems?.drawn(current);
       if (edit.end > edit.start) current.delete(edit.start, edit.end - edit.start);
       if (edit.insert) current.insert(edit.start, edit.insert);
       return edit.end > edit.start || edit.insert.length > 0;
@@ -2384,14 +3085,14 @@ function applyTextDelta(
         if (moved.insert) current.insert(moved.start, moved.insert);
         return moved.end > moved.start || moved.insert.length > 0;
       }
-      return spliceYText(current, mergeText3(typedOn, next, room));
+      return spliceYTextKeepingUndrawn(current, mergeText3(typedOn, next, room));
     }
     // Without a text base (the author added the field) there is no splice
     // to rebase: the author's value is written, as for any other leaf.
     const merged = typeof previous !== "string" || room === previous
       ? next
       : mergeText3(previous, next, room);
-    return spliceYText(current, merged);
+    return spliceYTextKeepingUndrawn(current, merged);
   }
   // A legacy room still holds the string as a scalar: upgrade it in place on
   // this first change. A peer's write that already arrived is merged in; one

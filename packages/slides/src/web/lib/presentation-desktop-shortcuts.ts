@@ -5,9 +5,9 @@
  */
 /**
  * The slide editor's desktop PowerPoint chords that act on the deck rather
- * than on the words being typed: New Slide, Duplicate Slide, Group / Ungroup
- * and Page Down / Page Up through the slides (audit PPT-E001 E002 E004 E007,
- * C015).
+ * than on the words being typed: New Slide, Duplicate Slide, Group / Ungroup,
+ * Page Down / Page Up through the slides (audit PPT-E001 E002 E004 E007,
+ * C015) and starting the slide show.
  *
  * Microsoft Support, "Keyboard shortcuts in PowerPoint"
  * (support.microsoft.com/office/ebb3d20e-dcd4-444f-a38e-bb5c5ed180f4):
@@ -20,6 +20,19 @@
  *   | Regroup          | Ctrl+Shift+J   | Option+Cmd+J    |
  *   | Hyperlink        | Ctrl+K         | Cmd+K           |
  *   | Next / previous slide (Normal view) | Page Down / Page Up |
+ *
+ * Microsoft Support, "Use keyboard shortcuts to deliver PowerPoint
+ * presentations" (support.microsoft.com/office/1524ffce-bd2a-45f4-9a7f-f18b992b93a0):
+ *
+ *   | Start the show       | Windows  | macOS                |
+ *   | From the beginning   | F5       | Cmd+Shift+Return     |
+ *   | From current slide   | Shift+F5 | Cmd+Return           |
+ *
+ *  - F5 is also the browser's Reload: the editor takes it (preventDefault)
+ *    only while the deck holds the focus, so the page reloads as usual
+ *    anywhere else. PowerPoint for the web's Ctrl+F5 / Shift+Ctrl+F5 are the
+ *    browsers' hard reload, so the deck uses the desktop keys. On a Mac F5
+ *    and Shift+F5 (Fn+F5 on most keyboards) start the show as well.
  *
  * Browser trade-offs (PowerPoint for the web's own list says the web app's
  * keys differ "because PowerPoint for the web runs in your web browser"):
@@ -48,7 +61,9 @@ export type PresentationDesktopShortcut =
   | "ungroup"
   | "nextSlide"
   | "previousSlide"
-  | "hyperlink";
+  | "hyperlink"
+  | "slideShowFromStart"
+  | "slideShowFromCurrent";
 
 export interface PresentationShortcutKeyEvent {
   readonly key: string;
@@ -98,10 +113,16 @@ export function presentationDesktopShortcutFor(
   const meta = Boolean(event.metaKey);
   const shift = Boolean(event.shiftKey);
   const alt = Boolean(event.altKey);
+  if (event.key === "F5" && !ctrl && !meta && !alt) {
+    return shift ? "slideShowFromCurrent" : "slideShowFromStart";
+  }
   if (!ctrl && !meta && !alt && !shift) {
     if (event.key === "PageDown") return "nextSlide";
     if (event.key === "PageUp") return "previousSlide";
     return null;
+  }
+  if (mac && meta && !ctrl && !alt && event.key === "Enter") {
+    return shift ? "slideShowFromStart" : "slideShowFromCurrent";
   }
   const key = letter(event);
   if (mac) {

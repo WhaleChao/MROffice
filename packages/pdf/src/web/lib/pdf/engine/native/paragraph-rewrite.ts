@@ -452,6 +452,37 @@ function formatNumber(value: number): string {
 
 /** How far apart two numbers of the page may be and still be one. */
 const LAYOUT_TOLERANCE = 0.01;
+
+
+
+
+
+
+
+
+
+
+
+const CLEAR_OF_TEXT_BESIDE_EM = 1.6;
+
+/** How near other text beside it a line may come where the alternative is a
+ * line of its own drawn over other text: the reader's bound for reading on
+ * in one item (PDFJS_SPACE_IN_FLOW_MAX_EM). The two may then read as one
+ * line; neither is drawn over. */
+const NEAR_TEXT_BESIDE_EM = 0.6;
+
+/** How far past its own right edge a paragraph of several lines may set a
+ * line, in ems: a hair (digits typed wider than the ones they replace). */
+const PARAGRAPH_EDGE_HAIR_EM = 0.35;
+/** A line that fills its paragraph's measure: at least this share of the
+ * widest line's width (list-text-fidelity's lineRunsPastItsParagraph reads
+ * the same). */
+const PARAGRAPH_FLOWING_LINE_SHARE = 0.85;
+/** Two rows on one axis: how far their middles may stand apart (a mark
+ * raised after the first row's last word counts into its width), and how
+ * far in from the first the second starts at least, in ems. */
+const PARAGRAPH_ROWS_AXIS_EM = 0.25;
+const PARAGRAPH_ROWS_MIN_INSET_EM = 0.1;
 /** The most a neighbouring show may already reach into the paragraph's own
  * ink and still count as abutting it, in points: two decimals of Tm rounding
  * on either side, well under a glyph (mirror of the replay's
@@ -459,6 +490,16 @@ const LAYOUT_TOLERANCE = 0.01;
 const SOURCE_ABUTMENT_MAX = 0.1;
 /** Alignment is read off the lines' ends and starts to within a point. */
 const ALIGNMENT_TOLERANCE = 1;
+/** How far a line's ink reaches under and over its baseline, in ems, when
+ * text set off a line is asked whether it stands in that line's band
+ * (list-text-fidelity's STACKED_INK_*). A line above or below, at any
+ * leading a reader reads, stays clear of it. */
+const STACKED_INK_UNDER_EM = 0.2;
+const STACKED_INK_OVER_EM = 0.7;
+/** A mark hanging after a line's last word: set at no more than this share
+ * of the body's size, raised by at least this share of it. */
+const HANGING_MARK_MAX_SIZE = 0.85;
+const HANGING_MARK_MIN_RISE_EM = 0.15;
 /** A space the font draws no glyph for is a third of the size, TeX's own. */
 const NUMBER_SPACE_EM = 1 / 3;
 /** A one-line paragraph that has to grow takes a step of 1.2 of its size. */
@@ -690,6 +731,14 @@ interface ReadParagraph {
   readonly basis: readonly [number, number, number, number];
   readonly blockMatrix: Matrix;
   readonly layout: ParagraphLayout;
+  /** Each source line's baseline across the lines, as the page sets it (a
+   * line under a fraction stands further down than the step): where a line
+   * the edit leaves alone is drawn again. */
+  readonly lineBaselines: readonly number[];
+  /** The frame's right edge grown as near the text beside the paragraph as
+   * NEAR_TEXT_BESIDE_EM allows, where that is further than the frame's own:
+   * taken only instead of a new line over other text. */
+  readonly nearFrameRight?: number;
   /** The paragraph's own line step, when `layout` is set at one the reader
    * asked for (paragraphAtRequestedLineStep). */
   readonly sourceLineStep?: number;
@@ -1363,7 +1412,20 @@ async function readParagraph(
   const restLeft = lineCount > 1 ? Math.min(...lineExtents.slice(1).map((extent) => extent.left)) : firstLeft;
   const frameLeft = Math.min(firstLeft, restLeft);
   const frameRight = Math.max(...lineExtents.map((extent) => extent.right));
-  const alignment = paragraphAlignment(lineExtents, frameRight, restLeft);
+  // Each line without the mark set raised and small after its last word (a
+  // footnote star or number after a name): the mark hangs past a centred
+  // line, which is centred without it.
+  const unmarkedExtents = lineExtents.map((extent, line) => {
+    const inked = shows.filter((show) => show.line === line && show.inked);
+    const last = inked.reduce((best, show) => show.inked!.end > best.inked!.end ? show : best);
+    const hangs = inked.length > 1 && last.size < bodySize * HANGING_MARK_MAX_SIZE &&
+      last.v + last.rise - lineBaselines[line] > bodySize * HANGING_MARK_MIN_RISE_EM &&
+      last.inked!.end - last.inked!.start < bodySize;
+    if (!hangs) return extent;
+    const body = inked.filter((show) => show !== last);
+    return { left: Math.min(...body.map((show) => show.inked!.start)), right: Math.max(...body.map((show) => show.inked!.end)) };
+  });
+  const alignment = paragraphAlignment(lineExtents, frameRight, restLeft, unmarkedExtents);
   // A paragraph set flush left whose later lines start at more than one left
   // edge runs around something (a picture it wraps): this tier sets one
   // frame, and every later line at its left edge would run over it (mirror
@@ -1631,27 +1693,77 @@ async function readParagraph(
   // right of its lines, on the band of any of them, or else the visible
   // page's edge. A form's frame is its own (mirror of the replay).
   let freeRight: number | null = null;
+  let nearRight: number | null = null;
   const bounds = kernel.visiblePageBounds(selection.pageNumber);
-  if (alignment === "left" && pageContent && bounds) {
+  if ((alignment === "left" || alignment === "justify") && pageContent && bounds) {
     freeRight = Math.max(...[[bounds.left, bounds.bottom], [bounds.right, bounds.bottom],
       [bounds.left, bounds.top], [bounds.right, bounds.top]].map(([x, y]) => {
       const [bx, by] = applyMatrix(toBlock, x, y);
       return bx * basis[0] + by * basis[1];
     }));
+    nearRight = freeRight;
     const others = otherInkedExtents(kernel, { allShows, shows, twinKeys, fonts, basis, blockMatrix });
     for (const [line, baseline] of lineBaselines.entries()) {
       const bottom = baseline - PDFJS_VERTICAL_SHIFT_RATIO * lineSizes[line];
       const top = baseline + PDFJS_VERTICAL_SHIFT_RATIO * lineSizes[line];
       for (const other of others) {
         if (other.across >= bottom && other.across <= top && other.start >= frameRight - LAYOUT_TOLERANCE) {
+          freeRight = Math.min(freeRight, other.start - CLEAR_OF_TEXT_BESIDE_EM * lineSizes[line]);
+          nearRight = Math.min(nearRight, other.start - NEAR_TEXT_BESIDE_EM * lineSizes[line]);
+        } else if (other.start >= frameRight - LAYOUT_TOLERANCE &&
+          other.across + STACKED_INK_OVER_EM * lineSizes[line] > baseline - STACKED_INK_UNDER_EM * lineSizes[line] &&
+          other.across - STACKED_INK_UNDER_EM * lineSizes[line] < baseline + STACKED_INK_OVER_EM * lineSizes[line]) {
+          // Text set off the line whose ink stands in the line's band (a
+          // fraction's numerator and denominator after "softmax(", a
+          // script): the line stops where it starts. Grown past it, the
+          // words ran between the two, through the fraction's bar.
           freeRight = Math.min(freeRight, other.start);
+          nearRight = Math.min(nearRight, other.start);
         }
       }
     }
-    if (!(freeRight > frameRight + LAYOUT_TOLERANCE)) freeRight = null;
+    // (A justified paragraph keeps its frame; the room beside it is read
+    // only for the frame below.)
+    if (alignment !== "left" || !(freeRight > frameRight + LAYOUT_TOLERANCE)) freeRight = null;
+    if (!(nearRight > frameRight + LAYOUT_TOLERANCE)) nearRight = null;
+  }
+  // A centred paragraph's room: what is free on both its sides, clear of
+  // the text beside it as a paragraph set left keeps clear.
+  let centreRoom: number | null = null;
+  if (alignment === "center" && pageContent && bounds) {
+    const edges = [[bounds.left, bounds.bottom], [bounds.right, bounds.bottom], [bounds.left, bounds.top],
+      [bounds.right, bounds.top]].map(([x, y]) => {
+      const [bx, by] = applyMatrix(toBlock, x, y);
+      return bx * basis[0] + by * basis[1];
+    });
+    let rightEdge = Math.max(...edges), leftEdge = Math.min(...edges);
+    const others = otherInkedExtents(kernel, { allShows, shows, twinKeys, fonts, basis, blockMatrix });
+    for (const [line, baseline] of lineBaselines.entries()) {
+      const bottom = baseline - PDFJS_VERTICAL_SHIFT_RATIO * lineSizes[line];
+      const top = baseline + PDFJS_VERTICAL_SHIFT_RATIO * lineSizes[line];
+      for (const other of others) {
+        if (other.across < bottom || other.across > top) continue;
+        if (other.start >= frameRight - LAYOUT_TOLERANCE) {
+          rightEdge = Math.min(rightEdge, other.start - CLEAR_OF_TEXT_BESIDE_EM * lineSizes[line]);
+        } else if (other.end !== null && other.end <= frameLeft + LAYOUT_TOLERANCE) {
+          leftEdge = Math.max(leftEdge, other.end + CLEAR_OF_TEXT_BESIDE_EM * lineSizes[line]);
+        } else {
+          // Text across the paragraph's own lines, or of unknown extent: no room is proven.
+          rightEdge = frameRight;
+          leftEdge = frameLeft;
+        }
+      }
+    }
+    centreRoom = Math.max(0, Math.min(rightEdge - frameRight, frameLeft - leftEdge));
   }
   const frame = paragraphFrameHoldingItsLines(kernel, selection.item.str, characterShows, shows, styleOf, gapRatio,
-    { alignment, frameLeft, frameRight, firstLeft, restLeft }, freeRight);
+    { alignment, frameLeft, frameRight, firstLeft, restLeft }, freeRight, false, centreRoom);
+  // (The frame with all the room beside the paragraph, as near the text
+  // there as NEAR_TEXT_BESIDE_EM: the rewrite takes it only instead of a new
+  // line drawn over other text, and only for the paragraph's last line.)
+  const nearFrame = nearRight !== null
+    ? paragraphFrameHoldingItsLines(kernel, selection.item.str, characterShows, shows, styleOf, gapRatio,
+      { alignment: "left", frameLeft, frameRight, firstLeft, restLeft }, nearRight, true) : null;
   return Object.freeze({
     selection, items, plans, firstPlan, streamBytes, source, pageContent,
     shows: Object.freeze(shows), characterShows, basis, blockMatrix,
@@ -1659,10 +1771,15 @@ async function readParagraph(
       ...(lineLefts ? { lineLefts } : {}),
       firstBaseline, lineStep, lineCount, lineExtents: Object.freeze(lineExtents), bodySize,
       ...(reach[0].above > 0 ? { firstReach: reach[0].above } : {}) }),
+    lineBaselines: Object.freeze([...lineBaselines]),
+    ...(nearFrame && nearFrame.left === frame.left && nearFrame.right > frame.right + LAYOUT_TOLERANCE
+      ? { nearFrameRight: nearFrame.right } : {}),
     pens: Object.freeze(pens),
     spanStart: Math.min(shows[0].start, ...twins.map((twin) => twin.start), ...rules.map((rule) => rule.start)),
     rules: Object.freeze(rules.map((rule) => Object.freeze(rule))),
-    insertion: Math.max(enclosingTextObject(source, Math.max(shows.at(-1)!.start, ...twins.map((twin) => twin.start))).end,
+    insertion: Math.max(blockInsertion({ source, allShows, toBlock, basis, blockMatrix, bodySize,
+      spanStart: Math.min(shows[0].start, ...twins.map((twin) => twin.start), ...rules.map((rule) => rule.start)),
+      objectEnd: enclosingTextObject(source, Math.max(shows.at(-1)!.start, ...twins.map((twin) => twin.start))).end }),
       ...rules.map((rule) => rule.end)),
     pins: Object.freeze([...pins.values()]),
     allShows, twins: Object.freeze(twins), twinKeys, fonts, fontOrder: Object.freeze(fontOrder), preferred, gapRatio, keptGaps,
@@ -1671,6 +1788,74 @@ async function readParagraph(
     unreadGaps: Object.freeze(unreadGaps),
     unreadGapWidths: Object.freeze(unreadGapWidths),
   });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const BLOCK_INSERTION_REACH_BYTES = 8 * 1024;
+
+function blockInsertion(input: Readonly<{
+  source: string;
+  allShows: readonly MraiNativeParagraphRewriteShow[];
+  toBlock: Matrix;
+  basis: readonly [number, number, number, number];
+  blockMatrix: Matrix;
+  bodySize: number;
+  spanStart: number;
+  objectEnd: number;
+}>): number {
+  const { source, toBlock, basis, blockMatrix } = input;
+  const inked = input.allShows.filter((show) => show.codes.length > 0 && !show.vertical &&
+    (show.text === null || !characters(show.text).every(isReaderBlank)));
+  const placed = (show: MraiNativeParagraphRewriteShow) => {
+    const [x, y] = applyMatrix(toBlock, ...applyMatrix(show.graphicsMatrix, ...applyMatrix(show.textMatrix, 0, show.textRise)));
+    return Object.freeze({ along: x * basis[0] + y * basis[1], across: x * basis[2] + y * basis[3] });
+  };
+  let end = input.objectEnd;
+  for (let hop = 0; hop < 16; hop += 1) {
+    const before = inked.filter((show) => show.end <= end).reduce<MraiNativeParagraphRewriteShow | null>(
+      (last, show) => !last || show.start > last.start ? show : last, null);
+    const after = inked.filter((show) => show.start >= end).reduce<MraiNativeParagraphRewriteShow | null>(
+      (first, show) => !first || show.start < first.start ? show : first, null);
+    if (!before || !after) break;
+    const from = placed(before), to = placed(after);
+    // The same line: within a line's height across it (a fraction's parts
+    // stand above and below its baseline, its denominator starting left of
+    // where its numerator did), not back at the start of a line.
+    if (Math.abs(to.across - from.across) > 0.9 * input.bodySize || to.along < from.along - 3 * input.bodySize) break;
+    if (!after.graphicsMatrix.every((value, at) => Math.abs(value - blockMatrix[at]) <= 1e-9)) break;
+    let next: ReturnType<typeof enclosingTextObject>;
+    try {
+      next = enclosingTextObject(source, after.start);
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+      break;
+    }
+    // Between the two: nothing but graphics drawn under a state of their own.
+    const between = source.slice(end, next.start);
+    const operators = between.split(/[^A-Za-z0-9*'"]+/u);
+    // (No string, dictionary or inline image in it: paths, their state, a dash array.)
+    if (!/^(?:\s*q\b[^()<>]*?\bQ\b)*\s*$/u.test(between) || /\b(?:BI|BDC|BMC|EMC|BT|ET)\b/u.test(between) ||
+      operators.filter((token) => token === "q").length !== operators.filter((token) => token === "Q").length) break;
+    // (The span the record keeps for an undo grows by what it writes past.)
+    if (next.end - input.objectEnd > BLOCK_INSERTION_REACH_BYTES ||
+      next.end - input.spanStart > PARAGRAPH_REWRITE_MAX_REPLACEMENT_BYTES / 2) break;
+    end = next.end;
+  }
+  return end;
 }
 
 /** The message of the edit gates' third admission check for a copy of the
@@ -1760,6 +1945,9 @@ function paragraphAlignment(
   extents: readonly Readonly<{ left: number; right: number }>[],
   frameRight: number,
   restLeft: number,
+  /** The lines without a mark hanging after their last word (see the
+   * caller): centred lines agree by these where the mark puts one off. */
+  unmarked: readonly Readonly<{ left: number; right: number }>[] = extents,
 ): PdfNativeParagraphRewriteAlignment {
   if (extents.length < 2) return "left";
   const flush = (value: number, target: number) => Math.abs(value - target) <= ALIGNMENT_TOLERANCE;
@@ -1773,6 +1961,13 @@ function paragraphAlignment(
   const middles = extents.map((extent) => (extent.left + extent.right) / 2);
   const lefts = extents.map((extent) => extent.left);
   if (middles.every((middle) => flush(middle, middles[0])) &&
+    Math.max(...lefts) - Math.min(...lefts) > ALIGNMENT_TOLERANCE) return "center";
+  // An author's name with its footnote star: "Ashish Vaswani*" over "Google
+  // Brain" over an address stood two points off the others' axis by the
+  // star, read as set flush left, and words typed in it were set from the
+  
+  const bodies = unmarked.map((extent) => (extent.left + extent.right) / 2);
+  if (unmarked !== extents && bodies.every((middle) => flush(middle, bodies[0])) &&
     Math.max(...lefts) - Math.min(...lefts) > ALIGNMENT_TOLERANCE) return "center";
   return "left";
 }
@@ -1966,6 +2161,10 @@ interface Piece {
 interface SetLine {
   readonly start: number;
   readonly end: number;
+  /** On the line the edit starts on: where what stays of it as the page
+   * draws it ends, and this tier's own setting starts (setParagraph's kept
+   * lines); unset where the tier sets the line from its start. */
+  readonly keptUntil?: number;
   /** Where its last inked character ends: trailing blanks hang past it. */
   readonly inkEnd: number;
   readonly inkWidth: number;
@@ -2306,6 +2505,13 @@ function paragraphFrameHoldingItsLines(
   frame: Readonly<{ alignment: PdfNativeParagraphRewriteAlignment; frameLeft: number; frameRight: number;
     firstLeft: number; restLeft: number }>,
   freeRight: number | null = null,
+  /** The room beside the paragraph is taken whole, a flowing paragraph's
+   * too: asked only for the frame tried instead of a new line over other
+   * text (readParagraph's nearFrameRight). */
+  pastTheMeasure = false,
+  /** The room free on both sides of a centred paragraph (readParagraph):
+   * rows of their own lengths grow into it alike on both sides. */
+  centreRoom: number | null = null,
 ): Readonly<{ left: number; right: number }> {
   const inked = Object.freeze({ left: frame.frameLeft, right: frame.frameRight });
   const all = characters(text);
@@ -2365,7 +2571,30 @@ function paragraphFrameHoldingItsLines(
   // set it -- a date whose new digits are wider -- then stays one line
   // instead of wrapping into a new one (mirror of the replay).
   if (freeRight !== null && frame.alignment === "left" && freeRight > right) {
-    let grown = freeRight;
+    // A paragraph of several lines has a right edge its lines show: the room
+    // beside it is for that hair, not for words. Grown as far as the next
+    // line's first word allowed, the last line of a column typed onto ran
+    // 12 pt out past the column's edge where a word typed belongs on a new
+    
+    // room beside it as before.
+    // (A paragraph whose lines fill its measure, all but the last: rows of
+    // their own lengths -- an address, a list of names -- are lines a break
+    // ended, and grow as a single line does.)
+    const widest = Math.max(...lineWidths);
+    // (Two rows show no measure: the first is as wide as itself. Two rows on
+    // one axis, the second starting in from the first -- a name over its
+    // affiliation -- are rows of their own; read as a paragraph that flows,
+    // the affiliation typed two letters longer was kept to the name's width
+    // and its letters went down a line, onto the address under it
+    
+    const size = Math.max(...styles.map((style) => style.size));
+    const rowsOnOneAxis = lineCount === 2 && frame.restLeft - frame.firstLeft >= PARAGRAPH_ROWS_MIN_INSET_EM * size &&
+      Math.abs(frame.firstLeft + lineWidths[0] / 2 - (frame.restLeft + lineWidths[1] / 2)) <= PARAGRAPH_ROWS_AXIS_EM * size;
+    const flows = !pastTheMeasure && lineCount > 1 && !rowsOnOneAxis &&
+      lineWidths.slice(0, -1).every((width) => width >= PARAGRAPH_FLOWING_LINE_SHARE * widest);
+    let grown = flows
+      ? Math.min(freeRight, right + PARAGRAPH_EDGE_HAIR_EM * size)
+      : freeRight;
     for (let line = 0; line < lineCount - 1; line += 1) {
       const nextStart = lineStarts[line + 1];
       const next = pieces.find((piece) => piece.start === nextStart);
@@ -2379,6 +2608,54 @@ function paragraphFrameHoldingItsLines(
       grown = Math.min(grown, limit);
     }
     if (grown > right && holds(grown)) right = grown;
+  }
+  // A centred block of rows of their own lengths (a diagram's label, a name
+  // over its affiliation) grows alike on both sides into the room free
+  // beside it, as a text box set centred does: its widest row typed a
+  // letter longer stays one row, on the block's axis. Kept to the widest
+  // row's width, the letter went down to a row of its own -- or, written in
+  // place, the row grew from its left edge off the axis. Never so far that a
+  // row takes up the first word of the row after it; a centred paragraph
+  // whose lines fill its measure keeps the measure.
+  if (frame.alignment === "center" && centreRoom !== null && centreRoom > LAYOUT_TOLERANCE && lineCount > 1) {
+    const widest = Math.max(...lineWidths);
+    const flows = lineCount > 2 &&
+      lineWidths.slice(0, -1).every((width) => width >= PARAGRAPH_FLOWING_LINE_SHARE * widest);
+    if (!flows) {
+      const size = Math.max(...styles.map((style) => style.size));
+      let width = right - left + 2 * centreRoom;
+      // A row the source ends short of the block's width by more than the
+      // next row's first word would take is ended by a break of its own (a
+      // label's "2100" over "& beyond"), not by the measure: it bounds no
+      // growth, and is a break still in the frame grown (setParagraph keeps
+      // it so: withSourceHardBreaks).
+      const hardStarts: number[] = [];
+      for (let line = 0; line < lineCount - 1; line += 1) {
+        const nextStart = lineStarts[line + 1];
+        const next = pieces.find((piece) => piece.start === nextStart);
+        if (!next) {
+          width = right - left;
+          break;
+        }
+        const blank = pieces.find((piece) => piece.blank && piece.end === nextStart);
+        if (right - left - lineWidths[line] > (blank?.width ?? 0) + next.width + 0.5 * size) {
+          hardStarts.push(nextStart);
+          continue;
+        }
+        width = Math.min(width, lineWidths[line] + (blank?.width ?? 0) + next.width - 2 * LAYOUT_TOLERANCE);
+      }
+      const grow = (width - (right - left)) / 2;
+      if (grow > LAYOUT_TOLERANCE) {
+        const [keptLeft, keptRight] = [left, right];
+        left -= grow;
+        right += grow;
+        const held = hardStarts.length
+          ? matches(setParagraphLines(kernel, own, styles, blanks, availableIn(right), hardStarts))
+          : holds(right);
+        if (!held) [left, right] = [keptLeft, keptRight];
+        else if (hardStarts.length) return Object.freeze({ left, right });
+      }
+    }
   }
   if (left === inked.left && right === inked.right) return inked;
   if (!holds(right)) return inked;
@@ -2443,6 +2720,9 @@ function setParagraph(
   layout: ParagraphLayout;
   notices: readonly PdfNativeEditNotice[];
   fontsUsed: ReadonlySet<string>;
+  /** The characters the block draws in the substitute face: those of the
+   * lines it sets, not of the lines it draws again as the page drew them. */
+  substituteCharacters: ReadonlySet<string>;
   /** The text is the source's and every line starts where the source's did. */
   sameBreaks: boolean;
   /** What moves the glyphs and rules standing in the gaps the edit moved. */
@@ -2541,6 +2821,105 @@ function setParagraph(
   let suffix = 0;
   while (suffix < original.length - prefix && suffix < replacement.length - prefix &&
     original[original.length - 1 - suffix] === replacement[replacement.length - 1 - suffix]) suffix += 1;
+  // What the edit leaves alone stays as the page draws it. The lines above the
+  // first word the edit touches, and what stands before that word on its own
+  // line, are drawn again show by show: each where it stood, with the array it
+  // was drawn with (its kerning, a fraction's numerator over its denominator).
+  // This tier sets the text from that word on, and stops where its lines fall
+  // back onto the source's (keptLines). Set whole, a paragraph typed onto at
+  // its end came back with every line spaced again and the formula on its
+  // third line taken apart, its radical 9 pt from the bar drawn over it
+  
+  // size or a line step asked of the paragraph sets every line of it.
+  const lineOfCharacter = (index: number) => paragraph.shows[characterShowAt(index)].line;
+  const anchor = ((): Readonly<{
+    /** The first character this tier sets, and the source line it is on. */
+    at: number;
+    line: number;
+    /** Where it stands along the line, when it does not start its line. */
+    origin: number | null;
+    /** The show it starts inside, and the code of that show it is drawn by:
+     * the show's glyphs before it stay. */
+    cut: Readonly<{ owner: number; code: number }> | null;
+  }> | null => {
+    if (formats || substituteWhole || paragraph.frameRequested || paragraph.sourceLineStep !== undefined ||
+      paragraph.sizeScale !== undefined || opening !== openingKept || original.length === 0) return null;
+    for (let index = 1; index < original.length; index += 1) {
+      if (lineOfCharacter(index) < lineOfCharacter(index - 1)) return null;
+    }
+    const inkOf = (index: number) => paragraph.characterInk.get(index + opening);
+    // A rule is drawn again under the characters it ruled, by where they are
+    // inked: every character's place is then known.
+    if ((paragraph.rules.length || paragraph.shows.some((show) => show.linkRule)) &&
+      original.some((character, index) => !isBlank(character) && !inkOf(index))) return null;
+    // The character the edit touches first: the one typed against, or the
+    // first one changed.
+    let touched = prefix > 0 && !isBlank(original[prefix - 1]) ? prefix - 1 : prefix;
+    // Words typed at the end of a line, a break after them where the next
+    // source line starts (the break the editor's rows put there, or one
+    // typed): they are typed against that line's last word, not against the
+    // line below, which stays as it is.
+    // (Read from the break, not from the common prefix: words typed that
+    // begin as the next line does -- "ab" before "avaswani" -- share a
+    // letter with it.)
+    const grown = replacement.length - original.length;
+    const lineStartAbove = grown > 0 ? forced.map((at) => at - grown).find((start) =>
+      start > 0 && start < original.length && lineOfCharacter(start) > lineOfCharacter(start - 1) &&
+      original.slice(start).every((character, index) => character === replacement[start + grown + index]) &&
+      original.slice(0, start - 1).every((character, index) => character === replacement[index])) : undefined;
+    if (lineStartAbove !== undefined) {
+      touched = lineStartAbove - 1;
+      while (touched > 0 && isBlank(original[touched])) touched -= 1;
+    }
+    while (touched < original.length && isBlank(original[touched])) touched += 1;
+    if (touched >= original.length) {
+      touched = original.length - 1;
+      while (touched > 0 && isBlank(original[touched])) touched -= 1;
+    }
+    const line = lineOfCharacter(touched);
+    let lineStart = touched;
+    while (lineStart > 0 && lineOfCharacter(lineStart - 1) === line) lineStart -= 1;
+    // The word it is in, as far back as one show draws it: what another show
+    // draws before it stays (the fraction a sentence ends with, before its
+    // full stop: set again with the stop, its radical moved 9 pt).
+    let word = touched;
+    while (word > lineStart && !isBlank(original[word - 1]) &&
+      characterShowAt(word - 1) === characterShowAt(touched)) word -= 1;
+    const whole = Object.freeze({ at: lineStart, line, origin: null, cut: null });
+    // A line set centred or flush right moves as a whole when its width does.
+    if (word === lineStart || paragraph.layout.alignment === "center" || paragraph.layout.alignment === "right") return whole;
+    const ink = inkOf(word);
+    if (!ink) return whole;
+    const owner = characterShowAt(word);
+    const before = new Set<number>();
+    for (let index = lineStart; index < word; index += 1) before.add(characterShowAt(index));
+    // No show draws on both sides of the word's start but the word's own, and
+    // nothing kept stands past where the word starts.
+    for (let index = word; index < original.length && lineOfCharacter(index) === line; index += 1) {
+      if (characterShowAt(index) !== owner && before.has(characterShowAt(index))) return whole;
+    }
+    for (const kept of before) {
+      if (kept === owner) continue;
+      const inked = paragraph.shows[kept].inked;
+      if (inked && inked.end > ink[0] + LAYOUT_TOLERANCE) return whole;
+    }
+    if (!before.has(owner)) return Object.freeze({ at: word, line, origin: ink[0], cut: null });
+    // The word starts inside a show: its glyphs and the text's characters go
+    // one to one (characterInk), so the glyph the word starts at is known.
+    const own = paragraph.shows[owner];
+    const unit = own.font.codeUnitBytes;
+    const drawn = showGlyphs(kernel, own.show, own.font).flatMap((glyph, index) =>
+      !/^\s*$/u.test(glyph.text ?? "x") &&
+      (!own.partial || (index * unit >= own.partial.codeStart && index * unit < own.partial.codeEnd)) ? [index] : []);
+    let rank = 0;
+    for (let index = lineStart; index < word; index += 1) {
+      if (characterShowAt(index) === owner && !isBlank(original[index])) rank += 1;
+    }
+    if (rank < 1) return Object.freeze({ at: word, line, origin: ink[0], cut: null });
+    if (drawn.length !== own.ink.length || rank >= drawn.length ||
+      Math.abs(own.ink[rank][0] - ink[0]) > 1e-9 || own.ink[rank - 1][1] > ink[0] + LAYOUT_TOLERANCE) return whole;
+    return Object.freeze({ at: word, line, origin: ink[0], cut: Object.freeze({ owner, code: drawn[rank] * unit }) });
+  })();
   // A gap the reader read as no text is kept only by the kerning this tier
   // drops (readParagraph's unreadGaps). Where the edit leaves the place of
   // the gap between two characters of the new text that are not blanks --
@@ -2559,8 +2938,10 @@ function setParagraph(
   // glyph stands in it in a display formula, the radical before a π: the box
   // read none only because that glyph was read between its two sides.)
   const heldGaps = new Map<number, number>();
+  // (A gap in what stays as the page draws it stays with it.)
   const closedGaps = paragraph.unreadGaps.flatMap((gap, index) =>
-    gapClosed(gap) ? [{ boundary: gap - opening, width: paragraph.unreadGapWidths[index] }] : []);
+    gapClosed(gap) && !(anchor && gap - opening <= anchor.at)
+      ? [{ boundary: gap - opening, width: paragraph.unreadGapWidths[index] }] : []);
   if (closedGaps.length) {
     if (forced.length) {
       refuse("A line of the paragraph leaves a gap between two words that its text does not read as a space.");
@@ -2856,18 +3237,167 @@ function setParagraph(
   const pageRight = (() => {
     const bounds = paragraph.pageContent ? kernel.visiblePageBounds(paragraph.selection.pageNumber) : null;
     if (!bounds) return Infinity;
-    // The page's right edge along the lines (the block's own u, as
-    // checkExtraLines reads other shows into it).
-    const [x, y] = applyMatrix(invertMatrix(paragraph.blockMatrix), bounds.right, (bounds.bottom + bounds.top) / 2);
-    const along = x * paragraph.basis[0] + y * paragraph.basis[1];
+    // The page's edge along the lines (the block's own u, as checkExtraLines
+    // reads other shows into it): the furthest of its corners that way, as
+    // readParagraph reads the room beside the paragraph (its freeRight) --
+    // the right edge of an upright line, the edge a turned line runs to.
+    const toBlock = invertMatrix(paragraph.blockMatrix);
+    const along = Math.max(...[[bounds.left, bounds.bottom], [bounds.right, bounds.bottom],
+      [bounds.left, bounds.top], [bounds.right, bounds.top]].map(([px, py]) => {
+      const [x, y] = applyMatrix(toBlock, px, py);
+      return x * paragraph.basis[0] + y * paragraph.basis[1];
+    }));
     return Number.isFinite(along) ? along : Infinity;
   })();
-  const frameRightOf = (line: number) => line >= layout.lineCount ? Math.min(layout.frameRight, pageRight)
-    : layout.frameRight;
+  // So does a line the paragraph has, set again. Its frame can stand past
+  // the page: the frame is widened to hold the paragraph's lines by this
+  // tier's own measure of them (paragraphFrameHoldingItsLines), and that
+  // measure can be far wider than the page draws a line -- a contents line's
+  // leader, dots under a character spacing the reader spells with a blank
+  // after each ("Introduction . . . . 4", 255 pt on the page, 425 pt
+  // measured, in a column that ends 42 pt from the paper's edge). In that
+  // frame a word typed after the page number "fitted" on its line, the
+  // check of a line against the page (below) is only made of a line wider
+  // than its frame, and the word was written off the paper: saved, in the
+  
+  
+  // word goes down a line as a text block's does (Acrobat, WPS) and a line
+  // that still cannot stay on the page is refused (below) -- further only
+  // as far as the paragraph's own lines already run past it, which stay
+  // where the page draws them.
+  const ownRight = Math.max(...layout.lineExtents.map((extent) => extent.right));
+  const frameRightOf = (line: number) => Math.min(layout.frameRight,
+    line >= layout.lineCount ? pageRight : Math.max(pageRight, ownRight));
   const available = (line: number) => layout.alignment === "center" || layout.alignment === "right"
     ? frameRightOf(line) - layout.frameLeft
     : frameRightOf(line) - lineLeftOf(layout, line);
-  let lines = setParagraphLines(kernel, replacement, styles, blanks, available, forced);
+  // The lines that stay as the page draws them (the anchor above): each
+  // source line's first character in the text, and a source line as a set
+  // line. None where the edit changed the paragraph's indents (a list marker
+  // given or taken off), or the new text draws nothing from the anchor on.
+  const kept = anchor !== null && layout === paragraph.layout &&
+    replacement.slice(anchor.at).some((character) => !isBlank(character)) ? (() => {
+      const lineFirst: number[] = [];
+      for (let index = 0; index < original.length; index += 1) {
+        const line = lineOfCharacter(index);
+        if (lineFirst[line] === undefined) lineFirst[line] = index;
+      }
+      if (lineFirst[0] !== 0 || lineFirst.length !== layout.lineCount) return null;
+      for (let line = 0; line < layout.lineCount; line += 1) if (lineFirst[line] === undefined) return null;
+      const lineEnd = (line: number) => lineFirst[line + 1] ?? original.length;
+      const sourceLine = (line: number, shift: number): SetLine => {
+        let inkEnd = lineEnd(line);
+        while (inkEnd > lineFirst[line] && isBlank(original[inkEnd - 1])) inkEnd -= 1;
+        const extent = layout.lineExtents[line];
+        return Object.freeze({ start: lineFirst[line] + shift, end: lineEnd(line) + shift, inkEnd: inkEnd + shift,
+          inkWidth: extent.right - extent.left });
+      };
+      return Object.freeze({ ...anchor, lineFirst, sourceLine });
+    })() : null;
+  // Where set lines fall back onto the source's: the first of them, from the
+  // edit's own line on, that starts where a source line starts with nothing
+  // but kept text from there to the paragraph's end. It and the lines after
+  // it are that source line and the ones after it, as the page draws them.
+  const keptTail = (set: readonly SetLine[]): Readonly<{ at: number; line: number }> | null => {
+    if (!kept || suffix <= 0) return null;
+    const moved = replacement.length - original.length;
+    const unchanged = replacement.length - suffix;
+    for (let index = Math.max(1, kept.line); index < set.length; index += 1) {
+      let first = set[index].start;
+      while (first < set[index].end && isBlank(replacement[first])) first += 1;
+      if (first < unchanged || first < kept.at || set[index].keptUntil !== undefined) continue;
+      const line = kept.lineFirst.indexOf(first - moved);
+      // A paragraph run round a picture keeps each line's own edge: its lines
+      // stay only where they are.
+      if (line < 1 || (layout.lineLefts?.length && line !== index)) continue;
+      return Object.freeze({ at: index, line });
+    }
+    return null;
+  };
+  const withKeptTail = (set: SetLine[]): SetLine[] => {
+    const tail = keptTail(set);
+    if (!kept || !tail) return set;
+    const moved = replacement.length - original.length;
+    return [...set.slice(0, tail.at),
+      ...Array.from({ length: layout.lineCount - tail.line }, (_, index) => kept.sourceLine(tail.line + index, moved))];
+  };
+  // The paragraph's lines: the source's own above the anchor, this tier's
+  // from it on (in the room its line has left beside what stays on it; a word
+  // that no longer fits there starts the next line), the source's again
+  // where they fall back onto them.
+  const setLines = (
+    styleSet: readonly CharacterStyle[],
+    blankSet: readonly (Readonly<{ width: number }> | null)[],
+    room: (line: number) => number,
+    splitWords = false,
+    kernSet?: readonly number[],
+  ): SetLine[] => {
+    if (!kept) return setParagraphLines(kernel, replacement, styleSet, blankSet, room, forced, splitWords, kernSet);
+    const { at, line: own } = kept;
+    const head = Array.from({ length: own }, (_, line) => kept.sourceLine(line, 0));
+    const from = (start: number, first: number, taken: number, breakWords: boolean) => setParagraphLines(kernel,
+      replacement.slice(start), styleSet.slice(start), blankSet.slice(start),
+      (line) => room(first + line) - (line === 0 ? taken : 0),
+      forced.filter((stop) => stop > start).map((stop) => stop - start), breakWords, kernSet?.slice(start))
+      .map((line) => Object.freeze({ start: line.start + start, end: line.end + start, inkEnd: line.inkEnd + start,
+        inkWidth: line.inkWidth }));
+    const lineStart = kept.lineFirst[own];
+    if (kept.origin === null) {
+      // The edit's line set whole (a centred or right-aligned one, which moves
+      // as its width changes) -- unless every character of it is the source's
+      // and it ends where the source's ended: what was typed went down to the
+      // next line, and the line is the page's own, drawn again as it stands.
+      // Set anew it was centred by this tier's measure of it, and a label's
+      // last row moved 0.8 pt under the row typed after it (IPCC SPM.1's
+      
+      const set = from(lineStart, own, 0, splitWords);
+      const source = kept.sourceLine(own, 0);
+      const stays = set.length > 1 && prefix >= source.inkEnd && set[0].start === source.start &&
+        set[0].inkEnd === source.inkEnd;
+      return withKeptTail([...head,
+        ...(stays ? [Object.freeze({ ...source, end: set[0].end, keptUntil: set[0].end })] : [set[0]]), ...set.slice(1)]);
+    }
+    const taken = kept.origin - lineLeftOf(layout, own);
+    const beside = from(at, own, taken, false);
+    const fits = !(beside[0].inkWidth > room(own) - taken + LAYOUT_TOLERANCE);
+    const set = fits && splitWords ? from(at, own, taken, true) : beside;
+    // A justified line is filled to its frame by its gaps, and what stays of
+    // it keeps the gaps it has: where what this tier sets after it cannot
+    // fill the line -- its first word no longer fits there, or it is one
+    // word that ends short of the frame -- the whole line is set again, as
+    // its paragraph's other lines reach the frame. (Left a word short, the
+    // line read as the end of a paragraph inside one.)
+    const filled = layout.alignment === "distribute" || (layout.alignment === "justify" &&
+      (fits ? set.length > 1 : true) && own < layout.lineCount - 1);
+    if (filled && (!fits || (!replacement.slice(at, set[0].inkEnd).some(isBlank) &&
+      taken + set[0].inkWidth < room(own) - LAYOUT_TOLERANCE))) {
+      return withKeptTail([...head, ...from(lineStart, own, 0, splitWords)]);
+    }
+    if (!fits) {
+      // The word the edit starts in no longer fits beside what stays on its
+      // line: it starts the next, and the line is what stays of it.
+      let inkEnd = at;
+      while (inkEnd > lineStart && isBlank(original[inkEnd - 1])) inkEnd -= 1;
+      return withKeptTail([...head, Object.freeze({ start: lineStart, end: at, inkEnd, inkWidth: taken, keptUntil: at }),
+        ...from(at, own + 1, 0, splitWords)]);
+    }
+    return withKeptTail([...head, Object.freeze({ start: lineStart, end: set[0].end, inkEnd: set[0].inkEnd,
+      inkWidth: taken + set[0].inkWidth, keptUntil: at }), ...set.slice(1)]);
+  };
+  /** Where this tier's own setting of line `index` of `set` starts: the
+   * line's end where the whole line stays as the page draws it. */
+  const setFromIn = (set: readonly SetLine[], tail: ReturnType<typeof keptTail>, index: number): number => {
+    const line = set[index];
+    if (!kept) return line.start;
+    if (index < kept.line || (tail && index >= tail.at)) return line.end;
+    return index === kept.line && line.keptUntil !== undefined ? Math.min(line.keptUntil, line.end) : line.start;
+  };
+  /** A line of `set` that stays whole as the page draws it. */
+  const staysIn = (set: readonly SetLine[]) => {
+    const tail = keptTail(set);
+    return (index: number) => setFromIn(set, tail, index) >= set[index].end;
+  };
+  let lines = setLines(styles, blanks, available);
   // The gaps kept where the line left them, its words staying where they stood
   // (one ratio for all moved a TeX line's formulas a point or two), unless that
   // takes a line more than the one ratio does: this tier sets words without the
@@ -2880,8 +3410,8 @@ function setParagraph(
       return gap === undefined ? blank : Object.freeze({ ...blank!, width: gap });
     });
     if (gapsKept.some((blank, index) => blank !== blanks[index])) {
-      const kept = setParagraphLines(kernel, replacement, styles, gapsKept, available, forced);
-      if (kept.length <= lines.length) {
+      const gapLines = setLines(styles, gapsKept, available);
+      if (gapLines.length <= lines.length) {
         gapsKept.forEach((blank, index) => {
           if (blank === blanks[index]) return;
           blanks[index] = blank;
@@ -2895,7 +3425,7 @@ function setParagraph(
             blanks[index] = Object.freeze({ ...blankForm(kernel, styles[index], paragraph.gapRatio), width: blank!.width });
           }
         });
-        lines = kept;
+        lines = gapLines;
       }
     }
   }
@@ -2914,8 +3444,8 @@ function setParagraph(
     if (Math.abs(kern) >= 0.01 && Math.abs(kern) < PDFJS_TRACKING_SPACE_FACTOR * show.size) kerns[index] = kern;
   }
   if (kerns.some(Boolean)) {
-    const kept = setParagraphLines(kernel, replacement, styles, blanks, available, forced, false, kerns);
-    if (kept.length <= lines.length) lines = kept;
+    const kerned = setLines(styles, blanks, available, false, kerns);
+    if (kerned.length <= lines.length) lines = kerned;
     else kerns.fill(0);
   }
   // The room beside a flush-left paragraph (readParagraph's freeRight) keeps
@@ -2924,10 +3454,8 @@ function setParagraph(
   // that left fewer lines in the grown frame keeps that many: a table header
   // "Ballots / Completed" retyped "Votes" came back as one line run past its
   
-  const ownRight = Math.max(...layout.lineExtents.map((extent) => extent.right));
   if (layout.alignment === "left" && !paragraph.frameRequested && layout.frameRight > ownRight + LAYOUT_TOLERANCE) {
-    const own = setParagraphLines(kernel, replacement, styles, blanks,
-      (line: number) => ownRight - lineLeftOf(layout, line), forced, false, kerns);
+    const own = setLines(styles, blanks, (line: number) => ownRight - lineLeftOf(layout, line), false, kerns);
     if (lines.length < Math.min(own.length, layout.lineCount)) lines = own;
   }
   // A paragraph justified line by line by its horizontal scale (each of its
@@ -2961,7 +3489,7 @@ function setParagraph(
     if (restyled.some((style, index) => style !== styles[index])) {
       const restyledBlanks = replacement.map((character, index) => restyled[index] === styles[index] ? blanks[index]
         : isBlank(character) ? blankForm(kernel, restyled[index], paragraph.gapRatio) : null);
-      const again = setParagraphLines(kernel, replacement, restyled, restyledBlanks, available, forced, false, kerns);
+      const again = setLines(restyled, restyledBlanks, available, false, kerns);
       if (again.length === lines.length && again.every((set, index) => set.start === lines[index].start &&
         set.end === lines[index].end)) {
         restyled.forEach((style, index) => { styles[index] = style; blanks[index] = restyledBlanks[index]; });
@@ -2978,8 +3506,8 @@ function setParagraph(
   // A word that cannot run on so (on a line the paragraph did not have, or
   // off the page) breaks at a character instead, as Word breaks a word
   // wider than its line.
-  const runsOnPastFrame = (set: readonly SetLine[], baselines = baselinesOf(set)) => set.every((line, index) => {
-    if (!(line.inkWidth > available(index) + LAYOUT_TOLERANCE)) return true;
+  const runsOnPastFrame = (set: readonly SetLine[], baselines = baselinesOf(set), stays = staysIn(set)) => set.every((line, index) => {
+    if (stays(index) || !(line.inkWidth > available(index) + LAYOUT_TOLERANCE)) return true;
     const bounds = paragraph.pageContent ? kernel.visiblePageBounds(paragraph.selection.pageNumber) : null;
     if (index >= layout.lineCount || !bounds) return false;
     const width = line.inkWidth;
@@ -2996,15 +3524,50 @@ function setParagraph(
     });
   });
   if (!runsOnPastFrame(lines)) {
-    const split = setParagraphLines(kernel, replacement, styles, blanks, available, forced, true, kerns);
-    if (split.every((line, index) => !(line.inkWidth > available(index) + LAYOUT_TOLERANCE))) lines = split;
+    const split = setLines(styles, blanks, available, true, kerns);
+    const stays = staysIn(split);
+    if (split.every((line, index) => stays(index) || !(line.inkWidth > available(index) + LAYOUT_TOLERANCE))) lines = split;
   }
   // Set lower for its larger characters only as far as the paragraph's last
   // line then stays clear of the text below it: the page cannot push the
   // paragraph under it down, as Word would, and a lowered last line was drawn
   
   // larger word reaches up into its own paragraph's line above.
-  const lineBaselines = (() => {
+  // Where the lines stand with lines kept as the page draws them: a kept line
+  // on its own baseline, a line set again on the baseline the source gave the
+  // line it is (the page spaces a line under a fraction further down than
+  // the step, and this tier's measure of what reaches past the body text is
+  // not the producer's), lower only by what its characters now reach further
+  // than the source's did there; a line the paragraph did not have a step
+  // under the one before; and the lines fallen back onto the source's as far
+  // under the line before them as the source set them.
+  const keptBaselines = (): number[] => {
+    const source = paragraph.lineBaselines;
+    const tail = keptTail(lines);
+    const reachOf = (line: number) => lineReachOf(paragraph.shows.filter((show) => show.line === line && show.inked)
+      .map((show) => ({ size: show.size, rise: show.rise })), layout.bodySize);
+    const reach = lines.map((line) => lineReachOf(styles.slice(line.start, line.end), layout.bodySize));
+    const baselines: number[] = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      if (tail && index >= tail.at) {
+        baselines.push(source[tail.line + index - tail.at] + (baselines[tail.at - 1] - source[tail.line - 1]));
+        continue;
+      }
+      if (index === 0 || index <= kept!.line) {
+        baselines.push(source[index]);
+        continue;
+      }
+      const reached = reach[index].above + reach[index - 1].below;
+      if (index < source.length) {
+        const grown = reached - (reachOf(index).above + reachOf(index - 1).below);
+        baselines.push(baselines[index - 1] - (source[index - 1] - source[index]) - leading * (grown > LAYOUT_TOLERANCE ? grown : 0));
+      } else {
+        baselines.push(baselines[index - 1] - layout.lineStep - leading * reached);
+      }
+    }
+    return baselines;
+  };
+  const lineBaselines = kept ? keptBaselines() : (() => {
     const lowered = baselinesOf(lines);
     // Evenly stepped from where the source's own first line stands: its
     // characters' reach (a footnote mark raised a little past the floor)
@@ -3061,8 +3624,10 @@ function setParagraph(
     }
     return at(share);
   })();
+  const keptLineTail = keptTail(lines);
+  const setFromOf = (index: number) => setFromIn(lines, keptLineTail, index);
   for (const [index, line] of lines.entries()) {
-    if (line.inkWidth > available(index) + LAYOUT_TOLERANCE) {
+    if (setFromOf(index) < line.end && line.inkWidth > available(index) + LAYOUT_TOLERANCE) {
       const bounds = paragraph.pageContent ? kernel.visiblePageBounds(paragraph.selection.pageNumber) : null;
       if (index >= layout.lineCount || !bounds) refuse("A word of the new text is wider than the paragraph's frame.");
       const width = line.inkWidth;
@@ -3092,10 +3657,17 @@ function setParagraph(
   const placeAt = (u: number, v: number, slant: number) =>
     `${[b0, b1, b2 + slant * b0, b3 + slant * b1, u * b0 + v * b2, u * b1 + v * b3].map(formatNumber).join(" ")} Tm\n`;
   const state: { font: string | null; size: number | null; spacing: number | null;
-    scale: number | null; rise: number | null; color: string | null; bold: boolean; strokeColor: string | null } =
-    { font: null, size: null, spacing: null, scale: null, rise: null, color: null, bold: false, strokeColor: null };
-  // The text state a run is drawn under: each part set where it changes.
-  const applyState = (style: CharacterStyle) => {
+    scale: number | null; rise: number | null; color: string | null; bold: boolean; strokeColor: string | null;
+    word: number } =
+    { font: null, size: null, spacing: null, scale: null, rise: null, color: null, bold: false, strokeColor: null,
+      word: 0 };
+  // The text state a run is drawn under: each part set where it changes. (A
+  // word spacing only under a show kept as the page draws it.)
+  const applyState = (style: CharacterStyle, word = 0) => {
+    if (state.word !== word) {
+      block += `${formatNumber(word)} Tw\n`;
+      state.word = word;
+    }
     if (state.font !== style.fontName || state.size !== style.size) {
       block += `/${style.fontName} ${formatNumber(style.size)} Tf\n`;
       state.font = style.fontName;
@@ -3138,6 +3710,7 @@ function setParagraph(
   };
   const allCodes: number[] = [];
   const fontsUsed = new Set<string>();
+  const substituteCharacters = new Set<string>();
   let advance = 0;
   // The rules the formats ask (a run's characters underlined or struck
   // through), each under the run's inked stretch on its line, drawn as the
@@ -3154,6 +3727,71 @@ function setParagraph(
       textMatrix: [b0, b1, b2, b3, at * b0 + across * b2, at * b1 + across * b3],
       fontSize: style.size, advance: along, color: style.color,
     }, kind));
+  // A show kept as the page draws it (codes `from` to `to` of it), its line
+  // moved `drop` across the lines: as the array it was drawn with (its strings
+  // and the numbers between them), from where its first glyph of them stood,
+  // under the state the source drew it in -- said the way this block says its
+  // own runs (the size in the font operator, along the paragraph's basis), so
+  // the reader reads on from a kept show into a run set after it as it read
+  // the line before: said in the source's own terms, a line whose text matrix
+  // holds its size came back as three items, its last word a font size apart
+  // from the words before it (a slide set sideways). What the reader measures
+  // by stays the source's: a text matrix that stretches the line stretches it
+  // here, not a Tz (the reader measures a gap against the matrix's scale, and
+  // a line at 1.02 drawn again at 102 Tz read as two items at a gap of
+  // 0.6 em: Attention p1's abstract), and a show placed off its line stays
+  // placed there, not on the line under a rise (the reader takes a glyph
+  // moved by a rise as still on its line: a subscript drawn again by a rise
+  // read with a space after it that the page never read, p4's "dk.").
+  const toBlockSpace = invertMatrix(paragraph.blockMatrix);
+  const keptShow = (owned: OwnedShow, from: number, to: number, drop: number) => {
+    const { show, font } = owned;
+    const unit = font.codeUnitBytes;
+    const first = showGlyphs(kernel, show, font)[from / unit];
+    if (!first || !(to > from) || !(show.fontSize > 0)) return null;
+    const counts = show.segmentCodeCounts.length ? show.segmentCodeCounts : [show.codes.length];
+    const elements: string[] = [];
+    let offset = 0;
+    let pending = 0;
+    for (const [segment, count] of counts.entries()) {
+      const start = Math.max(offset, from), end = Math.min(offset + count, to);
+      if (end > start) {
+        if (pending !== 0 && elements.length) elements.push(formatNumber(pending));
+        pending = 0;
+        elements.push(hexCodes(show.codes.slice(start, end)));
+        allCodes.push(...show.codes.slice(start, end));
+      }
+      offset += count;
+      if (segment < counts.length - 1 && offset > from && offset < to) pending += show.segmentAdjustments[segment] ?? 0;
+    }
+    if (!elements.length) return null;
+    fontsUsed.add(show.fontName);
+    // The show's text space in the block's: its size taken out of it.
+    const across = owned.size / show.fontSize;
+    const stretch = show.horizontalScale !== 0 ? owned.horizontalScale / show.horizontalScale : 1;
+    if (!(across > 0) || !(stretch > 0) || !Number.isFinite(across) || !Number.isFinite(stretch)) return null;
+    const style: CharacterStyle = Object.freeze({ fontName: show.fontName, font, preferred: NO_PREFERRED_CODES,
+      size: owned.size, characterSpacing: show.characterSpacing * across, horizontalScale: show.horizontalScale,
+      rise: show.textRise * across, slant: owned.slant, color: owned.color, twin: null, syntheticBold: owned.stroked });
+    const linear = composeMatrix(composeMatrix(show.textMatrix, show.graphicsMatrix), toBlockSpace);
+    // (The numbers before its first glyph are in where it is placed.)
+    const [x, y] = applyMatrix(linear, first.start * (show.horizontalScale / 100), 0);
+    return Object.freeze({ style, word: show.wordSpacing * across, array: elements.join(" "),
+      place: (du: number, dv: number) => `${[b0 * stretch, b1 * stretch, b2 + owned.slant * b0, b3 + owned.slant * b1,
+        x + du * b0 + (dv + drop) * b2, y + du * b1 + (dv + drop) * b3].map(formatNumber).join(" ")} Tm\n` });
+  };
+  // The characters each owned show draws, in the text.
+  const showCharacters = new Map<number, number[]>();
+  if (kept) {
+    for (let index = 0; index < original.length; index += 1) {
+      const own = showCharacters.get(characterShowAt(index));
+      if (own) own.push(index);
+      else showCharacters.set(characterShowAt(index), [index]);
+    }
+  }
+  // The parts of the block that draw kept shows: no part of what this tier
+  // set, and left out of what is read back.
+  const keptRanges: [number, number][] = [];
   // Where each line inks the page along the paragraph's lines: its runs of
   // inked characters, the blanks between them left out.
   const lineSpans: [number, number][][] = [];
@@ -3163,6 +3801,60 @@ function setParagraph(
       : layout.alignment === "center" ? (layout.frameLeft + layout.frameRight) / 2 - width / 2
         : lineLeftOf(layout, lineIndex);
     const v = lineBaselines[lineIndex];
+    // What of the line stays as the page draws it: the whole of a line above
+    // the anchor's or fallen back onto the source's, the shows before the
+    // anchor on its own line.
+    const setFrom = setFromOf(lineIndex);
+    const stays = setFrom >= line.end;
+    const sourceLine = !kept || setFrom <= line.start ? null
+      : keptLineTail && lineIndex >= keptLineTail.at ? keptLineTail.line + lineIndex - keptLineTail.at : lineIndex;
+    if (kept && sourceLine !== null) {
+      const sourceBaseline = paragraph.lineBaselines[sourceLine];
+      // (The anchor's own line whole, where it stays whole: setLines.)
+      const whole = sourceLine !== kept.line || (keptLineTail !== null && lineIndex >= keptLineTail.at) ||
+        (kept.origin === null && stays);
+      const drawn: NonNullable<ReturnType<typeof keptShow>>[] = [];
+      const twins: { drawn: NonNullable<ReturnType<typeof keptShow>>; twin: readonly [number, number] }[] = [];
+      for (const [owner, owned] of paragraph.shows.entries()) {
+        if (owned.line !== sourceLine) continue;
+        const from = owned.partial?.codeStart ?? 0;
+        let to = owned.partial?.codeEnd ?? owned.show.codes.length;
+        if (!whole) {
+          const own = showCharacters.get(owner);
+          if (kept.cut?.owner === owner) to = kept.cut.code;
+          else if (own ? own.some((index) => index >= kept.at)
+            : !(owned.inked && kept.origin !== null && owned.inked.end <= kept.origin + LAYOUT_TOLERANCE)) continue;
+        }
+        const show = keptShow(owned, from, to, v - sourceBaseline);
+        if (!show) continue;
+        drawn.push(show);
+        if (owned.twin) twins.push({ drawn: show, twin: owned.twin });
+      }
+      if (drawn.length) {
+        const rangeStart = block.length;
+        for (const show of drawn) {
+          block += show.place(0, 0);
+          applyState(show.style, show.word);
+          block += `[${show.array}] TJ\n`;
+        }
+        if (twins.length) {
+          block += "/Span << /ActualText <> >> BDC\n";
+          for (const { drawn: show, twin } of twins) {
+            block += show.place(twin[0], twin[1]);
+            applyState(show.style, show.word);
+            block += `[${show.array}] TJ\n`;
+          }
+          block += "EMC\n";
+        }
+        // The state they were drawn under ends with them: what this tier sets
+        // next says its own, whole.
+        if (state.bold) block += "0 Tr\n";
+        if (state.word !== 0) block += "0 Tw\n";
+        Object.assign(state, { font: null, size: null, spacing: null, scale: null, rise: null, color: null, bold: false,
+          strokeColor: null, word: 0 });
+        keptRanges.push([rangeStart, block.length]);
+      }
+    }
     // A rise in a leaned frame moves the glyph along the leaned up axis, a
     // slant times the rise to the right of the pen: a run both leaned and
     // raised is placed back by that much, so its glyphs stand on from the
@@ -3170,11 +3862,12 @@ function setParagraph(
     // word stood 1.3 pt off it, and the next edit of the paragraph read
     
     const leanShift = (style: CharacterStyle) => style.slant * style.rise;
-    let lineSlant = styles[line.start].slant;
-    let lineLean = leanShift(styles[line.start]);
-    block += placeAt(u - lineLean, v, lineSlant);
-    // How far the pen has moved along this line.
-    let pen = 0;
+    const setStyle = styles[Math.min(setFrom, styles.length - 1)];
+    let lineSlant = setStyle.slant;
+    let lineLean = leanShift(setStyle);
+    // How far the pen has moved along this line: past what stays on it.
+    let pen = setFrom > line.start && kept && kept.origin !== null ? kept.origin - u : 0;
+    if (!stays) block += placeAt(u + pen - lineLean, v, lineSlant);
     const spans: [number, number][] = [];
     lineSpans.push(spans);
     advance += width;
@@ -3183,7 +3876,7 @@ function setParagraph(
     const runs: { penStart: number; style: CharacterStyle; array: string }[] = [];
     // Justified lines before the last stretch every blank between their
     // first and last inked characters by the same amount.
-    let firstInk = line.start;
+    let firstInk = setFrom;
     while (firstInk < line.inkEnd && isBlank(replacement[firstInk])) firstInk += 1;
     const interior = replacement.slice(firstInk, line.inkEnd).filter(isBlank).length;
     const stretch = ((layout.alignment === "justify" && lineIndex < lines.length - 1) || layout.alignment === "distribute") &&
@@ -3217,7 +3910,43 @@ function setParagraph(
       }
       reach[kind] = null;
     };
-    let cursor = line.start;
+    // The rules a run's characters are drawn with, from where the run's ink
+    // starts along the line to where it ends (null: it inks nothing).
+    const ruleRun = (style: CharacterStyle, inkStart: number | null, inkEnd: number) => {
+      for (const kind of ["underline", "strikethrough"] as const) {
+        const open = reach[kind];
+        if (!style[kind] || (open && ruleKey(open.style) !== ruleKey(style))) closeRule(kind);
+        if (!style[kind] || inkStart === null || !(inkEnd > inkStart)) continue;
+        if (reach[kind]) reach[kind]!.end = inkEnd;
+        else reach[kind] = { start: inkStart, end: inkEnd, style };
+      }
+      if (!style.linkRule || (linkReach && linkKey(linkReach.style) !== linkKey(style))) closeLinkRule();
+      if (style.linkRule && inkStart !== null && inkEnd > inkStart) {
+        if (linkReach) linkReach.end = inkEnd;
+        else linkReach = { start: inkStart, end: inkEnd, style };
+      }
+    };
+    // What stays on the line as the page draws it keeps its rules, under where
+    // the source inks its characters.
+    for (let index = line.start; index < setFrom;) {
+      const style = styles[index];
+      const key = styleKey(style);
+      let stop = index + 1;
+      while (stop < setFrom && styleKey(styles[stop]) === key) stop += 1;
+      let inkStart: number | null = null;
+      let inkEnd = 0;
+      if (style.underline || style.strikethrough || style.linkRule) {
+        for (let at = index; at < stop; at += 1) {
+          const ink = keptSource[at] >= 0 ? paragraph.characterInk.get(inParagraphText(keptSource[at])) : undefined;
+          if (!ink) continue;
+          if (inkStart === null) inkStart = ink[0];
+          inkEnd = ink[1];
+        }
+      }
+      ruleRun(style, inkStart, inkEnd);
+      index = stop;
+    }
+    let cursor = setFrom;
     while (cursor < line.end) {
       const style = styles[cursor];
       const key = styleKey(style);
@@ -3229,6 +3958,11 @@ function setParagraph(
         lineLean = leanShift(style);
       }
       fontsUsed.add(style.fontName);
+      if (substitute && style.fontName === substitute.resourceName) {
+        for (let at = cursor; at < stop; at += 1) {
+          if (!isBlank(replacement[at])) substituteCharacters.add(replacement[at]);
+        }
+      }
       applyState(style);
       const penStart = pen;
       // The array: strings of codes, a number for a blank drawn as a gap and
@@ -3268,7 +4002,7 @@ function setParagraph(
           index += 1;
           continue;
         }
-        const kern = index > line.start ? kerns[index] : 0;
+        const kern = index > setFrom ? kerns[index] : 0;
         if (kern) {
           pushNumber(-kern * perUnit);
           pen += kern;
@@ -3280,7 +4014,7 @@ function setParagraph(
         runInkEnd = pen + set.width;
         pendingCodes.push(...set.codes);
         allCodes.push(...set.codes);
-        if (spans.length && index > line.start && !blanks[index - 1]) spans[spans.length - 1][1] = u + pen + set.width;
+        if (spans.length && index > setFrom && !blanks[index - 1]) spans[spans.length - 1][1] = u + pen + set.width;
         else spans.push([u + pen, u + pen + set.width]);
         pen += set.width;
         index = end;
@@ -3289,18 +4023,7 @@ function setParagraph(
       const array = elements.join(" ");
       block += `[${array}] TJ\n`;
       runs.push({ penStart, style, array });
-      for (const kind of ["underline", "strikethrough"] as const) {
-        const open = reach[kind];
-        if (!style[kind] || (open && ruleKey(open.style) !== ruleKey(style))) closeRule(kind);
-        if (!style[kind] || runInkStart === null || !(runInkEnd > runInkStart)) continue;
-        if (reach[kind]) reach[kind]!.end = u + runInkEnd;
-        else reach[kind] = { start: u + runInkStart, end: u + runInkEnd, style };
-      }
-      if (!style.linkRule || (linkReach && linkKey(linkReach.style) !== linkKey(style))) closeLinkRule();
-      if (style.linkRule && runInkStart !== null && runInkEnd > runInkStart) {
-        if (linkReach) linkReach.end = u + runInkEnd;
-        else linkReach = { start: u + runInkStart, end: u + runInkEnd, style };
-      }
+      ruleRun(style, runInkStart === null ? null : u + runInkStart, u + runInkEnd);
       cursor = stop;
     }
     closeRule("underline");
@@ -3328,7 +4051,10 @@ function setParagraph(
   // The block reads back, as the reader reads it, as exactly the new text
   // (less the reader's opening blanks, which it lays out as nothing, and the
   // blanks at either end, which it never shows).
-  const readBack = readBlockText(kernel, paragraph, block);
+  // (What stays as the page draws it reads as the page reads it: the read-back
+  // is of what this tier set.)
+  const readBack = readBlockText(kernel, paragraph, keptRanges.reduceRight((text, [from, to]) =>
+    text.slice(0, from) + text.slice(to), block));
   // Wrapped, the lines read joined as the reader joins a paragraph's lines:
   // the blank a line breaks at is no character of either line, and between a
   // long CJK line and the next none is read (lineBoundaryNeedsSpace).
@@ -3336,7 +4062,10 @@ function setParagraph(
   // lines as set (joined as typed segments, a segment holding a space was
   // never a long identifier, and 「…/final」 + 「https://…」 expected a space
   // the reader does not read).
-  const expectedBack = readerSpelling(lines.length > 1
+  const expectedBack = readerSpelling(kept
+    ? joinLines(lines.flatMap((line, index) => setFromOf(index) < line.end
+      ? [replacement.slice(setFromOf(index), line.end).join("").trim()] : []))
+    : lines.length > 1
     ? joinLines(lines.map((line) => replacement.slice(line.start, line.end).join("").trim()))
     : forced.length
       ? joinLines(typedSegments(replacement, forced).map((segment) => segment.join("")))
@@ -3366,16 +4095,20 @@ function setParagraph(
   // (paragraphCarriedInGaps) goes with the text after them.
   const movedGaps: MovedGap[] = [];
   for (const [index, line] of lines.entries()) {
+    // (Nothing moved in what stays as the page draws it.)
+    const from = setFromOf(index);
+    if (from >= line.end) continue;
     const width = line.inkWidth;
-    const left = layout.alignment === "right" ? layout.frameRight - width
-      : layout.alignment === "center" ? (layout.frameLeft + layout.frameRight) / 2 - width / 2
-        : lineLeftOf(layout, index);
-    for (let at = line.start + 1; at + 1 < line.end; at += 1) {
+    const left = from > line.start && kept && kept.origin !== null ? kept.origin
+      : layout.alignment === "right" ? layout.frameRight - width
+        : layout.alignment === "center" ? (layout.frameLeft + layout.frameRight) / 2 - width / 2
+          : lineLeftOf(layout, index);
+    for (let at = from + 1; at + 1 < line.end; at += 1) {
       const source = keptSource[at];
       if (!isBlank(replacement[at]) || source < 1 || keptSource[at + 1] !== source + 1 || !isBlank(original[source])) continue;
       const before = paragraph.shows[characterShowAt(source - 1)], next = paragraph.shows[characterShowAt(source + 1)];
       if (before === next || before.line !== next.line || !before.inked || !next.inked) continue;
-      const dx = left + measureRange(kernel, replacement, styles, blanks, line.start, at + 1, kerns) - next.inked.start;
+      const dx = left + measureRange(kernel, replacement, styles, blanks, from, at + 1, kerns) - next.inked.start;
       if (Math.abs(dx) > 0.01) {
         movedGaps.push(Object.freeze({ from: before.inked.end, to: next.inked.start, across: next.v, size: next.size, dx }));
       }
@@ -3402,7 +4135,8 @@ function setParagraph(
   const steppedEvenly = lineBaselines.every((baseline, index) =>
     Math.abs(baseline - (layout.firstBaseline - index * layout.lineStep)) <= 1e-9);
   return Object.freeze({ bytes: asciiBytes(ruledBlock), lines: Object.freeze(lines), codes: Object.freeze(allCodes), advance,
-    layout, notices: Object.freeze(notices), fontsUsed: fontsUsed as ReadonlySet<string>, sameBreaks, carried: paragraphCarriedInGaps(kernel, paragraph, movedGaps),
+    layout, notices: Object.freeze(notices), fontsUsed: fontsUsed as ReadonlySet<string>,
+    substituteCharacters: substituteCharacters as ReadonlySet<string>, sameBreaks, carried: paragraphCarriedInGaps(kernel, paragraph, movedGaps),
     ...(steppedEvenly ? {} : { lineBaselines: Object.freeze(lineBaselines.map((baseline) => Math.round(baseline * 1e6) / 1e6)) }) });
 }
 
@@ -3669,18 +4403,16 @@ function checkExtraLines(
       const [x, y] = applyMatrix(toBlock, ...applyMatrix(show.graphicsMatrix, ...applyMatrix(show.textMatrix, 0, 0)));
       return [x * basis[0] + y * basis[1], x * basis[2] + y * basis[3]] as const;
     });
+  // (And text that runs under the new line from a show starting outside the
+  // frame: the next row of a table TeX sets as one show from its first
+  // column. Read by where shows start alone, a figure wrapped down into the
+  // row below its cell was drawn over that row's figure and no one was told.)
+  const inked = otherInkedExtents(kernel, paragraph);
   for (let index = layout.lineCount; index < lines.length; index += 1) {
     const line = lines[index];
     const size = Math.max(...styles.slice(line.start, line.end).map((style) => style.size));
     const baseline = baselines[index];
     const bottom = baseline - 0.25 * size, top = baseline + size;
-    // Other text standing where the new line goes is drawn over, as a text
-    // box grown in Word or Acrobat draws over what lies below it: the write
-    // goes through and the user is told (docs/pdf/edit-gates.md).
-    if (others.some(([u, v]) => v >= bottom && v <= top && u >= layout.frameLeft - 0.5 && u <= layout.frameRight + 0.5) &&
-      !notices.some((notice) => notice.code === "new-line-over-other-text")) {
-      notices.push(Object.freeze({ code: "new-line-over-other-text" }));
-    }
     // The new line as it is set (its own ink across the line), not the
     // frame: a frame the source's own lines run past the page with (a URL
     // past the right margin) would refuse every new line.
@@ -3688,6 +4420,19 @@ function checkExtraLines(
     const left = layout.alignment === "right" ? layout.frameRight - width
       : layout.alignment === "center" ? (layout.frameLeft + layout.frameRight) / 2 - width / 2
         : lineLeftOf(layout, index);
+    // Other text standing where the new line goes is drawn over, as a text
+    // box grown in Word or Acrobat draws over what lies below it: the write
+    // goes through and the user is told (docs/pdf/edit-gates.md).
+    if ((others.some(([u, v]) => v >= bottom && v <= top && u >= layout.frameLeft - 0.5 && u <= layout.frameRight + 0.5) ||
+      // (Text whose baseline lies under the new line's band still reaches
+      // up into it with its own letters: a paragraph's ninth line set a
+      // third of a line step above the line that followed the paragraph was
+      // drawn through that line's capitals and nothing was said.)
+      inked.some((other) => other.across <= top && other.across + OTHER_TEXT_ASCENT_RATIO * other.size >= bottom &&
+        (other.end ?? Infinity) > left + LAYOUT_TOLERANCE && other.start < left + width - LAYOUT_TOLERANCE)) &&
+      !notices.some((notice) => notice.code === "new-line-over-other-text")) {
+      notices.push(Object.freeze({ code: "new-line-over-other-text" }));
+    }
     for (const [u, v] of [[left, bottom], [left + width, bottom], [left, top], [left + width, top]]) {
       const [x, y] = applyMatrix(blockMatrix, u * basis[0] + v * basis[2], u * basis[1] + v * basis[3]);
       if (x < bounds.left - 0.5 || x > bounds.right + 0.5 || y < bounds.bottom - 0.5 || y > bounds.top + 0.5) {
@@ -3706,6 +4451,10 @@ const PDFJS_SPACE_IN_FLOW_MAX_FACTOR = 0.6;
 /** A glyph raised or lowered by more than this share of its item's height
  * starts a new item (pdf.js VERTICAL_SHIFT_RATIO). */
 const PDFJS_VERTICAL_SHIFT_RATIO = 0.25;
+/** How far above its baseline text standing under a new line is taken to
+ * draw, of its size: its capitals and ascenders. Lines set solid (a step of
+ * the size) stay clear of each other by this. */
+const OTHER_TEXT_ASCENT_RATIO = 0.7;
 /** The most bytes one content-stream transaction writes (content-stream-transaction's MAX_REPLACEMENT_BYTES). */
 const PARAGRAPH_REWRITE_MAX_REPLACEMENT_BYTES = 64 * 1024;
 /** The reader's zero-width diacritics and invisible format marks (pdf.js
@@ -3725,11 +4474,45 @@ const PDFJS_INVISIBLE_FORMAT_MARK = /^\p{Cf}$/u;
 function otherInkedExtents(
   kernel: MraiNativeParagraphRewriteKernel,
   paragraph: Pick<ReadParagraph, "allShows" | "shows" | "twinKeys" | "fonts" | "basis" | "blockMatrix">,
-): Readonly<{ start: number; end: number | null; across: number; show: MraiNativeParagraphRewriteShow }>[] {
+): Readonly<{ start: number; end: number | null; across: number; size: number; show: MraiNativeParagraphRewriteShow }>[] {
   const { basis, blockMatrix } = paragraph;
   const toBlock = invertMatrix(blockMatrix);
   const owned = new Set(paragraph.shows.map((show) => `${show.start}:${show.end}`));
-  return paragraph.allShows
+  // The show's font size as it stands across the paragraph's lines.
+  const sizeAcross = (show: MraiNativeParagraphRewriteShow, toLines: ReturnType<typeof composeMatrix>) => {
+    const [x0, y0] = applyMatrix(toLines, 0, 0), [x1, y1] = applyMatrix(toLines, 0, show.fontSize);
+    return Math.abs((x1 - x0) * basis[2] + (y1 - y0) * basis[3]);
+  };
+  // What a show the paragraph owns part of draws outside that part is other
+  // text too (the next column of a table row TeX sets as one show: left out,
+  // a figure typed longer had the room up to the page's edge, across the
+  // columns beside it).
+  const outside: Readonly<{ start: number; end: number | null; across: number; size: number; show: MraiNativeParagraphRewriteShow }>[] = [];
+  for (const own of paragraph.shows) {
+    if (!own.partial) continue;
+    const { show, font } = own;
+    let glyphs: ReturnType<typeof showGlyphs>;
+    try {
+      glyphs = showGlyphs(kernel, show, font);
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+      continue;
+    }
+    const unit = font.codeUnitBytes;
+    const toLines = composeMatrix(composeMatrix(show.textMatrix, show.graphicsMatrix), toBlock);
+    const placed = (along: number) => {
+      const [x, y] = applyMatrix(toLines, along, show.textRise);
+      return [x * basis[0] + y * basis[1], x * basis[2] + y * basis[3]] as const;
+    };
+    const scale = show.horizontalScale / 100;
+    for (const [from, to] of [[0, own.partial.codeStart / unit], [own.partial.codeEnd / unit, glyphs.length]] as const) {
+      const inked = glyphs.slice(from, to).filter((glyph) => !/^\s*$/u.test(glyph.text ?? "x"));
+      if (!inked.length) continue;
+      const [start, across] = placed(inked[0].start * scale), [end] = placed(inked.at(-1)!.end * scale);
+      outside.push(Object.freeze({ start: Math.min(start, end), end: Math.max(start, end), across, size: sizeAcross(show, toLines), show }));
+    }
+  }
+  return [...outside, ...paragraph.allShows
     .filter((show) => show.codes.length > 0 && show.fontSize > 0 && [0, 1, 2].includes(show.renderingMode) &&
       !owned.has(`${show.start}:${show.end}`) && !paragraph.twinKeys.has(`${show.start}:${show.end}`) &&
       (show.text === null || !characters(show.text).every(isReaderBlank)))
@@ -3745,12 +4528,12 @@ function otherInkedExtents(
       const run = font && !show.vertical ? showRun(kernel, show, font) : null;
       if (!run) {
         const [start, across] = placed(0);
-        return Object.freeze({ start, end: null, across, show });
+        return Object.freeze({ start, end: null, across, size: sizeAcross(show, toLines), show });
       }
       const scale = show.horizontalScale / 100;
       const [start, across] = placed(run.start * scale), [end] = placed(run.end * scale);
-      return Object.freeze({ start: Math.min(start, end), end: Math.max(start, end), across, show });
-    });
+      return Object.freeze({ start: Math.min(start, end), end: Math.max(start, end), across, size: sizeAcross(show, toLines), show });
+    })];
 }
 
 /**
@@ -4651,7 +5434,7 @@ function charactersNoParagraphFontWrites(
  * reader resized keeps none (its lines are the reader's to break).
  */
 function withSourceHardBreaks(paragraph: ReadParagraph, sourceText: string, replacementText: string,
-  resized: boolean): string {
+  resized: boolean, rowEdit?: MraiNativeParagraphRowEdit, decided?: { byRows: boolean }): string {
   const extents = paragraph.layout.lineExtents;
   if (resized || replacementText.includes("\n") || extents.length < 2) return replacementText;
   const before = characters(sourceText);
@@ -4665,6 +5448,7 @@ function withSourceHardBreaks(paragraph: ReadParagraph, sourceText: string, repl
   }
   const em = paragraph.layout.lineStep > 0 ? paragraph.layout.lineStep / 1.2 : 0;
   const breaks: number[] = [];
+  const breakLines: number[] = [];
   for (let line = 0; line + 1 < extents.length; line += 1) {
     const next = starts[line + 1];
     const count = counts[line + 1] ?? 0;
@@ -4676,17 +5460,63 @@ function withSourceHardBreaks(paragraph: ReadParagraph, sourceText: string, repl
       if (/[-/\u2010\u2013]/u.test(before[next + piece - 1])) break;
     }
     const free = paragraph.layout.frameRight - extents[line].right;
-    if (free > (width / count) * piece + em * 0.5) breaks.push(next);
+    if (free > (width / count) * piece + em * 0.5) { breaks.push(next); breakLines.push(line); }
   }
-  if (!breaks.length) return replacementText;
   const after = characters(replacementText);
   let head = 0;
   while (head < before.length && head < after.length && before[head] === after[head]) head += 1;
   let tail = 0;
   while (tail < before.length - head && tail < after.length - head &&
     before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail += 1;
-  const at = breaks.flatMap((index) => index <= head ? [index]
-    : index >= before.length - tail ? [index + after.length - before.length] : []);
+  // Words the editor shows at the end of a row, the row under it starting
+  // where it did: that row's start is kept as a break too where the words
+  // fit on their row -- whatever the break was. (A short middle row of a
+  // centred block, the long row under it, reads as a line the measure broke:
+  // "Google Brain" over an e-mail address. Typed after "Brain", the words
+  // started a row of their own between the two.) Where they do not fit the
+  // lines flow, as a paragraph's do.
+  const typed = after.length - before.length;
+  // Whether the text is `before` with words typed right before the line that
+  // starts at `start`: all before the blank that line follows as it was, and
+  // all from the line's start on. (Not read from the common ends: words that
+  // begin as the line does share a letter with it.)
+  const adjoins = (start: number) => typed > 0 && start > 0 &&
+    before.slice(start).every((character, index) => character === after[start + typed + index]) &&
+    before.slice(0, start - 1).every((character, index) => character === after[index]);
+  if (rowEdit && rowEdit.rowStarts.length === extents.length - 1 && typed > 0) {
+    for (let line = 0; line + 1 < extents.length; line += 1) {
+      const next = starts[line + 1];
+      const count = counts[line] ?? 0;
+      const width = extents[line].right - extents[line].left;
+      if (next === undefined || breaks.includes(next) || !(count > 0) || !(width > 0)) continue;
+      if (!adjoins(next) || rowEdit.rowStarts[line] !== next + typed) continue;
+      const wider = (width / count) * typed * 1.15;
+      const room = paragraph.layout.alignment === "center"
+        ? paragraph.layout.frameRight - paragraph.layout.frameLeft - width
+        : paragraph.layout.frameRight - extents[line].right;
+      if (wider <= room) { breaks.push(next); breakLines.push(line); }
+    }
+  }
+  if (!breaks.length) return replacementText;
+  // Words typed right at a kept break read the same whether they were typed
+  // at the end of the line before it or at the start of the line after it
+  // (the lines are joined by the one blank): the break then stands before
+  // them, unless the editor says where its rows start (rowEdit) -- typed
+  // after "2100" of a label "2100 / & beyond", the words stood on the row
+  
+  const delta = after.length - before.length;
+  const rowStarts = rowEdit && rowEdit.rowStarts.length === extents.length - 1 ? rowEdit.rowStarts : null;
+  const at = breaks.flatMap((index, order) => {
+    const stays = index <= head, moves = index >= before.length - tail;
+    if (rowStarts && adjoins(index)) {
+      const start = rowStarts[breakLines[order]];
+      if (start === index + delta || start === index) {
+        if (decided) decided.byRows = true;
+        return [start];
+      }
+    }
+    return stays ? [index] : moves ? [index + delta] : [];
+  });
   const kept = [...after];
   for (const index of [...new Set(at)].sort((left, right) => right - left)) {
     if (index <= 0 || index >= kept.length) continue;
@@ -4698,6 +5528,14 @@ function withSourceHardBreaks(paragraph: ReadParagraph, sourceText: string, repl
   }
   return kept.join("");
 }
+
+/** Where the editor's rows start in the new text (an offset for each row
+ * after the first, the rows being the box's lines as it showed them): what
+ * tells words typed at the end of a line from words typed at the start of
+ * the next, which read the same (withSourceHardBreaks). `mustDecide`: the
+ * plan is refused unless the rows settled such a break -- the caller then
+ * plans as it would without them. */
+export type MraiNativeParagraphRowEdit = Readonly<{ rowStarts: readonly number[]; mustDecide?: boolean }>;
 
 export async function planMraiNativeParagraphRewrite(
   kernel: MraiNativeParagraphRewriteKernel,
@@ -4711,6 +5549,7 @@ export async function planMraiNativeParagraphRewrite(
    * weight or lean of the whole paragraph or of part of it), resolved once
    * the paragraph is read. */
   resolveFormats?: MraiNativeParagraphRewriteFormatsResolver,
+  rowEdit?: MraiNativeParagraphRowEdit,
 ): Promise<PdfNativeListTextReplacementPlan & Readonly<{ substitute?: Readonly<{ resourceName: string; text: string }> }>> {
   if (replacementText === selection.item.str && frame?.right === undefined && frame?.lineStep === undefined &&
     frame?.sizeScale === undefined && !resolveFormats) {
@@ -4741,7 +5580,10 @@ export async function planMraiNativeParagraphRewrite(
   // A line the source ends short of its frame keeps that break (set again in
   // its frame, a table cell's two links on two lines ran into one line,
   
-  replacementText = withSourceHardBreaks(paragraph, selection.item.str, replacementText, frame?.right !== undefined);
+  const decided = { byRows: false };
+  replacementText = withSourceHardBreaks(paragraph, selection.item.str, replacementText, frame?.right !== undefined,
+    rowEdit, decided);
+  if (rowEdit?.mustDecide && !decided.byRows) refuse("The editor's rows settle no line break of this edit.");
   // The formats, on the paragraph as read: the faces they name read back as
   // the paragraph's own fonts do; a larger size sets its own line lower, and
   // an alignment asked sets every line by it.
@@ -4785,10 +5627,10 @@ export async function planMraiNativeParagraphRewrite(
   
   const wholly = substitute?.faceName !== undefined && paragraph.fontOrder.length > 0 &&
     paragraph.fontOrder.every((name) => paragraph.fonts.get(name)!.faceName === substitute.faceName);
-  const missing = !substitute ? "" : wholly
+  let missing = !substitute ? "" : wholly
     ? [...new Set(characters(replacementText.replace(/\n/gu, "")).filter((character) => !isBlank(character)))].join("")
     : charactersNoParagraphFontWrites(kernel, paragraph, replacementText.replace(/\n/gu, ""));
-  const installed = missing ? await substitute!.install(missing) : null;
+  let installed = missing ? await substitute!.install(missing) : null;
   let set: ReturnType<typeof setParagraph>;
   try {
     set = setParagraph(kernel, paragraph, replacementText, installed, formats, wholly);
@@ -4828,6 +5670,61 @@ export async function planMraiNativeParagraphRewrite(
   if (frame?.right !== undefined && paragraph.sourceLineStep === undefined && paragraph.sizeScale === undefined &&
     replacementText === selection.item.str && set.sameBreaks && paragraph.layout.alignment === "left" && !formats) {
     refuse(MRAI_NATIVE_PARAGRAPH_FRAME_UNCHANGED_MESSAGE);
+  }
+  // A new line that would be drawn over other text, where the words fit on
+  // their own line in the room up to the text beside it: they stay on that
+  // line -- past the paragraph's measure, and nearer the text beside it than
+  // a paragraph otherwise comes. An author's affiliation typed two letters
+  // longer had its own e-mail address under it: kept to the width of the
+  // name above, the letters went down a line, onto the address (Attention
+  
+  // on with it at worst; over it, both are spoilt.
+  if (!frame && !formats && paragraph.nearFrameRight !== undefined &&
+    set.notices.some((notice) => notice.code === "new-line-over-other-text")) {
+    const nearer = Object.freeze({ ...paragraph, nearFrameRight: undefined,
+      layout: Object.freeze({ ...paragraph.layout, frameRight: paragraph.nearFrameRight }) });
+    try {
+      const again = setParagraph(kernel, nearer, replacementText, installed, formats, wholly);
+      const last = paragraph.layout.lineCount - 1;
+      // Taken where it gives the words room on the paragraph's own last
+      // line and changes no line before it.
+      if (!again.notices.some((notice) => notice.code === "new-line-over-other-text" || notice.code === "line-over-other-text") &&
+        again.lines.length === paragraph.layout.lineCount &&
+        again.lines.slice(0, last).every((line, index) => line.start === set.lines[index]?.start && line.end === set.lines[index]?.end)) {
+        set = again;
+        paragraph = nearer;
+      }
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+    }
+  }
+  // The face is installed with the glyphs the block draws in it, no more.
+  // The characters no font of the paragraph writes are those of its whole
+  // text, and the lines the edit leaves alone are drawn again by the codes
+  // the page drew them with: a word the page sets with a ligature ("flooding",
+  // its font holding "fl" and no "f") is such a line's, and its "f" was asked
+  // of the face, installed and never drawn -- which no write may carry (a
+  // package is proven by the glyphs drawn in it). A label of that word typed
+  // onto could not be written in place at all, and was taken apart as a text
+  // box in another face and size (IPCC SPM.1's "Inland flooding and
+  
+  // what was drawn, the block set once more names the same glyphs by the
+  // narrower face's own codes.
+  if (installed && !wholly) {
+    const drawn = characters(missing).filter((character) => set.substituteCharacters.has(character)).join("");
+    if (drawn && drawn !== missing) {
+      const narrowed = await substitute!.install(drawn);
+      if (narrowed) {
+        const again = setParagraph(kernel, paragraph, replacementText, narrowed, formats, wholly);
+        if (again.substituteCharacters.size !== characters(drawn).length ||
+          characters(drawn).some((character) => !again.substituteCharacters.has(character))) {
+          refuse("The paragraph does not draw the characters its substitute face was installed for.");
+        }
+        set = again;
+        installed = narrowed;
+        missing = drawn;
+      }
+    }
   }
   // The block records the layout its lines were set in.
   if (set.layout !== paragraph.layout) paragraph = Object.freeze({ ...paragraph, layout: set.layout });

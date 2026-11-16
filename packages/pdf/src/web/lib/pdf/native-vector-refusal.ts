@@ -14,10 +14,16 @@ export type PdfNativeVectorRefusal =
   | "noVertices"
   | "lineFill"
   | "notWritable"
-  | "unchanged";
+  | "unchanged"
+  | "otherStream"
+  | "rowsDiffer";
 
 /** Ordered: the first family whose pattern the refusal matches. */
 const REFUSAL_PATTERNS: readonly (readonly [PdfNativeVectorRefusal, RegExp])[] = [
+  // A layer move of a page object (the Selection pane): the page reads as
+  // other objects than the pane listed, or the move would cross streams.
+  ["rowsDiffer", /reads differently from the page shown/i],
+  ["otherStream", /cannot pass another of its page's content streams|crosses a page content stream boundary/i],
   ["offPage", /drawn outside (its|their) page/i],
   [
     "leavesPage",

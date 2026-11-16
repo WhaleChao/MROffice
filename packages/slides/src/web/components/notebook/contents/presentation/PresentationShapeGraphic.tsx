@@ -14,7 +14,8 @@
  * (structural split, no behaviour change).
  */
 
-import { normalizeOfficeShapeGradient, officeGradientAngleForBox, officePathGradientFocus, type OfficeShapeGradient } from "@mrnote/core/web/lib/office-shape-paint.ts";
+import { normalizeOfficeShapeGradient, officeGradientAngleForBox, officeGradientDrawnStops, type OfficeShapeGradient } from "@mrnote/core/web/lib/office-shape-paint.ts";
+import { officeCirclePathGradient, officeCirclePathGradientSvg, officeRectPathGradient } from "@mrnote/core/web/lib/office-path-gradient.ts";
 import {
   isShortSideArrowKind,
   presentationShortSideGeometry,
@@ -24,7 +25,7 @@ import { presentationActionButtonGeometry } from "../../../../lib/presentation-a
 import { presentationLineCalloutDrawing } from "../../../../lib/presentation-line-callout";
 import { PresentationNativeShapeGraphic } from "./PresentationNativeShapeGraphic";
 import { readPreservedSlotPicture } from "@mrnote/core/web/lib/office-smartart/preserved-slot-pictures.ts";
-import { SMARTART_PICTURE_PLACEHOLDER_STROKE } from "@mrnote/core/web/lib/office-smartart/model.ts";
+import { SMARTART_PICTURE_PLACEHOLDER_STROKE, smartArtShape3dUnderEffects } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import { usePreservedSmartArtSlotFill } from "./usePreservedSmartArtSlotFill";
 import { PresentationLineCalloutGraphic } from "./PresentationLineCalloutGraphic";
 import { nativeLineEndMarker, readNativeDrawingGeometry, readNativeLineEnd } from "@mrnote/core/web/lib/native-drawing-geometry.ts";
@@ -99,7 +100,7 @@ import {
 } from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtBevelFilter.tsx";
 import { OFFICE_HIT_BOX_ATTRIBUTE, officeHitBandProps, officePaintIsNone } from "@mrnote/core/web/components/office-ribbon/OfficeDrawingSelection.tsx";
 import { LIGHTING_FILTER_LAYER, OfficeShapeEffectsFrame } from "@mrnote/core/web/components/office-ribbon/OfficeShapeEffectsFrame.tsx";
-import { normalizeOfficeLineSketch, officeShapeEffectsPaint, officeShapeSilhouetteAlpha, officeSketchSeed } from "@mrnote/core/web/lib/office-shape-effects-paint.ts";
+import { normalizeOfficeLineSketch, officeEffectsUnderGroupCamera, officeShapeEffectsPaint, officeShapeSilhouetteAlpha, officeSketchSeed } from "@mrnote/core/web/lib/office-shape-effects-paint.ts";
 import { presentationShapeEffects } from "../../../../lib/presentation-shape-effects";
 import { smartArtContourStroke, smartArtShape3dFilter } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
 import { legacyLineSlopeFlipsHorizontally } from "@mrnote/core/web/lib/presentation-connectors.ts";
@@ -128,23 +129,24 @@ function presentationNativeOutlineKeptByPackage(block: { source?: unknown }): bo
 }
 /** A shape's pattern fill as an SVG `<pattern>` tile (Office's preset, the shared classification). */
 function PresentationShapePatternTile({ id, pattern }: { id: string; pattern: OfficeChartFillPattern }) {
-  const { size, angle, marks } = officeFillPatternTile(pattern);
+  const { size, angle, marks, paperInMarks } = officeFillPatternTile(pattern);
   return (
     <pattern
       id={id}
+      // Laid on the slide's grid, one bit a CSS pixel at any zoom, by the
+      // slide's pattern anchor (lib/office-pattern-anchor), as PowerPoint draws it.
+      data-office-pattern=""
       patternUnits="userSpaceOnUse"
       width={size}
       height={size}
       patternTransform={angle ? `rotate(${angle})` : undefined}
     >
-      <rect x="0" y="0" width={size} height={size} fill={pattern.background} />
-      {marks.map(({ tag, ...attrs }, index) =>
-        tag === "circle" ? (
-          <circle key={index} {...attrs} fill={pattern.foreground} />
-        ) : (
-          <rect key={index} {...attrs} fill={pattern.foreground} />
-        ),
-      )}
+      {paperInMarks ? null : <rect x="0" y="0" width={size} height={size} fill={pattern.background} />}
+      {marks.map(({ tag, ...attrs }, index) => {
+        if (tag === "circle") return <circle key={index} {...attrs} fill={pattern.foreground} />;
+        const { opacity, ...rest } = attrs as typeof attrs & { opacity?: number };
+        return <rect key={index} {...rest} fill={("fill" in rest && rest.fill) || pattern.foreground} fillOpacity={opacity} />;
+      })}
     </pattern>
   );
 }
@@ -220,10 +222,12 @@ export const PresentationShapeGraphic = memo(function PresentationShapeGraphic(p
   // twice, the effects' Format Shape bevel laid a dark band along every
   
   // PowerPoint draws 202). Its shadow, glow, soft edges and reflection stay.
-  const effects =
+  const effects = officeEffectsUnderGroupCamera(
     stated && props.block.shape3d && typeof stated === "object" && !deckShapeEffectsDraw3d(props.block)
       ? { ...(stated as Record<string, unknown>), bevel: "none", format3d: "none" }
-      : stated;
+      : stated,
+    props.block.scene3d,
+  );
   if (effects || sketch) {
     const width = (typeof props.block.width === "number" && Number.isFinite(props.block.width) ? props.block.width : 952500) / 9525;
     const height = (typeof props.block.height === "number" && Number.isFinite(props.block.height) ? props.block.height : 952500) / 9525;
@@ -247,8 +251,16 @@ export const PresentationShapeGraphic = memo(function PresentationShapeGraphic(p
           : null
         : drawn;
     // Office's own effects are the whole truth: the legacy shadow flag and
-    // preset name are not drawn beside them.
-    const block = { ...props.block, shadow: undefined, shapeShadow: undefined, effect: undefined };
+    // preset name are not drawn beside them. No Bevel on a SmartArt shape
+    // (`bevel: "none"`) takes the style's top bevel off its solid
+    // (`smartArtShape3dUnderEffects`), as the point's own `a:sp3d` does.
+    const block = {
+      ...props.block,
+      shadow: undefined,
+      shapeShadow: undefined,
+      effect: undefined,
+      shape3d: withStatedContourColor(smartArtShape3dUnderEffects(props.block.shape3d, stated), stated),
+    };
     if (paint) {
       return (
         <OfficeShapeEffectsFrame
@@ -335,6 +347,23 @@ function useTiledPictureSize(url: string | undefined): OfficePixelSize | null {
 
 
 
+function withStatedContourColor<T extends { contourColor?: string; contourWidthEmu?: number }>(
+  shape3d: T | undefined,
+  stated: unknown,
+): T | undefined {
+  if (!shape3d || shape3d.contourColor || !(shape3d.contourWidthEmu! > 0)) return shape3d;
+  const format3d = stated && typeof stated === "object" ? (stated as { format3d?: unknown }).format3d : undefined;
+  const contour = format3d && typeof format3d === "object" ? (format3d as { contour?: unknown }).contour : undefined;
+  const color = contour && typeof contour === "object" ? (contour as { color?: unknown }).color : undefined;
+  return typeof color === "string" && /^#[0-9a-fA-F]{6}$/.test(color) ? { ...shape3d, contourColor: color.toLowerCase() } : shape3d;
+}
+
+
+
+
+
+
+
 
 
 
@@ -344,11 +373,13 @@ function deckShapeEffectsDraw3d(block: { shapeEffects?: unknown; scene3d?: unkno
   const effects = block.shapeEffects;
   if (!effects || typeof effects !== "object") return false;
   const rotation = (effects as { rotation3d?: unknown }).rotation3d;
+  if (!rotation || typeof rotation !== "object") return false;
+  const turn = rotation as { camera?: unknown; lat?: unknown; lon?: unknown; rev?: unknown };
+  // A camera that turns the shape: a preset off the front, or the front
+  // camera turned by its own X / Y / Z.
   return (
-    !!rotation &&
-    typeof rotation === "object" &&
-    typeof (rotation as { camera?: unknown }).camera === "string" &&
-    (rotation as { camera: string }).camera !== "orthographicFront"
+    typeof turn.camera === "string" &&
+    (turn.camera !== "orthographicFront" || !!turn.lat || !!turn.lon || !!turn.rev)
   );
 }
 
@@ -565,7 +596,7 @@ function PresentationShapeGraphicBody({
     <defs>
       {fillOverlay.gradient.path ? (
         <radialGradient id={fillOverlayId} {...overlayRadialCentre(fillOverlay.gradient)} r="0.71">
-          {fillOverlay.gradient.stops.map((stop, index) => (
+          {officeGradientDrawnStops(fillOverlay.gradient.stops).map((stop, index) => (
             <stop key={index} offset={stop.position} stopColor={stop.color} stopOpacity={stop.alpha} />
           ))}
         </radialGradient>
@@ -574,7 +605,7 @@ function PresentationShapeGraphicBody({
           id={fillOverlayId}
           {...gradientVector(officeGradientAngleForBox(fillOverlay.gradient, drawingWidth, drawingHeight), drawingWidth, drawingHeight)}
         >
-          {fillOverlay.gradient.stops.map((stop, index) => (
+          {officeGradientDrawnStops(fillOverlay.gradient.stops).map((stop, index) => (
             <stop key={index} offset={stop.position} stopColor={stop.color} stopOpacity={stop.alpha} />
           ))}
         </linearGradient>
@@ -605,15 +636,22 @@ function PresentationShapeGraphicBody({
             silhouette={smartArtRimSilhouette}
           />
         ) : null}
-        {grad && style.fillGradient?.path ? (
+        {grad && style.fillGradient?.path?.kind === "rect" ? (
+          <RectPathGradientPattern id={gradientId} gradient={style.fillGradient} />
+        ) : grad && style.fillGradient?.path ? (
           // A path gradient (`a:path`: circle, rect, shape) radiates from its
           // focus rectangle, as the box path's CSS draws it
           // (`officeGradientCss`); drawn as the linear stand-in on a shape's
           
           
-          <radialGradient id={gradientId} {...pathGradientCircle(style.fillGradient, drawingWidth, drawingHeight)}>
-            {style.fillGradient.stops.map((s,i)=><stop key={`${i}-${s.position}`} offset={s.position} stopColor={s.color} stopOpacity={(s as {alpha?:number}).alpha}/>)}
-          </radialGradient>
+          (() => {
+            const circle = pathGradientCircle(style.fillGradient, drawingWidth, drawingHeight);
+            return (
+              <radialGradient id={gradientId} {...circle.attributes}>
+                {circle.stops.map((s,i)=><stop key={`${i}-${s.position}`} offset={s.position} stopColor={s.color} stopOpacity={(s as {alpha?:number}).alpha}/>)}
+              </radialGradient>
+            );
+          })()
         ) : grad ? (
           <linearGradient
             id={gradientId}
@@ -622,7 +660,7 @@ function PresentationShapeGraphicBody({
             x2={grad.x2}
             y2={grad.y2}
           >
-            {(style.fillGradient?.stops??[{position:0,color:style.fill??"transparent"},{position:1,color:style.fillTo??"transparent"}]).map((s,i)=><stop key={`${i}-${s.position}`} offset={s.position} stopColor={s.color} stopOpacity={(s as {alpha?:number}).alpha}/>)}
+            {officeGradientDrawnStops(style.fillGradient?.stops??[{position:0,color:style.fill??"transparent"},{position:1,color:style.fillTo??"transparent"}]).map((s,i)=><stop key={`${i}-${s.position}`} offset={s.position} stopColor={s.color} stopOpacity={(s as {alpha?:number}).alpha}/>)}
           </linearGradient>
         ) : null}
         {strokeGrad ? (
@@ -1715,6 +1753,50 @@ function shapeFillOpacity(block: unknown): number {
   return Math.max(0, Math.min(1, 1 - transparency / 100));
 }
 
+/**
+ * A rectangular path gradient (`a:path path="rect"`) over the shape's box, as
+ * PowerPoint prints it: rectangular contours from the focus rectangle to the
+ * box (`officeRectPathGradient`; look-fit truth-probes/lookfit-rect-shape-
+ * probe.pptx: rectangles 4:3 and 2:1, an ellipse, a rounded rectangle and a
+ * right triangle, each over its own box, within 0.006 along the stops on
+ * average; the circle about the box's centre was 0.12 off). An SVG pattern in
+ * the box's own units: the last stop's colour, the focus in the first, each
+ * trapezoid a linear gradient across it, stroked with itself so that no seam
+ * shows.
+ */
+function RectPathGradientPattern({ id, gradient }: { id: string; gradient: OfficeShapeGradient }) {
+  const shape = officeRectPathGradient(gradient.path?.fillToRect, gradient.tileRect);
+  const stops = officeGradientDrawnStops(gradient.stops);
+  const stopTags = stops.map((stop, index) => (
+    <stop key={`${index}-${stop.position}`} offset={stop.position} stopColor={stop.color} stopOpacity={(stop as { alpha?: number }).alpha} />
+  ));
+  const first = stops[0];
+  const last = stops[stops.length - 1];
+  const [fl, ft, fr, fb] = shape.focus;
+  return (
+    <pattern id={id} patternUnits="objectBoundingBox" patternContentUnits="objectBoundingBox" x={0} y={0} width={1} height={1} data-path-gradient="rect">
+      {last ? <rect x={0} y={0} width={1} height={1} fill={last.color} fillOpacity={(last as { alpha?: number }).alpha} /> : null}
+      {shape.regions.map((region, index) => (
+        <g key={index}>
+          <linearGradient id={`${id}-r${index}`} gradientUnits="userSpaceOnUse" x1={region.from[0]} y1={region.from[1]} x2={region.to[0]} y2={region.to[1]}>
+            {stopTags}
+          </linearGradient>
+          <polygon
+            points={region.points.map(([x, y]) => `${x},${y}`).join(" ")}
+            fill={`url(#${id}-r${index})`}
+            stroke={`url(#${id}-r${index})`}
+            strokeWidth={0.002}
+            strokeLinejoin="round"
+          />
+        </g>
+      ))}
+      {first && fr > fl && fb > ft ? (
+        <rect x={fl} y={ft} width={fr - fl} height={fb - ft} fill={first.color} fillOpacity={(first as { alpha?: number }).alpha} />
+      ) : null}
+    </pattern>
+  );
+}
+
 /** A path gradient's centre: the middle of its focus rectangle (`a:fillToRect`). */
 function overlayRadialCentre(gradient: OfficeShapeGradient): { cx: number; cy: number } {
   const rect = gradient.path?.fillToRect;
@@ -1725,38 +1807,44 @@ function overlayRadialCentre(gradient: OfficeShapeGradient): { cx: number; cy: n
   return { cx: (l + (1 - r)) / 2, cy: (t + (1 - b)) / 2 };
 }
 
-/** PowerPoint's 1 pt nudge of the end circle past a focus on (or beyond) it, in px. */
-const PATH_GRADIENT_FOCUS_NUDGE_PX = 12_700 / 9_525;
 
-/** A path gradient as PowerPoint draws it (its own PDF: a two-circle radial
- * shading): from the focus point to a CIRCLE about the box's centre whose
- * radius is the half diagonal, or the focus's distance (each offset one
- * point longer) when that is farther. In box units, with the transform that
- * keeps the circle round on a box that is not square. */
+
+
+
+
+
+
+
+
+
+
+
 export function pathGradientCircle(
   gradient: OfficeShapeGradient,
   width = 1,
   height = 1,
-): { cx: number; cy: number; r: number; fx: number; fy: number; gradientTransform?: string } {
-  const { x: fx, y: fy } = officePathGradientFocus(gradient.path?.fillToRect);
+): {
+  attributes: { cx: number; cy: number; r: number; fx: number; fy: number; fr?: number; gradientTransform?: string };
+  stops: ReturnType<typeof officeGradientDrawnStops>;
+} {
   const w = Number.isFinite(width) && width > 0 ? width : 1;
   const h = Number.isFinite(height) && height > 0 ? height : 1;
-  const nudge = w === 1 && h === 1 ? 0 : PATH_GRADIENT_FOCUS_NUDGE_PX;
-  const dx = Math.abs(fx - 0.5) * w;
-  const dy = Math.abs(fy - 0.5) * h;
-  const radius = Math.max(
-    Math.hypot(w, h) / 2,
-    dx > 0 || dy > 0 ? Math.hypot(dx + nudge, dy + nudge) : 0,
-  );
+  const circle = officeCirclePathGradient(gradient.path?.fillToRect, gradient.tileRect, w, h);
+  const drawn = officeCirclePathGradientSvg(circle, officeGradientDrawnStops(gradient.stops));
   // Gradient space measures both axes in widths; the transform stretches
   // its y back onto the box (objectBoundingBox units).
   const k = h / w;
+  const { cx, cy, r, fx, fy, fr } = drawn.attributes;
   return {
-    cx: 0.5,
-    cy: 0.5 * k,
-    r: radius / w,
-    fx,
-    fy: fy * k,
-    ...(Math.abs(k - 1) > 1e-9 ? { gradientTransform: `scale(1 ${1 / k})` } : {}),
+    attributes: {
+      cx: cx / w,
+      cy: cy / w,
+      r: r / w,
+      fx: fx / w,
+      fy: fy / w,
+      ...(fr === undefined ? {} : { fr: fr / w }),
+      ...(Math.abs(k - 1) > 1e-9 ? { gradientTransform: `scale(1 ${1 / k})` } : {}),
+    },
+    stops: drawn.stops,
   };
 }

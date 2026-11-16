@@ -23,6 +23,7 @@ import {
 } from "./native-document/trackChangesExtension";
 import { isDocumentTrackingLocked } from "./native-document/documentProtection";
 import type { TrackedObjectKind } from "./native-document/trackChanges";
+import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
 
 interface TrackChangesPanelProps {
   editor: Editor;
@@ -44,7 +45,7 @@ interface TrackedChangesSnapshot {
 function formatTimestamp(ts: number | null): string {
   if (ts === null) return "";
   try {
-    return new Date(ts).toLocaleString();
+    return new Date(ts).toLocaleString(pageInterfaceLocale());
   } catch {
     return "";
   }

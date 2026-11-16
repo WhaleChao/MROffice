@@ -201,15 +201,40 @@ export async function registerPresentationEmbeddedFonts(body: unknown): Promise<
   return Object.freeze(aliases);
 }
 
+/** How long a page asks again for faces the server is still unpacking
+ * (`{ pending: true }`: the import's own unpacking is under way), and how often. */
+const PENDING_RETRY_MS = [2_000, 3_000, 5_000, 8_000];
+const PENDING_GIVE_UP_MS = 10 * 60_000;
+
+/**
+ * The page's `presentation-embedded-fonts` answer, asked for again while the
+ * server answers that another process is still unpacking the faces: they are
+ * unpacked once, and the page draws stand-in faces meanwhile. `maxWaitMs`: the
+ * longest it asks again (the answer is then `{ fonts: [] }`).
+ */
+export async function readPresentationEmbeddedFontsAnswer(
+  pageId: string,
+  { maxWaitMs = PENDING_GIVE_UP_MS }: { maxWaitMs?: number } = {},
+): Promise<unknown> {
+  const started = Date.now();
+  for (let attempt = 0; ; attempt += 1) {
+    const body = await apiGet<unknown>(
+      `/api/v1/pages/${encodeURIComponent(pageId)}/presentation-embedded-fonts`,
+    );
+    if ((body as { pending?: unknown } | null)?.pending !== true) return body;
+    const delay = PENDING_RETRY_MS[Math.min(attempt, PENDING_RETRY_MS.length - 1)];
+    if (Date.now() - started + delay > maxWaitMs) return { fonts: [] };
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+}
+
 /** Load (once per page) and register a page's embedded faces; the aliases of
  * the typefaces that are ready. */
 export function loadPresentationEmbeddedFonts(pageId: string): Promise<PresentationEmbeddedFontAliases> {
   let pending = pageAliases.get(pageId);
   if (!pending) {
     pending = (async () => {
-      const body = await apiGet<unknown>(
-        `/api/v1/pages/${encodeURIComponent(pageId)}/presentation-embedded-fonts`,
-      );
+      const body = await readPresentationEmbeddedFontsAnswer(pageId);
       return registerPresentationEmbeddedFonts(body);
     })().catch((error) => {
       pageAliases.delete(pageId);

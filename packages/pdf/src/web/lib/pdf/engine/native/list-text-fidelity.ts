@@ -111,6 +111,7 @@ import { isPdfNativeEmbeddedFontKey, readPdfNativeEmbeddedFontKey } from "../../
 import { proveMraiNativeTextMove, type PdfNativeTextMoveProof } from "./text-move";
 import { PDF_SOURCE_NAME, PDF_SOURCE_NAME_TOKEN, decodePdfSourceName, pdfSourceNamesRead } from "./pdf-source-name";
 import { proveMraiNativeTextGroupMove, type PdfNativeTextGroupMoveProof } from "./text-group-move";
+import { MRAI_NATIVE_PARAGRAPH_OVER_OTHER_TEXT_REFUSAL } from "./refusal-details";
 
 import {
   PdfNativeTransactionError,
@@ -558,6 +559,11 @@ export interface PdfNativeListTextSelectionReplacementInput {
   /** The factor the reader scaled the whole paragraph's text by (a font
    * size set on all of it), in the frame paragraphFrameRight pins. */
   readonly paragraphSizeScale?: number;
+  /** Where the editor's rows start in `replacementText` (an offset for each
+   * row after the first): words typed at the end of a row broken by hand
+   * stay on it, and words typed at the start of the next start that row
+   * (MraiNativeParagraphRowEdit). Without them the two read the same. */
+  readonly rowStarts?: readonly number[];
 }
 
 export interface PdfNativeListTextPropertyReplacementInput extends PdfNativeListTextSelectionReplacementInput {
@@ -607,6 +613,9 @@ export interface PdfNativeEmbeddedFontProvider {
   /** A session for one write: the installed fonts' objects are numbered
    * from `firstObjectNumber`, on the page (or form) `page` names. */
   open(input: Readonly<{ firstObjectNumber: number; page: PdfNativeIndirectObjectRef }>): PdfNativeEmbeddedFontSession;
+  /** Lets go of what a write that was not planned asked for: the fonts the
+   * next session installs hold the glyphs of its own write only. */
+  restart?(): void;
 }
 
 export interface PdfNativeListTextSelectionRebindInput {
@@ -5201,6 +5210,66 @@ function restrictSimpleFontEncodeToGlyphs<
   });
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function type1SubsetCharacters(descriptorSource: string | null): ReadonlySet<string> | null {
+  if (!descriptorSource || !/\/FontFile3?\b/.test(descriptorSource)) return null;
+  const entries = readMraiNativeTopLevelDictionaryEntries(descriptorSource).filter((entry) => entry.key === "CharSet");
+  if (entries.length !== 1) return null;
+  const value = descriptorSource.slice(entries[0].valueStart, entries[0].valueEnd).trim();
+  let listed: string;
+  if (/^\((?:[^()\\]|\\[\s\S])*\)$/.test(value)) {
+    listed = value.slice(1, -1).replace(/\\([\s\S])/g, "$1");
+  } else if (/^<[0-9A-Fa-f\s]*>$/.test(value)) {
+    const hex = value.slice(1, -1).replace(/\s/g, "");
+    listed = (hex.length % 2 ? `${hex}0` : hex).replace(/../g, (pair) => String.fromCharCode(Number.parseInt(pair, 16)));
+  } else {
+    return null;
+  }
+  const names = listed.split("/").map((name) => name.trim()).filter((name) => name !== "");
+  if (names.length === 0 || names.length > 1024) return null;
+  const characters = new Set<string>();
+  for (const name of names) {
+    if (name === ".notdef") continue;
+    const character = pdfSimpleFontGlyphNameToCharacter(decodeInlineName(`/${name}`), adobeGlyphList ?? undefined);
+    if (character === null) return null;
+    characters.add(character);
+  }
+  return characters.size > 0 ? characters : null;
+}
+
+/** A simple font's tables with only the characters of `drawn` written
+ * (white space, which a face may set as a move alone, stays). */
+function restrictSimpleFontEncodeToCharacters<
+  T extends Readonly<{
+    encode: ReadonlyMap<string, number>;
+    ligatureEncodings?: readonly Readonly<{ text: string }>[];
+  }>,
+>(cmap: T, drawn: ReadonlySet<string>): T {
+  const encode = new Map([...cmap.encode].filter(([text]) => drawn.has(text) || /^\s+$/u.test(text)));
+  if (encode.size === cmap.encode.size) return cmap;
+  return Object.freeze({
+    ...cmap,
+    encode,
+    ...(cmap.ligatureEncodings
+      ? { ligatureEncodings: cmap.ligatureEncodings.filter((entry) => encode.has(entry.text)) }
+      : {}),
+  });
+}
+
 function restrictToType3GlyphCodes(
   cmap: Readonly<{ decode: ReadonlyMap<number, string>; encode: ReadonlyMap<string, number> }>,
   fontObject: string,
@@ -5610,6 +5679,10 @@ function parseFontMetrics(
       cmap = WITNESS_ONLY_UNICODE_TABLES;
     }
     if (simpleSubtype === "Type3") cmap = restrictToType3GlyphCodes(cmap, fontObject);
+    if (simpleSubtype === "Type1" && !witnessOnly) {
+      const drawn = type1SubsetCharacters(descriptorSource);
+      if (drawn) cmap = restrictSimpleFontEncodeToCharacters(cmap, drawn);
+    }
     if (simpleSubtype === "TrueType" && simpleTrueTypeProgram?.length && !witnessOnly) {
       const read = cmap;
       const glyphCodes = readPdfSimpleTrueTypeGlyphCodes(simpleTrueTypeProgram, (code) => read.decode.get(code));
@@ -6433,6 +6506,67 @@ function keptPerEvent<T>(event: object, metrics: FontMetrics, kind: string, read
   const value = read();
   kept.set(kind, value);
   return value;
+}
+
+/** What one plan reads off the shows of a page however many of its runs
+ * walk the page past them. A line a browser printed is one show to a glyph:
+ * each run of it is proved against every show of the page, and each of those
+ * proofs asked every show the same things again -- where it stands on the
+ * page, whether the reader reads it as white space, what the reader makes of
+ * it in the run's font. Those are facts of the show (frozen with its reading,
+ * as the list of them is) and the font (whose tables never change once
+ * derived) and of nothing a run asks, so a plan reads each once: the table is
+ * made by the plan that is asked, handed to the plans it asks in turn, and
+ * gone with it. A show is known by its place in its list, and a plan keeps
+ * the last few lists it walked (a run that leaves its own overprint out of
+ * the page walks a list of its own). A reading that refuses is not kept; it
+ * refuses again when it is asked again. */
+interface PlanShowFontFacts {
+  /** textEventCodesAdvance and pdfJsReaderOmittedAdvance over the show's own
+   * codes, and pdfJsUnnamedCodeShowDisplay. */
+  advance: number | undefined;
+  omittedAdvance: number | undefined;
+  unnamedDisplay: string | null | undefined;
+  leadingGap: LeadingGapShowReading | null | undefined;
+  trailingGap: TrailingGapShowReading | null | undefined;
+  raisedNeighbour: RaisedNeighbourShowReading | null | undefined;
+}
+interface PlanShowFacts {
+  /** The show's text space on the page: its graphics matrix times its text
+   * matrix. */
+  toPage: PdfMatrix | undefined;
+  /** isPdfJsWhiteSpaceText of the show's text. */
+  whiteSpace: boolean | undefined;
+}
+interface PlanPageFacts {
+  anyVertical: boolean | undefined;
+  /** Whether no show stands twice in the list: a show's place in it is then
+   * where a walk meets it. */
+  distinct: boolean | undefined;
+  readonly shows: (PlanShowFacts | undefined)[];
+  readonly inFont: Map<FontMetrics, (PlanShowFontFacts | undefined)[]>;
+}
+type PlanShowFactTable = Map<readonly TextEvent[], PlanPageFacts>;
+const MAX_PLAN_SHOW_FACT_LISTS = 8;
+
+function planPageFacts(table: PlanShowFactTable, events: readonly TextEvent[]): PlanPageFacts {
+  let page = table.get(events);
+  if (!page) {
+    if (table.size >= MAX_PLAN_SHOW_FACT_LISTS) table.delete(table.keys().next().value!);
+    page = { anyVertical: undefined, distinct: undefined, shows: [], inFont: new Map() };
+    table.set(events, page);
+  }
+  return page;
+}
+
+function anyShowVertical(events: readonly TextEvent[], page: PlanPageFacts | undefined): boolean {
+  if (!page) return events.some((event) => event.vertical);
+  return (page.anyVertical ??= events.some((event) => event.vertical));
+}
+
+function showToPage(event: TextEvent, known: PlanShowFacts | undefined): PdfMatrix {
+  if (!known) return multiplyPdfMatrices(event.graphicsMatrix, event.textMatrix);
+  return (known.toPage ??= multiplyPdfMatrices(event.graphicsMatrix, event.textMatrix));
 }
 
 /** The page's view as the reader reads one show in it: the show's text space
@@ -9733,8 +9867,10 @@ function nextInkedShowReach(
   geometry: ReturnType<typeof textEventSelectionGeometry>,
   metricsFor: (entry: TextEvent) => FontMetrics | undefined,
   pastWhiteSpace = false,
+  /** The show's place among the events, where the caller knows it. */
+  at?: number,
 ): Readonly<{ along: number; across: number; axis: number; nextAxis: number; acrossOffLine: number }> | null {
-  const index = events.indexOf(event);
+  const index = at ?? events.indexOf(event);
   let next: TextEvent | null = null;
   for (let cursor = index + 1; cursor < events.length; cursor += 1) {
     const candidate = events[cursor];
@@ -10006,15 +10142,14 @@ function raisedNeighbourGapSelectionProjection(
   events: readonly TextEvent[],
   metrics: FontMetrics,
   metricsFor: (entry: TextEvent) => FontMetrics | undefined,
+  inFont?: PlanShowFontFacts,
+  /** The show's place among the events, where the caller knows it. */
+  at?: number,
 ): PdfJsTextSelectionProjection | null {
-  if (event.vertical || event.text === null || event.displayText === null || !event.text.trim() ||
-    PDFJS_WHITESPACE_RUN_AT_END.test(event.text)) return null;
-  // The show may open with one space glyph (InDesign starts a run with its
-  // word space): the reader only moves its pen over it, and the item starts
-  // at the first inked glyph, past it, as it does for any show.
-  const display = pdfJsNormalizeUnicode(event.displayText);
-  const opening = display.startsWith(" ") && !PDFJS_WHITESPACE_CHARACTER.test(display[1] ?? " ") ? 1 : 0;
-  if (display.slice(opening) !== item.str) return null;
+  const reading = !inFont ? raisedNeighbourShowReading(event)
+    : inFont.raisedNeighbour === undefined ? (inFont.raisedNeighbour = raisedNeighbourShowReading(event)) : inFont.raisedNeighbour;
+  if (reading === null || reading.shown !== item.str) return null;
+  const { opening } = reading;
   let geometry: ReturnType<typeof textEventSelectionGeometry>;
   let lead = 0;
   try {
@@ -10028,7 +10163,7 @@ function raisedNeighbourGapSelectionProjection(
     if (error instanceof PdfNativeTransactionError) return null;
     throw error;
   }
-  const reach = nextInkedShowReach(event, events, geometry, metricsFor);
+  const reach = nextInkedShowReach(event, events, geometry, metricsFor, false, at);
   if (!reach) return null;
   const { along, across, axis } = reach;
   const height = geometry.height;
@@ -10042,6 +10177,21 @@ function raisedNeighbourGapSelectionProjection(
   const advance = along / axis;
   if (!(advance > lead) || !selectionItemGeometryMatchesTextEvent(item, event, advance, lead)) return null;
   return Object.freeze({ displayText: item.str, advance: advance - lead, leadingAdvance: lead });
+}
+
+type RaisedNeighbourShowReading = Readonly<{ shown: string; opening: 0 | 1 }>;
+/** What raisedNeighbourGapSelectionProjection reads off the show before it
+ * looks at the item: the text of an item that stands on it, and whether a
+ * space glyph opens it. Null for a show no such item stands on. */
+function raisedNeighbourShowReading(event: TextEvent): RaisedNeighbourShowReading | null {
+  if (event.vertical || event.text === null || event.displayText === null || !event.text.trim() ||
+    PDFJS_WHITESPACE_RUN_AT_END.test(event.text)) return null;
+  // The show may open with one space glyph (InDesign starts a run with its
+  // word space): the reader only moves its pen over it, and the item starts
+  // at the first inked glyph, past it, as it does for any show.
+  const display = pdfJsNormalizeUnicode(event.displayText);
+  const opening = display.startsWith(" ") && !PDFJS_WHITESPACE_CHARACTER.test(display[1] ?? " ") ? 1 : 0;
+  return Object.freeze({ shown: display.slice(opening), opening });
 }
 
 /** How many bytes of these codes run to the last glyph the reader measures
@@ -10160,18 +10310,17 @@ function pdfJsZeroWidthMarkHead(event: TextEvent, metrics: FontMetrics): number 
   }
 }
 
-function leadingGapSelectionProjection(
-  item: PdfNativeListTextSelectionItemEvidence,
-  event: TextEvent,
-  events: readonly TextEvent[],
-  metrics: FontMetrics,
-  metricsFor: (entry: TextEvent) => FontMetrics | undefined,
-  originalText: string,
-  replacementText: string,
-): PdfJsTextSelectionProjection | null {
-  if (event.vertical || event.displayText === null || event.text === null) return null;
+type LeadingGapShowReading = Readonly<{
+  kerned: ReturnType<typeof pdfJsKernedSpaceDisplay>; display: string;
+  leadingCount: number; trailingCount: number; core: string;
+}>;
+/** What leadingGapSelectionProjection reads off the show and its font before
+ * it looks at the item: the reader's display of it, the white space and the
+ * marks it opens and closes with, and the text between them. Null for a show
+ * no such item stands on. */
+function leadingGapShowReading(event: TextEvent, displayText: string, metrics: FontMetrics): LeadingGapShowReading | null {
   const kerned = pdfJsKernedSpaceDisplay(event, metrics);
-  const display = kerned?.display ?? pdfJsNormalizeUnicode(event.displayText);
+  const display = kerned?.display ?? pdfJsNormalizeUnicode(displayText);
   // The show's own white space: the glyphs it opens and closes with are
   // never shown (a Word run opens with its word-space glyph, a tab to its
   // ToUnicode, and the reader measures the gap from the inked glyph before
@@ -10189,7 +10338,25 @@ function leadingGapSelectionProjection(
   const leadingCount = markHead + opening.length - opening.replace(PDFJS_WHITESPACE_RUN_AT_START, "").length;
   const trailingCount = display.length - display.replace(PDFJS_WHITESPACE_RUN_AT_END, "").length;
   if (leadingCount + trailingCount >= display.length) return null;
-  const core = pdfJsWhitespaceRunProjection(display.slice(leadingCount, display.length - trailingCount));
+  return Object.freeze({ kerned, display, leadingCount, trailingCount,
+    core: pdfJsWhitespaceRunProjection(display.slice(leadingCount, display.length - trailingCount)) });
+}
+
+function leadingGapSelectionProjection(
+  item: PdfNativeListTextSelectionItemEvidence,
+  event: TextEvent,
+  events: readonly TextEvent[],
+  metrics: FontMetrics,
+  metricsFor: (entry: TextEvent) => FontMetrics | undefined,
+  originalText: string,
+  replacementText: string,
+  inFont?: PlanShowFontFacts,
+): PdfJsTextSelectionProjection | null {
+  if (event.vertical || event.displayText === null || event.text === null) return null;
+  const reading = !inFont ? leadingGapShowReading(event, event.displayText, metrics)
+    : inFont.leadingGap === undefined ? (inFont.leadingGap = leadingGapShowReading(event, event.displayText, metrics)) : inFont.leadingGap;
+  if (reading === null) return null;
+  const { kerned, display, leadingCount, trailingCount, core } = reading;
   // The viewer also folds the reader's gap space after the show into the
   // item (a TeX equals sign stands between two gaps, each read as a space
   // of its own): the item then runs on to the next show's first glyph.
@@ -10298,12 +10465,13 @@ function trailingGapSelectionProjection(
   metricsFor: (entry: TextEvent) => FontMetrics | undefined,
   originalText: string,
   replacementText: string,
+  inFont?: PlanShowFontFacts,
 ): PdfJsTextSelectionProjection | null {
   if (event.vertical || event.displayText === null || event.text === null) return null;
-  // A show of one word: white space inside it would be the reader's to read.
-  const trailingCount = event.displayText.length - event.displayText.replace(PDFJS_WHITESPACE_RUN_AT_END, "").length;
-  const display = event.displayText.slice(0, event.displayText.length - trailingCount);
-  if (!display || Array.from(display).some((character) => PDFJS_WHITESPACE_CHARACTER.test(character))) return null;
+  const reading = !inFont ? trailingGapShowReading(event.displayText)
+    : inFont.trailingGap === undefined ? (inFont.trailingGap = trailingGapShowReading(event.displayText)) : inFont.trailingGap;
+  if (reading === null) return null;
+  const { trailingCount, display } = reading;
   if (item.str !== `${display} ` || originalText !== item.str) return null;
   if (!/[^ ] $/u.test(replacementText)) return null;
   const unit = metrics.codeUnitBytes;
@@ -10340,6 +10508,18 @@ function trailingGapSelectionProjection(
     kernedSourceText: replacementText.slice(0, -1) + event.displayText.slice(display.length),
     foldedTrailingGap: true as const,
   });
+}
+
+type TrailingGapShowReading = Readonly<{ trailingCount: number; display: string }>;
+/** What trailingGapSelectionProjection reads off the show's display before
+ * it looks at the item: the white space it closes with and the word before
+ * that. Null for a show no such item stands on. */
+function trailingGapShowReading(displayText: string): TrailingGapShowReading | null {
+  // A show of one word: white space inside it would be the reader's to read.
+  const trailingCount = displayText.length - displayText.replace(PDFJS_WHITESPACE_RUN_AT_END, "").length;
+  const display = displayText.slice(0, displayText.length - trailingCount);
+  if (!display || Array.from(display).some((character) => PDFJS_WHITESPACE_CHARACTER.test(character))) return null;
+  return Object.freeze({ trailingCount, display });
 }
 
 function leadingSourceSpaceSelectionProjection(
@@ -11357,6 +11537,20 @@ function wrapFixedFrameRanges(input: {
     end: number,
   ) => number;
   readonly preferredBreak: (end: number) => boolean;
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  readonly droppedBreak?: (index: number) => boolean;
 }): readonly Readonly<{ start: number; end: number; advance: number }>[] {
   const result: Array<
     Readonly<{ start: number; end: number; advance: number }>
@@ -11388,6 +11582,14 @@ function wrapFixedFrameRanges(input: {
         );
       }
     } else if (bestEnd !== input.unitCount) {
+      if (input.droppedBreak?.(bestEnd) && !input.preferredBreak(bestEnd)) {
+        // The line's words end exactly here: the space after them is the break.
+        result.push(
+          Object.freeze({ start: cursor, end: bestEnd, advance: bestAdvance }),
+        );
+        cursor = bestEnd + 1;
+        continue;
+      }
       let preferredEnd = -1;
       for (let end = cursor + 1; end <= bestEnd; end += 1) {
         if (input.preferredBreak(end)) preferredEnd = end;
@@ -11548,6 +11750,7 @@ function alignedFixedFrameRanges(
             metrics,
           ).advance,
         preferredBreak: (rangeEnd) => characters[start + rangeEnd - 1] === " ",
+        droppedBreak: (index) => characters[start + index] === " ",
       });
     } catch (error) {
       if (!(error instanceof PdfNativeTransactionError)) throw error;
@@ -11618,6 +11821,7 @@ function wrapFixedFrameText(
           metrics,
         ).advance,
       preferredBreak: (end) => characters[end - 1] === " ",
+      droppedBreak: (index) => characters[index] === " ",
     });
   return Object.freeze(
     ranges.map((range, lineIndex) => {
@@ -14590,8 +14794,9 @@ function textFrameAxes(
  * through its own font, which the rule measuring that space knows. A show
  * whose codes its font does not read, or whose font the rule was not given,
  * inks (mirror of the replay's _show_inks_nothing). */
-function showInksNothing(event: TextEvent, metricsByResource: ReadonlyMap<string, FontMetrics>): boolean {
-  return event.text !== null && metricsByResource.has(event.fontName) && isPdfJsWhiteSpaceText(event.text);
+function showInksNothing(event: TextEvent, metricsByResource: ReadonlyMap<string, FontMetrics>, known?: PlanShowFacts): boolean {
+  if (event.text === null || !metricsByResource.has(event.fontName)) return false;
+  return known ? (known.whiteSpace ??= isPdfJsWhiteSpaceText(event.text)) : isPdfJsWhiteSpaceText(event.text);
 }
 
 function sameLineGrowthCapacity(
@@ -14602,9 +14807,11 @@ function sameLineGrowthCapacity(
   originalAdvance: number,
   metrics: FontMetrics,
   metricsByResource: ReadonlyMap<string, FontMetrics>,
+  showFacts?: PlanShowFactTable,
 ): number | null {
   const bounds = witnessBounds(context);
-  if (!bounds || text.vertical || events.some((event) => event.vertical)) {
+  const page = showFacts && planPageFacts(showFacts, events);
+  if (!bounds || text.vertical || anyShowVertical(events, page)) {
     return null;
   }
   // A page drawn from several streams is one drawing: the other streams
@@ -14634,22 +14841,48 @@ function sameLineGrowthCapacity(
     if (Math.abs(component) <= 1e-9) continue;
     limit = Math.min(limit, ((component > 0 ? high : low) - start) / component);
   }
-  for (const other of [...events, ...siblings]) {
+  const others = [...events, ...siblings];
+  for (let at = 0; at < others.length; at += 1) {
+    const other = others[at];
     if (other === text) continue;
+    const known = page && at < events.length ? (page.shows[at] ??= { toPage: undefined, whiteSpace: undefined }) : undefined;
     // An empty show (Distiller leaves `()Tj` between words) draws nothing
     // and bounds nothing; nor does a show that inks nothing, every glyph it
     // draws read as the reader's white space through its own font (Word
     // sets the space after a run as a show of its own, where the run ends).
-    if (other.codes.length === 0 || showInksNothing(other, metricsByResource)) continue;
-    const origin = multiplyPdfMatrices(other.graphicsMatrix, other.textMatrix);
+    if (other.codes.length === 0 || showInksNothing(other, metricsByResource, known)) continue;
+    const origin = showToPage(other, known);
     const otherAlong = alongOf(origin[4], origin[5]);
-    if (
-      Math.abs(acrossOf(origin[4], origin[5])) > 0.5 ||
-      otherAlong < endAlong - 0.5
-    ) {
+    const otherAcross = acrossOf(origin[4], origin[5]);
+    if (otherAlong < endAlong - 0.5) continue;
+    if (Math.abs(otherAcross) > 0.5) {
+      // Text set off the line's baseline whose ink still stands in the
+      // line's own band -- a fraction's numerator over the line and its
+      // denominator under it, a script -- bounds the room too: the line
+      // stops where it starts. Grown past it, "softmax(" typed longer ran
+      // between a numerator and a denominator, through their bar (Attention
+      
+      // its size under its baseline, seven tenths over it -- a line above
+      // or below, set at any leading a reader reads, stays clear of that.
+      const otherSize = other.fontSize * Math.hypot(origin[2], origin[3]);
+      const size = text.fontSize * acrossLength;
+      if (otherSize > 0 && otherAcross + STACKED_INK_OVER_EM * otherSize > -STACKED_INK_UNDER_EM * size &&
+        otherAcross - STACKED_INK_UNDER_EM * otherSize < STACKED_INK_OVER_EM * size) {
+        limit = Math.min(limit, otherAlong);
+      }
       continue;
     }
-    limit = Math.min(limit, otherAlong);
+    // Text that stands further off than the reader keeps two runs of a row
+    // in one line is another box's (SAME_BOX_GAP_EM): the line stops short
+    // of it by a little more than that gap, so the two stay two -- the
+    // clearance the paragraph tier keeps (its CLEAR_OF_TEXT_BESIDE_EM).
+    // Grown up to where that text starts, a label typed longer stood against
+    // the label beside it and the two read as one line ("Export" + "测试"
+    
+    // room this leaves, the words wrap in their own box.
+    const ownSize = text.fontSize * acrossLength;
+    limit = Math.min(limit, otherAlong - endAlong > SAME_BOX_GAP_EM * ownSize
+      ? otherAlong - CLEAR_OF_OTHER_BOX_EM * ownSize : otherAlong);
   }
   // A picture standing beyond the show on its line bounds the free space;
   // one the show already runs across, or that starts before its end, does
@@ -14699,10 +14932,12 @@ function sameLineLeftRoom(
   streamText: string,
   metrics: FontMetrics,
   metricsByResource: ReadonlyMap<string, FontMetrics>,
+  showFacts?: PlanShowFactTable,
 ): number | null {
   if (!(rightRoom < text.fontSize * 0.25)) return null;
   const bounds = witnessBounds(context);
-  if (!bounds || text.vertical || events.some((event) => event.vertical)) return null;
+  const page = showFacts && planPageFacts(showFacts, events);
+  if (!bounds || text.vertical || anyShowVertical(events, page)) return null;
   const siblings = siblingWitnessEvents(context, metrics, text.fontName, metricsByResource);
   const imageBoxes = siblings === null ? null : pageImageBoxes(context, streamText);
   if (siblings === null || imageBoxes === null || siblings.some((event) => event.vertical)) return null;
@@ -14723,10 +14958,13 @@ function sameLineLeftRoom(
     if (Math.abs(component) <= 1e-9) continue;
     limit = Math.max(limit, ((component > 0 ? low : high) - start) / component);
   }
-  for (const other of [...events, ...siblings]) {
+  const others = [...events, ...siblings];
+  for (let at = 0; at < others.length; at += 1) {
+    const other = others[at];
     if (other === text) continue;
-    if (other.codes.length === 0 || showInksNothing(other, metricsByResource)) continue;
-    const origin = multiplyPdfMatrices(other.graphicsMatrix, other.textMatrix);
+    const known = page && at < events.length ? (page.shows[at] ??= { toPage: undefined, whiteSpace: undefined }) : undefined;
+    if (other.codes.length === 0 || showInksNothing(other, metricsByResource, known)) continue;
+    const origin = showToPage(other, known);
     const otherAlong = alongOf(origin[4], origin[5]);
     if (Math.abs(acrossOf(origin[4], origin[5])) > 0.5 || otherAlong >= -0.5) continue;
     const otherMetrics = metricsByResource.get(other.fontName) ?? (other.fontName === text.fontName ? metrics : undefined);
@@ -14772,6 +15010,25 @@ interface SameLineShiftPlan {
 }
 
 const TEXT_SHOW_WORDS: ReadonlySet<string> = new Set(["Tj", "TJ", "'", '"']);
+/** The operators that paint a path (a rule, a bar, a box's fill). */
+const PATH_PAINT_WORDS: ReadonlySet<string> = new Set(["S", "s", "f", "F", "f*", "B", "B*", "b", "b*"]);
+
+/** The gap, in ems of the smaller of two runs of a row, up to which the
+ * reader reads them as one line and past which as two boxes
+ * (native-paragraph-edit-boxes' SAME_LINE_GAP_FACTOR). */
+const SAME_BOX_GAP_EM = 1.5;
+// A figure alone in its show (the box builder's COMPACT_NUMERIC_CHART_LABEL),
+// and how far apart two of them on one baseline are two boxes (the reader's
+// in-flow bound, its PDFJS_SPACE_IN_FLOW_MAX_EM).
+/** How far short of another box's text a line grown in place stops, in ems
+ * (paragraph-rewrite's CLEAR_OF_TEXT_BESIDE_EM). */
+const CLEAR_OF_OTHER_BOX_EM = 1.6;
+const COMPACT_FIGURE = /^[+-]?(?:\d{1,4}(?:[.,]\d+)?|[.,]\d+)%?$/u;
+/** How far a show's ink reaches under and over its baseline, in ems, for
+ * the room a line grown in place has (sameLineGrowthCapacity). */
+const STACKED_INK_UNDER_EM = 0.2;
+const STACKED_INK_OVER_EM = 0.7;
+const FIGURES_APART_EM = 0.6;
 
 /** The runs after an edited show on its visual line, each with the operand
  * that places it, so the line's later runs move with the edit: a run set by
@@ -14845,6 +15102,25 @@ function sameLineShiftPlan(
   // height starts another line.
   const lineYs: number[] = [toPage[5]];
   let anchorHeight = Math.abs(lineHeight);
+  // The line's own later runs end where the reader's line does: a run that
+  // starts further from the end of the runs before it than the reader keeps
+  // two runs of a row in one line (SAME_BOX_GAP_EM) is another box's -- the
+  // next cell of a table row, the next column, a value beside its label --
+  // and an edit of this box moves nothing of another. Moved with the line,
+  // a cell typed longer pushed the next cell's words 96 pt to the right,
+  
+  // room up to that run, and past it wraps in its own frame (the paragraph
+  // tier's).
+  let reach = endX;
+  let reachHeight = Math.abs(lineHeight);
+  // (Nor does it move a figure set apart from the figure before it: an axis'
+  // next tick label, the next number of a table's row -- each a box of its
+  // own, native-paragraph-edit-boxes' figuresSetApart.)
+  // (The two that face each other across the gap: a show's last figure, the
+  // next show's first.)
+  const endsOnFigure = (value: string | null) => value !== null && COMPACT_FIGURE.test(value.trim().split(/\s+/u).at(-1) ?? "");
+  const opensOnFigure = (value: string | null) => value !== null && COMPACT_FIGURE.test(value.trim().split(/\s+/u)[0] ?? "");
+  let reachFigure = endsOnFigure(text.text) ? toPage[5] : null;
   for (const event of later) {
     const origin = pageOrigin(event);
     if (
@@ -14855,14 +15131,35 @@ function sameLineShiftPlan(
     ) {
       break;
     }
+    const height = Math.abs(event.fontSize * origin[3]);
+    const inks = !showInksNothing(event, metricsByResource);
+    if (inks && origin[4] - reach > SAME_BOX_GAP_EM * Math.min(reachHeight, height)) break;
+    if (inks && opensOnFigure(event.text) && reachFigure !== null && Math.abs(origin[5] - reachFigure) <= 0.05 * Math.min(reachHeight, height) &&
+      Math.abs(height - reachHeight) <= 0.05 * Math.min(reachHeight, height) &&
+      origin[4] - reach > FIGURES_APART_EM * Math.min(reachHeight, height)) break;
     members.push(event);
     lineYs.push(origin[5]);
-    anchorHeight = Math.max(anchorHeight, Math.abs(event.fontSize * origin[3]));
+    anchorHeight = Math.max(anchorHeight, height);
+    const advance = inks ? advanceOf(event) : null;
+    if (advance !== null) {
+      reach = Math.max(reach, origin[4] + advance * origin[0]);
+      reachHeight = height;
+      reachFigure = endsOnFigure(event.text) ? origin[5] : null;
+    }
   }
   if (members.length === 0) return null;
   const tokens = tokenizeContentGraphics(streamText);
   const tokensBetween = (from: number, to: number) =>
     tokens.filter((token) => token.start >= from && token.end <= to);
+  // Something painted among the runs that would move -- a fraction's bar, a
+  // radical's, a rule under a word, each stroked between two text objects --
+  // stays where it is when only the text operands move: "softmax(" typed
+  // longer took the fraction after it 13 pt to the right and left its bar
+  // and its radical's behind, through the words typed (Attention p.4 on
+  
+  // set by the planners after this one, which move nothing of it.
+  if (tokensBetween(text.end, members.at(-1)!.start)
+    .some((token) => token.kind === "word" && PATH_PAINT_WORDS.has(token.value))) return null;
   const operators: PdfNativeLineShiftEvidence["operators"][number][] = [];
   let envelopeEnd = text.end;
   // Whether the current text object's line matrix already carries the shift.
@@ -17619,10 +17916,13 @@ function planMraiNativeListTextReplacementWithState(
    * over (see NATIVE_TEXT_GROUP_DRAWS_NOTHING_HERE); never part of what a
    * plan answers, so it is not part of the key either. */
   prescreenGroup = false,
+  /** The show facts of the plan that asks (PlanShowFactTable): what a plan
+   * reads either way, so no part of what it answers or of the key. */
+  showFacts?: PlanShowFactTable,
 ): Promise<PlannedNativeTextReplacement> {
   const plan = () => planMraiNativeListTextReplacementWithStateUnkept(input, context, allowNoopProof,
     historyAuthority, allowPropertyFonts, allowHeterogeneousRunFonts, inspectObject, inspectContentStream,
-    allowSingleItemSourceRun, groupOwnsFrameLines, prescreenGroup).then((planned) => NATIVE_TYPE3_ROUTES.has(input)
+    allowSingleItemSourceRun, groupOwnsFrameLines, prescreenGroup, showFacts).then((planned) => NATIVE_TYPE3_ROUTES.has(input)
     ? Object.freeze({ ...planned, plan: Object.freeze({ ...planned.plan, type3Text: true as const }) }) : planned);
   if (!context || !inspectObject || !inspectContentStream || historyAuthority) return plan();
   const { sourceBytes, ...asked } = input;
@@ -17688,6 +17988,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
    * this only after the frame compiler has refused the line. */
   groupOwnsFrameLines = false,
   prescreenGroup = false,
+  showFacts: PlanShowFactTable = new Map(),
 ): Promise<PlannedNativeTextReplacement> {
   exactRef(input.target, "content stream");
   exactRef(input.font.page, "page");
@@ -18521,17 +18822,17 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
       const planOnce = (candidate: typeof lineInput, prescreenGroup = false) =>
         planMraiNativeListTextReplacementWithState(candidate,
           context, true, undefined, allowPropertyFonts, inPlace, inspectObject, inspectContentStream, false,
-          false, prescreenGroup)
+          false, prescreenGroup, showFacts)
           .then(oneLine)
           .catch(error => {
             if (!(error instanceof PdfNativeTransactionError)) throw error;
             return planMraiNativeListTextReplacementWithState(candidate, context, true, undefined,
-              allowPropertyFonts, inPlace, inspectObject, inspectContentStream, true, false, prescreenGroup).then(oneLine);
+              allowPropertyFonts, inPlace, inspectObject, inspectContentStream, true, false, prescreenGroup, showFacts).then(oneLine);
           })
           .catch(error => {
             if (!(error instanceof PdfNativeTransactionError)) throw error;
             return planMraiNativeListTextReplacementWithState(candidate, context, true, undefined,
-              allowPropertyFonts, inPlace, inspectObject, inspectContentStream, true, true, prescreenGroup).then(oneLine);
+              allowPropertyFonts, inPlace, inspectObject, inspectContentStream, true, true, prescreenGroup, showFacts).then(oneLine);
           });
       // An item set in one of the paragraph's other fonts -- a symbol, an
       // italic word, a line in a heavier weight -- is proved in the font that
@@ -19423,7 +19724,8 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         let single: PlannedNativeTextReplacement;
         try {
           single = await planMraiNativeListTextReplacementWithState({ ...input, ...leafFontInput(event), originalText: runDisplays[runIndex], replacementText,
-            selectionItems: Object.freeze([item]) }, context, allowNoopProof, undefined, false, allowHeterogeneousRunFonts, inspectObject, inspectContentStream, false);
+            selectionItems: Object.freeze([item]) }, context, allowNoopProof, undefined, false, allowHeterogeneousRunFonts, inspectObject, inspectContentStream, false,
+            false, false, showFacts);
         } catch (error) {
           if (error instanceof PdfNativeTransactionError) return null;
           throw error;
@@ -19829,7 +20131,8 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
               ...(ownedOverprintSpans.length > 0 ? { ownedOverprintSpans } : {}) };
             let proof: PlannedNativeTextReplacement;
             try {
-              proof = await planMraiNativeListTextReplacementWithState(leafInput, context, true, undefined, false, allowHeterogeneousRunFonts, inspectObject, inspectContentStream, false);
+              proof = await planMraiNativeListTextReplacementWithState(leafInput, context, true, undefined, false, allowHeterogeneousRunFonts, inspectObject, inspectContentStream, false,
+                false, false, showFacts);
             } catch (error) {
               // A run that widens before runs it abuts moves them (the
               // group's shift), so it grows into the room past the group's
@@ -19840,7 +20143,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
                 : null;
               if (capacity === null) throw error;
               proof = await planMraiNativeListTextReplacementWithState({ ...leafInput, groupRunCapacity: capacity }, context, true, undefined, false,
-                allowHeterogeneousRunFonts, inspectObject, inspectContentStream, false);
+                allowHeterogeneousRunFonts, inspectObject, inspectContentStream, false, false, false, showFacts);
             }
             const leaf = runIndex === emptiedRun ? emptiedShowPlan(proof, stream.streamBytes) : proof;
             if (leaf.plan.evidence.textOperatorSpan.start !== event.start || leaf.plan.evidence.textOperatorSpan.end !== event.end ||
@@ -20154,7 +20457,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
             { ...input, originalText: trim(input.originalText), replacementText: trim(input.replacementText),
               selectionItems: Object.freeze([folded.item]) },
             context, allowNoopProof, historyAuthority, allowPropertyFonts, allowHeterogeneousRunFonts,
-            inspectObject, inspectContentStream, allowSingleItemSourceRun, ownsFrameLines,
+            inspectObject, inspectContentStream, allowSingleItemSourceRun, ownsFrameLines, false, showFacts,
           );
         } catch (error) {
           if (!(error instanceof PdfNativeTransactionError)) throw error;
@@ -21742,7 +22045,23 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
       : null;
   const allowPdfJsSpaceProjection =
     (input.selectionItems?.length ?? 0) <= 1 && !historyAuthority;
-  for (const [index, text] of events.entries()) {
+  // Whether a display reads as the text asked for is a fact of the two
+  // strings, and a page's shows share a few displays (a glyph to a show).
+  const displaysReadAsOriginal = new Map<string, boolean>();
+  const readsAsOriginalText = (display: string): boolean => {
+    let reads = displaysReadAsOriginal.get(display);
+    if (reads === undefined) {
+      reads = sourceDisplayMatchesPdfJsSelection(display, input.originalText);
+      displaysReadAsOriginal.set(display, reads);
+    }
+    return reads;
+  };
+  const pageFacts = planPageFacts(showFacts, events);
+  let showsInFont = pageFacts.inFont.get(metrics);
+  if (!showsInFont) pageFacts.inFont.set(metrics, showsInFont = []);
+  const showsDistinct = (pageFacts.distinct ??= new Set(events).size === events.length);
+  for (let index = 0; index < events.length; index += 1) {
+    const text = events[index];
     if (
       text.text === null ||
       text.displayText === null ||
@@ -21758,26 +22077,26 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
     }
     let selectionProjection: PdfJsTextSelectionProjection | null = null;
     if (singleSelectionItem) {
-      const sourceCodes = Uint8Array.from(text.codes);
-      const sourceAdvance = textEventCodesAdvance(sourceCodes, text, metrics);
-      const fullDisplayMatches = allowPdfJsSpaceProjection
-        ? sourceDisplayMatchesPdfJsSelection(
-            text.displayText,
-            input.originalText,
-          ) ||
-          pdfJsUnnamedCodeDisplayMatchesSelection(
-            text,
-            metrics,
-            input.originalText,
-          )
+      const inFont = (showsInFont[index] ??= { advance: undefined, omittedAdvance: undefined, unnamedDisplay: undefined,
+        leadingGap: undefined, trailingGap: undefined, raisedNeighbour: undefined });
+      const at = showsDistinct ? index : undefined;
+      const sourceAdvance = (inFont.advance ??= textEventCodesAdvance(Uint8Array.from(text.codes), text, metrics));
+      let fullDisplayMatches = allowPdfJsSpaceProjection
+        ? readsAsOriginalText(text.displayText)
         : text.displayText === input.originalText;
+      if (!fullDisplayMatches && allowPdfJsSpaceProjection) {
+        // (pdfJsUnnamedCodeDisplayMatchesSelection, the show's display read once.)
+        const unnamed = inFont.unnamedDisplay === undefined
+          ? (inFont.unnamedDisplay = pdfJsUnnamedCodeShowDisplay(text, metrics)) : inFont.unnamedDisplay;
+        fullDisplayMatches = unnamed !== null && readsAsOriginalText(unnamed);
+      }
       if (
         !fullDisplayMatches ||
         !selectionItemMatchesTextEvent(
           singleSelectionItem,
           text,
           sourceAdvance,
-          pdfJsReaderOmittedAdvance(sourceCodes, text, metrics),
+          (inFont.omittedAdvance ??= pdfJsReaderOmittedAdvance(Uint8Array.from(text.codes), text, metrics)),
           allowPdfJsSpaceProjection ? metrics : undefined,
           allowPdfJsSpaceProjection
             ? pdfJsReaderOriginDrift(events, index, resolvedMetricsFor)
@@ -21800,12 +22119,12 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         selectionProjection = fullDisplayMatches
           ? (trailingSourceSpaceSelectionProjection(singleSelectionItem, text, metrics) ??
             leadingSourceSpaceSelectionProjection(singleSelectionItem, text, metrics) ??
-            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor) ??
+            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor, inFont, at) ??
             leadingGapSelectionProjection(
-              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText,
+              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText, inFont,
             ) ??
             trailingGapSelectionProjection(
-              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText,
+              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText, inFont,
             ))
           : (trailingSourceSpaceSelectionProjection(singleSelectionItem, text, metrics) ?? leadingSourceSpaceSelectionProjection(
               singleSelectionItem,
@@ -21813,14 +22132,14 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
               metrics,
             ) ??
             leadingGapSelectionProjection(
-              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText,
+              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText, inFont,
             ) ??
             trailingGapSelectionProjection(
-              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText,
+              singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText, inFont,
             ) ??
             // A show that opens with its word space and runs on to a raised
             // or lowered show after it (" (tCO" before a subscript "2").
-            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor) ??
+            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor, inFont, at) ??
             rightCroppedSelectionProjection(
               singleSelectionItem,
               text,
@@ -21873,7 +22192,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
       candidates.push({ text, marker, selectionProjection: null });
       continue;
     }
-    const sameLinePeers = events.filter(
+    const sameLinePeers = () => events.filter(
       (event) =>
         event !== text &&
         event.blockId === text.blockId &&
@@ -21883,7 +22202,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
     );
     if (
       singleSelectionItem ||
-      sameLinePeers.length === 0 ||
+      sameLinePeers().length === 0 ||
       allowPropertyFonts
     ) {
       candidates.push({ text, marker: null, selectionProjection });
@@ -22220,6 +22539,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         allowSingleItemSourceRun,
         groupOwnsFrameLines,
         prescreenGroup,
+        showFacts,
       );
     }
   }
@@ -22413,6 +22733,21 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
     const reading = pieceReading(kernedEdit);
     if (reading.writtenEnd > reading.end + 0.001 &&
       reading.writtenNext - reading.writtenEnd <= PDFJS_SPACE_IN_FLOW_MAX_FACTOR * text.fontSize) {
+      // Only the pieces of its own line: a piece that stood further off than
+      // the reader keeps two runs of a row in one line (SAME_BOX_GAP_EM) is
+      // another box's -- the next column of a table row TeX sets as one show
+      // -- and an edit of this box moves nothing of another. A figure typed
+      // three digits longer pushed the column beside it 17 pt (Attention p8,
+      
+      // (Nor a figure set apart from the figure typed onto: an axis' next
+      // tick label, each a box of its own -- figuresSetApart.)
+      const ownFigure = itemChunk.sourceText ?? (pdfJsReaderChunks(text, metrics, readerView) ?? [])
+        .find((chunk) => chunk.codeStart < itemChunk.codeEnd && chunk.codeEnd > itemChunk.codeStart)?.display ?? null;
+      const figuresApart = ownFigure !== null && COMPACT_FIGURE.test(ownFigure.trim()) &&
+        COMPACT_FIGURE.test(nextPiece.display.trim()) && reading.next - reading.end > FIGURES_APART_EM * text.fontSize;
+      if (reading.next - reading.end > SAME_BOX_GAP_EM * text.fontSize || figuresApart) {
+        refuse("An edit of one piece of a show must leave the pieces after it where the page drew them.");
+      }
       piecesMoveWithEdit = true;
       kernedEdit = legacyMovesNextPiece ? null : kernedWrite(false);
     }
@@ -22493,7 +22828,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
       refuse("An edit of one piece of a show must leave the pieces after it where the page drew them.");
     }
     if (writtenEnd > end + 0.001) {
-      const room = sameLineGrowthCapacity(text, events, context, streamTextOf(stream.streamBytes), end, metrics, metricsByResourceMap);
+      const room = sameLineGrowthCapacity(text, events, context, streamTextOf(stream.streamBytes), end, metrics, metricsByResourceMap, showFacts);
       if (room === null || writtenEnd > room + 0.001) {
         refuse("Replacement requires wrapping or exceeds the proven same-line width.");
       }
@@ -22517,6 +22852,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
           originalAdvance,
           metrics,
           metricsByResourceMap,
+          showFacts,
         );
   // A history side carries the room only where the room holds it; one the
   // page no longer proves room for goes as it always went.
@@ -22950,7 +23286,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
             ...singleLineFitCharacterTable(metrics, text.fontSize, text.characterSpacing, text.wordSpacing, text.horizontalScale,
               originalCodes),
             ...leftRoomField(sameLineLeftRoom(text, maximumAdvance - originalAdvance, events, context,
-              streamTextOf(stream.streamBytes), metrics, metricsByResourceMap)) }) } : {}),
+              streamTextOf(stream.streamBytes), metrics, metricsByResourceMap, showFacts)) }) } : {}),
       evidence: Object.freeze({
         schemaVersion: MRAI_NATIVE_LIST_TEXT_SCHEMA_VERSION,
         layoutKind: marker ? "list-body" : "paragraph-line",
@@ -23937,6 +24273,24 @@ function formMatrix(formObjectBytes: Uint8Array): PdfMatrix {
   return exactPdfMatrix(matched.slice(1).map(Number), "Form");
 }
 
+/**
+ * A form that draws a table, chart or SmartArt made in MRAI as the page's
+ * own content (managed_object_content.py names the object on the form,
+ * /MRNoteObject). Its words are the object's: changed in the object, whose
+ * model the next save draws again, and never rewritten as a run of the page
+ * (the drawing and the model would then say different things).
+ */
+const MANAGED_OBJECT_FORM_KEY = /\/MRNoteObject(?![A-Za-z0-9])/;
+const managedObjectForms = new WeakMap<object, boolean>();
+function drawsManagedObject(formObject: Readonly<{ objectBytes: Uint8Array }>): boolean {
+  let answer = managedObjectForms.get(formObject);
+  if (answer === undefined) {
+    answer = MANAGED_OBJECT_FORM_KEY.test(objectDictionarySource(formObject.objectBytes));
+    managedObjectForms.set(formObject, answer);
+  }
+  return answer;
+}
+
 interface ResolvedFormPathEdge {
   readonly resourceName: string;
   readonly form: PdfNativeIndirectObjectRef;
@@ -24293,6 +24647,9 @@ export async function inspectMraiNativeFormHostedContentStream(
       "precondition-mismatch",
       "The named content stream does not draw this PDF page.",
     );
+  }
+  if (path.chain.some((edge) => drawsManagedObject(edge.formObject))) {
+    refuse("This text is part of a table, chart or SmartArt made in MRAI; it is changed in that object.");
   }
   // Every time the document draws the form: each path to it, as many times
   // as each form on the way is drawn.
@@ -25984,6 +26341,8 @@ async function planMraiNativeListTextSelectionReplacementInGroups(
     }
     const leaf = path.chain.at(-1);
     if (!leaf) continue;
+    // The words of a managed object the page draws: no run of the page.
+    if (path.chain.some((edge) => drawsManagedObject(edge.formObject))) continue;
     // An indirect shared mapping is safe only for one actual invocation of
     // this target across the document. Rewriting its shared owner would need
     // a separate clone-on-write contract; never infer locality from refcount.
@@ -26268,13 +26627,173 @@ async function planMraiNativeListTextSelectionReplacementUnwritten(
       release();
     }
   }
-  return withSingleItemFallback(input, (attempt) => withParagraphRewriteTier(attempt.sourceBytes, undefined,
+  // Words typed where two rows broken by hand meet, the editor saying which
+  // row they are on: the paragraph tier sets them there. Where its rows
+  // settle nothing (the lines flow, the edit is elsewhere) or it refuses,
+  // the edit is planned as ever.
+  if (input.rowStarts?.length) {
+    const { inspection: own, release } = await leaseParagraphFormatInspection(input.sourceBytes);
+    try {
+      return await planMraiNativeParagraphRewrite(paragraphRewriteKernel(input.sourceBytes, own), input.selection,
+        input.replacementText, undefined, undefined, undefined, { rowStarts: input.rowStarts, mustDecide: true });
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+    } finally {
+      release();
+    }
+  }
+  const plan = await withSingleItemFallback(input, (attempt) => withParagraphRewriteTier(attempt.sourceBytes, undefined,
     () => planMraiNativeListTextSelectionReplacementInternal(attempt, false, undefined, false, undefined),
     (kernel) => planMraiNativeParagraphRewrite(kernel, attempt.selection, attempt.replacementText)),
   (attempt) => planMraiNativeListTextSelectionReplacementInternal(attempt, true, undefined, false, undefined),
   async (attempt) => {
     const shared = await createNativeListTextSharedInspection(attempt.sourceBytes, await sha256PdfBytes(attempt.sourceBytes));
     try { await proveNativeTextSelectionStands(attempt, shared); } finally { shared.dispose(); }
+  });
+  // A line of a flowing paragraph the in-place writers grew out past the
+  // paragraph's own right edge: the words typed belong on the next line, as
+  // the paragraph tier sets them (it keeps every line the edit leaves alone
+  // as the page draws it). Where that tier cannot, the line stays as written.
+  return withLineKeptToItsMeasure(input, plan, async () => {
+    const { inspection, release } = await leaseParagraphFormatInspection(input.sourceBytes);
+    try {
+      return await planMraiNativeParagraphRewrite(paragraphRewriteKernel(input.sourceBytes, inspection), input.selection,
+        input.replacementText);
+    } finally {
+      release();
+    }
+  });
+}
+
+
+
+
+
+
+
+
+async function withLineKeptToItsMeasure(
+  input: PdfNativeListTextSelectionReplacementInput,
+  plan: PdfNativeListTextReplacementPlan,
+  rewrite: () => Promise<PdfNativeListTextReplacementPlan>,
+): Promise<PdfNativeListTextReplacementPlan> {
+  if (plan.evidence.paragraphRewrite) return plan;
+  // So do the words typed onto a row of a centred block (a diagram's label):
+  // written in place the row grows from its left edge, off the axis its
+  // block is set on; the paragraph tier sets it on that axis again, and
+  // leaves the block's other rows as the page draws them.
+  const offAxis = !lineRunsPastItsParagraph(input.selection, plan) && lineLeavesItsAxis(input.selection, plan);
+  if (!offAxis && !lineRunsPastItsParagraph(input.selection, plan)) return plan;
+  try {
+    const rewritten = await rewrite();
+    if (offAxis && rewritten.evidence.paragraphRewrite?.block?.alignment !== "center") return plan;
+    // Keeping to the measure is not worth a line drawn over other text: the
+    // words typed went down a line, onto the address under an author's
+    // affiliation (two rows as wide as each other read as a paragraph that
+    
+    // line stays as the in-place plan writes it, beside nothing.
+    return rewritten.notices?.some((notice) =>
+      notice.code === "new-line-over-other-text" || notice.code === "line-over-other-text") ? plan : rewritten;
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    return plan;
+  }
+}
+
+/** How closely the rows of a centred block share its axis, and how far
+ * their left edges differ at least, in ems (the box builder's
+ * CENTRED_STACK_AXIS_EM and CENTRED_STACK_MIN_INSET_EM). */
+const CENTRED_BLOCK_AXIS_EM = 0.2;
+const CENTRED_BLOCK_MIN_INSET_EM = 0.1;
+
+/**
+ * Whether an in-place plan changes the width of a row of a centred block:
+ * the box holds several upright rows on one axis, their left edges apart,
+ * and a row the plan writes longer or shorter would keep its left edge and
+ * leave the axis.
+ */
+function lineLeavesItsAxis(
+  selection: PdfNativeListTextSelectionEvidence,
+  plan: PdfNativeListTextReplacementPlan,
+): boolean {
+  const items = selection.items;
+  if (!items || items.length < 2) return false;
+  if (plan.evidence.linePlan || plan.evidence.paragraphReflow) return false;
+  if (!items.every((item) => Math.abs(item.transform[1]) <= 1e-6 && Math.abs(item.transform[2]) <= 1e-6 &&
+    item.transform[0] > 0 && item.width >= 0)) return false;
+  const lines = selectionVisualLineIndexes(items);
+  const lineCount = Math.max(...lines) + 1;
+  if (lineCount < 2) return false;
+  const height = Math.max(...items.map((item) => item.height));
+  const lefts = Array.from({ length: lineCount }, (_, line) =>
+    Math.min(...items.filter((_, index) => lines[index] === line).map((item) => item.transform[4])));
+  const rights = Array.from({ length: lineCount }, (_, line) =>
+    Math.max(...items.filter((_, index) => lines[index] === line).map((item) => item.transform[4] + item.width)));
+  const centres = lefts.map((left, line) => (left + rights[line]) / 2);
+  if (Math.max(...centres) - Math.min(...centres) > CENTRED_BLOCK_AXIS_EM * height ||
+    Math.max(...lefts) - Math.min(...lefts) < CENTRED_BLOCK_MIN_INSET_EM * height) return false;
+  const leaves = plan.evidence.positionedLines?.lines.map((line) => line.evidence) ?? [plan.evidence];
+  return leaves.some((leaf) => leaf.originalAdvance > 0 &&
+    Math.abs(leaf.replacementAdvance - leaf.originalAdvance) > 1e-6);
+}
+
+/** A hair, in ems, a paragraph's line may run past the paragraph's right
+ * edge (paragraph-rewrite's PARAGRAPH_EDGE_HAIR_EM), and the share of the
+ * widest line a line that fills the measure reaches (its
+ * PARAGRAPH_FLOWING_LINE_SHARE). */
+const PARAGRAPH_EDGE_HAIR_EM = 0.35;
+const PARAGRAPH_FLOWING_LINE_SHARE = 0.85;
+const PARAGRAPH_ROWS_AXIS_EM = 0.25;
+const PARAGRAPH_ROWS_MIN_INSET_EM = 0.1;
+
+
+
+
+
+
+
+
+
+
+
+function lineRunsPastItsParagraph(
+  selection: PdfNativeListTextSelectionEvidence,
+  plan: PdfNativeListTextReplacementPlan,
+): boolean {
+  const items = selection.items;
+  if (!items || items.length < 2) return false;
+  const lines = selectionVisualLineIndexes(items);
+  const lineCount = Math.max(...lines) + 1;
+  if (lineCount < 2) return false;
+  if (!items.every((item) => Math.abs(item.transform[1]) <= 1e-6 && Math.abs(item.transform[2]) <= 1e-6 &&
+    item.transform[0] > 0 && item.width >= 0)) return false;
+  // A plan that breaks the paragraph's lines again keeps each in its frame.
+  if (plan.evidence.linePlan || plan.evidence.paragraphReflow) return false;
+  const rightOf = (line: number) => Math.max(...items.filter((_, index) => lines[index] === line)
+    .map((item) => item.transform[4] + item.width));
+  const leftOf = (line: number) => Math.min(...items.filter((_, index) => lines[index] === line).map((item) => item.transform[4]));
+  const widths = Array.from({ length: lineCount }, (_, line) => rightOf(line) - leftOf(line));
+  const widest = Math.max(...widths);
+  if (!widths.slice(0, -1).every((width) => width >= PARAGRAPH_FLOWING_LINE_SHARE * widest)) return false;
+  const edge = Math.max(...Array.from({ length: lineCount }, (_, line) => rightOf(line)));
+  const height = Math.max(...items.map((item) => item.height));
+  // (Two rows on one axis, the second in from the first, are rows of their
+  // own: paragraph-rewrite's rowsOnOneAxis.)
+  if (lineCount === 2 && leftOf(1) - leftOf(0) >= PARAGRAPH_ROWS_MIN_INSET_EM * height &&
+    Math.abs((leftOf(0) + rightOf(0)) / 2 - (leftOf(1) + rightOf(1)) / 2) <= PARAGRAPH_ROWS_AXIS_EM * height) return false;
+  // Each line the plan writes longer: what it adds, on the page (a plan's
+  // advances are its own text space's), to the line its item stands on.
+  const leaves = plan.evidence.positionedLines?.lines.map((line) => line.evidence) ?? [plan.evidence];
+  return leaves.some((leaf) => {
+    if (!(leaf.originalAdvance > 0) || !(leaf.replacementAdvance > leaf.originalAdvance + 1e-6) || !leaf.selection) return false;
+    const planned = leaf.selection.items ?? [leaf.selection.item];
+    const inked = planned.reduce((total, item) => total + item.width, 0);
+    const at = items.findIndex((item) => Math.abs(item.transform[5] - planned[0].transform[5]) <= 0.01 &&
+      item.transform[4] <= planned[0].transform[4] + planned[0].width + 0.01 &&
+      item.transform[4] + item.width >= planned[0].transform[4] - 0.01);
+    if (!(inked > 0) || at < 0) return false;
+    const grown = (leaf.replacementAdvance - leaf.originalAdvance) * inked / leaf.originalAdvance;
+    return rightOf(lines[at]) + grown > edge + PARAGRAPH_EDGE_HAIR_EM * height + 0.01;
   });
 }
 
@@ -28300,6 +28819,21 @@ export async function planMraiNativeListTextParagraphFormat(input: Readonly<{
   }
 }
 
+export { MRAI_NATIVE_PARAGRAPH_OVER_OTHER_TEXT_REFUSAL };
+
+/** The plan as it is, or -- asked to -- refused where the paragraph set
+ * again runs into other text of the page (the rewrite's own notices). */
+export function pdfNativeParagraphPlanClearOfOtherText<Plan extends Readonly<{ notices?: readonly PdfNativeEditNotice[] }>>(
+  plan: Plan,
+  refuse: boolean,
+): Plan {
+  if (refuse && plan.notices?.some((notice) =>
+    notice.code === "line-over-other-text" || notice.code === "new-line-over-other-text")) {
+    throw new Error(MRAI_NATIVE_PARAGRAPH_OVER_OTHER_TEXT_REFUSAL);
+  }
+  return plan;
+}
+
 
 
 async function planMraiNativeListTextPropertyReplacementOrParagraph(
@@ -28315,6 +28849,12 @@ async function planMraiNativeListTextPropertyReplacementOrParagraph(
     if (!missingGlyph && !refused) throw error;
     const format = pdfNativeParagraphFormatOfPropertyDraft(input.proof.original, input.properties);
     if (!format) throw error;
+    // The write in place asked the installed faces for the whole part, its
+    // blanks too; the paragraph sets only the characters in them, each blank
+    // in the paragraph's own gap. Kept, the face's package held a space no
+    // show drew and the write was refused as not using its package (a font
+    
+    input.embeddedFonts?.restart?.();
     try {
       return await planMraiNativeListTextParagraphFormat({
         sourceBytes: input.sourceBytes,
@@ -29913,6 +30453,9 @@ export async function planMraiNativeParagraphRewriteWithSubstitute(input: {
    * the words were typed into): the words the paragraph's fonts lack wrap
    * in it with the others. */
   readonly frame?: MraiNativeParagraphRewriteFrame;
+  /** Where the editor's rows start in the new text, and whether the plan is
+   * refused unless they settle a line break (MraiNativeParagraphRowEdit). */
+  readonly rowEdit?: Readonly<{ rowStarts: readonly number[]; mustDecide?: boolean }>;
 }): Promise<PdfNativeListTextReplacementPlan & Readonly<{ substitute?: Readonly<{ resourceName: string; text: string }>; pageContent: boolean }>> {
   const sourceSha256 = await sha256PdfBytes(input.sourceBytes);
   const inspection = await createNativeListTextSharedInspection(input.sourceBytes, sourceSha256);
@@ -29941,7 +30484,7 @@ export async function planMraiNativeParagraphRewriteWithSubstitute(input: {
       format: input.format.format,
       fontOptions: input.format.fontOptions ?? [],
       page: input.format.page ?? null,
-    }) : undefined);
+    }) : undefined, input.rowEdit);
     return Object.freeze({ ...plan, pageContent });
   } finally {
     inspection.dispose();
@@ -30004,12 +30547,25 @@ export function createMraiNativeTextReadSession() {
       const plan = input.paragraphFrameRight !== undefined || input.paragraphLineStep !== undefined ||
         input.paragraphSizeScale !== undefined
         ? await run(input, (bytes, inspection) => planParagraphInRequestedFrame({ ...input, sourceBytes: bytes }, inspection))
-        : await run(input, (bytes, inspection) => withSingleItemFallback({ ...input, sourceBytes: bytes },
-          (attempt) => withParagraphRewriteTier(bytes, inspection,
-            () => planMraiNativeListTextSelectionReplacementInternal(attempt, false, undefined, false, inspection),
-            (kernel) => planMraiNativeParagraphRewrite(kernel, attempt.selection, attempt.replacementText)),
-          (attempt) => planMraiNativeListTextSelectionReplacementInternal(attempt, true, undefined, false, inspection),
-          (attempt) => proveNativeTextSelectionStands(attempt, inspection)));
+        : await run(input, async (bytes, inspection) => {
+          const own = { ...input, sourceBytes: bytes };
+          // (As the one-shot planner: the editor's rows first, where they settle a break.)
+          if (own.rowStarts?.length && !own.replacementText.includes("\n")) {
+            try {
+              return await planMraiNativeParagraphRewrite(paragraphRewriteKernel(bytes, inspection), own.selection,
+                own.replacementText, undefined, undefined, undefined, { rowStarts: own.rowStarts, mustDecide: true });
+            } catch (error) {
+              if (!(error instanceof PdfNativeTransactionError)) throw error;
+            }
+          }
+          return withLineKeptToItsMeasure(own, await withSingleItemFallback(own,
+            (attempt) => withParagraphRewriteTier(bytes, inspection,
+              () => planMraiNativeListTextSelectionReplacementInternal(attempt, false, undefined, false, inspection),
+              (kernel) => planMraiNativeParagraphRewrite(kernel, attempt.selection, attempt.replacementText)),
+            (attempt) => planMraiNativeListTextSelectionReplacementInternal(attempt, true, undefined, false, inspection),
+            (attempt) => proveNativeTextSelectionStands(attempt, inspection)),
+          () => planMraiNativeParagraphRewrite(paragraphRewriteKernel(bytes, inspection), own.selection, own.replacementText));
+        });
       return withStructActualText(input.sourceBytes, plan);
     },
     /** Build the document's shared reading ahead of the first selection (a

@@ -25,6 +25,7 @@ import {
 import { avatarFromWire } from "@mrnote/core/web/lib/user-avatar.ts";
 
 import styles from "./SpreadsheetChangesPane.module.css";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 
 export type SpreadsheetChangesScope = "workbook" | "sheet" | "range";
 
@@ -75,7 +76,7 @@ function relativeTime(at: number, now: number, locale: string): string {
     if (abs < 86_400) return rtf.format(Math.round(seconds / 3_600), "hour");
     return rtf.format(Math.round(seconds / 86_400), "day");
   } catch {
-    return new Date(at).toLocaleString();
+    return new Date(at).toLocaleString(pageInterfaceLocale());
   }
 }
 
@@ -86,7 +87,7 @@ function absoluteTime(at: number, locale: string): string {
       timeStyle: "short",
     }).format(new Date(at));
   } catch {
-    return new Date(at).toLocaleString();
+    return new Date(at).toLocaleString(pageInterfaceLocale());
   }
 }
 

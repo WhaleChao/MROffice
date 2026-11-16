@@ -5,6 +5,14 @@
  */
 import type { CSSProperties } from "react";
 import { smartArtPictureSrc } from "../office-smartart/picture";
+import {
+  normalizeOfficePictureEffects,
+  officePictureEffectsCss,
+  withOfficePictureEffect,
+  type OfficePictureEffectKind,
+  type OfficePictureEffects,
+  type OfficePictureEffectValues,
+} from "../office-picture-effects";
 
 /** The graphic's background as the sheet draws it: a resolved colour or a picture. */
 export type SheetSmartArtBackground = { fill: string; alpha?: number } | { src: string };
@@ -12,6 +20,31 @@ export type SheetSmartArtBackground = { fill: string; alpha?: number } | { src: 
 /** The effects a graphic's background takes: the effect-list presets (no Bevel / 3-D, which `dgm:bg` cannot hold). */
 export const SMARTART_GRAPHIC_EFFECTS = ["shadow", "reflection", "glow", "softEdge"] as const;
 export type SmartArtGraphicEffect = (typeof SMARTART_GRAPHIC_EFFECTS)[number];
+
+/**
+ * The Shape Effects categories a graphic's background takes as Office's whole
+ * cascade (`effects`, the shared Picture Effects model): the effect-list
+ * ones, every variation of each. Preset, Bevel and 3-D Rotation are 3-D,
+ * which `dgm:bg` (CT_BackgroundFormatting: fill, effects) cannot hold.
+ */
+export const SMARTART_GRAPHIC_EFFECT_KINDS: readonly OfficePictureEffectKind[] = [
+  "shadow",
+  "reflection",
+  "glow",
+  "softEdge",
+];
+
+/** The effect-list part of an effects value, or null when it states none. */
+export function readSmartArtGraphicEffects(value: unknown): OfficePictureEffects | null {
+  const effects = normalizeOfficePictureEffects(value);
+  if (!effects) return null;
+  const kept: Partial<Record<OfficePictureEffectKind, unknown>> = {};
+  for (const kind of SMARTART_GRAPHIC_EFFECT_KINDS) {
+    const stated = (effects as Partial<Record<OfficePictureEffectKind, unknown>>)[kind];
+    if (stated !== undefined && stated !== "none") kept[kind] = stated;
+  }
+  return Object.keys(kept).length ? (kept as OfficePictureEffects) : null;
+}
 
 /** The graphic's own line (`dgm:whole/a:ln`): a solid colour and a weight in points. */
 export interface SmartArtGraphicLine {
@@ -24,6 +57,12 @@ export interface SmartArtGraphicFormat {
   readonly background: SheetSmartArtBackground | null;
   readonly line: SmartArtGraphicLine | null;
   readonly effect: SmartArtGraphicEffect | null;
+  /**
+   * Office's whole Shape Effects on the graphic (a slide graphic's Shape
+   * Effects menu: every Shadow, Reflection, Glow and Soft Edges variation),
+   * in place of the one-name `effect` when stated.
+   */
+  readonly effects?: OfficePictureEffects | null;
 }
 
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -34,6 +73,32 @@ function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+/**
+ * The one-name effect a graphic's background wears, as Office's model: the
+ * exact bytes the writers put in `dgm:bg` for it (`_graphic_effect_xml`), so
+ * an effect added beside it on the full menu keeps it as it was drawn.
+ */
+export function smartArtGraphicEffectModel(effect: SmartArtGraphicEffect | null): OfficePictureEffects | null {
+  switch (effect) {
+    case "shadow":
+      return { shadow: { blurRad: 50_800, dist: 38_100, dir: 2_700_000, algn: "br", color: "#000000", alpha: 35_000 } };
+    case "glow":
+      return { glow: { radius: 63_500, color: "#3b82f6", alpha: 72_000 } };
+    case "softEdge":
+      return { softEdge: { radius: 25_400 } };
+    case "reflection":
+      return { reflection: { blurRad: 6_350, stA: 50_000, endA: 0, endPos: 100_000, dist: 25_400 } };
+    default:
+      return null;
+  }
+}
+
+/** The graphic's effects as Office's model: its own, else its one-name effect's. */
+export function smartArtGraphicEffects(format: SmartArtGraphicFormat | null): OfficePictureEffects | null {
+  if (!format) return null;
+  return format.effects ?? smartArtGraphicEffectModel(format.effect);
 }
 
 /** A line value, checked; null for none or anything this reader does not trust. */
@@ -71,7 +136,10 @@ export function readSmartArtGraphicFormat(member: unknown): SmartArtGraphicForma
   const background = readSheetSmartArtBackground(member);
   const line = readSmartArtGraphicLine(value.line);
   const effect = readSmartArtGraphicEffect(value.effect);
-  return background || line || effect ? { background, line, effect } : null;
+  const effects = readSmartArtGraphicEffects(value.effects);
+  return background || line || effect || effects
+    ? { background, line, effect: effects ? null : effect, ...(effects ? { effects } : {}) }
+    : null;
 }
 
 /** One change to the graphic's own formatting; `null` removes that part (No Fill, No Outline, No Effect). */
@@ -80,6 +148,16 @@ export interface SmartArtGraphicFormatChange {
   /** A colour (keeping the weight), a weight (keeping the colour), or null for No Outline. */
   readonly line?: { readonly color?: string; readonly widthPt?: number } | null;
   readonly effect?: SmartArtGraphicEffect | null;
+  /** Office's whole effects (`null` for none); replaces the one-name `effect`. */
+  readonly effects?: OfficePictureEffects | null;
+  /**
+   * One pick on the Shape Effects menu (`value` null is "No <effect>"),
+   * worked out on the effects the graphic wears when the change lands.
+   */
+  readonly effectPick?: {
+    readonly kind: OfficePictureEffectKind;
+    readonly value: OfficePictureEffectValues[OfficePictureEffectKind] | null;
+  };
 }
 
 /**
@@ -111,8 +189,25 @@ export function smartArtGraphicFormatRecord(
     }
   }
   if (change.effect !== undefined) {
+    // One statement of the graphic's effects: the name replaces the model.
+    delete base.effects;
     if (change.effect) base.effect = change.effect;
     else delete base.effect;
+  }
+  const effects =
+    change.effectPick !== undefined
+      ? withOfficePictureEffect(
+          smartArtGraphicEffects(readSmartArtGraphicFormat({ smartArtBackground: base })) ?? undefined,
+          change.effectPick.kind,
+          change.effectPick.value,
+          false,
+        ) ?? null
+      : change.effects;
+  if (effects !== undefined) {
+    delete base.effect;
+    const kept = readSmartArtGraphicEffects(effects);
+    if (kept) base.effects = kept;
+    else delete base.effects;
   }
   return readSmartArtGraphicFormat({ smartArtBackground: base }) ? base : undefined;
 }
@@ -125,7 +220,7 @@ export function smartArtGraphicFormatRecord(
  * those removed. So the fill (a colour or a picture) stays, the rest comes off
  * (live Word audit WUA 260).
  */
-export const SMARTART_RESET_GRAPHIC_FORMAT: SmartArtGraphicFormatChange = { line: null, effect: null };
+export const SMARTART_RESET_GRAPHIC_FORMAT: SmartArtGraphicFormatChange = { line: null, effect: null, effects: null };
 
 const PX_PER_PT = 96 / 72;
 
@@ -135,7 +230,11 @@ const PX_PER_PT = 96 / 72;
  * paints (an effect on a graphic with neither fill nor line shows nothing, as
  * an effect on an unfilled, unlined shape does). `null` for none.
  */
-export function smartArtGraphicFormatStyle(format: SmartArtGraphicFormat | null): CSSProperties | null {
+export function smartArtGraphicFormatStyle(
+  format: SmartArtGraphicFormat | null,
+  /** The frame's size in px, for effects drawn to it (a Perspective shadow). */
+  size: { readonly width: number; readonly height: number } = { width: 480, height: 270 },
+): CSSProperties | null {
   if (!format) return null;
   const style: Record<string, string | number> = {};
   const background = format.background;
@@ -158,7 +257,12 @@ export function smartArtGraphicFormatStyle(format: SmartArtGraphicFormat | null)
     style.outline = `${width}px solid ${format.line.color}`;
     style.outlineOffset = `${-width / 2}px`;
   }
-  switch (format.effect) {
+  if (format.effects) {
+    // Office's whole effects, drawn as a picture's are across the frame.
+    const drawn = officePictureEffectsCss(format.effects, size);
+    if (drawn) Object.assign(style, drawn.wrapper ?? {}, drawn.softEdge ?? {});
+  }
+  switch (format.effects ? null : format.effect) {
     case "shadow":
       // The Shadow preset's `a:outerShdw` (blur 4 pt, 3 pt at 45°, 35 % black).
       style.filter = "drop-shadow(2.8px 2.8px 2.7px rgba(0, 0, 0, 0.35))";
@@ -188,6 +292,9 @@ export function smartArtGraphicFormatStyle(format: SmartArtGraphicFormat | null)
 }
 
 /** The CSS that paints a member's graphic formatting across the frame, or `null`. */
-export function sheetSmartArtBackgroundStyle(member: unknown): CSSProperties | null {
-  return smartArtGraphicFormatStyle(readSmartArtGraphicFormat(member));
+export function sheetSmartArtBackgroundStyle(
+  member: unknown,
+  size?: { readonly width: number; readonly height: number },
+): CSSProperties | null {
+  return smartArtGraphicFormatStyle(readSmartArtGraphicFormat(member), size);
 }

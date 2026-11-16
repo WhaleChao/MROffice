@@ -673,6 +673,21 @@ export async function projectPageCausalCheckpoint(
  * is not the page's. The page keeps the extent the worker sends back
  * (`rememberPageCausalExtent`).
  */
+/** `checkpoint` with `updatesBase64` (a deck's room custody beyond it, in
+ * order: `room_custody_updates_base64`) merged in. The checkpoint's own
+ * bytes are proven to be its digest first; the result names its own. */
+export async function checkpointWithUpdates(
+  checkpoint: PageCausalCheckpoint, updatesBase64: readonly string[],
+): Promise<PageCausalCheckpoint> {
+  if (!DIGEST_PATTERN.test(checkpoint?.update_sha256 ?? "")) invalid();
+  const update = decodeBase64(checkpoint.update_base64);
+  if (await sha256(update) !== checkpoint.update_sha256) invalid();
+  let merged: Uint8Array;
+  try { merged = Y.mergeUpdates([update, ...updatesBase64.map(decodeBase64)]); }
+  catch { invalid(); }
+  return { ...checkpoint, update_base64: encodeBase64(merged!), update_sha256: await sha256(merged!) };
+}
+
 export async function projectPageCausalCheckpointAlone(
   checkpoint: PageCausalCheckpoint,
 ): Promise<{ projection: Record<string, JsonValue>; extent: CausalExtent }> {
@@ -714,6 +729,31 @@ function requireComplete(doc: Y.Doc): void {
   // a full standalone checkpoint and never project its partial visible JSON.
   if (doc.store.pendingStructs || doc.store.pendingDs) {
     throw new PageCausalCheckpointError("incomplete");
+  }
+}
+
+/** `Y.encodeStateAsUpdate` of what the document integrated, without the
+ * updates it holds pending their predecessors (Yjs merges those into its
+ * encoding). Synchronous: nothing runs while they are set aside, and they
+ * are put back exactly as they were whether the encoding returns or throws.
+ * It reads the store's own fields (Yjs 13.6): a Yjs that names them otherwise
+ * throws here rather than encoding the pending updates after all (the read
+ * that calls it then gives nothing, as before this was written, and the
+ * tests in tests/unit/page-causal-checkpoint.test.ts turn red). */
+export function encodeIntegratedStateAsUpdate(doc: Y.Doc, targetStateVector?: Uint8Array): Uint8Array {
+  const store = doc.store;
+  if (!("pendingStructs" in store) || !("pendingDs" in store)) {
+    throw new Error("Yjs StructStore no longer holds pendingStructs/pendingDs");
+  }
+  const { pendingStructs, pendingDs } = store;
+  if (!pendingStructs && !pendingDs) return Y.encodeStateAsUpdate(doc, targetStateVector);
+  store.pendingStructs = null;
+  store.pendingDs = null;
+  try {
+    return Y.encodeStateAsUpdate(doc, targetStateVector);
+  } finally {
+    store.pendingStructs = pendingStructs;
+    store.pendingDs = pendingDs;
   }
 }
 
@@ -1004,15 +1044,23 @@ export async function preparePageCausalCheckpoint(
       merge(doc, remoteOrigin);
       return readProjection(doc, model);
     },
+    // What the document holds beyond the checkpoint, as one update for the
+    // server to check against it (closing edits, the room's custody). Only
+    // what the document integrated: a peer's update still waiting here for
+    // its predecessors (a relay gap, the very state the room's gap resume
+    // reconnects from) is the peer's, and the server already keeps whatever
+    // of it reached the room. Refusing the whole read for it left this
+    // window's own edits with nothing to carry them: a window closed during
+    
     beyond: (doc: Y.Doc) => {
       try {
-        requireComplete(doc);
         const known = extent().clocks;
         const stateVector = Y.encodeStateVector(doc);
         const present = Y.decodeStateVector(stateVector);
         // The checkpoint was applied to this document: it holds every clock.
         for (const [client, clock] of known) if ((present.get(client) ?? 0) < clock) return null;
-        return { update: Y.encodeStateAsUpdate(doc, Y.encodeStateVector(known as Map<number, number>)), stateVector };
+        return { update: encodeIntegratedStateAsUpdate(doc, Y.encodeStateVector(known as Map<number, number>)),
+          stateVector };
       } catch { return null; }
     },
   });

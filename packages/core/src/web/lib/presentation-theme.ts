@@ -198,6 +198,12 @@ export interface NativeDeckThemeSource {
    * reaches every master (row 231).
    */
   themeParts?: { part: string; fingerprint: string; masterDesignFingerprint: string }[];
+  /**
+   * The Effects-gallery entry the theme's own `a:fmtScheme` is (reading row
+   * 851): what Design > Variants > Effects checks until a pick
+   * (`effectSchemeId`) replaces it. A receipt of the file, never an edit.
+   */
+  effectSchemeMatch?: string;
 }
 
 /**
@@ -288,6 +294,17 @@ export interface DeckTheme {
    */
   colorSlots?: Record<PresentationThemeColorSlot, string>;
   /**
+   * The first master's colour map (`p:clrMap`) of the four names it maps
+   * (Background 1 / Text 1 / Background 2 / Text 2 to one of the twelve
+   * slots), as an imported deck's master states it -- read only where the
+   * map is dark (`bg1` not Light 1: Berlin, an imported dark deck), reading
+   * row 826. Text 1 (the slide's ink: a new text box's and a placeholder's
+   * words) and the Theme Colors grid's Text / Background cells resolve
+   * through it (`presentationThemeColorMap`); absent = the Office theme
+   * variant's own map, else the light one.
+   */
+  colorMap?: DeckThemeColorMap;
+  /**
    * The theme's font scheme by face name: headings (`+mj-lt`) and body
    * (`+mn-lt`), plus the Simplified Chinese faces of each (`script="Hans"`).
    * Title / body text render in these faces ahead of `fontSchemeId` and
@@ -338,6 +355,13 @@ export interface DeckTheme {
    */
   officeMaster?: DeckOfficeMaster;
 }
+
+/** The four names a master's colour map resolves, each to a theme slot. */
+export const DECK_THEME_MAPPED_COLORS = ["bg1", "tx1", "bg2", "tx2"] as const;
+
+export type DeckThemeColorMap = Readonly<
+  Record<(typeof DECK_THEME_MAPPED_COLORS)[number], PresentationThemeColorSlot>
+>;
 
 /** A theme's heading / body faces (Office font scheme, by name). */
 export interface DeckThemeFontScheme {
@@ -1790,7 +1814,28 @@ function normalizeNativeThemeSource(
     });
     if (parts.length === record.themeParts.length) result.themeParts = parts;
   }
+  if (typeof record.effectSchemeMatch === "string" && officeEffectGalleryScheme(record.effectSchemeMatch)) {
+    result.effectSchemeMatch = record.effectSchemeMatch;
+  }
   return result;
+}
+
+/**
+ * The entry Design > Variants > Effects checks (PPT-A073): a pick
+ * (`effectSchemeId`); else an Office theme's own effects; else, on a deck
+ * still on its file's own theme, the entry that theme's scheme is
+ * (`identity.source.effectSchemeMatch`, reading row 851); else none. A theme
+ * picked since keeps the file's receipt, which then no longer says what the
+ * deck wears, so it is read only while the selection is the file's own.
+ */
+export function presentationEffectGalleryValue(
+  theme: DeckTheme | null | undefined,
+  officeThemeEffects: (themeId: string) => string | undefined,
+): string {
+  if (theme?.effectSchemeId) return theme.effectSchemeId;
+  const identity = theme?.identity;
+  if (identity?.selectionKind === "office") return officeThemeEffects(identity.themeId) ?? "";
+  return identity?.selectionKind === "native" ? (identity.source?.effectSchemeMatch ?? "") : "";
 }
 
 /**
@@ -1808,6 +1853,25 @@ export function normalizeThemeColorSlots(
     const color = normalizeThemeColor(record[slot]);
     if (!color) return undefined;
     result[slot] = color;
+  }
+  return result;
+}
+
+/**
+ * A master's colour map: all four of bg1 / tx1 / bg2 / tx2, each naming one
+ * of the twelve slots; anything else is dropped.
+ */
+export function normalizeThemeColorMap(raw: unknown): DeckThemeColorMap | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  if (Object.keys(record).length !== DECK_THEME_MAPPED_COLORS.length) return undefined;
+  const result = {} as Record<(typeof DECK_THEME_MAPPED_COLORS)[number], PresentationThemeColorSlot>;
+  for (const name of DECK_THEME_MAPPED_COLORS) {
+    const slot = record[name];
+    if (typeof slot !== "string" || !(PRESENTATION_THEME_COLOR_SLOTS as readonly string[]).includes(slot)) {
+      return undefined;
+    }
+    result[name] = slot as PresentationThemeColorSlot;
   }
   return result;
 }
@@ -1934,6 +1998,8 @@ export function normalizeTheme(raw: unknown): DeckTheme | undefined {
   }
   const colorSlots = normalizeThemeColorSlots(record.colorSlots);
   if (colorSlots) theme.colorSlots = colorSlots;
+  const colorMap = normalizeThemeColorMap(record.colorMap);
+  if (colorMap) theme.colorMap = colorMap;
   const fontScheme = normalizeThemeFontScheme(record.fontScheme);
   if (fontScheme) theme.fontScheme = fontScheme;
   const titleColor = normalizeThemeColor(record.titleColor);
@@ -2373,13 +2439,28 @@ export function applyThemeColorSchemeSelection(
     );
   };
   const darkGround = variant ? !themeColorIsLight(variant.background) : false;
-  const groundSlot = slotOf(variant?.background, darkGround ? "dk1" : "lt1");
-  const textSlot: PresentationThemeColorSlot = darkGround ? "lt1" : "dk1";
+  // A deck whose own master maps dark (`colorMap`, reading row 826) keeps
+  // that master: its ground and words take the slots the map names (the
+  // ground the one of Background 1 / 2 it was drawn from), as the import
+  // read them.
+  const fileMap = variant ? undefined : current.colorMap;
+  const fileSlots =
+    current.colorSlots ??
+    (identity?.selectionKind === "native" ? identity.source?.colorSlots : undefined);
+  const fileGround =
+    fileMap &&
+    current.background &&
+    fileSlots?.[fileMap.bg2]?.toLowerCase() === current.background.toLowerCase() &&
+    fileSlots?.[fileMap.bg1]?.toLowerCase() !== current.background.toLowerCase()
+      ? fileMap.bg2
+      : fileMap?.bg1;
+  const groundSlot = fileGround ?? slotOf(variant?.background, darkGround ? "dk1" : "lt1");
+  const textSlot: PresentationThemeColorSlot = fileMap?.tx1 ?? (darkGround ? "lt1" : "dk1");
   const next: DeckTheme = {
     ...current,
     background: slots[groundSlot],
     titleColor: slots[slotOf(variant?.titleColor, textSlot)],
-    bodyTextColor: slots[variant ? slotOf(variant.bodyColor, textSlot) : "dk2"],
+    bodyTextColor: slots[variant ? slotOf(variant.bodyColor, textSlot) : (fileMap?.tx1 ?? "dk2")],
     accentColors: [
       slots.accent1,
       slots.accent2,
@@ -2558,8 +2639,12 @@ export function applyThemeVariantSelection(
       ? resolveOfficeThemeDesign(current.identity.themeId, variantId)
       : undefined;
     if (!variant) return current;
+    // The variant's own master comes in with its colour map: the map the
+    // file's master stated (`colorMap`) goes.
+    const rest: DeckTheme = { ...current };
+    delete rest.colorMap;
     return normalizeTheme({
-      ...current,
+      ...rest,
       background: variant.background,
       titleColor: variant.titleColor,
       bodyTextColor: variant.bodyTextColor,
@@ -2617,8 +2702,35 @@ export function materializeCatalogThemeIdentity(
     identity.themeId,
     identity.variantId,
   );
-  return design ? normalizeTheme({ ...design, identity }) : normalized;
+  if (!design) return normalized;
+  // The file is the authority on what the deck wears; the catalog identity
+  // names the gallery tile, and fills only what the reading does not state.
+  // Rebuilt whole, the preset's values replaced the file's on every reopen
+  
+  // a Master Font's faces and a master background reverted to the preset's).
+  // A gallery pick (`fontSchemeId` ...) is an edit's receipt, never a reading;
+  // a background or font the reading states is one whole choice.
+  const filled: DeckTheme = { ...design };
+  for (const key of CATALOG_PICK_KEYS) delete filled[key];
+  if (CATALOG_BACKGROUND_FIELDS.some((key) => normalized![key] !== undefined)) {
+    for (const key of CATALOG_BACKGROUND_FIELDS) delete filled[key];
+  }
+  if (normalized!.fontScheme !== undefined || normalized!.fontFamily !== undefined) {
+    delete filled.fontScheme;
+    delete filled.fontFamily;
+  }
+  return normalizeTheme({ ...filled, ...normalized });
 }
+
+/** Gallery picks a theme states only once a Design command made them. */
+const CATALOG_PICK_KEYS = ["fontSchemeId", "colorSchemeId", "effectSchemeId"] as const satisfies readonly (keyof DeckTheme)[];
+/** One background choice: a reading that states any of them states the background. */
+const CATALOG_BACKGROUND_FIELDS = [
+  "background",
+  "backgroundGradient",
+  "backgroundPattern",
+  "backgroundImage",
+] as const satisfies readonly (keyof DeckTheme)[];
 
 /** Mark direct field editing as custom while preserving native source authority. */
 export function markThemeSelectionCustom(

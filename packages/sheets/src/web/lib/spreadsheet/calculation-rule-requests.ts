@@ -14,6 +14,8 @@ type FormulaStop = { type?: string; formula?: string } | undefined;
  * formula stops of a colour scale, data bar or icon set. */
 export function conditionalRuleFormulas(rule: ConditionalFormatRule): string[] {
   if (rule.kind === "formula") return [rule.formula];
+  
+  if (rule.kind === "textContains") return rule.formula !== undefined ? [rule.formula] : [];
   const record = rule as unknown as { stops?: FormulaStop[]; min?: FormulaStop; mid?: FormulaStop; max?: FormulaStop };
   const formulas = (stops: FormulaStop[]) => stops
     .filter((stop): stop is { type: string; formula: string } => stop?.type === "formula" && typeof stop.formula === "string" && stop.formula !== "")

@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { officeTextOutlineCss } from "../office-text-outline/office-text-outline-css";
+import { OFFICE_CHART_TEXT_CAPS, OFFICE_CHART_TEXT_SPACING } from "./chart-letter-spacing";
 import { ptToPx } from "../office-units";
 import { normalizeOfficeShapeFontFamily } from "../office-shape-text-font";
 import { primaryOfficeFontFace } from "../../components/office-ribbon/officeFontFace";
@@ -423,6 +425,10 @@ export function officeChartTextEChartsStyle(
       ? {}
       : { fontStyle: text.italic ? "italic" : "normal" }),
     ...(text.color ? { color: text.color } : {}),
+    // Character Spacing and All / Small Caps: measured and drawn by the
+    // picture renderer (`chart-letter-spacing`).
+    ...(text.spacingPt ? { [OFFICE_CHART_TEXT_SPACING]: ptToPx(text.spacingPt) * scale } : {}),
+    ...(text.caps ? { [OFFICE_CHART_TEXT_CAPS]: text.caps } : {}),
     // Text Effects ▸ Glow: a soft halo round the glyphs, as wide as its size.
     ...(text.glow
       ? {
@@ -459,8 +465,14 @@ export function officeChartTextCss(
     ...(typeof style.fontWeight === "string" ? { fontWeight: style.fontWeight } : {}),
     ...(typeof style.fontStyle === "string" ? { fontStyle: style.fontStyle } : {}),
     ...(text.underline !== undefined ? { textDecoration: "underline" } : {}),
+    ...(text.spacingPt ? { letterSpacing: `${ptToPx(text.spacingPt)}px` } : {}),
+    ...(text.caps === "all" ? { textTransform: "uppercase" } : text.caps === "small" ? { fontVariant: "small-caps" } : {}),
     ...(text.glow ? { textShadow: `0 0 ${glowBlurPx(text.glow)}px ${glowColor(text.glow)}` } : {}),
-    ...(text.outline ? { WebkitTextStroke: `${ptToPx(text.outline.widthPt)}px ${text.outline.color}` } : {}),
+    // Office's outline (one round stroke of the merged glyphs, over the
+    // fill) is the overlay's; the CSS stroke stands in until it draws.
+    ...(text.outline
+      ? officeTextOutlineCss(text.outline.color, text.outline.widthPt, `${ptToPx(text.outline.widthPt)}px ${text.outline.color}`)
+      : {}),
   };
 }
 

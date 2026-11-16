@@ -6,6 +6,24 @@
 import { MRAI_NATIVE_EMBEDDED_IMAGE_ALREADY_BACK, MRAI_NATIVE_EMBEDDED_IMAGE_ALREADY_FRONT, MRAI_NATIVE_EMBEDDED_IMAGE_NOT_CLIPPED, pdfNativeEmbeddedImageIsAlreadyArranged } from "./embedded-image-arrange-model";
 export { MRAI_NATIVE_EMBEDDED_IMAGE_ALREADY_BACK, MRAI_NATIVE_EMBEDDED_IMAGE_ALREADY_FRONT, MRAI_NATIVE_EMBEDDED_IMAGE_NOT_CLIPPED, pdfNativeEmbeddedImageIsAlreadyArranged };
 import { PDF_NATIVE_VECTOR_FORM_INSTANCE_PATTERN, pdfNativeVectorProofId } from "./vector-identity";
+import {
+  MRAI_NATIVE_CONTENT_UNIT_ALREADY_BACK,
+  MRAI_NATIVE_CONTENT_UNIT_ALREADY_FRONT,
+  MRAI_NATIVE_CONTENT_UNIT_ROWS_DIFFER,
+  pdfNativeContentUnitKinds,
+  type PdfNativeContentUnitIdentity,
+  type PdfNativeContentUnitKind,
+  type PdfNativeMovableContentUnitKind,
+} from "./content-unit-model";
+export {
+  MRAI_NATIVE_CONTENT_UNIT_ALREADY_BACK,
+  MRAI_NATIVE_CONTENT_UNIT_ALREADY_FRONT,
+  MRAI_NATIVE_CONTENT_UNIT_ROWS_DIFFER,
+  pdfNativeContentUnitKinds,
+  type PdfNativeContentUnitIdentity,
+  type PdfNativeContentUnitKind,
+  type PdfNativeMovableContentUnitKind,
+};
 import { decodePdfSourceName, pdfSourceNamesRead } from "./pdf-source-name";
 export { PDF_NATIVE_VECTOR_FORM_INSTANCE_PATTERN, pdfNativeVectorProofId };
 import {
@@ -43,6 +61,7 @@ import {
   type PdfNativePageContentStreamInspection,
   type PdfNativePreparedContentStreamTransaction,
   inspectMraiNativeEmbeddedImagePagePaints,
+  readMraiNativePageXObjectKinds,
   inspectMraiNativeConsolidatedContentStream,
   inspectMraiNativeObject,
   planMraiNativeContentStreamSpanRevision,
@@ -9257,5 +9276,461 @@ export async function planMraiNativeEmbeddedImageClipEscape(input: {
     end,
     expectedSpanSha256: await sha256PdfBytes(blockBytes),
     replacement: concatVectorBytes([latin1Bytes(escape.prefix), blockBytes, latin1Bytes(escape.suffix)]),
+  });
+}
+
+
+// ---------------------------------------------------------------------------
+// The page content's objects, as a layer step passes them (the Selection
+// pane's rows), and a layer move of a text object, a shading, a Form the page
+// draws whole, or a group of objects. A row is one object a step passes: a
+// path, a text object (`BT`…`ET` that shows text), a picture, an inline
+// picture, a shading, a Form's `Do`, or a group -- the outermost `q`…`Q` or
+// marked-content section holding two or more objects, which a step passes
+// whole (layerMoveDestination: past the first mark, out to where every group
+// and section opened since has closed). A group or section holding one
+// object is that object's own wrapper. The renderer reads the same rows off
+// its operator list (lib/pdf/page-object-list.ts); `kinds` is the row
+// sequence both compare before a move, one letter a row.
+// ---------------------------------------------------------------------------
+
+export const MRAI_NATIVE_CONTENT_UNIT_REORDER_SCHEMA_VERSION =
+  "mrai.pdf-native-content-unit.reorder.v1" as const;
+
+export interface PdfNativeContentUnitRow {
+  readonly kind: PdfNativeContentUnitKind;
+  /** Its place among the page's rows of its kind, back first. */
+  readonly order: number;
+  /** Offsets into the page drawing (its streams joined). */
+  readonly start: number;
+  readonly end: number;
+  /** For a group: the objects it holds, back first. */
+  readonly members?: readonly PdfNativeContentUnitRow[];
+  /** How many objects a group holds (1 for any other row). */
+  readonly count: number;
+}
+
+
+const CONTENT_UNIT_TEXT_SHOWS = new Set(["Tj", "TJ", "'", '"']);
+
+interface ContentUnitFrame {
+  readonly start: number;
+  readonly children: (ContentUnitLeaf | ContentUnitContainer)[];
+}
+interface ContentUnitLeaf {
+  readonly leaf: true;
+  readonly kind: PdfNativeContentUnitKind;
+  readonly start: number;
+  readonly end: number;
+}
+interface ContentUnitContainer {
+  readonly leaf: false;
+  readonly start: number;
+  readonly end: number;
+  readonly children: readonly (ContentUnitLeaf | ContentUnitContainer)[];
+}
+
+type UnorderedRow = Omit<PdfNativeContentUnitRow, "order" | "members"> & {
+  readonly members?: readonly UnorderedRow[];
+};
+
+/** The rows a run of the drawing's children is, flattened through the
+ * groups and sections that hold fewer than two objects. */
+function contentUnitChildRows(children: readonly (ContentUnitLeaf | ContentUnitContainer)[]): UnorderedRow[] {
+  const rows: UnorderedRow[] = [];
+  for (const child of children) {
+    if (child.leaf) {
+      rows.push({ kind: child.kind, start: child.start, end: child.end, count: 1 });
+      continue;
+    }
+    const inner = contentUnitChildRows(child.children);
+    const count = inner.reduce((sum, row) => sum + row.count, 0);
+    if (count < 2) {
+      rows.push(...inner);
+      continue;
+    }
+    // The group is the innermost wrapper that still holds all of it: a
+    // moved group wrapped again by its move (layerMove) reads as the same
+    // group, at the same bytes.
+    let span: ContentUnitContainer = child;
+    for (;;) {
+      const only = span.children.length === 1 ? span.children[0] : undefined;
+      if (!only || only.leaf) break;
+      span = only;
+    }
+    rows.push({ kind: "group", start: span.start, end: span.end, count, members: inner });
+  }
+  return rows;
+}
+
+/**
+ * The page content's rows, back first, from the drawing's operations.
+ * `xobjects` says what each `Do` name is. Content that never closes its
+ * group or section, or closes one it never opened, is read as it stands:
+ * the rows say what a step would pass, and a move refuses unbalanced
+ * content on its own.
+ */
+function contentUnitRows(
+  parsedOperations: readonly ContentOperation[],
+  xobjects: ReadonlyMap<string, "Image" | "Form" | "TextForm" | "PS">,
+): readonly PdfNativeContentUnitRow[] {
+  const stack: ContentUnitFrame[] = [{ start: 0, children: [] }];
+  let text: { start: number; shows: boolean } | null = null;
+  let pathStart: number | null = null;
+  const top = () => stack[stack.length - 1]!;
+  const leaf = (kind: PdfNativeContentUnitKind, start: number, end: number) =>
+    top().children.push({ leaf: true, kind, start, end });
+  for (const operation of parsedOperations) {
+    const operator = operation.operator;
+    if (text) {
+      if (operator === "ET") {
+        if (text.shows) leaf("text", text.start, operation.end);
+        text = null;
+      } else if (CONTENT_UNIT_TEXT_SHOWS.has(operator)) {
+        text.shows = true;
+      }
+      continue;
+    }
+    if (operator === "BT") {
+      text = { start: operation.start, shows: false };
+      pathStart = null;
+      continue;
+    }
+    if (PDF_PATH_CONSTRUCTION_OPERATORS.has(operator)) {
+      pathStart ??= operation.start;
+      continue;
+    }
+    if (operator === "W" || operator === "W*") continue;
+    if (paintMode(operator) !== null) {
+      leaf("path", pathStart ?? operation.start, operation.end);
+      pathStart = null;
+      continue;
+    }
+    pathStart = null;
+    if (operator === "q" || MARKED_CONTENT_OPEN_OPERATORS.has(operator)) {
+      stack.push({ start: operation.start, children: [] });
+      continue;
+    }
+    if (operator === "Q" || operator === "EMC") {
+      if (stack.length < 2) continue;
+      const frame = stack.pop()!;
+      top().children.push({ leaf: false, start: frame.start, end: operation.end, children: frame.children });
+      continue;
+    }
+    if (operator === "Do") {
+      const name = operation.operands[0];
+      const kind = name?.kind === "name" ? xobjects.get(decodePdfSourceName(name.value)) : undefined;
+      leaf(kind === "Form" || kind === "TextForm" ? "form" : kind === "Image" ? "image" : "other",
+        operation.start, operation.end);
+      continue;
+    }
+    if (operator === "sh") {
+      leaf("shading", operation.start, operation.end);
+      continue;
+    }
+    if (operator === "BI") leaf("inline-image", operation.start, operation.end);
+  }
+  // An unclosed group or section is read as the objects it holds.
+  while (stack.length > 1) {
+    const frame = stack.pop()!;
+    top().children.push(...frame.children);
+  }
+  const ordered = (rows: readonly UnorderedRow[]): PdfNativeContentUnitRow[] => {
+    const seen = new Map<PdfNativeContentUnitKind, number>();
+    return rows.map((row) => {
+      const order = seen.get(row.kind) ?? 0;
+      seen.set(row.kind, order + 1);
+      return Object.freeze({
+        kind: row.kind,
+        order,
+        start: row.start,
+        end: row.end,
+        count: row.count,
+        ...(row.members ? { members: Object.freeze(ordered(row.members)) } : {}),
+      });
+    });
+  };
+  return Object.freeze(ordered(contentUnitChildRows(stack[0]!.children)));
+}
+
+
+interface ContentUnitPage {
+  readonly xobjects: ReadonlyMap<string, "Image" | "Form" | "TextForm" | "PS">;
+  readonly inspections: readonly PdfNativePageContentStreamInspection[];
+  readonly drawing: Uint8Array;
+  readonly rows: readonly PdfNativeContentUnitRow[];
+}
+
+async function contentUnitPage(sourceBytes: Uint8Array, pageNumber: number): Promise<ContentUnitPage> {
+  const xobjects = await readMraiNativePageXObjectKinds(sourceBytes, pageNumber);
+  const graph = await inspectMraiNativePageContentGraph(sourceBytes, pageNumber);
+  const owner = graph.resourceAuthority.owner;
+  const inspections = await inspectMraiNativePageContentStreams(sourceBytes, pageNumber, {
+    // The names the moved object draws with stay as they were.
+    extraUntouched: sameObjectRef(owner, graph.page) ? [] : [{ ...owner, role: "resource" as const }],
+  });
+  const drawing = joinNativePageDrawing(inspections);
+  let parsed: readonly ContentOperation[];
+  try {
+    parsed = operations(latin1(drawing), true);
+  } catch {
+    refuse("PDF page content stream cannot be reordered.");
+  }
+  return { xobjects, inspections, drawing, rows: contentUnitRows(parsed, xobjects) };
+}
+
+function sameObjectRef(
+  left: Readonly<{ objectNumber: number; generation: number }>,
+  right: Readonly<{ objectNumber: number; generation: number }>,
+): boolean {
+  return left.objectNumber === right.objectNumber && left.generation === right.generation;
+}
+
+/**
+ * The page content's rows (see the section comment), back first, each with
+ * the digest of its bytes, and their `kinds`.
+ */
+export async function listMraiNativePageContentUnits(input: {
+  readonly sourceBytes: Uint8Array;
+  readonly pageNumber: number;
+}): Promise<Readonly<{ kinds: string; rows: readonly (PdfNativeContentUnitRow & Readonly<{ digest: string }>)[] }>> {
+  const page = await contentUnitPage(input.sourceBytes, input.pageNumber);
+  const rows = await Promise.all(
+    page.rows.map(async (row) =>
+      Object.freeze({ ...row, digest: await sha256PdfBytes(page.drawing.slice(row.start, row.end)) })),
+  );
+  return Object.freeze({ kinds: pdfNativeContentUnitKinds(page.rows), rows: Object.freeze(rows) });
+}
+
+/** The text state each text show (and each Form drawn) paints with, read
+ * through the `q`/`Q` stack: the state a text object takes from what is
+ * drawn before it (ISO 32000-1 9.3: it outlives `ET`), with the state left
+ * at the end, which the page's next stream starts from. Compared as a
+ * multiset before and after a move: every show still paints with the font,
+ * spacing, scale, leading, rise and render mode it did. */
+function contentUnitTextStateReads(
+  parsedOperations: readonly ContentOperation[],
+  streamText: string,
+  xobjects: ReadonlyMap<string, "Image" | "Form" | "TextForm" | "PS">,
+  withEnd: boolean,
+): string[] {
+  type State = Readonly<Record<string, string>>;
+  let state: State = {};
+  const stack: State[] = [];
+  const reads: string[] = [];
+  const operands = (operation: ContentOperation) =>
+    operation.operands.map((operand) => streamText.slice(operand.start, operand.end)).join(" ");
+  for (const operation of parsedOperations) {
+    const operator = operation.operator;
+    if (operator === "q") stack.push(state);
+    else if (operator === "Q") state = stack.pop() ?? state;
+    else if (["Tf", "Tc", "Tw", "Tz", "TL", "Ts", "Tr"].includes(operator)) {
+      state = { ...state, [operator]: operands(operation) };
+    } else if (operator === "TD") {
+      const leading = operation.operands[1];
+      const ty = Number(leading ? streamText.slice(leading.start, leading.end) : NaN);
+      state = { ...state, TL: Number.isFinite(ty) ? String(-ty) : "?" };
+    } else if (operator === '"') {
+      const [aw, ac] = operation.operands;
+      state = {
+        ...state,
+        Tw: aw ? streamText.slice(aw.start, aw.end) : "?",
+        Tc: ac ? streamText.slice(ac.start, ac.end) : "?",
+      };
+    }
+    const xobject = operation.operands[0];
+    const drawsForm =
+      operator === "Do" &&
+      xobject?.kind === "name" &&
+      xobjects.get(decodePdfSourceName(xobject.value)) === "TextForm";
+    if (CONTENT_UNIT_TEXT_SHOWS.has(operator) || drawsForm) {
+      reads.push(`${streamText.slice(operation.start, operation.end)}\u0000${JSON.stringify(state)}`);
+    }
+  }
+  // The page's next stream starts in the state this one leaves.
+  if (withEnd) reads.push(`end\u0000${JSON.stringify(state)}`);
+  return reads.sort();
+}
+
+export interface PdfNativeContentUnitReorderPlan {
+  readonly schemaVersion: typeof MRAI_NATIVE_CONTENT_UNIT_REORDER_SCHEMA_VERSION;
+  readonly sourceSha256: string;
+  readonly pageNumber: number;
+  readonly direction: PdfNativeVectorReorderDirection;
+  readonly before: PdfNativeContentUnitIdentity;
+  readonly after: PdfNativeContentUnitIdentity;
+  /** The rows the object passed, back first. */
+  readonly passed: readonly Readonly<{ kind: PdfNativeContentUnitKind; order: number }>[];
+  readonly prepared: PdfNativePreparedContentStreamTransaction;
+}
+
+/**
+ * One layer move of a text object, a shading, a Form drawn whole or a group
+ * of objects: one step past the next row (forward, backward) or to an end of
+ * the page content (front, back), written as a revision of the one content
+ * stream that holds it. The same move the page's paths and pictures make
+ * (layerMove): the object keeps every state it painted with, and anything it
+ * cannot carry past -- a clip, a state named again that cannot read the
+ * same, another of the page's streams -- refuses the move rather than draw
+ * the object otherwise. A text show (or a Form's drawing) that would read
+ * another text state after the move refuses it too.
+ *
+ * The object is found by its kind and place among the rows of that kind and
+ * held to its digest (the nearest row of its kind with that digest, when the
+ * moves before it shifted it). `kinds`, when given, is the row sequence the
+ * reader showed: a page that reads otherwise is refused.
+ */
+export async function planMraiNativeContentUnitReorder(input: {
+  readonly sourceBytes: Uint8Array;
+  readonly pageNumber: number;
+  readonly unit: PdfNativeContentUnitIdentity;
+  readonly direction: PdfNativeVectorReorderDirection;
+  readonly kinds?: string;
+}): Promise<PdfNativeContentUnitReorderPlan> {
+  const mode = input.direction;
+  if (mode !== "forward" && mode !== "backward" && mode !== "front" && mode !== "back") {
+    invalid("PDF page object reorder direction is invalid.");
+  }
+  const unit = input.unit;
+  if (
+    !unit ||
+    !["text", "shading", "form", "group"].includes(unit.kind) ||
+    !Number.isSafeInteger(unit.order) ||
+    unit.order < 0 ||
+    !SHA256_PATTERN.test(unit.digest)
+  ) {
+    invalid("PDF page object reorder selection is invalid.");
+  }
+  const after = mode === "forward" || mode === "front";
+  const sourceSha256 = await sha256PdfBytes(input.sourceBytes);
+  const page = await contentUnitPage(input.sourceBytes, input.pageNumber);
+  if (input.kinds !== undefined && input.kinds !== pdfNativeContentUnitKinds(page.rows)) {
+    refuse(MRAI_NATIVE_CONTENT_UNIT_ROWS_DIFFER);
+  }
+  const ofKind = page.rows.filter((row) => row.kind === unit.kind);
+  const digests = await Promise.all(
+    ofKind.map((row) => sha256PdfBytes(page.drawing.slice(row.start, row.end))),
+  );
+  let found = -1;
+  for (let index = 0; index < ofKind.length; index += 1) {
+    if (digests[index] !== unit.digest) continue;
+    if (found < 0 || Math.abs(index - unit.order) < Math.abs(found - unit.order)) found = index;
+  }
+  const row = ofKind[found];
+  if (!row) invalid("Selected PDF page object is stale or unavailable.");
+  const stream = page.inspections.find(
+    (inspection) =>
+      row.start >= inspection.drawingOffset &&
+      row.end <= inspection.drawingOffset + inspection.streamBytes.length,
+  );
+  if (!stream) refuse("PDF page object crosses a page content stream boundary.");
+  if (countMraiNativeIndirectObjectReferences(input.sourceBytes, stream.contentStream) !== 1) {
+    refuse("PDF page object lives in a shared stream.");
+  }
+  const streamBytes = stream.streamBytes;
+  const streamText = latin1(streamBytes);
+  let parsedOperations: readonly ContentOperation[];
+  try {
+    parsedOperations = operations(streamText, true);
+  } catch {
+    refuse("PDF page content stream cannot be reordered.");
+  }
+  const offset = stream.drawingOffset;
+  const block = layerObjectBlock(parsedOperations, { start: row.start - offset, end: row.end - offset });
+  const move = layerMove({
+    parsedOperations,
+    stream: streamBytes,
+    block,
+    mode,
+    // A shading paints with its own colours; text, a Form and a group read
+    // every state a paint can.
+    keys: new Set<string>(unit.kind === "shading" ? ["ri"] : LAYER_RESET_KEY_ORDER),
+    paintStates: await pagePaintStates(input.sourceBytes, input.pageNumber),
+    namedProperties: await pageMarkedContentProperties(input.sourceBytes, input.pageNumber),
+  });
+  if (
+    (!move || mode === "front" || mode === "back") &&
+    (await layerOtherStreamsMark(
+      input.sourceBytes,
+      page.inspections.map((inspection) => inspection.contentStream),
+      stream.streamIndex,
+      after,
+    ))
+  ) {
+    refuse(MRAI_NATIVE_LAYER_MOVE_OTHER_STREAM);
+  }
+  if (!move) refuse(after ? MRAI_NATIVE_CONTENT_UNIT_ALREADY_FRONT : MRAI_NATIVE_CONTENT_UNIT_ALREADY_BACK);
+  const candidateStream = concatVectorBytes([
+    streamBytes.slice(0, move.spanStart),
+    move.replacement,
+    streamBytes.slice(move.spanEnd),
+  ]);
+  const candidateText = latin1(candidateStream);
+  let candidateOperations: readonly ContentOperation[];
+  try {
+    candidateOperations = operations(candidateText, true);
+  } catch {
+    refuse("PDF page content stream cannot be reordered.");
+  }
+  const followed = stream.streamIndex < page.inspections.length - 1;
+  const readsBefore = contentUnitTextStateReads(parsedOperations, streamText, page.xobjects, followed);
+  const readsAfter = contentUnitTextStateReads(candidateOperations, candidateText, page.xobjects, followed);
+  if (readsBefore.length !== readsAfter.length || readsBefore.some((read, index) => read !== readsAfter[index])) {
+    refuse(LAYER_MOVE_REFUSAL);
+  }
+  const originalOperatorBytes = Uint8Array.from(streamBytes.slice(move.spanStart, move.spanEnd));
+  const request: PdfNativeContentStreamTransactionRequest = Object.freeze({
+    identity: stream.identity,
+    expectedObjectSha256: stream.objectSha256,
+    expectedStreamSha256: stream.streamSha256,
+    operatorSpan: Object.freeze({
+      start: move.spanStart,
+      end: move.spanEnd,
+      expectedSha256: await sha256PdfBytes(originalOperatorBytes),
+    }),
+    replacement: move.replacement,
+    untouchedObjects: stream.untouchedObjects,
+  });
+  const prepared = await prepareMraiNativeContentStreamTransaction(input.sourceBytes, request);
+  await verifyMraiNativeContentStreamCandidate(input.sourceBytes, prepared);
+  // The rows read back as they were, the moved one past the rows it passed.
+  const passedStart = offset + move.passedStart;
+  const passedEnd = offset + move.passedEnd;
+  const passedRows = page.rows.filter((other) => other !== row && other.start >= passedStart && other.end <= passedEnd);
+  const kept = page.rows.filter((other) => other !== row);
+  const at = after
+    ? kept.indexOf(passedRows[passedRows.length - 1]!) + 1
+    : kept.indexOf(passedRows[0]!);
+  if (passedRows.length === 0 || at < 0) refuse(LAYER_MOVE_REFUSAL);
+  const expected = [...kept.slice(0, at), row, ...kept.slice(at)];
+  const reopened = await contentUnitPage(prepared.candidateBytes, input.pageNumber);
+  const rowBytes = (source: Uint8Array, entry: PdfNativeContentUnitRow) => source.slice(entry.start, entry.end);
+  const same =
+    reopened.rows.length === expected.length &&
+    (await Promise.all(
+      reopened.rows.map(async (entry, index) => {
+        const wanted = expected[index]!;
+        if (entry.kind !== wanted.kind || entry.count !== wanted.count) return false;
+        if (entry.kind === "path") return true;
+        return (await sha256PdfBytes(rowBytes(reopened.drawing, entry))) ===
+          (await sha256PdfBytes(rowBytes(page.drawing, wanted)));
+      }),
+    )).every(Boolean);
+  if (!same) {
+    throw new PdfNativeTransactionError(
+      "verification-failed",
+      "Reopened PDF page objects do not match the requested move.",
+    );
+  }
+  const orderAfter = expected.filter((entry) => entry.kind === unit.kind).indexOf(row);
+  return Object.freeze({
+    schemaVersion: MRAI_NATIVE_CONTENT_UNIT_REORDER_SCHEMA_VERSION,
+    sourceSha256,
+    pageNumber: input.pageNumber,
+    direction: mode,
+    before: Object.freeze({ kind: unit.kind, order: found, digest: unit.digest }),
+    after: Object.freeze({ kind: unit.kind, order: orderAfter, digest: unit.digest }),
+    passed: Object.freeze(passedRows.map((entry) => Object.freeze({ kind: entry.kind, order: entry.order }))),
+    prepared,
   });
 }

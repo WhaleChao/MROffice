@@ -31,7 +31,7 @@ import { spreadsheetFontStack, type NativeGridFont } from "@mrnote/core/web/lib/
 export function spreadsheetFontStackWithAssets(
   family: string | undefined,
   aliases?: Readonly<Record<string, string>>,
-  traits?: Pick<NativeGridFont, "bold" | "italic">,
+  traits?: Pick<NativeGridFont, "bold" | "italic"> & { readonly record?: unknown; readonly fontRecord?: unknown },
 ): string {
   const alias =
     family && aliases?.[officePrimaryFontFamily(family).toLocaleLowerCase()];

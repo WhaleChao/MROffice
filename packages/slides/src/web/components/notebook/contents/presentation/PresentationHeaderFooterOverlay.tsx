@@ -28,6 +28,7 @@ import {
   resolveSlideNativeLayout,
   type SlideMaster,
 } from "@mrnote/core/web/lib/presentation-master.ts";
+import { buildBlockTransform } from "@mrnote/core/web/lib/presentation-drag.ts";
 import { slideBounds } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import {
   formatDeckDate,
@@ -38,6 +39,7 @@ import {
   type PresentationDateFieldLocale,
 } from "@mrnote/core/web/lib/presentation-header-footer.ts";
 import { presentationFooterFieldZIndex } from "@mrnote/core/web/lib/presentation-paint-order.ts";
+import { flippedTextTransform } from "@mrnote/core/web/lib/presentation-shape-text-rect.ts";
 import type { SlideModel } from "@mrnote/core/web/lib/presentation/deck-model.ts";
 
 export function presentationHeaderFooterDialogDraft(
@@ -185,6 +187,16 @@ export interface HeaderFooterFieldBox {
   top: number;
   width: number;
   height: number;
+  /**
+   * The placeholder's turn (degrees clockwise, about the box's centre) and
+   * flips, drawn as a slide block's are (`buildBlockTransform`). Microsoft's
+   * "Dark modernist" master sets its footer and slide number up the bar at
+   * the slide's right edge (`a:xfrm rot="16200000"`); drawn in the unturned
+   * frame they lay across the slide's middle, over the title.
+   */
+  rotation?: number;
+  flipH?: boolean;
+  flipV?: boolean;
   /** The box's text insets, as fractions of the slide's WIDTH (CSS padding). */
   insets: { left: number; top: number; right: number; bottom: number };
   align: "left" | "center" | "right";
@@ -236,11 +248,15 @@ function bandFieldBox(
   const firstRun = runs.find((run) => run && typeof run === "object") as { style?: Record<string, unknown> } | undefined;
   const runStyle = firstRun?.style && typeof firstRun.style === "object" ? firstRun.style : {};
   const fontSizePt = finiteNumber(runStyle.fontSize);
+  const rotation = finiteNumber(block.rotation);
   return {
     left: left / slideWidth,
     top: top / slideHeight,
     width: width / slideWidth,
     height: height / slideHeight,
+    ...(rotation !== undefined && rotation % 360 !== 0 ? { rotation } : {}),
+    ...(block.flipH === true ? { flipH: true } : {}),
+    ...(block.flipV === true ? { flipV: true } : {}),
     insets: {
       left: inset("left", 91_440),
       top: inset("top", 45_720),
@@ -326,6 +342,8 @@ function stackedInSlide(placement: HeaderFooterPlacement, slide: SlideModel): He
 
 function headerFooterFieldStyle(box: HeaderFooterFieldBox): CSSProperties {
   const percent = (value: number) => `${value * 100}%`;
+  // Turned and flipped about the box's centre, as the canvas draws a block.
+  const transform = buildBlockTransform(box.rotation, box);
   return {
     position: "absolute",
     left: percent(box.left),
@@ -341,12 +359,16 @@ function headerFooterFieldStyle(box: HeaderFooterFieldBox): CSSProperties {
     textAlign: box.align,
     pointerEvents: "none",
     zIndex: box.zIndex ?? 2,
+    ...(transform ? { transform, transformOrigin: "center center" } : {}),
   };
 }
 
 function headerFooterFieldTextStyle(box: HeaderFooterFieldBox): CSSProperties {
+  // The words of a flipped box are never mirrored (`flippedTextTransform`).
+  const unmirrored = flippedTextTransform(box);
   return {
     display: "block",
+    ...(unmirrored ? { transform: unmirrored } : {}),
     whiteSpace: "pre-wrap",
     lineHeight: 1.2,
     // A point is 4/3 of the design surface's pixel (9525 EMU per pixel).

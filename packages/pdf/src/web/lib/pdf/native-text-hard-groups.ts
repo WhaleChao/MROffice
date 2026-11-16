@@ -7,6 +7,11 @@ import { GROUPING_ROLES, INLINE_ROLES } from "./tagged-reading-order";
 
 /** The tag of the marked-content sequence the editor writes round a box. */
 export const PDF_NATIVE_BOX_MARK_TAG = "MRAIBox";
+/** The tag round the drawing of a table, chart or SmartArt made in MRAI,
+ * where the page draws it as its own content (managed_object_content.py):
+ * the words inside are the object's, edited in the object, and are no page
+ * text to open line by line. */
+export const PDF_MANAGED_OBJECT_MARK_TAG = "MRAIObject";
 
 const MAX_STRUCT_NODES = 10_000;
 const MAX_STRUCT_DEPTH = 64;
@@ -23,6 +28,12 @@ export interface PdfJsMarkedTextItems {
   /** Per item: drawn inside /Artifact marked content (pagination: a
    * watermark, a header or footer, a page number). */
   readonly artifacts: readonly boolean[];
+  /** Per item: the ordinal of the managed object (a table, a chart) whose
+   * drawing it is part of, null for the page's own text. */
+  readonly objects: readonly (number | null)[];
+  /** How many managed objects the page draws as its content (one with no
+   * words, an empty table, is counted too: its sequence is still marked). */
+  readonly objectCount: number;
   
 
   readonly ambiguousContentIds: ReadonlySet<string>;
@@ -35,9 +46,11 @@ export function splitPdfJsMarkedContent(raw: readonly unknown[]): PdfJsMarkedTex
   const boxes: (number | null)[] = [];
   const contentIds: (string | null)[] = [];
   const artifacts: boolean[] = [];
-  const frames: { box: number | null; id: string | null; artifact: boolean }[] = [];
+  const objects: (number | null)[] = [];
+  const frames: { box: number | null; id: string | null; artifact: boolean; object: number | null }[] = [];
   const opened = new Map<string, number>();
   let boxCount = 0;
+  let objectCount = 0;
   for (const value of raw) {
     const marker = value && typeof value === "object" ? (value as MarkedContentItem) : null;
     if (marker?.type === "beginMarkedContent" || marker?.type === "beginMarkedContentProps") {
@@ -46,7 +59,10 @@ export function splitPdfJsMarkedContent(raw: readonly unknown[]): PdfJsMarkedTex
         ? marker.id
         : null;
       if (id) opened.set(id, (opened.get(id) ?? 0) + 1);
-      frames.push({ box: tag === PDF_NATIVE_BOX_MARK_TAG ? boxCount++ : null, id, artifact: tag === "Artifact" });
+      frames.push({
+        box: tag === PDF_NATIVE_BOX_MARK_TAG ? boxCount++ : null, id, artifact: tag === "Artifact",
+        object: tag === PDF_MANAGED_OBJECT_MARK_TAG ? objectCount++ : null,
+      });
       continue;
     }
     if (marker?.type === "endMarkedContent") {
@@ -63,12 +79,15 @@ export function splitPdfJsMarkedContent(raw: readonly unknown[]): PdfJsMarkedTex
     boxes.push(box);
     contentIds.push(id);
     artifacts.push(frames.some((frame) => frame.artifact));
+    objects.push(frames.find((frame) => frame.object !== null)?.object ?? null);
   }
   return Object.freeze({
     items: Object.freeze(items),
     boxes: Object.freeze(boxes),
     contentIds: Object.freeze(contentIds),
     artifacts: Object.freeze(artifacts),
+    objects: Object.freeze(objects),
+    objectCount,
     ambiguousContentIds: new Set([...opened].filter(([, count]) => count > 1).map(([id]) => id)),
   });
 }
@@ -111,9 +130,10 @@ export function pdfStructBlockByContentId(structTree: unknown): ReadonlyMap<stri
 }
 
 /**
- * The key of the box each text item is drawn in, by item index: `box:<n>`
- * for the editor's n-th box mark, `struct:<n>` for a structure block, null
- * for none. Null as a whole when no item has one (every untagged page the
+ * The key of the box each text item is drawn in, by item index: `object:<n>`
+ * for the n-th managed object the page draws (its words never share a line
+ * or a box with the page's own), `box:<n>` for the editor's n-th box mark,
+ * `struct:<n>` for a structure block, null for none. Null as a whole when no item has one (every untagged page the
  * editor never wrote), so the page is grouped as it always was.
  */
 export function pdfNativeTextHardGroups(
@@ -125,6 +145,11 @@ export function pdfNativeTextHardGroups(
     : new Map<string, string>();
   let any = false;
   const groups = marked.items.map((_, index) => {
+    const object = marked.objects[index];
+    if (object !== null && object !== undefined) {
+      any = true;
+      return `object:${object}`;
+    }
     const box = marked.boxes[index];
     if (box !== null && box !== undefined) {
       any = true;
@@ -160,6 +185,10 @@ export async function readPdfTextContentWithHardGroups(
   hardGroups: readonly (string | null)[] | null;
   /** Per item: inside /Artifact marked content (splitPdfJsMarkedContent). */
   artifacts: readonly boolean[];
+  /** Per item: part of a managed object's drawing (splitPdfJsMarkedContent). */
+  objects: readonly boolean[];
+  /** The managed objects the page draws as its content (with or without words). */
+  objectCount: number;
 }> {
   const content = await page.getTextContent({ includeMarkedContent: true });
   const marked = splitPdfJsMarkedContent(Array.isArray(content?.items) ? (content.items as unknown[]) : []);
@@ -188,6 +217,8 @@ export async function readPdfTextContentWithHardGroups(
     styles,
     hardGroups: pdfNativeTextHardGroups(marked, structTree),
     artifacts: marked.artifacts,
+    objects: marked.objects.map((object) => object !== null),
+    objectCount: marked.objectCount,
   };
 }
 

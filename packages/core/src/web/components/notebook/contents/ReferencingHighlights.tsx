@@ -16,6 +16,7 @@ import { useTranslations } from "../../../../host/next-intl";
 import { apiGet } from "../../../lib/api";
 import { useWindowManagerActions } from "../WindowManager";
 import { Skeleton } from "../../ui/loading-skeleton";
+import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
 
 interface ReferencingHighlightsProps {
   pageId: string;
@@ -38,7 +39,7 @@ function formatRel(value: string | null): string {
   if (!value) return "";
   try {
     const d = new Date(value);
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(pageInterfaceLocale(), {
       month: "short",
       day: "numeric",
       hour: "2-digit",

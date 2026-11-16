@@ -18,7 +18,15 @@ import { type DrawingStackEntry } from "../../../../lib/spreadsheet/drawing-stac
 /** What spreadsheetObjectArrangeRibbonControls reads from SpreadsheetWindow's render scope. */
 export interface SpreadsheetObjectArrangeRibbonControlsInputs {
   drawingStack: DrawingStackEntry[];
+  /**
+   * Excel greys the four layer commands only when the sheet holds a single
+   * drawing; at the top or bottom of the stack they stay on and do nothing.
+   */
+  drawingsArrangeable: boolean;
   reorderSheetObject: (objectId: string, move: "front" | "back" | "forward" | "backward") => void;
+  /** A selected native chart moves through the same stack (Page Layout > Arrange). */
+  reorderSheetChart: (chartId: string, move: "front" | "back" | "forward" | "backward") => void;
+  selectedNativeChartId: string | null;
   selectedObject: SpreadsheetObject | null;
   selectedObjectStackIndex: number;
   sheet: SheetModel;
@@ -29,13 +37,25 @@ export interface SpreadsheetObjectArrangeRibbonControlsInputs {
 /** Moved verbatim from SpreadsheetWindow (called at the same position, so hook order is unchanged). */
 export function spreadsheetObjectArrangeRibbonControls({
   drawingStack,
+  drawingsArrangeable,
   reorderSheetObject,
+  reorderSheetChart,
+  selectedNativeChartId,
   selectedObject,
   selectedObjectStackIndex,
   sheet,
   sheetProtectionAllowsRef,
   t,
 }: SpreadsheetObjectArrangeRibbonControlsInputs) {
+  const nativeChartStackIndex = selectedNativeChartId
+    ? drawingStack.findIndex((entry) => entry.kind === "chart" && entry.id === selectedNativeChartId)
+    : -1;
+  const targetStackIndex = selectedObject ? selectedObjectStackIndex : nativeChartStackIndex;
+  const arrangeSelected = (move: "front" | "back" | "forward" | "backward") => {
+    if (selectedObject) reorderSheetObject(selectedObject.id, move);
+    else if (selectedNativeChartId && nativeChartStackIndex >= 0) reorderSheetChart(selectedNativeChartId, move);
+  };
+  const stackDisabled = targetStackIndex < 0 || !drawingsArrangeable;
   const objectArrangeRibbonControls = (
     compact = true,
     options?: {
@@ -56,8 +76,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             disabled={
               Boolean(options?.disabledReason) ||
               !sheetProtectionAllowsRef.current(sheet, "editObjects") ||
-              selectedObjectStackIndex < 0 ||
-              selectedObjectStackIndex === drawingStack.length - 1
+              stackDisabled
             }
             disabledReason={
               !sheetProtectionAllowsRef.current(sheet, "editObjects")
@@ -69,7 +88,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             onClick={() =>
               options?.onArrange
                 ? options.onArrange("front")
-                : selectedObject && reorderSheetObject(selectedObject.id, "front")
+                : arrangeSelected("front")
             }
             testId="spreadsheet-ribbon-arrange-front"
           />
@@ -81,8 +100,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             disabled={
               Boolean(options?.disabledReason) ||
               !sheetProtectionAllowsRef.current(sheet, "editObjects") ||
-              selectedObjectStackIndex < 0 ||
-              selectedObjectStackIndex === drawingStack.length - 1
+              stackDisabled
             }
             disabledReason={
               !sheetProtectionAllowsRef.current(sheet, "editObjects")
@@ -94,7 +112,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             onClick={() =>
               options?.onArrange
                 ? options.onArrange("forward")
-                : selectedObject && reorderSheetObject(selectedObject.id, "forward")
+                : arrangeSelected("forward")
             }
             testId="spreadsheet-ribbon-arrange-forward"
           />
@@ -106,7 +124,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             disabled={
               Boolean(options?.disabledReason) ||
               !sheetProtectionAllowsRef.current(sheet, "editObjects") ||
-              selectedObjectStackIndex <= 0
+              stackDisabled
             }
             disabledReason={
               !sheetProtectionAllowsRef.current(sheet, "editObjects")
@@ -118,7 +136,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             onClick={() =>
               options?.onArrange
                 ? options.onArrange("backward")
-                : selectedObject && reorderSheetObject(selectedObject.id, "backward")
+                : arrangeSelected("backward")
             }
             testId="spreadsheet-ribbon-arrange-backward"
           />
@@ -130,7 +148,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             disabled={
               Boolean(options?.disabledReason) ||
               !sheetProtectionAllowsRef.current(sheet, "editObjects") ||
-              selectedObjectStackIndex <= 0
+              stackDisabled
             }
             disabledReason={
               !sheetProtectionAllowsRef.current(sheet, "editObjects")
@@ -142,7 +160,7 @@ export function spreadsheetObjectArrangeRibbonControls({
             onClick={() =>
               options?.onArrange
                 ? options.onArrange("back")
-                : selectedObject && reorderSheetObject(selectedObject.id, "back")
+                : arrangeSelected("back")
             }
             testId="spreadsheet-ribbon-arrange-back"
           />

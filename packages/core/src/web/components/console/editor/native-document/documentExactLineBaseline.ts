@@ -11,6 +11,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { measureOfficeFontLineBox } from "../../../office-ribbon/officeFontLineBox";
 import { documentDisplayFontPluginKey } from "./documentDisplayFonts";
+import { projectionFontReach, sheetRangesOf, textblocksIn } from "./projectionFontNews";
 import { docsLayoutPerfLegacy } from "./paged/layoutPerfLegacy";
 import { ChangedSheets } from "./paged/changedSheets";
 import { textEngineEnabled } from "../../../../lib/text-engine/flags";
@@ -105,6 +106,10 @@ export class ExactLineReadings {
 
   set(block: ProseMirrorNode, reading: BlockReading): void {
     this.readings.set(block, reading);
+  }
+
+  delete(block: ProseMirrorNode): void {
+    this.readings.delete(block);
   }
 }
 
@@ -354,7 +359,25 @@ export const DocumentExactLineBaseline = Extension.create({
             frame = win.requestAnimationFrame(run);
           };
           // A face that arrives later has other ascent and descent.
-          const fontsLoaded = () => { cache.clear(); readings.clear(); changed?.invalidate(); schedule(); };
+          const fontsLoaded = (event?: Event) => {
+            // (projectionFontNews) With the trial, only the sheets drawing
+            // the arrived face's characters, and the baselines of its family.
+            const reach = projectionFontReach(view, "exact-line", event);
+            if (reach === "none") return;
+            if (reach === "all" || !changed) {
+              cache.clear();
+              readings.clear();
+              changed?.invalidate();
+            } else {
+              for (const key of [...cache.keys()]) {
+                const lower = key.toLowerCase();
+                if (reach.families.some((family) => lower.includes(family))) cache.delete(key);
+              }
+              textblocksIn(view, sheetRangesOf(view, reach.sheets), (node) => readings.delete(node));
+              for (const sheet of reach.sheets) changed.mark(sheet);
+            }
+            schedule();
+          };
           view.dom.ownerDocument.fonts?.addEventListener?.("loadingdone", fontsLoaded);
           const lookAgain = () => { if (waitingForAll || waiting.size > 0) schedule(); };
           view.dom.addEventListener(PAGE_LEDGER_CONVERGED_EVENT, lookAgain);

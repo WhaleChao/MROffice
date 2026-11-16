@@ -12,7 +12,9 @@
  * and the measuring AutoFit stay in the window.
  */
 
+import type { ExcelFontRecordClass } from "@mrnote/core/web/lib/office-fonts/excel-windows-faces.ts";
 import { officePrimaryFontFamily } from "@mrnote/core/web/components/office-ribbon/officeTypographyCatalog.ts";
+import { officePrintScale, type OfficePrintScale } from "./office-print-metrics";
 import {
   cellShiftMetadataBlocker,
   canAdjustCellShiftFormulas,
@@ -47,7 +49,9 @@ import {
   MAX_GRID_COLUMNS,
   MAX_GRID_ROWS,
   officeDigitWidth,
+  officeIndentStepPx,
   officeRowHeight,
+  officeRowMetricsKnown,
   setLineSizes,
   type SizeMap,
 } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
@@ -76,7 +80,6 @@ import {
   insertLine,
   remapPivotSourcesOnEditedSheet,
   remapReferencesToEditedSheet,
-  structuralEditMovesThreeDReference,
   structuralInsertRefusal,
   structuralLineArrayRefusal,
   type StructuralInsertRefusal,
@@ -168,7 +171,11 @@ export function insertedLinesSheet<S extends StructuralSheet>(
   // "Cannot change part of a data table." -- a line through a What-If Data
   // Table would split it.
   if (whatIfTableLineRefused(sheet.whatIfTables, axis, at, count, "insert")) return "data-table";
-  if (structuralEditMovesThreeDReference(workbook, sheet, axis, at, count)) return "three-d";
+  // A 3-D reference over this sheet (='1:31'!B21) does not stop the insert:
+  // Excel inserts and leaves the reference as written, while the cells move
+  // (Mac Excel 16, excel-formats/xprobe-rounds1113 H; xlsx-rounds R393-X20 ..
+  // R397-X16). The rewrite never moves a 3-D reference. A group edit, which
+  // moves every sheet of the span, still asks (sheet-group).
   const inserted = insertLine(sheet, axis, at, count);
   // The lines moved are the lines inserted. The extent's growth is not: at
   // the 1,048,576-row (16,384-column) cap it is capped, while the cells past
@@ -278,7 +285,8 @@ export function deletedLinesSheet<S extends StructuralSheet>(
   if (structuralLineArrayRefusal(sheet, axis, at, count, "delete")) return "array";
   // Deleted lines that cut a What-If Data Table without removing it whole.
   if (whatIfTableLineRefused(sheet.whatIfTables, axis, at, count, "delete")) return "data-table";
-  if (structuralEditMovesThreeDReference(workbook, sheet, axis, at, -count)) return "three-d";
+  // As for an insert: Excel deletes and leaves a 3-D reference as written
+  // (xprobe-rounds1113 H).
   const next = deleteLine(sheet, axis, at, count);
   return {
     sheet: next,
@@ -604,8 +612,23 @@ export interface ResolvedNativeGrid {
   digitWidth: number;
   fontRowHeight: number;
   fontReplaced: boolean;
+  /** The automatic default row is the grid font's own (fontRowHeight), not
+   * the height the file states: a theme replaced the font, or the file states
+   * a default that is not custom and the tables know the face. Windows Excel
+   * draws such a sheet's rows at its own default row for the font (lookwin
+   * probe p26: 14.4, 14.5 or 20 pt stated without customHeight all draw 15 pt
+   * in Calibri 11); a file saved at 120 dpi states 14.4. */
+  automaticDefaultRow: boolean;
+  /** The face the grid's rows are measured in (fontRowHeight's). */
+  rowFont: { family: string; sizePt: number; record?: ExcelFontRecordClass };
   widths: Record<string, number>;
   defaultWidth: number | undefined;
+  /** Windows Excel's printer scale of this grid (officePrintScale): rows by
+   * the grid font, columns by the face they are counted in. */
+  printScale?: OfficePrintScale;
+  /** One indent level on the screen, px: three of the grid font's spaces
+   * (officeIndentStepPx, lookwin p87-lw). */
+  indentStepPx?: number;
 }
 
 /**
@@ -628,6 +651,8 @@ export function resolveSpreadsheetNativeGrid(
   // and counts its columns in that face's digit, 等线 11's 8 px where the
   // file's Calibri has 7 (X-329). Rows keep the workbook's own heights.
   localeFamily?: string,
+  // The UI's face also measures the rows (a Western UI's Latin face).
+  localeRows = false,
 ): ResolvedNativeGrid | undefined {
   const changedTheme = grid && themeId && (grid.sourceThemeFontId ?? "office") !== themeId;
   const measurementFont = grid?.metricsFont ?? grid?.font;
@@ -636,10 +661,14 @@ export function resolveSpreadsheetNativeGrid(
     ? officePrimaryFontFamily(replacement) : measurementFont.family);
   if (!grid || !displayFamily) return undefined;
   const dpi = 96;
-  const font = { family: displayFamily, sizePt: measurementFont?.sizePt };
   const columnFamily = !changedTheme && measurementFont?.themeRole && localeFamily && localeFamily !== displayFamily
     ? officePrimaryFontFamily(localeFamily) : displayFamily;
-  const digitWidth = officeDigitWidth({ family: columnFamily, sizePt: measurementFont?.sizePt });
+  const rowFamily = localeRows ? columnFamily : displayFamily;
+  // The record's class (a face Windows lacks, drawn by it) belongs to the
+  // file's own face, not to a theme or UI face put in its place.
+  const recordOf = (family: string) => family === measurementFont?.family && measurementFont.record ? { record: measurementFont.record } : {};
+  const font = { family: rowFamily, sizePt: measurementFont?.sizePt, ...recordOf(rowFamily) };
+  const digitWidth = officeDigitWidth({ family: columnFamily, sizePt: measurementFont?.sizePt, ...recordOf(columnFamily) });
   const fontRowHeight = officeRowHeight(font);
   const resolved: Record<string, number> = { ...widths };
   for (const [index, column] of Object.entries(grid.columns)) {
@@ -648,7 +677,13 @@ export function resolveSpreadsheetNativeGrid(
   // The workbook's own row heights describe its own font; only a theme
   // change puts a different face on the sheet, whose rows must be re-derived.
   const fontReplaced = Boolean(changedTheme && measurementFont?.themeRole && replacement);
-  return { grid, dpi, digitWidth, fontRowHeight, fontReplaced, widths: resolved,
+  const automaticDefaultRow = fontReplaced || officeRowMetricsKnown(font.family, font.sizePt, font.record);
+  const rowPrint = officePrintScale(font, digitWidth);
+  const printScale = columnFamily === rowFamily
+    ? rowPrint
+    : { x: officePrintScale({ family: columnFamily, sizePt: measurementFont?.sizePt, ...recordOf(columnFamily) }, digitWidth).x, y: rowPrint.y };
+  return { grid, dpi, digitWidth, fontRowHeight, fontReplaced, automaticDefaultRow, indentStepPx: officeIndentStepPx(font),
+    rowFont: { family: rowFamily, sizePt: measurementFont?.sizePt ?? 11, ...recordOf(rowFamily) }, widths: resolved, printScale,
     defaultWidth: defaultWidth === grid.defaultPixels ? nativeDefaultWidth(grid, digitWidth, dpi) : defaultWidth };
 }
 

@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { PDF_JS_CMAP_BASE_URL } from "@mrnote/core/web/lib/pdf/pdfjs-asset-urls.ts";
 import { isMraiNativePredefinedUnicodeCMapName } from "./predefined-cmap-names";
 export { isMraiNativePredefinedUnicodeCMapName };
 /**
@@ -17,7 +18,8 @@ export { isMraiNativePredefinedUnicodeCMapName };
  * encodings (GBK-EUC-H, 90ms-RKSJ-H, ...) stay preserve-only.
  */
 
-export const PDF_NATIVE_PREDEFINED_CMAP_BASE_URL = "/pdfjs-cmaps/";
+/** The URL pdf.js itself reads them from, so one kept copy serves both. */
+export const PDF_NATIVE_PREDEFINED_CMAP_BASE_URL = PDF_JS_CMAP_BASE_URL;
 
 const MAX_BCMAP_BYTES = 4 * 1024 * 1024;
 const MAX_USE_CMAP_DEPTH = 4;

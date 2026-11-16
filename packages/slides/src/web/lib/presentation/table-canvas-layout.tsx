@@ -14,9 +14,12 @@
  */
 
 import { CSS_PX_PER_POINT, designPxToPoints } from "@mrnote/core/web/lib/presentation/text-units.ts";
+import { exactLineSpacingCss, normalizeExactLineSpacingPoints } from "@mrnote/core/web/lib/presentation-line-spacing.ts";
+import { officePercentLeadingEm } from "./text-layout-css";
 import type { CSSProperties, ReactElement } from "react";
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import { cellCharacterRuns } from "@mrnote/core/web/lib/presentation-cell-rich-text.ts";
+import { EMPTY_PRESENTATION_FONT_ALIASES, presentationFontFamilyWithAssets, presentationFontStacksJoined } from "@mrnote/core/web/lib/presentation-font-face-reads.ts";
 import {
   logicalCellPositions,
   logicalPositionOfCell,
@@ -69,6 +72,7 @@ import type {
 } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import { PRESENTATION_GEOMETRY_MAX_EMU } from "@mrnote/core/web/lib/presentation-geometry-limit.ts";
 import { clampNumber } from "./selection-geometry";
+import { presentationTextShapingCss } from "./presentation-text-shaping";
 
 export const MAX_PRESENTATION_GEOMETRY_EMU = PRESENTATION_GEOMETRY_MAX_EMU;
 
@@ -201,6 +205,12 @@ export function tableCellStrut(
 }
 
 /** A cell's own proportional line spacing (`lineSpacing`), else 1. */
+/** Line Spacing > Exactly every paragraph of the cell states, in points
+ * (`lineSpacingPoints`, readings row 832), else undefined. */
+export function tableCellExactLineSpacingPt(cell: PresentationTableCell | undefined): number | undefined {
+  return normalizeExactLineSpacingPoints((cell as { lineSpacingPoints?: unknown } | undefined)?.lineSpacingPoints) || undefined;
+}
+
 function tableCellLineSpacing(cell: PresentationTableCell | undefined): number {
   const value = (cell as { lineSpacing?: unknown } | undefined)?.lineSpacing;
   return typeof value === "number" && Number.isFinite(value) && value >= 0.25 && value <= 5 ? value : 1;
@@ -227,6 +237,42 @@ export function tableCellStatedHeightPx(
     total += height;
   }
   return total;
+}
+
+/**
+ * The faces a cell's complex-script and East Asian characters are drawn in
+ * (`scriptFaces`, readings row 833: the run's own `a:cs` / `a:ea`, else the
+ * theme's body font for the slot, else its `a:font` of the run's script).
+ * Drawn only.
+ */
+export function tableCellScriptFaces(cell: unknown): { cs?: string; ea?: string } | undefined {
+  const raw = (cell as { scriptFaces?: unknown } | undefined)?.scriptFaces;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: { cs?: string; ea?: string } = {};
+  for (const slot of ["cs", "ea"] as const) {
+    const face = (raw as Record<string, unknown>)[slot];
+    if (typeof face === "string" && face.trim() && face.length <= 200) out[slot] = face.trim();
+  }
+  return out.cs || out.ea ? out : undefined;
+}
+
+
+
+
+
+
+
+
+
+export function servedTableCellFontFamily(value: unknown, scriptFaces?: { cs?: string; ea?: string }): string | undefined {
+  const css = tableCellFontFamilyCss(value);
+  let served = css ? (presentationFontFamilyWithAssets(css, EMPTY_PRESENTATION_FONT_ALIASES) ?? css) : css;
+  if (!served) return served;
+  for (const face of [scriptFaces?.cs, scriptFaces?.ea]) {
+    const own = face ? tableCellFontFamilyCss(face) : undefined;
+    if (own) served = presentationFontStacksJoined(served, presentationFontFamilyWithAssets(own, EMPTY_PRESENTATION_FONT_ALIASES) ?? own);
+  }
+  return served;
 }
 
 export function tableCellVisualTextStyle(
@@ -260,6 +306,30 @@ export function tableCellVisualTextStyle(
   const reachBottom = reach(cellStyle.marginBottom, TABLE_CELL_PADDING_PX.vertical, TABLE_CELL_NORMAL_MARGIN_PX.vertical);
   const reachLeft = reach(cellStyle.marginLeft, TABLE_CELL_PADDING_PX.horizontal, TABLE_CELL_NORMAL_MARGIN_PX.horizontal);
   const reachRight = reach(cellStyle.marginRight, TABLE_CELL_PADDING_PX.horizontal, TABLE_CELL_NORMAL_MARGIN_PX.horizontal);
+  // A cell's PERCENTAGE line spacing lays its lines out as a text box's
+  // (`officePercentLeadingEm`): the extra above each line, the first
+  // baseline at the larger of single's and three quarters of the line, and
+  // nothing under the last line's descent. Pitched at 1.2 x the spacing in a
+  // CSS line box, a 115 % cell stood a sixth of a line too tall and its words
+  
+  // PowerPoint 12.96 pt apart, the editor 13.8; PowerPoint's print of
+  // truth-probes/lookfit-cell-spacing-probe.pptx, 80-200 %, one and three
+  // lines, Arial and Calibri). The glyphs move down by `shift`; the box gives
+  // back `tail` under its last line (a negative bottom margin, so a row its
+  // words decide is that much lower), and an anchored cell's words move down
+  // by what the anchor shared of it.
+  const exactSpacing = importedPresentationTable(block) ? tableCellExactLineSpacingPt(cell) : undefined;
+  const percentLeading =
+    importedPresentationTable(block) && exactSpacing === undefined && tableCellLineSpacing(cell) !== 1
+      ? officePercentLeadingEm(
+          Math.round(IMPORTED_TABLE_CELL_LINE_HEIGHT * tableCellLineSpacing(cell) * 10_000) / 10_000,
+          cellStyle.fontFamily ?? strutFontFamily ?? undefined,
+        )
+      : { shift: 0, tail: 0 };
+  const leadingDrop =
+    percentLeading.shift +
+    (cellStyle.verticalAlign === "bottom" ? percentLeading.tail : cellStyle.verticalAlign === "middle" ? percentLeading.tail / 2 : 0);
+  const tailCss = percentLeading.tail ? ` - ${percentLeading.tail}em` : "";
   return {
     border: 0,
     borderRadius: 0,
@@ -298,7 +368,8 @@ export function tableCellVisualTextStyle(
           ...(importedPresentationTable(block)
             ? {
                 height: `calc(100% + ${reachTop + reachBottom}px + var(${CELL_BORDER_TOP_HALF_VAR}, 0px) + var(${CELL_BORDER_BOTTOM_HALF_VAR}, 0px))`,
-                margin: `calc(${-reachTop}px - var(${CELL_BORDER_TOP_HALF_VAR}, 0px)) calc(${-reachRight}px - var(${CELL_BORDER_RIGHT_HALF_VAR}, 0px)) calc(${-reachBottom}px - var(${CELL_BORDER_BOTTOM_HALF_VAR}, 0px)) calc(${-reachLeft}px - var(${CELL_BORDER_LEFT_HALF_VAR}, 0px))`,
+                margin: `calc(${-reachTop}px - var(${CELL_BORDER_TOP_HALF_VAR}, 0px)) calc(${-reachRight}px - var(${CELL_BORDER_RIGHT_HALF_VAR}, 0px)) calc(${-reachBottom}px - var(${CELL_BORDER_BOTTOM_HALF_VAR}, 0px)${tailCss}) calc(${-reachLeft}px - var(${CELL_BORDER_LEFT_HALF_VAR}, 0px))`,
+                ...(leadingDrop ? { top: `${Math.round(leadingDrop * 10_000) / 10_000}em` } : {}),
                 maxHeight: `calc(100% + ${reachTop + reachBottom}px + var(${CELL_BORDER_TOP_HALF_VAR}, 0px) + var(${CELL_BORDER_BOTTOM_HALF_VAR}, 0px))`,
               }
             : {
@@ -349,6 +420,13 @@ export function tableCellVisualTextStyle(
         }
       : {}),
     ...(cellStyle.align !== "left" ? tableCellAlignmentCss(cellStyle.align) : {}),
+    // Right-to-Left paragraphs (`dir`, readings row 831): the lines' base
+    
+    // label of "A1:2017 - הזרקת קוד" on the right, as PowerPoint sets it).
+    // The alignment stays the cell's own, a physical side.
+    ...((cell as { dir?: unknown } | undefined)?.dir === "rtl"
+      ? { direction: "rtl" as const, ...(cellStyle.align === "left" ? { textAlign: "left" as const } : {}) }
+      : {}),
     // A header cell whose runs all say bold off stays regular (CDC p60). An
     // imported table drawn by its own style takes the header's weight from
     
@@ -371,12 +449,16 @@ export function tableCellVisualTextStyle(
           backgroundColor: cellStyle.highlight,
         }
       : {}),
+    // Served as a run's face is (`presentationFontFamilyWithAssets`): the
+    // Office name's static alias rule carries only its stand-in's Latin
+    // slices, so Cyrillic, Greek and Vietnamese words need the stand-in's own
+    
     ...(cellStyle.fontFamily !== null
       ? {
-          fontFamily: tableCellFontFamilyCss(cellStyle.fontFamily),
+          fontFamily: servedTableCellFontFamily(cellStyle.fontFamily, tableCellScriptFaces(cell)),
         }
       : strutFontFamily !== null
-        ? { fontFamily: tableCellFontFamilyCss(strutFontFamily) }
+        ? { fontFamily: servedTableCellFontFamily(strutFontFamily, tableCellScriptFaces(cell)) }
         : {}),
     ...(cellStyle.fontSize !== null
       ? {
@@ -385,6 +467,15 @@ export function tableCellVisualTextStyle(
       : strutFontSizePt !== null
         ? { fontSize: `${strutFontSizePt}pt` }
         : {}),
+    // Line Spacing > Exactly on every paragraph (readings row 832): each line
+    // that tall, its glyphs where PowerPoint sets them (`exactLineSpacingCss`,
+    
+    ...(importedPresentationTable(block) && tableCellExactLineSpacingPt(cell) !== undefined
+      ? exactLineSpacingCss(
+          tableCellExactLineSpacingPt(cell)!,
+          cellStyle.fontSize ?? strutFontSizePt ?? undefined,
+        )
+      : {}),
     ...(cellStyle.superscript || cellStyle.subscript
       ? {
           position: "relative",
@@ -1488,6 +1579,10 @@ export function tableLayoutStyle(
     // A cell naming no typeface draws in the theme's body font, as PowerPoint
     // draws it (`presentationBodyFontStyle` states it on the slide surface).
     fontFamily: "var(--presentation-body-font)",
+    // PowerPoint's shaping of the cells' words where the browser draws them
+    // (`presentationTextShapingCss`): no common ligatures; unkerned when the
+    // table's kerning receipt says PowerPoint kerns none of them.
+    ...presentationTextShapingCss(((block as { source?: unknown }).source as { nativeKerning?: unknown } | null | undefined)?.nativeKerning, null),
     ...(hasCols ? { tableLayout: "fixed" as const, width: "100%" } : {}),
     // An imported table is as tall as its rows, as PowerPoint draws it: the
     // frame's own extent is not its size (a Google Slides export states
@@ -1613,7 +1708,9 @@ function tableCellDrawnFontSizePx(
   let largest = cellFontSizePt === null ? 16 : cellFontSizePt * CSS_PX_PER_POINT;
   for (const run of cellCharacterRuns(String(cell.text ?? ""), (cell as { runs?: unknown }).runs)) {
     const size = run.style?.fontSize;
-    if (run.text && typeof size === "number" && Number.isFinite(size) && size > largest) largest = size;
+    // A paragraph break's own size (an empty paragraph's end mark, readings
+    // row 807) is that one line's, not every line's: the drawn cell stands it.
+    if (run.text && !/^\n+$/.test(run.text) && typeof size === "number" && Number.isFinite(size) && size > largest) largest = size;
   }
   return largest;
 }

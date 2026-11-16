@@ -171,6 +171,54 @@ export async function readCachedPdfSourceBytes(sha256: string | null | undefined
   }
 }
 
+/** How long the digests kept here may take to list before the caller goes
+ * on without them (it then asks as a reader that keeps nothing would not). */
+const LIST_WAIT_MS = 150;
+
+/**
+ * The digests of the files kept here for this account (their keys alone; no
+ * record is read or opened), or null when they could not be listed in time.
+ * A reader names them when it asks for a file's bytes, so the server can
+ * answer "you hold these" instead of sending them (lib/pdf/source-prefetch).
+ * A listed record may since have expired: its read then finds nothing.
+ */
+export async function listCachedPdfSourceDigests(): Promise<string[] | null> {
+  const principal = currentPrincipal();
+  if (!principal) return [];
+  const epoch = sessionEpoch;
+  try {
+    let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+    const timeout = new Promise<typeof TIMEOUT>((resolve) => {
+      timer = globalThis.setTimeout(() => resolve(TIMEOUT), LIST_WAIT_MS);
+    });
+    const listed = (async () => {
+      const database = await openDatabase();
+      if (!database) return [] as string[];
+      const keys = await requestResult(
+        database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAllKeys(),
+      );
+      const prefix = `${principal}:`;
+      const digests: string[] = [];
+      for (const key of keys ?? []) {
+        if (typeof key !== "string" || !key.startsWith(prefix)) continue;
+        const digest = key.slice(prefix.length);
+        if (SHA256.test(digest)) digests.push(digest);
+      }
+      return digests.slice(0, MAX_RECORDS * 2);
+    })();
+    let result: string[] | typeof TIMEOUT;
+    try {
+      result = await Promise.race([listed, timeout]);
+    } finally {
+      if (timer !== null) globalThis.clearTimeout(timer);
+    }
+    if (result === TIMEOUT || epoch !== sessionEpoch || currentPrincipal() !== principal) return null;
+    return result;
+  } catch {
+    return null;
+  }
+}
+
 /** Keep `bytes` (already verified to be `sha256`) for this account. */
 export async function storeCachedPdfSourceBytes(sha256: string | null | undefined, bytes: Uint8Array): Promise<void> {
   const digest = typeof sha256 === "string" ? sha256.trim().toLowerCase() : "";

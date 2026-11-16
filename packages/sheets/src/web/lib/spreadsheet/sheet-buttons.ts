@@ -15,6 +15,7 @@
 import { normalizeSpreadsheetPivotChartSource, type SpreadsheetPivotChartSource } from "@mrnote/core/web/lib/spreadsheet/chart.ts";
 import { normalizeTabColor } from "./fill-series";
 import { DEFAULT_SPREADSHEET_COLUMN_COUNT, DEFAULT_SPREADSHEET_ROW_COUNT, NEW_SHEET_DEFAULT_COLUMN_WIDTH_PX } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
+import { newSheetPrintSettings } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
 import type { NamedRange } from "@mrnote/core/web/lib/spreadsheet/named-ranges.ts";
 import { resolvePivotChartPivot } from "@mrnote/core/web/lib/spreadsheet/pivot-chart.ts";
 import { staticChartFromPivotChart } from "./pivot-chart-static";
@@ -86,6 +87,8 @@ export function newWorksheetFor(
   columnCount: number;
   /** Excel's default column width for a new sheet (XLS-A095). */
   defaultColumnWidth: number;
+  /** A4, stated (newSheetPrintSettings). */
+  printSettings: ReturnType<typeof newSheetPrintSettings>;
   cells: Record<string, never>;
   namedRanges?: NamedRange[];
 } | null {
@@ -109,13 +112,17 @@ export function newWorksheetFor(
     columnCount: DEFAULT_SPREADSHEET_COLUMN_COUNT,
     defaultColumnWidth: NEW_SHEET_DEFAULT_COLUMN_WIDTH_PX,
     cells: {},
+    printSettings: newSheetPrintSettings(),
     ...workbookNameMirrorsForNewSheet(workbook),
   };
 }
 
 /**
- * Rename sheet `index` (every rename entry lands here). The typed value is
- * trimmed; an unchanged name is null. A name Excel refuses (blank, over 31
+ * Rename sheet `index` (every rename entry lands here). The name is taken as
+ * given, a space at either end kept: Excel keeps " Lead", "Trail " and the
+ * references naming them (evidence/xprobe-sheetname-space; xlsx-rounds
+ * R308-X13 E17 lost " Cost of Retirement accounts"'s leading space). An
+ * unchanged name is null. A name Excel refuses (blank, over 31
  * characters, \ / ? * : [ ], an apostrophe at either end, "History", or
  * another sheet's name in any case) is the problem. The rename follows every
  * sheet's references to the OLD name (formulas, names, validation sources,
@@ -128,7 +135,7 @@ export function renamedSheetWorkbook<S extends WorkbookButtonSheet>(
 ): S[] | { problem: SheetNameProblem } | null {
   const target = workbook[index];
   if (!target) return null;
-  const name = rawName.trim();
+  const name = rawName;
   if (name === target.name) return null;
   const problem = sheetNameProblem(
     name,

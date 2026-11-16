@@ -89,6 +89,13 @@ function applyTheme(effective: EffectiveTheme): void {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/** Puts the current theme back on <html>: a locale switch remounts the root
+ * layout, and React clears <html>'s attributes and classes as it does
+ * (components/ThemeBootScript). */
+export function reapplyTheme(): void {
+  applyTheme(computeEffective());
+}
+
 /**
  * Persist the user's choice and immediately apply the resulting theme.
  * Pass "system" to store an explicit follow-the-OS choice.

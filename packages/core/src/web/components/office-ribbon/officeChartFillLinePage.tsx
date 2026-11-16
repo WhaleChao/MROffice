@@ -55,7 +55,7 @@ import {
   hlsToRgb,
   rgbToHls,
 } from "../../lib/office-color-transform";
-import { officeGradientCss, type OfficeShapeGradient, type OfficeShapeGradientStop } from "../../lib/office-shape-paint";
+import { officeGradientAngle, officeGradientCss, type OfficeShapeGradient, type OfficeShapeGradientStop } from "../../lib/office-shape-paint";
 import {
   OFFICE_STROKE_COMPOUNDS,
   OFFICE_STROKE_JOINS,
@@ -224,15 +224,15 @@ export function officeChartGradientPreset(preset: OfficeChartGradientPreset, bas
         { position: 1, color: officeChartMixColor(base, -0.25) },
       ] };
     case "topSpotlight":
-      return { angle: 180, path: { kind: "rect", fillToRect: { l: 50000, t: 0, r: 50000, b: 100000 } }, stops: [
+      return { path: { kind: "rect", fillToRect: { l: 50000, t: 0, r: 50000, b: 100000 } }, stops: [
         { position: 0, color: tint(0.5) }, { position: 1, color: base },
       ] };
     case "bottomSpotlight":
-      return { angle: 180, path: { kind: "rect", fillToRect: { l: 50000, t: 100000, r: 50000, b: 0 } }, stops: [
+      return { path: { kind: "rect", fillToRect: { l: 50000, t: 100000, r: 50000, b: 0 } }, stops: [
         { position: 0, color: tint(0.5) }, { position: 1, color: base },
       ] };
     case "radialGradient":
-      return { angle: 180, path: { kind: "circle", fillToRect: { l: 50000, t: 50000, r: 50000, b: 50000 } }, stops: [
+      return { path: { kind: "circle", fillToRect: { l: 50000, t: 50000, r: 50000, b: 50000 } }, stops: [
         { position: 0, color: tint(0.6) }, { position: 1, color: base },
       ] };
   }
@@ -301,11 +301,12 @@ export function officeChartGradientType(gradient: OfficeShapeGradient): OfficeCh
 }
 
 export function officeChartGradientWithType(gradient: OfficeShapeGradient, type: OfficeChartGradientType): OfficeShapeGradient {
-  const rest: OfficeShapeGradient = { angle: gradient.angle, stops: gradient.stops };
-  if (type === "linear") return rest;
+  // A path gradient has no angle (`OfficeShapeGradient.angle`); a linear one
+  // made from it runs where a linear renderer drew it.
+  if (type === "linear") return { angle: officeGradientAngle(gradient), stops: gradient.stops };
   const center = { l: 50000, t: 50000, r: 50000, b: 50000 };
   const kind = type === "radial" ? "circle" : type === "rectangular" ? "rect" : "shape";
-  return { ...rest, path: { kind, fillToRect: gradient.path?.fillToRect ?? center } };
+  return { stops: gradient.stops, path: { kind, fillToRect: gradient.path?.fillToRect ?? center } };
 }
 
 /** Office's angle (0 = left to right) of a gradient whose model angle is CSS's. */
@@ -381,7 +382,7 @@ function gradientFields(args: GradientEditorArgs): OfficeShapeFormatPaneField[] 
     },
   ];
   if (type === "linear") {
-    const angle = officeAngle(gradient.angle);
+    const angle = officeAngle(officeGradientAngle(gradient));
     fields.push(
       {
         kind: "select",

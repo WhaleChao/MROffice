@@ -1724,10 +1724,58 @@ export function excelBuiltInCustomLists(
   locale: string,
 ): readonly (readonly string[])[] {
   const tag = locale.toLowerCase();
-  return tag === "zh" ||
+  if (
+    tag === "zh" ||
     tag.startsWith("zh-cn") ||
     tag.startsWith("zh-sg") ||
     tag.startsWith("zh-hans")
-    ? EXCEL_ZH_CN_CUSTOM_LISTS
-    : EXCEL_CUSTOM_LISTS;
+  ) {
+    return EXCEL_ZH_CN_CUSTOM_LISTS;
+  }
+  const own = excelLocaleNameLists(locale);
+  if (own.length === 0) return EXCEL_CUSTOM_LISTS;
+  const known = LOCALE_CUSTOM_LISTS.get(tag);
+  if (known) return known;
+  const lists = [...EXCEL_CUSTOM_LISTS, ...own];
+  LOCALE_CUSTOM_LISTS.set(tag, lists);
+  return lists;
+}
+
+const LOCALE_CUSTOM_LISTS = new Map<string, readonly (readonly string[])[]>();
+const LOCALE_NAME_LISTS = new Map<string, readonly (readonly string[])[]>();
+const NO_LISTS: readonly (readonly string[])[] = [];
+
+/**
+ * The UI language's own day and month names as lists, beyond the English and
+ * Chinese ones every fill knows: Excel's built-in lists are the ones of its
+ * Office language (a German Excel fills Montag, Dienstag, …; Microsoft Support
+ * "Create or delete a custom list for sorting and filling data"). Long names
+ * only, from the platform's calendar names: the short forms' punctuation
+ * differs from Office's (de "Mo." against Excel's "Mo"), and a list that
+ * disagreed with Excel's would extend wrongly. Empty for English and Chinese,
+ * and for a language whose names are the English ones. The same array comes
+ * back for the same locale.
+ */
+export function excelLocaleNameLists(locale: string): readonly (readonly string[])[] {
+  const tag = locale.toLowerCase();
+  if (tag === "" || tag === "en" || tag.startsWith("en-") || tag === "zh" || tag.startsWith("zh-")) return NO_LISTS;
+  const known = LOCALE_NAME_LISTS.get(tag);
+  if (known) return known;
+  let lists: readonly (readonly string[])[] = NO_LISTS;
+  try {
+    const day = new Intl.DateTimeFormat(locale, { weekday: "long", timeZone: "UTC" });
+    const month = new Intl.DateTimeFormat(locale, { month: "long", timeZone: "UTC" });
+    
+    const weekdays = Array.from({ length: 7 }, (_, index) => day.format(Date.UTC(2023, 0, 1 + index)));
+    const months = Array.from({ length: 12 }, (_, index) => month.format(Date.UTC(2023, index, 1)));
+    const own = (names: string[], english: readonly string[]) =>
+      new Set(names.map((name) => name.toLowerCase())).size === names.length &&
+      names.some((name, index) => name !== english[index]);
+    const found = [...(own(weekdays, WEEKDAYS_LONG) ? [weekdays] : []), ...(own(months, MONTHS_LONG) ? [months] : [])];
+    if (found.length > 0) lists = found;
+  } catch {
+    // An unknown locale: the English and Chinese lists only.
+  }
+  LOCALE_NAME_LISTS.set(tag, lists);
+  return lists;
 }

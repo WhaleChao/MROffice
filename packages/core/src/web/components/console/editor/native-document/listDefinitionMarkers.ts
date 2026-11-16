@@ -357,11 +357,40 @@ function setMarkerMinWidth(span: HTMLElement, value: string): void {
   if (span.style.minWidth !== value) span.style.minWidth = value;
 }
 
+/** Markers drawn before their editor was in the page (a window built off
+ * screen): fitted once they are. Dropped, they kept the hanging indent's
+ * width and the text after the number stood against it (corpus R280-D16:
+ * "(1)'vx.mat'" where Word tabs to the 420-twip default stop). */
+const markerFitsAwaitingConnection = new Map<HTMLElement, { fit: MarkerTabFit; frames: number }>();
+let markerConnectionWatch = false;
+const MARKER_CONNECTION_FRAMES = 600;
+
+function watchMarkerConnections(): void {
+  if (markerConnectionWatch || typeof requestAnimationFrame !== "function") return;
+  markerConnectionWatch = true;
+  requestAnimationFrame(function check() {
+    for (const [span, entry] of markerFitsAwaitingConnection) {
+      if (span.isConnected) {
+        markerFitsAwaitingConnection.delete(span);
+        queueMarkerTabFit(entry.fit);
+      } else if (++entry.frames > MARKER_CONNECTION_FRAMES) {
+        markerFitsAwaitingConnection.delete(span);
+      }
+    }
+    if (markerFitsAwaitingConnection.size > 0) requestAnimationFrame(check);
+    else markerConnectionWatch = false;
+  });
+}
+
 function fitMarkerBatch(fits: readonly MarkerTabFit[], widths: ReadonlyArray<number | null>): void {
   fits.forEach((fit, index) => {
     const widthPt = widths[index];
     if (widthPt !== null) setMarkerMinWidth(fit.span, pt(widthPt));
     if (fit.span.isConnected) markerFitsAwaitingFonts.set(fit.span, fit);
+    else if (widthPt === null && !markerFitsAwaitingConnection.has(fit.span)) {
+      markerFitsAwaitingConnection.set(fit.span, { fit, frames: 0 });
+      watchMarkerConnections();
+    }
   });
   if (markerFontsArmed || markerFitsAwaitingFonts.size === 0) return;
   const ready = typeof document !== "undefined" ? document.fonts?.ready : undefined;
@@ -396,6 +425,12 @@ function fitMarkerBatch(fits: readonly MarkerTabFit[], widths: ReadonlyArray<num
     }
     lane.release();
   });
+}
+
+/** Harness switch (`window.__docsEmptyListNowrapOff = true`): an empty
+ * numbered paragraph wraps as any other (A/B). */
+function emptyListNowrapOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsEmptyListNowrapOff?: boolean }).__docsEmptyListNowrapOff === true;
 }
 
 function markerWidget(
@@ -639,6 +674,15 @@ function walkDefinedList(
         // this wrapper starts `containerPt` in from it.
         paragraphStyle.push(`margin-left:${pt(geometry.leftPt - containerPt)} !important`);
       }
+      // An empty numbered paragraph is one line, its number however wide:
+      // Word draws a number past a narrow cell's edge and the paragraph mark
+      // on its line (corpus R379-D02: "1." to "41." in 23.5pt cells with
+      // 7.2pt indents, rows 18.6pt). The browser broke the line after the
+      // overflowing marker, before the paragraph-mark widget or any empty
+      // inline, and the trailing <br> made a second line: rows 36.8pt, the
+      // 41-row table two pages longer. `window.__docsEmptyListNowrapOff`: as
+      // before (A/B).
+      if (first.content.size === 0 && !noMarker && !emptyListNowrapOff()) paragraphStyle.push("white-space:nowrap !important");
       ctx.decorations.push(
         Decoration.node(paragraphPos, paragraphPos + first.nodeSize, {
           class: "docs-list-defined-text",

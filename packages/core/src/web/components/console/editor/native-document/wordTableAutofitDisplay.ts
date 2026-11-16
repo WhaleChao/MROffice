@@ -3,7 +3,9 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { noWrapSlots, sourceRowOf } from "./tableNoWrap";
 import { docsContentWidths, readDocsParagraph } from "../../../../lib/text-engine/docs-lines";
+import { wordSetsIdeographsAsLetters } from "./wordFarEastDefaults";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { TableMap } from "@tiptap/pm/tables";
 import type { EditorView } from "@tiptap/pm/view";
@@ -226,9 +228,13 @@ function minContentFloorGrid(table: ProseMirrorNode): readonly number[] | null {
       // A share of the text column draws the grid about that much narrower.
       const drawnShare = Math.min(1, (layout.preferredWidthPct ?? 5000) / 5000);
       let overflows = false;
-      table.forEach((row) => {
+      const noWrap = noWrapSlots(table);
+      table.forEach((row, _offset, rowIndex) => {
         let column = 0;
+        const sourceRow = noWrap ? sourceRowOf(table, rowIndex) : -1;
         row.forEach((cell) => {
+          // A cell that does not wrap (Word's `w:noWrap`) holds its words as one piece.
+          const unbroken = noWrap?.has(`${sourceRow}:${column}`) === true;
           const span = Number(cell.attrs.colspan) || 1;
           let width = 0;
           for (let index = column; index < column + span; index += 1) width += grid[index] ?? 0;
@@ -244,7 +250,7 @@ function minContentFloorGrid(table: ProseMirrorNode): readonly number[] | null {
               if (inlinePictureWidth(child) > width) overflows = true;
             });
             const fontPx = largestRunFontPx(node);
-            for (const run of node.textContent.match(UNBREAKABLE_RUN) ?? []) {
+            for (const run of unbroken ? [node.textContent] : node.textContent.match(UNBREAKABLE_RUN) ?? []) {
               if (pieceMayOverflowCell(run, fontPx, width, sideMargins)) {
                 overflows = true;
                 break;
@@ -451,6 +457,55 @@ function marginBoxWidth(element: HTMLElement): number {
   );
 }
 
+/**
+ * A cell block's narrowest width in the min-content mode, its in-line
+ * formulas read as Word breaks them: after a slash, inside its brackets too
+ * (truth machine, Word 16.0.20527, corpus R287-D30: "100×(labor income tax/"
+ * on one line of a 192pt AutoFit column and "personal income)" on the next).
+ * KaTeX sets "\left( … \right)" as one unbreakable box, which made the
+ * formula's whole 184pt the column's narrowest content: the table's other
+ * columns gave it the room and "Variable" wrapped. The block is read with
+ * its formulas out, and each formula as its widest piece between two
+ * such breaks. `window.__docsFormulaPiecesOff = true`: as before (A/B).
+ */
+export function minContentWithFormulaPieces(element: HTMLElement): number {
+  const formulas = [...element.querySelectorAll<HTMLElement>(".inline-math-preview .katex-html")];
+  const off = (element.ownerDocument.defaultView as (Window & { __docsFormulaPiecesOff?: boolean }) | null)?.__docsFormulaPiecesOff === true;
+  if (formulas.length === 0 || off) return marginBoxWidth(element);
+  const scale = layoutScale(element);
+  let widest = 0;
+  for (const formula of formulas) {
+    const leaves = [...formula.querySelectorAll<HTMLElement>("span")]
+      .filter((span) => span.childElementCount === 0 && (span.textContent ?? "") !== "")
+      .map((span) => ({ rect: span.getBoundingClientRect(), text: span.textContent ?? "" }))
+      .filter(({ rect }) => rect.width > 0)
+      .sort((a, b) => a.rect.left - b.rect.left);
+    let from = Number.NaN;
+    let to = Number.NaN;
+    for (const leaf of leaves) {
+      if (!Number.isFinite(from)) from = leaf.rect.left;
+      to = Math.max(Number.isFinite(to) ? to : leaf.rect.right, leaf.rect.right);
+      if (leaf.text.trim() === "/") {
+        widest = Math.max(widest, (to - from) / scale);
+        from = Number.NaN;
+        to = Number.NaN;
+      }
+    }
+    if (Number.isFinite(from)) widest = Math.max(widest, (to - from) / scale);
+  }
+  const hosts = formulas.map((formula) => formula.closest<HTMLElement>(".inline-math-wrapper") ?? formula);
+  const kept = hosts.map((host) => host.style.getPropertyValue("display"));
+  for (const host of hosts) host.style.setProperty("display", "none");
+  try {
+    return Math.max(marginBoxWidth(element), widest + (marginBoxWidth(element) - drawnWidth(element)));
+  } finally {
+    hosts.forEach((host, index) => {
+      if (kept[index]) host.style.setProperty("display", kept[index]!);
+      else host.style.removeProperty("display");
+    });
+  }
+}
+
 interface CellContent {
   min: number;
   max: number;
@@ -577,8 +632,10 @@ function readCellContent(
           const known = memory?.read ? blockWidths.get(block)?.[mode] : undefined;
           const engine = known === undefined && widthOf ? widthOf(block, dom as HTMLElement) : undefined;
           if (engine === null) read = false;
-          const width = known ?? engine ?? marginBoxWidth(dom as HTMLElement);
-          if (memory && !memory.read) {
+          const width = known ?? engine ?? (mode === "min" ? minContentWithFormulaPieces(dom as HTMLElement) : marginBoxWidth(dom as HTMLElement));
+          // A block the engine could not say is not kept: its table is read
+          // from the page, which keeps what it reads.
+          if (memory && !memory.read && engine !== null) {
             const held = blockWidths.get(block);
             const record = held?.under === memory.under ? held : { under: memory.under };
             record[mode] = width;
@@ -613,26 +670,147 @@ function readCellContent(
 const ENGINE_CONTENT_COLUMN_PX = 1_000_000;
 
 /**
+ * The browser's ceiling on the max-content width of a table whose width is a
+ * share of its container: such a table would take any room it is given, and
+ * Blink answers this constant (its table code's kTableMaxWidth) for it. Every
+ * nested table of R286-D01 (817 in 163 tables) read exactly this in the `max`
+ * measurement mode.
+ */
+const BROWSER_SHARE_TABLE_MAX_CONTENT_PX = 1_000_000;
+
+/** One edge of a collapsed table border: a hidden border wins and draws
+ * nothing, a missing one gives way, the wider of two otherwise. */
+function collapsedEdgeWidth(cell: CSSStyleDeclaration, table: CSSStyleDeclaration, side: "Left" | "Right"): number {
+  const cellStyle = cell[`border${side}Style`];
+  const tableStyle = table[`border${side}Style`];
+  if (cellStyle === "hidden" || tableStyle === "hidden") return 0;
+  const cellWidth = cellStyle === "none" ? 0 : Number.parseFloat(cell[`border${side}Width`]) || 0;
+  const tableWidth = tableStyle === "none" ? 0 : Number.parseFloat(table[`border${side}Width`]) || 0;
+  return Math.max(cellWidth, tableWidth);
+}
+
+/**
+ * The min- and max-content widths of a cell block that is a nested table laid
+ * out fixed at a share of its cell (the Word importer's nested tables: R286-D01
+ * has 788, in 133 of its 227 tables), as the measurement modes read them: its
+ * content does not count, so the narrowest is its collapsed edge borders
+ * (half of each, inside the table's box) and the widest the browser's ceiling.
+ * Null for any other nested table, or a table whose rows' edges differ, or a
+ * sheet drawn at another scale: that table is read from the page. A nested
+ * table made every table holding one draw both measurement modes, each a style
+ * and layout pass of the whole table.
+ */
+function shareTableContentWidths(dom: HTMLElement): { min: number; max: number } | null {
+  const table = dom.firstElementChild;
+  if (dom.childElementCount !== 1 || !(table instanceof HTMLTableElement)) return null;
+  if (!table.style.width.includes("%")) return null;
+  // Only at the page's own size: how a zoom scales the browser's ceiling is
+  // not known, and such a sheet is read from the page as before.
+  const scale = paginationLayoutScale(dom).x;
+  if (!(Math.abs(scale - 1) <= 1e-4)) return null;
+  const wrapper = getComputedStyle(dom);
+  const tableStyle = getComputedStyle(table);
+  const sides = (style: CSSStyleDeclaration, box: "margin" | "padding") =>
+    (Number.parseFloat(style.getPropertyValue(`${box}-left`)) || 0) + (Number.parseFloat(style.getPropertyValue(`${box}-right`)) || 0);
+  if (sides(wrapper, "margin") !== 0 || sides(wrapper, "padding") !== 0 ||
+      (Number.parseFloat(wrapper.borderLeftWidth) || 0) + (Number.parseFloat(wrapper.borderRightWidth) || 0) !== 0) return null;
+  if (wrapper.display !== "block" || tableStyle.tableLayout !== "fixed" || tableStyle.borderCollapse !== "collapse") return null;
+  if (sides(tableStyle, "margin") !== 0) return null;
+  let left: number | null = null;
+  let right: number | null = null;
+  for (const row of table.rows) {
+    const cells = row.cells;
+    if (cells.length === 0) continue;
+    const rowLeft = collapsedEdgeWidth(getComputedStyle(cells[0]!), tableStyle, "Left");
+    const rowRight = collapsedEdgeWidth(getComputedStyle(cells[cells.length - 1]!), tableStyle, "Right");
+    if ((left !== null && rowLeft !== left) || (right !== null && rowRight !== right)) return null;
+    left = rowLeft;
+    right = rowRight;
+  }
+  if (left === null || right === null) return null;
+  // In document pixels, as the page reads it (marginBoxWidth): the sheet's
+  // scale, read from its rounded box, is a hair off 1 (0.99999984), and a
+  // ceiling of a million came back 0.16 px wider.
+  const widths = { min: (left + right) / 2 / scale, max: BROWSER_SHARE_TABLE_MAX_CONTENT_PX / scale };
+  shareTablesSaid?.push({ dom, ...widths });
+  return widths;
+}
+
+/** The nested tables the engine said this pass, while
+ * `window.__docsNestedShareTablesCheck = true` (development: compared with the
+ * measurement modes, checkShareTables). */
+let shareTablesSaid: { dom: HTMLElement; min: number; max: number }[] | null = null;
+
+function nestedShareTablesCheck(view: EditorView): boolean {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsNestedShareTablesCheck?: boolean }) | null;
+  return win?.__docsNestedShareTablesCheck === true;
+}
+
+/** Reads each nested table the engine said in both measurement modes and
+ * keeps the ones that differ in `window.__docsNestedShareTablesDiffs`
+ * (`checked`/`differed` counted in __docsAutofitStats). */
+function checkShareTables(view: EditorView, said: readonly { dom: HTMLElement; min: number; max: number }[]): void {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsNestedShareTablesDiffs?: unknown[] }) | null;
+  if (!win) return;
+  const diffs = (win.__docsNestedShareTablesDiffs ??= []);
+  const outers = new Set<HTMLElement>();
+  const outerOf = new Map<HTMLElement, HTMLElement>();
+  for (const { dom } of said) {
+    const outer = dom.parentElement?.closest("table");
+    if (outer instanceof HTMLElement) { outers.add(outer); outerOf.set(dom, outer); }
+  }
+  const read = (mode: "min" | "max") => {
+    for (const outer of outers) outer.setAttribute(WORD_AUTOFIT_MEASURE_ATTR, mode);
+    try {
+      return said.map(({ dom }) => (outerOf.has(dom) ? marginBoxWidth(dom) : Number.NaN));
+    } finally {
+      for (const outer of outers) outer.removeAttribute(WORD_AUTOFIT_MEASURE_ATTR);
+    }
+  };
+  const max = read("max");
+  const min = read("min");
+  said.forEach((entry, index) => {
+    autofitStats(view, "shareChecked");
+    if (Math.abs(entry.min - min[index]!) <= 0.01 && Math.abs(entry.max - max[index]!) <= 0.01) return;
+    autofitStats(view, "shareDiffered");
+    if (diffs.length < 200) diffs.push({ engine: [entry.min, entry.max], page: [min[index], max[index]], html: entry.dom.outerHTML.slice(0, 300) });
+  });
+}
+
+/**
  * A table's cell contents from the text engine, with no measurement mode
  * drawn (L3-DESIGN step 5): each paragraph's min- and max-content widths
- * (docsContentWidths) from its computed style. The two modes laid every
- * table out twice a pass, the largest share of a long document's open (61.6
- * s of R286-D01's). Null when any block is one the engine cannot say (a tab,
- * an object, a nested table, a face loading): that table is read from the page.
+ * (docsContentWidths) from its computed style, and a nested table's from its
+ * box (shareTableContentWidths). The two modes laid every table out twice a
+ * pass, the largest share of a long document's open (61.6 s of R286-D01's).
+ * Null when any block is one the engine cannot say (a tab, an object, another
+ * nested table, a face loading): that table is read from the page.
  */
-function engineCellContent(view: EditorView, table: LogicalTable): Map<string, CellContent> | null {
+function engineCellContent(
+  view: EditorView,
+  table: LogicalTable,
+  /** Where the widths are kept for a later pass (blockWidths), as the page's
+   * readings are: the engine read every paragraph of every such table again
+   * on every pass (R286-D01: 668 tables measured, none remembered). */
+  memory?: { readonly under: string; readonly read: false },
+): Map<string, CellContent> | null {
   const widths = new Map<ProseMirrorNode, { min: number; max: number } | null>();
   const widthsOf = (block: ProseMirrorNode, dom: HTMLElement) => {
     if (!widths.has(block)) {
-      const paragraph = block.isTextblock && !dom.querySelector("table") ? readDocsParagraph(dom, { columnWidthPx: ENGINE_CONTENT_COLUMN_PX }) : null;
-      widths.set(block, paragraph ? docsContentWidths(paragraph, ENGINE_CONTENT_COLUMN_PX) : null);
+      if (!block.isTextblock) {
+        widths.set(block, nestedShareTablesByEngine() ? shareTableContentWidths(dom) : null);
+      } else {
+        const paragraph = !dom.querySelector("table") ? readDocsParagraph(dom, { columnWidthPx: ENGINE_CONTENT_COLUMN_PX }) : null;
+        widths.set(block, paragraph ? docsContentWidths(paragraph, ENGINE_CONTENT_COLUMN_PX, wordSetsIdeographsAsLetters(view.state.doc.attrs)) : null);
+      }
     }
     return widths.get(block) ?? null;
   };
   const cells = new Map<string, CellContent>();
-  const max = readCellContent(view, table, "max", cells, undefined, (block, dom) => widthsOf(block, dom)?.max ?? null);
+  const kept = engineWidthsKept() ? memory : undefined;
+  const max = readCellContent(view, table, "max", cells, kept, (block, dom) => widthsOf(block, dom)?.max ?? null);
   if (!max) return null;
-  const min = readCellContent(view, table, "min", cells, undefined, (block, dom) => widthsOf(block, dom)?.min ?? null);
+  const min = readCellContent(view, table, "min", cells, kept, (block, dom) => widthsOf(block, dom)?.min ?? null);
   return min ? cells : null;
 }
 
@@ -644,14 +822,26 @@ function measureCellContent(
 ): Map<LogicalTable, Map<string, CellContent>> {
   const contents = new Map(tables.map((table) => [table, new Map<string, CellContent>()] as const));
   // With the docs-layout engine on, a table whose every block the engine
-  // can say draws no measurement mode at all.
-  const pageTables = textEngineEnabled("docs-layout")
-    ? tables.filter((table) => {
-      const engine = engineCellContent(view, table);
-      if (engine) contents.set(table, engine);
-      return !engine;
-    })
-    : tables;
+  // can say draws no measurement mode at all. A nested table's sheet scale is
+  // read once a sheet.
+  const checking = nestedShareTablesCheck(view);
+  if (checking) shareTablesSaid = [];
+  let pageTables: readonly LogicalTable[];
+  try {
+    pageTables = textEngineEnabled("docs-layout")
+      ? withPaginationScaleReuse(() => tables.filter((table) => {
+        const engine = engineCellContent(view, table, keyOf ? { under: keyOf(table), read: false } : undefined);
+        if (engine) contents.set(table, engine);
+        return !engine;
+      }))
+      : tables;
+  } finally {
+    const said = shareTablesSaid;
+    shareTablesSaid = null;
+    if (checking && said && said.length > 0) withPaginationScaleReuse(() => checkShareTables(view, said));
+  }
+  autofitStats(view, "byEngine", tables.length - pageTables.length);
+  autofitStats(view, "byPage", pageTables.length);
   if (pageTables.length === 0) return contents;
   const elements = pageTables.flatMap((table) => table.fragments.map((fragment) => fragment.table));
   try {
@@ -908,11 +1098,40 @@ function geometryFor(
     const lastMargins = lastCell ? wordCellHorizontalMargins(head.node, lastCell) : null;
     available += (firstMargins?.left ?? 0) + (lastMargins?.right ?? 0);
   } else {
+    const spaced = spacedTableChromePx(head, columns.length);
+    if (spaced !== null) {
+      // Cells standing apart (w:tblCellSpacing): the table's frame is the
+      // text column, and the spacing between and around the cells and the
+      // table's own border come out of it before the columns share the rest
+      // (Word 16.86, corpus R287-D30: an AutoFit table with 15-twip spacing
+      // in a 451.3pt column, its frame 72-523.4pt, its cells 123.4 / 131.3 /
+      // 190.0pt; the columns took the whole column and the frame stood 6.7pt
+      // past the right margin).
+      available -= spaced;
+      const widths = wordAutofitColumnWidths(columns, available, table.width);
+      if (widths.length !== columns.length || widths.some((width) => !(width > 0))) return null;
+      return { widths, borderAllowancePx: spaced };
+    }
     available -= borderAllowancePx;
   }
   const widths = wordAutofitColumnWidths(columns, available, table.width);
   if (widths.length !== columns.length || widths.some((width) => !(width > 0))) return null;
   return { widths, borderAllowancePx };
+}
+
+/** The width a table with cell spacing draws besides its columns (separate
+ * borders): the spacing before, between and after its cells and its own
+ * left and right border. Null for a table without spacing, or
+ * `window.__docsSpacedTableFrameOff = true` (A/B: the columns take it all). */
+function spacedTableChromePx(head: LogicalTable["fragments"][number], columnCount: number): number | null {
+  const spacing = Number(head.node.attrs.tableCellSpacingPx ?? 0);
+  if (!(Number.isFinite(spacing) && spacing > 0)) return null;
+  if (typeof window !== "undefined" && (window as Window & { __docsSpacedTableFrameOff?: boolean }).__docsSpacedTableFrameOff === true) return null;
+  const style = getComputedStyle(head.table);
+  if (style.borderCollapse !== "separate") return null;
+  const gap = Number.parseFloat(style.borderSpacing) || 0;
+  const border = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
+  return gap * (columnCount + 1) + border;
 }
 
 interface MeasuredTable {
@@ -942,6 +1161,20 @@ interface ProjectedFrame {
   readonly wrappers: readonly HTMLElement[];
   readonly sheets: readonly (Element | null)[];
   readonly frameKey: string;
+}
+
+/** On unless `window.__docsEngineWidthsKept = false` (development A/B): the
+ * widths the engine says for a table's blocks are kept for the next pass, as
+ * the page's readings are (blockWidths). */
+function engineWidthsKept(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsEngineWidthsKept?: boolean }).__docsEngineWidthsKept !== false;
+}
+
+/** On unless `window.__docsNestedShareTables = false` (development A/B): a
+ * nested table laid out fixed at a share of its cell is said by the engine
+ * (shareTableContentWidths), not read in both measurement modes. */
+function nestedShareTablesByEngine(): boolean {
+  return typeof window === "undefined" || (window as Window & { __docsNestedShareTables?: boolean }).__docsNestedShareTables !== false;
 }
 
 /** On unless `window.__docsTableFrameStamps = true` (development A/B): the

@@ -41,6 +41,7 @@ import type {
 import {
   OFFICE_CHART_FILL_PATTERNS,
   OFFICE_CHART_LINE_DASHES,
+  officeChartDefaultLineCap,
   type OfficeChartShapePaint,
 } from "../office-chart-shape-paint";
 import type { OfficeShapeGradient } from "../office-shape-paint";
@@ -311,8 +312,11 @@ function gradient(recipe: GradientRecipe, colours: ChartStyleColours, own: strin
   if (stops.length < 2) return null;
   const path = recipe.kind && recipe.kind !== "linear" ? recipe.kind : null;
   return {
-    // The model's angle is CSS's (0 = upward), DrawingML's `a:lin@ang` plus a quarter turn.
-    angle: path ? 0 : ((((recipe.angle ?? 0) + 90) % 360) + 360) % 360,
+    // The model's angle is CSS's (0 = upward), DrawingML's `a:lin@ang` plus a
+    // quarter turn. A path gradient (`a:path`) states no `a:lin` and has no
+    
+    // 0, read back without one, and was held as never landed.
+    ...(path ? {} : { angle: ((((recipe.angle ?? 0) + 90) % 360) + 360) % 360 }),
     stops,
     ...(path === "circle" || path === "rect" || path === "shape"
       ? {
@@ -346,12 +350,19 @@ interface Painted {
   style: PresentationChartAreaStyle & { fill?: `#${string}` | "none"; outline?: `#${string}` | "none" };
 }
 
-/** One element's fill, line and effects as the chart format states them. */
+/**
+ * One element's fill, line and effects as the chart format states them.
+ * ``defaultCap``: the cap the element's line takes when the format states none
+ * (`officeChartDefaultLineCap`): a style's cap that is that default is left
+ * unstated, as the format pane and the file's reader leave it (a line series'
+ * `cap="rnd"` stated as `lineCap: "round"` read back without it, and the
+ * restyled chart was declined, 04f77645).
+ */
 function areaPaint(
   element: ElementRecipe | null | undefined,
   colours: ChartStyleColours,
   own: string,
-  { fill = true, line = true }: { fill?: boolean; line?: boolean } = {},
+  { fill = true, line = true, defaultCap = "flat" }: { fill?: boolean; line?: boolean; defaultCap?: string } = {},
 ): Painted["style"] | undefined {
   if (!element) return undefined;
   const style: Record<string, unknown> = {};
@@ -398,7 +409,7 @@ function areaPaint(
       if (ln.widthPt !== undefined) shape.outlineWidthPt = Math.min(1584, Math.max(0, ln.widthPt));
       if (ln.dash && ln.dash !== "solid" && DASHES.has(ln.dash)) shape.lineDash = ln.dash as OfficeChartShapePaint["lineDash"];
       if (ln.compound && COMPOUNDS[ln.compound]) shape.lineCompound = COMPOUNDS[ln.compound];
-      if (ln.cap && CAPS[ln.cap]) shape.lineCap = CAPS[ln.cap];
+      if (ln.cap && CAPS[ln.cap] && CAPS[ln.cap] !== defaultCap) shape.lineCap = CAPS[ln.cap];
       if (ln.join === "bevel" || ln.join === "miter") shape.lineJoin = ln.join;
     }
   }
@@ -609,7 +620,11 @@ export function chartStyleFormat(
     const unlined = lined && series.line?.paint?.none;
     for (let index = 0; index < seriesCount; index += 1) {
       const own = colours.own(index);
-      const paint = areaPaint(series, colours, own, { line: !unlined }) ?? {};
+      const paint =
+        areaPaint(series, colours, own, {
+          line: !unlined,
+          defaultCap: officeChartDefaultLineCap(`series:${index}`, attrs.chartType),
+        }) ?? {};
       const entry: Record<string, unknown> = { seriesIndex: index, ...paint };
       if (series.marker && series.marker.symbol && series.marker.symbol !== "auto") {
         const symbol = series.marker.symbol;
@@ -654,6 +669,9 @@ export function chartStyleFormat(
         ...(group.gapWidth !== undefined ? { gapWidth: group.gapWidth } : {}),
         overlap: group.overlap ?? (attrs.chartSubtype === "clustered" ? 0 : layout.overlap),
       };
+      // The style states the spacing: the chart's own keys go (one record).
+      delete format.barGapWidth;
+      delete format.barOverlap;
     }
   }
   // Stock and line extras: high-low lines, up/down bars, drop lines.

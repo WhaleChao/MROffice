@@ -22,9 +22,11 @@ import type {
 } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import { tableWithPaintedLook, type FormatPaintPlan } from "@mrnote/core/web/lib/presentation-format-painter.ts";
 import { applyRunFormat, normalizeRuns, runsFromText, textFromRuns, type RunStyle } from "@mrnote/core/web/lib/presentation-point-runs.ts";
+import { pictureBorderIsOpaque } from "./presentation-picture-effects";
 import { presentationBlockWithFontColor } from "./presentation-run-text-paint";
 import { shapeBlockWithPatch } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
 import {
+  flatRunsFromParagraphs,
   normalizeParagraphsWithRuns,
   ownsParagraphRichLayout,
   type SlideParagraphWithRuns,
@@ -64,7 +66,16 @@ function paintWholeText(textBlock: PresentationTextBlock, plan: FormatPaintPlan)
       if (normalized) nextParagraph.runs = normalized;
       return nextParagraph;
     });
-    return { ...merged, paragraphs: nextParagraphs };
+    // The box's flat runs say the same words in one list (an imported
+    // shape states both): they take the paint too, or they keep the old
+    
+    // 10.5 pt green after its paragraphs took 20 pt bold).
+    if (!Array.isArray((merged as { runs?: unknown }).runs)) return { ...merged, paragraphs: nextParagraphs };
+    const flat = flatRunsFromParagraphs(nextParagraphs);
+    const painted: PresentationTextBlock = { ...merged, paragraphs: nextParagraphs };
+    if (flat) painted.runs = flat;
+    else delete (painted as { runs?: unknown }).runs;
+    return painted;
   }
   const baseRuns = normalizeRuns(merged.runs) ?? runsFromText(merged.text);
   const normalized = normalizeRuns(applyRunFormat(baseRuns, 0, merged.text.length, patch));
@@ -93,7 +104,21 @@ export function paintPresentationBlockFormat(block: PresentationBlock, plan: For
   }
   // Image visual style (shadow / border / corner radius).
   if (plan.imagePatch && block.type === "image") {
-    next = { ...next, ...plan.imagePatch };
+    const patch: Record<string, unknown> = { ...plan.imagePatch };
+    // A line the file states in a form the page cannot stays the file's.
+    if (pictureBorderIsOpaque(block)) for (const key of ["borderColor", "borderWidth", "borderStyle", "borderCompound", "borderJoin"]) delete patch[key];
+    next = { ...next, ...patch } as PresentationBlock;
+    // A painted frame is the source's whole line: one line with round
+    // corners where the source states no compound or join.
+    if (patch.borderStyle !== undefined) {
+      for (const key of ["borderCompound", "borderJoin"] as const) {
+        if (!(key in patch) && key in next) {
+          const rest = { ...(next as unknown as Record<string, unknown>) };
+          delete rest[key];
+          next = rest as unknown as PresentationBlock;
+        }
+      }
+    }
   }
   // Table look: style and every Table Style Option (PPT-B154).
   if (plan.tablePatch && block.type === "table") {

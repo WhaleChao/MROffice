@@ -5,6 +5,7 @@
  */
 import type { CSSProperties } from "react";
 
+import { officeCameraEyePx } from "./office-camera-distance";
 import { officeShadowCss, type OfficeShadowEffect } from "./office-shadow-effects";
 
 export const OFFICE_PICTURE_EFFECT_PRESETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
@@ -159,8 +160,14 @@ export function officePictureEffectPresetCss(
   if (boxShadows.length) wrapper.boxShadow = boxShadows.join(", ");
   if (shadow?.under) wrapper.isolation = "isolate";
   if (look.camera) {
-    const fov = (look.camera.fov / 60_000) * (Math.PI / 180);
-    const distance = (2 * Math.max(size.width, size.height)) / Math.tan(fov / 2);
+    // Office's camera stands at its own distance whatever the picture's size
+    // (`officeCameraEyePx`, the shapes' and SmartArt's): probe
+    // picture-preset-camera-probe p1-p3, Preset 12's far edge over its near
+    // edge 0.859 at 2 in and 0.728 at 4 in (drawn 0.857 / 0.733; the 2 x
+    // longer side / tan(fov / 2) this replaced drew 0.782 / 0.785 at both),
+    // Preset 9's 0.726 / 0.606 (drawn 0.736 / 0.608; was 0.770 / 0.773).
+    // A gallery tile (`scale`) stands it as much nearer as it shrinks.
+    const distance = officeCameraEyePx(size, look.camera.fov / 60_000) * scale;
     wrapper.transform =
       `perspective(${distance.toFixed(1)}px) rotateZ(${(-degrees(look.camera.rev)).toFixed(2)}deg) ` +
       `rotateX(${(-degrees(look.camera.lat)).toFixed(2)}deg) rotateY(${(-degrees(look.camera.lon)).toFixed(2)}deg)`;

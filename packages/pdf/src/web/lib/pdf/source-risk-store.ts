@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { apiGet, apiPut } from "@mrnote/core/web/lib/api.ts";
+import { pdfSourceBytesPrincipal } from "./source-bytes-cache";
 import {
   createPdfSourceRiskProfile,
   setPdfSourceRiskProfileStore,
@@ -64,6 +65,12 @@ export async function readStoredPdfSourceRiskProfile(
   sha256: string,
 ): Promise<PdfSourceRiskProfile | null> {
   if (!SHA256.test(sha256)) return null;
+  // A visitor (no login in this browser) is answered 401, and only after the
+  // round trip: 0.42 s on production, asked before the file's own inspection
+  // may start -- most of the 0.8 s a visitor's 编辑内容 stayed off with
+  
+  // store is the signed-in readers'; a visitor's file is inspected at once.
+  if (!pdfSourceBytesPrincipal()) return null;
   try {
     const row = await apiGet<unknown>(
       `/api/v1/pdf/source-risk/${sha256}?inspector=${PDF_SOURCE_RISK_INSPECTOR_VERSION}`,
@@ -80,7 +87,7 @@ export function storePdfSourceRiskProfile(
   sha256: string,
   profile: PdfSourceRiskProfile,
 ): void {
-  if (!SHA256.test(sha256) || !pdfSourceRiskProfileIsClean(profile)) return;
+  if (!SHA256.test(sha256) || !pdfSourceRiskProfileIsClean(profile) || !pdfSourceBytesPrincipal()) return;
   void apiPut<unknown>(`/api/v1/pdf/source-risk/${sha256}`, {
     inspector_version: PDF_SOURCE_RISK_INSPECTOR_VERSION,
     profile: { ...profile },

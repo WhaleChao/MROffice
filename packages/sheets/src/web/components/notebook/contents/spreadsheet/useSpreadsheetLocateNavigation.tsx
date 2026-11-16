@@ -89,7 +89,12 @@ export function useSpreadsheetLocateNavigation({
     const located = request.cell;
     if (located) {
       const wanted = located.sheet.toLowerCase();
-      const targetSheetIndex = sheets.findIndex(
+      // The sheet by its id when the source names it (a renamed sheet is the
+      // same sheet), else by its name.
+      const byId = located.sheetId
+        ? sheets.findIndex((candidate) => candidate.id === located.sheetId && !candidate.hidden)
+        : -1;
+      const targetSheetIndex = byId >= 0 ? byId : sheets.findIndex(
         (candidate) => candidate.name.toLowerCase() === wanted && !candidate.hidden,
       );
       const target =

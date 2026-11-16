@@ -56,6 +56,49 @@ const PRESENTATION_REGION_INPUT_EVENTS = [
   "drop",
 ] as const;
 
+
+
+
+
+
+
+
+
+
+
+const PRESENTATION_REGION_TYPING_QUIET_MS = 450;
+let lastTypedAt = Number.NEGATIVE_INFINITY;
+let typingListening = false;
+/** The regions waiting for the typing to pause: woken by a shortcut. */
+const typingWaiters = new Set<() => void>();
+function listenForTyping(): void {
+  if (typingListening || typeof window === "undefined") return;
+  typingListening = true;
+  const note = (event: Event) => {
+    if (event.type === "keydown") {
+      const keyboard = event as KeyboardEvent;
+      const key = keyboard.key;
+      // A shortcut (Cmd+B, Ctrl+I, Cmd+]) changes what the Ribbon shows:
+      // the regions waiting for the typing to pause are drawn now.
+      if ((keyboard.metaKey || keyboard.ctrlKey || keyboard.altKey) && key.length >= 1 && !["Meta", "Control", "Alt", "Shift"].includes(key)) {
+        lastTypedAt = Number.NEGATIVE_INFINITY;
+        for (const wake of [...typingWaiters]) wake();
+        return;
+      }
+      const typed = key.length === 1 || key === "Backspace" || key === "Delete" || key === "Enter" || key === "Process";
+      if (!typed) return;
+    }
+    lastTypedAt = performance.now();
+  };
+  window.addEventListener("keydown", note, true);
+  window.addEventListener("beforeinput", note, true);
+  window.addEventListener("compositionupdate", note, true);
+}
+/** How long until the typing has paused (0 when it has). */
+function typingQuietIn(): number {
+  return Math.max(0, lastTypedAt + PRESENTATION_REGION_TYPING_QUIET_MS - performance.now());
+}
+
 /** Whether this document is painted (not jsdom, which renders nothing). */
 function regionPaints(): boolean {
   return typeof window !== "undefined" && typeof window.requestAnimationFrame === "function" &&
@@ -157,21 +200,39 @@ export function PresentationAuthoringRegion({
   // returns it, so React neither calls it nor takes it for an updater.)
   const [paintedRender, setPaintedRender] = useState<() => ReactNode>(() => render);
   const latestForPaintRef = useRef(render);
-  const handOverRef = useRef<{ frame: number; timer: number } | null>(null);
+  const handOverRef = useRef<{ frame: number; timer: number; wake?: () => void } | null>(null);
   useLayoutEffect(() => {
     latestForPaintRef.current = render;
   });
   const waitsForPaint = deferred && regionPaints();
   useEffect(() => {
+    if (waitsForPaint) listenForTyping();
+  }, [waitsForPaint]);
+  useEffect(() => {
     if (!waitsForPaint || paintedRender === render || handOverRef.current) return;
-    const handOver = { frame: 0, timer: 0 };
+    const handOver: { frame: number; timer: number; wake?: () => void } = { frame: 0, timer: 0 };
     handOverRef.current = handOver;
+    const wake = () => {
+      window.clearTimeout(handOver.timer);
+      handOver.timer = window.setTimeout(handOverWhenQuiet, 0);
+    };
+    const handOverWhenQuiet = () => {
+      // Keys still coming (the typing has not paused): later, once it has,
+      // or at once after a shortcut.
+      const wait = typingQuietIn();
+      if (wait > 0) {
+        typingWaiters.add(wake);
+        handOver.timer = window.setTimeout(handOverWhenQuiet, wait);
+        return;
+      }
+      typingWaiters.delete(wake);
+      handOverRef.current = null;
+      const latest = latestForPaintRef.current;
+      startTransition(() => setPaintedRender(() => latest));
+    };
+    handOver.wake = wake;
     handOver.frame = requestAnimationFrame(() => {
-      handOver.timer = window.setTimeout(() => {
-        handOverRef.current = null;
-        const latest = latestForPaintRef.current;
-        startTransition(() => setPaintedRender(() => latest));
-      }, 0);
+      handOver.timer = window.setTimeout(handOverWhenQuiet, 0);
     });
   }, [waitsForPaint, paintedRender, render]);
   useEffect(() => () => {
@@ -179,6 +240,7 @@ export function PresentationAuthoringRegion({
     if (!handOver) return;
     cancelAnimationFrame(handOver.frame);
     window.clearTimeout(handOver.timer);
+    if (handOver.wake) typingWaiters.delete(handOver.wake);
     handOverRef.current = null;
   }, []);
   const deferredRender = useDeferredValue(waitsForPaint ? paintedRender : render);

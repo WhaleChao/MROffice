@@ -33,6 +33,8 @@ export interface PresentationPictureFormatPaneControls {
   readonly transparency: ReactNode;
   readonly crop: ReactNode | null;
   readonly actions: ReactNode;
+  /** A 3-D model's own page (Format 3D Model > 3D Model): its rotation. */
+  readonly model3d?: readonly OfficeShapeFormatPaneSection[] | null;
 }
 
 export interface PresentationPictureFormatPaneLabels {
@@ -48,6 +50,7 @@ export interface PresentationPictureFormatPaneLabels {
   readonly color: string;
   readonly transparency: string;
   readonly crop: string;
+  readonly model3d?: string;
 }
 
 export function presentationPictureFormatPaneTabs(
@@ -115,5 +118,8 @@ export function presentationPictureFormatPaneTabs(
         },
       ],
     },
+    ...(controls.model3d && controls.model3d.length && labels.model3d
+      ? [{ id: "model3d", label: labels.model3d, sections: [...controls.model3d] }]
+      : []),
   ];
 }

@@ -528,7 +528,9 @@ export type OfficeSmartArtTextStyle = {
 
 /**
  * The line spacing every label of the Office-drawn scene (`ms-engine/scene`)
- * carries: PowerPoint's 90%. The catalog generators set none.
+ * carries: PowerPoint's 90% of the single line (`a:lnSpc`), which the
+ * engine's fit and every host's drawing of SmartArt words read. The catalog
+ * generators set none.
  */
 export const OFFICE_SCENE_LABEL_LINE_SPACING = 0.9;
 
@@ -614,6 +616,8 @@ export type OfficeSmartArtTextNode = OfficeSmartArtNodeBase & {
    * words were fitted at. Drawn only; absent on a label without Chinese words.
    */
   smartArtLinePitch?: number;
+  /** The label's colour as the theme colour its point states (`a:schemeClr`), authenticated by `rgb`. */
+  smartArtTextColorScheme?: { scheme: string; mods: readonly (readonly [string, number])[]; rgb: string };
 };
 
 /** A picture member of a Picture layout; `src` starts as the placeholder. */
@@ -1208,4 +1212,76 @@ export function smartArtSupportsHierarchy(kind: SmartArtKind | undefined): boole
  */
 export function smartArtAcceptsLevelTwo(kind: SmartArtKind | undefined): boolean {
   return kind !== undefined;
+}
+
+/**
+ * Whether a SmartArt shape's own Shape Effects state a 3-D look: a Preset, a
+ * Bevel, a 3-D Rotation off the front or a 3-D Format beyond its light.
+ * Office's point-level `a:scene3d` / `a:sp3d` replace the SmartArt Style's on
+ * that one shape (ECMA-376 §21.4.3.8), so the style's `shape3d` / `scene3d`
+ * come off it and
+ * the shape's own effects draw its solid -- one 3-D, never the style's and
+ * the author's on top of each other.
+ */
+export function smartArtEffectsOwn3d(effects: unknown): boolean {
+  if (!effects || typeof effects !== "object") return false;
+  const record = effects as Record<string, unknown>;
+  const stated = (value: unknown) => value !== undefined && value !== null && value !== "none";
+  const rotation = record.rotation3d;
+  // A point's own `a:scene3d` (its light) with no `a:sp3d` keeps the
+  // style's solid: PowerPoint draws such a shape with the style's bevel
+  // (nobevel-style-probe p8, probe2: its whole metal, deep solid). Its 3-D
+  // Format then states lighting alone, which is no solid of its own.
+  const format3d = record.format3d;
+  const ownSolid =
+    stated(format3d) &&
+    (typeof format3d !== "object" || Object.keys(format3d as object).some((key) => key !== "lighting"));
+  return (
+    stated(record.preset) ||
+    stated(record.bevel) ||
+    ownSolid ||
+    (!!rotation &&
+      typeof rotation === "object" &&
+      (rotation as { camera?: unknown }).camera !== "orthographicFront")
+  );
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function smartArtShape3dUnderEffects<T extends { bevelTop?: unknown }>(
+  shape3d: T | undefined,
+  effects: unknown,
+): T | undefined {
+  if (!shape3d || shape3d.bevelTop === undefined) return shape3d;
+  if (!smartArtEffectsNoBevel(effects)) return shape3d;
+  const rest: Partial<T> = { ...shape3d };
+  delete rest.bevelTop;
+  return Object.keys(rest).length ? (rest as T) : undefined;
+}
+
+/** Whether a SmartArt shape's own Shape Effects state No Bevel (`bevel: "none"`). */
+export function smartArtEffectsNoBevel(effects: unknown): boolean {
+  return !!effects && typeof effects === "object" && (effects as { bevel?: unknown }).bevel === "none";
+}
+
+/**
+ * Whether a SmartArt node wears its SmartArt Style's top bevel (the style's
+ * `shape3d`, the node's own 3-D not yet stated): No Bevel then states the
+ * bevel `"none"`, Office's point-level `a:sp3d` with no `a:bevelT`.
+ */
+export function smartArtNodeWearsStyleBevel(block: unknown): boolean {
+  if (readSmartArtBlockMarker(block)?.role !== "node") return false;
+  const shape3d = (block as { shape3d?: { bevelTop?: unknown } }).shape3d;
+  return !!shape3d && shape3d.bevelTop !== undefined && shape3d.bevelTop !== null;
 }

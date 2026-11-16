@@ -12,10 +12,13 @@ import type { OfficePictureFillSource } from "@mrnote/core/web/lib/office-pictur
 import { officePictureFillOptionsOf } from "@mrnote/core/web/lib/office-picture-fill-options.ts";
 import { spreadsheetShapeLineEnds } from "../../../../lib/spreadsheet/shape-line-ends";
 import { spreadsheetShapeFillLineChange, spreadsheetShapeFillLineStyle } from "./spreadsheetShapeFillLine";
-import { spreadsheetPictureEffectParameter, spreadsheetPictureEffectsBlocker } from "../../../../lib/spreadsheet/picture-effects";
-import { officeEffectsPaneSections } from "@mrnote/core/web/components/office-ribbon/officeEffectsPaneSections.tsx";
+import { spreadsheetPictureEffectParameter, spreadsheetPictureEffectsBlocker, spreadsheetPictureShadowInEffects } from "../../../../lib/spreadsheet/picture-effects";
+import { officeEffectsPaneSections, officeTextEffectsPaneSections } from "@mrnote/core/web/components/office-ribbon/officeEffectsPaneSections.tsx";
 import { presentationEffectsPaneLabels } from "@mrnote/core/web/components/notebook/contents/presentation/presentationEffectsLabels.ts";
 import { spreadsheetShapeOfficeEffects } from "../../../../lib/spreadsheet/shape-office-effects";
+import { OFFICE_TEXT_EFFECT_KINDS, officeTextPaintOfficeEffects, withOfficeTextEffect } from "@mrnote/core/web/lib/office-text-effects.ts";
+import { OFFICE_GLOW_ACCENTS, OFFICE_GLOW_SIZES_PT, officeGlowVariation } from "@mrnote/core/web/lib/office-picture-effects.ts";
+import type { OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
 import { objectAspectLocked, objectPrints, objectSizePixels, spreadsheetObjectPlacement, spreadsheetObjectRotation, spreadsheetLineShapeTakesNoText, MAX_PICTURE_ALT_TEXT_LENGTH, SPREADSHEET_OBJECT_PLACEMENTS } from "../../../../lib/spreadsheet/drawing-buttons";
 import { type RefObject } from "react";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
@@ -36,6 +39,10 @@ const shapeTextPxToPt = (px: number) => pxToPtRounded(px);
 
 /** What spreadsheetFormatPaneTabs reads from SpreadsheetWindow's render scope. */
 export interface SpreadsheetFormatPaneTabsInputs {
+  /** Text Options > Text Effects: the words' WordArt paint edited as the
+   * ribbon's Text Effects menu edits it (absent: no Text Effects sections). */
+  editShapeTextPaint?: (edit: (paint: OfficeTextPaint) => OfficeTextPaint) => Promise<boolean | void>;
+  shapeTextPaintDisabledReason?: string;
   cmToPx: (cm: string) => number;
   colWidth: SparseAxisSizeResolver;
   executePictureFormatMutation: (controlId: PictureFormatWriterControlId, parameter: string | number, surface?: "visible" | "keyboard" | "navigation") => Promise<boolean | void>;
@@ -144,6 +151,8 @@ export function spreadsheetFormatPaneTabs({
   workbookThemeAccentColors,
   cmToPx,
   colWidth,
+  editShapeTextPaint,
+  shapeTextPaintDisabledReason,
   executePictureFormatMutation,
   executePictureMetadataMutation,
   executeShapeFormatMutation,
@@ -193,6 +202,12 @@ export function spreadsheetFormatPaneTabs({
             id: "effects",
             label: t("spreadsheet.chartFormatCopy.pane.effects"),
             sections: [
+              // The sheet's own shadow preset, unless the picture keeps its
+              // Shadow in its Picture Effects (readings row 570): then
+              // Office's Shadow section below is its one shadow.
+              ...(spreadsheetPictureShadowInEffects(picture)
+                ? []
+                : [
               {
                 id: "shadow",
                 title: t("spreadsheet.chartFormatCopy.pane.shadow"),
@@ -226,10 +241,12 @@ export function spreadsheetFormatPaneTabs({
                   },
                 ],
               },
+                  ] satisfies OfficeShapeFormatPaneSection[]),
               // Reflection, Glow, Soft Edges, 3-D Format and 3-D Rotation:
               // Office's sections over the picture's `pictureEffects` (the
               // deck's and the shapes' Effects pane; the Shadow above is the
-              // sheet's own preset).
+              // sheet's own preset, or Office's Shadow section here where the
+              // picture keeps its Shadow in its Picture Effects).
               ...(() => {
                 const accents = {
                   accent1: workbookThemeAccentColors[0] ?? "#4472c4",
@@ -253,7 +270,7 @@ export function spreadsheetFormatPaneTabs({
                       "XLSCTL.CONTEXT.PICTURE.EFFECTS.MRAI.APPLY",
                       spreadsheetPictureEffectParameter(kind, value),
                     ),
-                }).filter((section) => section.id !== "effects-shadow");
+                }).filter((section) => section.id !== "effects-shadow" || spreadsheetPictureShadowInEffects(picture));
               })(),
               {
                 id: "artistic",
@@ -592,6 +609,20 @@ export function spreadsheetFormatPaneTabs({
                       "XLSCTL.CONTEXT.SHAPE.EFFECTS.MRAI.APPLY",
                       JSON.stringify({ kind, value, accent1: accents.accent1 }),
                     ),
+                  // 3-D Rotation > Keep text flat, on a shape holding words
+                  // (`object.keepTextFlat`, the label body's `a:flatTx`).
+                  ...((selectedShapeStyle.text ?? "").trim()
+                    ? {
+                        keepTextFlat: {
+                          checked: (selectedShapeObject as { keepTextFlat?: unknown }).keepTextFlat === true,
+                          onChange: (checked: boolean) =>
+                            void executeShapeFormatMutation(
+                              "XLSCTL.CONTEXT.SHAPE.EFFECTS.MRAI.APPLY",
+                              JSON.stringify({ keepTextFlat: checked }),
+                            ),
+                        },
+                      }
+                    : {}),
                 });
               })(),
             },
@@ -790,6 +821,55 @@ export function spreadsheetFormatPaneTabs({
                     },
                   ],
                 },
+                // Text Options > Text Effects: Excel's Shadow, Reflection,
+                // Glow, 3-D Format and 3-D Rotation on the words' WordArt
+                // paint, the sections the deck's and shapes' panes show
+                // (officeEffectsPaneSections), each pick as the ribbon's
+                // Text Effects menu makes it (withOfficeTextEffect); the whole
+                // 3-D Format and 3-D Rotation on the words' statement.
+                ...(editShapeTextPaint
+                  ? (() => {
+                      const accents = {
+                        accent1: workbookThemeAccentColors[0] ?? "#4472c4",
+                        accent2: workbookThemeAccentColors[1] ?? "#ed7d31",
+                        accent3: workbookThemeAccentColors[2] ?? "#a5a5a5",
+                        accent4: workbookThemeAccentColors[3] ?? "#ffc000",
+                        accent5: workbookThemeAccentColors[4] ?? "#5b9bd5",
+                        accent6: workbookThemeAccentColors[5] ?? "#70ad47",
+                      };
+                      const textReason = reason ?? (lineTakesNoText ? t("spreadsheet.shapeTextLineUnavailable") : shapeTextPaintDisabledReason);
+                      return officeTextEffectsPaneSections({
+                        effects: officeTextPaintOfficeEffects(
+                          selectedShapeStyle.textPaint,
+                          OFFICE_GLOW_SIZES_PT.flatMap((size) =>
+                            OFFICE_GLOW_ACCENTS.map((accent) => officeGlowVariation(size, accent, accents[accent])),
+                          ),
+                        ),
+                        accentColors: accents,
+                        labels: presentationEffectsPaneLabels(t),
+                        disabled: Boolean(textReason),
+                        disabledReason: textReason,
+                        testIdPrefix: "text-effects",
+                        onChange: (kind, value) => {
+                          // 3-D Format beyond the top bevel is the words'
+                          // statement's (`office-text-3d`).
+                          if (kind !== "format3d" && !(OFFICE_TEXT_EFFECT_KINDS as readonly string[]).includes(kind)) return;
+                          void editShapeTextPaint((paint) => withOfficeTextEffect(paint, kind, value));
+                        },
+                        // 3-D Rotation > Keep text flat: the shape's one field
+                        // (`object.keepTextFlat`, the label body's `a:flatTx`),
+                        // the box Shape Options' Effects shows too.
+                        keepTextFlat: {
+                          checked: (selectedShapeObject as { keepTextFlat?: unknown }).keepTextFlat === true,
+                          onChange: (checked: boolean) =>
+                            void executeShapeFormatMutation(
+                              "XLSCTL.CONTEXT.SHAPE.EFFECTS.MRAI.APPLY",
+                              JSON.stringify({ keepTextFlat: checked }),
+                            ),
+                        },
+                      }, { threeD: "full" });
+                    })()
+                  : []),
               ],
             },
           ];

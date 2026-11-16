@@ -22,17 +22,26 @@ function sheetLabels(doc: ProseMirrorNode): readonly (string | null)[] | null {
 function sheetNumbering(doc: ProseMirrorNode): SheetNumbering {
   if (labelsByDoc.has(doc)) return labelsByDoc.get(doc)!;
   const attrs = (doc.attrs ?? {}) as Record<string, unknown>;
-  const sheets: Array<{ physicalStart: number; span: number; sectionIndex: number }> = [];
+  const sheets: Array<{ physicalStart: number; span: number; sectionIndex: number; sectionContinues: boolean }> = [];
   let section = 0;
+  let opensMidPage = false;
   doc.forEach((node) => {
     if (node.type.name !== "pageBlock") return;
     // Section breaks close their section: a sheet belongs to the section
     // counted before its content (the header bands count them the same way).
-    sheets.push({ physicalStart: sheets.length + 1, span: 1, sectionIndex: section });
+    // A section opened under the sheet before's last break with content
+    // after it began there, mid-page (sheetOpensSectionMidPage).
+    sheets.push({ physicalStart: sheets.length + 1, span: 1, sectionIndex: section, sectionContinues: opensMidPage });
+    const tail = { broke: false, after: false };
     node.descendants((child) => {
-      if (child.type.name === "sectionBreak") section += 1;
+      if (child.type.name === "sectionBreak") {
+        section += 1;
+        tail.broke = true;
+        tail.after = false;
+      } else if (tail.broke && child.isTextblock) tail.after = true;
       return !child.isTextblock;
     });
+    opensMidPage = tail.after;
   });
   const schemes =
     normalizeSectionLayouts(attrs.sectionLayouts)?.map((layout) => layout.pageNumber ?? null) ?? [];

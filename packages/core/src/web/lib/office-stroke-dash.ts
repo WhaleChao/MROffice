@@ -59,6 +59,19 @@ const OFFICE_STROKE_DASH_UNITS: Record<OfficeStrokeDash, readonly number[]> = {
 };
 
 /**
+ * Any `a:prstDash@val` preset's dash and gap lengths in line widths (the
+ * family names' too: `dash` 4-3, `dot` 1-3); null for `solid` or a name
+ * that is not a preset.
+ */
+export function officeDashUnits(preset: unknown): readonly number[] | null {
+  if (preset === "dash") return [4, 3];
+  if (preset === "dot") return [1, 3];
+  return typeof preset === "string" && Object.hasOwn(OFFICE_STROKE_DASH_UNITS, preset)
+    ? OFFICE_STROKE_DASH_UNITS[preset as OfficeStrokeDash]
+    : null;
+}
+
+/**
  * A dash pattern's lengths (in line widths) at a width, with the line's caps
  * counted inside each dash as Office counts them: a round or square cap
  * reaches half the width past each end, so each dash is drawn a width

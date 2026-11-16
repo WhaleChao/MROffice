@@ -52,6 +52,30 @@ export function cellKeystrokeSplice(
   return caretSplice(before, after, caretAfter) ?? textSplice(before, after);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+export function cellKeystrokeEdit(
+  live: string,
+  drawn: string | undefined,
+  after: string,
+  caretAfter: number | undefined,
+): { base: string; start: number; end: number; insert: string } | null {
+  const viaLive = cellKeystrokeSplice(live, after, caretAfter);
+  if (drawn === undefined || drawn === live) return viaLive ? { base: live, ...viaLive } : null;
+  const viaDrawn = cellKeystrokeSplice(drawn, after, caretAfter);
+  if (viaDrawn && (!viaLive || spliceSize(viaDrawn) < spliceSize(viaLive))) return { base: drawn, ...viaDrawn };
+  return viaLive ? { base: live, ...viaLive } : null;
+}
+
 /** The room's delta of one slide object's words in a delivery, if it has one. */
 export function deliveredBlockTextDelta(
   detail: PageRemoteContentDetail | undefined,
@@ -176,6 +200,18 @@ export function focusedRichPreviewCaret(root: HTMLElement | null): { blockId: st
   return range ? { blockId, text, range: { start: range.start, end: range.end } } : null;
 }
 
+/** The caret in the words of a slide object that hold the keyboard: its
+ * drawn (rich) body, or the field its words are typed through (a file's
+ * label whose drawn words take no keys of their own), if any. */
+export function focusedWordsCaret(root: HTMLElement | null): { blockId: string; text: string; range: TextRange } | null {
+  const rich = focusedRichPreviewCaret(root);
+  if (rich) return rich;
+  const active = root?.ownerDocument.activeElement;
+  if (!root || !(active instanceof HTMLTextAreaElement) || !root.contains(active)) return null;
+  const blockId = active.closest("[data-block-id]")?.getAttribute("data-block-id");
+  return blockId ? { blockId, text: active.value, range: { start: active.selectionStart, end: active.selectionEnd } } : null;
+}
+
 /** The focused field of a table cell (PresentationCellRichTextEditor: its
  * words and caret read as a textarea's are), if any. */
 export function focusedTableCellField(root: HTMLElement | null): {
@@ -263,6 +299,13 @@ export function carryKeystrokeToLive(options: {
   selection?: TextRange;
   shift: number;
   splice: { start: number; end: number; insert: string } | null;
+  /** How the keystroke was read: `exact` (at its selection or caret, in the
+   * drawn or the live words), `compared` (no selection or caret told it: the
+   * field's words compared with the live ones, which they differ from by
+   * less than from the drawn ones) or `stale` (the live words are not the
+   * drawn ones and neither read it: a comparison with the drawn words would
+   * take the collaborator's newer letters for this key's, see below). */
+  read: KeystrokeRead;
 } {
   const { changes, slideId, blockId, rendered, live, typed, selection, caretAfter } = options;
   const read = (words: string) => keystrokeSplice(words, typed, selection) ?? caretSplice(words, typed, caretAfter);
@@ -271,7 +314,8 @@ export function carryKeystrokeToLive(options: {
   // not drawn yet).
   const drawn = read(rendered);
   if (live === rendered) {
-    return { onLive: false, text: typed, selection: selection ?? (drawn ? { start: drawn.start, end: drawn.end } : undefined), shift: 0, splice: drawn };
+    return { onLive: false, text: typed, selection: selection ?? (drawn ? { start: drawn.start, end: drawn.end } : undefined), shift: 0, splice: drawn,
+      read: drawn ? "exact" : "compared" };
   }
   if (drawn) {
     const carried = carryEditThroughUnrendered(changes, slideId, blockId, rendered, live,
@@ -283,13 +327,36 @@ export function carryKeystrokeToLive(options: {
         selection: carried,
         shift: carried.start - drawn.start,
         splice: { ...carried, insert: drawn.insert },
+        read: "exact",
       };
     }
-    return { onLive: false, text: typed, selection, shift: 0, splice: null };
+    return { onLive: false, text: typed, selection, shift: 0, splice: null, read: "exact" };
   }
   const onLive = read(live);
-  if (onLive) return { onLive: true, text: typed, selection: { start: onLive.start, end: onLive.end }, shift: 0, splice: onLive };
-  return { onLive: false, text: typed, selection, shift: 0, splice: null };
+  if (onLive) return { onLive: true, text: typed, selection: { start: onLive.start, end: onLive.end }, shift: 0, splice: onLive, read: "exact" };
+  // Neither selection nor caret told the key (a field whose change event
+  // carries neither). The field already shows a collaborator's delivery the
+  
+  // 25 ms after A's "l" at its end was drawn into the field): compared with
+  // the drawn words, every character after the caret differs at the end, and
+  // the key read as "replace all of them with this key and all of them
+  // again" -- written so into the room it deleted the words and put a copy
+  // back, A's concurrent letter twice. The field's words are the live ones
+  // with this key in them when that comparison is the smaller change.
+  const viaLive = textSplice(live, typed);
+  const viaDrawn = textSplice(rendered, typed);
+  if (spliceSize(viaLive) < spliceSize(viaDrawn)) {
+    return { onLive: true, text: typed, selection: { start: viaLive.start, end: viaLive.end }, shift: 0, splice: viaLive, read: "compared" };
+  }
+  return { onLive: false, text: typed, selection, shift: 0, splice: null, read: "stale" };
+}
+
+/** How `carryKeystrokeToLive` read a keystroke. */
+export type KeystrokeRead = "exact" | "compared" | "stale";
+
+/** Characters a splice removes plus the ones it writes. */
+function spliceSize(splice: { start: number; end: number; insert: string }): number {
+  return splice.end - splice.start + splice.insert.length;
 }
 
 /**

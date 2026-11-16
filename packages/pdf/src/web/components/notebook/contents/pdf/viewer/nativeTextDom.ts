@@ -122,6 +122,56 @@ export function pdfNativeTextEditBoxAtPoint(
   }
   return reached;
 }
+/** A point on a page's own text, told on the page (fractions of its box) so
+ * it still names the same word after the window around the page has moved. */
+export type PdfPageTextEditPoint = Readonly<{ pageNumber: number; fx: number; fy: number }>;
+/**
+ * The page text under a press, for the Select tool's way into a line (a
+ * double click, 「编辑文字」 in the right-click menu), or null where there is
+ * none to edit: blank page, a line already open in its editor, a scan (its
+ * words are read off a picture, `isScan`).
+ */
+export function pdfPageTextEditPointAt(
+  target: EventTarget | null,
+  clientX: number,
+  clientY: number,
+  isScan: (pageNumber: number) => boolean,
+): PdfPageTextEditPoint | null {
+  const element = target instanceof Element ? target : null;
+  const layer = element?.closest<HTMLElement>("[data-pdf-text-layer]");
+  const host = layer?.closest<HTMLElement>(".pdf-viewer__page[data-page-number]");
+  if (!element || !layer || !host) return null;
+  if (element.closest("[contenteditable]:not([contenteditable='false']), textarea, input")) return null;
+  const pageNumber = Number(host.dataset.pageNumber);
+  if (!Number.isSafeInteger(pageNumber) || isScan(pageNumber)) return null;
+  const span = element.closest<HTMLElement>("span");
+  const onText =
+    Boolean(span && layer.contains(span) && span.textContent?.trim()) ||
+    Boolean(pdfNativeTextEditBoxAtPoint(null, clientX, clientY, layer));
+  if (!onText) return null;
+  const rect = host.getBoundingClientRect();
+  if (!(rect.width > 0 && rect.height > 0)) return null;
+  return {
+    pageNumber,
+    fx: (clientX - rect.left) / rect.width,
+    fy: (clientY - rect.top) / rect.height,
+  };
+}
+/** Where that point is in the window now, and the text box holding it (null
+ * until the page's boxes are laid out). */
+export function pdfPageTextEditBoxAt(
+  root: ParentNode | null | undefined,
+  at: PdfPageTextEditPoint,
+): Readonly<{ box: HTMLElement; clientX: number; clientY: number }> | null {
+  const host = root?.querySelector<HTMLElement>(`.pdf-viewer__page[data-page-number="${at.pageNumber}"]`);
+  const layer = host?.querySelector<HTMLElement>("[data-pdf-text-layer]");
+  const rect = host?.getBoundingClientRect();
+  if (!layer || !rect || !(rect.width > 0 && rect.height > 0)) return null;
+  const clientX = rect.left + at.fx * rect.width;
+  const clientY = rect.top + at.fy * rect.height;
+  const box = pdfNativeTextEditBoxAtPoint(null, clientX, clientY, layer);
+  return box ? { box, clientX, clientY } : null;
+}
 export const PDF_NATIVE_TEXT_EDITABLE_ATTR = "data-pdf-native-text-editable";
 export const PDF_NATIVE_TEXT_EDIT_SELECTED_ATTR = "data-pdf-native-text-edit-selected";
 /** A text box on a rendered page other than the current one: a click on it

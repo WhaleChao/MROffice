@@ -32,6 +32,7 @@ import {
   rgb,
   type PDFPage,
 } from "pdf-lib";
+import { pdfLibObjectsPerTick, pdfLibParseSpeed } from "../pdf/pdf-lib-pacing";
 
 export const FIELD_LINK_PREFIX = "https://form-field.mrai.invalid/#";
 
@@ -144,7 +145,7 @@ function squareBox(box: { x: number; y: number; width: number; height: number })
  * the bytes unchanged when it holds none.
  */
 export async function fillablePdfFromFieldLinks(pdf: ArrayBuffer | Uint8Array): Promise<Uint8Array> {
-  const doc = await PDFDocument.load(pdf, { updateMetadata: false });
+  const doc = await PDFDocument.load(pdf, { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
   const placed = takeFieldLinks(doc);
   if (!placed.length) return new Uint8Array(pdf instanceof Uint8Array ? pdf : new Uint8Array(pdf));
   const form = doc.getForm();
@@ -207,7 +208,7 @@ export async function fillablePdfFromFieldLinks(pdf: ArrayBuffer | Uint8Array): 
     if (groupRequired.has(name)) group.enableRequired();
   }
   if (needsAppearances) form.acroForm.dict.set(PDFName.of("NeedAppearances"), PDFBool.True);
-  return doc.save({ updateFieldAppearances: !needsAppearances });
+  return doc.save({ objectsPerTick: pdfLibObjectsPerTick(), updateFieldAppearances: !needsAppearances });
 }
 
 function uniqueOption(existing: readonly string[], name: string): string {

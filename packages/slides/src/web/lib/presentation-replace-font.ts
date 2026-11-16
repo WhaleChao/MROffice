@@ -21,6 +21,7 @@ import {
   MASTER_TEXT_STYLE_NAMES,
   type SlideMaster,
 } from "@mrnote/core/web/lib/presentation-master.ts";
+import { isNativeSmartArtMember } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
 import { tableCellTypefaceFromChoice } from "@mrnote/core/web/lib/presentation-table-style.ts";
 
 function styleFont(style: unknown): string | undefined {
@@ -208,7 +209,20 @@ export function collectDeckFonts<S extends { blocks?: unknown[] }>(
 function swapStyle(style: unknown, from: string, to: string): unknown {
   const font = styleFont(style);
   if (font && fontIdentity(font) === fontIdentity(from)) {
-    return { ...(style as object), fontFamily: to };
+    // Text that follows the theme's font (+mn-lt / +mj-lt, or no face of its
+    // own) and draws in `from` takes `to` as a face of its own: PowerPoint
+    // for Windows writes it as an explicit <a:latin> and leaves the theme's
+    
+    // runs, the master's and layouts' field runs too). Left marked as the
+    // theme's, the page showed the new face and the file never had it.
+    const next: Record<string, unknown> = { ...(style as Record<string, unknown>), fontFamily: to };
+    delete next.themeFontRole;
+    if (Array.isArray(next.inheritedKeys)) {
+      const kept = (next.inheritedKeys as unknown[]).filter((key) => key !== "fontFamily");
+      if (kept.length) next.inheritedKeys = kept;
+      else delete next.inheritedKeys;
+    }
+    return next;
   }
   return style;
 }
@@ -264,6 +278,10 @@ export function replaceDeckFont<S extends { blocks?: unknown[] }>(
     if (!Array.isArray(slide.blocks)) return slide;
     let slideChanged = false;
     const blocks = slide.blocks.map((block) => {
+      // A file's SmartArt keeps its words' faces: PowerPoint's Replace Fonts
+      
+      
+      if (isNativeSmartArtMember(block)) return block;
       let nextBlock = swapCarrier(block, from, to);
       // A list's character formatting lives on its paragraphs' runs, which
       // the canvas draws and saves (PPT-B085).

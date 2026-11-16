@@ -1993,7 +1993,23 @@ export interface PresentationPictureArrangeSlide<
   }>;
 }
 
+/** The steps a slide's native order journal takes one by one, as recorded. */
 export const PRESENTATION_PICTURE_ARRANGE_MAX_STEPS = 32;
+
+
+
+
+
+
+
+
+
+
+
+export function presentationNativeOrderStepBound(objectCount: number): number {
+  const count = Math.max(0, Math.floor(objectCount));
+  return Math.max(PRESENTATION_PICTURE_ARRANGE_MAX_STEPS, (count * (count - 1)) / 2);
+}
 
 export interface PresentationPictureArrangeCommandPayload {
   readonly blockId: string;
@@ -3284,10 +3300,53 @@ interface NativeShapeProjectionGroup<
   readonly blocks: readonly TBlock[];
 }
 
+/**
+ * An object the author added to an imported slide: it names no source at
+ * all, so it is none of the file's shapes and has no place in the native
+ * order. The save writes it before the file shape that follows it in the
+ * list (`authored_append_units`).
+ */
+function isAuthoredSlideObject(block: ArrangeablePresentationBlock): boolean {
+  return block.source === undefined || block.source === null;
+}
+
+
+
+
+
+
+
+
+
+
+function nativeOrderShapeId(source: Record<string, unknown> | undefined): unknown {
+  const shapeId = source?.shapeId;
+  if (shapeId !== undefined && shapeId !== null && shapeId !== "") return shapeId;
+  const view = source?.nativeSmartArtView;
+  if (
+    view &&
+    typeof view === "object" &&
+    !Array.isArray(view) &&
+    (view as Record<string, unknown>).schemaVersion === "pptx-smartart-drawing-v1" &&
+    typeof (view as Record<string, unknown>).frameShapeId === "string"
+  ) {
+    return (view as Record<string, unknown>).frameShapeId;
+  }
+  if (typeof source?.nativeSmartArtBlocker === "string" && typeof source.frameShapeId === "string") {
+    return source.frameShapeId;
+  }
+  return shapeId;
+}
+
 function nativeShapeProjectionGroups<
   TBlock extends ArrangeablePresentationBlock,
   TSlide extends PresentationPictureArrangeSlide<TBlock>,
->(slide: TSlide): readonly NativeShapeProjectionGroup<TBlock>[] | null {
+>(
+  slide: TSlide,
+  /** Pass over the objects the author added (they keep their own places in
+   * the list) rather than refuse the slide. */
+  withAuthored = false,
+): readonly NativeShapeProjectionGroup<TBlock>[] | null {
   const slideId = slide.source?.slideId;
   if (typeof slideId !== "string" || !/^sld[1-9][0-9]*$/.test(slideId)) {
     return null;
@@ -3307,11 +3366,12 @@ function nativeShapeProjectionGroups<
       // writer inserts it. Until then it addresses no native shape, so it sits
       // outside the native z-order the same way its inherited reading did --
       // rather than voiding the whole slide's native ordering.
-      source?.materializedPlaceholder !== undefined
+      source?.materializedPlaceholder !== undefined ||
+      (withAuthored && isAuthoredSlideObject(block))
     ) {
       continue;
     }
-    const shapeId = source?.shapeId;
+    const shapeId = nativeOrderShapeId(source);
     const sourceOrder = block.sourceOrder;
     if (
       !block.id ||
@@ -3366,6 +3426,7 @@ function blocksWithNativeGroupsReordered<
 >(
   blocks: readonly TBlock[],
   groups: readonly NativeShapeProjectionGroup<TBlock>[],
+  withAuthored = false,
 ): TBlock[] {
   const reordered = groups.flatMap((group) => group.blocks);
   let cursor = 0;
@@ -3373,7 +3434,8 @@ function blocksWithNativeGroupsReordered<
     if (
       block.source?.inheritedFrom === "layout" ||
       block.source?.inheritedFrom === "master" ||
-      block.source?.materializedPlaceholder !== undefined
+      block.source?.materializedPlaceholder !== undefined ||
+      (withAuthored && isAuthoredSlideObject(block))
     ) {
       return block;
     }
@@ -3416,9 +3478,7 @@ function parseNativeShapeOrderSteps(
     !Object.hasOwn(target, "steps") ||
     target.schemaVersion !== "presentation-native-shape-order-v2" ||
     target.slideId !== slideId ||
-    !Array.isArray(target.steps) ||
-    target.steps.length < 1 ||
-    target.steps.length > PRESENTATION_PICTURE_ARRANGE_MAX_STEPS
+    !Array.isArray(target.steps)
   ) {
     return null;
   }
@@ -3454,24 +3514,88 @@ function replayNativeShapeOrderSteps<
   trustedGroups: readonly NativeShapeProjectionGroup<TBlock>[],
   steps: readonly Readonly<{ shapeId: string; direction: ZOrderStep }>[],
 ): readonly NativeShapeProjectionGroup<TBlock>[] | null {
-  let replayed = [...trustedGroups];
+  // One swap per step, each group's place kept in a map: a journal of a few
+  // thousand steps (a large slide restacked whole) replays in linear time.
+  const replayed = [...trustedGroups];
+  const placeOf = new Map(replayed.map((group, index) => [group.shapeId, index]));
   for (const step of steps) {
-    const groupIndex = replayed.findIndex(
-      (group) => group.shapeId === step.shapeId,
-    );
-    const group = replayed[groupIndex];
-    if (
-      !group ||
-      group.blocks.length !== 1
-    ) {
+    const groupIndex = placeOf.get(step.shapeId);
+    const group = groupIndex === undefined ? undefined : replayed[groupIndex];
+    if (groupIndex === undefined || !group || group.blocks.length !== 1) {
       return null;
     }
     const neighborIndex =
       step.direction === "forward" ? groupIndex + 1 : groupIndex - 1;
-    if (!replayed[neighborIndex]) return null;
-    replayed = moveItemOneStep(replayed, group.id, step.direction);
+    const neighbor = replayed[neighborIndex];
+    if (!neighbor) return null;
+    replayed[neighborIndex] = group;
+    replayed[groupIndex] = neighbor;
+    placeOf.set(group.shapeId, neighborIndex);
+    placeOf.set(neighbor.shapeId, groupIndex);
   }
   return replayed;
+}
+
+/**
+ * The fewest one-object steps that take the file's order (`trustedGroups`,
+ * by their places) to `finalGroups`: each pair the new order swaps is
+ * swapped once, by whichever of the two is one direct object (the journal
+ * steps only those; an object projected as several blocks -- a SmartArt
+ * diagram, a group -- is stepped over). Null when a pair of such objects
+ * would have to swap, which no step can say.
+ */
+function compactNativeShapeOrderSteps<
+  TBlock extends ArrangeablePresentationBlock,
+>(
+  trustedGroups: readonly NativeShapeProjectionGroup<TBlock>[],
+  finalGroups: readonly NativeShapeProjectionGroup<TBlock>[],
+): Readonly<{ shapeId: string; direction: ZOrderStep }>[] | null {
+  const rank = new Map(finalGroups.map((group, index) => [group.id, index]));
+  if (rank.size !== trustedGroups.length || trustedGroups.some((group) => !rank.has(group.id))) {
+    return null;
+  }
+  const order = [...trustedGroups];
+  const steps: Array<Readonly<{ shapeId: string; direction: ZOrderStep }>> = [];
+  for (let swapped = true; swapped; ) {
+    swapped = false;
+    for (let index = 0; index + 1 < order.length; index += 1) {
+      const left = order[index];
+      const right = order[index + 1];
+      if (!left || !right || (rank.get(left.id) ?? 0) <= (rank.get(right.id) ?? 0)) continue;
+      if (left.blocks.length === 1) {
+        steps.push(Object.freeze({ shapeId: left.shapeId, direction: "forward" as const }));
+      } else if (right.blocks.length === 1) {
+        steps.push(Object.freeze({ shapeId: right.shapeId, direction: "backward" as const }));
+      } else {
+        return null;
+      }
+      order[index] = right;
+      order[index + 1] = left;
+      swapped = true;
+    }
+  }
+  return steps;
+}
+
+/**
+ * The journal a slide records after a restack: `steps` (the earlier ones and
+ * the new) while they are few, else the fewest steps from the file's order to
+ * `finalGroups` (`presentationNativeOrderStepBound`). Null only when the new
+ * order cannot be stepped at all.
+ */
+function nativeShapeOrderJournal<
+  TBlock extends ArrangeablePresentationBlock,
+>(
+  groups: readonly NativeShapeProjectionGroup<TBlock>[],
+  steps: readonly Readonly<{ shapeId: string; direction: ZOrderStep }>[],
+  finalGroups: readonly NativeShapeProjectionGroup<TBlock>[],
+): readonly Readonly<{ shapeId: string; direction: ZOrderStep }>[] | null {
+  if (steps.length <= PRESENTATION_PICTURE_ARRANGE_MAX_STEPS) return steps;
+  const trusted = [...groups].sort((left, right) => left.sourceOrder - right.sourceOrder);
+  const compact = compactNativeShapeOrderSteps(trusted, finalGroups);
+  return compact && compact.length <= presentationNativeOrderStepBound(trusted.length)
+    ? compact
+    : null;
 }
 
 function authorizedNativeShapeOrder<
@@ -3495,7 +3619,7 @@ function authorizedNativeShapeOrder<
     slide.nativeShapeOrderTarget,
     slideId,
   );
-  if (!steps) return null;
+  if (!steps || steps.length > presentationNativeOrderStepBound(groups.length)) return null;
   const replayed = replayNativeShapeOrderSteps(trustedGroups, steps);
   return replayed && sameNativeShapeGroupOrder(replayed, groups)
     ? { steps, groups }
@@ -3523,6 +3647,7 @@ function presentationNativeSelectionPaneTarget<
 >(
   slide: TSlide,
   blockId: string,
+  withAuthored = false,
 ): PresentationNativeSelectionPaneTarget<TBlock, TSlide> | null {
   const block = slide.blocks.find((candidate) => candidate.id === blockId);
   if (
@@ -3541,7 +3666,7 @@ function presentationNativeSelectionPaneTarget<
   ) {
     return null;
   }
-  const groups = nativeShapeProjectionGroups<TBlock, TSlide>(slide);
+  const groups = nativeShapeProjectionGroups<TBlock, TSlide>(slide, withAuthored);
   if (!groups) return null;
   const authorized = authorizedNativeShapeOrder<TBlock, TSlide>(slide, groups);
   if (!authorized) return null;
@@ -3584,12 +3709,7 @@ export function applyPresentationNativeSelectionPaneOrderStep<
 >(slide: TSlide, blockId: string, direction: ZOrderStep): TSlide | null {
   if (!isZOrderStep(direction)) return null;
   const resolved = presentationNativeSelectionPaneTarget(slide, blockId);
-  if (
-    !resolved ||
-    resolved.steps.length >= PRESENTATION_PICTURE_ARRANGE_MAX_STEPS
-  ) {
-    return null;
-  }
+  if (!resolved) return null;
   const neighborIndex =
     direction === "forward"
       ? resolved.groupIndex + 1
@@ -3600,6 +3720,12 @@ export function applyPresentationNativeSelectionPaneOrderStep<
     resolved.group.id,
     direction,
   );
+  const journal = nativeShapeOrderJournal(
+    resolved.groups,
+    [...resolved.steps, { shapeId: resolved.group.shapeId, direction }],
+    nextGroups,
+  );
+  if (!journal) return null;
   const nextBlocks = blocksWithNativeGroupsReordered(
     resolved.slide.blocks,
     nextGroups,
@@ -3617,16 +3743,14 @@ export function applyPresentationNativeSelectionPaneOrderStep<
     nativeShapeOrderTarget: {
       schemaVersion: "presentation-native-shape-order-v2",
       slideId: resolved.slide.source?.slideId as string,
-      steps: [
-        ...resolved.steps,
-        { shapeId: resolved.group.shapeId, direction },
-      ],
+      steps: [...journal],
     },
   } as TSlide;
 }
 
 /** The four z-order commands of Home / Shape Format ▸ Arrange and the context menu. */
 export type PresentationNativeOrderCommand = "front" | "forward" | "backward" | "back";
+
 
 
 
@@ -3672,7 +3796,9 @@ export function applyPresentationNativeOrderCommand<
       return false;
     }
     order = moveItemOneStep(order, groupId, direction) as NativeShapeProjectionGroup<TBlock>[];
-    taken.push({ shapeId: order[neighbor].shapeId, direction });
+    const moved = order[neighbor];
+    if (!moved) return false;
+    taken.push({ shapeId: moved.shapeId, direction });
     return true;
   };
   const direction: ZOrderStep = command === "front" || command === "forward" ? "forward" : "backward";
@@ -3686,18 +3812,19 @@ export function applyPresentationNativeOrderCommand<
       continue;
     }
     while (stepOnce(groupId, direction)) {
-      if (steps.length + taken.length > PRESENTATION_PICTURE_ARRANGE_MAX_STEPS) return null;
+      // to the end of the slide: one step per object passed
     }
   }
   if (taken.length === 0) return "unchanged";
-  if (steps.length + taken.length > PRESENTATION_PICTURE_ARRANGE_MAX_STEPS) return null;
+  const journal = nativeShapeOrderJournal(groups, [...steps, ...taken], order);
+  if (!journal) return null;
   return {
     ...slide,
     blocks: blocksWithNativeGroupsReordered(slide.blocks, order),
     nativeShapeOrderTarget: {
       schemaVersion: "presentation-native-shape-order-v2",
       slideId: slide.source?.slideId as string,
-      steps: [...steps, ...taken],
+      steps: [...journal],
     },
   } as TSlide;
 }
@@ -3714,8 +3841,15 @@ export function applyPresentationNativeOrderCommand<
 export function applyPresentationNativeObjectOrder<
   TBlock extends ArrangeablePresentationBlock,
   TSlide extends PresentationPictureArrangeSlide<TBlock>,
->(slide: TSlide, nextBlocks: readonly TBlock[]): TSlide | "unchanged" | null {
-  const groups = nativeShapeProjectionGroups<TBlock, TSlide>(slide);
+>(
+  slide: TSlide,
+  nextBlocks: readonly TBlock[],
+  /** The slide also holds objects the author added: the steps order the
+   * file's objects among themselves and the slide takes `nextBlocks` whole,
+   * so each added object stands where the list puts it. */
+  withAuthored = false,
+): TSlide | "unchanged" | null {
+  const groups = nativeShapeProjectionGroups<TBlock, TSlide>(slide, withAuthored);
   if (!groups) return null;
   const authorized = authorizedNativeShapeOrder<TBlock, TSlide>(slide, groups);
   if (!authorized) return null;
@@ -3741,7 +3875,7 @@ export function applyPresentationNativeObjectOrder<
   const rank = new Map(wanted.map((group, index) => [group.id, index]));
   const movable = (group: NativeShapeProjectionGroup<TBlock>) =>
     group.blocks.length === 1 &&
-    presentationNativeSelectionPaneTarget<TBlock, TSlide>(slide, group.blocks[0].id) !== null;
+    presentationNativeSelectionPaneTarget<TBlock, TSlide>(slide, group.blocks[0].id, withAuthored) !== null;
   let order = [...authorized.groups];
   const taken: Array<Readonly<{ shapeId: string; direction: ZOrderStep }>> = [];
   for (let swapped = true; swapped; ) {
@@ -3759,19 +3893,18 @@ export function applyPresentationNativeObjectOrder<
       }
       order = [...order.slice(0, index), right, left, ...order.slice(index + 2)];
       swapped = true;
-      if (authorized.steps.length + taken.length > PRESENTATION_PICTURE_ARRANGE_MAX_STEPS) {
-        return null;
-      }
     }
   }
   if (taken.length === 0) return "unchanged";
+  const journal = nativeShapeOrderJournal(authorized.groups, [...authorized.steps, ...taken], order);
+  if (!journal) return null;
   return {
     ...slide,
-    blocks: blocksWithNativeGroupsReordered(slide.blocks, order),
+    blocks: withAuthored ? [...nextBlocks] : blocksWithNativeGroupsReordered(slide.blocks, order),
     nativeShapeOrderTarget: {
       schemaVersion: "presentation-native-shape-order-v2",
       slideId: slide.source?.slideId as string,
-      steps: [...authorized.steps, ...taken],
+      steps: [...journal],
     },
   } as TSlide;
 }
@@ -3823,12 +3956,7 @@ export function createPresentationPictureArrangeCommandAdapter<
   const canExecute = (direction: ZOrderStep): boolean => {
     if (!isZOrderStep(direction)) return false;
     const resolved = target();
-    if (
-      !resolved ||
-      resolved.steps.length >= PRESENTATION_PICTURE_ARRANGE_MAX_STEPS
-    ) {
-      return false;
-    }
+    if (!resolved) return false;
     const neighborIndex =
       direction === "forward"
         ? resolved.groupIndex + 1
@@ -3843,8 +3971,7 @@ export function createPresentationPictureArrangeCommandAdapter<
     const resolved = target();
     if (
       !resolved ||
-      resolved.block.id !== payload.blockId ||
-      resolved.steps.length >= PRESENTATION_PICTURE_ARRANGE_MAX_STEPS
+      resolved.block.id !== payload.blockId
     ) {
       return false;
     }
@@ -3869,6 +3996,15 @@ export function createPresentationPictureArrangeCommandAdapter<
     ) {
       return false;
     }
+    const journal = nativeShapeOrderJournal(
+      resolved.groups,
+      [
+        ...resolved.steps,
+        { shapeId: resolved.group.shapeId, direction: payload.direction },
+      ],
+      nextGroups,
+    );
+    if (!journal) return false;
     const nextSlides = resolved.slides.map((slide, slideIndex) =>
       slideIndex === resolved.slideIndex
         ? ({
@@ -3877,13 +4013,7 @@ export function createPresentationPictureArrangeCommandAdapter<
             nativeShapeOrderTarget: {
               schemaVersion: "presentation-native-shape-order-v2",
               slideId: resolved.slide.source?.slideId as string,
-              steps: [
-                ...resolved.steps,
-                {
-                  shapeId: resolved.group.shapeId,
-                  direction: payload.direction,
-                },
-              ],
+              steps: [...journal],
             },
           } as TSlide)
         : slide,

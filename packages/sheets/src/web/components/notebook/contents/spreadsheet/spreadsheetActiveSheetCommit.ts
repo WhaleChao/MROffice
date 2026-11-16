@@ -13,7 +13,7 @@
  * bookkeeping after them.
  */
 import { committedSheetEdit, type FollowOtherSheets } from "../../../../lib/spreadsheet/row-column-buttons";
-import { sheetCoveringItsCells } from "../../../../lib/spreadsheet/sheet-extent";
+import { grownRowsStayHidden, sheetCoveringItsCells } from "../../../../lib/spreadsheet/sheet-extent";
 import { reconcileTableHeaderWrites, renameTableColumnsInSheet } from "./spreadsheetCellValuePlan";
 import { type SheetModel } from "./spreadsheetSheetModel";
 
@@ -40,6 +40,9 @@ export function preparedActiveSheetEdit(
   ) {
     nextSheet = sheetCoveringItsCells(nextSheet);
   }
+  // Rows the extent took in on a sheet whose rows are hidden by default stay
+  // hidden, unless the edit itself said which rows are hidden (Unhide).
+  if (nextSheet.manuallyHiddenRows === sheet.manuallyHiddenRows) nextSheet = grownRowsStayHidden(sheet, nextSheet);
   let followOthers = followOnOtherSheets;
   if (calculationMutation === "content") {
     const reconciled = reconcileTableHeaderWrites(sheet, nextSheet);

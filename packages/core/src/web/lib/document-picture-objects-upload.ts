@@ -40,7 +40,12 @@ function swapPictures(view: EditorView, tokens: ReadonlyMap<string, string>): bo
     return true;
   });
   if (!tr.docChanged) return false;
-  view.dispatch(tr);
+  // Housekeeping, not an edit: undo never brings the bytes back, and the
+  // page ledger does not read it as typing at the seams around the picture
+  // (corpus R279-D20: the swap of Figure 3's src, 228 positions from a page
+  // seam, marked that seam edited; the paragraph was re-cut a row short and
+  // kept two rows on its page where Word keeps three).
+  view.dispatch(tr.setMeta("addToHistory", false));
   return true;
 }
 

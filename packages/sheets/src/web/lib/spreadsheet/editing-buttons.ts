@@ -111,7 +111,10 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
       delete nextCell.hyperlinkTooltip;
       delete nextCell.hyperlinkDisplay;
       
+      // new element: no place in the file's list yet, the one beneath replaced.
       delete (nextCell as { hyperlinkInArea?: boolean }).hyperlinkInArea;
+      delete (nextCell as { hyperlinkRank?: number }).hyperlinkRank;
+      delete (nextCell as { hyperlinkOwnUnder?: unknown }).hyperlinkOwnUnder;
     }
     nextCell.hyperlink = href;
     if (details) {
@@ -149,6 +152,11 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
           else delete nextCell.phonetic;
           nextCell.value = visibleText;
           nextCell.kind = cellKind(visibleText);
+          // The file's string type belonged to the text it typed; the new
+          // text is read afresh, as a typed value is (cell-buttons; R307-X05
+          // WALK1: "2021" typed as a string, its link's display text "Walk
+          // note" kept the mark and read back without it).
+          delete (nextCell as { stringValue?: unknown }).stringValue;
           delete nextCell.display;
           delete nextCell.chartValueCache;
           delete nextCell.runs;
@@ -164,6 +172,8 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
     delete nextCell.hyperlinkTooltip;
     delete nextCell.hyperlinkDisplay;
     delete (nextCell as { hyperlinkInArea?: boolean }).hyperlinkInArea;
+    delete (nextCell as { hyperlinkRank?: number }).hyperlinkRank;
+    delete (nextCell as { hyperlinkOwnUnder?: unknown }).hyperlinkOwnUnder;
     if (nextCell.value || hasCellMetadata(nextCell)) {
       nextCells[key] = nextCell;
     } else {

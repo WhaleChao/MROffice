@@ -14,7 +14,8 @@ interface IndexedCell {
   readonly formula?: unknown;
   readonly value?: string;
   readonly display?: string;
-  readonly style?: { readonly wrapText?: boolean; readonly backgroundColor?: string; readonly numberFormat?: unknown; readonly fontSize?: number | false; readonly textRotation?: unknown; readonly verticalText?: boolean };
+  readonly style?: { readonly wrapText?: boolean; readonly backgroundColor?: string; readonly numberFormat?: unknown; readonly fontSize?: number | false; readonly textRotation?: unknown; readonly verticalText?: boolean;
+    readonly borderEdges?: { readonly top?: { readonly style?: unknown }; readonly bottom?: { readonly style?: unknown } } };
   readonly locked?: unknown;
   readonly rowspan?: number;
   readonly colspan?: number;
@@ -39,6 +40,14 @@ export const DEFAULT_CELL_FONT_SIZE_PT = 11;
 export function cellFontTallerThanDefault(style: { readonly fontSize?: number | false } | undefined): boolean {
   return typeof style?.fontSize === "number" && style.fontSize > DEFAULT_CELL_FONT_SIZE_PT;
 }
+/** Whether a cell's text wraps at its column: Wrap Text, or a horizontal
+ * Justify / Distributed alignment, which wraps whether or not Wrap Text is on
+ * (Excel; the grid draws them so, XLS-A037/A038) -- and so grows its row. */
+export function cellTextWraps(
+  style: { readonly wrapText?: boolean; readonly horizontalJustify?: unknown } | undefined,
+): boolean {
+  return Boolean(style?.wrapText) || style?.horizontalJustify === "justify" || style?.horizontalJustify === "distributed";
+}
 /** Turned or stacked text (a non-zero Orientation angle, Vertical Text): the
  * row grows to the turned line's height, so the cell's fill stands behind all
  * of it (Excel). */
@@ -50,7 +59,7 @@ export function cellTextTurned(
   return Number.isFinite(angle) && Math.round(angle) !== 0;
 }
 function autoHeightCandidate(cell: IndexedCell | undefined): boolean {
-  return Boolean(cell?.style?.wrapText || cell?.value?.startsWith("=") ||
+  return Boolean(cellTextWraps(cell?.style) || cell?.value?.startsWith("=") ||
     hasManualLineBreak(cell?.value) || hasManualLineBreak(cell?.display) ||
     cellFontTallerThanDefault(cell?.style) || cellTextTurned(cell?.style));
 }
@@ -61,6 +70,17 @@ const formulaCandidate = (cell: IndexedCell | undefined) =>
 const fillCandidate = (cell: IndexedCell | undefined) => Boolean(cell?.style?.backgroundColor);
 /** Cells carrying phonetic data (furigana); the row band reads the current cell. */
 const phoneticCandidate = (cell: IndexedCell | undefined) => typeof cell?.phonetic === "object" && cell.phonetic !== null;
+/** Excel's width of a border line style in grid pixels: the medium styles
+ * draw 2, thick and double 3, every other 1; no line, 0. */
+export function borderLineWidthPx(style: unknown): number {
+  if (typeof style !== "string" || style === "" || style === "none") return 0;
+  if (style === "thick" || style === "double") return 3;
+  return style.startsWith("medium") || style === "slantDashDot" ? 2 : 1;
+}
+/** Cells with a top or bottom line of 2 px or more: the lines that make a
+ * Windows Excel row taller (officeBorderRowExtras). */
+const heavyEdgeCandidate = (cell: IndexedCell | undefined) =>
+  borderLineWidthPx(cell?.style?.borderEdges?.top?.style) >= 2 || borderLineWidthPx(cell?.style?.borderEdges?.bottom?.style) >= 2;
 /** Cells the persisted display cache can touch: a formula or a number format
  * earns a cache, and a stray cache on any other cell is stripped. */
 const displayCacheCandidate = (cell: IndexedCell | undefined) => {
@@ -102,6 +122,8 @@ export interface SpreadsheetCellIndex {
   readonly displayCacheKeys: readonly string[];
   /** Every stored cell carrying phonetic data. */
   readonly phoneticKeys: readonly string[];
+  /** Every stored cell with a top or bottom border of 2 px or more. */
+  readonly heavyEdgeKeys: readonly string[];
   readonly spans: readonly IndexedSpan[];
   readonly facets: readonly IndexedFacets[];
   readonly notes: number;
@@ -208,6 +230,7 @@ export class SpreadsheetCellIndexes {
     const fillKeys: string[] = [];
     const displayCacheKeys: string[] = [];
     const phoneticKeys: string[] = [];
+    const heavyEdgeKeys: string[] = [];
     const spans: IndexedSpan[] = [];
     const facets: IndexedFacets[] = [];
     const keys = Object.keys(cells);
@@ -221,6 +244,7 @@ export class SpreadsheetCellIndexes {
       if (fillCandidate(cell)) fillKeys.push(key);
       if (displayCacheCandidate(cell)) displayCacheKeys.push(key);
       if (phoneticCandidate(cell)) phoneticKeys.push(key);
+      if (heavyEdgeCandidate(cell)) heavyEdgeKeys.push(key);
       const lenient = parseLenient(key);
       if (lenient) {
         observed++; observer.observe(cell); bounds = expand(bounds, lenient[0], lenient[1]);
@@ -249,7 +273,7 @@ export class SpreadsheetCellIndexes {
       if (!Number.isInteger(row) || !Number.isInteger(col)) continue;
       threads.push({ key, row, col, comment });
     }
-    const result: SpreadsheetCellIndex = { notes, threads, autoHeightKeys, formulaKeys, fillKeys, displayCacheKeys, phoneticKeys, spans, facets,
+    const result: SpreadsheetCellIndex = { notes, threads, autoHeightKeys, formulaKeys, fillKeys, displayCacheKeys, phoneticKeys, heavyEdgeKeys, spans, facets,
       usedRange, observation: observer.summary(observed, bounds) };
     this.#sources.set(cells, result);
     return result;
@@ -284,6 +308,7 @@ export class SpreadsheetCellIndexes {
       fillKeys: permutedCellKeys(prior.fillKeys, span, cells, fillCandidate),
       displayCacheKeys: permutedCellKeys(prior.displayCacheKeys, span, cells, displayCacheCandidate),
       phoneticKeys: permutedCellKeys(prior.phoneticKeys, span, cells, phoneticCandidate),
+      heavyEdgeKeys: permutedCellKeys(prior.heavyEdgeKeys, span, cells, heavyEdgeCandidate),
       usedRange: usedRangeAfterRowSort(prior.usedRange, span, before, cells),
       observation: observationAfterRowSort(prior.observation, span),
     };
@@ -310,7 +335,7 @@ export class SpreadsheetCellIndexes {
       if (a?.comment !== b?.comment || Boolean(a?.hyperlink) !== Boolean(b?.hyperlink) ||
           autoHeightCandidate(a) !== autoHeightCandidate(b) || formulaCandidate(a) !== formulaCandidate(b) ||
           fillCandidate(a) !== fillCandidate(b) || displayCacheCandidate(a) !== displayCacheCandidate(b) ||
-          phoneticCandidate(a) !== phoneticCandidate(b) ||
+          phoneticCandidate(a) !== phoneticCandidate(b) || heavyEdgeCandidate(a) !== heavyEdgeCandidate(b) ||
           !Object.is(rowSpanOf(a), rowSpanOf(b)) || !Object.is(colSpanOf(a), colSpanOf(b))) sameMetadata = false;
       if (!prior || !sameMetadata) continue;
       const lenient = parseLenient(key);

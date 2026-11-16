@@ -74,6 +74,9 @@ export function PresentationPictureStyleGraphic({
       preview={preview}
       omitEffects={omitEffects.size ? omitEffects : undefined}
       outline={presentationPictureStyleOutline(block)}
+      
+      // Compound Frame, Black; `lib/office-picture-line`).
+      lineOutside
       testId="presentation-native-picture-style"
       imageTestId="presentation-image-el"
     />

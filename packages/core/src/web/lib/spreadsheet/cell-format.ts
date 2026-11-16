@@ -225,9 +225,12 @@ export function textRotationCss(value: unknown): {
  * not at such an angle.
  */
 export function rotatedTextVerticalAnchor(
-  style: Pick<CellFormatStyle, "textRotation" | "verticalText" | "verticalAlign"> | undefined,
+  style: Pick<CellFormatStyle, "textRotation" | "verticalText" | "verticalAlign" | "verticalJustify"> | undefined,
 ): "flex-start" | "flex-end" | null {
-  if (style?.verticalText === true) return null;
+  // Vertical Text set Justify or Distributed down the cell starts at the top,
+  // as Excel stacks it (R20-X14's 「満足している」 headers hung from the top in
+  // Excel and stood on the bottom here, the default the alignment fell to).
+  if (style?.verticalText === true) return style.verticalJustify === "justify" || style.verticalJustify === "distributed" ? "flex-start" : null;
   const angle = normalizeTextRotation(style?.textRotation);
   if (angle === 0 || Math.abs(angle) === 90 || style?.verticalAlign === "middle") return null;
   return angle > 0 ? "flex-end" : "flex-start";
@@ -257,9 +260,16 @@ export function textOrientationCss(
   maxHeight?: string;
   writingMode?: "vertical-rl";
   textOrientation?: "upright" | "sideways";
+  letterSpacing?: string;
 } {
   if (style?.verticalText === true) {
-    return { writingMode: "vertical-rl", textOrientation: "upright" };
+    // Excel stacks Vertical Text a character to a line: each takes its line's
+    // height down the cell, not its em -- 「満足している」 runs about half as
+    // long again as the letters packed at 1em, and a header too long for its
+    // cell goes on in a second column where Excel puts one (xlsx-rounds
+    // R20-X14's survey headers). The spacing makes each character's advance
+    // its line box.
+    return { writingMode: "vertical-rl", textOrientation: "upright", letterSpacing: "calc(1lh - 1em)" };
   }
   const angle = normalizeTextRotation(style?.textRotation);
   // vertical-rl reads top to bottom (a clockwise quarter turn, -90); turned
@@ -317,7 +327,9 @@ export const MAX_INDENT_LEVEL = 250;
  */
 export const CELL_BASE_PADDING_X_PX = 9;
 
-/** Pixels of leading padding added per indent level. */
+/** Pixels of leading padding added per indent level on a page's own sheet;
+ * an imported grid's level is its Normal font's three spaces
+ * (ResolvedNativeGrid.indentStepPx, officeIndentStepPx). */
 export const INDENT_STEP_PX = 12;
 
 /**
@@ -353,8 +365,8 @@ export function stepIndentLevel(current: unknown, delta: number): number {
  * unaffected. The padding is additive on TOP of the grid's base cell padding,
  * so callers add it to (not replace) the default.
  */
-export function indentPaddingPx(value: unknown): number {
-  return normalizeIndentLevel(value) * INDENT_STEP_PX;
+export function indentPaddingPx(value: unknown, stepPx: number = INDENT_STEP_PX): number {
+  return normalizeIndentLevel(value) * stepPx;
 }
 
 // ── Justify / Distributed (Format Cells > Alignment, XLS-A037/A038/A058) ─────
@@ -485,22 +497,48 @@ export function cellVerticalSpread(style: { verticalJustify?: unknown } | undefi
   return spreadValue(style?.verticalJustify);
 }
 
-/** CSS that lays a wrapped text block out as Justify / Distributed. */
+/** Han, kana, Hangul and their full-width forms and punctuation. */
+const CJK_TEXT = /[\u1100-\u11ff\u2e80-\u9fff\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]|[\u{20000}-\u{3ffff}]/u;
+
+
+
+
+
+
+
+
+
+
+export function distributedLineUnits(line: string): { mode: "spread" | "center"; units: string[] } {
+  const text = line.trim();
+  const units = CJK_TEXT.test(text) ? Array.from(text) : text.split(" ").filter((word) => word !== "");
+  return { mode: units.length < 2 ? "center" : "spread", units };
+}
+
+/** CSS that lays a wrapped text block out as Justify / Distributed (with the
+ * cell's text, a Distributed block of one Latin word centres). */
 export function cellHorizontalSpreadCss(style: {
   horizontalJustify?: unknown;
   justifyLastLine?: unknown;
-} | undefined): {
-  textAlign: "justify";
-  textAlignLast: "justify" | "auto";
-  textJustify: "inter-character" | "auto";
+} | undefined, text?: string): {
+  textAlign: "justify" | "center";
+  textAlignLast: "justify" | "auto" | "center";
+  textJustify: "inter-character" | "inter-word" | "auto";
 } | null {
   const spread = cellHorizontalSpread(style);
   if (!spread) return null;
-  const allLines = spread === "distributed" || style?.justifyLastLine === true;
+  if (spread === "distributed") {
+    if (text === undefined || CJK_TEXT.test(text)) {
+      return { textAlign: "justify", textAlignLast: "justify", textJustify: "inter-character" };
+    }
+    return text.trim().includes(" ")
+      ? { textAlign: "justify", textAlignLast: "justify", textJustify: "inter-word" }
+      : { textAlign: "center", textAlignLast: "center", textJustify: "auto" };
+  }
   return {
     textAlign: "justify",
-    textAlignLast: allLines ? "justify" : "auto",
-    textJustify: spread === "distributed" ? "inter-character" : "auto",
+    textAlignLast: style?.justifyLastLine === true ? "justify" : "auto",
+    textJustify: "auto",
   };
 }
 
@@ -556,8 +594,8 @@ export function cellIndentInsetsPx(style: {
   textAlign?: unknown;
   horizontalJustify?: unknown;
   centerAcross?: unknown;
-} | undefined): { left: number; right: number } {
-  const pad = indentPaddingPx(style?.indent);
+} | undefined, stepPx: number = INDENT_STEP_PX): { left: number; right: number } {
+  const pad = indentPaddingPx(style?.indent, stepPx);
   if (pad === 0) return { left: 0, right: 0 };
   const edge = cellIndentEdge(style);
   return {

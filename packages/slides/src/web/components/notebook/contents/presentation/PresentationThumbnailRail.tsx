@@ -18,11 +18,13 @@
 
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
 import { isDoubleTap } from "@mrnote/core/web/lib/double-tap.ts";
+import { reducedMotionNow } from "@mrnote/core/web/lib/reduce-motion.ts";
 import { PresentationOutlineView } from "./PresentationOutlineView";
 import { presentationOutlineProjection } from "../../../../lib/presentation-outline-view";
 import { isTextEditLocked } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import { isSlideHidden } from "@mrnote/core/web/lib/presentation-slide-visibility.ts";
 import { adjustParagraphLevelAt } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
+import { presentationListLevelRestyle } from "@mrnote/core/web/lib/presentation-level-styles.ts";
 import type { SlideModel } from "@mrnote/core/web/lib/presentation/deck-model.ts";
 import {
   Fragment,
@@ -498,7 +500,10 @@ export function PresentationThumbnailRail({ ctl }: { ctl: PresentationThumbnailR
     const target = [
       ...rail.querySelectorAll<HTMLElement>('[data-testid="presentation-slide-tab"]'),
     ].find((thumbnail) => thumbnail.dataset.slideId === activeSlide.id);
-    if (target && target !== focused) target.focus();
+    // The browser's own scroll-into-view on focus is instant; the effect
+    // below brings the thumbnail into view and glides there, so Down at the
+    // bottom of the pane no longer jumps a whole tile.
+    if (target && target !== focused) target.focus({ preventScroll: true });
   }, [activeSlide.id, slides]);
   // The current slide's thumbnail stays in view however the slide became
   // current -- a comment's Next, Find, Page Down on the stage -- as
@@ -518,10 +523,20 @@ export function PresentationThumbnailRail({ ctl }: { ctl: PresentationThumbnailR
     const box = target.getBoundingClientRect();
     if (view.height <= 0 || box.height <= 0) return;
     const margin = 4;
+    let delta = 0;
     if (box.top < view.top) {
-      viewport.scrollTop -= view.top - box.top + margin;
+      delta = -(view.top - box.top + margin);
     } else if (box.bottom > view.bottom) {
-      viewport.scrollTop += Math.min(box.bottom - view.bottom + margin, box.top - view.top - margin);
+      delta = Math.min(box.bottom - view.bottom + margin, box.top - view.top - margin);
+    }
+    if (delta === 0) return;
+    // Measured against where the pane is now, so a held arrow key retargets
+    // a glide already under way instead of stacking on its end point.
+    const top = viewport.scrollTop + delta;
+    if (typeof viewport.scrollTo === "function" && !reducedMotionNow()) {
+      viewport.scrollTo({ top, behavior: "smooth" });
+    } else {
+      viewport.scrollTop = top;
     }
   }, [activeSlide.id]);
   const tileActions: RailTileActions = {
@@ -805,6 +820,8 @@ export function PresentationThumbnailRail({ ctl }: { ctl: PresentationThumbnailR
                     block.paragraphs as Parameters<typeof adjustParagraphLevelAt>[0],
                     lineIndex,
                     delta,
+                    // An imported body's words re-inherit at the new level (PPTX §13).
+                    presentationListLevelRestyle(block),
                   ) as typeof block.paragraphs;
                   return next === block.paragraphs ? null : { ...block, paragraphs: next };
                 });

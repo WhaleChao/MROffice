@@ -714,6 +714,17 @@ export const PAPER_SIZE_NATIVE_IDS = Object.fromEntries(
   SPREADSHEET_PAPER_SIZES.map(({ id, nativeId }) => [id, nativeId]),
 ) as Record<PrintPaperSize, number>;
 
+
+
+
+
+
+
+
+export function newSheetPrintSettings(): Pick<PrintSettings, "paperSize" | "paperSizeNativeId"> {
+  return { paperSize: "a4", paperSizeNativeId: PAPER_SIZE_NATIVE_IDS.a4 };
+}
+
 export const OOXML_PAPER_SIZES: Readonly<Record<number, PrintPaperSize>> = {
   ...Object.fromEntries(SPREADSHEET_PAPER_SIZES.map(({ id, nativeId }) => [nativeId, id])),
   17: "tabloid", // Existing 11x17 alias.
@@ -1684,24 +1695,83 @@ export function paginateSheet(input: PaginateInput): PageBreakResult {
     if (r) repeatColCount = Math.min(r.c2 - r.c1 + 1, totalCols);
   }
 
+  const spare = printPageSparePoints(settings.scaling);
   const rowRanges = paginateAxis(
     totalRows,
     repeatRowCount,
-    dataAreaHeight - headingHeight,
+    dataAreaHeight - headingHeight - spare,
     rowHeight,
     rowSizes,
-    settings.scaling && settings.scaling.kind !== "percent" ? undefined : settings.manualRowBreaks,
+    printManualBreaksApply(settings.scaling, "row") ? settings.manualRowBreaks : undefined,
   );
   const colRanges = paginateAxis(
     totalCols,
     repeatColCount,
-    dataAreaWidth - headingWidth,
+    dataAreaWidth - headingWidth - spare,
     colWidth,
     colSizes,
-    settings.scaling && settings.scaling.kind !== "percent" ? undefined : settings.manualColBreaks,
+    printManualBreaksApply(settings.scaling, "col") ? settings.manualColBreaks : undefined,
   );
 
   return { rowRanges, colRanges, repeatRowCount, repeatColCount };
+}
+
+/** The room Windows Excel leaves free at a page's right and bottom edges
+ * before a column or row goes on to the next page: 7 printer dots at 600 dpi
+ * (0.84 pt), at any percent scale (lookwin probes p34/p34b: a column that
+ * leaves 7 dots fits, one that leaves 6.5 starts a page, at 100% and 200%,
+ * bordered or not; rows the same within half a dot). Fit To keeps a dot
+ * more (printPageSparePoints). */
+export const PRINT_PAGE_SPARE_POINTS = (7 * 72) / 600;
+
+/** Fit To's room: its scale is the largest whole percent whose pages leave
+ * more than 8 printer dots free (lookwin probes p50-lw/p50b-lw, Letter,
+ * Calibri 11: rows at 40/60/80% and columns at 40/60% print one percent
+ * smaller with 8 dots to spare and at the percent with 8.5; R101-X17's 48%
+ * left 4.36 and Excel chose 47%). Between the two: 8.25 dots. */
+export const PRINT_FIT_SPARE_POINTS = (8.25 * 72) / 600;
+
+export function printPageSparePoints(scaling: PrintScaling | undefined): number {
+  return !scaling || scaling.kind === "percent" ? PRINT_PAGE_SPARE_POINTS : PRINT_FIT_SPARE_POINTS;
+}
+
+/** A row's printed height in points: Windows Excel prints every row a whole
+ * number of printer dots (600 dpi). At 100% that is its screen pixels times
+ * the Normal font's printed over screen default row, plus an eighth of a dot,
+ * floored (lookwin probe p72-lw: 1,625 rows of 10-70 px over 28 Normal fonts,
+ * every one; Calibri 11's 14 px rows print 84 dots, 17 px 102, 18 px 109 --
+ * rounding gave 85 and 103, and R79-X23's 72-row pages held 71); a scale
+ * then takes its 100% dots, rounded (lookwin probe p41: 123-dot Arial 12 rows
+ * print 58 dots at 47%, 121-dot Calibri 11 rows 57). The API's
+ * printed_row_points (office_rows.py) is the same rule; office-row-rules.cases.json
+ * holds cases both answer. */
+export function printedRowPoints(size: number, scale: number): number {
+  const dots = Math.floor((size * 600) / 72 + PRINTED_ROW_DOT_OFFSET + 1e-9);
+  return dots > 0 ? (Math.max(1, Math.floor(dots * scale + 0.5)) * 72) / 600 : 0;
+}
+export const PRINTED_ROW_DOT_OFFSET = 0.125;
+
+/** A column's printed width in points: whole printer dots too, its 100% dots
+ * (rounded) times the scale, rounded (lookwin probe p50b-lw: 423-dot columns
+ * print 343 dots at 81%, 254 at 60%, 169 at 40%), so a Fit To scale is judged
+ * on the widths the page actually takes. The API's printed_col_points is the same. */
+export function printedColumnPoints(size: number, scale: number): number {
+  const dots = Math.floor((size * 600) / 72 + 0.5);
+  return dots > 0 ? (Math.max(1, Math.floor(dots * scale + 0.5)) * 72) / 600 : 0;
+}
+
+/**
+ * Whether an axis's manual page breaks print: Fit To ignores the breaks of an
+ * axis it fits and keeps those of an axis it leaves automatic (Windows Excel,
+ * lookwin probe p32: Fit To 0 wide x 1 tall breaks at the manual column breaks
+ * and ignores the row ones; 1 wide x 0 tall the other way round; 2 x 2 ignores
+ * both). A scale in percent keeps both.
+ */
+export function printManualBreaksApply(scaling: PrintScaling | undefined, axis: "row" | "col"): boolean {
+  if (!scaling || scaling.kind === "percent") return true;
+  if (scaling.kind === "fitToWidth") return axis === "row";
+  if ("widthPages" in scaling) return (axis === "row" ? scaling.heightPages : scaling.widthPages) === 0;
+  return false;
 }
 
 // ── Page Break Preview (pure, testable) ──────────────────────────────────────
@@ -1756,11 +1826,11 @@ export function computePageBreakLines(input: PaginateInput): PageBreakLines {
   }
 
   const manualRows = new Set<number>();
-  for (const b of (input.settings.scaling && input.settings.scaling.kind !== "percent" ? [] : input.settings.manualRowBreaks) ?? []) {
+  for (const b of (printManualBreaksApply(input.settings.scaling, "row") ? input.settings.manualRowBreaks : []) ?? []) {
     if (b > 0 && b < totalRows) manualRows.add(b);
   }
   const manualCols = new Set<number>();
-  for (const b of (input.settings.scaling && input.settings.scaling.kind !== "percent" ? [] : input.settings.manualColBreaks) ?? []) {
+  for (const b of (printManualBreaksApply(input.settings.scaling, "col") ? input.settings.manualColBreaks : []) ?? []) {
     if (b > 0 && b < totalCols) manualCols.add(b);
   }
 

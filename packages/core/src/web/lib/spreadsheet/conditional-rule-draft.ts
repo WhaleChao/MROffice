@@ -1133,6 +1133,19 @@ export function conditionalRuleFromDraft(
   if (previous?.id) rule.id = previous.id;
   if (previous?.nativePriority !== undefined) rule.nativePriority = previous.nativePriority;
   if (previous?.nativeSequence !== undefined) rule.nativeSequence = previous.nativeSequence;
+  if (
+    previous?.kind === "textContains" &&
+    previous.formula !== undefined &&
+    rule.kind === "textContains" &&
+    rule.text === previous.text &&
+    rule.operator === previous.operator &&
+    rule.range.r1 === previous.range.r1 &&
+    rule.range.c1 === previous.range.c1
+  ) {
+    
+    // a changed text is the predicate Excel writes for it.
+    rule.formula = previous.formula;
+  }
   if (previous?.stopIfTrue && conditionalRuleSupportsStopIfTrue(rule)) {
     rule.stopIfTrue = true;
   }

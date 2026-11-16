@@ -390,6 +390,12 @@
   padding: 0 calc(8px * var(--touch-scale)) 0 calc(12px * var(--touch-scale));
   gap: calc(10px * var(--touch-scale));
 }
+/* A classic tab's bar carries the tab strip from its left edge (window-
+   manager.css): the strip's inset grows with the bar, and matches the home
+   card's bar (OfficeHome.module.css), so switching tabs does not shift it. */
+:root[data-touch-mode] .desktop-service-surface .wm-window[data-classic-tab] .wm-titlebar:not(.marketing-theme main *) {
+  padding-left: calc(6px * var(--touch-scale));
+}
 :root[data-touch-mode] .desktop-service-surface .wm-window[data-docked] .wm-titlebar:not(.marketing-theme main *) {
   height: calc(48px * var(--touch-scale));
   padding-right: calc(10px * var(--touch-scale));

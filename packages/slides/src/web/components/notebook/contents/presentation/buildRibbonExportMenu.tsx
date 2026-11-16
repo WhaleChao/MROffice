@@ -40,6 +40,9 @@ export interface BuildRibbonExportMenuCtl {
   exportDeckAsHtml: () => Promise<void>;
   /** File > Export > Create a Video / Create an Animated GIF. */
   openVideoExport: (format: "mp4" | "gif") => void;
+  /** Save as PDF's Options (Publish what, Include hidden slides): the
+   * PDF Options dialog, which exports when confirmed. */
+  openPdfOptions: () => void;
 }
 
 export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
@@ -53,6 +56,7 @@ export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
     exportSlideAsImage,
     exportDeckAsHtml,
     openVideoExport,
+    openPdfOptions,
   } = ctl;
   return (
       <DropdownMenu>
@@ -253,6 +257,25 @@ export function buildRibbonExportMenu(ctl: BuildRibbonExportMenuCtl) {
                   ? t("presentation.exportMenu.exporting")
                   : t("presentation.exportMenu.outlineDetail")
               }
+              badge="PDF"
+            />
+          </DropdownMenuItem>
+          {/* PowerPoint's Save as PDF goes through Publish ▸ Options; the four
+              rows above publish with its defaults (hidden slides left out),
+              this one opens those Options first (Include hidden slides,
+              Publish what) and exports when confirmed. */}
+          <DropdownMenuItem
+            className="docs-cupertino-menu__rich-item"
+            disabled={serverExporting}
+            onSelect={() => openPdfOptions()}
+            aria-label={t("presentation.pdfOptions.menuTitle")}
+            data-testid="presentation-export-pdf-options"
+          >
+            <RibbonMenuRichRow
+              fileType="pdf"
+              hoverScene
+              title={t("presentation.pdfOptions.menuTitle")}
+              detail={t("presentation.pdfOptions.menuDetail")}
               badge="PDF"
             />
           </DropdownMenuItem>

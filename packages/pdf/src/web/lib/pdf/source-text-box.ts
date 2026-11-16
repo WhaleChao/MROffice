@@ -199,7 +199,10 @@ export interface PdfSourceTextBoxBinding {
   readonly version: 1 | 2 | 3;
   /** Version 3: every span the box's text is drawn by, hidden by span. */
   readonly pieces?: readonly PdfFallbackTextPiece[];
-  /** Existing PDF owner identity, retained only after a portable import. */
+  /** Existing PDF owner identity, retained only after a portable import:
+   * always on version 2, and on a version 3 binding read back from the file
+   * it was written in (the owner is then named as the file states it, not
+   * by this host's resource and page). */
   readonly sourceIdentity?: string;
   readonly resourceId: string;
   readonly pageId: string;
@@ -261,9 +264,10 @@ export function readPdfSourceTextBoxBinding(
   const pieces = b.version === 3 ? readFallbackPieces(b.pieces) : null;
   if (
     (b.version !== 1 && b.version !== 2 && b.version !== 3) ||
-    (b.version === 2 && (typeof b.sourceIdentity !== "string" ||
-      !/^[a-f0-9]{64}$/.test(b.sourceIdentity) || b.expectedAppearance === null)) ||
-    ((b.version === 1 || b.version === 3) && b.sourceIdentity !== undefined) ||
+    ((b.version === 2 || (b.version === 3 && b.sourceIdentity !== undefined)) &&
+      (typeof b.sourceIdentity !== "string" ||
+        !/^[a-f0-9]{64}$/.test(b.sourceIdentity) || b.expectedAppearance === null)) ||
+    (b.version === 1 && b.sourceIdentity !== undefined) ||
     (b.version === 3 && (!pieces || pieces[0].object !== b.object ||
       pieces[0].generation !== b.generation || pieces[0].sha256 !== b.sha256)) ||
     (b.version !== 3 && b.pieces !== undefined) ||
@@ -296,7 +300,7 @@ export function readPdfSourceTextBoxBinding(
     return null;
   return {
     version: b.version,
-    ...(b.version === 2 ? { sourceIdentity: b.sourceIdentity } : {}),
+    ...(b.sourceIdentity !== undefined ? { sourceIdentity: b.sourceIdentity } : {}),
     ...(pieces ? { pieces } : {}),
     resourceId: b.resourceId,
     pageId: b.pageId,
@@ -320,12 +324,20 @@ export function readPortablePdfSourceTextBoxBinding(
 ): PdfSourceTextBoxBinding | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const portable = value as Record<string, unknown>;
+  
+  // version 3) is recorded with the spans it hides. Read without them it
+  // was no record at all: every box of its page was dropped on a reload,
+  // the hidden line was offered as a line of the page, and set again it was
+  // written a second time under the box still drawn over it (Attention
+  
+  const spans = "pieces" in portable;
   const keys = ["schemaVersion", "sourceIdentity", "boxId", "page", "object",
-    "generation", "operator", "sha256", "originalProof"];
+    "generation", "operator", "sha256", "originalProof", ...(spans ? ["pieces"] : [])];
   if (portable.schemaVersion !== "mrai.pdf-source-text-box.portable.v1" ||
     Object.keys(portable).length !== keys.length || keys.some(key => !(key in portable))) return null;
   return readPdfSourceTextBoxBinding({
-    version: 2,
+    version: spans ? 3 : 2,
+    ...(spans ? { pieces: portable.pieces } : {}),
     sourceIdentity: portable.sourceIdentity,
     resourceId: scope.resourceId,
     pageId: scope.pageId,
@@ -338,6 +350,36 @@ export function readPortablePdfSourceTextBoxBinding(
     originalProof: portable.originalProof,
     expectedAppearance,
   });
+}
+
+/** Whether a binding was read back from its file (a portable import): the
+ * page's own drawing already paints its box, and the server names its owner
+ * by the identity the file states. */
+export function pdfSourceTextBindingIsPortable(
+  binding: Readonly<{ version?: number; sourceIdentity?: string }> | null | undefined,
+): boolean {
+  return binding?.version === 2 || (binding?.version === 3 && typeof binding.sourceIdentity === "string");
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function pdfSourceTextBindingSealedForSave<Binding extends PdfSourceTextBoxBinding>(
+  binding: Binding,
+  newestSeal: string | null,
+): Binding {
+  if (pdfSourceTextBindingIsPortable(binding) && binding.expectedAppearance) return binding;
+  return { ...binding, expectedAppearance: newestSeal };
 }
 
 export function pdfSourceTextBoxOperator(

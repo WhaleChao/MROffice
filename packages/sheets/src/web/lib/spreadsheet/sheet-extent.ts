@@ -4,7 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { nearestKnownCellMap } from "@mrnote/core/web/lib/spreadsheet/cell-map-lineage.ts";
-import { MAX_GRID_COLUMNS, MAX_GRID_ROWS } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
+import { MAX_GRID_COLUMNS, MAX_GRID_ROW_SIZE_OVERRIDES, MAX_GRID_ROWS } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 
 interface ExtentSheet {
   rowCount: number;
@@ -137,4 +137,25 @@ export function sheetCoveringRanges<S extends { rowCount: number; columnCount: n
   rows = Math.min(rows, MAX_GRID_ROWS);
   cols = Math.min(cols, MAX_GRID_COLUMNS);
   return rows === sheet.rowCount && cols === sheet.columnCount ? sheet : { ...sheet, rowCount: rows, columnCount: cols };
+}
+
+/**
+ * The sheet after its stored extent grew from `before`, its new rows hidden
+ * when its rows are hidden by default (`rowsHiddenByDefault`, SpreadsheetML
+ * `sheetFormatPr/@zeroHeight`). Past the extent they were hidden by that
+ * default; inside it a hidden row is one `manuallyHiddenRows` lists, so a row
+ * the extent took in without listing it showed: a paste at A14 of a sheet
+ * used to row 12 showed rows 13-16, and the save wrote them shown, where Excel
+ * pastes into the hidden rows and keeps them hidden (xlsx-rounds R340-X13
+ * E14). The same sheet when nothing grew, or when the list would pass what a
+ * sheet may hold.
+ */
+export function grownRowsStayHidden<S extends { rowCount: number }>(before: { rowCount: number }, after: S): S {
+  const lines = after as S & { rowsHiddenByDefault?: unknown; manuallyHiddenRows?: unknown };
+  if (lines.rowsHiddenByDefault !== true || !(after.rowCount > before.rowCount)) return after;
+  const listed = Array.isArray(lines.manuallyHiddenRows) ? (lines.manuallyHiddenRows as unknown[]) : [];
+  const hidden = new Set(listed.filter((row): row is number => Number.isInteger(row)));
+  for (let row = Math.max(0, before.rowCount); row < after.rowCount; row += 1) hidden.add(row);
+  if (hidden.size > MAX_GRID_ROW_SIZE_OVERRIDES) return after;
+  return { ...after, manuallyHiddenRows: [...hidden].sort((a, b) => a - b) };
 }

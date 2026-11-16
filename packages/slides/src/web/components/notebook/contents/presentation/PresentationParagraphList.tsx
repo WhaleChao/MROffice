@@ -55,6 +55,7 @@ export function PresentationParagraphList({
   numberFormat,
   fontSizeUnit = "design-px",
   paragraphStyle,
+  bodyAlignStated = false,
   autofitLineSpacingMultiplier = 1,
   colorOverride,
   suppressFirstSpaceBefore = false,
@@ -112,6 +113,9 @@ export function PresentationParagraphList({
   fontSizeUnit?: PresentationFontSizeUnit;
   /** Effective a:spcBef/a:spcAft for each DrawingML paragraph. */
   paragraphStyle?: CSSProperties;
+  /** The box states an alignment its rows inherit (a text block's `style.align`):
+   * a Right-to-Left row stating none takes it, not Left. */
+  bodyAlignStated?: boolean;
   /** The box's autofit line reduction for rows that state their own spacing
    * (`autofitRenderForBlock().lineSpacingMultiplier`); 1 draws them as stated. */
   autofitLineSpacingMultiplier?: number;
@@ -184,6 +188,17 @@ export function PresentationParagraphList({
               ...(rowJustify ? { justifyContent: rowJustify } : {}),
               ...gutterCss,
               ...rowTextStyle,
+              // A Right-to-Left row stating no alignment is Left, a physical
+              // side, as PowerPoint draws it (look-fit
+              // truth-probes/lookfit-rtl-align-probe.pptx), not its start.
+              // One its box states (`bodyAlignStated`: the block's `align`,
+              
+              // that side, inherited from the box.
+              ...((paragraphs[index]?.dir ?? rowDirection) === "rtl" &&
+              rowTextStyle.textAlign === undefined &&
+              !bodyAlignStated
+                ? { textAlign: "left" as const }
+                : {}),
               ...indentCss,
               ...(baselineOffset === undefined ? {} : { transform: `translateY(${baselineOffset}px)` }),
               ...rowPlay.style,

@@ -41,7 +41,7 @@ import {
   PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER,
   type PresentationLabelledBlock,
 } from "./presentation-smartart-text";
-import { normalizeRuns, runsFromText, type RunStyle, type TextRun } from "./presentation-runs";
+import { normalizeRuns, runsFromText, withChangedLevelKeysOwn, type RunStyle, type TextRun } from "./presentation-runs";
 import { presentationTextRunsInRange } from "./presentation-text-clipboard";
 import {
   officeChartElementText,
@@ -401,14 +401,24 @@ function applyPresentationHomeObjectTextOfRuns<T extends PresentationLabelledBlo
           ? options.stepSizePx(currentPt * PX_PER_PT, command.direction)
           : pt === undefined ? undefined : Math.round(pt * PX_PER_PT * 100) / 100;
         if (fontSize === undefined) return run;
-        return { ...run, style: { ...(run.style ?? {}), fontSize } };
+        // The stepped size is the run's own (PowerPoint writes `sz`), no longer its list level's.
+        return { ...run, style: withChangedLevelKeysOwn(run.style, { ...(run.style ?? {}), fontSize }) };
       });
       if (JSON.stringify(stepped) === JSON.stringify(block)) return block;
       changed = true;
       return stepped as T;
     }
     const patch = own[0].patch!;
-    const result = PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER.write(block, patch);
+    // A point-sized block is here in design px (inDesignPx), and is scaled
+    // back to points afterwards; the label adapter writes such a block's size
+    // in points itself (415b974500), so it is handed the size in design px.
+    // Handed points, 18 picked for an imported shape was stored as 13.5.
+    const result = PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER.write(
+      block,
+      storesPoints(block) && patch.fontSizePt !== undefined
+        ? { ...patch, fontSizePt: patch.fontSizePt * PX_PER_PT }
+        : patch,
+    );
     if (result === block) return block;
     // A character format picked with the shape selected (not its text) is
     // every run's, as PowerPoint applies it: Bold, Italic, Underline,
@@ -431,7 +441,8 @@ function applyPresentationHomeObjectTextOfRuns<T extends PresentationLabelledBlo
       const style: Record<string, unknown> = { ...(run.style ?? {}) };
       if (sizeToo) delete style.fontSize;
       for (const [key, value] of stated) style[key] = value;
-      return Object.keys(style).length ? ({ ...run, style } as TextRun) : { text: run.text };
+      const owned = withChangedLevelKeysOwn(run.style, style);
+      return Object.keys(owned).length ? ({ ...run, style: owned } as TextRun) : { text: run.text };
     };
     let cleaned = result as PresentationLabelledBlock;
     if (stated.length || sizeOff) {

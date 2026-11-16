@@ -759,6 +759,9 @@ export interface PdfViewerRibbonModel {
   currentNativeVectorSelection: PdfNativeVectorSelectionRoute | null;
   maskCurrentNativeVector: () => Promise<void>;
   toggleNativeVectorVertexEditing: () => void;
+  /** Home > Arrange > Selection Pane (Alt+F10): the page's objects, front first. */
+  toggleNativeSelectionPane?: () => void;
+  nativeSelectionPaneOpen?: boolean;
   /** Copy and paste of source vectors (the copy lands where the pointer
    * was over a page, as WPS pastes; from the ribbon it is nudged instead). */
   nativeVectorClipboardCommands: Readonly<{ copy: () => void; paste: () => void }>;
@@ -1282,6 +1285,8 @@ export function PdfViewerRibbon({ ribbon }: { ribbon: PdfViewerRibbonModel }) {
     currentNativeVectorSelection,
     maskCurrentNativeVector,
     toggleNativeVectorVertexEditing,
+    toggleNativeSelectionPane,
+    nativeSelectionPaneOpen,
     nativeVectorClipboardCommands,
     runOrQueueNativeVectorCommand,
     annotationContextModel,
@@ -4027,6 +4032,8 @@ export function PdfViewerRibbon({ ribbon }: { ribbon: PdfViewerRibbonModel }) {
               ? toggleNativeVectorVertexEditing
               : undefined
           }
+          onSelectionPane={currentNativeVectorSelection ? toggleNativeSelectionPane : undefined}
+          selectionPaneOpen={nativeSelectionPaneOpen}
           onMaskShape={
             currentNativeVectorSelection
               ? () => void maskCurrentNativeVector()

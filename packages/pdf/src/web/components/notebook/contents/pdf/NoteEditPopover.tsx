@@ -5,9 +5,10 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, Pencil, Trash2 } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
+import { useDraftCommitOnLeave } from "@mrnote/core/web/lib/draft-commit-on-leave.ts";
 
 import { officeDialogParts as parts } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
 import {
@@ -36,6 +37,7 @@ import {
   planNotePopoverPlacement,
   type NotePopoverPlacement,
 } from "../../../../lib/pdf/note-popover-placement";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 
 // Static anchor clamps (page-relative percent): the first frame's position,
 // before the popover has measured itself against the page (see
@@ -69,7 +71,7 @@ function replyTimeLabel(value: string | undefined): string | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   try {
-    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+    return new Intl.DateTimeFormat(pageInterfaceLocale(), { dateStyle: "medium", timeStyle: "short" }).format(date);
   } catch {
     return null;
   }
@@ -201,6 +203,24 @@ export default function NoteEditPopover({
     if (mutationPending) return;
     onSave({ text: normalizeNoteText(draft), color: draftColor });
   };
+  // A note being typed is written by its Save alone: the window closed, the
+  // app quit or the page reloaded with the words still in the box, and they
+  
+  // is typed). The words in the box are saved as the page goes, once -- the
+  // same moments ask more than once -- and only where there are words and
+  // they are not the note's already. (A reply being typed is not posted for
+  // its writer: others would read it.)
+  const leaveKey = useId();
+  const savedOnLeaveRef = useRef<string | null>(null);
+  useDraftCommitOnLeave(`pdf-note:${leaveKey}`, () => {
+    if (mutationPending) return;
+    const typed = normalizeNoteText(draft);
+    if (!typed.trim() || (typed === normalizeNoteText(text) && draftColor === color)) return;
+    const written = `${draftColor}\u0000${typed}`;
+    if (savedOnLeaveRef.current === written) return;
+    savedOnLeaveRef.current = written;
+    onSave({ text: typed, color: draftColor });
+  }, editing);
   const handleCancelEdit = () => {
     if (mutationPending) return;
     if (isNew) {

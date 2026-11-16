@@ -22,6 +22,7 @@
  */
 
 import { readSpreadsheetNativeSmartArt } from "../../../../lib/spreadsheet/native-smartart";
+import { spreadsheetSmartArtOwnDefinitionRef } from "../../../../lib/spreadsheet/smartart-own-definition";
 import { nativeLayoutConvertsOnOpen, nativeLayoutToCatalogId } from "@mrnote/core/web/lib/office-smartart/native-layouts.ts";
 import { smartArtConvertRefusal } from "@mrnote/core/web/lib/office-smartart/native-convert-model.ts";
 import { readNativeSmartArtOutline } from "@mrnote/core/web/lib/office-smartart/native-outline-remote.ts";
@@ -45,13 +46,28 @@ const PREPARED = new WeakMap<readonly SpreadsheetObject[], PreparedSheetSmartArt
 
 export const sheetSmartArtPreparations = createSmartArtPreparations<SpreadsheetObject, readonly SpreadsheetObject[]>();
 
+/**
+ * A file's diagram that holds no cached drawing (Excel 2007 wrote empty ones):
+ * the page holds only its frame, which paints nothing (`drawingless_frame_member`),
+ * and Excel lays it out from its data as it opens the file. It is drawn as its
+ * conversion, for display only, until its first real edit lands that conversion
+ * (the deck's absent-cache scene, as the worksheet has it).
+ */
+export function sheetSmartArtDrawingless(object: SpreadsheetObject): boolean {
+  if (object.type !== "smartart") return false;
+  const members = (object as { members?: Array<{ drawingFrame?: unknown }> }).members;
+  return Array.isArray(members) && members.length > 0 && members.every((member) => member?.drawingFrame === true);
+}
+
 /** A diagram of a layout MRAI owns: the kind its first real edit converts. */
 export function sheetSmartArtConvertsOnEdit(object: SpreadsheetObject): boolean {
   const diagram = readSpreadsheetNativeSmartArt(object);
   return Boolean(
     diagram &&
-      nativeLayoutConvertsOnOpen(diagram.layoutIdentity) &&
-      nativeLayoutToCatalogId(diagram.layoutIdentity),
+      ((nativeLayoutConvertsOnOpen(diagram.layoutIdentity) && nativeLayoutToCatalogId(diagram.layoutIdentity)) ||
+        // …or one with no drawing, laid out from the definition its own
+        // workbook holds (SMARTART-GAP.md §8.6), as Excel lays it out on open.
+        (sheetSmartArtDrawingless(object) && spreadsheetSmartArtOwnDefinitionRef(object) !== null)),
   );
 }
 

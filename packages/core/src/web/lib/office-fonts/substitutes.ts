@@ -13,14 +13,16 @@
 // substitute under its own name. This module is that table for code that
 // builds font stacks or judges availability.
 //
-// The registry is served by the API one family at a time to a signed-in page
-// (`lib/office-data/store.ts`, "font-registry"), not bundled: a guest page
-// keeps the families styles/office-fonts.css declares.
+// The registry is served by the API one family at a time (`lib/office-data/
+// store.ts`, "font-registry"), not bundled: to a signed-in page and, as its
+// mapping (the faces and their descriptors), to a guest's.
 import generated from "./substitutes.generated.json";
 import cjkLatinFaces from "./cjk-latin-faces.json";
 import powerPointTable from "./powerpoint-substitutes.json";
 import { notedFontFaces, noteFontFaceSource, type DeclaredFontFace } from "../font-face-declarations";
 import { loadOfficeDataParts, officeDataObtainable, officeDataPartKnown } from "../office-data/store";
+import { parseUnicodeRange } from "../text-engine/face-index";
+import { officeFamilyHasNoBold } from "./faux-bold";
 
 export type OfficeFontMetric = "exact" | "cloned" | "near" | "style" | "fallback" | "none";
 
@@ -58,7 +60,7 @@ export interface OfficeFontSubstitution {
  * italic, local names, and Word's own ascent, descent and line gap (percent of
  * the font size) for a stand-in that is not metric-compatible, when known
  * (scripts/measure-word-vertical-metrics.py). */
-type RegistryAliasFace = [number, 0 | 1, number, 0 | 1, string[], ([string, string, string] | null)?, string?];
+export type RegistryAliasFace = [number, 0 | 1, number, 0 | 1, string[], ([string, string, string] | null)?, string?];
 type RegistrySubstituteFace = [number, 0 | 1, string, number | null];
 interface Registry {
   /** By index: the whole table's array, or the served parts' sparse record. */
@@ -664,6 +666,130 @@ export function ensureOfficeAliasFamily(
 }
 
 /**
+ * One script's letters in a served face at a size of its own: `alias` is the
+ * slices of `face` that hold `letter`, declared for `range` alone and set at
+ * `sizeAdjust` (regular and bold, as the face serves them). A family placed
+ * in a stack ahead of faces without the script sets its letters at the
+ * widths of the face an Office application draws them in (the sheet's
+ * complex-script scales, lib/spreadsheet/office-complex-scales.ts). No
+ * local() source: the size-adjust is the stand-in's alone.
+ */
+export function ensureOfficeScaledScriptFamily(
+  alias: string,
+  face: string,
+  letter: number,
+  range: string,
+  sizeAdjust: string,
+  doc: Document | undefined = typeof document === "undefined" ? undefined : document,
+): void {
+  if (!doc?.fonts || typeof FontFace === "undefined") return;
+  let done = aliasFamilies.get(doc);
+  if (!done) aliasFamilies.set(doc, (done = new Set()));
+  if (done.has(alias)) return;
+  done.add(alias);
+  void loadOfficeDataParts("font-registry", [normalize(face)])
+    .then((served) => {
+      const registry = served as Registry | undefined;
+      const name = registry ? registryIndexOf(registry).get(normalize(face)) : undefined;
+      if (!registry || !name) {
+        done.delete(alias);
+        registrationGeneration += 1;
+        return;
+      }
+      for (const [weight, italic, out, sliceRange] of registry.substitutes[name] ?? []) {
+        if (weight !== 400 && weight !== 700) continue;
+        const ranges = parseUnicodeRange(sliceRange === null ? undefined : registry.ranges[sliceRange]);
+        if (ranges && !ranges.some(([start, end]) => letter >= start && letter <= end)) continue;
+        addFace(doc, alias, weight, italic, [`url(${PUBLIC_PREFIX}${out}) format("woff2")`], range, sizeAdjust);
+      }
+    })
+    .catch(() => {
+      done.delete(alias);
+      registrationGeneration += 1;
+    });
+}
+
+/** By family (normalized): the regular face's Word line (ascent + descent +
+ * line gap, em), the line box its overrides give a stand-in. */
+const WORD_LINE_EM = new Map<string, number>();
+
+/** Notes the family's Word line from its served faces (exported for tests). */
+export function noteWordLineEm(faces: readonly RegistryAliasFace[], ...families: string[]): void {
+  const regular = faces.find(([weight, italic, , , , overrides]) => weight === 400 && italic === 0 && overrides);
+  const overrides = regular?.[5];
+  if (!overrides) return;
+  const em = overrides.reduce((sum, part) => sum + Number.parseFloat(part), 0) / 100;
+  if (!(em > 0) || !Number.isFinite(em)) return;
+  for (const family of families) WORD_LINE_EM.set(normalize(family), em);
+}
+
+let metricOverridesHonored: boolean | undefined;
+/**
+ * Whether the engine sets a line in a face's ascent-, descent- and
+ * line-gap-override (Chromium, Firefox). WebKit (Safari, every iPad browser)
+ * ignores the three descriptors: a stand-in keeps its own, taller line --
+ * Noto Serif SC's for 宋体 is 1.5 em where Word's SimSun is 1 em -- and a
+ * line of the font's normal height overflowed its cell above.
+ */
+export function fontMetricOverridesHonored(): boolean {
+  if (metricOverridesHonored === undefined) {
+    metricOverridesHonored = typeof FontFace === "undefined" || "ascentOverride" in FontFace.prototype;
+  }
+  return metricOverridesHonored;
+}
+
+/**
+ * The height of a `line-height: normal` line in an Office family at
+ * `fontSizePx`, as an engine that honours the stand-in's overrides sets it
+ * (Word's line), for an engine that does not; null where the engine honours
+ * them or the family has none (its own normal line is the right one).
+ */
+export function officeNormalLineHeightPx(fontFamily: string | null | undefined, fontSizePx: number): number | null {
+  if (fontMetricOverridesHonored() || !fontFamily || !(fontSizePx > 0)) return null;
+  const first = fontFamily.split(",")[0] ?? "";
+  const em = WORD_LINE_EM.get(normalize(first));
+  return em === undefined ? null : em * fontSizePx;
+}
+
+/**
+ * The cut a stand-in draws its Office face's emboldened regular in, printed:
+ * Noto Sans JP's regular strokes are lighter than ＭＳ Ｐゴシック's, so the
+ * bold Excel prints (its regular, filled and stroked) is set in Noto's 500
+ * under the same stroke, as the API's sheet writer sets it (office_pdf_fonts
+ * EMBOLDENED_REGULAR_WEIGHTS; lookwin R121-X08's title in Excel's printed PDF:
+ * 229.7 units of ink, Noto 400 stroked 184.6, 500 stroked 217.3).
+ */
+const EMBOLDENED_REGULAR_WEIGHTS: Readonly<Record<string, number>> = { "Noto Sans JP": 500 };
+let emboldenedRegularCuts = false;
+/** Whether a family with no bold face draws its bold from its stand-in's
+ * heavier cut (EMBOLDENED_REGULAR_WEIGHTS): the print page, set with the
+ * printer's resolution (native-typography setNativeTextPrinterDpi), before
+ * any family is declared. */
+export function setOfficeEmboldenedRegularCuts(on: boolean): void {
+  emboldenedRegularCuts = on;
+}
+
+/** An alias family's faces, with a bold drawn from the stand-in's
+ * emboldened cut where the family has no bold face and it prints. */
+function withEmboldenedCuts(
+  family: string,
+  substitute: string,
+  faces: readonly RegistryAliasFace[],
+  slices: readonly RegistrySubstituteFace[],
+): readonly RegistryAliasFace[] {
+  const cut = EMBOLDENED_REGULAR_WEIGHTS[substitute];
+  if (!emboldenedRegularCuts || cut === undefined || !officeFamilyHasNoBold(family)) return faces;
+  if (!slices.some((slice) => slice[0] === cut)) return faces;
+  const added: RegistryAliasFace[] = [];
+  for (const face of faces) {
+    if (face[0] !== 400 || faces.some((other) => other[0] >= 600 && other[1] === face[1])) continue;
+    if (!slices.some((slice) => slice[0] === cut && slice[1] === face[3])) continue;
+    added.push([700, face[1], cut, face[3], face[4], face[5], face[6]]);
+  }
+  return added.length ? [...faces, ...added] : faces;
+}
+
+/**
  * Declares the faces behind an Office family name (and its substitutes) in
  * the document, once, so text set in that family renders with the served
  * open face wherever the real one is not installed. Idempotent and cheap to
@@ -697,8 +823,8 @@ export function ensureOfficeFontFaces(
       }
       if (!name) {
         // Not answered yet (no connection, refused): a later call asks again.
-        // A family the registry does not know, and a guest page, stay settled.
-        if (officeDataObtainable() && !officeDataPartKnown("font-registry", key)) {
+        // A family the registry does not know stays settled.
+        if (officeDataObtainable("font-registry") && !officeDataPartKnown("font-registry", key)) {
           names.delete(key);
           registrationGeneration += 1;
         }
@@ -710,7 +836,12 @@ export function ensureOfficeFontFaces(
         registerSubstitute(doc, registry, name);
         return;
       }
-      for (const { substitute, faces } of registry.families[name] ?? []) {
+      const families = (registry.families[name] ?? []).map(({ substitute, faces }) => ({
+        substitute,
+        faces: withEmboldenedCuts(name, substitute, faces, registry.substitutes[substitute] ?? []),
+      }));
+      for (const { substitute, faces } of families) {
+        noteWordLineEm(faces, key, name);
         registerSubstitute(doc, registry, substitute);
         const slices = registry.substitutes[substitute] ?? [];
         const scaled = SCALED_THAI_FACES[key];
@@ -750,7 +881,7 @@ export function ensureOfficeFontFaces(
       const latin = slug ? CJK_LATIN.faces[slug] : undefined;
       if (latin) {
         const declared = new Set<string>();
-        for (const { faces } of registry.families[name] ?? []) {
+        for (const { faces } of families) {
           for (const [weight, italic, , , locals, overrides] of faces) {
             // A family Office ships without a bold face has its regular alone:
             // the browser emboldens it as Office does.

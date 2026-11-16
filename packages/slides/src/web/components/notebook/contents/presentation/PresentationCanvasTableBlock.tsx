@@ -42,7 +42,6 @@ import {
 import { tableCellIntersectsSelection, type TableSelectionScope } from "@mrnote/core/web/lib/presentation-table-selection.ts";
 import { normalizeCellStyle, type CellStyleInput } from "@mrnote/core/web/lib/presentation-table-style.ts";
 import { presentationTableCellParagraphStyles } from "../../../../lib/presentation/table-cell-paragraphs";
-import { PRESENTATION_SCRIPT_SCALE } from "../../../../lib/presentation/text-layout-css";
 import { PresentationTypingCellEditor } from "./PresentationTypingCellEditor";
 import { OfficeTableTouchGrips } from "@mrnote/core/web/components/office-ribbon/OfficeTableTouchGrips.tsx";
 import { canManipulateBlock, isTextEditLocked } from "@mrnote/core/web/lib/presentation-text-case.ts";
@@ -54,7 +53,8 @@ import {
   type TableBorderPenSplit,
 } from "../../../../lib/presentation-table-border-pen";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
-import { memo, useLayoutEffect, useRef } from "react";
+import { memo, useLayoutEffect, useMemo, useRef } from "react";
+import { usePresentationMergedRowHeights } from "./usePresentationMergedRowHeights";
 import type {
   CSSProperties,
   Dispatch,
@@ -463,15 +463,17 @@ const PresentationCanvasTableCell = memo(function PresentationCanvasTableCell({
       paragraphStyles={presentationTableCellParagraphStyles(cell, cell.text)}
       
       powerPointLineFit
+      
+      slideFaces
       // A plain character typed in its words is the browser's own: the cell
       
       nativeTyping
       inheritedStyle={{ superscript: cellStyle.superscript, subscript: cellStyle.subscript }}
-      // A raised or lowered run at 0.7 of its size, as a
-      // slide's text draws it (`text-layout-css`): full
+      // A raised or lowered run is drawn at the size the cell draws it at
       
-      // the names onto further lines.
-      scriptScale={PRESENTATION_SCRIPT_SCALE}
+      
+      // (²²⁷Th) pushed the names onto further lines, and scaled twice it was
+      // a third smaller while typed than at rest.
       // The cell's WordArt: Font Color on its words is their fill.
       containerPaint={cellStyle.textPaint}
       // A caret formats no existing word: the format waits for
@@ -1100,7 +1102,15 @@ export function PresentationCanvasTableBlock({ ctl }: { ctl: PresentationCanvasT
     tableCellPositions,
     tableColumnCount,
   } = ctl;
-  const displayedRowStyles = displayedTableBlock ? tableRowHeightStyles(displayedTableBlock) : [];
+  // Rows under merged cells as PowerPoint sizes them: a merge's shortfall on
+  // the last row it covers (`usePresentationMergedRowHeights`).
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const displayedRowStyles = usePresentationMergedRowHeights(
+    tableRef,
+    useMemo(() => (displayedTableBlock ? tableRowHeightStyles(displayedTableBlock) : []), [displayedTableBlock]),
+    displayedTableBlock,
+    displayedTableBlock !== null && displayedTableBlock !== undefined,
+  );
   // What every row's cells read of the table besides their own rows: a row
   // whose cells, neighbours and these are unchanged is not drawn again.
   const rowEnv: PresentationCanvasTableRowEnv = {
@@ -1228,6 +1238,7 @@ export function PresentationCanvasTableBlock({ ctl }: { ctl: PresentationCanvasT
                       ) : null}
                       <PresentationTableShadowFrame block={displayedTableBlock!}>
                       <table
+                        ref={tableRef}
                         style={tableLayoutStyle(displayedTableBlock!)}
                         {...tableDirectionProps(displayedTableBlock!)}
                       >

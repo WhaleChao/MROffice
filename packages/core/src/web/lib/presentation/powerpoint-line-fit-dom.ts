@@ -158,6 +158,22 @@ function readGlyphs(column: HTMLElement, ctx: CanvasRenderingContext2D, anyFace 
   return glyphs;
 }
 
+/**
+ * A run as the slide draws it, for the canvas to measure: no common ligature
+ * (`presentationTextShapingCss`; a canvas has no `font-variant-ligatures`).
+ * A zero-width non-joiner between letters of the scripts whose ligatures are
+ * optional (Latin, Greek, Cyrillic) blocks their ligatures and nothing else:
+ * kerning skips it and it has no advance. Other scripts are measured as they
+ * are (their joining and required ligatures stay in the drawing too).
+ */
+export function unligatedForMeasure(text: string): string {
+  // Combining marks stay on their letters (a non-joiner would keep "e" + U+0301
+  // from composing into "é").
+  return text.length > 1 && /^[\u0000-\u058f\u1d00-\u1fff\u2000-\u206f]*$/.test(text) && !/[\u0300-\u036f\u0483-\u0489\u0591-\u05c7\u1dc0-\u1dff\u20d0-\u20ff]/.test(text)
+    ? [...text].join("\u200c")
+    : text;
+}
+
 /** The browser's own width of glyphs `[start, end)`: kerned, run by run. */
 function exactMeasure(ctx: CanvasRenderingContext2D, glyphs: readonly DomGlyph[]) {
   return (start: number, end: number): number => {
@@ -179,7 +195,7 @@ function exactMeasure(ctx: CanvasRenderingContext2D, glyphs: readonly DomGlyph[]
         ctx.font = font;
         // The browser's own measure of the run: kerned only where it draws kerned.
         ctx.fontKerning = kerned ? "normal" : "none";
-        width += ctx.measureText(text).width + count * glyphs[index - 1].spacing;
+        width += ctx.measureText(unligatedForMeasure(text)).width + count * glyphs[index - 1].spacing;
       }
     }
     return width;

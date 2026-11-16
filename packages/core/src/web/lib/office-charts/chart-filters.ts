@@ -121,7 +121,12 @@ export function officeChartWithRowsAndColumnsSwitched(
   const names = chartCategoryFullNames(source);
   const switched: ChartBlockAttrsV2["data"] = data ?? {
     kind: "category",
-    categories: source.series.map((series) => series.name),
+    // A series the part names nothing ("Series n" by its place) gives its
+    // category no words: Excel's axis draws its place, "1", and its part
+    
+    categories: source.series.map((series, index) =>
+      series.nameUnstated && series.name === `Series ${index + 1}` ? String(index + 1) : series.name,
+    ),
     series: source.categories.map((_category, categoryIndex) => ({
       name: names[categoryIndex],
       values: source.series.map((series) => series.values[categoryIndex]),

@@ -43,6 +43,19 @@ export type { SymbolCharMarkAttrs } from "../../../../lib/office-symbols";
  * export, and in the paged projection — and so a copy/paste of the symbol back
  * into the editor reconstructs the mark from the same attributes.
  */
+/**
+ * The faces a symbol character is drawn in: its font, then, for Symbol, the
+ * web face of Symbol's own encoding (`MRAI Symbol PUA`, note-editor.css).
+ * Word stores a Symbol character shifted into U+F020-U+F0FF and draws it
+ * from Symbol's table; the Mac's Symbol has no glyph there, and as a local
+ * face it shadows the web Symbol office-fonts.css declares, so the browser
+ * painted a notdef box (corpus R283-D02: "16 µm" drawn "16 □m").
+ */
+function symbolFontStack(font: string): string {
+  const family = `"${font.replaceAll('"', "")}"`;
+  return font.trim().toLowerCase() === "symbol" ? `${family}, "MRAI Symbol PUA"` : family;
+}
+
 export const SymbolCharMark = Mark.create({
   name: SYMBOL_CHAR_MARK,
 
@@ -88,7 +101,7 @@ export const SymbolCharMark = Mark.create({
         // ("Wingdings 2"). The value is gated by normalizeSymbolFont, which
         // rejects control characters, and a quote inside the name would only
         // invalidate this one declaration — it cannot escape into another.
-        style: `font-family: "${normalized.font.replaceAll('"', "")}"`,
+        style: `font-family: ${symbolFontStack(normalized.font)}`,
       },
       0,
     ];

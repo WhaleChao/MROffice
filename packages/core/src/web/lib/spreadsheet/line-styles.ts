@@ -159,6 +159,21 @@ export function storedColumnStyles(sheet: object): LineStyleMap | undefined {
   return { ...own, ...(columnStyles ?? {}) };
 }
 
+/** One past the last column carrying a format of its own (its key, or the
+ * end of a run key), 0 when none does: the print's spill-tail rule takes a
+ * styled column as used (lookwin p86b-lw; the server's styled_column_edge). */
+export function styledColumnEdge(sheet: object): number {
+  const stored = storedColumnStyles(sheet);
+  let edge = 0;
+  for (const key in stored ?? {}) {
+    const style = stored![key];
+    if (!style || typeof style !== "object" || !Object.keys(style).length) continue;
+    const last = Number(key.split(":").pop());
+    if (Number.isInteger(last) && last >= 0) edge = Math.max(edge, last + 1);
+  }
+  return edge;
+}
+
 /** A sheet as the editor holds it: one column format entry per column, no runs. */
 export function withColumnStylesExpanded<S extends object>(sheet: S): S {
   const stored = storedColumnStyles(sheet);
@@ -616,10 +631,13 @@ const DERIVABLE_CELL_KEYS = new Set(["value", "kind", "style"]);
 
 
 
+
+
+
 function derivableBlankKey(cell: LineStyledCell, field: string): boolean {
   if (DERIVABLE_CELL_KEYS.has(field)) return true;
-  const own = cell as { display?: unknown; locked?: unknown };
-  return (field === "display" && own.display === "") || (field === "locked" && own.locked === false);
+  const own = cell as { locked?: unknown };
+  return field === "display" || field === "chartValueCache" || (field === "locked" && own.locked === false);
 }
 
 /**

@@ -160,6 +160,7 @@ import PdfTextBoxOverlay, {
   type PdfTextBoxEditEmitOptions,
   type PdfTextBoxSelection,
 } from "./PdfTextBoxOverlay";
+import { pdfTextBoxListWithBox } from "./window/textBoxChangeQueue";
 import PdfImageOverlay, { type PdfImageOverlayItem } from "./PdfImageOverlay";
 import PdfInkOverlay, { type PdfInkStroke } from "./PdfInkOverlay";
 import type { PdfInkEraseResult, PdfInkEraserKind } from "../../../../lib/pdf/ink-erase";
@@ -647,6 +648,11 @@ export interface PdfTextBoxCommandTarget {
   lineLayout?: PdfTextLineLayout[];
   edited?: boolean;
   created?: boolean;
+  /** The Office family a box someone made is set in (its font menu). */
+  officeFamily?: string;
+  /** A text annotation of the file itself: it keeps a face of the box's
+   * own five (the font menu offers it no Office family). */
+  annotation?: boolean;
 }
 
 function textBoxRect(box: TextBox): BoxRect {
@@ -1841,13 +1847,9 @@ export default function PdfTextEditor({
       // Housekeeping emissions (origin widening / auto-fit) bypass the undo
       // history: recording them would let an undo fight the emitting effect.
       if (!onTextBoxHistory || options?.transient) {
-        onEditsChange((current) => {
-          const next = current.filter(
-            (e) => !(e.page === prepared.page && e.id === prepared.id),
-          );
-          next.push(prepared);
-          return next;
-        });
+        // (In the place the list has it: moved to the end, the box's
+        // element moved too and the caret left it, pdfTextBoxListWithBox.)
+        onEditsChange((current) => pdfTextBoxListWithBox(current, prepared, prepared));
         return;
       }
       onTextBoxHistory({
@@ -1985,10 +1987,7 @@ export default function PdfTextEditor({
           onTextBoxHistory({ page, changes: [{ id, before, after }] });
           return;
         }
-        onEditsChange((current) => [
-          ...current.filter((edit) => !(edit.page === page && edit.id === id)),
-          after,
-        ]);
+        onEditsChange((current) => pdfTextBoxListWithBox(current, { page, id }, after));
         return;
       }
       if (onTextBoxHistory && before) {
@@ -3355,6 +3354,8 @@ export default function PdfTextEditor({
           latex: latexForTextBoxKind(kind, edit?.latex ?? box.latex),
           edited: Boolean(edit),
           created: Boolean(edit?.created),
+          ...(edit?.officeFamily ? { officeFamily: edit.officeFamily } : {}),
+          ...(edit?.nativeSource ? { annotation: true } : {}),
         };
       }),
     [allBoxes, editsById, page],
@@ -3606,12 +3607,9 @@ export default function PdfTextEditor({
         });
         return;
       }
-      const changedIds = new Set(enriched.map((e) => e.id));
       onEditsChange((current) => {
-        const next = current.filter(
-          (e) => !(e.page === page && changedIds.has(e.id)),
-        );
-        next.push(...enriched);
+        let next = current;
+        for (const edit of enriched) next = pdfTextBoxListWithBox(next, { page, id: edit.id }, edit);
         return next;
       });
     },
@@ -3729,12 +3727,9 @@ export default function PdfTextEditor({
         });
         return;
       }
-      const changedKeys = new Set(enriched.map((e) => `${e.page}:${e.id}`));
       onEditsChange((current) => {
-        const next = current.filter(
-          (e) => !changedKeys.has(`${e.page}:${e.id}`),
-        );
-        next.push(...enriched);
+        let next = current;
+        for (const edit of enriched) next = pdfTextBoxListWithBox(next, edit, edit);
         return next;
       });
     },

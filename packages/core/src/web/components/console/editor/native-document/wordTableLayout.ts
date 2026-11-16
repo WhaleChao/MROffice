@@ -50,8 +50,16 @@ export function wordCellHorizontalMargins(
  * indent: the first row's first cell's left margin (measured in Word for
  * Mac; a cell's own margin counts, not only the table default).
  */
+function unstatedIndentOff(): boolean {
+  return typeof window !== "undefined" && (window as { __docsUnstatedIndentOff?: boolean }).__docsUnstatedIndentOff === true;
+}
+
 export function wordTableTextOutdentPx(table: ProseMirrorNode): number {
-  if (readWordTableLayout(table.attrs)?.textAligned !== true) return 0;
+  const layout = readWordTableLayout(table.attrs);
+  if (layout?.textAligned !== true) return 0;
+  // A table stating no indent stands at the margin (Word reads the outdent
+  // from a stated indent only); A/B: window.__docsUnstatedIndentOff.
+  if (layout.indentUnstated && !unstatedIndentOff()) return 0;
   const firstCell = table.firstChild?.firstChild;
   if (!firstCell) return 0;
   return wordCellHorizontalMargins(table, firstCell).left ?? 0;

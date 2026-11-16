@@ -459,3 +459,40 @@ export interface NativePdfVersionPreview {
   url: string | null;
   error: string | null;
 }
+
+/** The ticket this window authenticated itself for the version `key` names
+ * (its own accepted save, else a peer's version it verified), if it has one
+ * with a URL. */
+export function authenticatedNativePdfVersionPreview(input: {
+  readonly key: string;
+  readonly accepted: NativePdfVersionPreview | null;
+  readonly peer: NativePdfVersionPreview | null;
+}): NativePdfVersionPreview | null {
+  if (!input.key) return null;
+  const own = input.accepted?.key === input.key ? input.accepted : input.peer;
+  return own?.key === input.key && own.url ? own : null;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function shownNativePdfVersionPreview(input: {
+  readonly key: string;
+  readonly published: NativePdfVersionPreview | null;
+  readonly authenticated: NativePdfVersionPreview | null;
+  readonly ahead: NativePdfVersionPreview | null;
+}): NativePdfVersionPreview | null {
+  if (input.published?.key === input.key) return input.published;
+  return (input.authenticated?.key === input.key && input.authenticated.url ? input.authenticated : null) ?? input.ahead;
+}

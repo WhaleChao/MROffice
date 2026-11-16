@@ -127,7 +127,19 @@ export function serializeToMarkdown(
   if (!options.unsafeSkipSizeLimit) {
     enforcePmDocumentLimits(docNode);
   }
-  const blocks = serializeWhiteboardScenes(docNode).content ?? [];
+  let blocks: PmNode[];
+  try {
+    blocks = serializeWhiteboardScenes(docNode).content ?? [];
+  } catch (error) {
+    // A whiteboard's children are its scene's objects, folded into its
+    // elements here; any other child (a paragraph) cannot be written and is
+    // refused as the boundary refuses unexpected content on every atom,
+    // never as a bare error the export cannot name.
+    if (error instanceof Error && error.message === "Invalid whiteboard object") {
+      throw new MarkdownUnsupportedNodeError("whiteboardUnexpectedContent", "block");
+    }
+    throw error;
+  }
   if (blocks.length === 0) return "";
   assertSerializableNodeTree(blocks);
   assertSafeFrontmatter(blocks);
@@ -200,12 +212,14 @@ const DOCUMENT_PAGE_ATTRS = new Set([
   "documentMetadata",
   "documentProtection",
   "eastAsianFontFamilies",
+  "defaultEastAsianFontFamily",
   "wordCompatibilityMode",
   "wordTableLinesOnGrid",
   "wordSpacingAddsUp",
   "eastAsianLanguage",
   "wordStrictKinsoku",
   "wordBalanceSbcsDbcs",
+  "wordBalancedSpaces",
   "wordDoNotBreakWrappedTables",
         "endnoteNumFmt",
         "endnoteNumRestart",

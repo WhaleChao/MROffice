@@ -252,9 +252,10 @@ export const CHART_SUBTYPE_CATALOG: readonly ChartSubtypeDefinition[] =
       family,
       subtype,
       dataKind: DATA_KIND_BY_FAMILY[family],
-      // A 3-D pie is drawn in 3-D (`lib/office-charts/pie-3d`); a 3-D area
-      // is still drawn as its flat projection.
-      renderMode: family === "area" && subtype.endsWith("3d") ? "projection" : "native",
+      // Every leaf is drawn natively: a 3-D pie in 3-D (`lib/office-charts/
+      // pie-3d`), a 3-D column, bar, line or area as its flat twin turned in
+      // Excel's projection (`lib/office-charts/cartesian-3d`, 44bde547f6).
+      renderMode: "native",
     })),
   ) as ChartSubtypeDefinition[];
 
@@ -506,6 +507,13 @@ export interface CategoryChartSeries {
   /** The points whose cell holds #N/A (a sheet range's reading), drawn as
    *  `format.displayNaAsBlank` says. Display only. */
   naPoints?: number[];
+  /**
+   * The part names this series nothing (no `c:tx`): its "Series n" is
+   * Office's own, by its place, and Switch Row/Column gives it the category
+   * "n" (the server's `CategorySeries.name_unstated`). Held only beside that
+   * very name; a series renamed or moved states its own.
+   */
+  nameUnstated?: true;
   /**
    * The number format of this series' source values (Linked to source):
    * `c:val/c:numRef/c:numCache/c:formatCode`, or the one format every value
@@ -2374,6 +2382,13 @@ export interface ChartDataLabelOverride {
   readonly dataLabelSeparator?: ChartDataLabelSeparator;
   readonly dataLabelNumberFormat?: string;
   readonly dataLabelPosition?: ChartDataLabelPosition;
+  /**
+   * The labels stand where their chart type stands them by default, whatever
+   * their chart (a point: their series) states -- their own block states no
+   * `c:dLblPos`. A stated position goes over it. The twin of
+   * `document_charts.ChartDataLabelOverride.dataLabelPositionAutomatic`.
+   */
+  readonly dataLabelPositionAutomatic?: true;
   /** One label's typed words (`c:dLbl/c:tx/c:rich`), shown instead of its fields. */
   readonly text?: string;
   /** A label dragged by hand: from its default place, as fractions of the chart's width and height. */
@@ -2443,8 +2458,8 @@ export function chartLabelFieldTextParts(
 }
 
 const CHART_LABEL_OVERRIDE_KEYS = new Set<string>([
-  "seriesIndex", "pointIndex", ...CHART_LABEL_STATEMENT_KEYS, "text", "offset", "font", "wrap", "rotation",
-  "fieldText", "box", "size", "textAlign", "leaderLine",
+  "seriesIndex", "pointIndex", ...CHART_LABEL_STATEMENT_KEYS, "dataLabelPositionAutomatic", "text", "offset", "font",
+  "wrap", "rotation", "fieldText", "box", "size", "textAlign", "leaderLine",
 ]);
 const CHART_LABEL_TOGGLE_KEYS = [
   "dataLabels",
@@ -2496,6 +2511,10 @@ export function normalizeChartDataLabelOverrides(
     if (raw.dataLabelPosition !== undefined) {
       if (!isChartDataLabelPosition(raw.dataLabelPosition)) return undefined;
       entry.dataLabelPosition = raw.dataLabelPosition;
+    }
+    if (raw.dataLabelPositionAutomatic !== undefined) {
+      if (raw.dataLabelPositionAutomatic !== true) return undefined;
+      entry.dataLabelPositionAutomatic = true;
     }
     if (raw.font !== undefined) {
       const font = normalizeOfficeChartText(raw.font);
@@ -2607,6 +2626,8 @@ function chartLabelStatementOver(
 ): ChartDataLabelStatement {
   if (!entry) return inherited;
   const next: Record<string, unknown> = { ...inherited };
+  // No position of its own (a stated one goes over it, below).
+  if (entry.dataLabelPositionAutomatic === true) delete next.dataLabelPosition;
   for (const name of CHART_LABEL_STATEMENT_KEYS) {
     if (entry[name] !== undefined) next[name] = entry[name];
   }
@@ -2689,6 +2710,8 @@ export function chartFormatReconcileDataLabelOverrides(
       }
       delete copy[name];
     }
+    // A chart-wide position is every label's again, the automatic one too.
+    if (changed.has("dataLabelPosition") || off) delete copy.dataLabelPositionAutomatic;
     return Object.keys(copy).some((name) => name !== "seriesIndex" && name !== "pointIndex")
       ? [copy as unknown as ChartDataLabelOverride]
       : [];
@@ -4543,7 +4566,11 @@ export function validateChartBlockAttrsV2(
         // rejection: pages saved before this contract knew still carry one on
         // an area chart or a doughnut, and refusing it here would stop such a
         // page opening. It is accepted on the way in and dropped on the way
-        // out — neither the renderer nor the writer states it.
+        // out — neither the renderer nor the writer states it. A
+        // combination's labels are each series group's (Inside Base on its
+        // columns, Above on its lines), so its position is never one either
+        // (R403-D17; the twin of `document_charts.ChartAttrsV2`).
+        value.chartType !== "combo" &&
         chartDataLabelPositions(value.chartType, value.chartSubtype).length >
           0 &&
         !chartDataLabelPositions(value.chartType, value.chartSubtype).includes(
@@ -5194,6 +5221,21 @@ export function validateChartBlockAttrsV2(
           (value.chartType === "column" || value.chartType === "bar") &&
           !(Array.isArray(value.format.sliceStyles) &&
             value.format.sliceStyles.some((raw) => isRecord(raw) && (raw.explosion !== undefined || raw.marker !== undefined)));
+        // A combination's bars: each bar's own fill, on a series the
+        
+        // `chartComboBarPointPaint`).
+        const comboBarPoints =
+          value.chartType === "combo" &&
+          !!sliceStyles &&
+          sliceStyles.every((style) => {
+            const entry = isRecord(value.data) && Array.isArray(value.data.series) ? value.data.series[style.seriesIndex ?? 0] : undefined;
+            return (
+              style.explosion === undefined &&
+              style.marker === undefined &&
+              isRecord(entry) &&
+              (entry.renderAs === "column" || entry.renderAs === "bar")
+            );
+          });
         // A funnel stage's own paint (`cx:dataPt`: its glow, its inner
         // shadow; X-051 C18's gamma and zeta).
         const funnelPoints =
@@ -5227,7 +5269,7 @@ export function validateChartBlockAttrsV2(
           }
         } else if (
           !sliceStyles ||
-          !ringCombination && !barPoints && !funnelPoints &&
+          !ringCombination && !barPoints && !comboBarPoints && !funnelPoints &&
           (value.chartType !== "pie" ||
           // A Pie of Pie and a Bar of Pie paint their points as a pie does
           // (C06_pieOfPieChart's six c:dPt fills).
@@ -5281,7 +5323,12 @@ export function validateChartBlockAttrsV2(
             (entry) =>
               entry.seriesIndex >= series.length ||
               (entry.pointIndex !== undefined && entry.pointIndex >= pointCount(entry.seriesIndex)) ||
-              (entry.dataLabelPosition !== undefined && !positions.includes(entry.dataLabelPosition)) ||
+              // A combination's label is its series' group's, and the writer
+              // states a position only where that group offers it (R403-D17):
+              // never a rejection, as `document_charts` takes it.
+              (value.chartType !== "combo" &&
+                entry.dataLabelPosition !== undefined &&
+                !positions.includes(entry.dataLabelPosition)) ||
               (entry.dataLabelPercentage === true && value.chartType !== "pie") ||
               (entry.dataLabelBubbleSize === true &&
                 !(value.chartType === "xy" && ["bubble", "bubble3d"].includes(String(value.chartSubtype)))),
@@ -5390,7 +5437,14 @@ export function validateChartBlockAttrsV2(
       }
       if (
         value.format.dataLabelStyle !== undefined &&
-        value.format.dataLabels !== true
+        value.format.dataLabels !== true &&
+        // The labels' look stands while any label shows: one series' labels
+        // turned off (its own `c:delete`) leave the chart's look on the rest
+        
+        !(Array.isArray(value.format.dataLabelOverrides) &&
+          value.format.dataLabelOverrides.some(
+            (entry) => isRecord(entry) && (entry as { dataLabels?: unknown }).dataLabels === true,
+          ))
       ) {
         issue(
           issues,

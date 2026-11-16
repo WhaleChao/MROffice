@@ -20,6 +20,7 @@ import {
 } from "@tiptap/pm/transform";
 import { ySyncPluginKey } from "@tiptap/y-tiptap";
 import { imeSafeAppendTransaction } from "./imeCompositionGuard";
+import { syncBoundControls } from "./boundControlSync";
 import { isTrustedReadOnlyDocumentMutation } from "./readOnlyTransactionAuthority";
 import { wordDateControlText } from "./wordDatePicture";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
@@ -189,6 +190,7 @@ function configToAttr(meta: ContentControlMeta): string {
   if (meta.temporary) config.temporary = true;
   if (meta.required) config.required = true;
   if (meta.radioGroup) config.radioGroup = meta.radioGroup;
+  if (meta.binding) config.binding = meta.binding;
   return Object.keys(config).length > 0 ? JSON.stringify(config) : "";
 }
 
@@ -566,6 +568,12 @@ function metaAttributes() {
       default: "",
       parseHTML: (element: HTMLElement) =>
         normalizeControlMeta(readControlMetaAttrs(element)).radioGroup,
+      renderHTML: () => ({}),
+    },
+    binding: {
+      default: "",
+      parseHTML: (element: HTMLElement) =>
+        normalizeControlMeta(readControlMetaAttrs(element)).binding ?? "",
       renderHTML: () => ({}),
     },
   };
@@ -1708,6 +1716,24 @@ function plainTextCellControlRanges(
   return found;
 }
 
+/**
+ * Marks that are not a run's character formatting, which Word's rule for a
+ * plain-text control (one format over all of it) does not reach: the
+ * revisions Track Changes records (trackChanges' insertion, deletion and
+ * format-change marks), a comment's and a bookmark's ranges. Widened, a word
+ * typed with Track Changes on marked the control's whole text inserted, its
+ * first word inserted and deleted at once, and the save refused the
+ * document as an ambiguous revision (FIXQUEUE 238, corpus R438-D11 E55: the
+ * "Project Title" control).
+ */
+const NOT_CHARACTER_FORMATTING: ReadonlySet<string> = new Set([
+  "trackInsertion",
+  "trackDeletion",
+  "trackFormatting",
+  "comment",
+  "bookmark",
+]);
+
 function widenPlainTextControlFormatting(
   transactions: readonly Transaction[],
   oldDoc: ProseMirrorNode,
@@ -1723,7 +1749,7 @@ function widenPlainTextControlFormatting(
     }
   }
   markTypes.forEach((type) => {
-    if (type.name === CONTENT_CONTROL_MARK_NAME) markTypes.delete(type);
+    if (type.name === CONTENT_CONTROL_MARK_NAME || NOT_CHARACTER_FORMATTING.has(type.name)) markTypes.delete(type);
   });
   if (markTypes.size === 0) return false;
   const plain = (doc: ProseMirrorNode) => [
@@ -2271,7 +2297,12 @@ export const DocumentContentControls = Extension.create<ContentControlOptions>({
           const typed = controlMarkType
             ? replaceTypedPlaceholders(controlMarkType, oldState.doc, tr)
             : false;
-          return widened || typed ? tr : null;
+          // Word: every control mapped to the node an edited control maps
+          // shows its new words (boundControlSync.ts), in this same step.
+          const bound = controlMarkType
+            ? syncBoundControls(controlMarkType, oldState.doc, tr)
+            : false;
+          return widened || typed || bound ? tr : null;
         }),
         props: {
           // Word: text typed over a control's whole contents (its prompt,

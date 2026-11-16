@@ -10,6 +10,7 @@ import {
   officeTextLayoutLines,
   officeTextLineIndentCss,
 } from "@mrnote/core/web/lib/office-text-layout.ts";
+import { exactLineSpacingCss } from "@mrnote/core/web/lib/presentation-line-spacing.ts";
 
 function textOfRuns(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
@@ -24,16 +25,30 @@ function textOfRuns(value: unknown): string | null {
 }
 
 export function presentationTableCellParagraphStyles(
-  cell: { readonly text?: unknown; readonly textLayout?: unknown; readonly nativeText?: unknown },
+  cell: {
+    readonly text?: unknown;
+    readonly textLayout?: unknown;
+    readonly nativeText?: unknown;
+    readonly align?: unknown;
+    readonly fontSize?: unknown;
+  },
   text: string,
 ): PresentationCellParagraphStyle[] | undefined {
   const layout = normalizeOfficeTextLayout(cell.textLayout);
   if (!layout) return undefined;
   const readWith = textOfRuns(cell.nativeText) ?? (typeof cell.text === "string" ? cell.text : text);
   const lines = officeTextLayoutLines(text, officeTextLayoutFollowingText(layout, readWith, text));
-  if (!lines.some((line) => line.marker !== null || line.marginPx || line.indentPx || line.spaceBeforePx || line.spaceAfterPx)) {
+  if (
+    !lines.some(
+      (line) =>
+        line.marker !== null || line.marginPx || line.indentPx || line.spaceBeforePx || line.spaceAfterPx ||
+        line.lineSpacingPoints !== undefined || line.dir === "rtl",
+    )
+  ) {
     return undefined;
   }
+  const typeSizePt = typeof cell.fontSize === "number" && cell.fontSize > 0 ? cell.fontSize : undefined;
+  const leftAligned = cell.align === undefined || cell.align === null || cell.align === "left";
   return lines.map((line, index) => {
     const css = officeTextLineIndentCss(line);
     // The space between paragraphs PowerPoint adds (`a:spcBef` / `a:spcAft`,
@@ -43,10 +58,65 @@ export function presentationTableCellParagraphStyles(
         ...css.block,
         ...(index > 0 && line.spaceBeforePx ? { paddingTop: `${line.spaceBeforePx}px` } : {}),
         ...(index < lines.length - 1 && line.spaceAfterPx ? { paddingBottom: `${line.spaceAfterPx}px` } : {}),
+        // Line Spacing > Exactly on this paragraph (readings row 832): its
+        // lines that tall, as a text box's row (`exactLineSpacingCss`).
+        ...(line.lineSpacingPoints !== undefined ? exactLineSpacingCss(line.lineSpacingPoints, typeSizePt) : {}),
+        // A Right-to-Left paragraph (readings row 831): its base direction,
+        // which orders its words and puts its marker and margin on the right.
+        // Its alignment is a physical side, Left where it states none
+        // (PowerPoint's print of truth-probes/lookfit-rtl-align-probe.pptx).
+        ...(line.dir === "rtl" ? { direction: "rtl" as const, ...(leftAligned ? { textAlign: "left" as const } : {}) } : {}),
       },
       ...(line.marker !== null ? { marker: { text: line.marker, css: css.marker } } : {}),
     };
   });
+}
+
+
+
+
+
+
+
+
+
+
+export function presentationTableCellParagraphSpacing(
+  cell: { readonly text?: unknown; readonly textLayout?: unknown; readonly nativeText?: unknown },
+  text: string,
+  /** Paragraph margins and first-line indents taken too (else they are the browser's to draw). */
+  withIndents = false,
+): { spaceBeforePt: number; spaceAfterPt: number; marginLeftPt: number; indentPt: number; lineSpacing?: number }[] | "drawn" | null {
+  const layout = normalizeOfficeTextLayout(cell.textLayout);
+  if (!layout) return null;
+  const readWith = textOfRuns(cell.nativeText) ?? (typeof cell.text === "string" ? cell.text : text);
+  const lines = officeTextLayoutLines(text, officeTextLayoutFollowingText(layout, readWith, text));
+  // Exactly-spaced or Right-to-Left paragraphs (readings rows 831 / 832) are
+  // the browser's to draw too.
+  if (lines.some((line) => line.marker !== null || line.lineSpacingPoints !== undefined || line.dir === "rtl" || (!withIndents && (line.marginPx || line.indentPx)))) return "drawn";
+  if (!lines.some((line) => line.spaceBeforePx || line.spaceAfterPx || line.lineSpacing !== undefined || line.marginPx || line.indentPx)) return null;
+  return lines.map((line) => ({
+    spaceBeforePt: (line.spaceBeforePx ?? 0) * 0.75,
+    spaceAfterPt: (line.spaceAfterPx ?? 0) * 0.75,
+    marginLeftPt: (line.marginPx ?? 0) * 0.75,
+    indentPt: (line.indentPx ?? 0) * 0.75,
+    ...(line.lineSpacing !== undefined ? { lineSpacing: line.lineSpacing } : {}),
+  }));
+}
+
+
+
+
+
+
+
+export function presentationTableCellParagraphBreakStyles<S>(runs: readonly { text: string; style?: S }[]): (S | undefined)[] {
+  const styles: (S | undefined)[] = [];
+  for (const run of runs) {
+    for (let index = run.text.indexOf("\n"); index !== -1; index = run.text.indexOf("\n", index + 1)) styles.push(run.style);
+  }
+  styles.push(undefined);
+  return styles;
 }
 
 /** A cell's runs split into its paragraphs (at each "\n", which no paragraph keeps). */

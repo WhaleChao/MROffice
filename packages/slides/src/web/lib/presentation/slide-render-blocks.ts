@@ -15,6 +15,7 @@ import {
   presentationInPaintOrder,
   presentationSlideReordersNativeObjects,
 } from "@mrnote/core/web/lib/presentation-paint-order.ts";
+import { presentationBlockWithGroupPaint } from "../presentation-group-fill";
 import { isBlockNotDrawn } from "@mrnote/core/web/lib/presentation-selection-pane.ts";
 import { isImportedInheritedSlideGraphic, isReplacedNativeMasterGraphic } from "@mrnote/core/web/lib/presentation-slide-bg.ts";
 import type { DeckTheme } from "@mrnote/core/web/lib/presentation-theme.ts";
@@ -33,7 +34,7 @@ export function presentationSlideRenderBlocks(
   theme: DeckTheme | undefined,
 ): Array<{ block: PresentationBlock; index: number }> {
   const context = resolveSlideContext(slide, masters, theme);
-  return presentationInPaintOrder(
+  const ordered = presentationInPaintOrder(
     resolveSlideRenderBlocks(
       slide.hideBackgroundGraphics
         ? undefined
@@ -50,4 +51,12 @@ export function presentationSlideRenderBlocks(
     ),
     { reordered: presentationSlideReordersNativeObjects(slide) },
   );
+  // A member wearing its group's gradient, picture or pattern draws its part
+  // of it, over the union of its group's members (`presentation-group-fill`).
+  if (!ordered.some(({ block }) => (block as { fillFromGroup?: unknown }).fillFromGroup === true)) return ordered;
+  const drawn = ordered.map(({ block }) => block as unknown as Record<string, unknown>);
+  return ordered.map((entry) => ({
+    ...entry,
+    block: presentationBlockWithGroupPaint(entry.block as unknown as Record<string, unknown>, drawn) as unknown as PresentationBlock,
+  }));
 }

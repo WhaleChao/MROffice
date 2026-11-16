@@ -4,13 +4,15 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import type { CSSProperties } from "react";
-import { clampNativeAutomaticRowHeight, nativeTextAdvances, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { clampNativeAutomaticRowHeight, nativeTextAdvances, nativeTextPrinterDpi, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { OFFICE_PRINT_DPI, officePrintedRowDots } from "./office-print-metrics";
 import { layoutProbeParent } from "@mrnote/core/web/lib/layout-probe-root.ts";
 import { spreadsheetEngineIdealAdvances, spreadsheetEngineLineBoxes, spreadsheetEngineLineMetrics, spreadsheetEngineParagraphHeight, spreadsheetTextEngineEpoch, spreadsheetTextEngineOn } from "@mrnote/core/web/lib/spreadsheet/spreadsheet-text-engine.ts";
-import { breakLines, lineBreakOpportunities } from "@mrnote/core/web/lib/text-engine/line-break.ts";
+import { breakLines, excelLineBreakOpportunities, lineBreakOpportunities } from "@mrnote/core/web/lib/text-engine/line-break.ts";
 import { graphemesOf } from "@mrnote/core/web/lib/text-engine/measure.ts";
 import { fontLoadReach, type FontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
 import { canvasLineBoxes } from "./canvas-line-boxes";
+import { officeRowHeight, officeRowMetricsKnown } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 
 export interface NativeTextPart {
   text: string;
@@ -95,6 +97,39 @@ export function measureNativeParagraphLineHeight(parts: readonly NativeTextPart[
   return height || undefined;
 }
 
+/**
+ * The pitch a Windows grid's paragraph is set at: Windows Excel lays each line
+ * of a wrapped cell at its faces' automatic row height (officeRowHeight),
+ * the height it fits the row to, so the lines fill the row (two lines of
+ * Calibri 11: a 40 px row, the lines 20 px apart; Cambria 11: 19 px). The
+ * browser's normal line box set them 18 and 17 px apart, the text standing
+ * short of the row it had been fitted to. Undefined off a 96 dpi grid, or for
+ * a face the table does not know.
+ */
+export function windowsNativeLinePitch(parts: readonly NativeTextPart[], style: CSSProperties, dpi: number): number | undefined {
+  if (dpi !== 96) return undefined;
+  let pitch = 0;
+  for (const part of parts.length ? parts : [{ text: "" }]) {
+    const merged = { ...style, ...part.style };
+    const family = typeof merged.fontFamily === "string" ? merged.fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim() : "";
+    const size = typeof merged.fontSize === "number" ? merged.fontSize : Number.NaN;
+    if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return undefined;
+    // Printed, a line is the printer's line of its face, whatever the sheet's
+    // Normal font (lookwin p107-lw: Calibri 11 lines 121 dots apart, 19.36 px,
+    // in an Aptos Narrow 11 sheet; the API's office_printed_line_dots).
+    const printed = nativeTextPrinterDpi() > 0 ? officePrintedRowDots({ family, sizePt: size * 0.75 }) : undefined;
+    pitch = Math.max(pitch, printed !== undefined ? printed * 96 / OFFICE_PRINT_DPI : officeRowHeight({ family, sizePt: size * 0.75 }));
+  }
+  return pitch || undefined;
+}
+
+/** The fixed pitch a paragraph is painted at: a Mac grid's native line
+ * height, a Windows grid's Excel line height, else none (the line boxes of
+ * the faces). */
+export function nativeParagraphLinePitch(parts: readonly NativeTextPart[], style: CSSProperties, dpi: number): number | undefined {
+  return measureNativeParagraphLineHeight(parts, style, dpi) ?? windowsNativeLinePitch(parts, style, dpi);
+}
+
 /** Whether a font load can change `parts` drawn in `style`: what any of its
  * runs is drawn in, resolved as the grid draws it (font-load-reach). */
 export function nativeTextTouchedBy(reach: FontLoadReach, parts: readonly NativeTextPart[], style: CSSProperties, dpi: number): boolean {
@@ -132,6 +167,44 @@ function dropTextCacheTouched<V>(cache: Map<string, V>, event: Event, touched: (
     if (drop) cache.delete(key);
   }
 }
+
+/**
+ * Where the browser stands the baseline of a line set in `font` with a fixed
+ * `lineHeightPx`, px below the line box's top: what its own layout does
+ * (the strut's ascent and half-leading, rounded as the engine rounds them),
+ * read once per font, size and line height from a probe. Undefined where
+ * nothing lays out (no document, or a probe the engine does not lay out).
+ * A Windows grid's printed line stands its baseline where Excel's does by it
+ * (SpreadsheetNativeParagraph officeBaseline).
+ */
+export function nativeStrutBaselinePx(font: { fontFamily?: unknown; fontSize?: unknown; fontWeight?: unknown; fontStyle?: unknown }, lineHeightPx: number | "normal", generation = 0): number | undefined {
+  if (typeof document === "undefined" || !document.body || (lineHeightPx !== "normal" && !(lineHeightPx > 0))) return undefined;
+  const size = typeof font.fontSize === "number" ? `${font.fontSize}px` : typeof font.fontSize === "string" ? font.fontSize : "";
+  const family = typeof font.fontFamily === "string" ? font.fontFamily : "";
+  if (!size || !family) return undefined;
+  const key = `${String(font.fontStyle ?? "normal")}\u0000${String(font.fontWeight ?? "normal")}\u0000${size}\u0000${family}\u0000${lineHeightPx}\u0000${generation}`;
+  if (strutBaselines.has(key)) return strutBaselines.get(key) ?? undefined;
+  const block = document.createElement("div");
+  block.style.cssText = "position:absolute;visibility:hidden;left:-10000px;top:0;white-space:pre;margin:0;padding:0;border:0;";
+  block.style.fontFamily = family;
+  block.style.fontSize = size;
+  block.style.fontWeight = String(font.fontWeight ?? "normal");
+  block.style.fontStyle = String(font.fontStyle ?? "normal");
+  block.style.lineHeight = lineHeightPx === "normal" ? "normal" : `${lineHeightPx}px`;
+  // A box of no height on the baseline: its top is the baseline.
+  const mark = document.createElement("span");
+  mark.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline;";
+  block.append(mark);
+  document.body.append(block);
+  const baseline = mark.getBoundingClientRect().top - block.getBoundingClientRect().top;
+  const laidOut = block.getBoundingClientRect().height > 0;
+  block.remove();
+  const answer = laidOut && Number.isFinite(baseline) && baseline > 0 ? baseline : null;
+  if (strutBaselines.size > 2000) strutBaselines.clear();
+  strutBaselines.set(key, answer);
+  return answer ?? undefined;
+}
+const strutBaselines = new Map<string, number | null>();
 
 /** AutoFit allocates one device pixel of clearance per line. This is distinct
  * from both the default row and a single-line font's base height. */
@@ -314,6 +387,23 @@ function fontStyle(style: CSSProperties, scale: number): Partial<CSSStyleDeclara
   };
 }
 
+/**
+ * The room a wrapped paragraph breaks in on a grid of Windows pixels, in the
+ * grid's pixels at the cell's own size. GDI sets a face at a whole-pixel em
+ * (Calibri 11, 14.67 px, at 15 px), so Windows Excel's lines are those of the
+ * text 15/14.67 wider than the size the grid draws: the same break, in a room
+ * narrowed by that ratio. Against the line counts Windows Excel's own row
+ * heights give for 3,900 wrapped cells (xlsx-rounds tools/wrapfit.py), lines
+ * broken so agree with Excel for 76.5% of them, against 73.1% at the drawn
+ * size (Calibri 11 64.6% to 68.9%, Arial 10 83.5% to 87.6%). A Mac grid and
+ * unwrapped text (an unbounded room) are as they were.
+ */
+export function excelWrapRoom(width: number, style: CSSProperties, dpi: number): number {
+  const size = style.fontSize;
+  if (dpi !== 96 || !(width < 1e5) || typeof size !== "number" || !(size > 0)) return width;
+  return width * size / Math.ceil(size - 1e-6);
+}
+
 type NativeTextAtom = {text:string;part:number;marker:HTMLElement;hardBreak?:boolean};
 
 function nativeTextLayoutKey(parts: readonly NativeTextPart[], style: CSSProperties, width: number, dpi: number): string | undefined {
@@ -398,6 +488,7 @@ function probeSpanCss(style: CSSProperties, scale: number): string {
 
 /** The probe of one text, not yet in the document. */
 function buildNativeTextProbe(parts: readonly NativeTextPart[], style: CSSProperties, width: number, dpi: number): {root:HTMLElement;atoms:NativeTextAtom[]} {
+  width = excelWrapRoom(width, style, dpi);
   const scale = dpi / 96;
   const root = probeElement("div");
   root.setAttribute("aria-hidden","true");
@@ -442,7 +533,35 @@ function buildNativeTextProbe(parts: readonly NativeTextPart[], style: CSSProper
       }
     }
   });
+  glueProbeToExcelBreaks(atoms);
   return {root,atoms};
+}
+
+
+
+
+
+
+
+
+
+
+
+function glueProbeToExcelBreaks(atoms: readonly NativeTextAtom[]): void {
+  let start = 0;
+  while (start < atoms.length) {
+    if (atoms[start].hardBreak) { start += 1; continue; }
+    let end = start;
+    while (end < atoms.length && !atoms[end].hardBreak) end += 1;
+    const texts = atoms.slice(start, end).map((atom) => atom.text);
+    const opportunities = excelLineBreakOpportunities(texts);
+    for (let index = 0; index < texts.length - 1; index += 1) {
+      const text = texts[index], next = texts[index + 1];
+      const glue = next === " " ? "" : text === " " ? (opportunities[index + 1] ? "" : "\u2060") : text === "-" ? "\u200b" : "\u2060";
+      if (glue) atoms[start + index].marker.appendChild(probeText(glue));
+    }
+    start = end;
+  }
 }
 
 
@@ -665,7 +784,7 @@ export function nativeTextParagraphWithoutLayout(
     rememberNativeTextLayout(key, engine);
     lines = engine;
   }
-  const fixed = measureNativeParagraphLineHeight(parts, style, dpi);
+  const fixed = nativeParagraphLinePitch(parts, style, dpi);
   if (fixed !== undefined) return { lines, boxes: lines.map((_, index) => ({ top: index * fixed, height: fixed, baseline: null })) };
   const strut = fontCss(nativeParagraphFontStyle(style, 1, parts[0] ? nativeTextFontLead(parts[0]) : "", dpi));
   const runs = lines.map((line) => line.parts.length
@@ -952,6 +1071,7 @@ function canvasFallback(reason: string, font: string, text: string): undefined {
 
 function engineNativeTextLayout(parts: readonly NativeTextPart[], style: CSSProperties, width: number, dpi: number, browserAdvances = false): NativeTextLine[] | undefined {
   if (!spreadsheetTextEngineOn()) return undefined;
+  width = excelWrapRoom(width, style, dpi);
   // Probes compare the grid's own decisions across browsers through this.
   (window as unknown as Record<string, unknown>).__mraiSpreadsheetTextLayout ??= { layoutNativeText, measureNativeParagraphLineHeight, measureNativeLineAdvance, measureNativeTextHeight, engineParagraphHeight };
   type Atom = { text: string; part: number; advance: number; hardBreak?: false } | { text: string; part: number; hardBreak: true };
@@ -1002,16 +1122,14 @@ function engineNativeTextLayout(parts: readonly NativeTextPart[], style: CSSProp
     previousPart = atom.part;
   };
   let run: Extract<Atom, { advance: number }>[] = [];
-  // Whether a hard break came before the run: its opening spaces are not the text's.
-  let afterHardBreak = false;
   const flush = () => {
     if (!run.length) return;
-    // On the browser's advances the lines break where the browser breaks
-    // them (its ASCII table, not UAX #14's: lib/text-engine/line-break).
-    const opportunities = lineBreakOpportunities(run.map((atom) => atom.text), {
-      kinsoku: "zh-CN",
-      ...(browserAdvances ? { browser: true, continuesText: afterHardBreak } : {}),
-    });
+    // Where Windows Excel breaks a cell's line, on the engine's advances and
+    
+    // before, the engine broke by UAX #14 and the zh-CN kinsoku list, and the
+    // browser's advances by its own ASCII table (after "?", "–", "…"; inside
+    // a run of ideographs; never before "。").
+    const opportunities = lineBreakOpportunities(run.map((atom) => atom.text), { kinsoku: null, excel: true });
     const starts = new Set(breakLines(run, width, opportunities));
     run.forEach((atom, index) => addText(atom, index > 0 && starts.has(index)));
     run = [];
@@ -1032,7 +1150,6 @@ function engineNativeTextLayout(parts: readonly NativeTextPart[], style: CSSProp
     if (!line.parts.length) line.emptyStyle = breakStyle;
     lines.push({ parts: [], hardBreak: "", emptyStyle: breakStyle });
     previousPart = -1;
-    afterHardBreak = true;
   }
   flush();
   return lines;

@@ -83,6 +83,18 @@ export const POWERPOINT_BULLET_CHARS = [
   "→",
 ] as const;
 
+/**
+ * The glyphs a BLOCK may carry (reading row 817): the gallery's, plus the
+ * middle dot a file states for every bulleted row of a box (a theme's level-1
+ * "·"). The gallery does not offer the dot, so no author picks it here; a box
+ * imported with it keeps it as its own block-level marker, and every row the
+ * author adds draws it, as PowerPoint draws the level's marker.
+ */
+export const POWERPOINT_NATIVE_BULLET_CHARS = [
+  ...POWERPOINT_BULLET_CHARS,
+  "·",
+] as const;
+
 /** PowerPoint's own five-level ladder: solid -> en dash -> middle dot. */
 export const POWERPOINT_DEFAULT_BULLET_GLYPH_BY_LEVEL = [
   "•",

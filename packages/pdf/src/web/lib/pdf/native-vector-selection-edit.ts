@@ -75,6 +75,7 @@ import {
 import type { PdfNativeListTextReplayAuthority } from "./engine/native/list-text-command-lifecycle";
 import type { PdfNativeVectorSelectionRoute } from "./semantic-appearance-inspection";
 import type { PdfVectorPageGeometry } from "./vector-capability-reconciliation";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 
 
@@ -768,6 +769,7 @@ export async function readPdfNativeSourcePageGeometries(
   }
   const loading = (async () => {
     const document = await PDFDocument.load(Uint8Array.from(sourceBytes), {
+      parseSpeed: pdfLibParseSpeed(),
       updateMetadata: false,
     });
     return Object.freeze(
@@ -3164,7 +3166,7 @@ async function planGroupedVectorReorder(
   const reject = () => { plan.prepared.candidateBytes.fill(0); return null; };
   if (invoked.length !== 1) return reject();
   try {
-    const document = await PDFDocument.load(Uint8Array.from(input.sourceBytes), { updateMetadata: false, ignoreEncryption: false });
+    const document = await PDFDocument.load(Uint8Array.from(input.sourceBytes), { parseSpeed: pdfLibParseSpeed(), updateMetadata: false, ignoreEncryption: false });
     const page = document.getPage(selection.pageNumber - 1);
     const xobjects = page.node.Resources()?.lookupMaybe(PDFName.of("XObject"), PDFDict);
     const ref = xobjects?.get(PDFName.of(invoked[0][1]));

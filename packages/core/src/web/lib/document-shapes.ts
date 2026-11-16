@@ -93,6 +93,7 @@ import { smartArtColorVariant } from "./office-smartart/colors";
 import { nativeSmartArtAliasOf } from "./office-smartart/native-layouts";
 import { isSmartArtHierBranch, SMARTART_OFFICE_DEFINITION_KIND } from "./office-smartart/model";
 import { normalizeOfficePictureFillOptions, type OfficePictureFillOptions } from "./office-picture-fill-options";
+import { officeGroupFillMemberPaint, type OfficeGroupFillBox } from "./office-shape-group-fill";
 import {
   readSmartArtCustom,
   type SmartArtCustomFactors,
@@ -102,8 +103,8 @@ import {
   type SmartArtTextBox,
 } from "./office-smartart/text-box";
 import {
-  isSmartArtScene3d,
-  isSmartArtShape3d,
+  isNativeScene3d,
+  isNativeShape3d,
   isSmartArtStyleId,
   isSmartArtTextShape3d,
   type SmartArtScene3d,
@@ -360,6 +361,15 @@ export function documentStackPatchAttrs(
   // writes back into the file's `wp:anchor` (`_docx_floating_stack_heights`).
   const anchor = documentAnchoredStackAnchor(node);
   if (anchor) return { ...node.attrs, floatAnchor: { ...anchor, relativeHeight } };
+  // A floating chart: its own anchor, which the chart writer writes whole.
+  const chartAnchor = name === "chart" ? node.attrs.floatAnchor : null;
+  if (
+    chartAnchor &&
+    typeof chartAnchor === "object" &&
+    documentShapeRelativeHeight((chartAnchor as { relativeHeight?: unknown }).relativeHeight) !== null
+  ) {
+    return { ...node.attrs, floatAnchor: { ...(chartAnchor as Record<string, unknown>), relativeHeight } };
+  }
   return null;
 }
 
@@ -600,13 +610,25 @@ function findDocumentShapeStack(
       else entries.push({ pos, relativeHeight });
       return false;
     }
-    // A page chart is drawn in line with its text (the model has no floating
-    // chart), so it is not in the stack. A source chart Word anchored is
-    // already counted by the import: it leaves the shapes' stack receipts
-    // (`zOrderStackComplete`) incomplete. Treating every chart as unknown
-    // greyed Bring Forward / Send Backward on every shape of a page that
-    // held a chart.
-    if (name === "chart") return false;
+    // A chart in line with its text is not in the stack. A floating chart
+    // (Layout Options, `chartPlacement`) holds its place by its own
+    // `floatAnchor`, as an anchored picture does, and the save writes that
+    // anchor whole -- a member like any other: Word's one stack orders it
+    // against the shapes, frames and pictures. Left out, Bring to Front on a
+    // shape under a floating chart found the shape alone at the top and
+    // greyed the button. A source chart Word anchored that the import could
+    // not take is already counted by the import: it leaves the shapes' stack
+    // receipts (`zOrderStackComplete`) incomplete.
+    if (name === "chart") {
+      const anchor = node.attrs.floatAnchor;
+      if (!anchor || typeof anchor !== "object") return false;
+      const relativeHeight = documentShapeRelativeHeight(
+        (anchor as { relativeHeight?: unknown }).relativeHeight,
+      );
+      if (relativeHeight === null) complete = false;
+      else entries.push({ pos, relativeHeight });
+      return false;
+    }
     if (name === "textBox") {
       // A frame in line with text is not in the stack; a floating one is a
       // member when its import saw the whole stack (`zOrderStackComplete`).
@@ -708,6 +730,74 @@ export function documentShapeZOrderPatches(
         stack.backToFront.find((current) => current.pos === entry.pos)
           ?.relativeHeight !== entry.relativeHeight,
     );
+}
+
+/**
+ * The z-order commands on SEVERAL selected members (Shift / Ctrl + click):
+ * Office moves the selection as a set and keeps its own order. Bring to Front
+ * / Send to Back carry every selected member past the others; Bring Forward /
+ * Send Backward move each one past the next unselected member, and a member
+ * already against a selected neighbour (or the edge) stays. Each member moves
+ * as the single command moves it (`documentShapeZOrderPatches`, Word's
+ * heights), one after another; the heights that changed, or null when nothing
+ * moves, the stack cannot be renumbered, or a position is not a member.
+ */
+export function documentShapeZOrderPatchesForSelection(
+  stack: DocumentShapeStackResolution,
+  positions: readonly number[],
+  action: DocumentShapeZOrderAction,
+): readonly DocumentShapeStackEntry[] | null {
+  if (!stack.complete || positions.length === 0) return null;
+  const selected = new Set(positions);
+  const members = stack.backToFront.filter((entry) => selected.has(entry.pos));
+  if (members.length !== selected.size) return null;
+  if (members.length === 1) {
+    const only = members[0];
+    return only ? documentShapeZOrderPatches(stack, only.pos, action) : null;
+  }
+  // Already the whole top (bottom) block: To Front (To Back) changes nothing.
+  const edge =
+    action === "bringToFront"
+      ? stack.backToFront.slice(-members.length)
+      : action === "sendToBack"
+        ? stack.backToFront.slice(0, members.length)
+        : null;
+  if (edge && edge.every((entry) => selected.has(entry.pos))) return null;
+  // To the front, the backmost goes first (each lands on top, so the last
+  // one moved -- the frontmost -- stays on top); one step forward, the
+  // frontmost goes first (so it makes room for the one under it).
+  const order =
+    action === "bringToFront" || action === "sendBackward"
+      ? members
+      : [...members].reverse();
+  let current: DocumentShapeStackEntry[] = [...stack.backToFront];
+  for (const member of order) {
+    const index = current.findIndex((entry) => entry.pos === member.pos);
+    if (index < 0) return null;
+    if (action === "bringForward") {
+      const next = current[index + 1];
+      if (!next || selected.has(next.pos)) continue;
+    } else if (action === "sendBackward") {
+      const previous = index > 0 ? current[index - 1] : undefined;
+      if (!previous || selected.has(previous.pos)) continue;
+    }
+    const patches = documentShapeZOrderPatches(
+      { complete: true, backToFront: current },
+      member.pos,
+      action,
+    );
+    if (!patches?.length) continue;
+    const moved = new Map(patches.map((patch) => [patch.pos, patch.relativeHeight]));
+    current = current
+      .map((entry) => {
+        const height = moved.get(entry.pos);
+        return height === undefined ? entry : { pos: entry.pos, relativeHeight: height };
+      })
+      .sort((left, right) => left.relativeHeight - right.relativeHeight || left.pos - right.pos);
+  }
+  const before = new Map(stack.backToFront.map((entry) => [entry.pos, entry.relativeHeight]));
+  const changed = current.filter((entry) => before.get(entry.pos) !== entry.relativeHeight);
+  return changed.length > 0 ? changed : null;
 }
 
 /**
@@ -878,6 +968,10 @@ export interface DocumentShapeTextBodyParagraph {
   readonly spaceBeforePt?: number;
   readonly spaceAfterPt?: number;
   readonly lineHeight?: number;
+  /** An exact or at-least line (`w:lineRule` `exact` / `atLeast`), in points
+   * with its rule: both or neither. */
+  readonly lineHeightPt?: number;
+  readonly lineHeightRule?: "exact" | "atLeast";
   /** The paragraph's own `w:ind`, in points (a hanging indent is a negative first line). */
   readonly indentLeftPt?: number;
   readonly indentRightPt?: number;
@@ -940,6 +1034,8 @@ export function normalizeDocumentShapeTextBody(
     const spaceBeforePt = shapeTextBodyNumber(row.spaceBeforePt, 0, 1_584);
     const spaceAfterPt = shapeTextBodyNumber(row.spaceAfterPt, 0, 1_584);
     const lineHeight = shapeTextBodyNumber(row.lineHeight, WORD_LINE_MULTIPLE_MIN, WORD_LINE_MULTIPLE_MAX);
+    const lineHeightPt = shapeTextBodyNumber(row.lineHeightPt, 0.05, 1_584);
+    const lineHeightRule = row.lineHeightRule === "exact" || row.lineHeightRule === "atLeast" ? row.lineHeightRule : null;
     const indentLeftPt = shapeTextBodyNumber(row.indentLeftPt, -1_584, 1_584);
     const indentRightPt = shapeTextBodyNumber(row.indentRightPt, -1_584, 1_584);
     const firstLineIndentPt = shapeTextBodyNumber(row.firstLineIndentPt, -1_584, 1_584);
@@ -955,6 +1051,7 @@ export function normalizeDocumentShapeTextBody(
       ...(spaceBeforePt === null ? {} : { spaceBeforePt }),
       ...(spaceAfterPt === null ? {} : { spaceAfterPt }),
       ...(lineHeight === null ? {} : { lineHeight }),
+      ...(lineHeightPt === null || lineHeightRule === null ? {} : { lineHeightPt, lineHeightRule }),
       ...(indentLeftPt === null ? {} : { indentLeftPt }),
       ...(indentRightPt === null ? {} : { indentRightPt }),
       ...(firstLineIndentPt === null ? {} : { firstLineIndentPt }),
@@ -1258,6 +1355,13 @@ export interface DocumentShapeAttrs {
    * bends nothing. Drawn by `@/lib/office-text-warp-render`.
    */
   textWarp?: OfficeTextWarp;
+  /**
+   * Format Shape > 3-D Rotation > Keep text flat (`wps:bodyPr/a:flatTx`): the
+   * words stay flat on the front of a shape its 3-D rotation turns. `true`
+   * checked; `false` unchecked, so an in-place save takes the file's element
+   * off; absent states nothing and the file keeps what it has.
+   */
+  keepTextFlat?: boolean;
   isTextBox: boolean;
   text: string;
   /**
@@ -1380,6 +1484,14 @@ export interface DocumentShapeAttrs {
   groupMembers?: readonly DocumentShapeGroupMember[];
   groupCoordinateWidthEmu?: number;
   groupCoordinateHeightEmu?: number;
+  /**
+   * The group's OWN fill (`wpg:grpSpPr`): a linear gradient, a stretched
+   * picture or a pattern laid over the group's child space, worn by the
+   * members marked {@link DocumentShapeGroupMember.fillFromGroup}
+   * (`a:grpFill`), each drawing the part under its own box when it is drawn
+   * (`office-shape-group-fill`). The group itself draws no fill.
+   */
+  groupFill?: DocumentShapeGroupFill;
   /**
    * The catalog SmartArt this group IS (the engine kind, e.g. `basic-list`).
    * It is the identity the Docs SmartArt contextual tab recognises, and it is
@@ -1612,6 +1724,13 @@ export interface DocumentShapeGroupMember {
    */
   readonly lockEditPoints?: true;
   /**
+   * Which of the file's groups this object is a child of, read flat: "" the
+   * group itself, "2" the nested group that is its third child, "2/0" that
+   * one's first. Word moves an object within its own group only (the
+   * Selection Pane); absent on a group drawn here or not read so.
+   */
+  readonly groupPath?: string;
+  /**
    * The member's own story when it holds a table or a picture its words
    * model cannot: Word's text box story as the header band's rich blocks
    * (`apps/api/.../projection._member_text_story`). Drawn by the band's
@@ -1685,6 +1804,29 @@ export interface DocumentShapeGroupMember {
 
   readonly shape3d?: SmartArtShape3d;
   readonly scene3d?: SmartArtScene3d;
+  /**
+   * The box {@link scene3d} turns this member about, in the group's child
+   * space, when the camera is a NESTED group's: Word turns that nested group
+   * as one object about its own centre (group-scene3d-probe2 W2). Absent is
+   * the whole group's box, as for a camera on the group itself.
+   */
+  readonly scene3dFrame?: DocumentShapeSceneFrame;
+  /**
+   * `a:grpFill`: the member wears the part of its group's fill
+   * ({@link DocumentShapeAttrs.groupFill}) under its own box, worked out when
+   * it is drawn ({@link documentShapeMemberGroupPaint}); its `fill` is only
+   * the colour a host drawing a solid falls back to.
+   */
+  readonly fillFromGroup?: true;
+  /**
+   * The NESTED group's fill the member wears, when it is a nested group's
+   * (read flat, its fill travels with its leaves), and that nested group's
+   * box in the group's child space ({@link groupFillFrame}; alone, the box
+   * the group's own fill is laid over). Absent: the group's fill over the
+   * group's child space.
+   */
+  readonly groupFill?: DocumentShapeGroupFill;
+  readonly groupFillFrame?: DocumentShapeSceneFrame;
   readonly textShape3d?: SmartArtTextShape3d;
   /** The member text's WordArt transform; see {@link DocumentShapeAttrs.textWarp}. */
   readonly textWarp?: OfficeTextWarp;
@@ -1727,6 +1869,12 @@ export interface DocumentShapeGroupMember {
   readonly textVerticalAlign?: DocumentShapeTextVerticalAlign;
   readonly textHorizontalAlign?: DocumentShapeTextHorizontalAlign;
   readonly textWrap?: boolean;
+  /**
+   * Word's "Resize shape to fit text" on the member (`a:spAutoFit` in its own
+   * `wps:bodyPr`): Word grows the member to its words, and the group and the
+   * group's line with it (docx-look probe grp1). Drawn so; never written.
+   */
+  readonly textAutofit?: "shape";
   readonly altText?: string;
   /** The member's own hyperlink (Word's `cNvPr/a:hlinkClick`) and its
    * ScreenTip, carried as the server read them. */
@@ -1863,6 +2011,22 @@ export interface DocumentShapeGroupMember {
    * absent, the layout's own 90%. On an item's node or label only.
    */
   readonly smartArtLineSpacing?: number;
+  /**
+   * The item's words are set in capitals (a converted point's `cap="all"`,
+   * Font > All Caps): drawn so, the words themselves untouched, and stated on
+   * the point again by the DOCX writer (`authorTextCapitals`).
+   */
+  readonly smartArtTextCapitals?: true;
+  /**
+   * The size, in points, Office's autofit gave this item's words when the
+   * diagram was laid out from Office's own definition (a converted Word
+   * diagram): the graphic's one size in that frame, which the document draws
+   * the words at, shrinking them with a smaller frame and never past it. Its
+   * `smartArtTextBox` is then the words' area with Office's insets already
+   * off. Drawing only: the DOCX writer never states it (no `sz`), and a
+   * diagram MRAI inserted has none. On an item's node or label only.
+   */
+  readonly smartArtLabelSizePt?: number;
   /**
    * The item is an organization chart's ASSISTANT (`dgm:pt type="asst"`),
    * on its node and label only, only ever `true`.
@@ -2010,6 +2174,16 @@ export function documentShapeMemberSmartArtIdentity(
     member.smartArtLineSpacing <= 9.6
       ? member.smartArtLineSpacing
       : null;
+  // Office's fitted size for the item's words; dropped, not refused, when it
+  // is not a size: the words then take the document's own fit.
+  const labelSize =
+    role !== "connector" &&
+    typeof member.smartArtLabelSizePt === "number" &&
+    Number.isFinite(member.smartArtLabelSizePt) &&
+    member.smartArtLabelSizePt >= 1 &&
+    member.smartArtLabelSizePt <= 4000
+      ? member.smartArtLabelSizePt
+      : null;
   if (role === "connector") {
     // A title box names the item it titles (Name and Title); dropped, not
     // refused, when it is not an item index.
@@ -2055,6 +2229,8 @@ export function documentShapeMemberSmartArtIdentity(
         ...(custom ? { smartArtCustom: custom } : {}),
         ...(textBox ? { smartArtTextBox: textBox } : {}),
         ...(lineSpacing !== null ? { smartArtLineSpacing: lineSpacing } : {}),
+        ...(member.smartArtTextCapitals === true ? { smartArtTextCapitals: true as const } : {}),
+        ...(labelSize !== null ? { smartArtLabelSizePt: labelSize } : {}),
         ...(member.smartArtAssistant === true && level > 0
           ? { smartArtAssistant: true as const }
           : {}),
@@ -2135,9 +2311,162 @@ export const DOCUMENT_SHAPE_MEMBER_STYLE_FIELDS = [
   "shapeShadow",
   "shape3d",
   "scene3d",
+  "scene3dFrame",
   "textShape3d",
   "opacity",
 ] as const;
+
+/** A box in a group's child space, in EMU (see {@link DocumentShapeGroupMember.scene3dFrame}). */
+export interface DocumentShapeSceneFrame {
+  readonly xEmu: number;
+  readonly yEmu: number;
+  readonly widthEmu: number;
+  readonly heightEmu: number;
+}
+
+function documentShapeSceneFrame(value: unknown): DocumentShapeSceneFrame | null | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const frame = value as Record<string, unknown>;
+  const keys = Object.keys(frame).sort().join(",");
+  if (keys !== "heightEmu,widthEmu,xEmu,yEmu") return null;
+  const within = (key: string, min: number) =>
+    Number.isSafeInteger(frame[key]) && (frame[key] as number) >= min && (frame[key] as number) <= DOCUMENT_SHAPE_MAX_EDGE_EMU;
+  if (!within("xEmu", -DOCUMENT_SHAPE_MAX_EDGE_EMU) || !within("yEmu", -DOCUMENT_SHAPE_MAX_EDGE_EMU)) return null;
+  if (!within("widthEmu", 1) || !within("heightEmu", 1)) return null;
+  return {
+    xEmu: frame.xEmu as number,
+    yEmu: frame.yEmu as number,
+    widthEmu: frame.widthEmu as number,
+    heightEmu: frame.heightEmu as number,
+  };
+}
+
+/**
+ * A group's own fill, worn by its `a:grpFill` members: one paint in the
+ * shared model (`office-shape-group-fill`, the API's
+ * `office_shape_group.group_fill`). A Docs picture is a shape's picture fill
+ * ({@link DocumentShapePictureFill}), stretched.
+ */
+export type DocumentShapeGroupFill =
+  | { readonly gradient: OfficeShapeGradient }
+  | { readonly picture: DocumentShapePictureFill }
+  | { readonly pattern: OfficeChartFillPattern };
+
+/** `value` as a {@link DocumentShapeGroupFill}, `undefined` when absent, null when it is not one. */
+export function normalizeDocumentShapeGroupFill(value: unknown): DocumentShapeGroupFill | null | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) return null;
+  const keys = Object.keys(value);
+  if (keys.length !== 1) return null;
+  const record = value as Record<string, unknown>;
+  try {
+    if (keys[0] === "gradient") {
+      const gradient = normalizeOfficeShapeGradient(record.gradient);
+      if (!gradient || gradient.path || gradient.tileRect || (gradient.flip !== undefined && gradient.flip !== "none")) return null;
+      return { gradient };
+    }
+    if (keys[0] === "pattern") {
+      const pattern = normalizeOfficeChartFillPattern(record.pattern);
+      return pattern ? { pattern } : null;
+    }
+  } catch {
+    return null;
+  }
+  if (keys[0] === "picture") {
+    const picture = normalizeDocumentShapePictureFill(record.picture);
+    return picture && picture.stretch === true && !picture.tile ? { picture } : null;
+  }
+  return null;
+}
+
+/**
+ * A member's group-fill fields ({@link DocumentShapeGroupMember.fillFromGroup}
+ * and the nested group's fill and frame beside it), `{}` for a member wearing
+ * none, or null when they do not hold together (as the API's validator says).
+ */
+function documentShapeMemberGroupFill(
+  member: Readonly<Record<string, unknown>>,
+  kind: string,
+): Pick<DocumentShapeGroupMember, "fillFromGroup" | "groupFill" | "groupFillFrame"> | null {
+  const wears = member.fillFromGroup === true;
+  if (member.fillFromGroup !== undefined && typeof member.fillFromGroup !== "boolean") return null;
+  const nested = normalizeDocumentShapeGroupFill(member.groupFill);
+  const frame = documentShapeSceneFrame(member.groupFillFrame);
+  if (nested === null || frame === null) return null;
+  if (!wears) return nested || frame ? null : {};
+  if (kind !== "shape" || (nested && !frame)) return null;
+  return {
+    fillFromGroup: true,
+    ...(nested ? { groupFill: nested } : {}),
+    ...(frame ? { groupFillFrame: frame } : {}),
+  };
+}
+
+/**
+ * What a member wearing its group's fill draws of it, in the page's fill keys
+ * (`fillGradient` / `fillPicture` / `fillPattern`): the group's `groupFill`
+ * -- or the nested group's the member carries -- laid over that group's box
+ * (`groupFillFrame`, else the group's child space), the member showing the
+ * part under its own box AS IT IS NOW. Worked out in the group's page EMU,
+ * where a gradient's aspect is the one drawn. Null when the member wears none
+ * or its part cannot be said. `document_shape_member_group_paint`'s twin.
+ */
+export function documentShapeMemberGroupPaint(
+  group: Pick<DocumentShapeAttrs, "groupFill" | "widthEmu" | "heightEmu" | "groupCoordinateWidthEmu" | "groupCoordinateHeightEmu" | "groupMembers">,
+  member: Pick<DocumentShapeGroupMember, "fillFromGroup" | "groupFill" | "groupFillFrame" | "xEmu" | "yEmu" | "widthEmu" | "heightEmu"> &
+    Partial<Pick<DocumentShapeGroupMember, "memberId">>,
+): { fillGradient: OfficeShapeGradient } | { fillPicture: DocumentShapePictureFill } | { fillPattern: OfficeChartFillPattern } | null {
+  if (member.fillFromGroup !== true) return null;
+  const nested = member.groupFill;
+  const fill = nested ?? group.groupFill;
+  if (!fill) return null;
+  const coordinateWidth = group.groupCoordinateWidthEmu ?? group.widthEmu;
+  const coordinateHeight = group.groupCoordinateHeightEmu ?? group.heightEmu;
+  if (!(coordinateWidth > 0) || !(coordinateHeight > 0)) return null;
+  const scaleX = group.widthEmu / coordinateWidth;
+  const scaleY = group.heightEmu / coordinateHeight;
+  // The fill is laid over the UNION of the group's members' boxes as they
+  // are now, not the box the group states (Word and PowerPoint alike,
+  // group-fill-probe3 W1-W3 / Q1-Q4). A nested group's members are those
+  // wearing the same nested fill; `member` stands for its own entry.
+  type Box = Pick<DocumentShapeGroupMember, "fillFromGroup" | "groupFill" | "groupFillFrame" | "xEmu" | "yEmu" | "widthEmu" | "heightEmu">;
+  let members: Box[] = (group.groupMembers ?? []).map((other) =>
+    member.memberId !== undefined && other.memberId === member.memberId ? member : other,
+  );
+  if (!members.includes(member)) members.push(member);
+  if (nested) {
+    const key = JSON.stringify([nested, member.groupFillFrame ?? null]);
+    members = members.filter(
+      (other) => other.fillFromGroup === true && JSON.stringify([other.groupFill ?? null, other.groupFillFrame ?? null]) === key,
+    );
+  }
+  const left = Math.min(...members.map((box) => box.xEmu));
+  const top = Math.min(...members.map((box) => box.yEmu));
+  const right = Math.max(...members.map((box) => box.xEmu + box.widthEmu));
+  const bottom = Math.max(...members.map((box) => box.yEmu + box.heightEmu));
+  const page = (x: number, y: number, w: number, h: number): OfficeGroupFillBox => [x * scaleX, y * scaleY, w * scaleX, h * scaleY];
+  return officeGroupFillMemberPaint(
+    fill,
+    page(left, top, right - left, bottom - top),
+    page(member.xEmu, member.yEmu, member.widthEmu, member.heightEmu),
+  ) as { fillGradient: OfficeShapeGradient } | { fillPicture: DocumentShapePictureFill } | { fillPattern: OfficeChartFillPattern } | null;
+}
+
+/**
+ * A member as it is DRAWN: wearing its part of its group's fill (worked out
+ * now, from the boxes as they are) in place of its own fallback paint. Any
+ * other member is returned as it is.
+ */
+export function documentShapeMemberWithGroupPaint(
+  group: Parameters<typeof documentShapeMemberGroupPaint>[0],
+  member: DocumentShapeGroupMember,
+): DocumentShapeGroupMember {
+  const paint = documentShapeMemberGroupPaint(group, member);
+  if (!paint) return member;
+  const { fillGradient: _gradient, fillPattern: _pattern, opacity: _opacity, ...rest } = member;
+  return { ...rest, ...paint } as DocumentShapeGroupMember;
+}
 
 /**
  * A member's own transparency, as {@link DocumentShapeGroupMember.opacity}
@@ -2172,21 +2501,30 @@ function documentShapeMemberStyle(
   DocumentShapeGroupMember,
   (typeof DOCUMENT_SHAPE_MEMBER_STYLE_FIELDS)[number]
 > | null {
+  // A member's solid and its group's camera are bounded by SHAPE, as the
+  // API's readers are by the literal ECMA names (`office_shape_paint`): Word
+  // writes any camera on a group (`wpg:grpSpPr/a:scene3d`, the whole group's
+  // 3-D Rotation) and any bevel on a member, and the SmartArt Styles' six
+  // cameras and four bevels refused every other group whole.
   for (const [key, guard] of [
-    ["shape3d", isSmartArtShape3d],
-    ["scene3d", isSmartArtScene3d],
+    ["shape3d", isNativeShape3d],
+    ["scene3d", isNativeScene3d],
     ["textShape3d", isSmartArtTextShape3d],
   ] as const) {
     if (member[key] !== undefined && !guard(member[key])) return null;
   }
   const opacity = documentShapeMemberOpacity(member.opacity);
   if (opacity === null) return null;
+  // The frame only beside the camera it frames, as the API's validator says.
+  const sceneFrame = documentShapeSceneFrame(member.scene3dFrame);
+  if (sceneFrame === null || (sceneFrame && !isNativeScene3d(member.scene3d))) return null;
   return {
     ...(opacity !== undefined ? { opacity } : {}),
     ...(leaf.fillGradient ? { fillGradient: leaf.fillGradient } : {}),
     ...(leaf.shapeShadow ? { shapeShadow: leaf.shapeShadow } : {}),
-    ...(isSmartArtShape3d(member.shape3d) ? { shape3d: member.shape3d } : {}),
-    ...(isSmartArtScene3d(member.scene3d) ? { scene3d: member.scene3d } : {}),
+    ...(isNativeShape3d(member.shape3d) ? { shape3d: member.shape3d } : {}),
+    ...(isNativeScene3d(member.scene3d) ? { scene3d: member.scene3d } : {}),
+    ...(sceneFrame ? { scene3dFrame: sceneFrame } : {}),
     ...(isSmartArtTextShape3d(member.textShape3d)
       ? { textShape3d: member.textShape3d }
       : {}),
@@ -2579,6 +2917,7 @@ function normalizeDocumentShapeLeafAttrs(
     ...(normalizeOfficeTextWarp(attrs.textWarp)
       ? { textWarp: normalizeOfficeTextWarp(attrs.textWarp)! }
       : {}),
+    ...(typeof attrs.keepTextFlat === "boolean" ? { keepTextFlat: attrs.keepTextFlat } : {}),
     wrapMode: normalizeDocumentShapeWrapMode(attrs.wrapMode),
     ...(linkedTextBoxStoryId !== null && linkedTextBoxSequence !== null
       ? { linkedTextBoxStoryId, linkedTextBoxSequence }
@@ -2818,6 +3157,8 @@ function normalizeDocumentShapeGroupMembersUncached(
     }
     const style = documentShapeMemberStyle(input, attrs);
     if (!style) return null;
+    const groupFill = documentShapeMemberGroupFill(input, kind);
+    if (!groupFill) return null;
     ids.add(memberId);
     members.push({
       memberId,
@@ -2854,6 +3195,9 @@ function normalizeDocumentShapeGroupMembersUncached(
         ? { lockAspectRatio: attrs.lockAspectRatio }
         : {}),
       ...(input.lockEditPoints === true ? { lockEditPoints: true as const } : {}),
+      ...(typeof input.groupPath === "string" && /^(?:\d{1,4}(?:\/\d{1,4}){0,15})?$/.test(input.groupPath)
+        ? { groupPath: input.groupPath }
+        : {}),
       ...(documentShapeMemberTextStory(input.textStory)
         ? { textStory: documentShapeMemberTextStory(input.textStory)! }
         : {}),
@@ -2875,6 +3219,7 @@ function normalizeDocumentShapeGroupMembersUncached(
       })(),
       fill: attrs.fill,
       ...style,
+      ...groupFill,
       ...(kind === "shape" && attrs.shapeEffects ? { shapeEffects: attrs.shapeEffects } : {}),
       outline: attrs.outline,
       outlineWidthPt: attrs.outlineWidthPt,
@@ -2904,6 +3249,7 @@ function normalizeDocumentShapeGroupMembersUncached(
         ? { textHorizontalAlign: attrs.textHorizontalAlign }
         : {}),
       textWrap: attrs.textWrap,
+      ...(attrs.textAutofit === "shape" && kind === "shape" ? { textAutofit: "shape" as const } : {}),
       altText: attrs.altText,
       ...(typeof input.linkHref === "string" &&
       input.linkHref.length > 0 &&
@@ -3039,14 +3385,16 @@ function anonymousGroupMembers(
           smartArtCustom: _custom,
           smartArtTextBox: _textBox,
           smartArtAssistant: _assistant,
-          shape3d: _shape3d,
-          scene3d: _scene3d,
           textShape3d: _textShape3d,
           ...member
         }) =>
           // Everything above is a DIAGRAM's, and an anonymous shape group
           // cannot have authored any of it -- including a picture SLOT's
           // contents, which is what `src` used to mean and nothing else.
+          // A member's own bevel (`shape3d`) and the camera of the group
+          // that turns it (`scene3d`, Format Shape > 3-D Rotation on a Word
+          // group; `scene3dFrame` for a nested one's) are the shapes' own,
+          // read by the API for any group and drawn as Word draws them.
           //
           // A `kind: "picture"` member's `src` is not a slot's contents: it is
           // the member's own `pic:blipFill` bytes, and an ordinary Word group
@@ -3082,6 +3430,9 @@ export function normalizeDocumentShapeAttrs(
   );
   const groupMembers = normalizeDocumentShapeGroupMembers(attrs.groupMembers);
   if (!groupMembers) return normalized;
+  // The group's own fill, worn by its `fillFromGroup` members; one that does
+  // not normalize is dropped (its members then draw their fallback colour).
+  const groupFill = normalizeDocumentShapeGroupFill(attrs.groupFill) ?? undefined;
   // A SmartArt identity is only an identity when the WHOLE group carries it:
   // one kind, one group id, and an identity on every member. A half-stamped
   // group is an ordinary shape group, never a diagram the SmartArt tools own.
@@ -3092,8 +3443,9 @@ export function normalizeDocumentShapeAttrs(
     smartArtGroupId !== null &&
     groupMembers.every((member) => member.smartArtRole !== undefined);
   // A quick style belongs to a DIAGRAM, so it goes exactly where the identity
-  // goes: an anonymous shape group keeps its members' ordinary fill and line
-  // and loses the 3-D it could not have authored.
+  // goes: an anonymous shape group keeps its members' ordinary fill and line,
+  // their own bevels and its camera, and loses a style it could not have
+  // authored.
   const smartArtStyle = isSmartArtStyleId(attrs.smartArtStyle)
     ? attrs.smartArtStyle
     : null;
@@ -3130,6 +3482,7 @@ export function normalizeDocumentShapeAttrs(
     groupMembers: identified ? groupMembers : anonymousGroupMembers(groupMembers),
     groupCoordinateWidthEmu: coordinateWidthEmu,
     groupCoordinateHeightEmu: coordinateHeightEmu,
+    ...(groupFill ? { groupFill } : {}),
     ...(identified ? { smartArtKind, smartArtGroupId } : {}),
     ...(identified && smartArtStyle !== null ? { smartArtStyle } : {}),
     ...(identified && smartArtRightToLeft
@@ -3660,6 +4013,9 @@ export function documentShapeGroupMoveMember(
   return next.groupMembers?.length === groupMembers.length ? next : null;
 }
 
+/** The keys a pane writes when it picks a member's own fill. */
+const DOCUMENT_SHAPE_MEMBER_FILL_KEYS = ["fill", "fillGradient", "fillPattern", "fillPicture", "fillTransparency"] as const;
+
 /**
  * Paint or format ONE member of an editable group -- a SmartArt node, a
  * flowchart box -- as the leaf shape it is, the way a slide or a worksheet
@@ -3680,6 +4036,8 @@ export function documentShapeGroupMemberPatch(
   if (!members || !documentShapeGroupIsEditable(group)) return null;
   const member = members.find((candidate) => candidate.memberId === memberId);
   if (!member) return null;
+  // The leaf the pane edits is the member as it is DRAWN: wearing its part
+  // of its group's fill, when it wears one.
   const {
     memberId: _memberId,
     drawingId: _drawingId,
@@ -3689,8 +4047,11 @@ export function documentShapeGroupMemberPatch(
     startConnectionSite: _startConnectionSite,
     endMemberId: _endMemberId,
     endConnectionSite: _endConnectionSite,
+    fillFromGroup: _fillFromGroup,
+    groupFill: _groupFill,
+    groupFillFrame: _groupFillFrame,
     ...leafFields
-  } = member;
+  } = documentShapeMemberWithGroupPaint(group, member);
   const leaf = normalizeDocumentShapeAttrs({
     ...documentShapeDefaultAttrs(member.preset),
     ...leafFields,
@@ -3698,6 +4059,13 @@ export function documentShapeGroupMemberPatch(
   const patch = patchLeaf(leaf);
   if (!patch) return null;
   const updated: Record<string, unknown> = { ...member };
+  if (DOCUMENT_SHAPE_MEMBER_FILL_KEYS.some((key) => Object.hasOwn(patch, key))) {
+    // A fill picked for THIS member is its own: it no longer wears its
+    // group's (`a:grpFill` gives way to the fill written for it).
+    delete updated.fillFromGroup;
+    delete updated.groupFill;
+    delete updated.groupFillFrame;
+  }
   for (const [key, next] of Object.entries(patch)) {
     if (next === null || next === undefined) delete updated[key];
     else updated[key] = next;
@@ -4505,6 +4873,7 @@ export type DocumentShapeFormatPatch = Readonly<
       | "textRuns"
       | "textWrap"
       | "textAutofit"
+      | "keepTextFlat"
       | "altText"
       | "decorative"
       | "wrapMode"
@@ -4553,6 +4922,8 @@ export interface DocumentShapeFormatRequest {
   readonly textHorizontalAlign?: unknown;
   readonly textWrap?: unknown;
   readonly textAutofit?: unknown;
+  /** Format Shape > 3-D Rotation > Keep text flat: true or false. */
+  readonly keepTextFlat?: unknown;
   readonly altText?: unknown;
   readonly decorative?: unknown;
   readonly wrapMode?: unknown;
@@ -4589,6 +4960,7 @@ const DOCUMENT_SHAPE_FORMAT_KEYS = [
   "textHorizontalAlign",
   "textWrap",
   "textAutofit",
+  "keepTextFlat",
   "altText",
   "decorative",
   "wrapMode",

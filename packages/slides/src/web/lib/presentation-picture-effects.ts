@@ -78,17 +78,32 @@ export function applyPresentationPictureEffect<
   return next;
 }
 
-const BORDER_KEYS = ["borderStyle", "borderColor", "borderWidth"] as const;
+const BORDER_KEYS = ["borderStyle", "borderColor", "borderWidth", "borderCompound", "borderJoin"] as const;
 
 /**
- * Preset N, as PowerPoint applies it: the picture's scene, 3-D shape and
- * shadow become the preset's (`effects`: the glow, reflection and soft edges
- * picked before it stay; the older shadow switch goes), and its line becomes
- * the preset's -- the border fields, which the border writer turns into the
- * preset's own `a:ln`. A Picture Style's recipe would write its own line and
- * effects over it, so the style goes too. An SVG graphic has no border
- * fields: its line stays. No Presets is the generic path: the line stays.
+ * Whether the picture's line is one the file states in a form the page cannot
+ * (`source.pictureBorderDisposition: "preserve-only"`): the package keeps it,
+ * and the page states no border fields over it -- Picture Border is offered
+ * nowhere for it, and a save stating them is refused. A preset or the format
+ * painter leaves such a line as it is.
  */
+export function pictureBorderIsOpaque(block: object): boolean {
+  const source = Reflect.get(block, "source") as Record<string, unknown> | undefined;
+  return source?.pictureBorderDisposition === "preserve-only";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 function withPreset<T extends PresentationPictureEffectsHost>(
   block: T,
   preset: number,
@@ -99,7 +114,7 @@ function withPreset<T extends PresentationPictureEffectsHost>(
   // Reflect: the host type states these two read-only.
   Reflect.deleteProperty(next, "shadow");
   Reflect.deleteProperty(next, "pictureStylePreset");
-  if ((block as Record<string, unknown>).officeGraphicKind !== "svg") {
+  if ((block as Record<string, unknown>).officeGraphicKind !== "svg" && !pictureBorderIsOpaque(block)) {
     for (const key of BORDER_KEYS) delete next[key];
     Object.assign(next, officePictureEffectPresetLine(preset));
   }

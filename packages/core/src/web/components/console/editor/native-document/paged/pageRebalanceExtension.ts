@@ -2606,6 +2606,39 @@ function positiveElementHeight(element: HTMLElement, scale?: PaginationScale): n
  * with every cell's content shorter than that: its height is the floor's,
  * not its lines'. A page piece of a split row draws no floor and is never
  * held by one. */
+/** Harness switch (`window.__docsRowFloorMarginsOff = true`): an "At least"
+ * row's floor is its stated height alone, its cells' margins inside it (A/B). */
+function rowFloorMarginsOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsRowFloorMarginsOff?: boolean }).__docsRowFloorMarginsOff === true;
+}
+
+/**
+ * The least an "At least" row stands where it starts: its stated height plus
+ * its cells' top and bottom margins and the line across its top, as Word lays
+ * the row (tableBorders atLeastRowRuleDecorations). Its head piece holds
+ * that much or the row moves whole: Windows Word moves a 260-twip row of
+ * 100-twip margins with 19.5pt left (23pt it needs; corpus R417-D03 page 35,
+ * "Plastic/poly-bags for seed storage", one line of it cut onto the page
+ * here), and a 600-twip row with 30pt left (tables/probes/rest r3). The row
+ * measured whole carries that extra (`data-row-height-rule-extra`); a head
+ * piece does not, and reads its cells' padding instead.
+ */
+export function rowFloorPx(row: HTMLElement, rowNode: PmNode, declared: number): number {
+  const twips = Number(rowNode.attrs?.rowHeightTwips);
+  const stated = twips > 0 ? twips / 15 : declared;
+  if (rowFloorMarginsOff()) return declared;
+  const decorated = Number.parseFloat(row.getAttribute("data-row-height-rule-extra") ?? "");
+  if (Number.isFinite(decorated) && decorated >= 0) return stated + decorated;
+  let top = 0;
+  let bottom = 0;
+  for (const cell of renderedRowCells(row)) {
+    const style = getComputedStyle(cell);
+    top = Math.max(top, cssPx(style.paddingTop));
+    bottom = Math.max(bottom, cssPx(style.paddingBottom));
+  }
+  return stated + top + bottom;
+}
+
 function rowHeldByFloor(row: HTMLElement, rowNode: PmNode, heightPx: number, scale?: PaginationScale): boolean {
   const floor = Number(rowNode.attrs?.rowHeight);
   if (!(floor > 0) || rowNode.attrs?.rowHeightRule === "exact") return false;
@@ -2736,7 +2769,7 @@ export function tableRowMeasurements(
     // The whole row's floor, on its head piece too: that piece draws none
     // (tableRowHeightAttributes), but a floor the space left cannot hold
     // still moves the row (R82-D18 RW17: a head cut under "above" stayed).
-    const floorPx = declared > 0 && !exactHeight ? declared : 0;
+    const floorPx = declared > 0 && !exactHeight ? rowFloorPx(rows[index], rowNode, declared) : 0;
     const keepSpans = [...rowKeepLinesSpans(rows[index], scale), ...rowFirstLineSpans(rows[index], scale)];
     measurements.push({
       heightPx,
@@ -3026,6 +3059,12 @@ function cellListItemTextCut(
   return null;
 }
 
+/** Harness switch (`window.__docsCellSplitSpaceAfterOff = true`): a cell
+ * paragraph cut through its lines keeps its space after on the head half (A/B). */
+export function cellSplitSpaceAfterOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCellSplitSpaceAfterOff?: boolean }).__docsCellSplitSpaceAfterOff === true;
+}
+
 function planTableCellCuts(
   rowDom: HTMLElement,
   rowNode: PmNode,
@@ -3239,9 +3278,15 @@ function planTableCellCuts(
         }
       }
       let planned: ReturnType<typeof planTextCutByChars> = null;
-      if (blockNode.isTextblock && available > 0) {
+      // A paragraph cut through its lines ends on the next page, and its
+      // space after with it: the head half keeps none (Word: corpus R417-D03,
+      // a 10pt space after under the 22nd line of a one-word-wide cell, Word
+      // drew a 23rd line where the page had room for it but not for the
+      // space; the head paragraph is drawn without it, tablePaginationAttrs).
+      const textAvailable = cellSplitSpaceAfterOff() ? available : available + trailingPx;
+      if (blockNode.isTextblock && textAvailable > 0) {
         const pitchPx = standInLinePx(blockDom, rect.bottom - rect.top);
-        let budget = available;
+        let budget = textAvailable;
         for (let attempt = 0; attempt < 4 && budget > 0; attempt += 1) {
           // Below compatibility mode 15 Word keeps no widow/orphan floor
           // inside a table cell: a row it breaks across pages may leave one
@@ -3249,7 +3294,7 @@ function planTableCellCuts(
           // 16.86, corpus R36-D30 and the same file with w:widowControl on).
           // From mode 15 the paragraph's own control holds there.
           planned = planTextCutByChars(blockDom, budget, tableCellMinSplitLines(blockNode, cellWidowControl));
-          if (!planned || planned.rowTop <= available + 1e-6) break;
+          if (!planned || planned.rowTop <= textAvailable + 1e-6) break;
           planned = null;
           if (!(pitchPx > 0)) break;
           budget -= pitchPx;
@@ -3261,8 +3306,8 @@ function planTableCellCuts(
         // back and cut again until the ledger held the cycle (corpus R03-D23
         // on a live page). Read by line boxes, the last line goes on.
         if (!planned && rect.bottom + trailingPx > contentEdge + 1e-6) {
-          const byLineBox = planTextCutByChars(blockDom, available, tableCellMinSplitLines(blockNode, cellWidowControl), true);
-          if (byLineBox && byLineBox.rowTop <= available + 1e-6) planned = byLineBox;
+          const byLineBox = planTextCutByChars(blockDom, textAvailable, tableCellMinSplitLines(blockNode, cellWidowControl), true);
+          if (byLineBox && byLineBox.rowTop <= textAvailable + 1e-6) planned = byLineBox;
         }
         // The cell's first paragraph may not break here and does not fit
         // whole: nothing of the cell stays, and Word moves the whole row on
@@ -3407,12 +3452,14 @@ function planRowPieceCellCuts(
       const startsAt = blockIndex === was.blockIndex ? rowTop + was.topPx : rect.top;
       const pieceBlock = blockIndex - was.blockIndex;
       const pitchPx = standInLinePx(blockDom, rect.bottom - rect.top);
-      if (startsAt + pitchPx + trailingPx > edge + 1e-6) {
+      // A head cut through the lines keeps no space after (planTableCellCuts).
+      const headTrailingPx = cellSplitSpaceAfterOff() ? trailingPx : 0;
+      if (startsAt + pitchPx + headTrailingPx > edge + 1e-6) {
         // Not one line of it fits: what stays is what stood above it.
         cut = pieceBlock === 0 ? { kind: "before" } : { kind: "block", blockIndex: pieceBlock };
         break;
       }
-      const available = edge - trailingPx - rect.top;
+      const available = edge - headTrailingPx - rect.top;
       const minLines = tableCellMinSplitLines(blockNode, cellWidowControl);
       let planned: ReturnType<typeof planTextCutByChars> = null;
       let budget = available;

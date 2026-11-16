@@ -96,14 +96,22 @@ function freshId(): string {
     : `smartart-${Date.now().toString(36)}-${nonce()}`;
 }
 
-/** The answer with stand-ins put back and every placeholder id made real. */
-export function withRealIds<T>(answer: T, restore: (text: string) => string = (text) => text): T {
+/**
+ * The answer with stand-ins put back and every placeholder id made real:
+ * fresh ones, or with `idPrefix` the prefix and a count in the order the
+ * answer names them -- the same ids for the same answer in every window.
+ */
+export function withRealIds<T>(
+  answer: T,
+  restore: (text: string) => string = (text) => text,
+  idPrefix?: string,
+): T {
   const ids = new Map<string, string>();
   return mapStrings(answer, (text) => {
     if (text.startsWith(SMARTART_ENGINE_ID_PREFIX)) {
       let id = ids.get(text);
       if (!id) {
-        id = freshId();
+        id = idPrefix ? `${idPrefix}${ids.size}` : freshId();
         ids.set(text, id);
       }
       return id;
@@ -121,11 +129,15 @@ export function withRealIds<T>(answer: T, restore: (text: string) => string = (t
 export async function smartArtEngine<M extends SmartArtMethod>(
   method: M,
   input: EngineInput<"smartart", M>,
-  options: { signal?: AbortSignal } = {},
+  options: {
+    signal?: AbortSignal;
+    /** New ids as this prefix and a count instead of fresh ones (`withRealIds`). */
+    idPrefix?: string;
+  } = {},
 ): Promise<EngineOutput<"smartart", M>> {
   const { input: sent, restore } = withPictureStandIns(await withLentDefinition(input));
   const answer = await callEngine("smartart", method, sent, { signal: options.signal, cache: true });
-  return withStatedDirection(withRealIds(answer, restore));
+  return withStatedDirection(withRealIds(answer, restore, options.idPrefix));
 }
 
 /**

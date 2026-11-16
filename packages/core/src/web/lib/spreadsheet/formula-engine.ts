@@ -22,6 +22,7 @@ import {
 } from "./name-syntax";
 import type { WhatIfTableDefinition } from "./what-if-table-definition";
 import type { ExternalDataLookup } from "./external-data";
+import type { KeptFormulaInput } from "./kept-formula-results";
 import { type ExcelDateSystemArg } from "./excel-1900-calendar";
 
 /**
@@ -515,7 +516,16 @@ function readStructuredName(
       continue;
     }
     if (c === "]" || (stopAtColon && c === ":")) return { name, next: j };
-    if (c === "[" || c === "#" || c === "@") return null; // unescaped meta
+    // An unescaped meta character is malformed -- but an `@` or `#` inside a
+    // name, past its first character, is the name's own: Excel writes and
+    // calculates Table3[[#This Row],[LogS @pH 11]] so (xlsx-rounds formula
+    // truth R230-X06). At the start they keep their meaning ([@Col], [#Totals]).
+    if (c === "[" || ((c === "#" || c === "@") && name === "")) return null;
+    if (c === "#" || c === "@") {
+      name += c;
+      j += 1;
+      continue;
+    }
     name += c;
     j += 1;
   }
@@ -3258,7 +3268,13 @@ export function adjustFormulaForStructuralChange(
   if (!/\s/.test(formula)) return `${formula.startsWith("=") ? "=" : ""}${moved.join("")}`;
   // (at -1, nothing on the edited line: a zero-line edit at a real line
   // would read as a delete of it)
-  return piecesInTheFormulasSpacing(formula, moved, structuralFormulaPieces(formula, axis, -1, 0, scope));
+  const spelled = structuralFormulaPieces(formula, axis, -1, 0, scope);
+  // Nothing in it moved: the formula is what it was, whatever the tokenizer
+  // made of its text. Rebuilt, text a file stores as a formula that does not
+  // parse as one lost its spaces on every row insert (xlsx-rounds R381-X11:
+  // <f>1 if the school is a small-scale rural school ...</f>).
+  if (spelled && spelled.length === moved.length && spelled.every((piece, index) => piece === moved[index])) return formula;
+  return piecesInTheFormulasSpacing(formula, moved, spelled);
 }
 
 /**
@@ -4619,6 +4635,19 @@ export interface SheetEvaluatorOptions {
    * being evaluated, for itself and every formula reading it.
    */
   keptFormulaResult?: (row: number, col: number) => CellValue | undefined;
+  /**
+   * What a held result (a formula calling a function this engine does not
+   * have, kept-formula-results) read in the file: the areas and the values
+   * stored in them. The cell answers its kept result only while each still
+   * holds that value; once one does not, the cell is calculated (#NAME?), as
+   * Excel recalculates it with its macros off.
+   */
+  keptFormulaInputs?: (row: number, col: number) => readonly KeptFormulaInput[] | undefined;
+  /** Set precision as displayed (calcPr@fullPrecision="0"): the rounding the
+   *  cell's number format gives its number, a formula's or a constant's
+   *  (displayedPrecisionRounder), null where it keeps the number whole.
+   *  Readers of the cell read it rounded. */
+  displayPrecision?: (row: number, col: number) => ((value: number) => number) | null;
   /**
    * Whether the formula of the cell at (row, col) cannot be displayed: the
    * sheet's protection is in effect and the cell is formatted Hidden

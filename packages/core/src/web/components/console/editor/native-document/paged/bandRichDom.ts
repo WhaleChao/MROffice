@@ -13,15 +13,20 @@
  */
 
 import { EMU_PER_PT, EMU_PER_PX, EMU_PER_TWIP, PX_PER_PT, ptToPx } from "../../../../../lib/office-units";
+import { washoutPictureStyle } from "../watermark";
 import { ruleAttrs } from "../wordHorizontalRule";
 import { resolveFontScriptSlices } from "../../../../office-ribbon/officeFontScriptSlots";
 import { textHasEastAsian, wordSingleLineRatio } from "../noteTextStyle";
 import { documentStyleFontSizePx } from "../documentStyleFontSize";
+import { missingFontStackFrom } from "../documentDisplayFonts";
 import {
+  documentBorderLineIsVisible,
   documentParagraphBordersHtmlAttributes,
   documentTextBoxFillCss,
   documentTextBoxOutlineHtmlAttributes,
+  normalizeDocumentParagraphBorders,
   paintPhysicalParagraphBorderEdges,
+  type DocumentParagraphBorders,
 } from "../../../../../lib/document-borders";
 
 import { paintShape } from "../documentShapeExtension";
@@ -40,12 +45,14 @@ import type {
   BandRichBlock,
   BandRichBlockType,
   BandRichBorder,
+  BandRichImageCrop,
   BandRichRun,
   BandRichFrame,
   BandRichParagraph,
   BandRichLine,
   BandRichShape,
   BandRichTable,
+  BandRichTableCell,
   BandRichChart,
   BandRichWordArt,
   BandFieldToken,
@@ -76,6 +83,15 @@ export interface BandTokenContext {
    * header or footer object on the paper (`keepBandObjectsOnPaper`); absent,
    * nothing is kept. */
   wordCompatibilityMode?: number | null;
+  /** Lower-case family -> the faces Word sets it in where it is not
+   * installed (the page's display-font plan): a header in a face the page
+   * cannot draw is set in Word's replacement, as the body is (R433-D19:
+   * "Formata OTF", alternate Calibri, drawn in Times). */
+  missingFontSubstitutes?: Readonly<Record<string, readonly string[]>> | null;
+}
+
+function bandFontCss(family: string, context: BandTokenContext): string {
+  return missingFontStackFrom(context.missingFontSubstitutes, family) ?? `"${family}"`;
 }
 
 const styleRecord = (value: unknown): Record<string, unknown> | null =>
@@ -109,18 +125,21 @@ export function bandStyleRunSizePx(styleDefinitions: unknown, styleId: string | 
 
 
 /**
- * The bold and italic a header or footer run that states neither takes from
- * its paragraph style: the nearest style of the chain (the document's
- * default paragraph style when the line names none) that states each, as
- * Word reads a style hierarchy (a child stating `w:b w:val="0"` turns its
- * base's bold off). Nothing without Word styles.
+ * The bold, italic, all caps and small caps a header or footer run that
+ * states none takes from its paragraph style: the nearest style of the chain
+ * (the document's default paragraph style when the line names none) that
+ * states each, as Word reads a style hierarchy (a child stating
+ * `w:b w:val="0"` turns its base's bold off). Nothing without Word styles.
+ * (Corpus R281-D26: a journal title in a Heading 1 with small caps, drawn in
+ * capitals and small capitals by Word, in lower case here.)
  */
+const BAND_STYLE_TOGGLES = ["bold", "italic", "caps", "smallCaps"] as const;
 export function bandStyleRunToggles(
   styleDefinitions: unknown,
   styleId: string | null | undefined,
-): { bold: boolean; italic: boolean } {
+): { bold: boolean; italic: boolean; caps: boolean; smallCaps: boolean } {
   const defs = styleRecord(styleDefinitions);
-  const out = { bold: false, italic: false };
+  const out = { bold: false, italic: false, caps: false, smallCaps: false };
   if (!defs || !Array.isArray(defs.styles)) return out;
   const styles = defs.styles.map(styleRecord).filter((style): style is Record<string, unknown> => style !== null);
   const byId = new Map(styles.map((style) => [style.styleId, style]));
@@ -128,19 +147,19 @@ export function bandStyleRunToggles(
     typeof styleId === "string" && styleId
       ? styleId
       : styles.find((style) => style.type === "paragraph" && style.default === true)?.styleId;
-  const settled: { bold?: boolean; italic?: boolean } = {};
+  const settled: Partial<Record<(typeof BAND_STYLE_TOGGLES)[number], boolean>> = {};
   const seen = new Set<unknown>();
   while (typeof id === "string" && byId.has(id) && !seen.has(id) && seen.size < 32) {
     seen.add(id);
     const style = byId.get(id) as Record<string, unknown>;
     const rPr = styleRecord(style.rPr);
-    for (const key of ["bold", "italic"] as const) {
+    for (const key of BAND_STYLE_TOGGLES) {
       if (settled[key] === undefined && typeof rPr?.[key] === "boolean") settled[key] = rPr[key] as boolean;
     }
     id = style.basedOn;
   }
   const defaults = styleRecord(styleRecord(defs.docDefaults)?.rPr);
-  for (const key of ["bold", "italic"] as const) {
+  for (const key of BAND_STYLE_TOGGLES) {
     out[key] = settled[key] ?? (defaults?.[key] === true);
   }
   return out;
@@ -196,6 +215,7 @@ function appendRuns(
   parent: HTMLElement,
   runs: readonly BandRichRun[],
   context: BandTokenContext,
+  firstNodes?: Map<BandRichRun, ChildNode>,
 ): void {
   const entries = runs.map(run => {
     const font = run.font;
@@ -208,6 +228,7 @@ function appendRuns(
   const slices = runs.some(run => run.font) ? resolveFontScriptSlices(entries)
     : entries.map((entry, index) => ({index, from: 0, to: entry.text.length, slot: "primary" as const, value: null}));
   for (const [index, run] of runs.entries()) {
+    const before = parent.lastChild;
     const parts = slices.filter(slice => slice.index === index);
     if (!parts.length) parts.push({index, from: 0, to: entries[index].text.length, slot: "primary", value: entries[index].primary});
     for (const part of parts) {
@@ -229,8 +250,9 @@ function appendRuns(
         if (!piece && pieces.length > 1) continue;
         const span = parent.ownerDocument.createElement("span");
         span.setAttribute("data-band-run", "");
-        span.textContent = piece;
-        if (part.value) span.style.fontFamily = `"${part.value}"`;
+        if (run.scalePct) appendScaledText(span, piece, run.scalePct / 100);
+        else span.textContent = piece;
+        if (part.value) span.style.fontFamily = bandFontCss(part.value, context);
         span.style.whiteSpace = "pre-wrap";
         // A run that states bold or italic, on or off, says so; one that
         // states neither takes its paragraph style's (`bandStyleRunToggles`).
@@ -241,6 +263,9 @@ function appendRuns(
         if (run.underline) span.style.textDecoration = "underline";
         if (run.sizePt) span.style.fontSize = `${run.sizePt}pt`;
         if (run.color) span.style.color = run.color;
+        // Font > Advanced > Spacing: every character set this much farther
+        // apart (Word's "Page | 1" footer: "Page" 3 pt apart, R433-D06).
+        if (run.spacingPt) span.style.letterSpacing = `${run.spacingPt}pt`;
         // Superscript / Subscript: raised or lowered at a smaller size, as a
         // body run's are.
         if (run.vertAlign) {
@@ -262,6 +287,8 @@ function appendRuns(
         parent.appendChild(span);
       }
     }
+    const first = before ? before.nextSibling : parent.firstChild;
+    if (firstNodes && first) firstNodes.set(run, first);
   }
 }
 
@@ -271,12 +298,17 @@ function appendRuns(
  * and size; `exact` is the stated height; `atLeast` never goes below Word's
  * single line.
  */
-function bandWordLineHeightPx(doc: Document, line: BandRichLine, text: string): number | null {
+function bandWordLineHeightPx(
+  doc: Document,
+  line: BandRichLine,
+  text: string,
+  substitutes?: Readonly<Record<string, readonly string[]>> | null,
+): number | null {
   if (line.lineHeightRule === "exact" && line.lineHeightPt) return line.lineHeightPt * PX_PER_PT;
   if (!line.lineSizePt || !line.lineFont) {
     return line.lineHeightRule === "atLeast" && line.lineHeightPt ? line.lineHeightPt * PX_PER_PT : null;
   }
-  const ratio = wordSingleLineRatio(doc, line.lineFont, textHasEastAsian(text));
+  const ratio = wordSingleLineRatio(doc, missingFontStackFrom(substitutes, line.lineFont) ?? line.lineFont, textHasEastAsian(text));
   if (ratio === null) return null;
   const single = ratio * line.lineSizePt * PX_PER_PT;
   if (line.lineHeightRule === "atLeast" && line.lineHeightPt) return Math.max(single, line.lineHeightPt * PX_PER_PT);
@@ -292,8 +324,13 @@ function bandWordLineHeightPx(doc: Document, line: BandRichLine, text: string): 
  * `text` is the line's text without its fields (East Asian text takes the
  * face's taller line).
  */
-export function bandLineHeightCss(doc: Document, line: BandRichLine, text: string): string | null {
-  const height = bandWordLineHeightPx(doc, line, text);
+export function bandLineHeightCss(
+  doc: Document,
+  line: BandRichLine,
+  text: string,
+  substitutes?: Readonly<Record<string, readonly string[]>> | null,
+): string | null {
+  const height = bandWordLineHeightPx(doc, line, text, substitutes);
   if (height !== null && Number.isFinite(height) && height > 0) return `${Math.round(height * 1000) / 1000}px`;
   // A line whose face and size the band does not know (a line typed in MRAI)
   // still keeps its spacing: that many of the band's own single lines.
@@ -307,10 +344,16 @@ export function bandLineHeightCss(doc: Document, line: BandRichLine, text: strin
 /** The band's own single line, per em (`.sheet-band-rich`'s line height). */
 export const BAND_SINGLE_LINE_EM = 1.35;
 
-function applyBandLineHeight(element: HTMLElement, line: BandRichLine, runs: readonly BandRichRun[]): void {
+function applyBandLineHeight(element: HTMLElement, line: BandRichLine, runs: readonly BandRichRun[], context: BandTokenContext): void {
   const text = runs.map((run) => run.text ?? "").join("");
-  const height = bandLineHeightCss(element.ownerDocument, line, text);
+  const height = bandLineHeightCss(element.ownerDocument, line, text, context.missingFontSubstitutes);
   if (height !== null) element.style.lineHeight = height;
+  // The single line a Tight or Through object steps the line down by
+  // (`wrapBandTextAroundObjects`).
+  const multiple = line.lineHeight;
+  if (line.lineHeightRule === undefined && typeof multiple === "number" && Number.isFinite(multiple) && multiple > 0 && multiple !== 1) {
+    element.setAttribute(BAND_LINE_MULTIPLE_ATTR, String(multiple));
+  }
   // A Word line height in px is the line's whole height (note-editor.css).
   if (height?.endsWith("px")) element.setAttribute("data-band-word-line", "");
 }
@@ -326,7 +369,7 @@ function applyBandLineHeight(element: HTMLElement, line: BandRichLine, runs: rea
  * line, and a taller run raises the lines it stands on. White space raises
  * nothing here: at a line's end it hangs on the line it is drawn past.
  */
-function applyBandRunLineHeights(paragraph: HTMLElement, line: BandRichLine): void {
+function applyBandRunLineHeights(paragraph: HTMLElement, line: BandRichLine, context: BandTokenContext): void {
   if (line.lineHeightRule !== undefined || !line.lineFont || !line.lineSizePt) return;
   const doc = paragraph.ownerDocument;
   const spans = (Array.from(paragraph.children) as HTMLElement[]).filter(
@@ -339,7 +382,7 @@ function applyBandRunLineHeights(paragraph: HTMLElement, line: BandRichLine): vo
   const heights: number[] = [];
   for (const span of spans) {
     const sizePt = span.style.fontSize.endsWith("pt") ? Number.parseFloat(span.style.fontSize) : paragraphPt;
-    const face = span.style.fontFamily.replace(/["']/g, "") || line.lineFont;
+    const face = span.style.fontFamily || bandFontCss(line.lineFont, context);
     const ratio = wordSingleLineRatio(doc, face, textHasEastAsian(span.textContent ?? ""));
     if (ratio === null || !(sizePt > 0)) return;
     heights.push(ratio * sizePt * PX_PER_PT * (line.lineHeight ?? 1));
@@ -350,6 +393,46 @@ function applyBandRunLineHeights(paragraph: HTMLElement, line: BandRichLine): vo
   spans.forEach((span, index) => {
     if (heights[index] > lowest + 0.01) span.style.lineHeight = css(heights[index]);
   });
+}
+
+/** `window.__docsBandTrailingHangOff = true` asks the older reading (a band
+ * line's trailing spaces take room in its alignment), for an A/B of one build. */
+function bandTrailingHangOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBandTrailingHangOff?: boolean }).__docsBandTrailingHangOff === true;
+}
+
+/**
+ * The spaces that end a band paragraph hang past its line, as Word sets
+ * them: they take no room in the line's alignment. Windows Word right-aligns
+ * "E end text" followed by 300 spaces flush with the margin
+ * (docx-look/probes/lead lead1); corpus R425-D02's masthead line
+ * "ISSN-e: 2409-2770" and its 134 spaces stood a third of the page from the
+ * right. A preserved space (`pre-wrap`) counts in Chromium's alignment until
+ * the line overflows; the same spaces in a span of normal white space
+ * collapse at the line's end. Spaces before the paragraph's last visible
+ * character keep their room, and a paragraph of spaces alone keeps its line.
+ */
+function hangBandTrailingSpaces(paragraph: HTMLElement): void {
+  if (bandTrailingHangOff()) return;
+  const spans = Array.from(paragraph.querySelectorAll<HTMLElement>(":scope > [data-band-run]"));
+  let last: HTMLElement | null = null;
+  for (const span of spans) if ((span.textContent ?? "") !== "") last = span;
+  if (!last || last.children.length || !/ +$/.test(last.textContent ?? "")) return;
+  // Nothing drawn after it: no tab, field, picture or text of another kind.
+  for (let node = last.nextSibling; node; node = node.nextSibling) {
+    if (node.nodeType === 1 && (node as Element).tagName !== "BR" && ((node as Element).textContent ?? "").trim() !== "") return;
+    if (node.nodeType === 1 && (node as Element).matches("[data-band-tab], .sheet-band-rich__tab, img, svg")) return;
+  }
+  const text = last.textContent ?? "";
+  const kept = text.replace(/ +$/, "");
+  if (!kept.trim()) return;
+  const hang = last.cloneNode(false) as HTMLElement;
+  hang.removeAttribute("data-band-run");
+  hang.setAttribute("data-band-trailing-spaces", "");
+  hang.style.whiteSpace = "normal";
+  hang.textContent = text.slice(kept.length);
+  last.textContent = kept;
+  last.after(hang);
 }
 
 function frameVerticalFromParagraph(frame: BandRichFrame): boolean {
@@ -373,17 +456,39 @@ function placeableBandFrames(block: BandRichParagraph): Map<number, BandRichFram
     // anchored drawings: a classification label's "OFFICIAL" box centred at
     // the page foot was left in its right-aligned footer line (corpus
     // R282-D01, right where Word centres it).
+    // A box in a page margin's own area (Word's page-number gallery boxes:
+    // centred in the right margin and in the bottom margin, corpus R441-D01)
+    // is placed there too (`placeBandBox`); it used to stay in the footer's
+    // flow, a line of its own under the footer's words.
+    const marginAreas = !bandMarginAreasOff();
     const horizontalOk =
       (h.offsetEmu !== undefined && ["column", "margin", "character", "page", "leftMargin"].includes(h.relativeFrom)) ||
       (h.align !== undefined && ["column", "margin"].includes(h.relativeFrom) && ["left", "center", "right"].includes(h.align)) ||
-      (h.align !== undefined && h.relativeFrom === "page" && ["center", "right"].includes(h.align));
+      (h.align !== undefined && h.relativeFrom === "page" && ["center", "right"].includes(h.align)) ||
+      (marginAreas && h.align !== undefined && ["leftMargin", "rightMargin"].includes(h.relativeFrom) &&
+        ["left", "center", "right"].includes(h.align));
     const verticalOk =
       (v.offsetEmu !== undefined && ["paragraph", "line", "page", "margin", "topMargin"].includes(v.relativeFrom)) ||
+      (marginAreas && v.offsetEmu !== undefined && v.relativeFrom === "bottomMargin") ||
       (v.offsetEmu === undefined && v.align !== undefined && ["top", "center", "bottom"].includes(v.align) &&
-        ["page", "margin"].includes(v.relativeFrom) && frame.heightEmu > 0);
+        (["page", "margin"].includes(v.relativeFrom) || (marginAreas && ["topMargin", "bottomMargin"].includes(v.relativeFrom))) &&
+        frame.heightEmu > 0);
     if (horizontalOk && verticalOk) out.set(frame.index, frame);
   }
   return out;
+}
+
+/** `window.__docsBandUprightTextOff = true` asks the older reading (a turned
+ * VML box's words turn with it), for an A/B of one build. */
+function bandUprightTextOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsBandUprightTextOff?: boolean}).__docsBandUprightTextOff === true;
+}
+
+/** `window.__docsBandMarginAreasOff = true` asks the older reading (a band
+ * box placed in a page margin's own area stays in its line's flow), for an
+ * A/B of one build. */
+function bandMarginAreasOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsBandMarginAreasOff?: boolean}).__docsBandMarginAreasOff === true;
 }
 
 function pt(emu: number): string {
@@ -492,6 +597,157 @@ export function keepBandObjectsOnPaper(root: ParentNode): void {
   }
 }
 
+/** How far a band paragraph's lines are pushed down past the objects of its
+ * band that its text wraps around (`wrapBandTextAroundObjects`), px. */
+export const BAND_WRAP_PUSH_ATTR = "data-band-wrap-push";
+/** A header or footer object placed out of the band's flow (`placeBandBox`). */
+export const BAND_FLOAT_ATTR = "data-band-float";
+/** A band paragraph's auto line spacing (a multiple of its single line). */
+const BAND_LINE_MULTIPLE_ATTR = "data-band-line-multiple";
+/** The narrowest strip beside an object that still takes text (the body's
+ * bandFloatExclusion MIN_STRIP_PX). */
+const BAND_WRAP_MIN_STRIP_PX = 24;
+
+/**
+ * The lines of a header or footer go round the objects of their band the text
+ * wraps around, as body lines do: a line with no room beside such an object
+ * moves below it, the band grows by as much, and the body starts below the
+ * grown band (`measureHeaderBandOverflowBySheet`). Word 16, docx-look
+ * probes/hdrwrap (a 6.9" x 1.34" shape 21.9 pt above its header paragraph,
+ * header distance 36 pt, top margin 72 pt): the paragraph's line under a Top
+ * and Bottom or Square shape ending at 110.8 pt stands at 110.8 pt, under a
+ * Tight or Through one in whole single lines from its own place (36 + 6 x
+ * 13.4 = 116.5 pt for Calibri 11 at 1.08 lines, 89.7 / 103.1 for shapes
+ * ending at 86.1-89.7 / 93.3-100.5 pt), and the body starts under the line
+ * and its space after (141.3 pt); a shape in front of the text pushes
+ * nothing. Corpus R347-D06: the empty header paragraph under the journal's
+ * banner put every page's body 60 pt lower in Word, 11 pages where the band
+ * left at the header distance drew 10. The object itself never grows the
+ * band: only the lines it pushes do (Square beside room: body at the margin).
+ *
+ * The paragraph's own objects stay where its anchor puts them: the push is
+ * a top padding, inside the box they are placed from. Not modelled: a line
+ * shortened beside an object with room for text (it keeps its width).
+ * `window.__docsBandWrapOff = true` keeps the lines in place (A/B).
+ */
+export function wrapBandTextAroundObjects(root: ParentNode): void {
+  const bands = Array.from(root.querySelectorAll<HTMLElement>(".sheet-band-rich"));
+  if (root instanceof HTMLElement && root.classList.contains("sheet-band-rich")) bands.unshift(root);
+  for (const band of bands) {
+    // Headers only: a footer grows up from its distance, which nothing here
+    // has measured against Word yet.
+    if (band.closest(".sheet-band-box__footer, .sheet-band-print--footer")) continue;
+    const own = (element: Element) => element.parentElement?.closest(".sheet-band-rich") === band;
+    const paragraphs = (Array.from(band.children) as HTMLElement[]).filter(
+      (child) => child.classList.contains("sheet-band-rich__p") && child.style.float === "",
+    );
+    // `window.__docsBandWrapOff = true` leaves the lines where they were (A/B).
+    const off = (band.ownerDocument.defaultView as (Window & { __docsBandWrapOff?: boolean }) | null)?.__docsBandWrapOff === true;
+    const objects = off ? [] : Array.from(band.querySelectorAll<HTMLElement>("[data-band-wrap]")).filter(own);
+    if (!objects.length || !band.offsetWidth) {
+      for (const paragraph of paragraphs) writeBandWrapPush(paragraph, 0);
+      continue;
+    }
+    const scale = band.getBoundingClientRect().width / band.offsetWidth || 1;
+    // In order: a push moves the paragraphs after it, and the objects they
+    // anchor, before they are measured. Each line is measured from its own
+    // place, the push written last taken back out, so an unchanged band
+    // writes nothing.
+    for (const paragraph of paragraphs) {
+      const style = getComputedStyle(paragraph);
+      const box = paragraph.getBoundingClientRect();
+      const pushed = Number.parseFloat(paragraph.getAttribute(BAND_WRAP_PUSH_ATTR) ?? "") || 0;
+      const top =
+        box.top / scale + (Number.parseFloat(style.borderTopWidth) || 0) + (Number.parseFloat(style.paddingTop) || 0) - pushed;
+      const textLeft = box.left / scale + (Number.parseFloat(style.paddingLeft) || 0);
+      const textRight = box.right / scale - (Number.parseFloat(style.paddingRight) || 0);
+      const lineHeight = Number.parseFloat(style.lineHeight) || (Number.parseFloat(style.fontSize) || 16) * BAND_SINGLE_LINE_EM;
+      const multiple = Number.parseFloat(paragraph.getAttribute(BAND_LINE_MULTIPLE_ATTR) ?? "");
+      const step = lineHeight / (Number.isFinite(multiple) && multiple > 0 ? multiple : 1);
+      const blockers = objects.flatMap((object) => {
+        const rect = object.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0)) return [];
+        const [distTop = 0, distRight = 0, distBottom = 0, distLeft = 0] = (object.dataset.bandWrapDist ?? "")
+          .split(",")
+          .map((value) => Number.parseFloat(value) || 0);
+        const left = rect.left / scale - distLeft;
+        const right = rect.right / scale + distRight;
+        if (right <= textLeft || left >= textRight) return [];
+        const kind = object.dataset.bandWrap ?? "";
+        if (kind !== "topAndBottom") {
+          const text = object.dataset.bandWrapText;
+          const roomLeft = left - textLeft;
+          const roomRight = textRight - right;
+          const room = text === "right" ? roomRight : text === "left" ? roomLeft : Math.max(roomLeft, roomRight);
+          if (room >= BAND_WRAP_MIN_STRIP_PX) return [];
+        }
+        return [{ top: rect.top / scale - distTop, bottom: rect.bottom / scale + distBottom, stepped: kind === "tight" || kind === "through" }];
+      }).sort((a, b) => a.top - b.top);
+      let line = top;
+      for (let moved = true, guard = 0; moved && guard < 16; guard += 1) {
+        moved = false;
+        for (const blocker of blockers) {
+          if (!(line < blocker.bottom - 0.01 && line + lineHeight > blocker.top + 0.01)) continue;
+          line = blocker.stepped && step > 0
+            ? top + Math.ceil((blocker.bottom - top) / step - 1e-6) * step
+            : blocker.bottom;
+          moved = true;
+        }
+      }
+      writeBandWrapPush(paragraph, Math.round((line - top) * 100) / 100);
+    }
+  }
+}
+
+function writeBandWrapPush(paragraph: HTMLElement, pushPx: number): void {
+  const previous = Number.parseFloat(paragraph.getAttribute(BAND_WRAP_PUSH_ATTR) ?? "") || 0;
+  if (Math.abs(previous - pushPx) < 0.01) return;
+  const padding = (Number.parseFloat(paragraph.style.paddingTop) || 0) - previous;
+  if (pushPx > 0) {
+    paragraph.setAttribute(BAND_WRAP_PUSH_ATTR, String(pushPx));
+    paragraph.style.paddingTop = `${Math.round((padding + pushPx) * 100) / 100}px`;
+  } else {
+    paragraph.removeAttribute(BAND_WRAP_PUSH_ATTR);
+    if (padding > 0) paragraph.style.paddingTop = `${Math.round(padding * 100) / 100}px`;
+    else paragraph.style.removeProperty("padding-top");
+  }
+}
+
+/**
+ * A header or footer picture's `a:srcRect` crop (`BandRichImage.crop`, in
+ * Word's thousandths of a percent): `a:stretch` stretches the kept window over the picture's extent, so the box
+ * is the extent, clipping, and the whole picture is drawn in it scaled by
+ * 1 / (1 - l - r) and 1 / (1 - t - b) and shifted by the left and top cuts,
+ * as a cropped group member is drawn (documentShapeExtension). Corpus
+ * R432-D16: the header and the footer are the top 13 % and the bottom 9 % of
+ * one full-page template picture, which the band drew whole and squashed.
+ */
+function bandCroppedPicture(doc: Document, img: HTMLImageElement, crop: BandRichImageCrop): HTMLElement {
+  const left = (crop.l ?? 0) / 100_000;
+  const right = (crop.r ?? 0) / 100_000;
+  const top = (crop.t ?? 0) / 100_000;
+  const bottom = (crop.b ?? 0) / 100_000;
+  const keptWidth = Math.max(1e-6, 1 - left - right);
+  const keptHeight = Math.max(1e-6, 1 - top - bottom);
+  const box = doc.createElement("span");
+  box.setAttribute("data-band-picture-crop", "");
+  box.style.position = "relative";
+  box.style.overflow = "hidden";
+  Object.assign(img.style, {
+    position: "absolute",
+    margin: "0",
+    maxWidth: "none",
+    maxHeight: "none",
+    left: `${(-left / keptWidth) * 100}%`,
+    top: `${(-top / keptHeight) * 100}%`,
+    width: `${(1 / keptWidth) * 100}%`,
+    height: `${(1 / keptHeight) * 100}%`,
+    objectFit: "fill",
+  });
+  box.appendChild(img);
+  return box;
+}
+
 function placeBandBox(
   box: HTMLElement,
   h: { relativeFrom: string; offsetEmu?: number; align?: string },
@@ -499,12 +755,32 @@ function placeBandBox(
   widthEmu: number,
   heightEmu?: number,
 ): void {
+  // A header or footer object placed out of the band's flow: the body's
+  // objects and text are drawn over it wherever it reaches (bandObjectHoles).
+  box.setAttribute(BAND_FLOAT_ATTR, "");
   const marginLeft = "var(--page-margin-left, var(--page-margin-x, 96px))";
+  const marginRight = "var(--page-margin-right, var(--page-margin-x, 96px))";
   if (h.offsetEmu !== undefined) {
+    // The right margin's area starts at the text column's right edge
+    // (ECMA-376 20.4.3.4 ST_RelFromH rightMargin).
     box.style.left =
       h.relativeFrom === "page" || h.relativeFrom === "leftMargin"
         ? `calc(${pt(h.offsetEmu)} - ${marginLeft})`
-        : pt(h.offsetEmu);
+        : h.relativeFrom === "rightMargin"
+          ? `calc(100% + ${pt(h.offsetEmu)})`
+          : pt(h.offsetEmu);
+  } else if (h.relativeFrom === "rightMargin" || h.relativeFrom === "leftMargin") {
+    // Aligned inside a margin's own area, not the text column: corpus
+    // R433-D11's vertical "Página" box is centred in the right margin, where
+    // the band drew it centred over the column, on the footer's words.
+    const [start, room] =
+      h.relativeFrom === "rightMargin" ? ["100%", marginRight] : [`(0px - ${marginLeft})`, marginLeft];
+    box.style.left =
+      h.align === "center"
+        ? `calc(${start} + (${room} - ${pt(widthEmu)}) / 2)`
+        : h.align === "right"
+          ? `calc(${start} + ${room} - ${pt(widthEmu)})`
+          : `calc(${start})`;
   } else if (h.relativeFrom === "page" && (h.align === "center" || h.align === "right")) {
     // Aligned on the PAGE: the band box is the text column, so the page's
     // own edges are a left margin away on the left and a right margin away
@@ -534,8 +810,19 @@ function placeBandBox(
     (v.align === "center" || v.align === "bottom") &&
     v.relativeFrom !== "paragraph" &&
     v.relativeFrom !== "line";
+  const marginBottom = "var(--page-margin-bottom, var(--page-margin-y, 96px))";
   if (v.relativeFrom === "paragraph" || v.relativeFrom === "line") {
     box.style.top = offset;
+  } else if (!bandMarginAreasOff() && (v.relativeFrom === "bottomMargin" || (v.offsetEmu === undefined && v.relativeFrom === "topMargin"))) {
+    // A page margin's own area (ECMA-376 20.4.3.5 ST_RelFromV): the bottom
+    // margin runs from the bottom text edge to the page's foot, the top one
+    // from the page's top to the top text edge.
+    const [areaTop, areaHeight] = v.relativeFrom === "bottomMargin"
+      ? [`(var(--page-height-px, 1123px) - ${marginBottom})`, marginBottom]
+      : ["0px", marginTop];
+    const room = `(${areaHeight} - ${pt(heightEmu ?? 0)})`;
+    const within = v.offsetEmu !== undefined ? offset : v.align === "center" ? `${room} / 2` : v.align === "bottom" ? room : "0px";
+    box.style.top = `calc(${areaTop} + ${within} - ${headerOffset})`;
   } else if (v.relativeFrom === "page") {
     if (aligned) {
       const room = `(var(--page-height-px, 1123px) - ${pt(heightEmu)})`;
@@ -620,7 +907,21 @@ function buildBandFrame(
   // about the box's centre), which the anchor it was read with states: the
   // box used to be drawn upright whatever the file said.
   const turn = (frame.floatAnchor?.rotation ?? 0) / 60_000;
-  if (turn % 360 !== 0) {
+  if (turn % 360 !== 0 && frame.textUpright === true && !bandUprightTextOff()) {
+    // A legacy VML box (`textUpright`): Word turns the box and lays its words
+    // upright in the turned box's own bounds (probes/vmlrot: `rotation:90`
+    // draws a 40 x 120 pt box with "R90" level at its top; half and whole
+    // turns, with or without a flip, are the box as stated). A quarter turn
+    // is the box with its sides swapped about its centre.
+    const quarter = Math.abs(((turn % 180) + 180) % 180 - 90) < 0.5;
+    if (quarter && !frame.autoWidth) {
+      const across = `(${pt(frame.widthEmu)} - ${pt(frame.heightEmu)}) / 2`;
+      box.style.width = pt(frame.heightEmu);
+      if (frame.autoHeight) box.style.minHeight = pt(frame.widthEmu);
+      else box.style.height = pt(frame.widthEmu);
+      box.style.transform = `${box.style.transform} translate(calc(${across}), calc(-1 * ${across}))`.trim();
+    }
+  } else if (turn % 360 !== 0) {
     box.style.transformOrigin = "center";
     box.style.transform = `${box.style.transform} rotate(${turn}deg)`.trim();
   }
@@ -638,7 +939,7 @@ function buildBandFrame(
 
   const line = doc.createElement("div");
   line.className = "sheet-band-rich__frame-text";
-  if (frame.line) applyBandLineHeight(line, frame.line, runs);
+  if (frame.line) applyBandLineHeight(line, frame.line, runs, context);
   appendRuns(line, runs, context);
   box.appendChild(line);
   return box;
@@ -688,7 +989,7 @@ function buildBandInlineFrame(
   }
   const line = doc.createElement("div");
   line.className = "sheet-band-rich__frame-text";
-  if (frame.line) applyBandLineHeight(line, frame.line, runs);
+  if (frame.line) applyBandLineHeight(line, frame.line, runs, context);
   appendRuns(line, runs, context);
   box.appendChild(line);
   return box;
@@ -857,6 +1158,12 @@ export function bandMemberTextMirrored(
   return (member.flipH === true) !== (shape.flipH === true) && (member.flipV === true) === (shape.flipV === true);
 }
 
+/** `window.__docsBandMemberPaintOff`: a band group's members draw their
+ * outline only, their words as plain band text (A/B). */
+function bandMemberPaintOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsBandMemberPaintOff?: boolean }) | null)?.__docsBandMemberPaintOff === true;
+}
+
 function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRichShape): void {
   const width = shape.groupCoordinateWidthEmu ?? shape.widthEmu;
   const height = shape.groupCoordinateHeightEmu ?? shape.heightEmu;
@@ -898,12 +1205,55 @@ function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRich
     svg.style.height = "100%";
     svg.style.display = "block";
     svg.style.overflow = "visible";
+    const paintOwn = !bandMemberPaintOff(doc);
+    // A picture member (`pic:pic` / a VML `v:imagedata` shape in the group)
+    // draws its own picture over its box: R441-D01's header bar was a dark
+    // PNG under the journal's white title, and the band drew neither.
+    if (paintOwn && member.kind === "picture" && typeof member.src === "string" && member.src) {
+      const picture = doc.createElement("img");
+      picture.src = member.src;
+      picture.alt = "";
+      picture.draggable = false;
+      picture.style.position = "absolute";
+      picture.style.inset = "0";
+      picture.style.width = "100%";
+      picture.style.height = "100%";
+      picture.style.display = "block";
+      cell.appendChild(picture);
+    }
     paintShape(svg, normalizeDocumentShapeAttrs({ ...member, source: null }));
     cell.appendChild(svg);
     if (member.text) {
       const label = doc.createElement("span");
       label.className = "sheet-band-rich__shape-text";
-      label.textContent = member.text;
+      const runs = paintOwn ? member.textRuns?.filter((run) => typeof run.text === "string") ?? [] : [];
+      if (runs.length > 0) {
+        // The member's own runs, in their own face, weight and colour, set
+        // as Word sets a text box's words: from its top-left inset, spaces
+        // kept (R441-D01: "…academic research", 45 spaces, "ISSN 2582-7197",
+        // Times New Roman bold in white).
+        const body = member.textBody;
+        const emuPx = (emu: number | undefined) => (typeof emu === "number" && Number.isFinite(emu) ? ptToPx(emu / 12_700) : 0);
+        const before = body?.paragraphs?.[0]?.spaceBeforePt;
+        label.style.position = "absolute";
+        label.style.left = `${emuPx(body?.insetLeftEmu)}px`;
+        label.style.top = `${emuPx(body?.insetTopEmu) + (typeof before === "number" && before > 0 ? ptToPx(before) : 0)}px`;
+        label.style.whiteSpace = "pre";
+        if (typeof member.textFill === "string" && /^#[0-9a-f]{6}$/i.test(member.textFill)) label.style.color = member.textFill;
+        for (const run of runs) {
+          const span = doc.createElement("span");
+          span.textContent = run.text;
+          const style = run.style;
+          if (style?.fontFamily) span.style.fontFamily = `"${style.fontFamily.replace(/"/g, "")}"`;
+          if (typeof style?.fontSize === "number" && style.fontSize > 0) span.style.fontSize = `${style.fontSize}pt`;
+          if (style?.bold) span.style.fontWeight = "bold";
+          if (style?.italic) span.style.fontStyle = "italic";
+          if (typeof style?.color === "string" && /^#[0-9a-f]{6}$/i.test(style.color)) span.style.color = style.color;
+          label.appendChild(span);
+        }
+      } else {
+        label.textContent = member.text;
+      }
       // Words are not mirrored with a flipped shape (Word; the body's group
       // member label, `memberTextMirrored`): one mirror of the member's or
       // the group's is undone, both cancel.
@@ -1041,12 +1391,105 @@ function isEmptySlotLine(block: BandRichBlock, context: BandTokenContext): boole
   );
 }
 
+/** `window.__docsBandBorderGroupsOff = true` draws every band line's borders
+ * as a box of its own, as before (A/B). */
+function bandBorderGroupsOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBandBorderGroupsOff?: boolean }).__docsBandBorderGroupsOff === true;
+}
+
+/** What makes two band lines one bordered box: their four outside edges and
+ * their left and right indents. Null for a line with no visible outside edge
+ * or one standing out of the flow in a text frame. */
+function bandBorderBoxKey(block: BandRichBlock | undefined): string | null {
+  if (!block || block.type !== "paragraph" || block.textFrame) return null;
+  const borders = normalizeDocumentParagraphBorders(block.paragraphBorders);
+  if (!borders) return null;
+  const edges = (["top", "left", "bottom", "right"] as const).map((edge) =>
+    documentBorderLineIsVisible(borders[edge]) ? borders[edge] : null,
+  );
+  if (edges.every((edge) => edge === null)) return null;
+  return JSON.stringify([edges, block.indentLeftPt ?? 0, block.indentRightPt ?? 0]);
+}
+
+/**
+ * The borders a band line draws as a member of its border group. Word draws
+ * paragraph borders per group in a header or footer as in the body (ECMA-376
+ * 17.3.1.24): consecutive lines with the same outside edges and indents are
+ * one box, its top edge above the first only, its bottom edge below the last
+ * only, and the upper line's `between` rule between two of them. A line's own
+ * right-to-left direction does not part it from its neighbours. Corpus
+ * R350-D01 (Windows Word 16): the footer's three citation lines, the middle
+ * one right-to-left, are one box under one rule; the band drew three boxes,
+ * six rules, the footer 13 pt taller and every page's body a line short.
+ */
+export function bandParagraphGroupBorders(
+  blocks: readonly BandRichBlock[],
+  index: number,
+): DocumentParagraphBorders | undefined {
+  const block = blocks[index];
+  if (!block || block.type !== "paragraph") return undefined;
+  const own = block.paragraphBorders;
+  if (bandBorderGroupsOff()) return own;
+  const key = bandBorderBoxKey(block);
+  if (key === null) return own;
+  const joinsAbove = bandBorderBoxKey(blocks[index - 1]) === key;
+  const joinsBelow = bandBorderBoxKey(blocks[index + 1]) === key;
+  if (!joinsAbove && !joinsBelow) return own;
+  const borders: DocumentParagraphBorders = { ...normalizeDocumentParagraphBorders(own) };
+  if (joinsAbove) {
+    const above = blocks[index - 1];
+    const between = above?.type === "paragraph" ? normalizeDocumentParagraphBorders(above.paragraphBorders)?.between : undefined;
+    if (between && documentBorderLineIsVisible(between)) borders.top = between;
+    else delete borders.top;
+  }
+  if (joinsBelow) delete borders.bottom;
+  delete borders.between;
+  return borders;
+}
+
+/**
+ * The empty paragraph Word requires after a table that ends a cell takes no
+ * height in a header or footer either, as in the body
+ * (nestedTableEndParagraph.ts). Windows Word, probes/cjk4: R399-D02's header
+ * cell ends in its title table and an empty Sakkal Majalla line -- set at
+ * 30 pt the body does not move, the same line holding "X" at 30 pt pushes it
+ * 31.8 pt down; in a body cell two empty lines after the table both count.
+ * The band drew it as a line, and every page's body started 14.9 pt low.
+ * `window.__docsBandNestedEndLineOff = true` keeps the line, for an A/B of
+ * the same build.
+ */
+function collapseNestedTableEndLine(
+  td: HTMLElement,
+  cell: BandRichTableCell | undefined,
+  context: BandTokenContext,
+): void {
+  if (typeof window !== "undefined" && (window as Window & { __docsBandNestedEndLineOff?: boolean }).__docsBandNestedEndLineOff === true) return;
+  const paragraphs = cell?.paragraphs ?? [];
+  const last = cell?.tables?.[cell.tables.length - 1];
+  const line = paragraphs[paragraphs.length - 1];
+  if (!last || !line || last.at !== paragraphs.length - 1) return;
+  if (
+    line.runs.some((run) => run.frame !== undefined || runText(run, context)) ||
+    line.images?.length || line.shapes?.length || line.charts?.length || line.frames?.length || line.wordArt?.length || line.list
+  ) return;
+  const drawn = td.querySelectorAll<HTMLElement>(":scope > .sheet-band-rich__p")[last.at];
+  if (!drawn) return;
+  drawn.dataset.bandNestedTableEnd = "true";
+  drawn.style.height = "0";
+  drawn.style.minHeight = "0";
+  drawn.style.marginTop = "0";
+  drawn.style.marginBottom = "0";
+  drawn.style.lineHeight = "0";
+  drawn.style.overflow = "hidden";
+}
+
 export function buildBandRichDom(
   doc: Document,
   blocks: BandRichBlock[],
   context: BandTokenContext,
-  /** A cell's or a box's own flow, never a band story of its own. */
-  innerFlow = false,
+  /** A cell's or a box's own flow, never a band story of its own ("cell":
+   * a table cell's, whose empty lines are lines). */
+  innerFlow: boolean | "cell" = false,
 ): HTMLElement {
   const root = doc.createElement("div");
   root.className = "sheet-band-rich";
@@ -1073,7 +1516,8 @@ export function buildBandRichDom(
       const paragraph = doc.createElement("div");
       paragraph.className = "sheet-band-rich__p";
       paragraphByBlock.set(blockIndex, paragraph);
-      for (const [key, value] of Object.entries(documentParagraphBordersHtmlAttributes(block.paragraphBorders))) {
+      const groupBorders = bandParagraphGroupBorders(blocks, blockIndex);
+      for (const [key, value] of Object.entries(documentParagraphBordersHtmlAttributes(groupBorders))) {
         paragraph.setAttribute(key, value);
       }
       paragraph.style.textAlign = block.align ?? "left";
@@ -1094,6 +1538,9 @@ export function buildBandRichDom(
       const toggles = bandStyleRunToggles(context.styleDefinitions, block.docxStyleId);
       if (toggles.bold) paragraph.style.fontWeight = "700";
       if (toggles.italic) paragraph.style.fontStyle = "italic";
+      // All caps over small caps, as Word draws a run that has both.
+      if (toggles.caps) paragraph.style.textTransform = "uppercase";
+      else if (toggles.smallCaps) paragraph.style.fontVariant = "small-caps";
       // Tabs reach their stops as Word lays them out once the band is on
       // screen (`layoutBandTabs`); until then, and on paper that is never
       // measured, a uniform width from the first stop stands in.
@@ -1133,7 +1580,7 @@ export function buildBandRichDom(
         label.style.textIndent = "0";
         label.style.whiteSpace = "pre";
         if (marker.firstLineIndentPt < 0) label.style.minWidth = `${-marker.firstLineIndentPt}pt`;
-        if (marker.font) label.style.fontFamily = `"${marker.font}"`;
+        if (marker.font) label.style.fontFamily = bandFontCss(marker.font, context);
         // The tab after the number: a number wider than the hanging indent
         // moves the text on to the next stop (`layoutBandListMarkers`).
         label.setAttribute("data-band-marker-tab", JSON.stringify({
@@ -1143,7 +1590,14 @@ export function buildBandRichDom(
         }));
         paragraph.appendChild(label);
       }
-      applyBandLineHeight(paragraph, block, block.runs.filter((run) => run.frame === undefined));
+      // A line that states a face but no size (an empty line, its mark
+      // unsized) is set in its paragraph style's size, as Word sizes it:
+      // R434-D02's four empty Arial header lines at 10 pt stand 11.5 pt each,
+      // drawn at the band's generic 1.35 lines they stood 13.5 pt.
+      const sizedLine = block.lineSizePt || !block.lineFont || runSize === null
+        ? block
+        : { ...block, lineSizePt: runSize / PX_PER_PT };
+      applyBandLineHeight(paragraph, sizedLine, block.runs.filter((run) => run.frame === undefined), context);
       const sameStyle = (other: BandRichBlock | undefined) => Boolean(block.contextualSpacing && other?.type === "paragraph" && (other.docxStyleId ?? "Normal") === (block.docxStyleId ?? "Normal"));
       if (sameStyle(blocks[blockIndex - 1])) paragraph.style.marginTop = "0pt";
       else if (block.spaceBeforePt !== undefined) paragraph.style.marginTop = `${block.spaceBeforePt}pt`;
@@ -1154,6 +1608,9 @@ export function buildBandRichDom(
       if (!block.runs.length && !block.images?.some((image) => !image.floatAnchor) && !block.shapes?.some((shape) => !shape.floatAnchor) && !block.charts?.length && !block.frames?.some((frame) => frame.inline)) paragraph.appendChild(doc.createElement("br"));
       const floated = placeableBandFrames(block);
       const inlineFrames = (block.frames ?? []).filter((frame) => frame.inline);
+      // The first node each run drew, where an in-line picture that stands
+      // before that run goes (`BandRichImage.runsBefore`).
+      const runNodes = new Map<BandRichRun, ChildNode>();
       if (inlineFrames.length) {
         appendLineWithInlineFrames(doc, paragraph, block, floated, inlineFrames, context);
       } else {
@@ -1161,6 +1618,7 @@ export function buildBandRichDom(
           paragraph,
           floated.size ? block.runs.filter((run) => run.frame === undefined || !floated.has(run.frame)) : block.runs,
           context,
+          runNodes,
         );
         // An empty line of a band story (its typing slots only) is a blank
         // line of its own height, as Word draws it: empty spans alone make no
@@ -1169,10 +1627,13 @@ export function buildBandRichDom(
         // R27-D13's footer opens with one, drawn as a line at 710 pt
         // (R54-D01: a blank header pushes the body down). R27-D13's page
         // count is kept by the footer's reach, not by dropping its line
-        // (measureFooterBandOverflowBySheet). A cell's or a box's own flow
-        // keeps its empty lines as it drew them.
-        if (!innerFlow && isEmptySlotLine(block, context)) paragraph.appendChild(doc.createElement("br"));
-        applyBandRunLineHeights(paragraph, block);
+        // (measureFooterBandOverflowBySheet). A table cell's empty lines are
+        // lines too (corpus R434-D02: a header row of four empty paragraphs
+        // Word stands 46 pt tall, drawn as none, every page's body 12 pt
+        // high); a box's own flow keeps its empty lines as it drew them.
+        if (innerFlow !== true && isEmptySlotLine(block, context)) paragraph.appendChild(doc.createElement("br"));
+        applyBandRunLineHeights(paragraph, block, context);
+        hangBandTrailingSpaces(paragraph);
       }
       for (const frame of floated.values()) {
         const box = buildBandFrame(doc, frame, block.runs.filter((run) => run.frame === frame.index), context);
@@ -1232,40 +1693,50 @@ export function buildBandRichDom(
         // A header or footer picture is drawn, never dragged away natively
         // (lib/native-drag-guard).
         img.draggable = false;
-        img.className = "sheet-band-rich__img";
+        // A cropped picture is its kept window: a box of the picture's extent
+        // the picture is drawn in, larger and shifted (bandCroppedPicture).
+        const box = image.crop ? bandCroppedPicture(doc, img, image.crop) : img;
+        box.className = "sheet-band-rich__img";
         // At its exact extent: a whole-pixel picture stood a logo 0.3 pt
         // taller than Word's, and the body under the band with it.
         if (image.widthEmu) {
-          img.style.width = `${Math.max(1, Math.round((image.widthEmu / EMU_PER_PX) * 1000) / 1000)}px`;
+          box.style.width = `${Math.max(1, Math.round((image.widthEmu / EMU_PER_PX) * 1000) / 1000)}px`;
         }
         if (image.heightEmu) {
-          img.style.height = `${Math.max(1, Math.round((image.heightEmu / EMU_PER_PX) * 1000) / 1000)}px`;
+          box.style.height = `${Math.max(1, Math.round((image.heightEmu / EMU_PER_PX) * 1000) / 1000)}px`;
         }
         const anchor = image.floatAnchor;
         if (!anchor) {
-          paragraph.appendChild(img);
+          // Where it stands among the line's runs (corpus R436-D23: a logo
+          // after a date and a run of spaces, at the right of that line).
+          const next = image.runsBefore !== undefined ? block.runs[image.runsBefore] : undefined;
+          const at = next ? runNodes.get(next) : undefined;
+          if (at && at.parentNode === paragraph) paragraph.insertBefore(box, at);
+          else paragraph.appendChild(box);
           continue;
         }
         // An anchored picture is placed exactly as an anchored band shape is.
-        img.style.position = "absolute";
-        img.style.display = "block";
-        img.style.maxWidth = "none";
-        img.style.zIndex = anchor.behindDoc ? "-1" : "auto";
+        box.style.position = "absolute";
+        box.style.display = "block";
+        box.style.maxWidth = "none";
+        box.style.zIndex = anchor.behindDoc ? "-1" : "auto";
         // The band is drawn over the page's text: a picture Word puts behind
         // the text makes the overlay multiply onto the page (note-editor.css),
         // so the text shows through as if it were above (R21-D04's picture
         // watermark hid its first page).
         if (anchor.behindDoc) img.setAttribute("data-band-behind-text", "");
         // Word's Washout, as the document's own picture watermark draws it.
-        img.style.opacity = image.washout ? "0.3" : "";
-        placeBandBox(img, anchor.horizontal, anchor.vertical, image.widthEmu ?? anchor.widthEmu, image.heightEmu ?? anchor.heightEmu);
-        markBandWrap(img, anchor);
-        markBandKeep(img, anchor);
+        const washout = image.washout ? washoutPictureStyle(img.ownerDocument) : null;
+        img.style.opacity = washout ? washout.opacity : "";
+        img.style.filter = washout ? washout.filter : "";
+        placeBandBox(box, anchor.horizontal, anchor.vertical, image.widthEmu ?? anchor.widthEmu, image.heightEmu ?? anchor.heightEmu);
+        markBandWrap(box, anchor);
+        markBandKeep(box, anchor);
         if (anchor.vertical.relativeFrom === "paragraph" || anchor.vertical.relativeFrom === "line") {
           paragraph.style.position = "relative";
-          paragraph.appendChild(img);
+          paragraph.appendChild(box);
         } else {
-          root.appendChild(img);
+          root.appendChild(box);
         }
       }
       // A line holding in-line pictures and no text is as tall as its
@@ -1273,13 +1744,34 @@ export function buildBandRichDom(
       // R158-D19's header logo 75.45 pt: the next line starts 75.43 pt
       // down, where the band drew it 3 pt lower and every page's body
       // started late). With text beside the picture the descent stays.
-      if (
-        (block.images ?? []).some((image) => !image.floatAnchor) &&
-        !block.runs.some((run) => run.frame === undefined && (run.text ?? "").trim() !== "")
-      ) {
-        paragraph.setAttribute("data-band-picture-line", "");
+      // Word stands such a line's drawings -- pictures, shapes and charts
+      // alike -- on the BOTTOM of the line, which is the taller of the
+      // paragraph mark's own line and the tallest drawing (Windows Word 16,
+      // probes/inlshape: a 3.55 pt shape or picture alone in a Calibri 11
+      // line leaves the line 13.44 pt with the drawing's bottom on its
+      // bottom, 3 pt under the baseline; a 20 pt one makes the line 20.04
+      // pt. Corpus R412-D12's footer diamond rule stood 3.4 pt high on the
+      // baseline). `window.__docsBandObjectLineOff = true` keeps the older
+      // reading: pictures only, the line as tall as the picture (A/B).
+      const objectLineOff =
+        (doc.defaultView as (Window & { __docsBandObjectLineOff?: boolean }) | null)?.__docsBandObjectLineOff === true;
+      const hasInlineObject = objectLineOff
+        ? (block.images ?? []).some((image) => !image.floatAnchor)
+        : (block.images ?? []).some((image) => !image.floatAnchor) ||
+          (block.shapes ?? []).some((shape) => !shape.floatAnchor) ||
+          (block.charts ?? []).length > 0;
+      if (hasInlineObject && !block.runs.some((run) => run.frame === undefined && (run.text ?? "").trim() !== "")) {
+        paragraph.setAttribute("data-band-picture-line", objectLineOff ? "" : "bottom");
       }
-      paintPhysicalParagraphBorderEdges(paragraph, block.paragraphBorders);
+      paintPhysicalParagraphBorderEdges(paragraph, groupBorders);
+      if (block.shading) {
+        // Word's paragraph fill: between the line's indents (the band draws a
+        // positive indent as padding), out to its borders when it has them,
+        // and not in its space before or after (margins). Corpus R436-D25's
+        // running head is white words on a red bar.
+        paragraph.style.backgroundColor = block.shading;
+        if (!block.paragraphBorders) paragraph.style.backgroundClip = "content-box";
+      }
       if (block.wordHorizontalRule) {
         // Word's horizontal line the line hosts, drawn as a body paragraph's
         // is (`wordHorizontalRule`): at the bottom of its own line.
@@ -1321,6 +1813,42 @@ export function buildBandRichDom(
       }
       if (block.tableAlign === "center") { table.style.marginLeft = "auto"; table.style.marginRight = "auto"; }
       else if (block.tableAlign === "right") table.style.marginLeft = "auto";
+      // Table direction: Right-to-left (`w:bidiVisual`): the columns run from
+      // the right, as a body table's do (note-editor.css), and each cell keeps
+      // its own text direction. Word draws R350-D01's masthead so: the first
+      // cell's cover picture on the right, the last cell's logo on the left.
+      // `window.__docsBandBidiVisualOff = true` draws it from the left, for an
+      // A/B of the same build.
+      const bidiVisual =
+        block.bidiVisual === true &&
+        !(typeof window !== "undefined" &&
+          (window as Window & { __docsBandBidiVisualOff?: boolean }).__docsBandBidiVisualOff === true);
+      if (bidiVisual) {
+        table.style.direction = "rtl";
+        table.dataset.wordBidiVisual = "true";
+        // Its leading edge is the right one: a right-to-left table wider than
+        // the room it stands in keeps its right edge on the right margin and
+        // runs out past the left one. Windows Word: R399-D02's header table
+        // (405 pt in 360) and the title table nested in its first cell (346
+        // pt in 340.5, `w:jc` right), R379-D02's (364 pt): the band anchored
+        // them on the left and every header line stood up to 48 pt right of
+        // Word's. CSS resolves an over-wide block's margins by its container's
+        // direction, so the left margin is set to what is left over, however
+        // negative. `window.__docsBandBidiOverflowOff = true` draws it from
+        // the left again, for an A/B of the same build.
+        if (
+          !relative?.length &&
+          widths &&
+          block.tableAlign !== "center" &&
+          !block.floatPosition &&
+          !(typeof window !== "undefined" &&
+            (window as Window & { __docsBandBidiOverflowOff?: boolean }).__docsBandBidiOverflowOff === true)
+        ) {
+          const total = widths.reduce((sum, width) => sum + width, 0);
+          table.style.marginLeft = `calc(100% - ${Math.round(total * 1000) / 1000}px)`;
+          table.style.marginRight = "0";
+        }
+      }
       const covered = new Set<string>();
       const byCoord = new Map<string, (typeof block.cells)[number]>();
       for (const cell of block.cells) {
@@ -1344,6 +1872,7 @@ export function buildBandRichDom(
           const cell = byCoord.get(key);
           const td = doc.createElement("td");
           td.style.whiteSpace = "pre-wrap";
+          if (bidiVisual) td.style.direction = "ltr";
           if (cell?.colspan) td.colSpan = cell.colspan;
           if (cell?.rowspan) td.rowSpan = cell.rowspan;
           if (cell?.align) td.style.textAlign = cell.align;
@@ -1381,7 +1910,9 @@ export function buildBandRichDom(
             td.style.setProperty(`padding-${side}`, `${padding}px`);
           }
           if (cell?.paragraphs?.length) {
-            const paragraphs = buildBandRichDom(doc, cell.paragraphs, context, true);
+            // An exact row keeps its height: its empty lines stand as drawn.
+            const exactRow = block.rowHeights?.[row]?.rule === "exact" && (cell.rowspan ?? 1) === 1;
+            const paragraphs = buildBandRichDom(doc, cell.paragraphs, context, exactRow ? true : "cell");
             td.append(...paragraphs.childNodes);
           } else if (cell?.runs?.length) appendRuns(td, cell.runs, context);
           else if (!cell?.tables?.length) td.textContent = cell?.text ?? "";
@@ -1392,6 +1923,7 @@ export function buildBandRichDom(
             const before = td.querySelectorAll(":scope > .sheet-band-rich__p")[nested.at] ?? null;
             td.insertBefore(drawn.firstChild ?? doc.createTextNode(""), before);
           }
+          collapseNestedTableEndLine(td, cell, context);
           tr.appendChild(td);
         }
         table.appendChild(tr);
@@ -1403,7 +1935,39 @@ export function buildBandRichDom(
       void undrawn;
     }
   }
+  addAdjoiningParagraphSpacing(root);
   return root;
+}
+
+/** A margin this module wrote (`12pt`), in points; 0 for none. Null for any
+ * other spelling, which is left as it is. */
+function writtenMarginPt(value: string): number | null {
+  if (!value) return 0;
+  const match = /^(-?\d+(?:\.\d+)?)pt$/.exec(value);
+  return match ? Number(match[1]) : null;
+}
+
+/**
+ * Word ADDS a paragraph's space after to the next paragraph's space before;
+ * CSS collapses the two adjoining margins into the larger. Two band lines in
+ * a row are given the whole gap as the second's top margin. Corpus R433-D11
+ * (Word 16.86's PDF): a footer of two lines, 12 pt after and 12 pt before,
+ * stands 24 pt apart -- the band drew 12, its footer a line short, and the
+ * body ran on into it. A line that ends the band keeps its own space after.
+ */
+function addAdjoiningParagraphSpacing(root: HTMLElement): void {
+  const children = Array.from(root.children) as HTMLElement[];
+  for (let index = 1; index < children.length; index += 1) {
+    const previous = children[index - 1];
+    const current = children[index];
+    if (!previous.classList.contains("sheet-band-rich__p") || !current.classList.contains("sheet-band-rich__p")) continue;
+    if (previous.style.position === "absolute" || current.style.position === "absolute") continue;
+    const after = writtenMarginPt(previous.style.marginBottom);
+    const before = writtenMarginPt(current.style.marginTop);
+    if (after === null || before === null || after <= 0 || before < 0) continue;
+    current.style.marginTop = `${Math.round((before + after) * 1000) / 1000}pt`;
+    previous.style.marginBottom = "0pt";
+  }
 }
 
 
@@ -1454,7 +2018,46 @@ function bandPositionalTab(tab: HTMLElement): PositionalTab | null {
  * not on screen keeps its first-stop approximation. Idempotent -- call it
  * again when fonts load or the band resizes.
  */
+/** Font > Advanced > Scale in a band: each word a box stretched from its left
+ * edge, the spaces between words ordinary text so the line still breaks
+ * there; `layoutBandCharScales` gives each box the advance Word does. */
+function appendScaledText(span: HTMLElement, text: string, scale: number): void {
+  for (const piece of text.split(/( +)/)) {
+    if (!piece) continue;
+    if (piece.startsWith(" ")) {
+      span.appendChild(span.ownerDocument.createTextNode(piece));
+      continue;
+    }
+    const word = span.ownerDocument.createElement("span");
+    word.setAttribute("data-band-char-scale", String(scale));
+    word.style.display = "inline-block";
+    word.style.textIndent = "0";
+    word.style.transform = `scaleX(${scale})`;
+    word.style.transformOrigin = "left center";
+    word.textContent = piece;
+    span.appendChild(word);
+  }
+}
+
+/** Each scaled word takes `scale` times its glyphs' width, its character
+ * spacing unscaled, as Word lays it out (corpus R434-D04: the IJDR title at
+ * 85 % fits its header box on one line). */
+export function layoutBandCharScales(root: ParentNode): void {
+  for (const word of root.querySelectorAll<HTMLElement>("[data-band-char-scale]")) {
+    const scale = Number(word.getAttribute("data-band-char-scale"));
+    if (!(scale > 0) || !word.offsetWidth) continue;
+    const spacing = Number.parseFloat(word.ownerDocument.defaultView?.getComputedStyle(word).letterSpacing ?? "") || 0;
+    const characters = Array.from(word.textContent ?? "").length;
+    // Laid out the box keeps its own width (glyphs and spacing); Word's
+    // advance is the glyphs scaled plus the spacing as stated.
+    const glyphs = word.offsetWidth - spacing * characters;
+    word.style.marginRight = `${Math.round((scale - 1) * glyphs * 1000) / 1000}px`;
+  }
+}
+
 export function layoutBandTabs(root: ParentNode): void {
+  // Scaled words first: the tabs measure the text they follow.
+  layoutBandCharScales(root);
   // The markers first: a text tab after a list number measures from where
   // the number's own tab ends.
   layoutBandListMarkers(root);
@@ -1628,7 +2231,7 @@ export function measureHeaderBandOverflowBySheet(overlay: Element): Record<numbe
   return out;
 }
 
-/** Each sheet's own footer overflow past its bottom margin (px, whole), by
+/** Each sheet's own footer overflow past its bottom margin (px, to 1/64), by
  * the band box's sheet index; a sheet whose footer fits is absent. Word ends
  * the body at the higher of the bottom margin and the footer's top (page
  * height less the footer distance and the footer's height), with no gap:
@@ -1642,7 +2245,11 @@ export function measureFooterBandOverflowBySheet(overlay: Element): Record<numbe
     const content = box.firstElementChild as HTMLElement | null;
     const sheet = Number(box.closest("[data-band-sheet-index]")?.getAttribute("data-band-sheet-index"));
     if (!content || !Number.isInteger(sheet) || box.clientWidth <= 0 || content.offsetWidth <= 0) continue;
-    const extra = Math.min(Math.max(0, Math.round(footerReach(content) - box.clientHeight + bandDistanceBeyondMargin(box, "bottom"))), 480);
+    // To the layout unit, not the whole pixel: Word ends the body at the
+    // footer's top to the twip, and a whole pixel's rounding (5.72 px drawn
+    // as 6) left a line that ends 0.2 px above it off the page (corpus
+    // R279-D17 / R279-D29: one line or a widow's two moved on, a page more).
+    const extra = Math.min(Math.max(0, Math.round((footerReach(content) - box.clientHeight + bandDistanceBeyondMargin(box, "bottom")) * 64) / 64), 480);
     if (extra > 0) out[sheet] = extra;
   }
   return out;
@@ -1660,7 +2267,9 @@ function footerReach(content: HTMLElement): number {
     child instanceof HTMLElement && getComputedStyle(child).position !== "absolute" && child.offsetHeight > 0);
   const contentRect = content.getBoundingClientRect();
   if (!first || !(content.offsetHeight > 0) || !(contentRect.height > 0)) return content.offsetHeight;
-  const scale = contentRect.height / content.offsetHeight;
+  // The drawn scale from the width: `offsetHeight` is a whole pixel, and a
+  // height-based scale gave back that whole pixel (53.72 px read as 54).
+  const scale = content.offsetWidth > 0 && contentRect.width > 0 ? contentRect.width / content.offsetWidth : contentRect.height / content.offsetHeight;
   const reach = (contentRect.bottom - first.getBoundingClientRect().top) / scale;
   return Number.isFinite(reach) && reach > 0 ? Math.min(reach, content.offsetHeight) : content.offsetHeight;
 }

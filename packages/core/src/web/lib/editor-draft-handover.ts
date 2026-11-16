@@ -13,6 +13,8 @@
  * all first, never waiting longer than the bound.
  */
 
+import { noteAppReload } from "./reload-reason";
+
 type Handover = () => Promise<void>;
 
 const handovers = new Set<Handover>();
@@ -47,7 +49,12 @@ export async function handOverEditorDrafts(
   }
 }
 
-/** Reload the page once the open editors have handed their drafts over. */
-export function reloadAfterEditorHandover(): void {
+/**
+ * Reload the page once the open editors have handed their drafts over. The
+ * reason is kept for the next load's session_start (lib/reload-reason); used
+ * as a click handler it is the notice's button.
+ */
+export function reloadAfterEditorHandover(reason?: unknown): void {
+  noteAppReload(typeof reason === "string" ? reason : "notice_button");
   void handOverEditorDrafts().finally(() => window.location.reload());
 }

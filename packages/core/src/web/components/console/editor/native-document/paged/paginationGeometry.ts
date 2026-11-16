@@ -142,3 +142,40 @@ export function paginationBoxRelativeTo(element: HTMLElement, container: HTMLEle
     height: layoutUnit(paper.height / scale.y),
   };
 }
+
+/** Where an element's border box starts in the page's layout, CSS pixels. */
+function layoutOrigin(element: HTMLElement): { top: number; left: number } {
+  let top = 0,
+    left = 0;
+  for (let node: HTMLElement | null = element; node; ) {
+    const parent = node.offsetParent as HTMLElement | null;
+    top += node.offsetTop + (parent?.clientTop ?? 0);
+    left += node.offsetLeft + (parent?.clientLeft ?? 0);
+    node = parent;
+  }
+  return { top, left };
+}
+
+/** The used border-box size, fractional (an A4 sheet is 793.7px) where the
+ * element is sized border-box, within a pixel of its rounded offset size. */
+function layoutSize(element: HTMLElement, axis: "width" | "height"): number {
+  const rounded = axis === "width" ? element.offsetWidth : element.offsetHeight;
+  const style = getComputedStyle(element);
+  const used = Number.parseFloat(style[axis]);
+  return style.boxSizing === "border-box" && Math.abs(used - rounded) < 1 ? used : rounded;
+}
+
+/** An element's box in a container's own CSS pixels, from layout offsets:
+ * no transform or zoom between them or above them changes it, a 3D turn
+ * included, which no scale read from client rects can undo. Its place rounds
+ * to whole pixels. */
+export function layoutBoxRelativeTo(element: HTMLElement, container: HTMLElement) {
+  const at = layoutOrigin(element);
+  const from = layoutOrigin(container);
+  return {
+    top: at.top - from.top,
+    left: at.left - from.left,
+    width: layoutSize(element, "width"),
+    height: layoutSize(element, "height"),
+  };
+}

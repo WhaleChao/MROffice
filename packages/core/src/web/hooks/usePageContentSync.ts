@@ -52,20 +52,31 @@ import {
   collaborativeTextAt,
   collaborativeTextChanges,
   collaborativeTextEditsFor,
+  composeCollaborativeTextChanges,
   createJsonCollaborationHistory,
+  watchConcurrentKeyedCreations,
+  noteKeyedCreationEdits,
   jsonEquals,
   jsonValueAt,
   resolveCollaborativeTextAnchor,
+  shareUnchangedJson,
   upgradeCollaborativeText,
+  withUndrawnDelivery,
+  type UndrawnTextItems,
   withJsonValueAt,
+  withTextContainerWords,
   yToJson,
   yToJsonShared,
   type CollaborativeTextChange,
   type CollaborativeTextEdit,
   type JsonValue,
 } from "../lib/collab/json-crdt";
-import { CollaborativeTextKeys, textKeyWritten, writeWaitingTextEdits } from "../lib/collab/collab-text-keys";
+import { CollaborativeTextKeys, OrphanTextEdits, textKeyWritten, writeWaitingTextEdits } from "../lib/collab/collab-text-keys";
+import { remoteUpdateBeingApplied } from "../lib/collab/remote-update-payload";
 import { USE_COLLAB_EDITING } from "../lib/code-runner/editor-flags";
+import { createRoomCustodyPump, roomCustodyPumpEnabled } from "../lib/collab/room-custody-pump";
+import { closingBytesBase64 } from "../lib/page-closing-edits";
+import { sendPageCustodyEdits } from "../lib/page-collab-sdk";
 import { createPageCausalModelStatus, type PageYjsFailureCause } from "../lib/collab/ws-provider";
 import type { PageItem } from "../lib/notebook-sdk";
 import {
@@ -85,6 +96,13 @@ import type { WorkbookContentDocument } from "@/lib/collab/workbook-shards";
 
 const ROOT_KEY = "page-json";
 const INITIAL_ORIGIN = Symbol("mrn-page-json-seed");
+/** How long after the editor took a document a collaborator's characters in
+ *  it are still not taken as drawn (`UndrawnTextItems`): a frame refit
+ *  commits a cell's older words within a few hundred milliseconds. */
+const UNDRAWN_TEXT_DRAW_MS = 1_000;
+/** The longest a collaborator's characters are kept from a comparison's
+ *  deletion without the editor showing them. */
+const UNDRAWN_TEXT_KEPT_AT_MOST_MS = 30_000;
 const PAGE_AUTHORITY_KEY_PATTERN =
   /^(known|unknown):(writable|readonly):(none|read_only_tier|role|locked)$/u;
 
@@ -157,16 +175,25 @@ export function coeditTail(doc: unknown, path: readonly string[] | undefined = c
  * each as the room holds it after the key, numbered in order. */
 interface TextWriteLog {
   seq: number;
-  entries: Array<{ seq: number; path: readonly string[]; value: Record<string, JsonValue> }>;
+  /** `held`: the container as the editor holds it once it draws its key --
+   * the room's words, every other field as the editor had it (a
+   * collaborator's format of the object it had not drawn stays out). */
+  entries: Array<{ seq: number; path: readonly string[]; held: Record<string, JsonValue> }>;
 }
 /** Kept for documents a render or two behind; older ones are not handed back. */
 const TEXT_WRITE_LOG_LIMIT = 512;
 
-/**
- * `content` with the text containers written into the room after it was
- * made (`made`: the write count when this hook handed it out) as the room
- * holds them. A document the hook did not make is the editor's own: as it is.
- */
+
+
+
+
+
+
+
+
+
+
+
 function withTextWritesSince<T extends PageContentDocument | null | undefined>(
   content: T,
   log: TextWriteLog,
@@ -179,7 +206,7 @@ function withTextWritesSince<T extends PageContentDocument | null | undefined>(
   let out: JsonValue = doc;
   for (const entry of log.entries) {
     if (entry.seq <= at) continue;
-    out = withJsonValueAt(out, entry.path, entry.value);
+    out = withJsonValueAt(out, entry.path, entry.held);
   }
   if (out !== doc) made.set(out as object, log.seq);
   return out as unknown as T;
@@ -279,6 +306,10 @@ export interface PageContentSyncController {
    * written into the room where it was typed rather than where a string
    * comparison of the two documents would put it. */
   noteTextEdit?: (edit: PageCollaborativeTextEdit) => PageTextEditOutcome | void;
+  /** Whether a key typed (`noteTextEdit`) waits outside the room for the next
+   * publication (the room took no writes when it was typed): edits the room's
+   * acknowledgements do not cover yet. */
+  textEditsWaiting?: () => boolean;
   /** This member's caret in a collaborative text, kept by the room as
    * relative positions so a delivery says where it now stands
    * (`PageRemoteContentDetail.carets`). Ignored unless `text` is the room's. */
@@ -339,6 +370,10 @@ export interface PageContentSyncController {
    * base64: what a server write that answers with the room's own update
    * (a deck's slide insert or delete) measures that update from. */
   stateVectorBase64?: () => string | null;
+  /** This window's own author id in the room document (its Y.Doc clientID):
+   * with the state vector, the operations this window made (a copy kept on
+   * this device names them, lib/autorecover-store). Null without a room. */
+  clientId?: () => number | null;
   /** A server write of this member's own, as the room's update (base64):
    * applied under this member's local origin, so it is their step in the
    * shared history (Undo takes it back). False when the room is not this
@@ -452,7 +487,7 @@ export function canApplyPageMaintenanceDelta(
 
 type LegacyContentController = Pick<PageContentSyncController,
   "history" | "flushContent" | "roomUnavailable" | "applyMaintenanceDelta" | "causal" | "awareness" | "noteTextEdit" |
-  "anchorTextCaret" | "stateVectorBase64" | "applyOwnServerUpdate">;
+  "textEditsWaiting" | "anchorTextCaret" | "stateVectorBase64" | "clientId" | "applyOwnServerUpdate">;
 
 function useLegacyPageContentSync({
   pageId,
@@ -479,6 +514,10 @@ function useLegacyPageContentSync({
   const sessionRef = useRef<CollabSession | null>(null);
   /** Text edits the next publication writes exactly (`noteTextEdit`). */
   const pendingTextEditsRef = useRef<PageCollaborativeTextEdit[]>([]);
+  /** Keys whose words a publication did not bring into the room (a file's
+   * SmartArt typed on its own drawing), waiting for a peer's words
+   * (lib/collab/collab-text-keys `OrphanTextEdits`). */
+  const orphanTextEditsRef = useRef(new OrphanTextEdits<PageCollaborativeTextEdit>());
   /** Writes an edit with its container into the room now (the live room's). */
   const writeTextEditNowRef = useRef<((edit: PageCollaborativeTextEdit) => string) | null>(null);
   const anchorTextCaretRef = useRef<((caret: PageCollaborativeTextCaret) => void) | null>(null);
@@ -513,6 +552,7 @@ function useLegacyPageContentSync({
     pendingTextEditsRef.current.push(edit);
     return outcome;
   }, []);
+  const textEditsWaiting = useCallback((): boolean => pendingTextEditsRef.current.length > 0, []);
   const anchorTextCaret = useCallback((caret: PageCollaborativeTextCaret) => {
     anchorTextCaretRef.current?.(caret);
   }, []);
@@ -562,6 +602,21 @@ function useLegacyPageContentSync({
   const textWritesRef = useRef<TextWriteLog>({ seq: 0, entries: [] });
   /** The documents this hook handed out, by the write count they were made at. */
   const madeAtRef = useRef(new WeakMap<object, number>());
+  /** The documents this hook handed out, by when (performance.now()). */
+  const handedAtRef = useRef(new WeakMap<object, number>());
+  /** When the editor took a document this hook handed out as its prop: the
+   *  last few, by when it was handed out and when it was taken. */
+  const shownHandedRef = useRef<Array<{ handedAt: number; shownAt: number }>>([]);
+  /** `foreignTransactionsRef` when the room's state was last read for the
+   *  editor (a delivery, a projection): transactions after it have not been
+   *  handed to the editor yet. */
+  const deliveredForeignAtRef = useRef(0);
+  /** This session's guard of collaborators' characters the editor may not
+   *  have drawn (`UndrawnTextItems`), with the count of those a publication
+   *  kept; null without a room. */
+  const undrawnGuardRef = useRef<(UndrawnTextItems & { keptCount: number }) | null>(null);
+  /** Hands the editor the room as it is now, soon (a publication kept characters it had not drawn). */
+  const redeliverRef = useRef<(() => void) | null>(null);
   const causalModel = pdfPageUsesAuthorCausalModel(durablePage) ? "pdf-author-v1" : "page-json-v1";
   const privateKeysRef = useRef(privateKeys);
   useLayoutEffect(() => {
@@ -589,6 +644,12 @@ function useLegacyPageContentSync({
   // one tab's letters vanished as the other typed). Such a document gets
   // every key written after it was made again.
   useLayoutEffect(() => {
+    const handedAt = content ? handedAtRef.current.get(content) : undefined;
+    if (handedAt !== undefined) {
+      const shown = shownHandedRef.current;
+      shown.push({ handedAt, shownAt: performance.now() });
+      if (shown.length > 8) shown.splice(0, shown.length - 8);
+    }
     contentRef.current = withTextWritesSince(content, textWritesRef.current, madeAtRef.current);
     if (coeditTraceOn()) coeditTrace("prop", { made: content ? madeAtRef.current.get(content) ?? null : null, seq: textWritesRef.current.seq,
       text: coeditTail(content, tracedPathRef.current), now: coeditTail(contentRef.current, tracedPathRef.current) });
@@ -682,8 +743,11 @@ function useLegacyPageContentSync({
     // was replayed while the room holds only what this member published.)
     const roomIsOwn = baselineIsOwnAtRef.current !== null &&
       baselineIsOwnAtRef.current === foreignTransactionsRef.current && deliveryIsOwnRef.current;
-    const shown = !roomIsOwn && lastDelivery && jsonEquals(current, lastDelivery.source)
-      ? lastDelivery.projection
+    // What the editor still holds as it was handed it before the last
+    // delivery is that delivery's (`withUndrawnDelivery`): the whole body,
+    // or each part of it the editor has not touched since.
+    const shown = !roomIsOwn && lastDelivery
+      ? withUndrawnDelivery(current, lastDelivery.source, lastDelivery.projection) as PageContentDocument
       : current;
     // A text the editor still shows as it was before a key of it was carried
     // over a collaborator's characters is the room's words (no edit of it).
@@ -710,14 +774,63 @@ function useLegacyPageContentSync({
       const textEdits = collaborativeTextEditsFor(root, notedEdits.map(({ container: _container, ...edit }) => edit));
       if (coeditTraceOn()) coeditTrace("publish", { local: coeditTail(local, tracedPathRef.current), base: coeditTail(baseline, tracedPathRef.current),
         current: coeditTail(current, tracedPathRef.current), noted: notedEdits.length });
+      const undrawn = undrawnGuardRef.current ?? undefined;
+      if (undrawn) undrawn.keptCount = 0;
+      const ownFrom = Y.getState(session.ydoc.store, session.ydoc.clientID);
       session.ydoc.transact(() => {
-        applyJsonDelta(root, nextShared, prevShared, textEdits ? { textEdits, rebaseStaleEdits: true } : undefined);
+        applyJsonDelta(root, nextShared, prevShared, {
+          ...(textEdits ? { textEdits, rebaseStaleEdits: true } : {}),
+          ...(undrawn ? { undrawn } : {}),
+        });
+        // Keys of words this publication creates (a diagram's first key,
+        // which converts it) are this member's change of what it created.
+        if (notedEdits.length > 0) noteKeyedCreationEdits(root, notedEdits);
       }, localOrigin);
+      // Keys whose words this publication did not bring into the room wait
+      // for a peer's words (`orphanTextEditsRef`).
+      if (notedEdits.length > 0) {
+        orphanTextEditsRef.current.keep(root, notedEdits,
+          { client: session.ydoc.clientID, from: ownFrom, to: Y.getState(session.ydoc.store, session.ydoc.clientID) });
+      }
+      if (undrawn && undrawn.keptCount > 0) {
+        // The room keeps collaborators' characters this document was
+        // committed without: it is not this member's document, and the
+        // editor is handed the room's as soon as it can take it.
+        if (coeditTraceOn()) coeditTrace("kept-undrawn", { count: undrawn.keptCount, local: coeditTail(local, tracedPathRef.current) });
+        baselineRef.current = { ...local };
+        baselineIsOwnAtRef.current = null;
+        deliveryIsOwnRef.current = false;
+        redeliverRef.current?.();
+        return;
+      }
     }
     baselineRef.current = { ...local };
-    baselineIsOwnAtRef.current = foreignTransactionsRef.current;
-    deliveryIsOwnRef.current = local === current;
-    lastDeliveryRef.current = { source: current, projection: local };
+    // The room holds this member's document only when every transaction a
+    // collaborator made on it has been handed to the editor: one applied but
+    // not delivered yet (the window busy with the last delivery) is in the
+    // room and not in `local`.
+    baselineIsOwnAtRef.current = foreignTransactionsRef.current === deliveredForeignAtRef.current
+      ? foreignTransactionsRef.current : null;
+    // The editor handing back the very document the last delivery projected
+    // (the window took it as its prop) has not therefore drawn it: a cell
+    // being typed in keeps its own words until it loads the delivery, and a
+    // commit from them meanwhile (a table's frame refitted) is still that
+    // delivery's undrawn part. Recorded as the source, the cell's older words
+    // read as this member deleting the collaborator's letter, and the next
+    
+    // tr34: "QBSDAS" became "QSDAS" + "B").
+    // (Nor does it make the room this member's own: what the delivery
+    // brought is still the collaborator's.) Nor does any other document this
+    // hook handed out: a save's mirror hands the room's document back and a
+    // flush of it hands out a newer copy, and the window took the first as
+    
+    // refit from the cell's older words a moment later deleted nine letters).
+    const handedBack = lastDelivery !== null && local === current &&
+      (current === lastDelivery.projection || handedAtRef.current.has(current));
+    if (!handedBack) {
+      deliveryIsOwnRef.current = local === current;
+      lastDeliveryRef.current = { source: current, projection: local };
+    }
   }, [active, canPublish, localOrigin]);
 
   useEffect(() => {
@@ -728,6 +841,7 @@ function useLegacyPageContentSync({
     const textModel = durablePageRef.current?.id === pageId && durablePageRef.current.page_type === "presentation";
     // Keys noted for another room's publication are not this one's.
     pendingTextEditsRef.current = [];
+    if (coeditTraceOn()) coeditTrace("session", { epoch: migratedEpoch ?? null });
     const session = createCollabSession({ docId: pageId, pageJsonCausalModel: true,
       ...(migratedEpoch ? { pageJsonCausalEpoch: migratedEpoch } : {}),
       ...(textModel ? { pageJsonTextModel: true } : {}) });
@@ -743,6 +857,45 @@ function useLegacyPageContentSync({
     rootRef.current = root;
     const maintenanceOrigin = Symbol("mrn-page-json-maintenance");
     const ownSaveReceiptOrigin = Object.freeze({ kind: "mrn-page-json-own-save-receipt" });
+    // Collaborators' characters the editor may not have drawn yet, by room
+    // text: the state vector before the first of them came, and when the
+    // last did. The editor has drawn them once it showed the text as the
+    // room holds it (a publication of the room's very words, a key typed on
+    // them), or once it took a document handed out after the last of them
+    // and had a moment to draw it -- never sooner than a frame refit can
+    
+    const undrawnTexts = new WeakMap<Y.Text, { before: Map<number, number>; firstAt: number; lastAt: number }>();
+    const undrawnSettled = (mark: { firstAt: number; lastAt: number }, now: number) =>
+      now - mark.firstAt > UNDRAWN_TEXT_KEPT_AT_MOST_MS ||
+      shownHandedRef.current.some((shown) => shown.handedAt >= mark.lastAt && now - shown.shownAt >= UNDRAWN_TEXT_DRAW_MS);
+    const noteUndrawnText = (transaction: Y.Transaction) => {
+      const origin = transaction.origin;
+      if (origin === localOrigin || origin === INITIAL_ORIGIN || origin === maintenanceOrigin) return;
+      const now = performance.now();
+      for (const type of transaction.changed.keys()) {
+        if (!(type instanceof Y.Text)) continue;
+        const mark = undrawnTexts.get(type);
+        if (mark && !undrawnSettled(mark, now)) mark.lastAt = now;
+        else undrawnTexts.set(type, { before: new Map(transaction.beforeState), firstAt: now, lastAt: now });
+      }
+    };
+    session.ydoc.on("afterTransaction", noteUndrawnText);
+    undrawnGuardRef.current = {
+      keptCount: 0,
+      drawnTo: (text) => {
+        const mark = undrawnTexts.get(text);
+        if (!mark) return null;
+        if (undrawnSettled(mark, performance.now())) {
+          undrawnTexts.delete(text);
+          return null;
+        }
+        return mark.before;
+      },
+      drawn: (text) => { undrawnTexts.delete(text); },
+      kept: (_text, count) => {
+        if (undrawnGuardRef.current) undrawnGuardRef.current.keptCount += count;
+      },
+    };
     let causalStatus: "preparing" | "ready" | "failed" = "preparing";
     let causalEpoch: number | null = null;
     let causalRevision = 0;
@@ -763,6 +916,35 @@ function useLegacyPageContentSync({
     const history = createJsonCollaborationHistory(root, {
       localOrigin, canWrite: canPublish, maintenanceOrigins: new Set<unknown>([maintenanceOrigin, ownSaveReceiptOrigin]),
     });
+    // Two members creating one entry at once (a diagram's first-edit
+    // conversion in two windows): the one whose entry the room drops writes
+    // its change again over the one kept (lib/collab/json-crdt).
+    const stopCreationWatch = watchConcurrentKeyedCreations(root, { localOrigin });
+    // Keys typed into words the room did not hold (`orphanTextEditsRef`):
+    // written when a peer's update brings those words, before the update is
+    // handed to the editor; let go when this member's own publication brings
+    // them (its words are in it).
+    const orphanTextEdits = orphanTextEditsRef.current;
+    orphanTextEdits.clear();
+    const writeOrphanTextEdits = (transaction: Y.Transaction) => {
+      if (orphanTextEdits.size === 0 || transaction.local) return;
+      const arrived = orphanTextEdits.arrived(root, remoteUpdateBeingApplied(session.ydoc));
+      if (arrived.length === 0) return;
+      const write = writeTextEditNowRef.current;
+      const left = write
+        ? writeWaitingTextEdits(arrived, (edit) => {
+          const done = write(edit);
+          noteTextEditOutcome(`orphan-${done}`);
+          return done;
+        })
+        : arrived;
+      pendingTextEditsRef.current.push(...left);
+    };
+    const forgetOrphanTextEdits = (transaction: Y.Transaction) => {
+      if (orphanTextEdits.size > 0 && transaction.local && transaction.origin === localOrigin) orphanTextEdits.forgetPresent(root);
+    };
+    session.ydoc.on("beforeObserverCalls", writeOrphanTextEdits);
+    session.ydoc.on("afterTransaction", forgetOrphanTextEdits);
     const isCurrent = () => !disposed && sessionRef.current === session &&
       bindingRef.current === authorityBinding && readyRef.current && canPublish() &&
       (causalScopeRef.current?.() ?? true);
@@ -774,16 +956,26 @@ function useLegacyPageContentSync({
       const projection = { ...pickPrivate(source, privateKeysRef.current), ...shared };
       // The room still holds only what this member published: its baseline
       // stays their own document (equal values, shared objects).
+      const held = lastDeliveryRef.current;
       const own = baselineIsOwnAtRef.current !== null &&
         baselineIsOwnAtRef.current === foreignTransactionsRef.current &&
-        deliveryIsOwnRef.current && lastDeliveryRef.current?.source === source;
+        deliveryIsOwnRef.current && held?.source === source;
       if (!own) {
         baselineRef.current = projection;
         baselineIsOwnAtRef.current = null;
       }
+      // The editor's document handed back as the last delivery's very
+      // projection (a save flushing what its mirror returned) is not what
+      // the editor draws: that is still the delivery's source, until a
+      
+      // the source, a frame refit from a cell's older words a moment later
+      // read a collaborator's nine letters as deleted).
+      const editorHolds = !own && held && !deliveryIsOwnRef.current && source === held.projection ? held.source : source;
       deliveryIsOwnRef.current = own;
-      lastDeliveryRef.current = { source, projection };
+      deliveredForeignAtRef.current = foreignTransactionsRef.current;
+      lastDeliveryRef.current = { source: editorHolds, projection };
       madeAtRef.current.set(projection, textWritesRef.current.seq);
+      handedAtRef.current.set(projection, performance.now());
       return projection;
     };
     let noProjectionNotedAt = 0;
@@ -851,17 +1043,34 @@ function useLegacyPageContentSync({
       baselineRef.current = withJsonValueAt(baseline, containerPath, value) as PageContentDocument;
       const local = contentRef.current;
       const delivery = lastDeliveryRef.current;
-      if (local) contentRef.current = withJsonValueAt(local, containerPath, value) as PageContentDocument;
+      // What the editor holds of the container is the words as written and
+      // every other field as the editor had it when it typed the key
+      // (`container.next`): the editor's documents, here and those a write
+      // log replay brings up to date (`withTextWritesSince`), take that, so
+      // a publication never records the room's fields the editor has not
+      // drawn as the editor's own. (With no delivery to read the rest from,
+      // the room's container, as before.)
+      const held = delivery ? withTextContainerWords(container.next, value) : value;
+      if (local) contentRef.current = withJsonValueAt(local, containerPath, held) as PageContentDocument;
       if (delivery) {
+        // What the editor holds of the container is the words as written and
+        // every other field as the editor had it when it typed the key
+        // (`container.next`): a collaborator's format of the object the room
+        // holds and the editor has not drawn (a slow view: Home > Font on the
+        // whole box a moment before) stays the delivery's, for the editor's
+        // next commit -- which still shows the object without it -- to leave
+        // in the room. Recorded as the room's whole container, that commit
+        
+        // tab B slowed 6x, the box's Georgia gone from every run).
         lastDeliveryRef.current = {
-          source: delivery.source === local && contentRef.current ? contentRef.current
-            : withJsonValueAt(delivery.source, containerPath, value) as PageContentDocument,
+          source: withJsonValueAt(delivery.source === local && contentRef.current ? contentRef.current : delivery.source,
+            containerPath, held) as PageContentDocument,
           projection: withJsonValueAt(delivery.projection, containerPath, value) as PageContentDocument,
         };
       }
       const log = textWritesRef.current;
       log.seq += 1;
-      log.entries.push({ seq: log.seq, path: containerPath, value });
+      log.entries.push({ seq: log.seq, path: containerPath, held });
       if (log.entries.length > TEXT_WRITE_LOG_LIMIT) log.entries.splice(0, log.entries.length - TEXT_WRITE_LOG_LIMIT);
       // The caret the key left, bound to the letter before it.
       const key = edit.path.join("\u0000");
@@ -870,6 +1079,10 @@ function useLegacyPageContentSync({
         caretAnchors.set(key, {
           path: edit.path, text, start: collaborativeTextAnchor(text, write.caret, -1), end: collaborativeTextAnchor(text, write.caret, -1),
           placed: { text: write.roomText, start: write.caret, end: write.caret },
+          // A carried key: until the editor draws the room's words, its own
+          // caret reads in the words it typed in, behind the key.
+          ...(write.carried ? { view: { text: write.carried.viewText, start: write.carried.viewCaret,
+            end: write.carried.viewCaret } } : {}),
         });
       }
       if (write.carried) {
@@ -893,6 +1106,9 @@ function useLegacyPageContentSync({
       path: readonly string[]; text: Y.Text; start: Y.RelativePosition; end: Y.RelativePosition;
       /** Where it stood when placed, or when last carried. */
       placed: Omit<PageCollaborativeTextCaret, "path">;
+      /** A carried key's caret as the editor still reads it, in the words it
+       * typed the key into (`writeTextEditNowRef`). */
+      view?: Omit<PageCollaborativeTextCaret, "path">;
     }>();
     anchorTextCaretRef.current = (caret) => {
       if (!readyRef.current || sessionRef.current !== session) return;
@@ -906,6 +1122,13 @@ function useLegacyPageContentSync({
       // delivery's delta.
       if (!text || text.toString() !== caret.text || caret.start < 0 || caret.start > caret.end ||
           caret.end > caret.text.length) {
+        // The caret a carried key left, read back from the words the editor
+        // typed it into (it has not drawn the room's yet): the room's anchor
+        // behind the key is that caret. Dropped, the next delivery carried no
+        // caret, the editor kept its offset, and the next keys went in front
+        
+        const kept = caretAnchors.get(key)?.view;
+        if (text && kept && kept.text === caret.text && kept.start === caret.start && kept.end === caret.end) return;
         caretAnchors.delete(key);
         return;
       }
@@ -967,6 +1190,7 @@ function useLegacyPageContentSync({
       }
       return btoa(text);
     };
+    const clientId = (): number | null => (isCurrent() ? session.ydoc.clientID : null);
     const applyOwnServerUpdate = (updateBase64: string): boolean => {
       if (!isCurrent()) return false;
       let update: Uint8Array;
@@ -1097,7 +1321,7 @@ function useLegacyPageContentSync({
           previous.history.canUndo === canUndo && previous.history.canRedo === canRedo) return;
       const next: LegacyContentController & { binding: string } = {
         binding: authorityBinding, flushContent, roomUnavailable, applyMaintenanceDelta,
-        stateVectorBase64, applyOwnServerUpdate,
+        stateVectorBase64, clientId, applyOwnServerUpdate,
         ...(hasCausal ? { causal: { status: causalStatus, saved: causalSaved,
           readContent: () => !disposed && sessionRef.current === session && readyRef.current &&
             bindingRef.current === authorityBinding && (causalScopeRef.current?.() ?? true) ? currentProjection() : null,
@@ -1137,6 +1361,12 @@ function useLegacyPageContentSync({
         ? { pageId, content: loadedContent as PageContentDocument } : null;
     }
 
+    // Peers' updates that came while the window was still busy with the last
+    // delivery: applied to the room document as they come, handed to the
+    // editor as one delivery (`deliverRemote`).
+    let heldRemoteChanges: CollaborativeTextChange[] | null = null;
+    let lastDeliveryEndedAt = Number.NEGATIVE_INFINITY;
+    let lastDeliveryMs = 0;
     const deliver = (textChanges?: readonly CollaborativeTextChange[], options?: {
       /** Hand it over even when it is the last delivery's projection. */
       force?: boolean;
@@ -1145,6 +1375,13 @@ function useLegacyPageContentSync({
     }) => {
       if (disposed || sessionRef.current !== session || bindingRef.current !== authorityBinding ||
           !(causalScopeRef.current?.() ?? true)) return;
+      // Any delivery hands over what the room holds now: peers' changes held
+      // for the next one go with it (their deltas first), not after it.
+      if (heldRemoteChanges) {
+        textChanges = composeCollaborativeTextChanges([...heldRemoteChanges, ...(textChanges ?? [])]);
+        heldRemoteChanges = null;
+      }
+      const deliveryStartedAt = performance.now();
       const roomDoc = stripPrivate(
         yToJsonShared(root) as PageContentDocument,
         privateKeysRef.current,
@@ -1185,9 +1422,11 @@ function useLegacyPageContentSync({
         previousShared ? settleStaleTextViewsRef.current?.(localProjection, previousShared) ?? localProjection : localProjection,
         privateKeysRef.current,
       );
+      // A merge is built afresh: what it leaves as the room has it is handed
+      // on as the room's own objects, so a slide nobody changed reads as unchanged.
       const mergedShared =
         previousShared && !jsonEquals(localShared, previousShared)
-          ? mergePageDocumentDelta(roomDoc, localShared, previousShared)
+          ? shareUnchangedJson(mergePageDocumentDelta(roomDoc, localShared, previousShared), roomDoc)
           : roomDoc;
       // The room owns shared content; this member owns their view state. Keep
       // the ROOM baseline separate from the rebased editor projection so a
@@ -1211,13 +1450,48 @@ function useLegacyPageContentSync({
       );
       lastDeliveryRef.current = { source: localDoc, projection: merged };
       madeAtRef.current.set(merged, textWritesRef.current.seq);
+      handedAtRef.current.set(merged, performance.now());
+      deliveredForeignAtRef.current = foreignTransactionsRef.current;
       deliveryIsOwnRef.current = false;
       if (coeditTraceOn()) coeditTrace("deliver", { force: Boolean(options?.force), room: coeditTail(roomDoc, tracedPathRef.current),
         local: coeditTail(localShared, tracedPathRef.current), base: coeditTail(previousShared, tracedPathRef.current),
-        merged: coeditTail(merged, tracedPathRef.current), skipped: alreadyDelivered && !options?.force });
+        merged: coeditTail(merged, tracedPathRef.current), skipped: alreadyDelivered && !options?.force,
+        changes: textChanges?.length ?? 0, projectMs: Math.round(performance.now() - deliveryStartedAt) });
       if (alreadyDelivered && !options?.force) return;
       const carets = options?.carets ?? (textChanges?.length ? caretsAfterChangeRef.current?.(textChanges) : undefined);
       onRemoteRef.current(merged, textChanges?.length ? { textChanges, ...(carets ? { carets } : {}) } : undefined);
+      lastDeliveryEndedAt = performance.now();
+      lastDeliveryMs = lastDeliveryEndedAt - deliveryStartedAt;
+      if (coeditTraceOn()) coeditTrace("delivered", { ms: Math.round(lastDeliveryMs) });
+    };
+    redeliverRef.current = () => queueMicrotask(() => {
+      if (!disposed && sessionRef.current === session) deliver(undefined, { force: true });
+    });
+    // A peer's update is handed over at once, unless it came while the
+    // window was still on a long delivery (one that took a frame or more and
+    // ended moments ago: the updates queued behind its work arrive back to
+    // back). Those
+    // wait for the end of the burst and go as one delivery: a deck's room
+    // replaying a closed window's keys delivered and drew the whole deck once
+    
+    // words without those keys while the member typed, and a key pressed
+    
+    const DELIVERY_BURST_MS = 32;
+    const LONG_DELIVERY_MS = 50;
+    const deliverRemote = (changes: CollaborativeTextChange[]) => {
+      if (heldRemoteChanges) {
+        heldRemoteChanges.push(...changes);
+        return;
+      }
+      if (lastDeliveryMs < LONG_DELIVERY_MS || performance.now() - lastDeliveryEndedAt >= DELIVERY_BURST_MS) {
+        deliver(changes);
+        return;
+      }
+      heldRemoteChanges = [...changes];
+      window.setTimeout(() => {
+        if (!heldRemoteChanges) return;
+        deliver(undefined);
+      }, 0);
     };
 
     const observer = (
@@ -1232,7 +1506,7 @@ function useLegacyPageContentSync({
       // document to an editor makes it the editor's truth (and then its save).
       if (!readyRef.current) return;
       // The texts' deltas are readable only while the events are dispatched.
-      deliver(collaborativeTextChanges(events));
+      deliverRemote(collaborativeTextChanges(events));
     };
     root.observeDeep(observer as never);
 
@@ -1379,6 +1653,30 @@ function useLegacyPageContentSync({
       }
     };
     session.ydoc.on("update", onOriginalUpdate);
+    // A deck's edits its room has not confirmed go to the room's durable
+    // custody over HTTP (lib/collab/room-custody-pump): a socket a busy
+    // server never admitted left every key after the first in the browser,
+    
+    const custodyPump = causalModel === "page-json-v1" && pageId && session.network && session.provider?.durableUpdates &&
+      roomCustodyPumpEnabled()
+      ? createRoomCustodyPump({
+        read: closingCausal,
+        state: () => {
+          const network = session.network;
+          const live = Boolean(network?.ready && network.connected && !network.failed);
+          const durable = session.provider?.durableUpdates?.();
+          // A live room on a server that does not confirm relays and saves as before.
+          return { live, settled: live && durable ? durable.settled || !durable.active : false };
+        },
+        send: (edits, signal) => sendPageCustodyEdits(pageId, {
+          epoch: edits.epoch, model: edits.model, update_base64: closingBytesBase64(edits.update) }, signal),
+      })
+      : null;
+    // This member's own changes (typing, Undo, a command), not the room's.
+    const onCustodyChange = (_update: Uint8Array, _origin: unknown, _doc: Y.Doc, transaction: Y.Transaction) => {
+      if (transaction.local) custodyPump?.noteChange();
+    };
+    if (custodyPump) session.ydoc.on("update", onCustodyChange);
 
     
 
@@ -1540,8 +1838,17 @@ function useLegacyPageContentSync({
       modelStatus.release();
       unsubscribeHistory();
       session.ydoc.off("update", onOriginalUpdate);
+      if (custodyPump) session.ydoc.off("update", onCustodyChange);
+      custodyPump?.dispose();
       session.ydoc.off("afterTransaction", countForeignTransaction);
+      session.ydoc.off("afterTransaction", noteUndrawnText);
+      undrawnGuardRef.current = null;
+      redeliverRef.current = null;
       baselineIsOwnAtRef.current = null;
+      stopCreationWatch();
+      session.ydoc.off("beforeObserverCalls", writeOrphanTextEdits);
+      session.ydoc.off("afterTransaction", forgetOrphanTextEdits);
+      orphanTextEdits.clear();
       history.destroy();
       if (notifyHistoryRef.current === notifyHistory) notifyHistoryRef.current = null;
       unsubscribeWritable?.();
@@ -1589,9 +1896,11 @@ function useLegacyPageContentSync({
     roomUnavailable: controller.roomUnavailable,
     applyMaintenanceDelta: controller.applyMaintenanceDelta,
     stateVectorBase64: current ? controller.stateVectorBase64 : undefined,
+    clientId: current ? controller.clientId : undefined,
     applyOwnServerUpdate: current ? controller.applyOwnServerUpdate : undefined,
     causal: controller.causal,
     noteTextEdit,
+    textEditsWaiting,
     anchorTextCaret,
     history: current || !controller.history ? controller.history : {
       ...controller.history, available: false, canUndo: false, canRedo: false,

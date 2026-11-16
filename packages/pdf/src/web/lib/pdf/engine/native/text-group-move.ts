@@ -1136,6 +1136,48 @@ function carriedGroupRules(
   });
 }
 
+/** One straight stroke: `x y m x y l` (its span in the source) under the
+ * matrix in force, stroked right after. */
+interface StrokeCandidate {
+  readonly start: number;
+  readonly end: number;
+  readonly points: readonly [number, number, number, number];
+  readonly ctm: Matrix;
+}
+
+/** What ends or goes on with a path: after any of these a pending `m … l`
+ * is no single stroke. */
+const STROKE_PATH_OPERATORS = new Set(["m", "l", "c", "v", "y", "h", "re", "S", "s", "f", "F", "f*", "B", "B*", "b", "b*", "n", "W", "W*"]);
+
+/**
+ * The strokes a box's lines carry: level rules drawn between the box's first
+ * text object and its last, where its lines stand on the page -- not left of
+ * where they start, no higher or lower than a line above its first or below
+ * its last. A rule of the page drawn elsewhere, or across the box from
+ * outside it, is not the box's.
+ */
+function carriedGroupStrokes(
+  candidates: readonly StrokeCandidate[],
+  owned: readonly Readonly<{ start: number; end: number }>[],
+  places: readonly Readonly<{ x: number; y: number; size: number }>[],
+): readonly StrokeCandidate[] {
+  const first = owned[0];
+  const last = owned.at(-1);
+  if (!first || !last || places.length === 0) return [];
+  const size = Math.max(...places.map((place) => place.size));
+  const left = Math.min(...places.map((place) => place.x));
+  const low = Math.min(...places.map((place) => place.y)), high = Math.max(...places.map((place) => place.y));
+  return candidates.filter((stroke) => {
+    if (stroke.start <= first.start || stroke.end >= last.end) return false;
+    const [a, b, c, d, e, f] = stroke.ctm;
+    const [x0, y0, x1, y1] = stroke.points;
+    const px0 = a * x0 + c * y0 + e, py0 = b * x0 + d * y0 + f;
+    const px1 = a * x1 + c * y1 + e, py1 = b * x1 + d * y1 + f;
+    return Math.abs(py1 - py0) <= 0.01 && Math.abs(px1 - px0) > 0.01 &&
+      Math.min(px0, px1) >= left - size && py0 >= low - 1.2 * size && py0 <= high + 1.2 * size;
+  });
+}
+
 /** The rewrite of one text object, and what the clip check needs of it. */
 interface ObjectRewrite {
   readonly edits: { start: number; end: number; text: string }[];
@@ -1264,6 +1306,16 @@ export function deriveMraiNativeTextGroupMoveRewrite(input: {
   // matrix), read as the walk passes them; carried with the box below.
   const ruleCandidates: RuleCandidate[] = [];
   let pendingRect: Omit<RuleCandidate, "end" | "fill" | "disruptions"> | null = null;
+  // The rules a producer strokes among the box's text objects (TeX: a
+  // fraction's bar, a radical's, each `x y m x y l S` under a matrix of its
+  // own between two text objects of the line), read as the walk passes
+  // them; carried with the box below (carriedGroupStrokes).
+  const strokeCandidates: StrokeCandidate[] = [];
+  let pendingMove: Readonly<{ start: number; x: number; y: number }> | null = null;
+  let pendingStroke: StrokeCandidate | null = null;
+  // Where the box's shows are placed on the page (their lines' origins), and
+  // how tall they are there.
+  const ownedPlaces: { x: number; y: number; size: number }[] = [];
   let fillOperator: string | null = null;
   // Operators other than colours, marked content and rules: a rule after the
   // box's last text object with one of these before it is not the box's.
@@ -1285,6 +1337,17 @@ export function deriveMraiNativeTextGroupMoveRewrite(input: {
     const operator = source.slice(token.start, token.end);
     if (operator !== "BT") {
       const numbers = operands.map((operand) => Number(source.slice(operand.start, operand.end)));
+      if (operator === "m" && numbers.length === 2 && numbers.every(Number.isFinite)) {
+        pendingMove = Object.freeze({ start: operands[0].start, x: numbers[0], y: numbers[1] });
+        pendingStroke = null;
+      } else if (operator === "l" && numbers.length === 2 && numbers.every(Number.isFinite) && pendingMove && !pendingStroke) {
+        pendingStroke = Object.freeze({ start: pendingMove.start, end: token.end,
+          points: Object.freeze([pendingMove.x, pendingMove.y, numbers[0], numbers[1]]) as StrokeCandidate["points"], ctm: state.ctm });
+      } else if (STROKE_PATH_OPERATORS.has(operator)) {
+        if (operator === "S" && pendingStroke) strokeCandidates.push(pendingStroke);
+        pendingMove = null;
+        pendingStroke = null;
+      }
       if (operator === "re" && numbers.length === 4 && numbers.every(Number.isFinite)) {
         pendingRect = { start: operands[0].start, reEnd: token.end, numbers, ctm: state.ctm };
       } else {
@@ -1414,6 +1477,11 @@ export function deriveMraiNativeTextGroupMoveRewrite(input: {
           if (part) segment.other += 1;
           segment.shows.push(Object.freeze({ start, end: inner.end, kind: op, operands: [...operands], fontSize, hscale,
             rise, riseText, ...(part ? { part } : {}) }));
+          {
+            const [a, b, c, d, e, f] = objectState.ctm;
+            ownedPlaces.push({ x: a * lineMatrix[4] + c * lineMatrix[5] + e, y: b * lineMatrix[4] + d * lineMatrix[5] + f,
+              size: Math.abs(fontSize * lineMatrix[3] * d) || Math.abs(fontSize) || 1 });
+          }
           modes.push(mode);
           showFonts.push(font);
           const boldShow = boldShows ? boldShows.get(`${start}:${inner.end}`) : bold ? true : undefined;
@@ -1708,6 +1776,20 @@ export function deriveMraiNativeTextGroupMoveRewrite(input: {
         (block.style === "underline" ? beside.before : beside.after).push(moved.trim());
         besideRuns.set(at, beside);
         ruleEdits.push({ start: block.start, end: block.end, text: " " });
+      }
+    }
+    // And the rules stroked among the box's own text objects, each by the
+    // same map: left where they stood, a paragraph moved kept its fractions'
+    // bars and its radicals' on the page it left, a dash beside nothing, and
+    
+    if (!outsideClip) {
+      for (const stroke of carriedGroupStrokes(strokeCandidates, ownedObjects, ownedPlaces)) {
+        const map = groupMapUnder(stroke.ctm, transform);
+        if (Math.abs(map[1]) > 1e-9 || Math.abs(map[2]) > 1e-9) continue;
+        const [x0, y0, x1, y1] = stroke.points;
+        ruleEdits.push({ start: stroke.start, end: stroke.end,
+          text: `${written(map[0] * x0 + map[4]).text} ${written(map[3] * y0 + map[5]).text} m ` +
+            `${written(map[0] * x1 + map[4]).text} ${written(map[3] * y1 + map[5]).text} l` });
       }
     }
     if (ruleEdits.length) objects.push({ edits: ruleEdits, clip: ownedObjects[0]!.clip });

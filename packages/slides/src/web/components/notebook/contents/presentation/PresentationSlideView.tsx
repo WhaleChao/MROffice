@@ -14,6 +14,7 @@
  * (structural split, no behaviour change).
  */
 
+import { useOfficePatternAnchor } from "@mrnote/core/web/components/office-pattern/useOfficePatternAnchor.ts";
 import {
   applyNativeTimingVisibility,
   endNativeTimingRun,
@@ -37,7 +38,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { presentationFontFamilyWithAssets } from "@mrnote/core/web/lib/presentation-font-faces.ts";
+import { presentationFontFamilyWithAssets, presentationServedBodyFontStyle } from "@mrnote/core/web/lib/presentation-font-faces.ts";
 import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
 import { presentationAnimatedBackgroundPlay } from "../../../../lib/presentation-animated-background-play";
 import { normalizeHexColor as normalizeOfficeHexColor } from "@mrnote/core/web/lib/office-color-palette.ts";
@@ -136,6 +137,7 @@ export function PresentationSlideView({
   slideNumber,
   entranceLeadMs,
   captureFrameMs,
+  patternBitCssPx = 1,
 }: {
   slide: SlideModel;
   transitionClassName?: string | null;
@@ -217,6 +219,12 @@ export function PresentationSlideView({
   fitToParent?: boolean;
   /** False projects final object states without playing object animations. */
   showAnimations?: boolean;
+  /**
+   * A pattern fill's bit, in CSS pixels on screen (lib/office-pattern-anchor):
+   * 1 -- one screen point at any zoom, PowerPoint's window (the show, the
+   * thumbnails); 4/3 -- one point of the page, PowerPoint's print.
+   */
+  patternBitCssPx?: number;
 }) {
   const fontAliases = useContext(PresentationFontAliasesContext);
   const bounds = slideBounds(slide);
@@ -229,6 +237,8 @@ export function PresentationSlideView({
   // space as the editor. Resizing a preview changes one projection scale,
   // never the text frame's wrapping width or the document's authored font size.
   const projectionFrameRef = useRef<HTMLDivElement>(null);
+  // Pattern fills on the slide's grid, one bit `patternBitCssPx` CSS pixels.
+  useOfficePatternAnchor(projectionFrameRef, slide.id, patternBitCssPx);
   // Animations no reader recognised, played as the slide's timing tree states
   // them (`presentation-native-timing-player`): each click's run as the show
   // reveals it, entrances hidden until theirs.
@@ -484,9 +494,9 @@ export function PresentationSlideView({
       resolveSlideMaster(slide, masters)?.linkColors,
     ) as CSSProperties),
     // ... and its body font, which a table cell naming no face draws in.
-    ...(presentationBodyFontStyle(
+    ...(presentationServedBodyFontStyle(presentationBodyFontStyle(
       mergeMasterTheme(theme, resolveSlideMaster(slide, masters)),
-    ) as CSSProperties),
+    )) as CSSProperties),
   };
   const className = [
     "presentation-present__slide",
@@ -898,7 +908,7 @@ export function PresentationSlideView({
         // Words that state no colour draw in the slide's own ink, as on the
         // canvas, wherever this slide is mounted (show, thumbnails, Reading
         // View, the presenter's slides).
-        color: presentationSlideInk(theme),
+        color: presentationSlideInk(theme, resolveSlideMaster(slide, masters)),
         ...(prismTransition ? { "--ppt-prism-duration": `${transitionDurationMs ?? BASIC_TRANSITION_DURATION_MS}ms` } as CSSProperties : {}),
         // A picture of the slide (Export > Image, print, thumbnails) is the
         // page alone: the show's rounded corner and drop shadow left grey

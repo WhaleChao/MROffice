@@ -20,10 +20,12 @@ export type PdfFallbackTextRefusalCode =
   | "shared"
   | "unreadable"
   | "split-unproven"
-  | "glyphs-read-as-blanks";
+  | "glyphs-read-as-blanks"
+  | "text-box-source";
 
 import { appendMraiNativeObjectRevisions } from "./engine/native/content-stream-transaction";
-import { PDF_FALLBACK_NOT_FOUND_MESSAGE, PDF_FALLBACK_TYPE3_MESSAGE } from "./source-text-fallback-copy";
+import { PDF_FALLBACK_NOT_FOUND_MESSAGE, PDF_FALLBACK_TEXT_BOX_SOURCE_MESSAGE, PDF_FALLBACK_TYPE3_MESSAGE } from "./source-text-fallback-copy";
+import { pdfLibObjectsPerTick, pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 export { PDF_FALLBACK_TYPE3_MESSAGE };
 
@@ -403,7 +405,7 @@ const refKey = (ref: StreamRef) => `${ref.objectNumber} ${ref.generation}`;
 
 async function loadDocument(sourceBytes: Uint8Array) {
   const lib = await import("pdf-lib");
-  const doc = await lib.PDFDocument.load(Uint8Array.from(sourceBytes), { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
+  const doc = await lib.PDFDocument.load(Uint8Array.from(sourceBytes), { parseSpeed: pdfLibParseSpeed(), ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false });
   if (doc.isEncrypted) fail("encrypted", "The PDF is encrypted; its text cannot be written.");
   return { lib, doc };
 }
@@ -755,7 +757,11 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
           const xobject = resolve(entry);
           if (depth < 12 && entry instanceof lib.PDFRef && xobject instanceof lib.PDFRawStream) {
             const subtype = xobject.dict.get(lib.PDFName.of("Subtype"));
-            if (subtype instanceof lib.PDFName && subtype.decodeText() === "Form") {
+            // A form that draws a table, chart or SmartArt made here as the
+            // page's content (managed_object_content.py, /MRNoteObject): its
+            // words are the object's, never a line of the page to bind.
+            if (subtype instanceof lib.PDFName && subtype.decodeText() === "Form" &&
+              !xobject.dict.has(lib.PDFName.of("MRNoteObject"))) {
               const saved = { ...state }, savedTm = tm, savedTlm = tlm;
               const matrix = resolve(xobject.dict.get(lib.PDFName.of("Matrix")));
               if (matrix instanceof lib.PDFArray && matrix.size() === 6) {
@@ -780,7 +786,15 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
     }
     return !form && operands.length ? { operands: [...operands], ref, key, length: data.length } : null;
   };
-  const contents = page.node.get(lib.PDFName.of("Contents"));
+  // A page's Contents is a stream or an array of streams, and either may be
+  // named by reference (ISO 32000 7.7.3.3): `/Contents 41 0 R` with object
+  // 41 the array is the page's streams, not a stream that cannot be read.
+  // (Read as one, every line of such a page was refused here as unreadable
+  // and bound by its one show instead, which the server proves only on a
+  // page of one content stream: walk 0515, a court form.)
+  const named = page.node.get(lib.PDFName.of("Contents"));
+  const array = named instanceof lib.PDFRef ? doc.context.lookup(named) : named;
+  const contents = array instanceof lib.PDFArray ? array : named;
   const refs = contents instanceof lib.PDFRef ? [contents]
     : contents instanceof lib.PDFArray ? contents.asArray().filter((entry): entry is import("pdf-lib").PDFRef => entry instanceof lib.PDFRef)
       : [];
@@ -888,6 +902,75 @@ function readAsBlankOnLines(reading: PageReading, items: readonly PdfNativeListT
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function hiddenShowsAreATextBoxSource(
+  reading: PageReading,
+  items: readonly PdfNativeListTextSelectionItemEvidence[],
+  shows: readonly ShowRecord[],
+): boolean {
+  const { PDFArray, PDFDict, PDFHexString, PDFName, PDFNumber, PDFRef, PDFString } = reading.lib;
+  const page = reading.doc.context.lookup(PDFRef.of(reading.page.objectNumber, reading.page.generation));
+  const annots = page instanceof PDFDict ? page.lookup(PDFName.of("Annots")) : null;
+  if (!(annots instanceof PDFArray)) return false;
+  const streams = new Set(shows.map((show) => show.key));
+  const origins = items.map((item) => [Number(item.transform[4]), Number(item.transform[5])] as const)
+    .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
+  for (let index = 0; index < annots.size(); index += 1) {
+    const annotation = annots.lookup(index);
+    if (!(annotation instanceof PDFDict)) continue;
+    const stored = annotation.lookup(PDFName.of("MRNoteSourceTextBinding"));
+    if (!(stored instanceof PDFString) && !(stored instanceof PDFHexString)) continue;
+    // A record that cannot be read names no stream: its rectangle alone
+    // says whether the box stands over the line.
+    let named: Set<string> | null = null;
+    let boundAt: readonly [number, number] | null = null;
+    try {
+      const record = JSON.parse(stored.decodeText()) as {
+        object?: unknown; generation?: unknown; pieces?: unknown;
+        originalProof?: { evidence?: { selection?: { item?: { transform?: unknown } } } };
+      };
+      named = new Set<string>();
+      const name = (object: unknown, generation: unknown) => {
+        if (Number.isSafeInteger(object) && Number.isSafeInteger(generation)) named!.add(`${object} ${generation}`);
+      };
+      name(record.object, record.generation);
+      if (Array.isArray(record.pieces)) {
+        for (const piece of record.pieces as { object?: unknown; generation?: unknown }[]) name(piece?.object, piece?.generation);
+      }
+      const transform = record.originalProof?.evidence?.selection?.item?.transform;
+      if (Array.isArray(transform) && transform.length === 6 && Number.isFinite(transform[4]) && Number.isFinite(transform[5])) {
+        boundAt = [Number(transform[4]), Number(transform[5])];
+      }
+    } catch { named = null; }
+    if (named && ![...named].some((key) => streams.has(key))) continue;
+    const rect = annotation.lookup(PDFName.of("Rect"));
+    const corners = rect instanceof PDFArray && rect.size() === 4
+      ? [0, 1, 2, 3].map((at) => { const value = rect.lookup(at); return value instanceof PDFNumber ? value.asNumber() : Number.NaN; })
+      : null;
+    const within = corners && corners.every(Number.isFinite) ? {
+      left: Math.min(corners[0], corners[2]) - 2, right: Math.max(corners[0], corners[2]) + 2,
+      bottom: Math.min(corners[1], corners[3]) - 2, top: Math.max(corners[1], corners[3]) + 2,
+    } : null;
+    if (origins.some(([x, y]) =>
+      (within !== null && x >= within.left && x <= within.right && y >= within.bottom && y <= within.top) ||
+      (boundAt !== null && Math.abs(x - boundAt[0]) < 1 && Math.abs(y - boundAt[1]) < 1))) return true;
+  }
+  return false;
+}
+
 export async function pdfTextLinesDrawGlyphsReadAsBlanks(input: {
   sourceBytes: Uint8Array;
   selection: PdfNativeListTextSelectionEvidence;
@@ -943,6 +1026,12 @@ export async function locatePdfFallbackText(input: {
       fail("type3", PDF_FALLBACK_TYPE3_MESSAGE);
     }
     fail("not-found", PDF_FALLBACK_NOT_FOUND_MESSAGE);
+  }
+  // A line that paints nothing because a text box of the page draws its
+  // words is that box's, not a line to open, delete or bind again.
+  if (inked.every(([show]) => show.mode === 3 || show.mode === 7) &&
+    hiddenShowsAreATextBoxSource(reading, items, inked.map(([show]) => show))) {
+    fail("text-box-source", PDF_FALLBACK_TEXT_BOX_SOURCE_MESSAGE);
   }
   // Each show: the runs of its codes the box holds, a gap of spaces joined.
   const nearRegions = items.map((item) => itemRegion(item, 3));
@@ -1170,7 +1259,7 @@ export async function applyPdfFallbackTextHide(
   } catch {
     // A source whose cross-references the native reader does not take is
     // written whole, as before.
-    return doc.save({ useObjectStreams: false, updateFieldAppearances: false });
+    return doc.save({ objectsPerTick: pdfLibObjectsPerTick(), useObjectStreams: false, updateFieldAppearances: false });
   }
 }
 

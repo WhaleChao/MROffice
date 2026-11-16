@@ -12,12 +12,14 @@
  * on: the API answers with a strong ETag and `Cache-Control: private`, so a
  * reload revalidates or reuses what this browser already holds. A 401 never
  * bounces the page to the sign-in screen (the editors draw their fallback),
- * and a guest asks nothing at all.
+ * and a guest asks for nothing but the tables the API serves a guest (the
+ * font registry's mapping, `officeDataServedToGuests`).
  */
 import { apiGet, isApiRequestError } from "../api";
 import { isLoggedIn } from "../auth-state";
 import {
   OfficeDataUnavailableError,
+  officeDataServedToGuests,
   type OfficeDataPartitionedName,
   type OfficeDataTransport,
   type OfficeDataWholeName,
@@ -37,8 +39,8 @@ function unavailable(error: unknown): OfficeDataUnavailableError {
   return new OfficeDataUnavailableError("failed");
 }
 
-async function read(path: string): Promise<Record<string, unknown>> {
-  if (!isLoggedIn()) throw new OfficeDataUnavailableError("signed_out");
+async function read(path: string, servedToGuests = false): Promise<Record<string, unknown>> {
+  if (!servedToGuests && !isLoggedIn()) throw new OfficeDataUnavailableError("signed_out");
   if (typeof navigator !== "undefined" && navigator.onLine === false) throw new OfficeDataUnavailableError("offline");
   try {
     const answer = await apiGet<unknown>(path, { cache: "default" }, { suppressUnauthorizedHandling: true });
@@ -60,7 +62,7 @@ export const officeDataApiTransport: OfficeDataTransport = {
   },
   async parts(name: OfficeDataPartitionedName, keys: readonly string[]) {
     const query = keys.map((key) => `part=${encodeURIComponent(key)}`).join("&");
-    const answer = await read(`${OFFICE_DATA_PATH}/${encodeURIComponent(name)}?${query}`);
+    const answer = await read(`${OFFICE_DATA_PATH}/${encodeURIComponent(name)}?${query}`, officeDataServedToGuests(name));
     const data = answer.data;
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       throw new OfficeDataUnavailableError("failed", "malformed response");

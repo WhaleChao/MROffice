@@ -234,8 +234,40 @@ function sourceCaretBoundaries(appearance:PdfTextSourceAppearance):readonly {off
  return boundaries;
 }
 
-export function pdfSourceCaretOffset(appearance:PdfTextSourceAppearance,x:number,y:number):number{
+/** The caret positions of the drawn row a point is on: the row whose caret
+ * edges stand nearest the point along the text's own up/down axis. All of
+ * them when the text is drawn on one row (or its rows cannot be told). */
+function sourceCaretBoundariesOfRowAt(appearance:PdfTextSourceAppearance,x:number,y:number){
  const boundaries=sourceCaretBoundaries(appearance);
+ const first=boundaries[0];
+ if(!first)return boundaries;
+ const vx=first.edge[2]-first.edge[0],vy=first.edge[3]-first.edge[1],height=Math.hypot(vx,vy);
+ if(!(height>0))return boundaries;
+ const ux=vx/height,uy=vy/height;
+ const across=(edge:readonly number[])=>((edge[0]+edge[2])/2)*ux+((edge[1]+edge[3])/2)*uy;
+ const rows:number[]=[];
+ for(const value of boundaries.map(boundary=>across(boundary.edge)).sort((left,right)=>left-right)){
+  if(!rows.length||value-rows[rows.length-1]>height/2)rows.push(value);
+ }
+ if(rows.length<2)return boundaries;
+ const here=x*ux+y*uy;
+ let row=0;
+ for(let index=1;index<rows.length;index++)if(Math.abs(rows[index]-here)<Math.abs(rows[row]-here))row=index;
+ // A row holds what starts within half a caret's height of its first edge
+ // (the rows as pdfSourceVerticalCaretOffset reads them).
+ const next=rows[row+1]??Infinity;
+ const own=boundaries.filter(boundary=>{const value=across(boundary.edge);return value>=rows[row]-1e-6&&value<next-1e-6&&value-rows[row]<=height/2+1e-6;});
+ return own.length?own:boundaries;
+}
+
+
+
+
+
+
+
+export function pdfSourceCaretOffset(appearance:PdfTextSourceAppearance,x:number,y:number):number{
+ const boundaries=sourceCaretBoundariesOfRowAt(appearance,x,y);
  let best=0,distance=Infinity;
  for(const {offset,edge} of boundaries){
   const dx=edge[2]-edge[0],dy=edge[3]-edge[1],length=dx*dx+dy*dy;

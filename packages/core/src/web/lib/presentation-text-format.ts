@@ -67,8 +67,15 @@ export function normalizeTextAlign(value: unknown): TextAlign {
   return isTextAlign(value) ? value : DEFAULT_TEXT_ALIGN;
 }
 
-/** Max characters of text a single shape may carry (a short label, not a body). */
-export const MAX_SHAPE_TEXT_LENGTH = 2_000;
+
+
+
+
+
+
+
+
+export const MAX_SHAPE_TEXT_LENGTH = 20_000;
 
 /**
  * Control bytes to strip from shape text: C0 (U+0000–U+001F) and C1

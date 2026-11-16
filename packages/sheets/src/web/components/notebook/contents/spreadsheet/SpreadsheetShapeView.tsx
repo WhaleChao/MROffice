@@ -40,7 +40,7 @@ import {
 } from "@mrnote/core/web/lib/office-ink-smooth.ts";
 import { DEFAULT_SHAPE_OPACITY } from "@mrnote/core/web/lib/presentation-shapes.ts";
 import { OfficeShapeEffectsFrame } from "@mrnote/core/web/components/office-ribbon/OfficeShapeEffectsFrame.tsx";
-import { officeShapeEffectsPaint, officeShapeSilhouetteAlpha, officeSketchSeed } from "@mrnote/core/web/lib/office-shape-effects-paint.ts";
+import { officeEffectsUnderGroupCamera, officeShapeEffectsPaint, officeShapeSilhouetteAlpha, officeShapeTextTurn, officeSketchSeed } from "@mrnote/core/web/lib/office-shape-effects-paint.ts";
 import { officeOutlineDashPaint } from "@mrnote/core/web/lib/office-stroke-dash.ts";
 import { OfficePictureStyleGraphic } from "@mrnote/core/web/components/office-ribbon/OfficePictureStyleGraphic.tsx";
 import { smartArtSlotPictureBox, type SmartArtSlotPictureFormat } from "@mrnote/core/web/lib/office-smartart/slot-picture-format.ts";
@@ -345,6 +345,7 @@ export function SpreadsheetShapeView({
   smartArtTextBox = null,
   geometryHit = false,
   effects,
+  keepTextFlat = false,
   sketchedNative = false,
   emptyTextPrompt = null,
   smartArtFaceSpan = null,
@@ -360,6 +361,9 @@ export function SpreadsheetShapeView({
    * shape's own outline by the painter the slide and Docs use.
    */
   effects?: unknown;
+  /** Format Shape > 3-D Rotation > Keep text flat (`object.keepTextFlat`):
+   * the words stay flat instead of turning with the shape's 3-D rotation. */
+  keepTextFlat?: boolean;
   /** The object's geometry is a sketch the file already drew
    * (`source.nativeSketchGeometry` "baked"): it is not sketched again. */
   sketchedNative?: boolean;
@@ -463,14 +467,28 @@ export function SpreadsheetShapeView({
   // A shape whose own effects state its 3-D (a bevel, the 3-D Format or a
   // 3-D Rotation the server now reads into `shapeEffects`) is drawn by the
   // effects painter: the display-only reading would draw it twice.
-  const native3d = (["bevel", "format3d", "rotation3d"] as const).some((kind) => {
-    const value = (effects as Record<string, unknown> | null | undefined)?.[kind];
-    return value !== undefined && value !== "none";
-  })
-    ? undefined
-    : shape.nativeShape3d;
+  // A member of a group with a camera (`nativeGroupScene3d`) is the other
+  // way round, as on a slide: its solid is swept under the GROUP's camera by
+  // the diagram renderer, and the effects keep only what is not 3-D.
+  const groupCamera = shape.nativeGroupScene3d;
+  const native3d =
+    !groupCamera &&
+    (["bevel", "format3d", "rotation3d"] as const).some((kind) => {
+      const value = (effects as Record<string, unknown> | null | undefined)?.[kind];
+      return value !== undefined && value !== "none";
+    })
+      ? undefined
+      : shape.nativeShape3d;
+  const paintedEffects = officeEffectsUnderGroupCamera(
+    groupCamera && native3d && effects && typeof effects === "object"
+      ? { ...(effects as Record<string, unknown>), bevel: "none", format3d: "none" }
+      : effects,
+    groupCamera,
+  );
   const drawn3d = shape.shape3d ?? native3d?.shape3d;
-  const drawnScene3d = shape.shape3d ? shape.scene3d : native3d?.scene3d;
+  // A member of a group with a camera is seen through the GROUP's camera
+  // (Office states it on the group and on no member).
+  const drawnScene3d = shape.shape3d ? shape.scene3d : (shape.nativeGroupScene3d ?? native3d?.scene3d);
   const contour = drawn3d ? smartArtContourStroke(drawn3d) : null;
   const smartArtOutline =
     contour && (!shape.stroke || shape.stroke === "none") ? contour : null;
@@ -501,13 +519,41 @@ export function SpreadsheetShapeView({
     ? null
     : officeOutlineDashPaint(shape.outlineDash, shape.outlineCap, Math.max(1, shape.strokeWidth));
   const effectsPaint = officeShapeEffectsPaint(
-    effects,
+    paintedEffects,
     { width: boxWidthPx ?? 100, height: boxHeightPx ?? 100 },
     // Shape Outline > Sketched; a shape Excel already sketched carries the
     // drawn path as its own geometry.
-    { sketch: sketchedNative ? undefined : shape.outlineSketch, seed: officeSketchSeed(rimId) },
+    {
+      sketch: sketchedNative ? undefined : shape.outlineSketch,
+      seed: officeSketchSeed(rimId),
+      // The drawing's flips wrap the effects frame (`transform` above): its
+      // 3-D turn is taken through them, as PowerPoint and Excel flip a shape
+      // in its plane before they turn it (`flippedCameraTurn`). The words are
+      // drawn outside the flips and take the turn as it is.
+      frame: { rotation: typeof rotation === "number" ? rotation : 0, flipH, flipV },
+    },
   );
   const effectsId = `spreadsheet-shape-effects-${rimId.replace(/[^A-Za-z0-9_-]/g, "")}`;
+  // Format Shape > 3-D Rotation: the words lie on the shape's front and turn
+  // with it unless Keep text flat is checked (typed into, the editor lays
+  // them flat), on a layer of the shape's box turned about its centre as the
+  // effects frame is.
+  const textTurn = officeShapeTextTurn(
+    officeEffectsUnderGroupCamera(effects, groupCamera),
+    { width: boxWidthPx ?? 100, height: boxHeightPx ?? 100 },
+    { keepTextFlat, editing: editingText },
+  );
+  const turnWords = (words: ReactNode) =>
+    textTurn ? (
+      <div
+        data-spreadsheet-shape-text-turn=""
+        style={{ position: "absolute", inset: 0, pointerEvents: "none", ...textTurn }}
+      >
+        {words}
+      </div>
+    ) : (
+      words
+    );
   const withShapeEffects = (drawn: ReactNode) =>
     effectsPaint ? (
       <OfficeShapeEffectsFrame
@@ -619,6 +665,7 @@ export function SpreadsheetShapeView({
             // arrowhead draws as one instead of as a triangle (§7.4).
             headEnd={shape.headEnd}
             tailEnd={shape.tailEnd}
+            lineEndsAtLineWeight
             headEndWidth={shape.headEndWidth}
             headEndLength={shape.headEndLength}
             tailEndWidth={shape.tailEndWidth}
@@ -814,7 +861,7 @@ export function SpreadsheetShapeView({
         ) : upright ? (
           // Do not rotate text (`a:bodyPr@upright`): the words stay level in
           // the box the turned shape covers (S26_tdf137000_export_upright).
-          <div
+          turnWords(<div
             data-spreadsheet-shape-text-upright=""
             style={{
               position: "absolute",
@@ -833,15 +880,17 @@ export function SpreadsheetShapeView({
               hitText={geometryHit}
               framed={!!smartArtTextBox}
             />
-          </div>
+          </div>)
         ) : (
-          <SpreadsheetShapeTextBody
-            shape={shape}
-            textBox={textBox}
-            inset={spreadsheetShapeTextInset(shape, boxWidthPx, boxHeightPx, smartArtTextBox)}
-            hitText={geometryHit}
-            framed={!!smartArtTextBox}
-          />
+          turnWords(
+            <SpreadsheetShapeTextBody
+              shape={shape}
+              textBox={textBox}
+              inset={spreadsheetShapeTextInset(shape, boxWidthPx, boxHeightPx, smartArtTextBox)}
+              hitText={geometryHit}
+              framed={!!smartArtTextBox}
+            />,
+          )
         )
       )}
     </div>

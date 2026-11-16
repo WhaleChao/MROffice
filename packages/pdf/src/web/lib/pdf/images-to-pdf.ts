@@ -32,6 +32,7 @@
  */
 
 import { PDFDocument } from "pdf-lib";
+import { pdfLibObjectsPerTick } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 /** US-Letter page size in PDF points (the blank-PDF starter page). */
 export const US_LETTER_WIDTH = 612;
@@ -256,7 +257,7 @@ export async function buildPdfFromImages(
       height: image.height,
     });
   }
-  return doc.save();
+  return doc.save({ objectsPerTick: pdfLibObjectsPerTick() });
 }
 
 /** Build one blank page, defaulting to US Letter for the create-page starter. */
@@ -277,7 +278,7 @@ export async function buildBlankPdfBytes(
   }
   const doc = await PDFDocument.create();
   doc.addPage([width, height]);
-  return doc.save();
+  return doc.save({ objectsPerTick: pdfLibObjectsPerTick() });
 }
 
 /** Derive "photos.pdf" from the first image's filename (fallback provided). */

@@ -139,6 +139,12 @@ interface ResidentTile {
    * none of its cells but the body's, loose ones and edits (all kept), so
    * putting it in needs no sweep of the model for cells it no longer has. */
   firstRead?: boolean;
+  /** Read again while the model showed an earlier reading of it: that
+   * reading, until this one is in the model. What the model holds there
+   * unlike it is the window's own, typed since the last collect (night
+   * coedit R421-X12: a cell typed as the tile arrived was swept away and
+   * never saved); collect compares against it meanwhile. */
+  shown?: Map<string, SpreadsheetCell>;
 }
 
 interface SheetState {
@@ -167,7 +173,7 @@ interface QueuedRowSort {
   previousBodyKeys: Set<string>;
 }
 
-interface EditorTilesAnswer {
+export interface EditorTilesAnswer {
   revision: number;
   sheet: string;
   styles: Record<string, unknown>[];
@@ -342,6 +348,10 @@ function tilePayload(cell: SpreadsheetCell): Record<string, unknown> {
 export class TiledSheets {
   /** The sheets past `WHOLE_SHEET_CELLS` a command asked to read whole. */
   private readonly wholeOnRequest = new Set<string>();
+  /** Rows a derived result is computed from (a PivotTable report reading its
+   * source's live cells), by sheet: their tiles are kept once read
+   * (`keepRows`), so the report is not dropped back to partial rows. */
+  private keptRows = new Map<string, ReadonlyArray<readonly [number, number]>>();
   readonly pageId: string;
   revision: number;
   /** Advances when tiles are read: a model is reconciled against what it has not seen. */
@@ -376,6 +386,11 @@ export class TiledSheets {
   private readonly collected = new WeakMap<object, { sheetId: string; tileState: number; rowStyles: unknown; columnStyles: unknown }>();
   private inFlight: Promise<boolean> | null = null;
   private readonly ownRevisions = new Set<number>();
+  /** Tiles this window saved into while another member's save landed between
+   * its revision and the answer's: read again at the next poll, whatever
+   * revision they now carry (the answer's revision is this window's own, and
+   * the other member's cells in them would be passed over). */
+  private readonly rereadOwnTiles = new Map<string, Set<number>>();
   private readonly listeners = new Set<() => void>();
   private failure: string | null = null;
   /** The refused save's HTTP status (0: no answer) and error code. */
@@ -613,6 +628,11 @@ export class TiledSheets {
     return entry.cells / tiles;
   }
 
+  /** The cells the sheet holds, as its manifest counts them. */
+  cellsOf(sheetId: string): number {
+    return this.sheets.get(sheetId)?.entry.cells ?? 0;
+  }
+
   /** Whether the sheet is read whole when shown (`WHOLE_SHEET_CELLS`). */
   readsWhole(sheetId: string): boolean {
     const entry = this.sheets.get(sheetId)?.entry;
@@ -710,6 +730,42 @@ export class TiledSheets {
     return true;
   }
 
+  /** Whether every cell of rows `first..last` of the sheet is in the model
+   * (true for a sheet that is not tiled). */
+  rowsResident(sheetId: string, first: number, last: number): boolean {
+    const state = this.sheets.get(sheetId);
+    if (!state) return true;
+    const bottom = Math.min(last, Math.max(0, state.entry.rows - 1));
+    if (bottom < first) return true;
+    for (const tile of this.tilesFor(sheetId, first, bottom)) {
+      if (!state.tiles.get(tile)?.applied) return false;
+    }
+    return true;
+  }
+
+  /** The tiles holding rows `first..last` of the sheet that are not yet in
+   * the model, within its extent. */
+  tilesMissingFor(sheetId: string, first: number, last: number): number[] {
+    const state = this.sheets.get(sheetId);
+    if (!state) return [];
+    const bottom = Math.min(last, Math.max(0, state.entry.rows - 1));
+    if (bottom < first) return [];
+    return this.tilesFor(sheetId, first, bottom).filter((tile) => !state.tiles.get(tile)?.applied);
+  }
+
+  /** The rows derived results read, which `evict` keeps once read (replaces
+   * the previous set). */
+  keepRows(reads: ReadonlyArray<{ readonly sheetId: string; readonly first: number; readonly last: number }>): void {
+    const kept = new Map<string, Array<readonly [number, number]>>();
+    for (const { sheetId, first, last } of reads) {
+      if (!this.sheets.has(sheetId)) continue;
+      const list = kept.get(sheetId) ?? [];
+      list.push([first, last]);
+      kept.set(sheetId, list);
+    }
+    this.keptRows = kept;
+  }
+
   isApplied(sheetId: string, tile: number): boolean {
     return this.sheets.get(sheetId)?.tiles.get(tile)?.applied ?? false;
   }
@@ -751,39 +807,49 @@ export class TiledSheets {
         { signal },
         this.readsBeforeMountKnown ? { beforeMountKnown: true } : undefined,
       );
-      const state = this.sheets.get(sheetId);
-      if (!state) return;
-      const styles = answer.styles.map((style) => this.intern(style));
-      this.generation += 1;
-      this.tileState += 1;
-      const everRead = (state.everRead ??= new Set());
-      for (const tile of answer.tiles) {
-        if (!refresh && state.tiles.has(tile.tile)) continue;
-        const firstRead = !refresh && !everRead.has(tile.tile);
-        everRead.add(tile.tile);
-        const baseline = new Map<string, SpreadsheetCell>();
-        for (const [key, raw] of Object.entries(tile.cells)) {
-          let cell = raw;
-          if (typeof raw.styleRef === "number") {
-            const { styleRef, ...rest } = raw;
-            cell = { ...rest, style: styles[styleRef as number] };
-          }
-          baseline.set(key, cell as unknown as SpreadsheetCell);
-        }
-        state.tiles.set(tile.tile, {
-          index: tile.tile,
-          revision: tile.revision,
-          generation: this.generation,
-          baseline,
-          applied: false,
-          usedAt: ++this.clock,
-          ...(firstRead ? { firstRead: true } : {}),
-        });
-      }
-      this.emit();
+      this.accept(sheetId, answer, refresh);
     } finally {
       for (const tile of tiles) this.reading.delete(`${sheetId}:${tile}`);
     }
+  }
+
+  /** The tiles an answer holds, resident from now on (as a read of them
+   * would have made them); a tile already resident stays as it is unless
+   * `refresh`. The manifest's `first_tiles` come in this way. */
+  accept(sheetId: string, answer: EditorTilesAnswer, refresh = false): void {
+    const state = this.sheets.get(sheetId);
+    if (!state) return;
+    const styles = answer.styles.map((style) => this.intern(style));
+    this.generation += 1;
+    this.tileState += 1;
+    const everRead = (state.everRead ??= new Set());
+    for (const tile of answer.tiles) {
+      if (!refresh && state.tiles.has(tile.tile)) continue;
+      const firstRead = !refresh && !everRead.has(tile.tile);
+      everRead.add(tile.tile);
+      const held = state.tiles.get(tile.tile);
+      const shown = held ? (held.applied ? held.baseline : held.shown) : undefined;
+      const baseline = new Map<string, SpreadsheetCell>();
+      for (const [key, raw] of Object.entries(tile.cells)) {
+        let cell = raw;
+        if (typeof raw.styleRef === "number") {
+          const { styleRef, ...rest } = raw;
+          cell = { ...rest, style: styles[styleRef as number] };
+        }
+        baseline.set(key, cell as unknown as SpreadsheetCell);
+      }
+      state.tiles.set(tile.tile, {
+        index: tile.tile,
+        revision: tile.revision,
+        generation: this.generation,
+        baseline,
+        applied: false,
+        usedAt: ++this.clock,
+        ...(firstRead ? { firstRead: true } : {}),
+        ...(shown ? { shown } : {}),
+      });
+    }
+    this.emit();
   }
 
   /**
@@ -933,7 +999,13 @@ export class TiledSheets {
 
   reapply(): void {
     this.tileState += 1;
-    for (const state of this.sheets.values()) for (const tile of state.tiles.values()) tile.applied = false;
+    // The model is made again from a body: no earlier reading is what it shows.
+    for (const state of this.sheets.values()) {
+      for (const tile of state.tiles.values()) {
+        tile.applied = false;
+        delete tile.shown;
+      }
+    }
   }
 
   /** The model with every tile read since in it. A position the body owns,
@@ -947,6 +1019,32 @@ export class TiledSheets {
       const taken = new Map<number, ReadonlyMap<string, unknown>>();
       const changedKeys: string[] = [];
       const dirty = this.dirtyKeys(sheet.id);
+      // Cells the window typed or cleared since the last collect in a tile
+      // read again: the model's, as an edit waiting is (`collect` saves them).
+      const own = new Set<string>();
+      const shownByTile = new Map<number, Map<string, SpreadsheetCell>>();
+      for (const tile of state.tiles.values()) {
+        if (!tile.applied && tile.shown) shownByTile.set(tile.index, tile.shown);
+        delete tile.shown;
+      }
+      if (shownByTile.size) {
+        const rows = state.entry.tileRows;
+        const isOwn = (key: string, shown: Map<string, SpreadsheetCell>): boolean => {
+          if (state.bodyKeys.has(key)) return false;
+          const cell = sheet.cells[key];
+          const before = shown.get(key);
+          if (before === undefined) return cell !== undefined && !isLineFormatBlank(sheet, key, cell);
+          // What a calculation stamped since is not the window's edit.
+          return cell === undefined || (cell !== before && !sameBesidesResult(before, cell));
+        };
+        for (const shown of shownByTile.values()) for (const key of shown.keys()) if (isOwn(key, shown)) own.add(key);
+        // Cells typed where the earlier reading had none: one pass over the
+        // model for every tile read again.
+        for (const key of Object.keys(sheet.cells)) {
+          const shown = shownByTile.get(Math.floor(rowOfKey(key) / rows));
+          if (shown && !shown.has(key) && isOwn(key, shown)) own.add(key);
+        }
+      }
       let sweep = false;
       for (const tile of state.tiles.values()) {
         if (tile.applied) continue;
@@ -957,7 +1055,7 @@ export class TiledSheets {
         cells ??= { ...sheet.cells };
         taken.set(tile.index, tile.baseline);
         for (const [key, cell] of tile.baseline) {
-          if (dirty.has(key)) continue;
+          if (dirty.has(key) || own.has(key)) continue;
           if (state.bodyKeys.has(key)) {
             // A formatted blank of the body over a cell the tile holds (typed
             // there, or written by a save before ranges stayed the body's):
@@ -983,7 +1081,7 @@ export class TiledSheets {
       if (sweep) {
         for (const key of Object.keys(cells)) {
           const baseline = taken.get(Math.floor(rowOfKey(key) / rows));
-          if (!baseline || baseline.has(key) || state.bodyKeys.has(key) || dirty.has(key) || state.loose.has(key)) continue;
+          if (!baseline || baseline.has(key) || state.bodyKeys.has(key) || dirty.has(key) || own.has(key) || state.loose.has(key)) continue;
           delete cells[key];
           changedKeys.push(key);
         }
@@ -1021,7 +1119,10 @@ export class TiledSheets {
   adoptFilledSheets<S extends SheetLike>(sheets: readonly S[], stored?: Map<string, Set<string>> | null): S[] {
     this.acceptBody(sheets, stored);
     for (const sheet of sheets) {
-      for (const tile of this.sheets.get(sheet.id)?.tiles.values() ?? []) tile.applied = false;
+      for (const tile of this.sheets.get(sheet.id)?.tiles.values() ?? []) {
+        tile.applied = false;
+        delete tile.shown;
+      }
     }
     this.tileState += 1;
     const out = this.apply(sheets);
@@ -1072,6 +1173,9 @@ export class TiledSheets {
     // A workbook read whole keeps every tile.
     if (this.readsWholeWorkbook()) return sheets as S[];
     const keep = new Set(this.tilesFor(activeSheetId, first, last).map((tile) => `${activeSheetId}:${tile}`));
+    for (const [sheetId, ranges] of this.keptRows) {
+      for (const [from, to] of ranges) for (const tile of this.tilesFor(sheetId, from, to)) keep.add(`${sheetId}:${tile}`);
+    }
     const candidates: { sheet: string; tile: ResidentTile }[] = [];
     let resident = 0;
     for (const [sheetId, state] of this.sheets) {
@@ -1199,6 +1303,11 @@ export class TiledSheets {
           if (tile?.applied && tile.baseline.has(key)) {
             cleared(key);
             tile.baseline.delete(key);
+          } else if (tile && !tile.applied && tile.shown?.has(key)) {
+            // Cleared while the tile was read again (`ResidentTile.shown`).
+            cleared(key);
+            tile.shown.delete(key);
+            tile.baseline.delete(key);
           }
           if (state.loose.has(key)) {
             cleared(key);
@@ -1214,10 +1323,12 @@ export class TiledSheets {
       for (const key of Object.keys(cells)) visit(key);
       // Cells the tiles had that the model cleared.
       for (const tile of state.tiles.values()) {
-        if (!tile.applied) continue;
-        for (const key of [...tile.baseline.keys()]) {
+        const synced = tile.applied ? tile.baseline : tile.shown;
+        if (!synced) continue;
+        for (const key of [...synced.keys()]) {
           if (cells[key] !== undefined) continue;
           cleared(key);
+          synced.delete(key);
           tile.baseline.delete(key);
         }
       }
@@ -1422,7 +1533,11 @@ export class TiledSheets {
     const cell = sheet.cells[key];
     if (state.bodyKeys.has(key)) return;
     const tile = state.tiles.get(Math.floor(parseKey(key)[0] / state.entry.tileRows));
-    const read = tile ? tile.baseline.get(key) : state.loose.get(key);
+    // A tile read again and not yet in the model: the model is level with
+    // the reading it showed (`ResidentTile.shown`), and a cell the new one
+    // changed is another member's, not an edit of this window's.
+    const synced = tile && !tile.applied && tile.shown ? tile.shown : tile?.baseline;
+    const read = tile ? synced!.get(key) : state.loose.get(key);
     if (read === cell) return;
     // What a line format shows there, not a cell anyone wrote: never
     // saved over the tile (whose cell may not be read yet).
@@ -1434,19 +1549,23 @@ export class TiledSheets {
         const [row, col] = parseKey(key);
         edits.push({ sheet: sheet.id, row, col, cell: null });
         tile?.baseline.delete(key);
+        tile?.shown?.delete(key);
         state.loose.delete(key);
       }
       return;
     }
     if (read !== undefined && sameCell(read, cell)) {
-      if (tile) tile.baseline.set(key, cell);
+      if (synced === tile?.shown && tile) synced!.set(key, cell);
+      else if (tile) tile.baseline.set(key, cell);
       else state.loose.set(key, cell);
       return;
     }
     const [row, col] = parseKey(key);
     edits.push({ sheet: sheet.id, row, col, cell: tilePayload(cell) });
-    if (tile) tile.baseline.set(key, cell);
-    else state.loose.set(key, cell);
+    if (tile) {
+      tile.baseline.set(key, cell);
+      tile.shown?.set(key, cell);
+    } else state.loose.set(key, cell);
     this.noteFormula(sheet.id, key, cell);
   }
 
@@ -1594,6 +1713,17 @@ export class TiledSheets {
     if (answer.recalculated !== undefined) this.calculationUnanswered = answer.recalculated === null;
     for (const revision of answer.revisions ?? [answer.revision]) this.ownRevisions.add(revision);
     this.ownRevisions.add(answer.revision);
+    // Another member saved between this window's revision and this answer
+    // (two windows typing at once): this window has not seen that save, so
+    // its revision and its tiles' stay where they were and the next poll
+    // reads the others' tiles and these again. Taking the answer's revision
+    // passed over the other save for good: the two windows showed different
+    // values in one cell, and neither showed the other's next cell (xlsx-rounds
+    // night coedit R421-X12, R421-X59).
+    let othersBetween = answer.revision - this.revision > 10_000;
+    for (let revision = this.revision + 1; !othersBetween && revision <= answer.revision; revision += 1) {
+      if (!this.ownRevisions.has(revision)) othersBetween = true;
+    }
     // A formula this flush stored and the save calculated (a typed one,
     // or each formula a sort moved) needs no question of its own:
     // asking again, 64 a request, and stamping that answer as new input
@@ -1611,10 +1741,17 @@ export class TiledSheets {
         if (!unsent.has(`${sheetId}\u0000${key}`)) asked.delete(key);
       }
     }
-    this.revision = Math.max(this.revision, answer.revision);
-    for (const [sheetId, tileIndex, revision] of answer.tiles) {
-      const tile = this.sheets.get(sheetId)?.tiles.get(tileIndex);
-      if (tile) tile.revision = Math.max(tile.revision, revision);
+    if (othersBetween) {
+      for (const [sheetId, tileIndex] of answer.tiles) {
+        if (!this.rereadOwnTiles.has(sheetId)) this.rereadOwnTiles.set(sheetId, new Set());
+        this.rereadOwnTiles.get(sheetId)!.add(tileIndex);
+      }
+    } else {
+      this.revision = Math.max(this.revision, answer.revision);
+      for (const [sheetId, tileIndex, revision] of answer.tiles) {
+        const tile = this.sheets.get(sheetId)?.tiles.get(tileIndex);
+        if (tile) tile.revision = Math.max(tile.revision, revision);
+      }
     }
     for (const [sheetId, extent] of Object.entries(answer.extents ?? {})) {
       const state = this.sheets.get(sheetId);
@@ -1803,17 +1940,33 @@ export class TiledSheets {
       // is read again.
       for (const [sheetId, state] of this.sheets) stale.set(sheetId, [...state.tiles.keys()]);
     }
+    const reread = new Map(this.rereadOwnTiles);
+    this.rereadOwnTiles.clear();
+    for (const [sheetId, tiles] of answer.reload ? [] : reread) {
+      const held = [...tiles].filter((tileIndex) => this.sheets.get(sheetId)?.tiles.has(tileIndex));
+      if (held.length) stale.set(sheetId, held);
+    }
     for (const [sheetId, tileIndex, revision] of answer.reload ? [] : answer.tiles) {
+      if (stale.get(sheetId)?.includes(tileIndex)) continue;
       if (this.ownRevisions.has(revision)) continue;
       const tile = this.sheets.get(sheetId)?.tiles.get(tileIndex);
       if (!tile || tile.revision >= revision) continue;
       if (!stale.has(sheetId)) stale.set(sheetId, []);
       stale.get(sheetId)!.push(tileIndex);
     }
-    for (const [sheetId, tiles] of stale) {
-      for (let start = 0; start < tiles.length; start += TILES_PER_READ) {
-        await this.read(sheetId, tiles.slice(start, start + TILES_PER_READ), signal, true);
+    try {
+      for (const [sheetId, tiles] of stale) {
+        for (let start = 0; start < tiles.length; start += TILES_PER_READ) {
+          await this.read(sheetId, tiles.slice(start, start + TILES_PER_READ), signal, true);
+        }
       }
+    } catch (error) {
+      // Not read: asked again at the next poll.
+      for (const [sheetId, tiles] of reread) {
+        if (!this.rereadOwnTiles.has(sheetId)) this.rereadOwnTiles.set(sheetId, new Set());
+        for (const tileIndex of tiles) this.rereadOwnTiles.get(sheetId)!.add(tileIndex);
+      }
+      throw error;
     }
     this.revision = Math.max(this.revision, answer.revision);
     return true;
@@ -2046,11 +2199,21 @@ export function trustTiledResults(
   return out ?? results;
 }
 
-/** The rows read before a large sheet is first drawn: a screen and a margin. */
-const FIRST_DRAW_ROWS = 128;
+
+
+
+
+
+const FIRST_DRAW_ROWS = 64;
 /** A sheet read whole has its tiles read before it is drawn up to this many;
  * past it the first screen's are, and the rest follow it in. */
 const FIRST_DRAW_TILES = 96;
+
+
+
+
+
+const FIRST_DRAW_WHOLE_CELLS = 20_000;
 const prepared = new WeakMap<object, TiledSheets>();
 
 /**
@@ -2070,10 +2233,16 @@ export async function prepareTiledSheets(
   const sheetId = activeSheetId && tiled.isTiledSheet(activeSheetId) ? activeSheetId : tiled.sheetIds()[0];
   if (!sheetId) return;
   tiled.readsBeforeMountKnown = options?.beforeMountKnown === true;
+  // The first screen's tiles the manifest brought: resident at once, so only
+  // what they leave out is read.
+  const brought = opening.first_tiles;
+  if (brought && brought.sheet === sheetId && tiled.isTiledSheet(sheetId)) tiled.accept(sheetId, brought);
   const all = tiled.allTilesOf(sheetId);
   const first = tiled.ensure(
     sheetId,
-    tiled.readsWhole(sheetId) && all.length <= FIRST_DRAW_TILES ? all : tiled.tilesFor(sheetId, 0, FIRST_DRAW_ROWS - 1),
+    tiled.readsWhole(sheetId) && all.length <= FIRST_DRAW_TILES && tiled.cellsOf(sheetId) <= FIRST_DRAW_WHOLE_CELLS
+      ? all
+      : tiled.tilesFor(sheetId, 0, FIRST_DRAW_ROWS - 1),
   );
   tiled.readsBeforeMountKnown = false;
   await first;

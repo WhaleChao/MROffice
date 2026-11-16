@@ -72,6 +72,12 @@ import type { NativeListIndent } from "./native-drawing-geometry";
 import type { PresentationParagraphIndentChange } from "./presentation-paragraph-dialog";
 import { PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER } from "./presentation-smartart-text";
 import {
+  presentationLevelStylesOf,
+  presentationListLevelRestyle,
+  runStyleHandedToLevel,
+  type PresentationLevelStyle,
+} from "./presentation-level-styles";
+import {
   applyCaseToRuns,
   applyCaseToText,
   type ChangeCaseMode,
@@ -85,6 +91,7 @@ import {
   adjustParagraphLevelAt,
   type BulletChar,
   MAX_PARAGRAPH_LEVEL,
+  normalizeBlockBulletChar,
   normalizeBulletChar,
   normalizeNumberFormat,
   type NumberFormat,
@@ -100,6 +107,7 @@ import {
   normalizeParagraphDirection,
   normalizeParagraphIndentEmu,
   type ParagraphAlign,
+  type PresentationFontAlign,
   paragraphIndexAtOffset,
   paragraphMarkerFields,
   paragraphCarriedFields,
@@ -108,6 +116,7 @@ import {
   type SlideParagraph,
   textFromParagraphs,
 } from "./presentation-paragraphs";
+import { rowsWithLayoutHiddenMarkers } from "./presentation-smartart-markers";
 import {
   applyRunFormat,
   applyStylePatch,
@@ -143,11 +152,19 @@ export const FONT_RUN_STYLE_KEYS = [
   "fontSize",
   "fontFamily",
   "textOutline",
+  "textOutlineWidthPt",
+  "textOutlineJoin",
+  "textOutlineMiterLimit",
+  "textOutlineCap",
+  "textOutlineDash",
 ] as const satisfies readonly (keyof RunStyle)[];
 
-export const FONT_RUN_CLEAR_PATCH = Object.fromEntries(
-  FONT_RUN_STYLE_KEYS.map((key) => [key, undefined]),
-) as Readonly<Partial<RunStyle>>;
+export const FONT_RUN_CLEAR_PATCH = {
+  ...Object.fromEntries(FONT_RUN_STYLE_KEYS.map((key) => [key, undefined])),
+  // A run's own text shadow (readings row 808) is cleared with the rest.
+  textShadow: undefined,
+  textShadowEffect: undefined,
+} as Readonly<Partial<RunStyle>>;
 
 // Only these fields are authenticated block-level inheritance in the current
 // presentation renderer. Run-only fields (strike/baseline/highlight/outline)
@@ -411,6 +428,8 @@ export function normalizeParagraphsWithRuns(
       paragraph.level === 0 &&
       paragraph.align === undefined &&
       paragraph.dir === undefined &&
+      paragraph.fontAlign === undefined &&
+      paragraph.fontAlignInherited === undefined &&
       !paragraphStatesIndent(paragraph),
   );
   if (
@@ -759,7 +778,12 @@ export function paragraphDialogSelectionExtras(
   block: PresentationTextBlock,
   selection: LiveTextSelection,
   inherited?: readonly NativeListIndent[],
-): { lineSpacingPoints: number | undefined | "mixed"; marL?: number; indent?: number } {
+): {
+  lineSpacingPoints: number | undefined | "mixed";
+  marL?: number;
+  indent?: number;
+  fontAlign?: PresentationFontAlign | "mixed";
+} {
   const paragraphs = paragraphsWithRunsFromTextBlock(block);
   if (paragraphs.length === 0) return { lineSpacingPoints: undefined };
   const [first, last] = paragraphSelectionSpan(block.id, paragraphs, selection);
@@ -775,7 +799,45 @@ export function paragraphDialogSelectionExtras(
     lineSpacingPoints: exact.every((value) => Object.is(value, exact[0])) ? exact[0] : "mixed",
     ...(marL === undefined ? {} : { marL }),
     ...(indent === undefined ? {} : { indent }),
+    fontAlign: uniformFontAlign(selected),
   };
+}
+
+/** The Text alignment each row applies: its own, what its level inherits, else Auto. */
+function effectiveParagraphFontAlign(
+  paragraph: Pick<SlideParagraphWithRuns, "fontAlign" | "fontAlignInherited">,
+): PresentationFontAlign {
+  return paragraph.fontAlign ?? paragraph.fontAlignInherited ?? "auto";
+}
+
+function uniformFontAlign(
+  rows: readonly Pick<SlideParagraphWithRuns, "fontAlign" | "fontAlignInherited">[],
+): PresentationFontAlign | "mixed" {
+  const values = new Set(rows.map(effectiveParagraphFontAlign));
+  return values.size === 1 ? [...values][0]! : values.size === 0 ? "auto" : "mixed";
+}
+
+/**
+ * Paragraph > Asian Typography > Text alignment on the selected rows: each
+ * states it as its own `fontAlgn` (PowerPoint writes the attribute on every
+ * row the dialog applies to, Auto included). Null when every selected row
+ * already states that value.
+ */
+export function textBlockWithParagraphFontAlign(
+  block: PresentationTextBlock,
+  fontAlign: PresentationFontAlign,
+  selection: LiveTextSelection,
+): PresentationTextBlock | null {
+  const paragraphs = paragraphsWithRunsFromTextBlock(block);
+  if (paragraphs.length === 0) return null;
+  const [first, last] = paragraphSelectionSpan(block.id, paragraphs, selection);
+  let changed = false;
+  const nextParagraphs = paragraphs.map((paragraph, index) => {
+    if (index < first || index > last || paragraph.fontAlign === fontAlign) return paragraph;
+    changed = true;
+    return { ...paragraph, fontAlign };
+  });
+  return changed ? withPersistedParagraphs(block, nextParagraphs) : null;
 }
 
 /**
@@ -1215,7 +1277,29 @@ export function textBlockWithStyle(
   const next = { ...block } as PresentationTextBlock;
   if (nextKeys.length > 0) next.style = nextStyle;
   else delete next.style;
+  // Text Shadow is the box's: on or off, no run keeps a shadow of its own
+  // (readings row 808), as PowerPoint's button sets every selected run.
+  if ("textShadow" in patch) withoutRunTextShadows(next);
   return next;
+}
+
+/** The block's runs without a text shadow of their own (readings row 808). */
+function withoutRunTextShadows(block: PresentationTextBlock): void {
+  const strip = <R extends { style?: RunStyle }>(runs: readonly R[] | undefined): R[] | undefined =>
+    runs?.map((run) => {
+      if (!run.style || (run.style.textShadow === undefined && run.style.textShadowEffect === undefined)) return run;
+      const { textShadow: _shadow, textShadowEffect: _effect, ...rest } = run.style;
+      void _shadow;
+      void _effect;
+      return { ...run, style: Object.keys(rest).length ? rest : undefined };
+    });
+  const record = block as unknown as { runs?: { style?: RunStyle }[]; paragraphs?: { runs?: { style?: RunStyle }[] }[] };
+  if (Array.isArray(record.runs)) record.runs = strip(record.runs);
+  if (Array.isArray(record.paragraphs)) {
+    record.paragraphs = record.paragraphs.map((paragraph) =>
+      Array.isArray(paragraph.runs) ? { ...paragraph, runs: strip(paragraph.runs) } : paragraph,
+    );
+  }
 }
 
 /**
@@ -1322,7 +1406,7 @@ export function textBlockWithListMarker(
   const whole = first === 0 && last === paragraphs.length - 1;
   const blockChoice =
     kind === "bullet"
-      ? normalizeBulletChar(block.bulletChar)
+      ? normalizeBlockBulletChar(block.bulletChar)
       : normalizeNumberFormat(block.numberFormat);
   const rowChoice =
     whole || chosen === (blockChoice === "decimal" ? undefined : blockChoice)
@@ -1348,7 +1432,7 @@ export function textBlockWithListMarker(
       ? { ...next, bulletChar: rowChoice as BulletChar }
       : { ...next, numberFormat: rowChoice as NumberFormat };
   });
-  const next = withPersistedParagraphs(block, listed);
+  const next = withPersistedParagraphs(block, rowsWithLayoutHiddenMarkers(block, listed));
   if (whole) {
     if (kind === "bullet") {
       delete next.bulletChar;
@@ -1390,7 +1474,7 @@ export function textBlockWithListToggle(
       ? { ...paragraph, bullet }
       : paragraph,
   );
-  const next = withPersistedParagraphs(block, nextParagraphs);
+  const next = withPersistedParagraphs(block, rowsWithLayoutHiddenMarkers(block, nextParagraphs));
   return paragraphPersistenceEqual(next, block) ? null : next;
 }
 
@@ -1480,11 +1564,15 @@ export function textBlockWithIndentShift(
     selection,
   );
   let nextParagraphs = paragraphs;
+  // An imported body's words re-inherit at the new level, as PowerPoint's
+  
+  const restyle = presentationListLevelRestyle(block);
   for (let index = first; index <= last; index += 1) {
     nextParagraphs = adjustParagraphLevelAt(
       nextParagraphs,
       index,
       delta,
+      restyle,
     ) as SlideParagraphWithRuns[];
   }
   if (nextParagraphs === paragraphs) return null;
@@ -1583,15 +1671,61 @@ function formattingCleared(
   const text = presentationEditableText(textBlock);
   const [from, to] = selectedTextRange(blockId, text, selection);
   const wholeText = from === 0 && to >= text.length;
-  const base = withDefaultTextBoxSize(cleared ?? textBlock, cleared !== null);
-  const style = base.style as ({ textShadow?: unknown; letterSpacing?: unknown } & Record<string, unknown>) | undefined;
-  if (!wholeText || (style?.textShadow === undefined && style?.letterSpacing === undefined)) {
+  // A body read with its list levels (reading row 518): the cleared words are
+  // handed back to their level -- they state nothing of their own, and draw
+  
+  // save wrote b="0" where PowerPoint removes `b`).
+  const ladder = presentationLevelStylesOf(textBlock);
+  const handed = ladder && cleared ? withRunsHandedToLevel(cleared, from, to, ladder) : cleared;
+  const base = ladder ? (handed ?? textBlock) : withDefaultTextBoxSize(cleared ?? textBlock, cleared !== null);
+  const style = base.style as ({ textShadow?: unknown; textShadowEffect?: unknown; letterSpacing?: unknown } & Record<string, unknown>) | undefined;
+  if (
+    !wholeText ||
+    (style?.textShadow === undefined && style?.textShadowEffect === undefined && style?.letterSpacing === undefined)
+  ) {
     return base === textBlock ? cleared : base;
   }
-  const { textShadow: _shadow, letterSpacing: _spacing, ...rest } = style!;
+  const { textShadow: _shadow, textShadowEffect: _effect, letterSpacing: _spacing, ...rest } = style!;
   void _shadow;
+  void _effect;
   void _spacing;
   return { ...base, style: rest as PresentationTextBlock["style"] };
+}
+
+/** The runs of `block` inside [from, to) handed back to their rows' list level (`runStyleHandedToLevel`). */
+function withRunsHandedToLevel(
+  block: PresentationTextBlock,
+  from: number,
+  to: number,
+  ladder: readonly PresentationLevelStyle[],
+): PresentationTextBlock {
+  // Words cleared of every format are kept as plain text (no runs): they get
+  // one run again to carry the level's.
+  const handRuns = (own: readonly TextRun[] | undefined, text: string, start: number, level: number): TextRun[] | undefined => {
+    const runs = own ?? (text ? runsFromText(text) : undefined);
+    if (!runs) return undefined;
+    let cursor = start;
+    return runs.map((run) => {
+      const runStart = cursor;
+      cursor += run.text.length;
+      if (run.text.length === 0 || runStart < from || cursor > to) return run;
+      return { ...run, style: runStyleHandedToLevel(run.style, ladder, level) };
+    });
+  };
+  const paragraphs = normalizeParagraphsWithRuns(block.paragraphs);
+  if (paragraphs && ownsParagraphRichLayout(paragraphs)) {
+    let offset = 0;
+    const next = paragraphs.map((paragraph) => {
+      const start = offset;
+      offset += paragraph.text.length + 1;
+      const runs = handRuns(paragraph.runs, paragraph.text, start, Number(paragraph.level ?? 0));
+      return runs ? { ...paragraph, runs } : paragraph;
+    });
+    return { ...block, paragraphs: next };
+  }
+  const level = Number(((block.style ?? {}) as { indentLevel?: unknown }).indentLevel ?? 0);
+  const runs = handRuns(normalizeRuns(block.runs) ?? undefined, block.text ?? "", 0, Number.isFinite(level) ? level : 0);
+  return runs ? { ...block, runs } : block;
 }
 
 /** The cleared free text box stating the default size its words now take. */
@@ -2039,7 +2173,7 @@ export function textBlockWithListRows(
     }
     return row;
   });
-  const next = withPersistedParagraphs(materialized, rows);
+  const next = withPersistedParagraphs(materialized, rowsWithLayoutHiddenMarkers(materialized, rows));
   if (whole) {
     delete next.bulletChar;
     delete next.numberFormat;

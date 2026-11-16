@@ -19,7 +19,8 @@
 "use client";
 
 import { editorViewDom } from "@mrnote/core/web/components/console/editor/native-document/editorViewDom.ts";
-import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { useId, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useOfficePatternAnchor } from "@mrnote/core/web/components/office-pattern/useOfficePatternAnchor.ts";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { EditorContent } from "@tiptap/react";
 import { EMPTY_DOCUMENT_DEFAULT_INDENTS } from "../paragraphSetAsDefault";
@@ -35,6 +36,8 @@ import { footnoteTextStyleFromDocAttrs } from "@mrnote/core/web/components/conso
 import type { DocumentSurfaceAttrState } from "./documentSurfaceAttrs";
 import { isUsableEditor, type MaybeNoteEditor, type NoteEditorRuntime } from "./editorRuntime";
 import type { UseDocumentPagedSurfaceResult as DocumentPagedSurfaceLayout } from "./useDocumentPagedSurface";
+import { washoutPictureStyle } from "@mrnote/core/web/components/console/editor/native-document/watermark.ts";
+import { PAPER_UNDERLAY_ATTR, paperBoxesPlaced, paperUnderlayOff, paperUnderlaySheetRule } from "@mrnote/core/web/components/console/editor/native-document/paged/paperUnderlay.ts";
 
 export interface DocumentPagedSurfaceProps {
   bandEditScope: DocumentPagedSurfaceLayout["bandEditScope"];
@@ -168,8 +171,25 @@ export function DocumentPagedSurface({
   bandEditLayer,
   followPill,
 }: DocumentPagedSurfaceProps) {
+  // Pattern fills on their page's grid, one bit a CSS pixel at every zoom
+  // (lib/office-pattern-anchor; PowerPoint's window, the measured truth).
+  const patternAnchorRef = useRef<HTMLDivElement>(null);
+  useOfficePatternAnchor(patternAnchorRef, docZoom, 1, "article[data-page-sheet]");
+  // The paper as its own layer under the header, footer and watermark, which
+  // are drawn under the content (paperUnderlay.ts). Paged print layout only,
+  // and not on a handwriting document's paper (its sheets draw their own).
+  const paperUnderlayScope = useId();
+  const watermarkShown = Boolean((watermark && watermarkStyle) || pictureWatermark);
+  const paperUnderlay =
+    documentLayoutViewMode === "print" &&
+    !handwriting &&
+    (Boolean(sheetBandOverlay) || watermarkShown) &&
+    sheetBandBoxes.length > 0 &&
+    !paperUnderlayOff();
+  const paperPlaced = paperUnderlay && paperBoxesPlaced(sheetBandBoxes);
   return (
     <div
+            ref={patternAnchorRef}
             className={`note-editor-body-main${
               detachedPagePreviewActive ? " note-editor-body-main--hidden" : ""
             } note-editor-body-main--sheeted`}
@@ -290,6 +310,7 @@ export function DocumentPagedSurface({
                   : String(docDefaultKinsoku)
               }
               data-doc-strict-kinsoku={docStrictKinsoku ? "true" : undefined}
+              {...(paperUnderlay ? { [PAPER_UNDERLAY_ATTR]: paperUnderlayScope } : {})}
               style={{
                 ...columnsStyle,
                 ...columnSeparatorStyle,
@@ -326,6 +347,31 @@ export function DocumentPagedSurface({
                   </div>
                 </div>
               ) : null}
+              {paperUnderlay ? (
+                // Each measured sheet's paper (its colour and fill), under the
+                // watermark and the header and footer, which are under the
+                // content; those sheets' own paper is cleared by the rule.
+                <div
+                  className="sheet-paper-underlay"
+                  data-testid="sheet-paper-underlay"
+                  contentEditable={false}
+                  aria-hidden
+                >
+                  {paperPlaced
+                    ? sheetBandBoxes.map((box, index) => (
+                        <div
+                          key={index}
+                          className="sheet-paper"
+                          data-sheet-index={index}
+                          style={{ top: box.top, left: box.left, width: box.width, height: box.height }}
+                        />
+                      ))
+                    : null}
+                  {paperPlaced ? (
+                    <style>{paperUnderlaySheetRule(paperUnderlayScope, sheetBandBoxes.length)}</style>
+                  ) : null}
+                </div>
+              ) : null}
               <EditorContent editor={usableEditor} />
               {/* A document held as parts: the next part loads as this
                   comes near the viewport (useDocumentPageParts). */}
@@ -353,6 +399,7 @@ export function DocumentPagedSurface({
                         key={`${sheetIndex}:${pageIndex}`}
                         className="note-editor-watermark"
                         data-testid="note-editor-watermark"
+                        data-sheet-index={sheetIndex}
                         data-watermark-kind={
                           watermark && watermarkStyle ? "text" : "picture"
                         }
@@ -380,9 +427,9 @@ export function DocumentPagedSurface({
                             style={{
                               width: `${pictureWatermark.widthPt}pt`,
                               height: `${pictureWatermark.heightPt}pt`,
-                              // Word's Washout (gain 0.3, black level 0.35)
-                              // reads as a pale print of the picture.
-                              opacity: pictureWatermark.washout ? 0.3 : 1,
+                              // Word's Washout (gain 0.3, black level 0.35):
+                              // the Washout correction, as Word prints it.
+                              ...(pictureWatermark.washout ? washoutPictureStyle() : { opacity: 1 }),
                             }}
                           />
                         ) : null}

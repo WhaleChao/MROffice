@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { reloadPage } from "../../../../lib/reload-reason";
 import { memo } from "react";
 import { useTranslations } from "../../../../../host/next-intl";
 
@@ -90,7 +91,7 @@ export const DocumentPartsNotice = memo(function DocumentPartsNotice({
           type="button"
           className="note-editor-parts-notice__action"
           data-testid="note-editor-parts-reopen"
-          onClick={() => window.location.reload()}
+          onClick={() => reloadPage("document_parts_notice")}
         >
           {t("oversizedImport.partsReopen")}
         </button>

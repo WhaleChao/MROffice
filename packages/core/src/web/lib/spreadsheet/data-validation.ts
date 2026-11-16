@@ -605,8 +605,12 @@ export const MAX_LIST_VALUES = 1_000;
 /** A list rule's source is checked in full on entry: a value past the
  *  dropdown's first thousand options is still in the list (live audit B290). */
 export const MAX_LIST_MEMBERSHIP_SCAN = MAX_GRID_ROWS;
-/** Maximum number of rules a sheet may carry (DoS bound on iteration). */
-export const MAX_VALIDATION_RULES = 1_000;
+/** Maximum number of rules a sheet may carry (DoS bound). A rule is one
+ *  rectangle (the import splits a rule's sqref): Excel sets no count, and one
+ *  "IME off" rule of a Japanese workbook spans 1,024 of them (xlsx-rounds
+ *  R422-X46), so the bound is 10,000; `ruleForCell` finds a cell's rule by a
+ *  row index, not by walking them all. */
+export const MAX_VALIDATION_RULES = 10_000;
 /** Upper bound for a text-length constraint (Excel caps cell text far higher). */
 export const MAX_TEXT_LENGTH = 32_767;
 /** Upper bound for a formula/custom rule's source length (DoS bound on parse). */
@@ -1388,10 +1392,66 @@ export function ruleForCell(
   row: number,
   col: number,
 ): ValidationRule | null {
-  for (const rule of rules) {
-    if (rangeContains(rule.range, row, col)) return rule;
+  if (rules.length <= RULE_INDEX_MIN) {
+    for (const rule of rules) {
+      if (rangeContains(rule.range, row, col)) return rule;
+    }
+    return null;
+  }
+  // Asked for each cell drawn: up to MAX_VALIDATION_RULES rules are found by
+  // the band of rows they reach, in array order (first match wins).
+  let index = RULE_INDEXES.get(rules);
+  if (!index) {
+    index = ruleIndex(rules);
+    RULE_INDEXES.set(rules, index);
+  }
+  const band = index.bands.get(Math.floor(row / RULE_BAND_ROWS));
+  const tall = index.tall;
+  let b = 0;
+  let t = 0;
+  while ((band && b < band.length) || t < tall.length) {
+    const next =
+      band && b < band.length && (t >= tall.length || band[b] < tall[t])
+        ? band[b++]
+        : tall[t++];
+    if (rangeContains(rules[next].range, row, col)) return rules[next];
   }
   return null;
+}
+
+/** Below this many rules a cell's rule is found by walking them. */
+const RULE_INDEX_MIN = 64;
+/** Rows of one band of the rule index. */
+const RULE_BAND_ROWS = 256;
+/** A rule reaching more bands than this is asked of every row. */
+const RULE_MAX_BANDS = 64;
+
+interface RuleIndex {
+  /** The rules reaching each band of rows, by their order. */
+  bands: Map<number, number[]>;
+  /** The rules too tall to list by band, by their order. */
+  tall: number[];
+}
+
+const RULE_INDEXES = new WeakMap<readonly ValidationRule[], RuleIndex>();
+
+function ruleIndex(rules: readonly ValidationRule[]): RuleIndex {
+  const bands = new Map<number, number[]>();
+  const tall: number[] = [];
+  rules.forEach((rule, position) => {
+    const first = Math.floor(rule.range.r1 / RULE_BAND_ROWS);
+    const last = Math.floor(rule.range.r2 / RULE_BAND_ROWS);
+    if (last - first + 1 > RULE_MAX_BANDS) {
+      tall.push(position);
+      return;
+    }
+    for (let band = first; band <= last; band += 1) {
+      const listed = bands.get(band);
+      if (listed) listed.push(position);
+      else bands.set(band, [position]);
+    }
+  });
+  return { bands, tall };
 }
 
 /**

@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 /** Every managed text box of a PDF by page and name: its appearance seal
  * (null without one), how many annotations carry that name, and whether a
  * seal there is malformed. One pdf-lib load for the whole file. */
@@ -17,7 +18,7 @@ export type PdfSourceTextBoxSealIndex = {
 
 export async function scanPdfSourceTextBoxAppearanceSeals(sourceBytes: Uint8Array): Promise<PdfSourceTextBoxSealIndex> {
   const { PDFDocument, PDFArray, PDFDict, PDFName, PDFString, PDFHexString } = await import("pdf-lib");
-  const pdf = await PDFDocument.load(sourceBytes, { updateMetadata: false });
+  const pdf = await PDFDocument.load(sourceBytes, { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
   const pages = pdf.getPages();
   const boxes: Record<string, { matches: number; seal: string | null; invalid: boolean }> = {};
   const unreadablePages: number[] = [];

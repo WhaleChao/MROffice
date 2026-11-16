@@ -4,6 +4,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import type { PdfArmedTextKind } from "@mrnote/core/web/lib/pdf/text-box-create.ts";
 import { resolveManagedTextBoxPreviewAnnotationId } from "../../../lib/pdf/native-text-box-roundtrip";
 import { refuseStrayNativeDrag } from "@mrnote/core/web/lib/native-drag-guard.ts";
@@ -32,8 +33,9 @@ import { captureNativeVectorDragGhost } from "../../../lib/pdf/native-vector-dra
 import { readCachedPdfSourceBytes, storeCachedPdfSourceBytes } from "../../../lib/pdf/source-bytes-cache";
 import { downloadPdfSourceOnce, takePrefetchedPdfSource } from "../../../lib/pdf/source-prefetch";
 import { bindPdfWorkerToTask, takePdfReaderWorker, warmPdfReaderWorker } from "../../../lib/pdf/pdfjs-reader-worker";
+import { takePdfDocumentAhead } from "../../../lib/pdf/document-ahead";
 import { sha256PdfBytes } from "../../../lib/pdf/engine/native/transaction-error";
-import { rememberPdfSourceBytes } from "../../../lib/pdf/source-bytes-memo";
+import { copyRememberedPdfSourceBytes, rememberPdfSourceBytes } from "../../../lib/pdf/source-bytes-memo";
 import type { FractionRect } from "@/lib/pdf/embedded-image-edits";
 import {
   buildLayeredDragModel,
@@ -47,7 +49,7 @@ import {
   type PdfVectorDragAbove,
   type PdfVectorDragStage,
 } from "../../../lib/pdf/native-vector-drag-backdrop";
-import { usePdfNativeTextContinuation, joinPdfNativeTextActivation, type PdfNativeTextActivationStatus } from "../../../lib/pdf/native-text-continuation";
+import { usePdfNativeTextContinuation, joinPdfNativeTextActivation, isPdfNativeTextCaretClick, type PdfNativeTextActivationStatus } from "../../../lib/pdf/native-text-continuation";
 import { notePdfNativeTextPress } from "../../../lib/pdf/native-text-press";
 import { queuePdfNativeTextRebuildClick, type PdfNativeTextRebuildClickHandle } from "../../../lib/pdf/native-text-rebuild-click";
 import { holdPdfNativeTextGestures } from "../../../lib/pdf/native-text-gesture-hold";
@@ -291,11 +293,21 @@ import {
   MAX_REPLIES_PER_ANNOTATION,
   MAX_REPLY_TEXT,
   parseAnnotationAuthor,
+  parseReplies,
   type PdfAnnotationAuthor,
   type PdfAnnotationReply,
 } from "@mrnote/core/web/lib/pdf/annotation-replies.ts";
 import {
+  createPdfThreadedAnnotationWriter,
+  keepPdfUnsentReply,
+  mergePdfAnnotationReplies,
+  pdfUnsentReplies,
+  pdfUnsentReplyThreads,
+  settlePdfUnsentReplies,
+} from "../../../lib/pdf/annotation-thread-write";
+import {
   createPdfAnnotationReadScope,
+  notePdfAnnotationRowWrite,
   notePdfAnnotationWrite,
   readPdfAnnotationsByType,
 } from "../../../lib/pdf/annotation-read-batch";
@@ -318,6 +330,17 @@ import { apiStream } from "@mrnote/core/web/lib/api-stream.ts";
 import { isLoggedIn, subscribeAuthState } from "@mrnote/core/web/lib/auth-state.ts";
 import { mergeHydratedAnnotationList } from "../../../lib/pdf/annotation-hydration";
 import { enqueuePdfMarkupWrite, type PdfMarkupWrite } from "../../../lib/pdf/markup-write-queue";
+import { holdPdfReaderWork, onPdfReaderWorkAsked, PDF_READER_WRITE_SAID_AFTER, pdfReaderRetryPauseMs } from "../../../lib/pdf/reader-held-work";
+import {
+  keepPdfObjectChange,
+  pdfKeptObjectChange,
+  pdfKeptObjectChanges,
+  pdfKeptObjectKey,
+  settlePdfObjectChange,
+  withKeptPdfObjectChanges,
+  type PdfKeptObjectKind,
+} from "../../../lib/pdf/kept-object-change";
+import { keepPdfWetInk, pdfWetInkLandedId, settlePdfWetInkBatch, takePdfKeptWetInk, type PdfWetInkWrite } from "../../../lib/pdf/wet-ink-save";
 
 /** One press's marks waiting to be written (lib/pdf/markup-write-queue). */
 type PendingMarkupPress = Readonly<{
@@ -420,8 +443,24 @@ import {
 } from "../../../lib/pdf/fallback-glyph-advances";
 import {
   nativeVectorLayerBoundary,
+  nativeVectorSelectionLayerBoundary,
+  pdfLayerMoveAvailability,
   pdfPagePaintStops,
 } from "../../../lib/pdf/native-vector-layer-boundary";
+import {
+  pdfNativeVectorArrangeMoves,
+  type PdfNativeContentReorderRequestMember,
+} from "../../../lib/pdf/native-vector-reorder-chain";
+import {
+  pdfPageObjectRows,
+  pdfSelectionPaneContentRows,
+  type PdfPageObjectRows,
+  type PdfSelectionPaneMoves,
+} from "../../../lib/pdf/page-object-list";
+import {
+  PdfSelectionPane,
+  type PdfSelectionPaneAnnotationRow,
+} from "./pdf/viewer/PdfSelectionPane";
 import {
   annotationLayerMembersAt,
   composeNativeVectorLayersRegion,
@@ -854,9 +893,11 @@ import {
   cancelTrackedPdfTasks,
   cleanupPdfPageAfter,
   collectPdfPagesOutsideKeepSet,
+  createPdfRenderSession,
   createPdfSessionDestroyer,
   isPdfRenderCancellation,
   releasePdfCanvasBackingStore,
+  type PdfRenderSession,
 } from "../../../lib/pdf/render-lifecycle";
 import {
   PointerContextMenu,
@@ -1063,6 +1104,7 @@ import {
   type PdfAnnotationStorageLike,
 } from "../../../lib/pdf/form-appearance-storage";
 import { managedPdfAnnotationNamesForDocument } from "@mrnote/core/web/lib/pdf/managed-note-source-identity.ts";
+import type { PdfAnnotsEntry } from "../../../lib/pdf/annotation-stack-order";
 import {
   DEFAULT_SIGNATURE_FONT,
   SIGNATURE_MAX_PER_PAGE,
@@ -1257,6 +1299,8 @@ import {
   textBoxesFromPdfTextContent,
 } from "../../../lib/pdf/text-box-extract";
 import { readPdfTextContentWithHardGroups } from "../../../lib/pdf/native-text-hard-groups";
+import { createPdfStagedTextReads } from "../../../lib/pdf/staged-text-reads";
+import { pdfNativeTextRowRoom } from "../../../lib/pdf/native-text-row-room";
 import {
   textBoxViewOverlaysFromEdits,
   type TextBoxViewOverlay,
@@ -1500,6 +1544,7 @@ import {
   type ManagedPdfCommentBatchDeleteTarget,
   type SelectedPdfLinkContext,
   type PdfPlacedAnnotationSelection,
+  type PdfPlacedDeleteHold,
   pdfPlacedSelectionType,
   measurementPointBox,
   xfdfAuthorIdentity,
@@ -1621,7 +1666,8 @@ import {
 import {
   loadedPdfBytesForMetadata,
   fetchPdfSourceWithOneNetworkRetry,
-  readPdfOpenActionPage,
+  readPdfOpeningView,
+  type PdfOpeningView,
 } from "./pdf/viewer/pdfSourceLoading";
 import {
   paintCanvasObjectGhost,
@@ -1687,6 +1733,8 @@ import {
   pdfNativeTextPointerGestureOwnsClick,
   beginPdfNativeTextActivationFeedback,
   pdfNativeTextEditBoxAtPoint,
+  pdfPageTextEditBoxAt,
+  pdfPageTextEditPointAt,
   PDF_NATIVE_TEXT_HOVERED_ATTR,
   resolvePdfNativeTextEditedLayout,
   synchronizePdfNativeTextEditedOutline,
@@ -1704,6 +1752,7 @@ export {
 export type {
   PdfNativeTextPointerGestureOwner,
 } from "./pdf/viewer/nativeTextDom";
+import type { PdfPageTextEditPoint } from "./pdf/viewer/nativeTextDom";
 import {
   type PdfNativeTextEditBoxPresentation,
   emptyPdfTextLayerForRebuild,
@@ -1825,27 +1874,51 @@ function noteAnnotationWrite(path: string): void {
   const dataItemId = created ? decodeURIComponent(created[1]) : null;
   for (const listener of annotationWriteListeners) listener(dataItemId);
 }
+// A write of a row, landed or not known to have, also makes the open
+// document's own read of the rows stale: its next re-read (every save that
+// publishes a revision makes one) asks the server instead of drawing the
+// rows as they stood when the document was opened. Shapes, redactions and
+// highlights said so one by one; a signature, a stamp, a stroke, a link, a
+// note or a form's values did not, and went back to how they were opened
+
+function noteAnnotationRowsStale(path: string): void {
+  const created = /^\/api\/v1\/data-items\/([^/?]+)\/annotations(?:[/?]|$)/.exec(path);
+  if (created) notePdfAnnotationWrite(decodeURIComponent(created[1]));
+  else if (path.startsWith("/api/v1/annotations/")) notePdfAnnotationRowWrite();
+}
 // Each forwards exactly the arguments it was called with.
 const apiPost: typeof apiPostRequest = async <T,>(
   ...args: Parameters<typeof apiPostRequest>
 ): Promise<T> => {
-  const result = await apiPostRequest<T>(...args);
-  noteAnnotationWrite(args[0]);
-  return result;
+  try {
+    const result = await apiPostRequest<T>(...args);
+    noteAnnotationWrite(args[0]);
+    return result;
+  } finally {
+    noteAnnotationRowsStale(args[0]);
+  }
 };
 const apiPatch: typeof apiPatchRequest = async <T,>(
   ...args: Parameters<typeof apiPatchRequest>
 ): Promise<T> => {
-  const result = await apiPatchRequest<T>(...args);
-  noteAnnotationWrite(args[0]);
-  return result;
+  try {
+    const result = await apiPatchRequest<T>(...args);
+    noteAnnotationWrite(args[0]);
+    return result;
+  } finally {
+    noteAnnotationRowsStale(args[0]);
+  }
 };
 const apiDelete: typeof apiDeleteRequest = async <T,>(
   ...args: Parameters<typeof apiDeleteRequest>
 ): Promise<T> => {
-  const result = await apiDeleteRequest<T>(...args);
-  noteAnnotationWrite(args[0]);
-  return result;
+  try {
+    const result = await apiDeleteRequest<T>(...args);
+    noteAnnotationWrite(args[0]);
+    return result;
+  } finally {
+    noteAnnotationRowsStale(args[0]);
+  }
 };
 
 
@@ -2142,12 +2215,22 @@ function nativeTextSelectionOfBox(paragraph: PdfNativeParagraphEditBox | undefin
 
 /** A page's text as a document draws it, read before it is committed. Null
  * fields: the page has no text the editor binds. */
+/** On a text-layer span: one of the words of a managed object the page draws
+ * as its content (pdf-viewer.css lets the pointer through it). */
+const PDF_MANAGED_OBJECT_TEXT_ATTR = "data-pdf-managed-object-text";
+
 type BuiltNativeTextOfPage = {
   items: readonly (PdfNativeListTextSelectionItemEvidence | null)[] | null;
   paragraphs: readonly PdfNativeParagraphEditBox[] | null;
   layoutBoxes: (PdfViewerTextBoxCommandTarget & PdfNativeTextSourceLayout &
     NonNullable<ReturnType<typeof nativeTextItemLayoutGeometry>>)[] | null;
   artifacts: readonly boolean[] | null;
+  /** Per item: part of the drawing of a table, chart or SmartArt the page
+   * draws as its content (PDF_MANAGED_OBJECT_MARK_TAG). */
+  objects: readonly boolean[] | null;
+  /** The managed objects the page draws as its content (an empty table has
+   * no words and is counted too). */
+  objectCount: number;
   /** What the layer was built from (pdfNativeTextContentSignature); set when
    * its boxes were bound. */
   signature?: string;
@@ -2155,6 +2238,13 @@ type BuiltNativeTextOfPage = {
    * revision builds, and was left as it is. */
   kept?: boolean;
 };
+/** The pages whose text is on screen, the one being read first, six at
+ * most: those a working revision brings its text for. */
+function pdfPagesWithTextOnScreen(hosts: ReadonlyMap<number, HTMLElement>, shownFirst: number): number[] {
+  return [...hosts.entries()]
+    .filter(([, host]) => host.querySelector("div[data-pdf-text-layer] span") !== null).map(([number]) => number)
+    .sort((left, right) => Math.abs(left - shownFirst) - Math.abs(right - shownFirst)).slice(0, 6);
+}
 /** The attributes a line carries while an edit of it is on its way: a
  * layer holding one is built again with the revision, never kept
  * (assignPdfNativeTextLineIds carries them from the old layer to the new). */
@@ -2196,6 +2286,7 @@ export default function PDFViewer({
   managedOutlineBusy,
   managedOutlineDisabledReason,
   onDownload,
+  onDownloadSavedRevision,
   onGuestExportRequest,
   preferAnnotatedDownload,
   annotatedDownloadEnabled = true,
@@ -2372,6 +2463,8 @@ export default function PDFViewer({
   onNativeVectorDeleteCommit,
   onNativeVectorDuplicateCommit,
   onNativeVectorReorderCommit,
+  onNativeVectorReorderCommitAll,
+  onNativeContentReorderCommit,
   onNativeVectorStyleCommitAll,
   onNativeVectorDeleteCommitAll,
   onNativeVectorGeometryCommitAll,
@@ -2985,11 +3078,20 @@ export default function PDFViewer({
       window.setTimeout(queueFirstVisibleCanvasPaint, 120);
     });
   }, []);
+  const savePolicyDocumentReady =
+    !loading &&
+    pages.length > 0 &&
+    (!savePolicyV1 || matchedSourceRiskSnapshot !== null);
+  // The times a document, or its next revision, became ready. The ribbon's
+  // output decisions read readiness through the ref below, which no memo
+  // sees: they are made again each time it is reached (withReaderSavePolicy).
+  const documentReadyTurnsRef = useRef(0);
+  const documentWasReadyRef = useRef(false);
+  if (savePolicyDocumentReady && !documentWasReadyRef.current) documentReadyTurnsRef.current += 1;
+  documentWasReadyRef.current = savePolicyDocumentReady;
+  const documentReadyTurns = documentReadyTurnsRef.current;
   savePolicyRuntimeRef.current = {
-    documentReady:
-      !loading &&
-      pages.length > 0 &&
-      (!savePolicyV1 || matchedSourceRiskSnapshot !== null),
+    documentReady: savePolicyDocumentReady,
     editable: annotatedDownloadEnabled,
     source: matchedSourceRiskSnapshot,
     documentAuthority: savePolicyDocumentAuthority,
@@ -3124,6 +3226,8 @@ export default function PDFViewer({
   const [readerContextMenu, setReaderContextMenu] = useState<{
     x: number;
     y: number;
+    /** The page's own text under the press, where it can be edited. */
+    textAt?: PdfPageTextEditPoint | null;
   } | null>(null);
 
   // ---- In-document find bar (Ctrl/Cmd+F) ---------------------------------
@@ -3388,12 +3492,36 @@ export default function PDFViewer({
     }),
     [currentAuthor],
   );
+  // Every write of a note's or a mark's row names the row it read, and one
+  // the server answers as stale is made again over the stored row with the
+  // two reply threads joined by reply id: nobody's reply is overwritten
+  // (annotation-thread-write).
+  const [threadWriter] = useState(() =>
+    createPdfThreadedAnnotationWriter({
+      patch: (id, body) => apiPatch(`/api/v1/annotations/${id}`, body),
+      parseReplies: (id, raw) =>
+        parseReplies(
+          raw,
+          (index) => `${id}:reply:${index}`,
+          () => new Date().toISOString(),
+        ),
+    }),
+  );
   // ---- Sticky notes ------------------------------------------------------
   // Point-anchored text comments persisted as `pdf_note` annotations (additive
   // to `pdf_highlight`). `noteMode` turns clicks-on-page into note placement;
   // `activeNoteId` is the note whose popover is open ("__new__" sentinel while a
   // freshly-placed note hasn't been saved yet).
   const [notes, setNotes] = useState<StickyNoteAnnotation[]>([]);
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  
+  // not hold yet (annotation-thread-write keeps them): they show in the
+  // thread from the moment they are posted, `writeNoteReplies` writes them
+  // (again, after a failure) and they count as unsaved work until they land.
+  const noteReplyLanesRef = useRef(
+    new Map<string, { writing: boolean; failures: number; timer: number | null }>(),
+  );
   const [noteMode, setNoteMode] = useState(false);
   // 插入 › 文字 on the page the reader shows: the next click places a text
   // box (one placement per arming, as WPS places one).
@@ -3748,6 +3876,20 @@ export default function PDFViewer({
   // The wet strokes being saved now (one write takes all that were waiting).
   const inkWetSavingKeysRef = useRef(new Set<number>());
   const inkWetGateRef = useRef<InkWritingSaveGate | null>(null);
+  // A wet stroke whose save failed stays wet and is saved again after a
+  // growing pause (lib/pdf/wet-ink-save); the saves that failed in a row,
+  // the next try's timer, and what the reader is told meanwhile: that the
+  // ink is not saved yet, or that the page had no room for the last stroke.
+  const inkWetFailuresRef = useRef(0);
+  const inkWetRetryTimerRef = useRef<number | null>(null);
+  const [inkUnsavedNotice, setInkUnsavedNotice] = useState<"failing" | "pageFull" | null>(null);
+  const readerHeldFileRef = useRef(dataItemId);
+  readerHeldFileRef.current = dataItemId;
+  /** The kind of placed object whose change the file does not hold yet
+   * (commitObjectChange, below): said until every such change has landed. */
+  const [objectUnsavedNotice, setObjectUnsavedNotice] = useState<PdfKeptObjectKind | null>(null);
+  /** Lets go of a deleted object's kept change (commitObjectChange, below). */
+  const forgetKeptObjectRef = useRef<(kind: PdfKeptObjectKind, id: string) => void>(() => undefined);
   const [inkSaving, setInkSaving] = useState(false);
   const managedInkNativeWritable =
     typeof onManagedInkUpsert === "function" &&
@@ -4971,6 +5113,14 @@ export default function PDFViewer({
   );
   const nativeTextRangeIsDecorationRef = useRef<(page: number, start: number, end: number) => boolean>(() => false);
   nativeTextRangeIsDecorationRef.current = (page, start, end) => {
+    // The words of a table, a chart or a SmartArt made here, which the page
+    // draws as its own content: changed in the object (its cell, its data),
+    // never opened as a line of the page -- edited as one, the table's model
+    // and its drawing no longer said the same thing.
+    const objects = nativeTextObjectItemsByPageRef.current.get(page);
+    if (objects && start >= 0 && end >= start) {
+      for (let index = start; index <= end; index += 1) if (objects[index]) return true;
+    }
     const artifacts = nativeTextArtifactItemsByPageRef.current.get(page);
     const items = nativeTextItemsByPageRef.current.get(page);
     const pageCount = pdfDocRef.current?.numPages ?? 0;
@@ -6316,6 +6466,11 @@ export default function PDFViewer({
   // a fit is armed: arriving there re-fits it when its size differs from the
   // page the fit was made for (user audit PDF 0026).
   const fitOnArrivalRef = useRef<number | null>(null);
+  // The fit as the latest render runs it, for the opening view (applied
+  // before the fit callbacks are declared below).
+  const runFitModeRef = useRef<(mode: PdfFitMode, options?: { opening?: boolean }) => void>(() => undefined);
+  // The view the loaded file asks to open in, read before its first layout.
+  const openingViewRef = useRef<(PdfOpeningView & { document: PdfDocument }) | null>(null);
   // The page size (or Two Pages pair size) the armed fit was last made for.
   const fitPageSizeRef = useRef<string | null>(null);
   // The zoom a view-history entry records with its position, so Back/Forward
@@ -6501,6 +6656,11 @@ export default function PDFViewer({
   // one previously opened huge PDF cannot retain a promise per historical
   // page for the component's whole lifetime.
   const renderChainsRef = useRef<Map<number, Promise<void>>>(new Map());
+  // The render session of each document published to the reader: its page
+  // renders settle with it at the latest (createPdfRenderSession), so a
+  // render pdf.js never answers for a destroyed document does not hold the
+  // page's chain against the document shown next.
+  const renderSessionsRef = useRef(new WeakMap<PdfDocument, PdfRenderSession>());
   // Annotation ids this viewer flagged noView while comments are hidden, per
   // document (lib/pdf/form-appearance-storage.ts).
   const commentVisibilityStorageRef = useRef<{
@@ -6589,6 +6749,12 @@ export default function PDFViewer({
   const preparedNativeTextRef = useRef(new Map<number, Readonly<{ document: PdfDocument; scale: number; rotation: number }>>());
   const prepareNativeTextOfPagesRef = useRef<(pdfDocument: PdfDocument, isCurrent: () => boolean) =>
     Promise<readonly PreparedNativeTextOfPage[] | null>>(async () => null);
+  /** The text of a working revision's pages read while its line is still
+   * open (lib/pdf/staged-text-reads): the revision's worker parses its fonts
+   * then, not between the reader leaving the line and the save. */
+  const stagedTextReadsRef = useRef(createPdfStagedTextReads<Awaited<ReturnType<typeof readPdfTextContentWithHardGroups>>>());
+  /** The annotations of those pages, read with their text. */
+  const stagedAnnotationReadsRef = useRef(createPdfStagedTextReads<unknown[]>());
   const commitNativeTextOfPageRef = useRef<(pageNumber: number, built: BuiltNativeTextOfPage, sourceSha256: string | null) => void>(() => undefined);
   
 
@@ -6705,6 +6871,9 @@ export default function PDFViewer({
   const [nativePaintStopsByPage, setNativePaintStopsByPage] = useState<
     ReadonlyMap<number, readonly number[]>
   >(new Map());
+  // The page content's objects (the Selection pane's rows), read with the
+  // paint stops: a page whose stops are gone has none either.
+  const nativePageUnitsRef = useRef(new Map<number, PdfPageObjectRows>());
   const [selectedNativeVectorSelection, setSelectedNativeVectorSelection] =
     useState<PdfNativeVectorSelectionRoute | null>(null);
   // Vertex editing (WPS "编辑顶点"): the selected source vector shows a handle
@@ -8393,6 +8562,9 @@ export default function PDFViewer({
   readNativeKeptTextBlocksRef.current = readNativeKeptTextBlocks;
   // Per page: which text items are drawn inside /Artifact marked content.
   const nativeTextArtifactItemsByPageRef = useRef(new Map<number, readonly boolean[]>());
+  // Per page, the text items that are the words of a table, chart or
+  // SmartArt the page draws as its content: the object's, not page text.
+  const nativeTextObjectItemsByPageRef = useRef(new Map<number, readonly boolean[]>());
   const nativeTextItemsByPageRef = useRef<
     Map<number, readonly (PdfNativeListTextSelectionItemEvidence | null)[]>
   >(new Map());
@@ -8424,20 +8596,88 @@ export default function PDFViewer({
   const [nativeTextAppearancePages, setNativeTextAppearancePages] = useState<
     ReadonlyMap<number, { document: PdfDocument; page: PdfPage; annotations: readonly unknown[]; rotation: number }>
   >(new Map());
+  // Each painted page's /Annots, in the array's order: each annotation's
+  // pdf.js reference and its /NM. The annotations the reader draws or takes
+  // clicks for in its own layers -- text boxes, tables, charts, and the click
+  // targets of shapes, ink and stamps -- are stacked in it, as every reader
+  // paints the exported file (lib/pdf/annotation-stack-order.ts).
+  const [annotationStackNamesByPage, setAnnotationStackNamesByPage] = useState<
+    ReadonlyMap<number, Readonly<{ annotations: readonly unknown[]; names: readonly (string | null)[] }>>
+  >(() => new Map());
+  // The /NM are read only while the page has objects made here to place
+  // (a read of the file's names parses it once per revision); the file's own
+  // objects are placed by reference, which the page's annotations say.
+  const annotationStackWanted = Boolean(
+    chartAuthoring?.charts.length ||
+      tableAuthoring?.tables.length ||
+      textBoxAuthoring?.edits.some((edit) => edit.created && !edit.deleted) ||
+      shapes.length ||
+      inks.length ||
+      stamps.length,
+  );
+  useEffect(() => {
+    if (!annotationStackWanted) return;
+    let cancelled = false;
+    const documents = new Set([...nativeTextAppearancePages.values()].map((entry) => entry.document));
+    void Promise.all([...documents].map(async (document) => [document,
+      await managedPdfAnnotationNamesForDocument(document as { getData(): Promise<Uint8Array> })] as const))
+      .then((read) => {
+        if (cancelled) return;
+        const namesByDocument = new Map(read);
+        const next = new Map<number, Readonly<{ annotations: readonly unknown[]; names: readonly (string | null)[] }>>();
+        for (const [pageNumber, entry] of nativeTextAppearancePages) {
+          const names = namesByDocument.get(entry.document);
+          next.set(pageNumber, { annotations: entry.annotations, names: entry.annotations.map((annotation) => {
+            const id = (annotation as { id?: unknown } | null)?.id;
+            return typeof id === "string" ? (names?.get(id) ?? null) : null;
+          }) });
+        }
+        setAnnotationStackNamesByPage(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [annotationStackWanted, nativeTextAppearancePages]);
+  const annotationStackOrderByPage = useMemo(() => {
+    const order = new Map<number, readonly PdfAnnotsEntry[]>();
+    for (const [pageNumber, entry] of nativeTextAppearancePages) {
+      // Names read for the annotations the page shows now (an older read
+      // names another list).
+      const read = annotationStackNamesByPage.get(pageNumber);
+      const names = read?.annotations === entry.annotations ? read.names : undefined;
+      order.set(pageNumber, entry.annotations.map((annotation, index) => {
+        const id = (annotation as { id?: unknown } | null)?.id;
+        return { ref: typeof id === "string" ? id : null, name: names?.[index] ?? null };
+      }));
+    }
+    return order;
+  }, [annotationStackNamesByPage, nativeTextAppearancePages]);
+  /** The pages whose content draws a table, chart or SmartArt made here
+   * (managed_object_content.py; the marks read with the page's text). */
+  const [nativeObjectContentPages, setNativeObjectContentPages] = useState<ReadonlySet<number>>(() => new Set());
   useEffect(() => {
     const retained = retainedPdfPrintSourceBytesRef.current;
     if (!retained || retained.document !== pdfDocRef.current ||
       retained.sha256 !== matchedSourceRiskSnapshot?.identity.sha256) return;
+    // A page whose file holds the editor's own objects with no row of the
+    // page's for them (an exported PDF uploaded again): its /FreeText
+    // annotations (a text box, or a table held as one), and the objects its
+    // content draws -- with the annotation gone, a page of those alone was
+    
+    const pages = new Set(nativeObjectContentPages);
     for (const [pageNumber, entry] of nativeTextAppearancePages) {
-      if (entry.document !== retained.document || !entry.annotations.some(annotation =>
+      if (entry.document === retained.document && entry.annotations.some(annotation =>
         annotation && typeof annotation === "object" &&
-        (annotation as { subtype?: unknown }).subtype === "FreeText")) continue;
+        (annotation as { subtype?: unknown }).subtype === "FreeText")) pages.add(pageNumber);
+    }
+    for (const pageNumber of pages) {
       onNativeFreeTextCandidatePage?.({ pageNumber, dataItemId: retained.dataItemId,
         sourceSha256: retained.sha256,
         copySourceBytes: () => retainedPdfPrintSourceBytesRef.current === retained &&
           pdfDocRef.current === retained.document ? Uint8Array.from(retained.bytes) : null });
     }
-  }, [nativeTextAppearancePages, matchedSourceRiskSnapshot, onNativeFreeTextCandidatePage]);
+  }, [nativeObjectContentPages, nativeTextAppearancePages, matchedSourceRiskSnapshot, onNativeFreeTextCandidatePage]);
   const nativeListSelectionRevisionRef = useRef(0);
   const nativeTextPointerGestureOwnerRef =
     useRef<PdfNativeTextPointerGestureOwner | null>(null);
@@ -8467,6 +8707,10 @@ export default function PDFViewer({
       activeRibbonTab === "picture-format" &&
       pictureContextBaseTabRef.current === "edit");
   const contentEditModeLiveRef = useRef(contentEditModeLive);
+  // How many times Edit Content has ended: a line whose proof was asked for
+  // in one session and answered after it is not selected (below).
+  const contentEditModeEndsRef = useRef(0);
+  if (contentEditModeLiveRef.current && !contentEditModeLive) contentEditModeEndsRef.current += 1;
   contentEditModeLiveRef.current = contentEditModeLive;
   // The PDF's East Asian face (10 MB, hashed and parsed on the main thread:
   // ~75 ms) is loaded while Edit Content stands idle, not when the first
@@ -10674,6 +10918,20 @@ export default function PDFViewer({
       if (!ownerIsCurrent()) { await discard(); return null; }
       const document = shownStaged;
       let preparedText: readonly PreparedNativeTextOfPage[] | null = null;
+      // A working revision's pages on screen are read now, by its own
+      // worker, while its line is still open: leaving the line finds their
+      // text read (prepareText below) instead of waiting for it, the save
+      // behind it. A revision typed past is discarded with its reads.
+      if (working) {
+        stagedTextReadsRef.current.start(document, pdfPagesWithTextOnScreen(pageRefs.current, currentPageRef.current),
+          async (pageNumber) => readPdfTextContentWithHardGroups(await document.getPage(pageNumber)));
+        // Their annotations too: a page kept as it stands then waits on no
+        // round trip to the revision's worker, which is busy with the edited
+        // page's drawing by then (a kept page took 200-440 ms behind it,
+        
+        stagedAnnotationReadsRef.current.start(document, pdfPagesWithTextOnScreen(pageRefs.current, currentPageRef.current),
+          async (pageNumber) => (await document.getPage(pageNumber)).getAnnotations() as Promise<unknown[]>);
+      }
       const loadingTask = stagedTask;
       const nextOwner = {};
       const identity: LoadedPdfSourceIdentity = Object.freeze({ document, dataItemId: request.dataItemId,
@@ -10722,6 +10980,7 @@ export default function PDFViewer({
           thumbRenderTasksRef.current = maps.thumbs;
           renderPipelinesRef.current = maps.pipelines;
           renderChainsRef.current = maps.chains;
+          renderSessionsRef.current.set(document, createPdfRenderSession());
           pageProxiesRef.current = maps.proxies;
           pageRenderEpochsRef.current = maps.epochs;
           const paintedBeforePublish = renderedPagesRef.current;
@@ -10943,6 +11202,9 @@ export default function PDFViewer({
       bytes: Uint8Array;
     } | null = null;
     let loadingTask: ReturnType<PdfApi["getDocument"]> | null = null;
+    // The render session of the document this load shows (its own, or the
+    // one it took over with a document already parsed): ended with it.
+    let renderSession: PdfRenderSession | null = null;
     const destroySession = createPdfSessionDestroyer(() => ({
       loadingTask,
       document: activeDoc,
@@ -11395,6 +11657,7 @@ export default function PDFViewer({
         if (installed) {
           documentArrived = true;
           activeDoc = installed.document;
+          renderSession = renderSessionsRef.current.get(installed.document) ?? null;
           loadingTask = installed.loadingTask;
           // Parked under it when the reader moves on: a load of the same
           // bytes under another name (the working copy retired to its saved
@@ -11409,6 +11672,7 @@ export default function PDFViewer({
         if (adopted) {
           documentArrived = true;
           activeDoc = adopted.document;
+          renderSession = renderSessionsRef.current.get(adopted.document) ?? null;
           if (sourceSha256 && adopted.sha256 === sourceSha256) pdfDocumentShaRef.current.set(adopted.document, sourceSha256);
           loadingTask = adopted.loadingTask;
           return;
@@ -11453,8 +11717,16 @@ export default function PDFViewer({
           // the same two sources, taken for exactly this file and digest.
           const ahead = await (takePrefetchedPdfSource(url, sourceSha256, abortController.signal) ?? Promise.resolve(null));
           if (cancelled) { ahead?.bytes.fill(0); return; }
+          // The bytes this tab already holds for the digest (the last files
+          // it showed; a visitor's sample, which its host has just read to
+          // name it) come before the store and the network: the visitor's
+          // reader downloaded the sample a second time on every open
+          
+          // its first page). Hashed below like any kept bytes.
           const cached = ahead?.from === "cache" ? ahead.bytes
-            : ahead ? null : await readCachedPdfSourceBytes(sourceSha256).catch(() => null);
+            : ahead ? null
+              : (sourceSha256 ? copyRememberedPdfSourceBytes(sourceSha256) : null)
+                ?? await readCachedPdfSourceBytes(sourceSha256).catch(() => null);
           if (cancelled) { cached?.fill(0); return; }
           let verified: Uint8Array | null = null;
           if (cached) {
@@ -11539,14 +11811,27 @@ export default function PDFViewer({
         }
         // Started ahead of the document (lib/pdf/pdfjs-reader-worker), and
         // ended with its loading task like the worker pdf.js starts itself.
-        const readerWorker = await takePdfReaderWorker();
+        //
+        // The document opened from these very bytes while this reader was
+        // still mounting (lib/pdf/document-ahead) is this reader's document:
+        // the same call on the same bytes, made as soon as they arrived and
+        // not once the reader had mounted and taken them. Opened without a
+        // password, so a file that needs one is refused there as it is
+        // here, and opened with the one typed below.
+        const documentAhead = !readInRanges && attemptPassword === undefined
+          ? await takePdfDocumentAhead(url, bytes) : null;
+        const readerWorker = documentAhead ? undefined : await takePdfReaderWorker();
         if (cancelled) {
           readerWorker?.destroy();
+          void documentAhead?.task.destroy().catch(() => undefined);
           pendingTextHandoffBytes?.fill(0);
           pendingTextHandoffBytes = null;
           return;
         }
-        loadingTask = readInRanges && rangeSource
+        if (documentAhead) bytes.fill(0);
+        loadingTask = documentAhead
+          ? documentAhead.task as unknown as ReturnType<PdfApi["getDocument"]>
+          : readInRanges && rangeSource
           ? pdfjs.getDocument({
               range: createPdfRangeTransport(pdfjs, rangeSource, abortController.signal, (failure) => {
                 if (cancelled) return;
@@ -11607,7 +11892,7 @@ export default function PDFViewer({
           const readInRangesOnly = () => Promise.reject(new Error("pdf_read_in_ranges"));
           Object.assign(doc, { getData: readInRangesOnly, saveDocument: readInRangesOnly });
         }
-        vectorRouteMark("source-load-document", { ms: Math.round(performance.now() - sourceLoadStartedAt) });
+        vectorRouteMark("source-load-document", { ms: Math.round(performance.now() - sourceLoadStartedAt), ahead: documentAhead !== null });
         setPasswordGate(null);
         // The document opened WITH a password: editing/downloading run on
         // pdf-lib, which cannot decrypt — ask the server for the decrypted
@@ -11630,6 +11915,23 @@ export default function PDFViewer({
             (page) => ({ ok: true as const, page }),
             (error: unknown) => ({ ok: false as const, error }),
           ));
+        // What the first layout reads besides the pages -- the optional
+        // content groups, the page labels and the view the file asks to open
+        // in -- asked with the pages' dictionaries. Each was asked once the
+        // one before had answered, with the document already published: the
+        // reader rendered between the answers (four renders before its pages
+        // stood), and the opening view was read after the first page had
+        // been drawn, which then drew again at the fitted size 0.6 s later
+        
+        const ocgRead: Promise<OcgConfigLike | null> = Promise.resolve()
+          .then(() => doc.getOptionalContentConfig() as Promise<OcgConfigLike | null>)
+          .catch(() => null);
+        const pageLabelsRead: Promise<unknown> = Promise.resolve()
+          .then(() => (typeof doc.getPageLabels === "function" ? doc.getPageLabels() : null))
+          .catch(() => null);
+        // (A document read in ranges resolves its destination from ranges it
+        // has not fetched: its opening view is read once it is shown.)
+        const openingViewRead = readInRanges ? null : readPdfOpeningView(doc);
         for (let i = 1; i <= doc.numPages; i += 1) {
           if (readInRanges && i > 1 && pageRecords[0]) {
             // A document read in ranges is laid out at its first page's size
@@ -11667,6 +11969,16 @@ export default function PDFViewer({
           await destroySession();
           return;
         }
+        const [ocgConfig, rawPageLabels, openingView] = await Promise.all([ocgRead, pageLabelsRead, openingViewRead]);
+        if (cancelled) {
+          await destroySession();
+          return;
+        }
+        // Everything the first layout reads is published in one turn: the
+        // document, its layers, its labels, its opening view and its pages.
+        openingViewRef.current = openingView ? { document: doc, ...openingView } : null;
+        renderSession = createPdfRenderSession();
+        renderSessionsRef.current.set(doc, renderSession);
         setPdfDoc(doc);
         pdfDocRef.current = doc;
         loadedPdfSourceIdentityRef.current = Object.freeze({
@@ -11677,38 +11989,17 @@ export default function PDFViewer({
           documentRevision: expectedSourceDocumentRevision,
         });
         bindRetainedPrintSourceIfReady();
-        // Read the document's optional-content groups once. Most PDFs have
-        // none → empty list → the Layers panel button stays hidden. The config
-        // object is the source of truth for visibility + is threaded into every
-        // page render below.
-        try {
-          const ocgConfig =
-            (await doc.getOptionalContentConfig()) as OcgConfigLike | null;
-          if (!cancelled) {
-            ocgConfigRef.current = ocgConfig;
-            setOcgLayers(readOcgLayers(ocgConfig));
-          }
-        } catch {
-          if (!cancelled) {
-            ocgConfigRef.current = null;
-            setOcgLayers([]);
-          }
-        }
-        // Read the document's /PageLabels once (logical page numbers like
-        // "iii" / "A-2"). Most PDFs have none → null → the indicator and the
-        // page input stay purely physical. Guarded: the sanitize helper also
-        // rejects trivial "1..N" label sets.
-        try {
-          const rawLabels =
-            typeof doc.getPageLabels === "function"
-              ? await doc.getPageLabels()
-              : null;
-          if (!cancelled) {
-            setDocPageLabels(sanitizeDocPageLabels(rawLabels, doc.numPages));
-          }
-        } catch {
-          if (!cancelled) setDocPageLabels(null);
-        }
+        // The document's optional-content groups. Most PDFs have none → empty
+        // list → the Layers panel button stays hidden. The config object is
+        // the source of truth for visibility + is threaded into every page
+        // render below. (A failed read: no layers.)
+        ocgConfigRef.current = ocgConfig;
+        setOcgLayers(readOcgLayers(ocgConfig));
+        // The document's /PageLabels (logical page numbers like "iii" /
+        // "A-2"). Most PDFs have none → null → the indicator and the page
+        // input stay purely physical. The sanitize helper also rejects
+        // trivial "1..N" label sets.
+        setDocPageLabels(sanitizeDocPageLabels(rawPageLabels, doc.numPages));
         // Before the pages are first measured, the ones the document opens
         // on are drawn in full and the rest as their paper: with no band yet
         // every page of a long document was mounted in full (all its
@@ -11946,6 +12237,10 @@ export default function PDFViewer({
         } finally {
           if (heldFaces) keepPdfJsFontFacesBriefly(heldFaces);
           retireCapturedPipelines();
+          // Nothing more is answered for this document: its renders still
+          // waited for (a text read cut off by the teardown, a page asked by
+          // a callback of the render before) let their pages' chains go.
+          renderSession?.end();
           const retiredBytes = retiredReaderBytes.get(readerOwner);
           retiredReaderBytes.delete(readerOwner);
           retiredBytes?.fill(0);
@@ -12304,7 +12599,7 @@ export default function PDFViewer({
      * on the page is written either way. */
     keepShown?: string;
   }>): Promise<BuiltNativeTextOfPage | undefined> => {
-      const built: BuiltNativeTextOfPage = { items: null, paragraphs: null, layoutBoxes: null, artifacts: null };
+      const built: BuiltNativeTextOfPage = { items: null, paragraphs: null, layoutBoxes: null, artifacts: null, objects: null, objectCount: 0 };
       const cssUserUnit =
         Number.isFinite(cssViewport.userUnit) && cssViewport.userUnit > 0
           ? cssViewport.userUnit
@@ -12355,7 +12650,15 @@ export default function PDFViewer({
       // content, whose text items are the plain read's, index for index.
       let textContentHardGroups: readonly (string | null)[] | null = null;
       let textContentArtifacts: readonly boolean[] | null = null;
+      let textContentObjects: readonly boolean[] | null = null;
+      let textContentObjectCount = 0;
       const readNativeTextContent = async () => {
+        // Read ahead with its revision: the same page of the same document,
+        // taken once (a read that failed is made again below).
+        const ahead = stagedTextReadsRef.current.take(pdfDocument, pageNumber);
+        if (ahead) {
+          try { return await ahead; } catch { /* read again */ }
+        }
         try {
           return await readPdfTextContentWithHardGroups(page);
         } catch {
@@ -12365,6 +12668,8 @@ export default function PDFViewer({
             styles: (content?.styles ?? {}) as typeof rawTextContentStyles,
             hardGroups: null,
             artifacts: null,
+            objects: null,
+            objectCount: 0,
           };
         }
       };
@@ -12431,6 +12736,8 @@ export default function PDFViewer({
           rawTextContentStyles = content.styles;
           textContentHardGroups = content.hardGroups;
           textContentArtifacts = content.artifacts;
+          textContentObjects = content.objects ?? null;
+          textContentObjectCount = content.objectCount ?? 0;
           items = content.items.map((item) => searchTextItemFromPdfItem(item));
         } catch {
           items = [];
@@ -12445,11 +12752,19 @@ export default function PDFViewer({
           rawTextContentStyles = content.styles;
           textContentHardGroups = content.hardGroups;
           textContentArtifacts = content.artifacts;
+          textContentObjects = content.objects ?? null;
+          textContentObjectCount = content.objectCount ?? 0;
         } catch {
           rawTextContentItems = [];
         }
       }
-      const keptBlocks = readNativeKeptTextBlocksRef.current?.();
+      // The page's own kept blocks: a page's boxes are built from no other
+      // page's (keptBlockParagraphs, pdfNativeBoxOriginsOf). Signed with
+      // every page's, a line written on one page changed the signature of
+      // all of them, and the revision carrying it laid out every page on
+      // screen again instead of keeping their layers (2 s for five pages,
+      
+      const keptBlocks = readNativeKeptTextBlocksRef.current?.()?.filter((block) => block.pageNumber === pageNumber);
       const signature = pdfNativeTextContentSignature({ items: rawTextContentItems, styles: rawTextContentStyles,
         hardGroups: textContentHardGroups, artifacts: textContentArtifacts,
         context: [cssViewport.width, cssViewport.height, cssViewport.scale, cssViewport.rotation, cssUserUnit,
@@ -12507,6 +12822,8 @@ export default function PDFViewer({
           } };
         }
         built.artifacts = textContentArtifacts;
+        built.objects = textContentObjects;
+        built.objectCount = textContentObjectCount;
         built.paragraphs = paragraphs;
         // What the PDF advances by for the glyphs its fonts do not hold
         // (the space of a subset, a missing glyph): the text editor sets
@@ -12677,6 +12994,20 @@ export default function PDFViewer({
         const root = viewerRootRef.current;
         if (root) normalizeNativeTextEditBoxTabStops(root);
         orderTextLayerEditedBoxes(textLayer, pageNumber);
+        // The words of a table, chart or SmartArt the page draws as its
+        // content are in the text layer (found, copied, read aloud), and
+        // the pointer goes through them to the object beneath: with Edit
+        // Content on, the text layer lies over the object's own layer, and
+        
+        for (const span of indexedSpans) {
+          const indexed = span.getAttribute(PDF_NATIVE_TEXT_ITEM_INDEX_ATTR);
+          const itemIndex = indexed === null || indexed === "" ? Number.NaN : Number(indexed);
+          if (Number.isSafeInteger(itemIndex) && textContentObjects?.[itemIndex]) {
+            span.setAttribute(PDF_MANAGED_OBJECT_TEXT_ATTR, "true");
+          } else {
+            span.removeAttribute(PDF_MANAGED_OBJECT_TEXT_ATTR);
+          }
+        }
       }
       return built;
   }, [nativeTextParagraphUsesStandaloneFallback, orderTextLayerEditedBoxes, readNativeTextEditBoxPresentation]);
@@ -12685,6 +13016,16 @@ export default function PDFViewer({
     nativeTextItemsByPageRef.current.set(pageNumber, built.items);
     if (built.artifacts) nativeTextArtifactItemsByPageRef.current.set(pageNumber, built.artifacts);
     else nativeTextArtifactItemsByPageRef.current.delete(pageNumber);
+    if (built.objects?.some(Boolean)) nativeTextObjectItemsByPageRef.current.set(pageNumber, built.objects);
+    else nativeTextObjectItemsByPageRef.current.delete(pageNumber);
+    const drawsObjects = built.objectCount > 0;
+    setNativeObjectContentPages((current) => {
+      if (current.has(pageNumber) === drawsObjects) return current;
+      const next = new Set(current);
+      if (drawsObjects) next.add(pageNumber);
+      else next.delete(pageNumber);
+      return next;
+    });
     nativeTextItemsSourceShaRef.current = sourceSha256;
     nativeTextParagraphsByPageRef.current.set(pageNumber, built.paragraphs);
     retiredNativeTextItemsByPageRef.current.delete(pageNumber);
@@ -12693,13 +13034,27 @@ export default function PDFViewer({
   commitNativeTextOfPageRef.current = commitNativeTextOfPage;
   prepareNativeTextOfPagesRef.current = async (pdfDocument, isCurrent) => {
     const at = renderInvalidationSnapshotRef.current?.scale ?? scale;
-    const shownFirst = currentPageRef.current;
     // The pages whose text is on screen (a page still painting the revision
     // before this one holds that revision's).
-    const numbers = [...pageRefs.current.entries()]
-      .filter(([, host]) => host.querySelector("div[data-pdf-text-layer] span") !== null).map(([number]) => number)
-      .sort((left, right) => Math.abs(left - shownFirst) - Math.abs(right - shownFirst)).slice(0, 6);
+    const numbers = pdfPagesWithTextOnScreen(pageRefs.current, currentPageRef.current);
     const prepared: PreparedNativeTextOfPage[] = [];
+    const startedAt = performance.now();
+    // Read ahead with the revision where they were (taken once); else now.
+    const readAnnotations = async (page: PdfPage, pageNumber: number): Promise<unknown[]> => {
+      const ahead = stagedAnnotationReadsRef.current.take(pdfDocument, pageNumber);
+      if (ahead) {
+        try { return await ahead; } catch { /* read again */ }
+      }
+      return page.getAnnotations().catch(() => [] as unknown[]);
+    };
+    // Each page's share, for the trace: kept as it stands (k) or built (b).
+    const shares: string[] = [];
+    let pageStartedAt = startedAt;
+    const noteShare = (pageNumber: number, kept: boolean) => {
+      const now = performance.now();
+      shares.push(`${pageNumber}${kept ? "k" : "b"}${Math.round(now - pageStartedAt)}`);
+      pageStartedAt = now;
+    };
     for (const pageNumber of numbers) {
       const shown = pageRefs.current.get(pageNumber)?.querySelector<HTMLDivElement>("div[data-pdf-text-layer]");
       if (!shown) continue;
@@ -12719,10 +13074,11 @@ export default function PDFViewer({
           cssViewport, isCurrent, trackTask: false, keepShown: shownBuild.signature });
         if (kept === undefined) return null;
         if (kept.kept && kept.items) {
-          const annotations = await page.getAnnotations().catch(() => [] as unknown[]);
+          const annotations = await readAnnotations(page, pageNumber);
           if (!isCurrent()) return null;
           prepared.push(Object.freeze({ pageNumber, scale: at, rotation, layer: shown, built: kept, page, annotations,
             sameWords: true, kept: true }));
+          noteShare(pageNumber, true);
           continue;
         }
       }
@@ -12735,11 +13091,14 @@ export default function PDFViewer({
       // What opening a line reads of its page, up with the revision: read from
       // the page's paint, a line pressed before that landed had no surface of
       // its own to open on.
-      const annotations = await page.getAnnotations().catch(() => [] as unknown[]);
+      const annotations = await readAnnotations(page, pageNumber);
       if (!isCurrent()) return null;
       prepared.push(Object.freeze({ pageNumber, scale: at, rotation, layer, built, page, annotations,
         sameWords: layer.textContent === shown.textContent }));
+      noteShare(pageNumber, false);
     }
+    markPdfTextLatency("stage.text.prepared", { pages: prepared.length, kept: prepared.filter((entry) => entry.kept).length,
+      ms: Math.round(performance.now() - startedAt), shares: shares.join(" ") });
     return prepared;
   };
   const renderPageInner = useCallback(
@@ -13881,9 +14240,12 @@ export default function PDFViewer({
         : 0;
       const previous =
         renderChainsRef.current.get(pageNumber) ?? Promise.resolve();
-      const run = previous.then(() =>
-        renderPageInner(pageNumber, requestedGeneration, requestedPageEpoch, requestedDensity, densityOnly),
-      );
+      // Waited for no longer than its document's session lasts, and not
+      // begun for a document whose session is over (createPdfRenderSession).
+      const session = pdfDoc ? renderSessionsRef.current.get(pdfDoc) ?? null : null;
+      const render = () =>
+        renderPageInner(pageNumber, requestedGeneration, requestedPageEpoch, requestedDensity, densityOnly);
+      const run = previous.then(() => (session ? session.bound(render) : render()));
       // Park a settled link in the chain so one rejected render never wedges
       // every later render of the same page.
       const settled = run.then(
@@ -13909,7 +14271,7 @@ export default function PDFViewer({
       }
       return run;
     },
-    [renderLifecycleV2, renderPageInner],
+    [pdfDoc, renderLifecycleV2, renderPageInner],
   );
 
   useEffect(() => {
@@ -14279,6 +14641,12 @@ export default function PDFViewer({
     (force: boolean) => {
       const root = scrollContainerRef.current;
       if (!root) return;
+      // No page is mounted yet (the reader has just mounted and its document
+      // is still on its way): there is nothing to place, and no band comes
+      // of no pages. Reading the reader's box here laid out the whole new
+      // window in the middle of its mount, twice, before the document had
+      
+      if (visibleItemRefs.current.size === 0) return;
       const rootRect = root.getBoundingClientRect();
       const spans: PdfPageSpan[] = [];
       visibleItemRefs.current.forEach((wrapper, ordinal) => {
@@ -15119,16 +15487,7 @@ export default function PDFViewer({
       // The author's opening navigation pane (/PageMode, PDF 32000-1 table
       // 28): bookmarks or thumbnails open with the document the first time,
       
-      void (async () => {
-        let pageMode: unknown = null;
-        try {
-          pageMode = await (
-            targetDoc as unknown as { getPageMode?: () => Promise<unknown> }
-          ).getPageMode?.();
-        } catch {
-          pageMode = null;
-        }
-        if (viewRecoveryAppliedDocumentRef.current !== targetDoc) return;
+      const applyPageMode = (pageMode: unknown) => {
         if (pageMode === "UseOutlines") {
           setThumbsOpen(false);
           setOutlineOpen(true);
@@ -15136,21 +15495,33 @@ export default function PDFViewer({
           setOutlineOpen(false);
           setThumbsOpen(true);
         }
-      })();
-      void (async () => {
-        const target = await readPdfOpenActionPage(targetDoc);
-        if (
-          !target ||
-          viewRecoveryAppliedDocumentRef.current !== targetDoc ||
-          target.pageNumber <= 1 && !target.fit
-        ) {
-          return;
+      };
+      const applyOpenAction = (target: PdfOpeningView["target"]) => {
+        if (!target || (target.pageNumber <= 1 && !target.fit)) return;
+        if (target.fit) {
+          setFitMode(target.fit);
+          // Fitted now, with the mode: armed alone, the page stayed at 100%
+          // until something resized the view (a pane opening, 0.4-0.6 s
+          // after the first page was drawn, which was then drawn again).
+          runFitModeRef.current(target.fit, { opening: true });
         }
-        if (target.fit) setFitMode(target.fit);
         if (target.pageNumber > 1) {
           goToPage(target.pageNumber, { recordHistory: false, restoringView: true });
         }
-      })();
+      };
+      // Read with the pages, before this first layout (the loader): applied
+      // in it. A document read in ranges answers once it is shown.
+      const opening = openingViewRef.current?.document === targetDoc ? openingViewRef.current : null;
+      if (opening) {
+        applyPageMode(opening.pageMode);
+        applyOpenAction(opening.target);
+      } else {
+        void readPdfOpeningView(targetDoc).then((read) => {
+          if (viewRecoveryAppliedDocumentRef.current !== targetDoc) return;
+          applyPageMode(read.pageMode);
+          applyOpenAction(read.target);
+        });
+      }
     }
 
     if (runtime) runtime.hydrated = true;
@@ -16558,6 +16929,7 @@ export default function PDFViewer({
           );
           const nativeMarkup = managedTextMarkupById.get(item.id);
           if (!highlight) return null;
+          threadWriter.saw(item.id, item.payload_sha256, highlight.replies);
           return {
             ...highlight,
             ...(item.created_at ? { createdAt: item.created_at } : {}),
@@ -16591,6 +16963,7 @@ export default function PDFViewer({
     dataItemId,
     effectiveAnnotationReadScope,
     managedTextMarkupById,
+    threadWriter,
   ]);
 
   useEffect(() => {
@@ -18061,10 +18434,15 @@ export default function PDFViewer({
           await onManagedTextMarkupUpsert(nextNative);
           nativeUpdated = true;
         }
+        let written: PdfAnnotationReply[];
         try {
-          await apiPatch(`/api/v1/annotations/${next.id}`, {
-            payload_json: buildHighlightReaderPayload(next),
-          });
+          written = (
+            await threadWriter.write(
+              next.id,
+              buildHighlightReaderPayload(next),
+              "mine",
+            )
+          ).replies;
         } catch (error) {
           if (nativeUpdated && priorNative && onManagedTextMarkupUpsert) {
             await Promise.resolve(
@@ -18077,7 +18455,17 @@ export default function PDFViewer({
         setRibbonMarkupColor(next.color);
         setHighlights((prev) =>
           prev.map((highlight) =>
-            highlight.id === next.id ? { ...highlight, ...next } : highlight,
+            highlight.id === next.id
+              ? {
+                  ...highlight,
+                  ...next,
+                  // The thread the row now holds: the dialog's own copy
+                  // may be older than a reply someone else posted.
+                  ...(written.length > 0 || next.replies !== undefined
+                    ? { replies: written }
+                    : {}),
+                }
+              : highlight,
           ),
         );
         setEditingHighlight((editing) =>
@@ -18087,7 +18475,7 @@ export default function PDFViewer({
         highlightMutationRef.current = false;
       }
     },
-    [highlights, onManagedTextMarkupUpsert, t],
+    [highlights, onManagedTextMarkupUpsert, t, threadWriter],
   );
 
   // Post one reply to a highlight's comment thread: PATCH the PERSISTED
@@ -18116,10 +18504,15 @@ export default function PDFViewer({
           await onManagedTextMarkupUpsert(nextNative);
           nativeUpdated = true;
         }
+        let written: Awaited<ReturnType<typeof threadWriter.write>>;
         try {
-          await apiPatch(`/api/v1/annotations/${current.id}`, {
-            payload_json: buildHighlightReaderPayload(updated),
-          });
+          // Only the thread is this write's: over a row someone else
+          // changed meanwhile, their reply and their edit both stay.
+          written = await threadWriter.write(
+            current.id,
+            buildHighlightReaderPayload(updated),
+            "theirs",
+          );
         } catch (error) {
           if (nativeUpdated && priorNative && onManagedTextMarkupUpsert) {
             await Promise.resolve(
@@ -18128,9 +18521,24 @@ export default function PDFViewer({
           }
           throw error;
         }
+        if (written.joined && nextNative && onManagedTextMarkupUpsert) {
+          // The mark in the file follows the joined thread; the row is the
+          // thread's record, so a failure here loses nothing.
+          const joinedNative = managedTextMarkupSyncFromHighlight({
+            ...updated,
+            replies: written.replies,
+          });
+          if (joinedNative) {
+            await Promise.resolve(
+              onManagedTextMarkupUpsert(joinedNative),
+            ).catch(() => undefined);
+          }
+        }
         setHighlights((prev) =>
           prev.map((highlight) =>
-            highlight.id === current.id ? updated : highlight,
+            highlight.id === current.id
+              ? { ...highlight, replies: written.replies }
+              : highlight,
           ),
         );
         return reply;
@@ -18138,7 +18546,7 @@ export default function PDFViewer({
         highlightMutationRef.current = false;
       }
     },
-    [highlights, makeReply, onManagedTextMarkupUpsert],
+    [highlights, makeReply, onManagedTextMarkupUpsert, threadWriter],
   );
 
   const handleHighlightDeleted = useCallback(
@@ -18206,7 +18614,23 @@ export default function PDFViewer({
       }
       const items: StickyNoteAnnotation[] = data.items
         .map((item) => {
-          const note = sanitizeNotePayload(item.id, item.payload_json || {});
+          const stored = sanitizeNotePayload(item.id, item.payload_json || {});
+          if (stored) {
+            threadWriter.saw(item.id, item.payload_sha256, stored.replies);
+          }
+          // A reply posted here that the row does not hold yet stays in
+          // its thread across a re-read.
+          const unsent = stored ? pdfUnsentReplies(dataItemId, item.id) : [];
+          const note =
+            stored && unsent.length > 0
+              ? {
+                  ...stored,
+                  replies: mergePdfAnnotationReplies(
+                    stored.replies ?? [],
+                    unsent,
+                  ),
+                }
+              : stored;
           return note && item.created_at
             ? { ...note, createdAt: item.created_at }
             : note;
@@ -18216,7 +18640,12 @@ export default function PDFViewer({
     } catch {
       /* ignore — notes are optional */
     }
-  }, [beginAnnotationHydration, dataItemId, effectiveAnnotationReadScope]);
+  }, [
+    beginAnnotationHydration,
+    dataItemId,
+    effectiveAnnotationReadScope,
+    threadWriter,
+  ]);
 
   useEffect(() => {
     void loadNotes();
@@ -18322,7 +18751,12 @@ export default function PDFViewer({
             }
             throw error;
           }
-          setNotes((prev) => [...prev, created]);
+          // The page's reading of its rows may have brought it in already
+          // (a collaborator's save read back while this one was written
+          // again on their version): one marker, not two.
+          setNotes((prev) => prev.some((note) => note.id === created.id)
+            ? prev.map((note) => (note.id === created.id ? { ...note, ...created } : note))
+            : [...prev, created]);
           commentMentions?.notifyPosted({
             threadRef: created.id,
             messageRef: created.id,
@@ -18350,9 +18784,11 @@ export default function PDFViewer({
           replies: current.replies,
           xfdfSourceId: current.xfdfSourceId,
         });
-        await apiPatch(`/api/v1/annotations/${targetNoteId}`, {
-          payload_json: payload,
-        });
+        const written = await threadWriter.write(
+          targetNoteId,
+          payload,
+          "mine",
+        );
         await syncManagedNote({
           ...current,
           page: payload.page,
@@ -18376,6 +18812,7 @@ export default function PDFViewer({
                   text: payload.text,
                   color: payload.color,
                   resolved: payload.resolved,
+                  ...(written.joined ? { replies: written.replies } : {}),
                 }
               : n,
           ),
@@ -18406,6 +18843,7 @@ export default function PDFViewer({
       pendingNote,
       syncManagedNote,
       t,
+      threadWriter,
     ],
   );
 
@@ -18490,69 +18928,188 @@ export default function PDFViewer({
           replies: current.replies,
           xfdfSourceId: current.xfdfSourceId,
         });
-        await apiPatch(`/api/v1/annotations/${noteId}`, {
-          payload_json: payload,
-        });
+        const written = await threadWriter.write(noteId, payload, "mine");
         setNotes((prev) =>
           prev.map((n) =>
-            n.id === noteId ? { ...n, resolved: payload.resolved } : n,
+            n.id === noteId
+              ? {
+                  ...n,
+                  resolved: payload.resolved,
+                  ...(written.joined ? { replies: written.replies } : {}),
+                }
+              : n,
           ),
         );
       } catch {
-        /* ignore — leave state as-is so the user can retry */
+        // The status stays as it was, and that is said: the click did not
+        // take, and pressing it again is the retry.
+        setNoteActionError(t("pages.saveFailed"));
       } finally {
         noteSavingRef.current = false;
         setNoteSaving(false);
       }
     },
-    [notes],
+    [notes, t, threadWriter],
   );
 
-  // Post one reply to a note's comment thread (Acrobat / WPS "Reply"):
-  // PATCH the full persisted payload with the appended, author-stamped reply,
-  // then mirror into local state so the popover / panel re-render the thread.
+  // Write a note's posted replies to its row. One write per note at a time.
+  // A write that fails keeps the replies in the thread and in the window's
+  // unsaved count and is made again after a growing pause; after a few
+  // failures the reader says so. Nothing is taken out of the thread but by
+  // landing (or by the note itself being gone).
+  const writeNoteRepliesRef = useRef<(noteId: string) => void>(() => undefined);
+  const writeNoteReplies = useCallback(
+    async (noteId: string) => {
+      const file = readerHeldFileRef.current;
+      if (!file) return;
+      const lanes = noteReplyLanesRef.current;
+      const lane = lanes.get(noteId) ?? {
+        writing: false,
+        failures: 0,
+        timer: null,
+      };
+      lanes.set(noteId, lane);
+      if (lane.writing) return;
+      if (lane.timer !== null) {
+        window.clearTimeout(lane.timer);
+        lane.timer = null;
+      }
+      const key = `reply:${noteId}`;
+      const stillFailing = t("pdfViewer.replyNotSavedYet");
+      const finish = (landed: ReadonlySet<string> | null) => {
+        const rest = settlePdfUnsentReplies(file, noteId, landed);
+        lane.failures = 0;
+        if (rest.length > 0) return rest;
+        lanes.delete(noteId);
+        holdPdfReaderWork(file, key, null);
+        if ([...lanes.values()].every((other) => other.failures === 0)) {
+          setNoteActionError((shown) => (shown === stillFailing ? null : shown));
+        }
+        return rest;
+      };
+      const unsent = pdfUnsentReplies(file, noteId);
+      if (unsent.length === 0) {
+        finish(null);
+        return;
+      }
+      const posted = (replies: readonly PdfAnnotationReply[]) => {
+        for (const reply of replies) {
+          commentMentions?.notifyPosted({
+            threadRef: noteId,
+            messageRef: reply.id,
+            text: reply.text,
+          });
+        }
+      };
+      const sending = new Set(unsent.map((reply) => reply.id));
+      // Another write of this note (its text, its status) may have carried
+      // them already.
+      const held = new Set(threadWriter.known(noteId).map((reply) => reply.id));
+      if (unsent.every((reply) => held.has(reply.id))) {
+        posted(unsent);
+        if (finish(sending).length > 0) writeNoteRepliesRef.current(noteId);
+        return;
+      }
+      lane.writing = true;
+      holdPdfReaderWork(file, key, lane.failures > 0 ? "unsaved" : "saving");
+      const note = notesRef.current.find((entry) => entry.id === noteId);
+      let rest: readonly PdfAnnotationReply[] | null = null;
+      try {
+        // Only the thread is this write's: over a row someone else changed
+        // meanwhile, their reply and their edit both stay. A note this
+        // reader does not show is written as its stored row plus the thread.
+        const written = await threadWriter.write(
+          noteId,
+          note
+            ? buildNotePayload({
+                ...note,
+                replies: mergePdfAnnotationReplies(note.replies ?? [], unsent),
+              })
+            : { replies: [...unsent] },
+          "theirs",
+        );
+        posted(unsent);
+        rest = finish(sending);
+        const waiting = rest;
+        setNotes((prev) =>
+          prev.map((n) =>
+            n.id === noteId
+              ? {
+                  ...n,
+                  replies: mergePdfAnnotationReplies(written.replies, waiting),
+                }
+              : n,
+          ),
+        );
+      } catch (error) {
+        if ((error as { status?: unknown } | null)?.status === 404) {
+          // The note was deleted: its thread went with it, and there is
+          // no row left for these replies.
+          finish(null);
+          return;
+        }
+        lane.failures += 1;
+        holdPdfReaderWork(file, key, "unsaved");
+        if (viewerUnmountedRef.current) {
+          // The next reader of this file takes the thread up.
+          lanes.delete(noteId);
+          return;
+        }
+        if (lane.failures >= PDF_READER_WRITE_SAID_AFTER) {
+          setNoteActionError(stillFailing);
+        }
+        lane.timer = window.setTimeout(() => {
+          lane.timer = null;
+          writeNoteRepliesRef.current(noteId);
+        }, pdfReaderRetryPauseMs(lane.failures));
+      } finally {
+        lane.writing = false;
+      }
+      if (rest && rest.length > 0) writeNoteRepliesRef.current(noteId);
+    },
+    [commentMentions, t, threadWriter],
+  );
+  writeNoteRepliesRef.current = (noteId) => void writeNoteReplies(noteId);
+  // A reader opened over replies an earlier one could not write takes them
+  // up; one closed stops its pauses (the replies stay kept for the next).
+  useEffect(() => {
+    if (!dataItemId) return;
+    const lanes = noteReplyLanesRef.current;
+    for (const noteId of pdfUnsentReplyThreads(dataItemId)) {
+      if (!lanes.has(noteId)) writeNoteRepliesRef.current(noteId);
+    }
+    return () => {
+      for (const [noteId, lane] of lanes) {
+        if (lane.timer !== null) window.clearTimeout(lane.timer);
+        lane.timer = null;
+        if (!lane.writing) lanes.delete(noteId);
+      }
+    };
+  }, [dataItemId]);
+
+  // Post one reply to a note's comment thread (Acrobat / WPS "Reply"). The
+  // reply is in the thread at once and is the reader's to deliver from then
+  // on: the popover has already cleared its draft, so a reply dropped here
+  // (a save running, a failed write) would be words the user cannot get back.
   const handleNoteAddReply = useCallback(
     async (noteId: string, text: string) => {
-      if (!noteId || noteSavingRef.current || !text.trim()) return;
-      const current = notes.find((n) => n.id === noteId);
-      if (!current) return;
+      if (!noteId || !dataItemId || !text.trim()) return;
+      if (!notesRef.current.some((n) => n.id === noteId)) return;
       const reply = makeReply(text);
-      const replies = [...(current.replies ?? []), reply].slice(
-        -MAX_REPLIES_PER_ANNOTATION,
+      keepPdfUnsentReply(dataItemId, noteId, reply);
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId
+            ? {
+                ...n,
+                replies: mergePdfAnnotationReplies(n.replies ?? [], [reply]),
+              }
+            : n,
+        ),
       );
-      noteSavingRef.current = true;
-      setNoteSaving(true);
-      try {
-        const payload = buildNotePayload({
-          page: current.page,
-          x: current.x,
-          y: current.y,
-          text: current.text,
-          color: current.color,
-          resolved: current.resolved,
-          author: current.author,
-          replies,
-          xfdfSourceId: current.xfdfSourceId,
-        });
-        await apiPatch(`/api/v1/annotations/${noteId}`, {
-          payload_json: payload,
-        });
-        commentMentions?.notifyPosted({
-          threadRef: noteId,
-          messageRef: reply.id,
-          text: reply.text,
-        });
-        setNotes((prev) =>
-          prev.map((n) => (n.id === noteId ? { ...n, replies } : n)),
-        );
-      } catch {
-        /* ignore — leave the thread unchanged so the user can retry */
-      } finally {
-        noteSavingRef.current = false;
-        setNoteSaving(false);
-      }
+      await writeNoteReplies(noteId);
     },
-    [commentMentions, makeReply, notes],
+    [dataItemId, makeReply, writeNoteReplies],
   );
 
   // Click-to-place handler attached to each rendered page wrapper. Only fires
@@ -18780,7 +19337,10 @@ export default function PDFViewer({
       const items: InkAnnotation[] = (data.items || [])
         .map((item) => sanitizeInkPayload(item.id, item.payload_json || {}))
         .filter((item): item is InkAnnotation => Boolean(item) && !discarded.has(item!.id));
-      setInks((current) => mergeHydratedAnnotationList(base, current, items));
+      // A stroke whose restyle the file does not hold yet is drawn as kept.
+      setInks((current) =>
+        mergeHydratedAnnotationList(base, current, withKeptPdfObjectChanges(dataItemId, "ink", items)),
+      );
     } catch {
       /* ignore — ink strokes are optional */
     }
@@ -18799,19 +19359,19 @@ export default function PDFViewer({
       rawPoints: ReadonlyArray<InkPoint>,
       color: string = inkColor,
       width: number = inkWidth,
-    ): Promise<string | null> => {
-      if (!dataItemId || inkSavingRef.current) return null;
+    ): Promise<PdfWetInkWrite> => {
+      if (!dataItemId || inkSavingRef.current) return "failed";
       const normalized = normalizeStroke({
         points: rawPoints,
         color,
         width,
       });
-      if (!normalized) return null;
+      if (!normalized) return "not-a-stroke";
       const pageStrokeCount = inks.filter((s) => s.page === page).length;
-      if (pageStrokeCount >= 500) return null;
+      if (pageStrokeCount >= 500) return "page-full";
       inkSavingRef.current = true;
       setInkSaving(true);
-      let landed: string | null = null;
+      let landed: PdfWetInkWrite = "failed";
       try {
         const payload = buildInkPayload({
           page,
@@ -18839,10 +19399,10 @@ export default function PDFViewer({
             await apiDelete(`/api/v1/annotations/${created.id}`).catch(
               () => undefined,
             );
-            return null;
+            return "failed";
           }
         }
-        landed = created.id;
+        landed = { id: created.id };
         setInks((prev) => {
           const next = upsertAnnotationRowById(prev, created);
           // Cap strokes for THIS page (oldest dropped first) while preserving
@@ -18855,7 +19415,7 @@ export default function PDFViewer({
           return next.filter((s) => s.page !== page || keep.has(s.id));
         });
       } catch {
-        /* ignore — leave the stroke unsaved on failure */
+        /* the stroke stays wet and is saved again (flushInkWet) */
       } finally {
         inkSavingRef.current = false;
         setInkSaving(false);
@@ -18892,6 +19452,7 @@ export default function PDFViewer({
           nativeDeleted = true;
         }
         await apiDelete(`/api/v1/annotations/${annotationId}`);
+        forgetKeptObjectRef.current("ink", annotationId);
         setInks((prev) => prev.filter((s) => s.id !== annotationId));
         return true;
       } catch {
@@ -18923,22 +19484,30 @@ export default function PDFViewer({
    * Wet strokes saved together, through a host that writes many at once
    * (onManagedInkErase with nothing taken): their reader rows side by side,
    * then the PDF's one commit. Refused, the rows go and nothing lands (as a
-   * stroke's own save leaves it unsaved). The landed row ids, by stroke.
+   * stroke's own save leaves it unsaved). What each stroke's save came to,
+   * by stroke: a failed one stays wet and is saved again (flushInkWet).
    */
   const persistStrokes = useCallback(
     async (
       strokes: readonly { page: number; points: InkPoint[]; color: string; width: number }[],
-    ): Promise<(string | null)[]> => {
+    ): Promise<PdfWetInkWrite[]> => {
       const writer = onManagedInkEraseRef.current;
-      const none = strokes.map(() => null);
-      if (!writer || !dataItemId || inkSavingRef.current) return none;
+      if (!writer || !dataItemId || inkSavingRef.current) return strokes.map(() => "failed");
       const perPage = new Map<number, number>();
       for (const ink of inksRef.current) perPage.set(ink.page, (perPage.get(ink.page) ?? 0) + 1);
-      const payloads = strokes.map((stroke) => {
+      // What no retry changes, said apart from a write that failed.
+      const refusals: ("not-a-stroke" | "page-full" | null)[] = strokes.map(() => null);
+      const payloads = strokes.map((stroke, index) => {
         const normalized = normalizeStroke({ points: stroke.points, color: stroke.color, width: stroke.width });
-        if (!normalized) return null;
+        if (!normalized) {
+          refusals[index] = "not-a-stroke";
+          return null;
+        }
         const count = perPage.get(stroke.page) ?? 0;
-        if (count >= 500) return null;
+        if (count >= 500) {
+          refusals[index] = "page-full";
+          return null;
+        }
         perPage.set(stroke.page, count + 1);
         return buildInkPayload({
           page: stroke.page,
@@ -18975,7 +19544,8 @@ export default function PDFViewer({
         );
         // In the order they were written: the later stroke lies on top.
         const made = rows.filter((row): row is InkAnnotation => row !== null);
-        if (made.length === 0) return none;
+        const unwritten = (): PdfWetInkWrite[] => refusals.map((refusal) => refusal ?? "failed");
+        if (made.length === 0) return unwritten();
         try {
           await writer({ removedIds: [], added: made.map((row) => readerInkToManagedStroke(row)) });
         } catch {
@@ -18984,7 +19554,7 @@ export default function PDFViewer({
           await Promise.allSettled(
             created.map((row) => apiDelete(`/api/v1/annotations/${row.id}`)),
           );
-          return none;
+          return unwritten();
         }
         setInks((prev) => {
           let next = prev;
@@ -18997,7 +19567,7 @@ export default function PDFViewer({
           }
           return next.filter((s) => !pagesTouched.has(s.page) || keep.has(s.id));
         });
-        return rows.map((row) => row?.id ?? null);
+        return rows.map((row, index) => (row ? { id: row.id } : refusals[index] ?? "failed"));
       } finally {
         inkSavingRef.current = false;
         setInkSaving(false);
@@ -19077,6 +19647,14 @@ export default function PDFViewer({
     },
     [inkWetLayer],
   );
+  /** Say (or stop saying) one thing about ink that is not saved; a render only when it changes. */
+  const inkUnsavedNoticeRef = useRef<"failing" | "pageFull" | null>(null);
+  const sayInkUnsaved = useCallback((what: "failing" | "pageFull", on: boolean) => {
+    const next = on ? what : inkUnsavedNoticeRef.current === what ? null : inkUnsavedNoticeRef.current;
+    if (next === inkUnsavedNoticeRef.current) return;
+    inkUnsavedNoticeRef.current = next;
+    setInkUnsavedNotice(next);
+  }, []);
   /**
    * The wet strokes changed: drawn at once (no render of the viewer), the
    * running stroke's canvas let go of in the same task its wet stroke is
@@ -19107,8 +19685,24 @@ export default function PDFViewer({
         else setInkWetPending(false);
       }
       tellInkPresence();
+      // No wet ink left (saved, or taken back): nothing is failing any more.
+      if (!pending) {
+        inkWetFailuresRef.current = 0;
+        if (inkWetRetryTimerRef.current !== null) {
+          window.clearTimeout(inkWetRetryTimerRef.current);
+          inkWetRetryTimerRef.current = null;
+        }
+        sayInkUnsaved("failing", false);
+      }
+      
+      // never saw (lib/pdf/reader-held-work): 保存中 while it waits for the
+      // pen or its write, 未保存 once a write of it failed.
+      const file = readerHeldFileRef.current;
+      if (file) {
+        holdPdfReaderWork(file, "ink", !pending ? null : inkWetFailuresRef.current > 0 ? "unsaved" : "saving");
+      }
     },
-    [syncReaderWetInk, tellInkPresence],
+    [sayInkUnsaved, syncReaderWetInk, tellInkPresence],
   );
   useLayoutEffect(() => {
     for (const layer of inkWetLayersRef.current.values()) layer.commit();
@@ -19145,27 +19739,70 @@ export default function PDFViewer({
         // 7 s after the pen stopped. Else one at a time.
         const batch = onManagedInkEraseRef.current ? ready : [ready[0]!];
         for (const stroke of batch) inkWetSavingKeysRef.current.add(stroke.key);
-        const landed = onManagedInkEraseRef.current
+        if (inkWetRetryTimerRef.current !== null) {
+          window.clearTimeout(inkWetRetryTimerRef.current);
+          inkWetRetryTimerRef.current = null;
+        }
+        const writes: PdfWetInkWrite[] = onManagedInkEraseRef.current
           ? await persistStrokesRef.current(batch)
           : [await persistStrokeRef.current(batch[0]!.page, batch[0]!.points, batch[0]!.color, batch[0]!.width)];
-        const keys = new Set(batch.map((stroke) => stroke.key));
-        inkWetRef.current = inkWetRef.current.filter((stroke) => !keys.has(stroke.key));
-        for (const key of keys) inkWetLandedKeysRef.current.delete(key);
+        // A stroke leaves the wet layer when its row landed (or the page
+        // can never take it). One whose write failed stays wet: the whole
+        // batch used to go whatever the answer, so a failed save took the
+        // strokes off the screen with nothing in the file, the window
+        
+        const settled = settlePdfWetInkBatch(inkWetRef.current, batch, writes, inkWetErasedKeysRef.current);
+        const kept = new Set(settled.failed.map((stroke) => stroke.key));
+        inkWetRef.current = settled.wet;
+        for (const stroke of batch) {
+          if (!kept.has(stroke.key)) inkWetLandedKeysRef.current.delete(stroke.key);
+        }
         inkWetSavingKeysRef.current.clear();
+        inkWetFailuresRef.current = kept.size > 0 ? inkWetFailuresRef.current + 1 : 0;
         publishInkWet({ leaveAtCommit: true });
         // The Eraser took one while it was being saved: it goes as it lands
-        // (hidden meanwhile, `wet:<key>` then its row's id).
+        // (hidden meanwhile, `wet:<key>` then its row's id); one whose save
+        // failed is simply gone, as asked.
         batch.forEach((stroke, index) => {
+          if (kept.has(stroke.key)) return;
           if (inkWetErasedKeysRef.current.delete(stroke.key)) {
-            eraseLandedInkRef.current(`wet:${stroke.key}`, landed[index] ?? null);
+            eraseLandedInkRef.current(`wet:${stroke.key}`, pdfWetInkLandedId(writes[index]));
           }
         });
+        // Said until a later save finds room again (some ink was erased).
+        if (settled.pageFull.length > 0) sayInkUnsaved("pageFull", true);
+        else if (writes.some((write) => typeof write === "object")) sayInkUnsaved("pageFull", false);
+        if (kept.size === 0) {
+          sayInkUnsaved("failing", false);
+          continue;
+        }
+        if (viewerUnmountedRef.current) {
+          // The reader is gone and nothing here can try again: the next
+          // reader of this file takes the strokes back (wet-ink-save), and
+          // the window goes on reading them unsaved until one does.
+          const file = readerHeldFileRef.current;
+          if (file) {
+            keepPdfWetInk(file, inkWetRef.current);
+            holdPdfReaderWork(file, "ink", "unsaved");
+          }
+          inkWetRef.current = [];
+          inkWetLandedKeysRef.current.clear();
+          break;
+        }
+        // Still wet, tried again after 1, 2, 4 ... 30 s (and with the next
+        // stroke that lands); said once it has failed a few times in a row.
+        if (inkWetFailuresRef.current >= PDF_READER_WRITE_SAID_AFTER) sayInkUnsaved("failing", true);
+        inkWetRetryTimerRef.current = window.setTimeout(() => {
+          inkWetRetryTimerRef.current = null;
+          if (inkWetRef.current.length > 0) void flushInkWetRef.current();
+        }, pdfReaderRetryPauseMs(inkWetFailuresRef.current));
+        break;
       }
     } finally {
       inkWetSavingKeysRef.current.clear();
       inkWetFlushingRef.current = false;
     }
-  }, [publishInkWet]);
+  }, [publishInkWet, sayInkUnsaved]);
   useEffect(() => {
     flushInkWetRef.current = flushInkWet;
   }, [flushInkWet]);
@@ -19237,6 +19874,15 @@ export default function PDFViewer({
       void flushInkWet(true);
     };
   }, [flushInkWet]);
+  // Strokes a reader of this file was closed over while their save kept
+  // failing (lib/pdf/wet-ink-save): drawn again here, and saved.
+  useEffect(() => {
+    if (!dataItemId) return;
+    for (const stroke of takePdfKeptWetInk<ReaderWetStroke>(dataItemId)) {
+      inkWetKeyRef.current += 1;
+      addReaderWetStroke({ ...stroke, key: inkWetKeyRef.current });
+    }
+  }, [addReaderWetStroke, dataItemId]);
 
   // Undo the most recently added stroke (bonus): a wet one is simply taken
   // back; else the last-persisted stroke across all pages is deleted
@@ -19290,7 +19936,11 @@ export default function PDFViewer({
         })
         .filter((item): item is SignatureAnnotation => Boolean(item));
       setSignatures((current) =>
-        mergeHydratedAnnotationList(base, current, items),
+        mergeHydratedAnnotationList(
+          base,
+          current,
+          withKeptPdfObjectChanges(dataItemId, "signature", items),
+        ),
       );
     } catch {
       /* ignore — signatures are optional */
@@ -19464,6 +20114,7 @@ export default function PDFViewer({
           }
           await apiDelete(`/api/v1/annotations/${annotationId}`);
         });
+        forgetKeptObjectRef.current("signature", annotationId);
         setSignatures((prev) => prev.filter((s) => s.id !== annotationId));
       } catch {
         setPlacedAnnotationClipboardError(true);
@@ -19568,7 +20219,9 @@ export default function PDFViewer({
           sanitizeReaderStampPayload(item.id, item.payload_json || {}),
         )
         .filter((item): item is ReaderStampAnnotation => Boolean(item));
-      setStamps((current) => mergeHydratedAnnotationList(base, current, items));
+      setStamps((current) =>
+        mergeHydratedAnnotationList(base, current, withKeptPdfObjectChanges(dataItemId, "stamp", items)),
+      );
     } catch {
       /* ignore — stamps are optional */
     }
@@ -19698,6 +20351,7 @@ export default function PDFViewer({
         await onManagedStampDelete(annotationId, current.nativeCommandOrigin);
         nativeDeleteCommitted = true;
         await apiDelete(`/api/v1/annotations/${annotationId}`);
+        forgetKeptObjectRef.current("stamp", annotationId);
         setStamps((prev) => prev.filter((s) => s.id !== annotationId));
       } catch {
         if (nativeDeleteCommitted && onManagedStampUpsert) {
@@ -22394,7 +23048,15 @@ export default function PDFViewer({
           console.debug("[pdf-shape] hydration published", { items: items.map((shape) => shape.id.slice(0, 8)),
             discarded: [...discarded].map((id) => id.slice(0, 8)) });
         }
-        setShapes(discarded.size ? items.filter((shape) => !discarded.has(shape.id)) : items);
+        // A shape whose change the file does not hold yet is drawn as the
+        // user left it, not as the row read back (commitObjectChange).
+        setShapes(
+          withKeptPdfObjectChanges(
+            dataItemId,
+            "shape",
+            discarded.size ? items.filter((shape) => !discarded.has(shape.id)) : items,
+          ),
+        );
         setShapesHydratedItem(dataItemId ?? null);
       } catch {
         // Failure, malformed data and partial sanitation are all UNKNOWN, never
@@ -22687,6 +23349,7 @@ export default function PDFViewer({
           nativeDeleteCommitted = true;
         }
         await apiDelete(`/api/v1/annotations/${annotationId}`);
+        forgetKeptObjectRef.current("shape", annotationId);
         if (visualMaskMutationReceipt) {
           if (!settleVisualMaskMutation()) return;
         } else {
@@ -22724,12 +23387,312 @@ export default function PDFViewer({
     ],
   );
 
+  // ---- A placed object's change, kept until the file holds it -------------
+  // A shape's look or place, a pen stroke's look, a signature's or stamp's
+  // place and a link's place or target are written in two steps: the
+  // reader's row, then the PDF. A failure of either used to put the object
+  // back as it was (and write the row back), under a general "save failed":
+  // the change was thrown away. The object now stays as the user left it,
+  // the window counts it as unsaved, and the same write is made again after
+  // a growing pause until it lands; the notice names what is not saved yet.
+  // Nothing takes the change back but the user (changing it again, or
+  // deleting the object).
+  type KeptObjectChange =
+    | { kind: "shape"; object: ShapeAnnotation }
+    | { kind: "ink"; object: InkAnnotation }
+    | { kind: "signature"; object: SignatureAnnotation }
+    | { kind: "stamp"; object: ReaderStampAnnotation }
+    | { kind: "link"; object: PdfLinkOverlay };
+  const keptObjectLanesRef = useRef(
+    new Map<string, { kind: PdfKeptObjectKind; id: string; failures: number; timer: number | null }>(),
+  );
+  const retryKeptObjectRef = useRef<(kind: PdfKeptObjectKind, id: string) => void>(() => undefined);
+  /** Writes the shape style change made while another shape write ran. */
+  const drainQueuedShapeStyleRef = useRef<() => void>(() => undefined);
+  /** Shapes whose kept change was handed to the PDF's writer: only that
+   * writer taking it lets the change go, never the row's write alone. */
+  const shapeChangeOwedToPdfRef = useRef(new Set<string>());
+  const objectSaveLocks = useMemo(
+    () => ({
+      shape: { busy: shapeSavingRef, setBusy: setShapeSaving },
+      ink: { busy: inkSavingRef, setBusy: setInkSaving },
+      signature: { busy: signSavingRef, setBusy: setSignSaving },
+      stamp: { busy: stampSavingRef, setBusy: setStampSaving },
+      link: { busy: linkSavingRef, setBusy: setLinkSaving },
+    }),
+    [],
+  );
+  /** Draws the object as the user left it. */
+  const showObjectChange = useCallback((change: KeptObjectChange) => {
+    switch (change.kind) {
+      case "shape": {
+        if (!shapesRef.current.some((shape) => shape.id === change.object.id)) return;
+        const next = shapesRef.current.map((shape) =>
+          shape.id === change.object.id ? change.object : shape,
+        );
+        shapesRef.current = next;
+        setShapes(next);
+        return;
+      }
+      case "ink": {
+        if (!inksRef.current.some((stroke) => stroke.id === change.object.id)) return;
+        const next = inksRef.current.map((stroke) =>
+          stroke.id === change.object.id ? change.object : stroke,
+        );
+        inksRef.current = next;
+        setInks(next);
+        return;
+      }
+      case "signature":
+        setSignatures((prev) =>
+          prev.map((signature) => (signature.id === change.object.id ? change.object : signature)),
+        );
+        return;
+      case "stamp":
+        setStamps((prev) =>
+          prev.map((stamp) => (stamp.id === change.object.id ? change.object : stamp)),
+        );
+        return;
+      case "link":
+        setLinkOverlays((prev) =>
+          prev.map((link) => (link.id === change.object.id ? change.object : link)),
+        );
+        return;
+    }
+  }, []);
+  /** Both steps of one object's write: its row, then the PDF. Throws when
+   * either does not hold the object as given; puts nothing back. */
+  const writeObjectChange = useCallback(
+    async (change: KeptObjectChange): Promise<void> => {
+      const refused = () => new Error(t("pdf.editNotReady"));
+      const row = `/api/v1/annotations/${change.object.id}`;
+      switch (change.kind) {
+        case "shape": {
+          const payload = buildShapePayload(change.object);
+          if (!payload) throw refused();
+          if (onManagedShapeUpsert) {
+            shapeChangeOwedToPdfRef.current.add(change.object.id);
+          } else if (shapeChangeOwedToPdfRef.current.has(change.object.id)) {
+            // The PDF's writer is away: the change waits for it.
+            throw refused();
+          }
+          await apiPatch(row, { payload_json: payload });
+          // Before the PDF write publishes a new revision, whose re-read
+          // must see this row, not the snapshot taken before it (PDF 0016).
+          if (dataItemId) notePdfAnnotationWrite(dataItemId);
+          await onManagedShapeUpsert?.(change.object);
+          // The row and the PDF hold the change. Writing it into the PDF
+          // published a new revision, so the epoch guard (bound to the
+          // document identity the edit started on) may refuse; the record
+          // follows what was written all the same (user audit PDF 0016).
+          advanceShapeMutationEpoch();
+          return;
+        }
+        case "ink": {
+          if (!onManagedInkUpsert) throw refused();
+          await apiPatch(row, { payload_json: buildInkPayload(change.object) });
+          await onManagedInkUpsert(change.object);
+          return;
+        }
+        case "signature": {
+          const upsert = managedSignatureUpsertRef.current;
+          const generation = nativeAnnotationWriteGenerationRef.current;
+          const payload = buildSignaturePayload(change.object);
+          if (!upsert || !payload || !change.object.nativeAppearanceImage) throw refused();
+          await apiPatch(row, { payload_json: signatureReaderPayload(payload) });
+          // The PDF moved on while the row was written: this write is made
+          // again against the PDF as it is now.
+          if (nativeAnnotationWriteGenerationRef.current !== generation) throw refused();
+          await upsert(change.object as ManagedNativeSignatureAnnotation, generation);
+          return;
+        }
+        case "stamp": {
+          const origin = change.object.nativeCommandOrigin;
+          const payload = buildReaderStampPayload(change.object, origin);
+          if (!onManagedStampUpsert || !payload) throw refused();
+          await apiPatch(row, { payload_json: payload });
+          await onManagedStampUpsert(change.object, origin);
+          return;
+        }
+        case "link": {
+          const upsert = managedLinkUpsertRef.current;
+          const generation = nativeAnnotationWriteGenerationRef.current;
+          if (!upsert) throw refused();
+          await apiPatch(row, {
+            payload_json: Object.fromEntries(
+              Object.entries(change.object).filter(([key]) => key !== "id"),
+            ),
+          });
+          if (nativeAnnotationWriteGenerationRef.current !== generation) throw refused();
+          await upsert(change.object, generation);
+          return;
+        }
+      }
+    },
+    [
+      advanceShapeMutationEpoch,
+      dataItemId,
+      onManagedInkUpsert,
+      onManagedShapeUpsert,
+      onManagedStampUpsert,
+      t,
+    ],
+  );
+  /** Says the kind of one change still failing, or nothing when none is. */
+  const sayObjectsUnsaved = useCallback(() => {
+    let failing: PdfKeptObjectKind | null = null;
+    for (const lane of keptObjectLanesRef.current.values()) {
+      if (lane.failures > 0) failing = lane.kind;
+    }
+    setObjectUnsavedNotice(failing);
+  }, []);
+  const settleKeptObject = useCallback(
+    (file: string, kind: PdfKeptObjectKind, id: string) => {
+      const key = pdfKeptObjectKey(kind, id);
+      const lane = keptObjectLanesRef.current.get(key);
+      if (lane && lane.timer !== null) window.clearTimeout(lane.timer);
+      keptObjectLanesRef.current.delete(key);
+      if (kind === "shape") shapeChangeOwedToPdfRef.current.delete(id);
+      settlePdfObjectChange(file, kind, id);
+      holdPdfReaderWork(file, key, null);
+      sayObjectsUnsaved();
+    },
+    [sayObjectsUnsaved],
+  );
+  forgetKeptObjectRef.current = (kind, id) => {
+    const file = readerHeldFileRef.current;
+    if (file) settleKeptObject(file, kind, id);
+  };
+  /**
+   * Shows the object as changed and writes it. "written": the row and the
+   * PDF hold it. "kept": they do not yet; it stays shown, counts as unsaved
+   * and is written again. "gone": its row no longer exists.
+   */
+  const commitObjectChange = useCallback(
+    async (change: KeptObjectChange): Promise<"written" | "kept" | "gone"> => {
+      const { kind } = change;
+      const id = change.object.id;
+      const file = readerHeldFileRef.current ?? "";
+      const key = pdfKeptObjectKey(kind, id);
+      const lanes = keptObjectLanesRef.current;
+      const waiting = lanes.get(key);
+      if (waiting && waiting.timer !== null) {
+        window.clearTimeout(waiting.timer);
+        waiting.timer = null;
+      }
+      const lock = objectSaveLocks[kind];
+      lock.busy.current = true;
+      lock.setBusy(true);
+      // Kept from the first moment: a re-read of the rows made while the
+      // write runs draws the object as changed, not as stored.
+      keepPdfObjectChange(file, kind, change.object);
+      showObjectChange(change);
+      try {
+        await writeObjectChange(change);
+        settleKeptObject(file, kind, id);
+        showObjectChange(change);
+        return "written";
+      } catch (error) {
+        if ((error as { status?: unknown } | null)?.status === 404) {
+          // The object was deleted meanwhile: there is no row to change.
+          settleKeptObject(file, kind, id);
+          return "gone";
+        }
+        showObjectChange(change);
+        if (!file) return "kept";
+        holdPdfReaderWork(file, key, "unsaved");
+        const lane = waiting ?? { kind, id, failures: 0, timer: null };
+        lane.failures += 1;
+        if (viewerUnmountedRef.current || readerHeldFileRef.current !== file) {
+          // The next reader of this file takes the change up.
+          lanes.delete(key);
+          return "kept";
+        }
+        lanes.set(key, lane);
+        setObjectUnsavedNotice(kind);
+        lane.timer = window.setTimeout(() => {
+          lane.timer = null;
+          retryKeptObjectRef.current(kind, id);
+        }, pdfReaderRetryPauseMs(lane.failures));
+        return "kept";
+      } finally {
+        lock.busy.current = false;
+        lock.setBusy(false);
+        if (kind === "shape") drainQueuedShapeStyleRef.current();
+      }
+    },
+    [objectSaveLocks, settleKeptObject, showObjectChange, writeObjectChange],
+  );
+  retryKeptObjectRef.current = (kind, id) => {
+    const file = readerHeldFileRef.current;
+    if (!file || viewerUnmountedRef.current) return;
+    const key = pdfKeptObjectKey(kind, id);
+    const object = pdfKeptObjectChange<KeptObjectChange["object"]>(file, kind, id);
+    if (!object) {
+      settleKeptObject(file, kind, id);
+      return;
+    }
+    const lanes = keptObjectLanesRef.current;
+    const lane = lanes.get(key) ?? { kind, id, failures: 1, timer: null };
+    lanes.set(key, lane);
+    if (lane.timer !== null) return;
+    if (objectSaveLocks[kind].busy.current) {
+      // Another write of this kind is running: after it.
+      lane.timer = window.setTimeout(() => {
+        lane.timer = null;
+        retryKeptObjectRef.current(kind, id);
+      }, 500);
+      return;
+    }
+    void commitObjectChange({ kind, object } as KeptObjectChange);
+  };
+  // A reader opened over changes an earlier one could not write takes them
+  // up; one closed stops its pauses (the changes stay kept for the next).
+  useEffect(() => {
+    if (!dataItemId) return;
+    const lanes = keptObjectLanesRef.current;
+    for (const { kind, id } of pdfKeptObjectChanges(dataItemId)) {
+      if (!lanes.has(pdfKeptObjectKey(kind, id))) retryKeptObjectRef.current(kind, id);
+    }
+    return () => {
+      for (const lane of lanes.values()) {
+        if (lane.timer !== null) window.clearTimeout(lane.timer);
+      }
+      lanes.clear();
+      setObjectUnsavedNotice(null);
+    };
+  }, [dataItemId]);
+  
+  // an object's change waiting out the pause after a failed write is tried
+  // now. The title read 未保存 over them and a press of Save changed nothing
+  
+  // already running is left to finish.
+  useEffect(() => {
+    if (!dataItemId) return;
+    return onPdfReaderWorkAsked(dataItemId, () => {
+      for (const [noteId, lane] of [...noteReplyLanesRef.current]) {
+        if (lane.timer !== null) writeNoteRepliesRef.current(noteId);
+      }
+      if (inkWetRetryTimerRef.current !== null) {
+        window.clearTimeout(inkWetRetryTimerRef.current);
+        inkWetRetryTimerRef.current = null;
+        if (inkWetRef.current.length > 0) void flushInkWetRef.current();
+      }
+      for (const lane of [...keptObjectLanesRef.current.values()]) {
+        if (lane.timer === null) continue;
+        window.clearTimeout(lane.timer);
+        lane.timer = null;
+        retryKeptObjectRef.current(lane.kind, lane.id);
+      }
+    });
+  }, [dataItemId]);
+
   // ---- Placed-annotation move / resize ------------------------------------
   // Each finished PdfAnnotationFrame / PdfNoteMarker gesture PATCHes the
   // annotation's percent geometry through the SAME per-type payload builder
-  // its create path uses (persisted bytes == what we render), then mirrors the
-  // persisted values into local state. A failure keeps the old geometry so the
-  // user can retry.
+  // its create path uses (persisted bytes == what we render). A shape, a
+  // signature and a stamp show the new geometry at once and keep it when the
+  // write fails (commitObjectChange); a cover's write stays all-or-nothing.
   const handleShapeTransform = useCallback(
     async (annotationId: string, box: PercentBox) => {
       const current = shapes.find((s) => s.id === annotationId);
@@ -22759,21 +23722,26 @@ export default function PDFViewer({
         cornerRadius: current.cornerRadius,
       });
       if (!payload) return;
-      const visualMaskMutationReceipt =
-        current.purpose === PDF_SHAPE_VISUAL_MASK_PURPOSE
-          ? beginVisualMaskShapeMutation()
-          : null;
-      if (
-        current.purpose === PDF_SHAPE_VISUAL_MASK_PURPOSE &&
-        !visualMaskMutationReceipt
-      ) {
+      const updated: ShapeAnnotation = {
+        ...current,
+        x1: payload.x1,
+        y1: payload.y1,
+        x2: payload.x2,
+        y2: payload.y2,
+        ...(payload.points ? { points: payload.points } : null),
+      };
+      if (current.purpose !== PDF_SHAPE_VISUAL_MASK_PURPOSE) {
+        // Shown where it was dropped; a write that fails (the row's, or the
+        // PDF's, which used to be passed over in silence) keeps it there,
+        // unsaved, and is made again.
+        await commitObjectChange({ kind: "shape", object: updated });
         return;
       }
-      let visualMaskMutationPending = visualMaskMutationReceipt !== null;
+      const visualMaskMutationReceipt = beginVisualMaskShapeMutation();
+      if (!visualMaskMutationReceipt) return;
+      let visualMaskMutationPending = true;
       const settleVisualMaskMutation = (): boolean => {
-        if (!visualMaskMutationReceipt || !visualMaskMutationPending) {
-          return true;
-        }
+        if (!visualMaskMutationPending) return true;
         visualMaskMutationPending = false;
         return settleVisualMaskShapeMutation(visualMaskMutationReceipt);
       };
@@ -22783,44 +23751,24 @@ export default function PDFViewer({
         await apiPatch(`/api/v1/annotations/${annotationId}`, {
           payload_json: payload,
         });
-        const updated: ShapeAnnotation = {
-          ...current,
-          x1: payload.x1,
-          y1: payload.y1,
-          x2: payload.x2,
-          y2: payload.y2,
-          ...(payload.points ? { points: payload.points } : null),
-        };
-        if (
-          visualMaskMutationReceipt
-            ? !settleVisualMaskMutation()
-            : !advanceShapeMutationEpoch()
-        ) {
-          return;
-        }
+        if (!settleVisualMaskMutation()) return;
         setShapes((prev) =>
           prev.map((s) => (s.id === annotationId ? updated : s)),
         );
-        if (updated.purpose !== PDF_SHAPE_VISUAL_MASK_PURPOSE) {
-          try {
-            await onManagedShapeUpsert?.(updated);
-          } catch {
-            // See create path: the reader record remains authoritative until a
-            // future edit successfully mirrors it into the native page model.
-          }
-        }
       } catch {
-        /* ignore — keep the old geometry so the user can retry */
+        // A cover is one write, all or nothing: it stays where it was, and
+        // the reader says the move was not saved.
+        setPlacedAnnotationClipboardError(true);
       } finally {
         settleVisualMaskMutation();
         shapeSavingRef.current = false;
         setShapeSaving(false);
+        drainQueuedShapeStyleRef.current();
       }
     },
     [
-      advanceShapeMutationEpoch,
       beginVisualMaskShapeMutation,
-      onManagedShapeUpsert,
+      commitObjectChange,
       settleVisualMaskShapeMutation,
       shapes,
     ],
@@ -22942,92 +23890,24 @@ export default function PDFViewer({
       };
       if (isManagedNativeShapeEquivalent(current, updated)) return;
       setPlacedAnnotationClipboardError(false);
-      shapeSavingRef.current = true;
-      setShapeSaving(true);
       // Shown at once: the reader's row differs from the page's drawing, so
       // the overlay draws it (the page's own paint shows again once the
-      // write holds the same), and the tab reads the new values.
-      {
-        const shown = shapesRef.current.map((shape) => (shape.id === updated.id ? updated : shape));
-        shapesRef.current = shown;
-        setShapes(shown);
-      }
-      const restore = () => {
-        const back = shapesRef.current.map((shape) => (shape.id === current.id ? current : shape));
-        shapesRef.current = back;
-        setShapes(back);
-      };
-      try {
-        await apiPatch(`/api/v1/annotations/${current.id}`, {
-          payload_json: payload,
-        });
-        // Before the PDF write publishes a new revision, whose re-read must
-        // see this row, not the snapshot taken before it (PDF 0016).
-        if (dataItemId) notePdfAnnotationWrite(dataItemId);
-        try {
-          await onManagedShapeUpsert(updated);
-        } catch {
-          const rollbackPayload = buildShapePayload({
-            page: current.page,
-            kind: current.kind,
-            x1: current.x1,
-            y1: current.y1,
-            x2: current.x2,
-            y2: current.y2,
-            points: current.points,
-            xfdfSourceId: current.xfdfSourceId,
-            color: current.color,
-            width: current.width,
-            lineStyle: current.lineStyle,
-            lineStart: current.lineStart,
-            lineEnd: current.lineEnd,
-            fillColor: current.fillColor,
-            fillOpacity: current.fillOpacity,
-            opacity: current.opacity,
-            cornerRadius: current.cornerRadius,
-          });
-          if (rollbackPayload) {
-            await apiPatch(`/api/v1/annotations/${current.id}`, {
-              payload_json: rollbackPayload,
-            }).catch(() => undefined);
-          }
-          restore();
-          queuedShapeStyleRef.current = null;
-          setPlacedAnnotationClipboardError(true);
-          return;
-        }
-        // The server row and the PDF hold the change now. Writing it into
-        // the PDF published a new revision, so the epoch guard (bound to the
-        // document identity the edit started on) refuses; keeping the old
-        // record then showed the old width on reselect and wrote it back with
-        // the next colour change (user audit PDF 0016). The record follows
-        // what was written; the guard still bumps the hydration when current.
-        advanceShapeMutationEpoch();
-        const next = shapesRef.current.map((shape) =>
-          shape.id === updated.id ? updated : shape,
-        );
-        shapesRef.current = next;
-        setShapes(next);
-      } catch {
-        restore();
-        queuedShapeStyleRef.current = null;
-        setPlacedAnnotationClipboardError(true);
-      } finally {
-        shapeSavingRef.current = false;
-        setShapeSaving(false);
-      }
-      // The change made while this one was written, if the shape is still
-      // the one selected.
-      const queued = queuedShapeStyleRef.current;
-      queuedShapeStyleRef.current = null;
-      if (queued && selectedPlacedRef.current?.kind === "shape" && selectedPlacedRef.current.id === queued.id) {
-        await handleSelectedManagedShapeStyleRef.current(queued.change);
-      }
+      // write holds the same), and the tab reads the new values. A write
+      // that fails keeps the shape as changed, unsaved, and is made again;
+      // the change queued behind it is then made over it, not dropped.
+      await commitObjectChange({ kind: "shape", object: updated });
     },
-    [advanceShapeMutationEpoch, onManagedShapeUpsert, onNativeSourceShapeStyle],
+    [commitObjectChange, onManagedShapeUpsert, onNativeSourceShapeStyle],
   );
-  const handleSelectedManagedShapeStyleRef = useRef(handleSelectedManagedShapeStyle);
-  handleSelectedManagedShapeStyleRef.current = handleSelectedManagedShapeStyle;
+  // The change made while a shape write ran, if the shape is still the one
+  // selected: after that write, whether it landed or is kept.
+  drainQueuedShapeStyleRef.current = () => {
+    const queued = queuedShapeStyleRef.current;
+    queuedShapeStyleRef.current = null;
+    if (queued && selectedPlacedRef.current?.kind === "shape" && selectedPlacedRef.current.id === queued.id) {
+      void handleSelectedManagedShapeStyle(queued.change);
+    }
+  };
 
   const handleSelectedManagedShapeArrange = useCallback(
     async (action: ShapeGeometryTransform) => {
@@ -23085,47 +23965,10 @@ export default function PDFViewer({
       };
       if (isManagedNativeShapeEquivalent(current, updated)) return;
       setPlacedAnnotationClipboardError(false);
-      shapeSavingRef.current = true;
-      setShapeSaving(true);
-      try {
-        await apiPatch(`/api/v1/annotations/${current.id}`, {
-          payload_json: payload,
-        });
-        // Before the PDF write publishes a new revision, whose re-read must
-        // see this row, not the snapshot taken before it (PDF 0016).
-        if (dataItemId) notePdfAnnotationWrite(dataItemId);
-        try {
-          await onManagedShapeUpsert(updated);
-        } catch {
-          const rollbackPayload = buildShapePayload(current);
-          if (rollbackPayload) {
-            await apiPatch(`/api/v1/annotations/${current.id}`, {
-              payload_json: rollbackPayload,
-            }).catch(() => undefined);
-          }
-          setPlacedAnnotationClipboardError(true);
-          return;
-        }
-        // The server row and the PDF hold the change now. Writing it into
-        // the PDF published a new revision, so the epoch guard (bound to the
-        // document identity the edit started on) refuses; keeping the old
-        // record then showed the old width on reselect and wrote it back with
-        // the next colour change (user audit PDF 0016). The record follows
-        // what was written; the guard still bumps the hydration when current.
-        advanceShapeMutationEpoch();
-        const next = shapesRef.current.map((shape) =>
-          shape.id === updated.id ? updated : shape,
-        );
-        shapesRef.current = next;
-        setShapes(next);
-      } catch {
-        setPlacedAnnotationClipboardError(true);
-      } finally {
-        shapeSavingRef.current = false;
-        setShapeSaving(false);
-      }
+      // Turned or flipped at once, and kept so when the write fails.
+      await commitObjectChange({ kind: "shape", object: updated });
     },
-    [advanceShapeMutationEpoch, onManagedShapeUpsert, resolvedPageRotation],
+    [commitObjectChange, onManagedShapeUpsert, resolvedPageRotation],
   );
 
   const handleSelectedManagedInkStyle = useCallback(
@@ -23169,40 +24012,15 @@ export default function PDFViewer({
         points: current.points,
         xfdfSourceId: current.xfdfSourceId,
       });
-      const rollbackPayload = buildInkPayload(current);
       const updated: InkAnnotation = {
         id: current.id,
         ...payload,
       };
       setPlacedAnnotationClipboardError(false);
-      inkSavingRef.current = true;
-      setInkSaving(true);
-      try {
-        await apiPatch(`/api/v1/annotations/${current.id}`, {
-          payload_json: payload,
-        });
-        try {
-          await onManagedInkUpsert(updated);
-        } catch {
-          await apiPatch(`/api/v1/annotations/${current.id}`, {
-            payload_json: rollbackPayload,
-          }).catch(() => undefined);
-          setPlacedAnnotationClipboardError(true);
-          return;
-        }
-        const next = inksRef.current.map((stroke) =>
-          stroke.id === updated.id ? updated : stroke,
-        );
-        inksRef.current = next;
-        setInks(next);
-      } catch {
-        setPlacedAnnotationClipboardError(true);
-      } finally {
-        inkSavingRef.current = false;
-        setInkSaving(false);
-      }
+      // Restyled at once, and kept so when the write fails.
+      await commitObjectChange({ kind: "ink", object: updated });
     },
-    [onManagedInkUpsert, onNativeSourceInkStyle],
+    [commitObjectChange, onManagedInkUpsert, onNativeSourceInkStyle],
   );
 
   const handleNativeSourceShapeTransform = useCallback(
@@ -23401,8 +24219,6 @@ export default function PDFViewer({
       objectRotation?: number,
     ) => {
       const current = signatures.find((s) => s.id === annotationId);
-      const authorityGenerationAtStart =
-        nativeAnnotationWriteGenerationRef.current;
       if (
         !current ||
         !managedSignatureUpsertRef.current ||
@@ -23426,65 +24242,26 @@ export default function PDFViewer({
           normalizeSignatureObjectRotation(current.objectRotation),
       });
       if (!payload) return;
-      signSavingRef.current = true;
-      setSignSaving(true);
-      try {
-        await apiPatch(`/api/v1/annotations/${annotationId}`, {
-          payload_json: signatureReaderPayload(payload),
-        });
-        const updated: SignatureAnnotation = {
-          ...current,
-          x: payload.x,
-          y: payload.y,
-          width: payload.width,
-          height: payload.height,
-          ...(payload.objectRotation === undefined
-            ? { objectRotation: undefined }
-            : { objectRotation: payload.objectRotation }),
-        };
-        const nativeUpsert = managedSignatureUpsertRef.current;
-        if (
-          !nativeUpsert ||
-          !updated.nativeAppearanceImage ||
-          nativeAnnotationWriteGenerationRef.current !==
-            authorityGenerationAtStart
-        ) {
-          const rollbackPayload = buildSignaturePayload(current);
-          if (rollbackPayload) {
-            await apiPatch(`/api/v1/annotations/${annotationId}`, {
-              payload_json: signatureReaderPayload(rollbackPayload),
-            }).catch(() => undefined);
-          }
-          setPlacedAnnotationClipboardError(true);
-          return;
-        }
-        try {
-          await nativeUpsert(
-            updated as ManagedNativeSignatureAnnotation,
-            authorityGenerationAtStart,
-          );
-        } catch {
-          const rollbackPayload = buildSignaturePayload(current);
-          if (rollbackPayload) {
-            await apiPatch(`/api/v1/annotations/${annotationId}`, {
-              payload_json: signatureReaderPayload(rollbackPayload),
-            }).catch(() => undefined);
-          }
-          setPlacedAnnotationClipboardError(true);
-          return;
-        }
-        setSignatures((prev) =>
-          prev.map((s) => (s.id === annotationId ? updated : s)),
-        );
-      } catch {
+      if (!current.nativeAppearanceImage) {
+        // A signature the PDF holds no drawing of cannot be placed anew in
+        // it: refused before anything is written, and said.
         setPlacedAnnotationClipboardError(true);
-        /* keep the old geometry so the user can retry */
-      } finally {
-        signSavingRef.current = false;
-        setSignSaving(false);
+        return;
       }
+      const updated: SignatureAnnotation = {
+        ...current,
+        x: payload.x,
+        y: payload.y,
+        width: payload.width,
+        height: payload.height,
+        ...(payload.objectRotation === undefined
+          ? { objectRotation: undefined }
+          : { objectRotation: payload.objectRotation }),
+      };
+      // Shown where it was dropped, and kept there when the write fails.
+      await commitObjectChange({ kind: "signature", object: updated });
     },
-    [signatures],
+    [commitObjectChange, signatures],
   );
 
   // Commit a stamp frame move/resize: PATCH the re-clamped percent box while
@@ -23507,45 +24284,17 @@ export default function PDFViewer({
         current.nativeCommandOrigin,
       );
       if (!payload) return;
-      stampSavingRef.current = true;
-      setStampSaving(true);
-      try {
-        await apiPatch(`/api/v1/annotations/${annotationId}`, {
-          payload_json: payload,
-        });
-        const updated: ReaderStampAnnotation = {
-          ...current,
-          x: payload.x,
-          y: payload.y,
-          width: payload.width,
-          height: payload.height,
-        };
-        try {
-          await onManagedStampUpsert(updated, updated.nativeCommandOrigin);
-        } catch {
-          const rollbackPayload = buildReaderStampPayload(
-            current,
-            current.nativeCommandOrigin,
-          );
-          if (rollbackPayload) {
-            await apiPatch(`/api/v1/annotations/${annotationId}`, {
-              payload_json: rollbackPayload,
-            }).catch(() => undefined);
-          }
-          setPlacedAnnotationClipboardError(true);
-          return;
-        }
-        setStamps((prev) =>
-          prev.map((s) => (s.id === annotationId ? updated : s)),
-        );
-      } catch {
-        /* ignore — keep the old geometry so the user can retry */
-      } finally {
-        stampSavingRef.current = false;
-        setStampSaving(false);
-      }
+      const updated: ReaderStampAnnotation = {
+        ...current,
+        x: payload.x,
+        y: payload.y,
+        width: payload.width,
+        height: payload.height,
+      };
+      // Shown where it was dropped, and kept there when the write fails.
+      await commitObjectChange({ kind: "stamp", object: updated });
     },
-    [onManagedStampUpsert, stamps],
+    [commitObjectChange, onManagedStampUpsert, stamps],
   );
 
   // 大小 on the contextual tab for a signature or a stamp: the typed width or
@@ -23708,21 +24457,26 @@ export default function PDFViewer({
       noteSavingRef.current = true;
       setNoteSaving(true);
       try {
-        await apiPatch(`/api/v1/annotations/${noteId}`, {
-          payload_json: payload,
-        });
+        const written = await threadWriter.write(noteId, payload, "mine");
         const updatedNote = { ...current, x: payload.x, y: payload.y };
         try {
           await syncManagedNote(updatedNote);
         } catch (error) {
-          await apiPatch(`/api/v1/annotations/${noteId}`, {
-            payload_json: rollbackPayload,
-          }).catch(() => undefined);
+          await threadWriter
+            .write(noteId, rollbackPayload, "mine")
+            .catch(() => undefined);
           throw error;
         }
         setNotes((prev) =>
           prev.map((n) =>
-            n.id === noteId ? updatedNote : n,
+            n.id === noteId
+              ? {
+                  ...n,
+                  x: payload.x,
+                  y: payload.y,
+                  ...(written.joined ? { replies: written.replies } : {}),
+                }
+              : n,
           ),
         );
         return true;
@@ -23735,7 +24489,7 @@ export default function PDFViewer({
         setNoteSaving(false);
       }
     },
-    [notes, syncManagedNote, t],
+    [notes, syncManagedNote, t, threadWriter],
   );
 
   const handleNativeSourceInkDelete = useCallback(
@@ -24744,7 +25498,53 @@ export default function PDFViewer({
     clearPlacedAnnotationSelection,
   ]);
 
-  const handleDeleteSelectedPlacedAnnotation = useCallback(() => {
+  // A Delete pressed while the selected object's own save runs (the write of
+  // a move, say) waits for that save and is carried out after it. It used to
+  // take the selection away and then be refused without a word by the
+  // object's delete, which does not run beside a save: the object stayed
+  
+  // must still hold the selection; a gesture begun on it since takes the
+  // Delete back, and one not carried out within ten seconds says so.
+  const placedDeleteHoldRef = useRef<PdfPlacedDeleteHold>({
+    waiting: null,
+    frameHeldKey: null,
+    savingAtKey: null,
+    notCarriedOut: null,
+  });
+  // The frame's own waiting Delete says the same when its save outlasts it.
+  placedDeleteHoldRef.current.notCarriedOut = () =>
+    setPlacedAnnotationClipboardError(true);
+  const [, setPlacedDeleteHoldTick] = useState(0);
+  const placedKindSavingNow = useCallback(
+    (kind: PdfPlacedAnnotationSelection["kind"]) => {
+      switch (kind) {
+        case "shape": return shapeSavingRef.current;
+        case "nativeSourceShape": return nativeSourceShapeSavingRef.current;
+        case "signature": return signSavingRef.current;
+        case "measurement": return measurementSavingRef.current;
+        case "note": return noteSavingRef.current;
+        case "ink": return inkSavingRef.current;
+        case "nativeInk": return nativeSourceInkSavingRef.current;
+        case "redaction": return redactSavingRef.current;
+        case "stamp": return stampSavingRef.current;
+        case "nativeSourceStamp": return nativeSourceStampSavingRef.current;
+        case "nativeSourceFreeText": return nativeSourceFreeTextSavingRef.current;
+        default: return false;
+      }
+    },
+    [],
+  );
+  const holdSelectedPlacedDelete = useCallback(() => {
+    const selected = selectedPlacedRef.current;
+    if (!selected) return;
+    placedDeleteHoldRef.current.waiting = {
+      key: `${selected.kind}:${selected.id}`,
+      at: Date.now(),
+    };
+    setPlacedDeleteHoldTick((tick) => tick + 1);
+  }, []);
+
+  const carryOutSelectedPlacedDelete = useCallback(() => {
     if (!selectedPlaced) return false;
     const { kind, id } = selectedPlaced;
     if (kind === "measurement") {
@@ -24812,6 +25612,46 @@ export default function PDFViewer({
     clearPlacedAnnotationSelection,
     selectedPlaced,
   ]);
+  const handleDeleteSelectedPlacedAnnotation = useCallback(() => {
+    if (!selectedPlaced) return false;
+    if (placedKindSavingNow(selectedPlaced.kind)) {
+      holdSelectedPlacedDelete();
+      return true;
+    }
+    return carryOutSelectedPlacedDelete();
+  }, [
+    carryOutSelectedPlacedDelete,
+    holdSelectedPlacedDelete,
+    placedKindSavingNow,
+    selectedPlaced,
+  ]);
+  useEffect(() => {
+    const hold = placedDeleteHoldRef.current;
+    const waiting = hold.waiting;
+    if (!waiting) return;
+    if (
+      !selectedPlaced ||
+      waiting.key !== `${selectedPlaced.kind}:${selectedPlaced.id}`
+    ) {
+      hold.waiting = null;
+      return;
+    }
+    if (Date.now() - waiting.at > 10_000) {
+      hold.waiting = null;
+      setPlacedAnnotationClipboardError(true);
+      return;
+    }
+    if (placedKindSavingNow(selectedPlaced.kind)) {
+      // Not every save lock is a state: look again shortly.
+      const timer = window.setTimeout(
+        () => setPlacedDeleteHoldTick((tick) => tick + 1),
+        150,
+      );
+      return () => window.clearTimeout(timer);
+    }
+    hold.waiting = null;
+    carryOutSelectedPlacedDelete();
+  });
 
   /** Leave Edit Content mode (WPS): selection, vertex editing and source-text
    * selection go, the ribbon stays on (or returns to) the Edit tab, and the
@@ -24927,8 +25767,14 @@ export default function PDFViewer({
       // write saves, focus falls back to the body, and Escape pressed then
       
       // body is no control a shortcut could be taken from.
+      // The window holding the viewer too. Safari does not focus a button it
+      // clicks: after a click on a signature the focus is on that window, and
+      // Delete, Escape and Cmd+C/V/D on the selected signature went nowhere
+      
+      
       const targetIsDocument =
-        target === document || target === document.body || target === document.documentElement;
+        target === document || target === document.body || target === document.documentElement ||
+        (root != null && target instanceof Element && target !== root && target.contains(root));
       const activePolygonDraft = polygonDraftRef.current;
       const vectorSelected = latestSelectedNativeVectorRef.current !== null;
       const contentEditLive = contentEditModeLiveRef.current;
@@ -25053,16 +25899,42 @@ export default function PDFViewer({
       if (!selectedPlaced) return;
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       event.preventDefault();
-      handleDeleteSelectedPlacedAnnotation();
+      const hold = placedDeleteHoldRef.current;
+      const savingAtKey = hold.savingAtKey;
+      const frameHeldKey = hold.frameHeldKey;
+      hold.savingAtKey = null;
+      hold.frameHeldKey = null;
+      // The object's frame took the key and holds the Delete itself.
+      if (frameHeldKey === `${selectedPlaced.kind}:${selectedPlaced.id}`) return;
+      // Saving when the key went down (not: the frame's own delete, begun
+      // on this same key, is what runs now).
+      if (savingAtKey ?? placedKindSavingNow(selectedPlaced.kind)) {
+        holdSelectedPlacedDelete();
+        return;
+      }
+      carryOutSelectedPlacedDelete();
     };
+    const onKeyDownCapture = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      const hold = placedDeleteHoldRef.current;
+      const selected = selectedPlacedRef.current;
+      hold.frameHeldKey = null;
+      hold.savingAtKey = selected ? placedKindSavingNow(selected.kind) : null;
+    };
+    document.addEventListener("keydown", onKeyDownCapture, true);
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDownCapture, true);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [
     activeAnnotationPastePage,
     clearPlacedAnnotationSelection,
     exitContentEditMode,
     handleCopyPlacedAnnotation,
-    handleDeleteSelectedPlacedAnnotation,
+    carryOutSelectedPlacedDelete,
+    holdSelectedPlacedDelete,
+    placedKindSavingNow,
     handleDuplicatePlacedAnnotation,
     handlePastePlacedAnnotation,
     finishPolygon,
@@ -25692,7 +26564,11 @@ export default function PDFViewer({
         )
         .filter((item): item is PdfLinkOverlay => Boolean(item));
       setLinkOverlays((current) =>
-        mergeHydratedAnnotationList(base, current, items),
+        mergeHydratedAnnotationList(
+          base,
+          current,
+          withKeptPdfObjectChanges(dataItemId, "link", items),
+        ),
       );
     } catch {
       /* ignore — links are optional */
@@ -25748,40 +26624,13 @@ export default function PDFViewer({
             id: existing.id,
             ...payload,
           };
-          await apiPatch(`/api/v1/annotations/${existing.id}`, {
-            payload_json: payload,
-          });
-          try {
-            if (
-              nativeAnnotationWriteGenerationRef.current !==
-              authorityGenerationAtStart
-            ) {
-              throw new Error(t("pdf.editNotReady"));
-            }
-            await nativeUpsertAtStart(updated, authorityGenerationAtStart);
-          } catch {
-            try {
-              const previousPayload = Object.fromEntries(
-                Object.entries(existing).filter(([key]) => key !== "id"),
-              );
-              await apiPatch(`/api/v1/annotations/${existing.id}`, {
-                payload_json: previousPayload,
-              });
-            } catch {
-              // Keep the API-authoritative payload visible. Its mismatch with
-              // nativeLinks blocks original-package export until repaired.
-              setLinkOverlays((previous) =>
-                previous.map((link) =>
-                  link.id === updated.id ? updated : link,
-                ),
-              );
-            }
+          // The link is on the page as changed from here on: written, or
+          // kept as an unsaved change that is written again (the reader
+          // says which). Only a link deleted meanwhile is not.
+          if ((await commitObjectChange({ kind: "link", object: updated })) === "gone") {
             setLinkSaveError(t("pages.saveFailed"));
             return false;
           }
-          setLinkOverlays((prev) =>
-            prev.map((link) => (link.id === updated.id ? updated : link)),
-          );
           return true;
         }
         const result = await apiPost<{ annotation: { id: string } }>(
@@ -25829,7 +26678,7 @@ export default function PDFViewer({
         setLinkSaving(false);
       }
     },
-    [dataItemId, linkOverlays, t],
+    [commitObjectChange, dataItemId, linkOverlays, t],
   );
 
   const handleLinkOverlayDelete = useCallback(
@@ -25863,6 +26712,7 @@ export default function PDFViewer({
             await apiDelete(`/api/v1/annotations/${annotationId}`);
           },
         );
+        forgetKeptObjectRef.current("link", annotationId);
         setLinkOverlays((prev) =>
           prev.filter((link) => link.id !== annotationId),
         );
@@ -29138,9 +29988,7 @@ export default function PDFViewer({
                   replies: existing.replies,
                   xfdfSourceId: existing.xfdfSourceId,
                 });
-                await apiPatch(`/api/v1/annotations/${existing.id}`, {
-                  payload_json: payload,
-                });
+                await threadWriter.write(existing.id, payload, "mine");
                 await syncManagedNote({ ...existing, text: payload.text });
                 setNotes((prev) =>
                   prev.map((note) =>
@@ -29158,9 +30006,11 @@ export default function PDFViewer({
               const nextNote = item.note ?? "";
               if (existing && (existing.note ?? "") !== nextNote) {
                 const updated = { ...existing, note: nextNote, text: nextNote };
-                await apiPatch(`/api/v1/annotations/${existing.id}`, {
-                  payload_json: buildHighlightReaderPayload(updated),
-                });
+                await threadWriter.write(
+                  existing.id,
+                  buildHighlightReaderPayload(updated),
+                  "mine",
+                );
                 setHighlights((prev) =>
                   prev.map((highlight) =>
                     highlight.id === existing.id ? updated : highlight,
@@ -29356,6 +30206,7 @@ export default function PDFViewer({
       sourceSha256,
       syncManagedNote,
       t,
+      threadWriter,
       xfdfImportDocumentKey,
     ],
   );
@@ -38066,13 +38917,17 @@ export default function PDFViewer({
     async (
       policyAction: PdfSavePolicyAction = "download-original",
       expectedAuthority?: VisualMaskOutputAuthoritySnapshot,
+      // The current file is the host's verified saved revision, not the file
+      // at `downloadUrl` (the upload): delivered by the host, which starts no
+      // save and no export for it.
+      savedRevision?: () => Promise<boolean>,
     ): Promise<boolean> => {
       if (blockVisualMaskDerivedPdfOutput(policyAction)) return false;
       // The native onDownload callback may publish a server export before its
       // Promise settles, so it cannot expose a parent-owned sink CAS. Current
       // output uses the consent-bound local writer unless a direct URL exists;
       // only immutable download-original may call the async host fallback.
-      if (policyAction !== "download-original" && !downloadUrl) {
+      if (policyAction !== "download-original" && !downloadUrl && !savedRevision) {
         setFlattenError(t("pdfViewer.flattenFailed"));
         return false;
       }
@@ -38125,6 +38980,13 @@ export default function PDFViewer({
           );
           return false;
         }
+      }
+      if (savedRevision && policyAction === "download-current") {
+        if (outputAuthorityIsCurrent && !outputAuthorityIsCurrent()) {
+          return false;
+        }
+        beginOutputAttempt();
+        return savedRevision();
       }
       if (downloadUrl) {
         if (outputAuthorityIsCurrent && !outputAuthorityIsCurrent()) {
@@ -38186,13 +39048,16 @@ export default function PDFViewer({
       authority.redactionWritesInFlight > 0 ||
       authority.redactionRiskPresent ||
       !downloadUrl;
+    // (A page whose text was edited: its saved revision, where the direct
+    // URL is the file as uploaded.)
     return requiresConsentBoundCurrentOutput
       ? handleDownloadWithAnnotations({ policyAction: "download-current" })
-      : handleDirectPdfDownload("download-current", authority);
+      : handleDirectPdfDownload("download-current", authority, onDownloadSavedRevision);
   }, [
     handleDirectPdfDownload,
     handleDownloadWithAnnotations,
     hasFlattenableAnnotations,
+    onDownloadSavedRevision,
     downloadUrl,
     readVisualMaskOutputAuthority,
     renderedVisualMaskOutputAuthority,
@@ -39025,6 +39890,15 @@ export default function PDFViewer({
       const displayedLayoutBox = layoutBox && provisionalInkColor
         ? { ...layoutBox, color: provisionalInkColor }
         : layoutBox;
+      // The room on the box's own row, up to the next text the page draws
+      // there (its own items apart): what a line saved as a text box may
+      // grow into before its words go down a row.
+      const ownItemBoxIds = new Set((paragraphItems ?? [item]).flatMap((entry) =>
+        ((entry as Readonly<{ sourceItemIndexes?: readonly number[] }>).sourceItemIndexes ?? [entry.itemIndex])
+          .map((index) => `native-text:${pageNumber}:${index}:${index}`)));
+      const rowRoom = displayedLayoutBox && rotation === 0 && !(Number(displayedLayoutBox.angle) || 0)
+        ? pdfNativeTextRowRoom(displayedLayoutBox, (pageLayoutBoxes ?? []).filter((box) => !ownItemBoxIds.has(box.id)))
+        : undefined;
       const bitmapEpoch = sourceCanvas && deskewCanvasRenderGenerationsRef.current.get(sourceCanvas);
       const sourceWidth = sourceCanvas?.width;
       const sourceHeight = sourceCanvas?.height;
@@ -39196,7 +40070,8 @@ export default function PDFViewer({
           : Promise.resolve(null);
         const layout = displayedLayoutBox
           ? { box: displayedLayoutBox, pageWidthPx: localPageSize.width, pageHeightPx: localPageSize.height,
-              pageHeightPoints, pdfToCssTransform, sourceInputLayout, sourceInputKey, runFaces, readerRuns }
+              pageHeightPoints, pdfToCssTransform, sourceInputLayout, sourceInputKey, runFaces, readerRuns,
+              ...(rowRoom !== undefined ? { rowRoom } : {}) }
           : null;
         // A line already written as a text box: its box opens queued too, on
         // the page drawn now without that box (the document it is drawn from
@@ -39285,7 +40160,7 @@ export default function PDFViewer({
           caretPoint,
           copySourceBytes,
           renderManagedEditingSurface,
-          layout: displayedLayoutBox ? { box: displayedLayoutBox, pageWidthPx: localPageSize.width, pageHeightPx: localPageSize.height, pageHeightPoints, pdfToCssTransform, sourceInputLayout, sourceInputKey, runFaces, readerRuns } : null,
+          layout: displayedLayoutBox ? { box: displayedLayoutBox, pageWidthPx: localPageSize.width, pageHeightPx: localPageSize.height, pageHeightPoints, pdfToCssTransform, sourceInputLayout, sourceInputKey, runFaces, readerRuns, ...(rowRoom !== undefined ? { rowRoom } : {}) } : null,
         });
         return true;
       }
@@ -39295,6 +40170,7 @@ export default function PDFViewer({
       const finishFeedback = !nativeTextEditingActive ? beginPdfNativeTextActivationFeedback(span) : null;
       let feedbackAccepted = false;
       nativeTextActivationPressRef.current = nativeTextPressGenerationRef.current;
+      const editSessionEnds = contentEditModeEndsRef.current;
       const activationEvidence: PdfNativeTextEditActivationEvidence = {
         editingSurface,
         renderNativeEditingSurface,
@@ -39317,6 +40193,7 @@ export default function PDFViewer({
               sourceInputKey,
               runFaces,
               readerRuns,
+              ...(rowRoom !== undefined ? { rowRoom } : {}),
               // Known from the fonts the page already loaded, the moment it
               // opens: its words take no key, however long its proof takes.
               ...(selectionDrawnInType3(pageProxiesRef.current.get(pageNumber), selection) ? { type3Text: true } : {}),
@@ -39332,13 +40209,19 @@ export default function PDFViewer({
         onSettled?.(result.outcome?.status ?? "transient-refusal");
         if (
           result.outcome?.status === "accepted" &&
-          nativeTextActivationPressRef.current !== nativeTextPressGenerationRef.current
+          (nativeTextActivationPressRef.current !== nativeTextPressGenerationRef.current ||
+            editSessionEnds !== contentEditModeEndsRef.current)
         ) {
           // The reader pressed somewhere else while this box was being
           // prepared (another box, a shape, blank page): that press is the
           // choice, and this box selects nothing when it lands. A line
           // clicked while a shape saved used to light up seconds later,
           
+          // Leaving Edit Content meanwhile (another tab, Escape -- a press
+          // on the ribbon is not one on the paper) is the same choice: the
+          // line was marked selected on a page whose boxes were gone, and
+          // the window was handed its selection after the null that ended
+          // the mode.
           onNativeListTextSelectionChange?.(null);
           return;
         }
@@ -39870,11 +40753,13 @@ export default function PDFViewer({
       // A single click selects the box as a block, as WPS does: the box
       // under the press by geometry, not the span the browser hit-tested
       // (a short line under a longer one selected the line above, #46).
+      // The window's own click for a line the reader's caret was in opens
+      // it with the caret there again (pdfNativeTextCaretClick).
       if (
         !activateNativeTextEditBox(span ?? event.target, {
           clientX: event.clientX,
           clientY: event.clientY,
-        }, false, undefined, true)
+        }, false, undefined, !isPdfNativeTextCaretClick(event.nativeEvent))
       ) {
         // A box that cannot be opened says why, in the reader's words, the
         // moment it is clicked (its outline shows it taken): the page's
@@ -40332,8 +41217,15 @@ export default function PDFViewer({
           : decision.reasonLabel,
       };
     },
+    // A decision made while a document was not ready ("still loading") is
+    // made again when it is. The downloads' own dependency stopped saying so
+    // when they came to grey only for a document not shown yet (1e879b43fb,
+    
+    // left Download refused as "still loading" for good, its pages on screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       createReaderSavePolicyRequest,
+      documentReadyTurns,
       redactionProductCopy.blockedOutput,
       redactionOutputRiskPresent,
       savePolicyV1,
@@ -41367,7 +42259,11 @@ export default function PDFViewer({
   // the other toolbar zooms) so fitting keeps the reading position instead of
   // letting the viewport drift.
   const runFitMode = useCallback(
-    (mode: PdfFitMode) => {
+    // `opening`: the fit a file's own opening view asks for, applied with
+    // its first layout. The page is then placed at once: scrolled smoothly
+    // like a jump made while reading, it settled 8 px higher some 0.7 s
+    
+    (mode: PdfFitMode, options?: { opening?: boolean }) => {
       const root = scrollContainerRef.current;
       const benchmark = fitBenchmarkPage();
       if (!root || !benchmark) return;
@@ -41399,11 +42295,15 @@ export default function PDFViewer({
         // view. Anchored on the view's centre, a page fitted at 57% in
         // Continuous kept 59 px below the bottom of the view (user audit
         // PDF 0044). Not a jump, so no history entry.
-        goToPage(currentPageRef.current, { recordHistory: false });
+        goToPage(currentPageRef.current, {
+          recordHistory: false,
+          ...(options?.opening ? { restoringView: true } : {}),
+        });
       }
     },
     [applyAnchoredScale, fitBenchmarkPage, goToPage, viewMode],
   );
+  runFitModeRef.current = runFitMode;
   // The toolbar buttons arm the STICKY fit mode (re-applied on container
   // resize / layout change until a manual zoom clears it) and fit immediately.
   const fitWidth = useCallback(() => {
@@ -43201,6 +44101,111 @@ export default function PDFViewer({
       (activeRibbonTab === "picture-format" &&
         pictureContextBaseTabRef.current === "edit")) &&
     selectToolActive;
+  
+  // 过的文本框无法选中」): a double click on the page's own text, or 「编辑文字」
+  // in its right-click menu, turns Edit Content on and opens the line under
+  // the point with the caret at the word pressed. A single click still drags
+  // a selection over the text, as Acrobat's Select tool does. Only where the
+  // page's text can be written at all: a read-only, signed or encrypted file
+  // and a scan (its words are read off a picture) have neither.
+  const pageTextEditGateRef = useRef({ allowed: false, selectTool: false, held: false });
+  pageTextEditGateRef.current = {
+    allowed:
+      Boolean(onEditContent) &&
+      annotationContextWritable &&
+      selectToolActive &&
+      !presentationActive &&
+      (!editContentModeDisabledReason || editContentModeDisabledTransient),
+    selectTool: selectToolActive && !contentEditModeLive,
+    // A moment (the saved revision being read in): the command waits it out.
+    held: loading || Boolean(editContentModeDisabledReason),
+  };
+  const pageTextEditTargetAt = useCallback(
+    (target: EventTarget | null, clientX: number, clientY: number): PdfPageTextEditPoint | null => {
+      if (!pageTextEditGateRef.current.allowed) return null;
+      return pdfPageTextEditPointAt(target, clientX, clientY, (pageNumber) =>
+        ocrEmptyTextPagesRef.current.has(pageNumber));
+    },
+    [],
+  );
+  const pageTextEditRunRef = useRef(0);
+  useEffect(() => () => { pageTextEditRunRef.current += 1; }, []);
+  const editPageTextAt = useCallback(
+    (at: PdfPageTextEditPoint) => {
+      const run = ++pageTextEditRunRef.current;
+      dismissSelection();
+      void (async () => {
+        const pause = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+        const deadline = performance.now() + 15_000;
+        let enteredAt: number | null = null;
+        while (pageTextEditRunRef.current === run && performance.now() < deadline) {
+          const gate = pageTextEditGateRef.current;
+          if (!gate.allowed) return;
+          if (!contentEditModeLiveRef.current) {
+            if (enteredAt === null) {
+              if (!gate.held) {
+                enterContentEditMode();
+                enteredAt = performance.now();
+              }
+            } else if (performance.now() - enteredAt > 2_000) {
+              // Edit Content was left again: the reader's choice stands.
+              return;
+            }
+          } else if (nativeTextEditBoxesInteractiveRef.current) {
+            const found = pdfPageTextEditBoxAt(viewerRootRef.current, at);
+            if (found) {
+              const { box, clientX, clientY } = found;
+              const editable = box.getAttribute(PDF_NATIVE_TEXT_EDITABLE_ATTR);
+              if (editable === "false") {
+                
+                const refusal = readNativeTextEditBoxRefusal(box);
+                if (refusal) setPdfActionNotice(refusal);
+                return;
+              }
+              if (editable === "true") {
+                const outcome = await new Promise<"opened" | "retry" | "refused">((resolve) => {
+                  let timer = 0;
+                  const finish = (result: "opened" | "retry" | "refused") => {
+                    window.clearTimeout(timer);
+                    resolve(result);
+                  };
+                  // With the point and not as a block: the caret stands at
+                  // the word pressed, as a double click in Edit Content does.
+                  const opened = activateNativeTextEditBoxRef.current(
+                    box,
+                    { clientX, clientY },
+                    false,
+                    (status) => {
+                      if (status === "transient-refusal") finish("retry");
+                      else if (status === "unsupported" || status === "released") finish("refused");
+                      else finish("opened");
+                    },
+                  );
+                  if (!opened) finish("retry");
+                  else timer = window.setTimeout(() => finish("retry"), 6_000);
+                });
+                if (outcome !== "retry") return;
+              }
+            }
+          }
+          await pause(120);
+        }
+      })();
+    },
+    [dismissSelection, enterContentEditMode, readNativeTextEditBoxRefusal, setPdfActionNotice],
+  );
+  const handlePageTextDoubleClick = useCallback(
+    (event: ReactMouseEvent<HTMLElement>) => {
+      // In Edit Content a double click is the editor's own (the caret, then
+      // the word); with another tool in hand it is that tool's.
+      if (event.button !== 0 || !pageTextEditGateRef.current.selectTool) return;
+      const at = pageTextEditTargetAt(event.target, event.clientX, event.clientY);
+      if (!at) return;
+      event.preventDefault();
+      editPageTextAt(at);
+    },
+    [editPageTextAt, pageTextEditTargetAt],
+  );
   // Edit-tab widget selection only routes to the Form Field tab when the
   // document lets fields be authored at all. A source the unified save policy
   // keeps read-only (optional content, attachments, ...) leaves its widgets as
@@ -43494,6 +44499,10 @@ export default function PDFViewer({
         operatorList.fnArray,
         ops,
         visibleVectors.map((vector) => vector.operatorIndex),
+      );
+      nativePageUnitsRef.current.set(
+        currentPage,
+        pdfPageObjectRows(operatorList.fnArray, operatorList.argsArray, ops),
       );
       setNativePaintStopsByPage((current) => {
         const next = new Map(current);
@@ -43958,6 +44967,9 @@ export default function PDFViewer({
     carry: pictureCarry,
     locale,
     documentWriteBusy: nativeDocumentWriteBusy,
+    // Read from the same operator list as the picture targets: a picture
+    // painted last greys its forward moves, one painted first its backward.
+    paintStopsByPage: nativePaintStopsByPage,
   });
   pictureEditingRef.current = pictureEditing;
   const pictureContextActive = pictureEditing.selected !== null;
@@ -49079,6 +50091,8 @@ export default function PDFViewer({
     page: number | null;
     searching: boolean;
     lineScrolled: boolean;
+    /** The named page's text has been asked for and answered (or failed). */
+    pageTextRead?: boolean;
   } | null>(null);
   const resolvePdfLocate = useCallback(
     (_scope: Element, request: PageLocateRequest): HTMLElement | null => {
@@ -49088,7 +50102,14 @@ export default function PDFViewer({
           .replace(/^[\s"'\u201c\u201d\u2018\u2019\u300c\u300d\u300e\u300f\u2026]+/, "")
           .slice(0, PAGE_LOCATE_SNIPPET_PREFIX),
       ).trim();
-      if (!needle) return null;
+      // The page an answer's citation names (its read's "--- 第 N 页 ---"):
+      // that page first, its passage's line on it when the words are there.
+      const namedPage =
+        typeof request.pdfPage === "number" &&
+        visiblePages.some((page) => page.pageNumber === request.pdfPage)
+          ? request.pdfPage
+          : null;
+      if (!needle && namedPage === null) return null;
       let state = pdfLocateRef.current;
       if (!state || state.requestId !== request.requestId) {
         state = {
@@ -49100,6 +50121,16 @@ export default function PDFViewer({
         pdfLocateRef.current = state;
       }
       const current = state;
+      if (current.page == null && namedPage !== null) {
+        current.page = namedPage;
+        goToPage(namedPage);
+        void getPageTextEntry(namedPage)
+          .catch(() => null)
+          .then(() => {
+            current.pageTextRead = true;
+          });
+        return null; // Asked again once the page is drawn.
+      }
       if (current.page == null) {
         if (!current.searching) {
           current.searching = true;
@@ -49122,10 +50153,16 @@ export default function PDFViewer({
         "div[data-pdf-text-layer]",
       );
       const entry = findPageTextRef.current.get(current.page);
+      if (wrapper && (!layer || !entry) && current.pageTextRead) {
+        // The named page has no text to point into (a scan): the page.
+        return (
+          wrapper.querySelector<HTMLElement>("[data-pdf-page-locate]") ?? wrapper
+        );
+      }
       if (!wrapper || !layer || !entry) return null;
       const overlay =
         wrapper.querySelector<HTMLElement>("[data-pdf-page-locate]") ?? wrapper;
-      const folded = entry.text.indexOf(needle);
+      const folded = needle ? entry.text.indexOf(needle) : -1;
       if (folded < 0) return overlay;
       const rawStart = entry.normStarts[folded] ?? 0;
       let itemIndex = 0;
@@ -49826,8 +50863,11 @@ export default function PDFViewer({
       // or about to open): Home and End are the line's, never the file's ends.
       // The reader pressing End to type at the end of a line went to the last
       
+      // The box itself, not an input inside it: there the key is the input's
+      // own caret key, and taking its default left the caret where it was.
       if ((event.key === "Home" || event.key === "End") && contentEditModeLiveRef.current &&
-        event.target instanceof Element && event.target.closest(`span[${PDF_NATIVE_TEXT_EDIT_BOX_ATTR}="true"]`)) {
+        event.target instanceof Element && !isTypingTarget(event.target) &&
+        event.target.closest(`span[${PDF_NATIVE_TEXT_EDIT_BOX_ATTR}="true"]`)) {
         event.preventDefault();
         return;
       }
@@ -50811,6 +51851,17 @@ export default function PDFViewer({
         return liftLandingNote(lift, "painted-current", since);
       }
       if (lift.stale) {
+        // The page under it is already a text edit's own drawing of the
+        // bytes now shown (the hand-over of a line just written, over the
+        // page until it paints them): what the page will paint is on
+        // screen, and the stage goes without waiting for that paint. Left
+        // up, it showed the page's words as they stood when the shape was
+        
+        const handedOver = activeTextSourceHandoffRef.current;
+        if (handedOver?.active && handedOver.pageNumber === ghost.pageNumber && handedOver.canvas.isConnected &&
+          handedOver.sha256 === sourceSha256Ref.current && now - since > 150) {
+          return liftLandingNote(lift, "stale-handed-over", since);
+        }
         // Gone stale for other bytes on the page: a paint of those bytes.
         const paintedAfter = lift.staleAt === undefined ? paintedSince
           : (pagePaintedAtRef.current.get(ghost.pageNumber) ?? 0) > lift.staleAt;
@@ -51252,7 +52303,23 @@ export default function PDFViewer({
     async (direction: PdfNativeVectorLayerMove) => {
       const route = currentNativeVectorSelection;
       const pageGeometry = currentNativeVectorPageGeometry;
-      if (!route || !pageGeometry || !onNativeVectorReorderCommit) return;
+      if (!route || !pageGeometry) return;
+      if (nativeVectorMultiSelection.length > 1) {
+        // Office: the selected objects move together, keeping their order
+        // among themselves; one write, one Undo step.
+        if (!onNativeVectorReorderCommitAll) return;
+        const routes = [...nativeVectorMultiSelection].sort(
+          (left, right) => left.rendererOperatorIndex - right.rendererOperatorIndex);
+        await commitNativeVectorWrite(route, () =>
+          onNativeVectorReorderCommitAll({
+            routes,
+            pageGeometry,
+            moves: pdfNativeVectorArrangeMoves(routes.length, direction),
+          }),
+        );
+        return;
+      }
+      if (!onNativeVectorReorderCommit) return;
       await commitNativeVectorWrite(route, () =>
         onNativeVectorReorderCommit({ route, pageGeometry, direction }),
       );
@@ -51261,9 +52328,157 @@ export default function PDFViewer({
       commitNativeVectorWrite,
       currentNativeVectorPageGeometry,
       currentNativeVectorSelection,
+      nativeVectorMultiSelection,
       onNativeVectorReorderCommit,
+      onNativeVectorReorderCommitAll,
     ],
   );
+  // Home > Arrange > Selection Pane (Office, Alt+F10): the page's
+  // annotations, listed above its content and never reordered with it, and
+  // the page content front first. A shape dragged to the k-th place is one
+  // reorder chain: one write, one Undo step.
+  const [nativeSelectionPaneOpen, setNativeSelectionPaneOpen] = useState(false);
+  const toggleNativeSelectionPane = useCallback(
+    () => setNativeSelectionPaneOpen((open) => !open),
+    [],
+  );
+  const nativeSelectionPanePage = currentNativeVectorSelection?.pageNumber ?? currentPage;
+  const nativeSelectionPaneStops = nativePaintStopsByPage.get(nativeSelectionPanePage);
+  const nativeSelectionPaneRoutes =
+    nativeVectorSelectionRoutesByPage.get(nativeSelectionPanePage) ??
+    EMPTY_NATIVE_VECTOR_SELECTION_ROUTES;
+  const nativeSelectionPaneImageTargets = nativeImageTargetsByPage.get(nativeSelectionPanePage);
+  const nativeSelectionPaneObjects = nativeSelectionPaneStops
+    ? nativePageUnitsRef.current.get(nativeSelectionPanePage)
+    : undefined;
+  const nativeSelectionPaneRows = useMemo(() => {
+    if (!nativeSelectionPaneObjects) return [];
+    return pdfSelectionPaneContentRows(nativeSelectionPaneObjects.rows, {
+      vectors: new Set(
+        nativeSelectionPaneRoutes
+          .filter((route) => route.formInstance === undefined)
+          .map((route) => route.rendererOperatorIndex),
+      ),
+      images: new Set(
+        (nativeSelectionPaneImageTargets ?? []).flatMap((target) =>
+          target.operatorIndex === undefined ? [] : [target.operatorIndex]),
+      ),
+    });
+  }, [nativeSelectionPaneImageTargets, nativeSelectionPaneObjects, nativeSelectionPaneRoutes]);
+  const [nativeSelectionPaneAnnotations, setNativeSelectionPaneAnnotations] = useState<
+    readonly PdfSelectionPaneAnnotationRow[]
+  >([]);
+  useEffect(() => {
+    if (!nativeSelectionPaneOpen) return;
+    const document = pdfDocRef.current;
+    if (!document) return;
+    let cancelled = false;
+    void document
+      .getPage(nativeSelectionPanePage)
+      .then((page) => page.getAnnotations())
+      .then((annotations: unknown[]) => {
+        if (cancelled) return;
+        // The /Annots order is the order a reader paints them in: front
+        // first here. A popup is part of its parent and paints nothing.
+        const rows: PdfSelectionPaneAnnotationRow[] = [];
+        annotations.forEach((annotation, index) => {
+          const entry = annotation as { subtype?: unknown; id?: unknown };
+          const subtype = typeof entry.subtype === "string" ? entry.subtype : "";
+          if (subtype === "Popup") return;
+          rows.push({
+            key: `annot:${typeof entry.id === "string" ? entry.id : index}`,
+            label: `${t("pdf.selectionPane.annotation")} ${rows.length + 1}${subtype ? ` · ${subtype}` : ""}`,
+          });
+        });
+        setNativeSelectionPaneAnnotations(rows.reverse());
+      })
+      .catch(() => {
+        if (!cancelled) setNativeSelectionPaneAnnotations([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nativeSelectionPaneOpen, nativeSelectionPanePage, nativeSelectionPaneStops, t]);
+  const selectNativeSelectionPaneVector = useCallback(
+    (operatorIndex: number, additive: boolean) => {
+      const route = nativeSelectionPaneRoutes.find(
+        (entry) => entry.rendererOperatorIndex === operatorIndex,
+      );
+      if (!route) return;
+      nativeVectorTargetActivateRef.current(route, {
+        stopPropagation: () => {}, shiftKey: false, metaKey: false, ctrlKey: additive,
+      } as unknown as ReactMouseEvent<HTMLButtonElement>);
+    },
+    [nativeSelectionPaneRoutes],
+  );
+  const selectNativeSelectionPaneImage = useCallback(
+    (operatorIndex: number) => {
+      const target = nativeImageTargetsByPage
+        .get(nativeSelectionPanePage)
+        ?.find((entry) => entry.operatorIndex === operatorIndex);
+      if (target) nativeImageTargetActivateRef.current(target);
+    },
+    [nativeImageTargetsByPage, nativeSelectionPanePage],
+  );
+  const reorderNativeSelectionPane = useCallback(
+    async (asked: PdfSelectionPaneMoves) => {
+      const kinds = nativeSelectionPaneObjects?.kinds;
+      const members: PdfNativeContentReorderRequestMember[] = [];
+      const routes: PdfNativeVectorSelectionRoute[] = [];
+      let sourceSha256: string | null = null;
+      for (const member of asked.members) {
+        if (member.kind === "vector") {
+          const route = nativeSelectionPaneRoutes.find(
+            (entry) => entry.rendererOperatorIndex === member.operatorIndex,
+          );
+          if (!route) return;
+          routes.push(route);
+          sourceSha256 ??= route.sourceSha256;
+          members.push({ kind: "vector", route });
+        } else if (member.kind === "image") {
+          const target = nativeSelectionPaneImageTargets?.find((entry) => entry.operatorIndex === member.operatorIndex);
+          if (!target) return;
+          sourceSha256 ??= target.sourceSha256 ?? null;
+          members.push({ kind: "image", pageNumber: target.pageNumber, imageOrder: target.order,
+            matrix: target.matrix ? [...target.matrix] : null });
+        } else {
+          if (kinds === undefined) return;
+          members.push({ kind: "unit", pageNumber: nativeSelectionPanePage,
+            unit: { kind: member.unitKind, order: member.order }, kinds });
+        }
+      }
+      const lead = routes[routes.length - 1];
+      const pageGeometry = lead ? nativeVectorPageGeometryFor(lead.pageNumber, lead.sourceSha256) : null;
+      if (lead && !pageGeometry) return;
+      sourceSha256 ??= nativeVectorWriterSourceSha256 ?? semanticAppearanceInspectionBindingRef.current?.sourceSha256 ?? null;
+      if (onNativeContentReorderCommit && sourceSha256) {
+        await onNativeContentReorderCommit({ sourceSha256, pageNumber: nativeSelectionPanePage, pageGeometry,
+          members, moves: asked.moves });
+        return;
+      }
+      // A host that moves source vectors only.
+      if (!onNativeVectorReorderCommitAll || !lead || !pageGeometry || routes.length !== members.length) return;
+      await commitNativeVectorWrite(lead, () =>
+        onNativeVectorReorderCommitAll({ routes, pageGeometry, moves: asked.moves }),
+      );
+    },
+    // nativeVectorPageGeometryFor reads the routes' geometry each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commitNativeVectorWrite, nativeSelectionPaneImageTargets, nativeSelectionPaneObjects, nativeSelectionPanePage,
+      nativeSelectionPaneRoutes, nativeVectorWriterSourceSha256, onNativeContentReorderCommit,
+      onNativeVectorReorderCommitAll],
+  );
+  // Alt+F10 shows and hides the pane (Office).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "F10" || !event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (!nativeSelectionPaneOpen && !currentNativeVectorSelection) return;
+      event.preventDefault();
+      setNativeSelectionPaneOpen((open) => !open);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [currentNativeVectorSelection, nativeSelectionPaneOpen]);
   /** Select every source vector of the anchor's page (WPS 全选). */
   const selectAllNativeVectorsOnPage = useCallback(() => {
     const anchor = currentNativeVectorSelection;
@@ -52224,10 +53439,15 @@ export default function PDFViewer({
     : undefined;
   const nativeVectorReorderBoundary =
     currentNativeVectorSelection && nativeVectorPaintStops
-      ? nativeVectorLayerBoundary(
-          nativeVectorPaintStops,
-          currentNativeVectorSelection.rendererOperatorIndex,
-        )
+      ? nativeVectorMultiSelected
+        ? nativeVectorSelectionLayerBoundary(
+            nativeVectorPaintStops,
+            nativeVectorMultiSelection.map((route) => route.rendererOperatorIndex),
+          )
+        : nativeVectorLayerBoundary(
+            nativeVectorPaintStops,
+            currentNativeVectorSelection.rendererOperatorIndex,
+          )
       : { atFront: false, atBack: false };
   // The size fields read the frame (the whole path and its stroke), as WPS:
   // a 1.2 pt rule 462 pt long reads 463 x 1.2.
@@ -52308,15 +53528,20 @@ export default function PDFViewer({
               ? nativeVectorMultiReason
               : undefined) ??
             t("pdf.viewer.pageCoordinateSystemStillBeing"),
+          // A multiple selection moves together (Office's Arrange rules),
+          // one write and one Undo step.
           reorderEnabled: Boolean(
             nativeVectorCommandUsable &&
-              !nativeVectorMultiSelected &&
-              onNativeVectorReorderCommit,
+              (nativeVectorMultiSelected
+                ? onNativeVectorReorderCommitAll
+                : onNativeVectorReorderCommit),
           ),
           reorderDisabledReason:
             nativeVectorGeometryDisabledReason ??
             nativeVectorRouteStaleReason ??
-            nativeVectorMultiReason ??
+            (nativeVectorMultiSelected && !onNativeVectorReorderCommitAll
+              ? nativeVectorMultiReason
+              : undefined) ??
             t("pdf.viewer.nativePdfVectorOrderingUnavailable"),
           reorderAtFront: nativeVectorReorderBoundary.atFront,
           reorderAtBack: nativeVectorReorderBoundary.atBack,
@@ -54102,6 +55327,17 @@ export default function PDFViewer({
   const readerContextMenuEntries = useMemo<PointerContextMenuEntry[]>(() => {
     const selectedText = selection?.text?.trim() ?? "";
     const entries: PointerContextMenuEntry[] = [];
+    const textAt = readerContextMenu?.textAt ?? null;
+    if (textAt) {
+      entries.push({
+        id: "edit-text",
+        label: t("pdf.viewer.editTextHere"),
+        testId: "pdf-context-edit-text",
+        icon: officeContextMenuIcon("rename"),
+        onSelect: () => editPageTextAt(textAt),
+      });
+      entries.push({ id: "edit-text-separator", separator: true });
+    }
     if (selectedText) {
       entries.push({
         id: "copy",
@@ -54204,9 +55440,11 @@ export default function PDFViewer({
     commentMarkupDisabledReason,
     executeReaderCommand,
     fitPage,
+    editPageTextAt,
     fitWidth,
     handleHighlightRequest,
     handleQuoteRequest,
+    readerContextMenu?.textAt,
     ribbonLoading,
     loadingDisabledReason,
     printCommand.enabled,
@@ -54244,8 +55482,17 @@ export default function PDFViewer({
       icon: officeContextMenuIcon(
         direction === "front" || direction === "forward" ? "bringForward" : "sendBackward",
       ),
-      disabled: !model.reorderEnabled,
-      disabledReason: model.reorderEnabled ? undefined : model.reorderDisabledReason,
+      // As the Arrange group's split buttons: a shape painted last on its
+      // page greys both forward moves, one painted first both backward.
+      ...pdfLayerMoveAvailability({
+        direction,
+        enabled: Boolean(model.reorderEnabled),
+        disabledReason: model.reorderDisabledReason,
+        atFront: model.reorderAtFront,
+        atBack: model.reorderAtBack,
+        atFrontReason: t("pdf.annotationFormat.alreadyAtFront"),
+        atBackReason: t("pdf.annotationFormat.alreadyAtBack"),
+      }),
       onSelect: () => runOrQueueNativeVectorCommand((run) => run.reorder(direction)),
     });
     return [
@@ -54355,6 +55602,13 @@ export default function PDFViewer({
       layer("forward", "bring-forward", t("pdf.viewer.bringForward")),
       layer("backward", "send-backward", t("pdf.viewer.sendBackward")),
       layer("back", "send-to-back", t("pdf.viewer.sendBack")),
+      {
+        id: "selection-pane",
+        label: t("presentation.arrange.selectionPane"),
+        testId: "pdf-vector-context-selection-pane",
+        icon: officeContextMenuIcon("layout"),
+        onSelect: () => setNativeSelectionPaneOpen(true),
+      },
     ];
   }, [
     runOrQueueNativeVectorCommand,
@@ -55372,7 +56626,7 @@ export default function PDFViewer({
       <div className="pdf-viewer pdf-viewer--center" role="alert">
         <AlertCircle size={28} />
         <strong>{t("pdfViewer.loadFailed")}</strong>
-        <button type="button" onClick={() => window.location.reload()}>
+        <button type="button" onClick={() => reloadPage("pdf_notice")}>
           <RefreshCw size={14} />
           {t("pdfViewer.retry")}
         </button>
@@ -56204,6 +57458,8 @@ export default function PDFViewer({
           currentNativeVectorSelection,
           maskCurrentNativeVector,
           toggleNativeVectorVertexEditing,
+          toggleNativeSelectionPane,
+          nativeSelectionPaneOpen,
           nativeVectorClipboardCommands,
           runOrQueueNativeVectorCommand,
           annotationContextModel,
@@ -56541,6 +57797,40 @@ export default function PDFViewer({
         </WindowNotice>
       ) : null}
 
+      {inkUnsavedNotice ? (
+        <WindowNotice title={t("windowNotices.title")} scopeKey={inkUnsavedNotice} passive>
+          <div
+            className="pdf-viewer__snapshot-toast office-pop-in"
+            role="alert"
+            data-testid="pdf-ink-unsaved-notice"
+            data-ink-unsaved={inkUnsavedNotice}
+          >
+            {inkUnsavedNotice === "failing" ? t("pdfViewer.inkNotSavedYet") : t("pdfViewer.inkPageFull")}
+          </div>
+        </WindowNotice>
+      ) : null}
+
+      {objectUnsavedNotice ? (
+        <WindowNotice title={t("windowNotices.title")} scopeKey={`object-${objectUnsavedNotice}`} passive>
+          <div
+            className="pdf-viewer__snapshot-toast office-pop-in"
+            role="alert"
+            data-testid="pdf-object-unsaved-notice"
+            data-object-unsaved={objectUnsavedNotice}
+          >
+            {objectUnsavedNotice === "shape"
+              ? t("pdfViewer.shapeChangeNotSavedYet")
+              : objectUnsavedNotice === "ink"
+                ? t("pdfViewer.inkChangeNotSavedYet")
+                : objectUnsavedNotice === "signature"
+                  ? t("pdfViewer.signatureChangeNotSavedYet")
+                  : objectUnsavedNotice === "stamp"
+                    ? t("pdfViewer.stampChangeNotSavedYet")
+                    : t("pdfViewer.linkChangeNotSavedYet")}
+          </div>
+        </WindowNotice>
+      ) : null}
+
       {placedAnnotationClipboardError && !annotationContextModel ? (
         <WindowNotice title={t("windowNotices.title")}>
           <div
@@ -56753,6 +58043,25 @@ export default function PDFViewer({
           findInputRef={findInputRef}
         />
 
+        {nativeSelectionPaneOpen && !loading ? (
+          <PdfDockedPane docks={pdfTaskPaneDocks} pane="selection">
+            <PdfSelectionPane
+              pageNumber={nativeSelectionPanePage}
+              rows={nativeSelectionPaneRows}
+              annotations={nativeSelectionPaneAnnotations}
+              selectedVectors={new Set(nativeVectorMultiSelection.map((route) => route.rendererOperatorIndex))}
+              writable={Boolean((onNativeContentReorderCommit || onNativeVectorReorderCommitAll) && dataItemId)}
+              onSelectVector={selectNativeSelectionPaneVector}
+              onSelectImage={selectNativeSelectionPaneImage}
+              onReorder={(asked) => void reorderNativeSelectionPane(asked)}
+              onClose={() => setNativeSelectionPaneOpen(false)}
+              className={pdfTaskPaneClassName("pdf-viewer__selection-pane")}
+              bodyClassName={PDF_TASK_PANE_BODY_CLASS}
+              closeClassName={PDF_TASK_PANE_CLOSE_CLASS}
+            />
+          </PdfDockedPane>
+        ) : null}
+
         {thumbsOpen && !loading ? (
           <PdfDockedPane docks={pdfTaskPaneDocks} pane="thumbnails">
             <OfficeTaskPane
@@ -56918,6 +58227,8 @@ export default function PDFViewer({
             currentPage,
             currentVisibleOrdinal,
             setReaderContextMenu,
+            pageTextEditTargetAt,
+            onPageTextDoubleClick: handlePageTextDoubleClick,
             setFindOpen,
             findActiveIndex,
             findHighlightsByPage,
@@ -56933,6 +58244,7 @@ export default function PDFViewer({
             tableSelection,
             onTableSelectionChange: setTableSelection,
             chartAuthoring,
+            annotationStackOrderByPage,
             chartSelectedId,
             onChartSelectionChange: setChartSelectedId,
             chartPreview,
@@ -57062,6 +58374,7 @@ export default function PDFViewer({
             parkedCanvasObjectLifts,
             placedLiftWritingRef,
             placedObjectSavingRef,
+            placedDeleteHoldRef,
             staleNativeVectorRoutesByPage,
             setExtraNativeVectorSelections,
             extraNativeVectorSelections,

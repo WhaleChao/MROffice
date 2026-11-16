@@ -49,6 +49,7 @@ export const OFFICE_SCREEN_TIP_NAME_ONLY: readonly RegExp[] = [
   /-style-quick-/, // Home > Styles quick tiles
   /-shape-insert-quick-|-insert-shapes-quick-/, // shape tiles
   /-equation-symbol-/, // equation symbol tiles
+  /-design-style-set-(?!more$|strip$|custom-(?:delete|menu)$)/, // Docs Design > Document Formatting style set tiles
   /-swatch-/, // colour swatches
 ];
 

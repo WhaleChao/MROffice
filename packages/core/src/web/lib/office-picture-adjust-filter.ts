@@ -188,3 +188,17 @@ export function officePictureAdjustFilterCss(
   if (svg) terms.push(svg);
   return terms.join(" ");
 }
+
+/**
+ * Word's Washout as the CSS `filter` of a picture drawn over white: the
+ * Washout correction (Brightness +70 %, Contrast -70 %: 0.3 c + 0.805 per
+ * channel), the same for a header's VML picture watermark (`v:imagedata`
+ * gain 19661f, black level 22938f) and a DrawingML picture's Recolor >
+ * Washout (Windows Word, probe docx-look probes/washout w1/w3: black 205,
+ * 25 % gray 224, 50 % gray 244, red 255/205/205). "" without a document.
+ */
+export function officeWashoutFilterCss(
+  owner: Document | null = typeof document === "undefined" ? null : document,
+): string {
+  return officeAdjustStepsFilterCss(officeAdjustFilterSteps({ recolor: "washout" }), owner);
+}

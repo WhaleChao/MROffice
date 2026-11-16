@@ -91,6 +91,8 @@ export function literalEditReach(
     // the blocker only stops it from being edited or written natively.
     if (hasBorder(rule)) return null;
     const kind = rule.kind ?? "comparison";
+    // A text rule with a formula of its own reads what the formula names.
+    if (rule.kind === "textContains" && rule.formula !== undefined) return null;
     if (CELL_LOCAL_CONDITIONAL_KINDS.has(kind)) continue;
     if (!RANGE_STATISTIC_KINDS.has(kind)) return null;
     reach.push(...(rule.areas?.length ? rule.areas : [rule.range]));

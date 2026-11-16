@@ -26,7 +26,12 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/formula-reference-highlight.ts";
 
 import type { SpreadsheetLiveEdit } from "./SpreadsheetDraftInput";
-import { useSheetRangeBoxes } from "./useSheetRangeBoxes";
+import { SheetRangePaneLayers, type SheetRangePaneLayerRefs } from "./SheetRangePaneLayers";
+import { useSheetRangeBoxes, type SheetFrozenLines, type SheetRangePane } from "./useSheetRangeBoxes";
+
+/** The range finder's layer in the body: over the cells' own text, under
+ * the fill handle and the comment indicator. */
+const BODY_LAYER = 5;
 
 export function SpreadsheetFormulaReferenceOverlay({
   liveEdit,
@@ -34,6 +39,7 @@ export function SpreadsheetFormulaReferenceOverlay({
   committedEntry,
   sheetName,
   layoutKey,
+  frozen = null,
 }: {
   liveEdit: SpreadsheetLiveEdit;
   /** The open entry's identity in `liveEdit` (the edited cell's). */
@@ -44,6 +50,8 @@ export function SpreadsheetFormulaReferenceOverlay({
   sheetName: string;
   /** Changes when the grid lays out again (scroll window, sizes, zoom). */
   layoutKey: unknown;
+  /** The frozen lines: a reference across a freeze line is boxed in each pane. */
+  frozen?: SheetFrozenLines | null;
 }) {
   const reader = useRef({}).current;
   const draft = useSyncExternalStore(
@@ -65,35 +73,42 @@ export function SpreadsheetFormulaReferenceOverlay({
     return out;
   }, [entry, sheetName]);
   const hostRef = useRef<HTMLDivElement>(null);
-  const boxes = useSheetRangeBoxes(hostRef, spans, layoutKey);
+  const layersRef = useRef<SheetRangePaneLayerRefs>({});
+  const boxes = useSheetRangeBoxes(hostRef, spans, layoutKey, frozen, layersRef);
+  const drawn = (pane: SheetRangePane) =>
+    boxes.filter((box) => box.pane === pane).map((box) => (
+      <span
+        key={`${box.span.key}@${box.pane}`}
+        data-testid="spreadsheet-formula-reference-box"
+        data-reference={box.span.key}
+        data-pane={box.pane}
+        data-color={box.span.color}
+        style={{
+          position: "absolute",
+          left: box.left,
+          top: box.top,
+          width: box.width,
+          height: box.height,
+          boxSizing: "border-box",
+          borderStyle: "solid",
+          borderColor: box.span.color,
+          borderWidth: box.edges.map((edge) => (edge ? "2px" : "0")).join(" "),
+          // The reference's cells are tinted, as Excel shades them.
+          background: `color-mix(in srgb, ${box.span.color} 10%, transparent)`,
+        }}
+      />
+    ));
+  // The body's boxes in the host, under the frozen panes; a frozen pane's
+  // on a layer pinned with that pane, over its cells (SheetRangePaneLayers).
   return (
-    <div
-      ref={hostRef}
-      aria-hidden="true"
-      data-testid="spreadsheet-formula-reference-overlay"
-      style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5 }}
+    <SheetRangePaneLayers
+      hostRef={hostRef}
+      layersRef={layersRef}
+      frozen={frozen}
+      bodyLayer={BODY_LAYER}
+      testId="spreadsheet-formula-reference-overlay"
     >
-      {boxes.map((box) => (
-        <span
-          key={box.span.key}
-          data-testid="spreadsheet-formula-reference-box"
-          data-reference={box.span.key}
-          data-color={box.span.color}
-          style={{
-            position: "absolute",
-            left: box.left,
-            top: box.top,
-            width: box.width,
-            height: box.height,
-            boxSizing: "border-box",
-            borderStyle: "solid",
-            borderColor: box.span.color,
-            borderWidth: box.edges.map((edge) => (edge ? "2px" : "0")).join(" "),
-            // The reference's cells are tinted, as Excel shades them.
-            background: `color-mix(in srgb, ${box.span.color} 10%, transparent)`,
-          }}
-        />
-      ))}
-    </div>
+      {drawn}
+    </SheetRangePaneLayers>
   );
 }

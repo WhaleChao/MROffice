@@ -9,8 +9,36 @@ const EMU_PER_PX = 9_525;
 
 /** The ECharts item style key a mark's 3-D Format rides under (the engine draws none). */
 export const OFFICE_CHART_BEVEL = "officeBevel3d";
+
+
+
+
+
+
+export const OFFICE_CHART_MARKER_BEVEL = "officeMarkerBevel3d";
+
+/** A marker's own 3-D Format as the picture draws it (`OFFICE_CHART_MARKER_BEVEL`), or nothing. */
+export function officeChartMarkerBevel(marker: {
+  readonly shapePaint?: { readonly bevel?: OfficeBevelEffect; readonly format3d?: OfficeFormat3dEffect };
+} | undefined): Record<string, OfficeChartBevel> {
+  const paint = marker?.shapePaint;
+  if (!paint?.bevel && !paint?.format3d) return {};
+  return {
+    [OFFICE_CHART_MARKER_BEVEL]: {
+      ...(paint.bevel ? { bevel: paint.bevel } : {}),
+      ...(paint.format3d ? { format3d: paint.format3d } : {}),
+    },
+  };
+}
 /** The option key the chart area's and the plot area's 3-D Formats ride under (`{ chart?, plot? }`). */
 export const OFFICE_CHART_AREA_BEVELS = "officeAreaBevels3d";
+/**
+ * The chart area's, the plot area's, the title's and the legend's Soft Edges
+ * (`{chart?, plot?, title?, legend?}`, each `{fill, radiusPt}`): the picture
+ * renderer draws their boxes faded in from their edges in place of the
+ * engine's backgrounds (`chart-render-server`).
+ */
+export const OFFICE_CHART_AREA_SOFT_EDGES = "officeAreaSoftEdges";
 
 export interface OfficeChartBevel {
   readonly bevel?: OfficeBevelEffect;
@@ -143,6 +171,17 @@ function rimPaint(
   return amount > 0.004 ? { fill: white ? "#ffffff" : "#000000", opacity: Math.round(Math.min(0.85, amount) * 1000) / 1000 } : null;
 }
 
+/**
+ * How far a bevel's rims turn from its face against the measured ones (as
+ * high as wide): a lower bevel turns them less (p2 b: an Angle bevel 8 pt
+ * wide and 4 high shades its edge turned from the light 0.84 of the fill
+ * where the measured column's shades it 0.60).
+ */
+function bevelSlope(bevel: OfficeBevelEffect | undefined): number {
+  if (!bevel || !(bevel.width > 0)) return 1;
+  return Math.max(0.25, Math.min(1.5, bevel.height / bevel.width));
+}
+
 function bevelWidthPx(bevel: OfficeBevelEffect | undefined, most: number): number {
   if (!bevel) return 0;
   return Math.max(0, Math.min(most, bevel.width / EMU_PER_PX));
@@ -176,6 +215,20 @@ const ROUND_PROFILES: readonly (readonly [facing: number, profile: LitProfile])[
   [-0.57, [[0, 0.17], [0.18, 0.44], [0.36, 0.66], [0.55, 0.81], [0.73, 0.89], [0.91, 1], [1, 1.039]]],
   [-0.82, [[0, 0.6], [0.14, 0.5], [0.23, 0.516], [0.41, 0.69], [0.59, 0.836], [0.77, 0.945], [0.95, 1.016], [1, 1.039]]],
 ];
+
+
+
+
+
+
+
+
+const SOFT_ROUND_PROFILES: readonly (readonly [facing: number, profile: LitProfile])[] = [
+  [0.82, [[0, 0.9], [0.15, 0.9], [0.31, 0.46], [0.5, 0.5], [0.62, 0.62], [0.75, 0.78], [0.88, 0.92], [1, 1.039]]],
+  [0.57, [[0, 0.56], [0.25, 0.53], [0.375, 0.7], [0.5, 0.85], [0.625, 0.96], [0.75, 1.01], [1, 1.039]]],
+  [-0.57, [[0, 0.4], [0.25, 0.36], [0.4, 0.5], [0.55, 0.75], [0.75, 0.95], [1, 1.039]]],
+  [-0.82, [[0, 0.36], [0.25, 0.32], [0.45, 0.5], [0.6, 0.72], [0.8, 0.95], [1, 1.039]]],
+];
 const STRAIGHT_PROFILES: readonly (readonly [facing: number, k: number])[] = [
   [0.82, 1.1],
   [0.57, 0.86],
@@ -191,13 +244,22 @@ const STRAIGHT_PROFILES: readonly (readonly [facing: number, k: number])[] = [
  * glint of 0.37 too.
  */
 type Lobe = readonly [peak: number, at: number, outward: number, inward: number];
-const HIGHLIGHT: Readonly<Record<"matte" | "metal", { readonly top: Lobe; readonly bottom: Lobe; readonly glint: readonly [top: number, bottom: number] }>> = {
+const HIGHLIGHT: Readonly<Record<"matte" | "metal" | "plastic", { readonly top: Lobe; readonly bottom: Lobe; readonly glint: readonly [top: number, bottom: number] }>> = {
   matte: { top: [0.24, 0.62, 0.19, 0.26], bottom: [0.095, 0.45, 0.2, 0.2], glint: [0, 0.14] },
   metal: { top: [1.2, 0.62, 0.15, 0.2], bottom: [0.37, 0.45, 0.2, 0.2], glint: [0.37, 0.61] },
+  
+  // p2 a): 0.54 white 0.65 across its edge facing the light.
+  plastic: { top: [0.55, 0.65, 0.19, 0.22], bottom: [0.12, 0.45, 0.2, 0.2], glint: [0, 0.14] },
 };
 const ANGLE_BOTTOM_WHITE = 0.038;
+/** Metal on a straight profile: its slants facing toward and away from the
+ * light shine (p2 b: the red area's edge facing the light 0.37 white, its
+ * bottom edge 0.15). */
+const ANGLE_METAL_WHITE: readonly [toward: number, away: number] = [0.37, 0.15];
 /** The materials the measured profiles stand for (the rest keep the rims). */
 const LIT_MATERIALS = new Set(["warmMatte", "matte", "legacyMatte", "metal", "legacyMetal"]);
+/** And a polygon's (an area's, a filled radar's), measured in Plastic too. */
+const LIT_POLYGON_MATERIALS = new Set([...LIT_MATERIALS, "plastic", "legacyPlastic"]);
 const STRAIGHT_PRESETS = new Set(["angle", "slope", "coolSlant", "hardEdge"]);
 
 function between(table: readonly (readonly [number, number])[], at: number): number {
@@ -211,10 +273,10 @@ function between(table: readonly (readonly [number, number])[], at: number): num
 }
 
 /** k at `s` across the band of an edge facing `facing`, between the measured edges. */
-function litK(facing: number, s: number, straight: boolean): number {
-  const rows = straight
+function litK(facing: number, s: number, preset: string): number {
+  const rows = STRAIGHT_PRESETS.has(preset)
     ? STRAIGHT_PROFILES.map(([f, k]) => [f, k] as const)
-    : ROUND_PROFILES.map(([f, profile]) => [f, between(profile, s)] as const);
+    : (preset === "softRound" ? SOFT_ROUND_PROFILES : ROUND_PROFILES).map(([f, profile]) => [f, between(profile, s)] as const);
   // Facing runs from 1 (the light) to -1: the table from its top down.
   const descending = [...rows].sort((a, b) => b[0] - a[0]);
   if (facing >= descending[0]![0]) return descending[0]![1];
@@ -241,42 +303,38 @@ function plainRgb(color: string | undefined): [number, number, number] | null {
   return rgb ? [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])] : null;
 }
 
+/** One edge of a lit bevel: its outward normal and its band's quadrilateral
+ * between depths d0 and d1 in from the outline, mitred where it meets the next. */
+interface LitEdge {
+  readonly normal: readonly [number, number];
+  readonly at: (d0: number, d1: number) => (readonly [number, number])[];
+}
 
 
 
 
 
-function officeChartLitBoxBevel(
-  box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+
+
+
+
+function officeChartLitBevel(
+  face: readonly (readonly [number, number])[],
+  edges: readonly LitEdge[],
   value: OfficeChartBevel,
   width: number,
+  { materials, slope, slantShine }: { readonly materials: ReadonlySet<string>; readonly slope: number; readonly slantShine: readonly [toward: number, away: number] },
 ): OfficeChartBevelPiece[] | null {
   const fill = plainRgb(value.fill);
   const material = value.format3d?.material ?? "warmMatte";
   const rig = value.format3d?.lighting?.rig ?? "threePt";
-  if (!fill || !LIT_MATERIALS.has(material) || FLAT_RIGS.has(rig) || SOFT_RIGS.has(rig)) return null;
+  if (!fill || !materials.has(material) || FLAT_RIGS.has(rig) || SOFT_RIGS.has(rig)) return null;
   const preset = value.bevel?.preset ?? "circle";
   const straight = STRAIGHT_PRESETS.has(preset);
-  const highlight = HIGHLIGHT[material === "metal" || material === "legacyMetal" ? "metal" : "matte"];
+  const metal = material === "metal" || material === "legacyMetal";
+  const highlight = HIGHLIGHT[metal ? "metal" : material === "plastic" || material === "legacyPlastic" ? "plastic" : "matte"];
   const [lx, ly] = officeChartBevelLight(value.format3d);
-  const x0 = box.x, y0 = box.y, x1 = box.x + box.width, y1 = box.y + box.height;
   const pieces: OfficeChartBevelPiece[] = [];
-  // The face inside the band.
-  pieces.push({
-    kind: "polygon",
-    points: [[x0 + width, y0 + width], [x1 - width, y0 + width], [x1 - width, y1 - width], [x0 + width, y1 - width]].map(([x, y]) => [round(x!), round(y!)] as const),
-    fill: litColor(fill, LIT_FACE[0], LIT_FACE[1]),
-    opacity: 1,
-  });
-  const edges: readonly {
-    readonly normal: readonly [number, number];
-    readonly at: (d0: number, d1: number) => (readonly [number, number])[];
-  }[] = [
-    { normal: [0, -1], at: (d0, d1) => [[x0 + d0, y0 + d0], [x1 - d0, y0 + d0], [x1 - d1, y0 + d1], [x0 + d1, y0 + d1]] },
-    { normal: [1, 0], at: (d0, d1) => [[x1 - d0, y0 + d0], [x1 - d0, y1 - d0], [x1 - d1, y1 - d1], [x1 - d1, y0 + d1]] },
-    { normal: [0, 1], at: (d0, d1) => [[x1 - d0, y1 - d0], [x0 + d0, y1 - d0], [x0 + d1, y1 - d1], [x1 - d1, y1 - d1]] },
-    { normal: [-1, 0], at: (d0, d1) => [[x0 + d0, y1 - d0], [x0 + d0, y0 + d0], [x0 + d1, y0 + d1], [x0 + d1, y1 - d1]] },
-  ];
   const steps = straight ? 1 : Math.max(2, Math.min(24, Math.round(width * 2)));
   for (const edge of edges) {
     const facing = edge.normal[0] * lx + edge.normal[1] * ly;
@@ -288,21 +346,49 @@ function officeChartLitBoxBevel(
       peak * Math.exp(-(((across - at) / (across < at ? outward : inward)) ** 2));
     for (let step = 0; step < steps; step += 1) {
       const sMid = (step + 0.5) / steps;
-      const k = litK(facing, sMid, straight);
+      const k = LIT_FACE[0] + (litK(facing, sMid, preset) - LIT_FACE[0]) * slope;
       const glint = Math.exp(-(((sMid - 0.05) / 0.06) ** 2));
       const white = straight
-        ? away * ANGLE_BOTTOM_WHITE
-        : toward * (lobe(highlight.top, sMid) + highlight.glint[0] * glint) +
-          away * (lobe(highlight.bottom, sMid) + highlight.glint[1] * glint);
+        ? away * ANGLE_BOTTOM_WHITE + (metal ? toward * slantShine[0] + away * slantShine[1] : 0)
+        : preset === "softRound"
+          ? 0
+          : toward * (lobe(highlight.top, sMid) + highlight.glint[0] * glint) +
+            away * (lobe(highlight.bottom, sMid) + highlight.glint[1] * glint);
       pieces.push({
         kind: "polygon",
-        points: edge.at((width * step) / steps, (width * (step + 1)) / steps).map(([x, y]) => [round(x), round(y)] as const),
+        // Each step reaches to the band's inner edge and the next is drawn
+        // over it: a slanted edge's half-pixel strips show no seams.
+        points: edge.at((width * step) / steps, width).map(([x, y]) => [round(x), round(y)] as const),
         fill: litColor(fill, k, white),
         opacity: 1,
       });
     }
   }
+  // The face inside the band, last: its one edge covers the strips' ends.
+  pieces.push({
+    kind: "polygon",
+    points: face.map(([x, y]) => [round(x), round(y)] as const),
+    fill: litColor(fill, LIT_FACE[0], LIT_FACE[1]),
+    opacity: 1,
+  });
   return pieces;
+}
+
+/** A box's bevel in PowerPoint's colours (`officeChartLitBevel`). */
+function officeChartLitBoxBevel(
+  box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+  value: OfficeChartBevel,
+  width: number,
+): OfficeChartBevelPiece[] | null {
+  const x0 = box.x, y0 = box.y, x1 = box.x + box.width, y1 = box.y + box.height;
+  const edges: readonly LitEdge[] = [
+    { normal: [0, -1], at: (d0, d1) => [[x0 + d0, y0 + d0], [x1 - d0, y0 + d0], [x1 - d1, y0 + d1], [x0 + d1, y0 + d1]] },
+    { normal: [1, 0], at: (d0, d1) => [[x1 - d0, y0 + d0], [x1 - d0, y1 - d0], [x1 - d1, y1 - d1], [x1 - d1, y0 + d1]] },
+    { normal: [0, 1], at: (d0, d1) => [[x1 - d0, y1 - d0], [x0 + d0, y1 - d0], [x0 + d1, y1 - d1], [x1 - d1, y1 - d1]] },
+    { normal: [-1, 0], at: (d0, d1) => [[x0 + d0, y1 - d0], [x0 + d0, y0 + d0], [x0 + d1, y0 + d1], [x0 + d1, y1 - d1]] },
+  ];
+  const face: (readonly [number, number])[] = [[x0 + width, y0 + width], [x1 - width, y0 + width], [x1 - width, y1 - width], [x0 + width, y1 - width]];
+  return officeChartLitBevel(face, edges, value, width, { materials: LIT_MATERIALS, slope: 1, slantShine: [0, 0] });
 }
 
 /**
@@ -526,21 +612,37 @@ export function officeChartPolygonBevel(
     across = Math.min(across, extent);
   }
   const width = bevelWidthPx(value.bevel, Math.min(room, Number.isFinite(across) ? across / 2 : 0));
-  if (width >= 0.5) {
+  // A vertex moved `depth` in from both of its edges (the edges' offset lines meet there).
+  const inset = (index: number, depth: number): readonly [number, number] => {
+    const before = edges[(index - 1 + count) % count]!;
+    const after = edges[index]!;
+    const point = points[index]!;
+    const nx = before.normal[0] + after.normal[0];
+    const ny = before.normal[1] + after.normal[1];
+    const dot = before.normal[0] * after.normal[0] + before.normal[1] * after.normal[1];
+    const scale = depth / Math.max(0.2, 1 + dot);
+    return [point[0] - nx * scale, point[1] - ny * scale];
+  };
+  // In the mark's own colours where it states a plain fill (an area, a
+  // filled radar): PowerPoint's lit face and rims, as a column's.
+  const lit =
+    width >= 0.5 && value.fill
+      ? officeChartLitBevel(
+          points.map((_, index) => inset(index, width)),
+          edges.map((edge, index) => {
+            const next = (index + 1) % count;
+            return { normal: edge.normal, at: (d0: number, d1: number) => [inset(index, d0), inset(next, d0), inset(next, d1), inset(index, d1)] };
+          }),
+          value,
+          width,
+          { materials: LIT_POLYGON_MATERIALS, slope: bevelSlope(value.bevel), slantShine: ANGLE_METAL_WHITE },
+        )
+      : null;
+  if (lit) pieces.push(...lit);
+  if (width >= 0.5 && !lit) {
     const strength = contrast(value);
     const [lx, ly] = officeChartBevelLight(value.format3d);
     const profile = value.bevel?.preset ?? "circle";
-    // A vertex moved `depth` in from both of its edges (the edges' offset lines meet there).
-    const inset = (index: number, depth: number): readonly [number, number] => {
-      const before = edges[(index - 1 + count) % count]!;
-      const after = edges[index]!;
-      const point = points[index]!;
-      const nx = before.normal[0] + after.normal[0];
-      const ny = before.normal[1] + after.normal[1];
-      const dot = before.normal[0] * after.normal[0] + before.normal[1] * after.normal[1];
-      const scale = depth / Math.max(0.2, 1 + dot);
-      return [point[0] - nx * scale, point[1] - ny * scale];
-    };
     const steps = Math.max(1, Math.min(STEPS, Math.round(width)));
     edges.forEach((edge, index) => {
       const facing = edge.normal[0] * lx + edge.normal[1] * ly;
@@ -570,4 +672,45 @@ export function officeChartPolygonBevel(
     });
   }
   return pieces;
+}
+
+
+
+
+
+
+
+
+export function officeChartPolygonOutset(
+  points: readonly (readonly [number, number])[],
+  distance: number,
+): (readonly [number, number])[] {
+  const kept = points.filter((point, index) => {
+    const before = points[(index - 1 + points.length) % points.length]!;
+    return index === 0 ? Math.hypot(point[0] - points[points.length - 1]![0], point[1] - points[points.length - 1]![1]) > 1e-6 : Math.hypot(point[0] - before[0], point[1] - before[1]) > 1e-6;
+  });
+  const count = kept.length;
+  if (count < 3 || !(distance > 0)) return kept;
+  let area = 0;
+  for (let index = 0; index < count; index += 1) {
+    const [x0, y0] = kept[index]!;
+    const [x1, y1] = kept[(index + 1) % count]!;
+    area += x0 * y1 - x1 * y0;
+  }
+  if (Math.abs(area) < 1) return kept;
+  const turn = area > 0 ? 1 : -1;
+  const normals = kept.map((from, index) => {
+    const to = kept[(index + 1) % count]!;
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    return [(turn * (to[1] - from[1])) / length, (-turn * (to[0] - from[0])) / length] as const;
+  });
+  return kept.map((point, index) => {
+    const before = normals[(index - 1 + count) % count]!;
+    const after = normals[index]!;
+    const dot = before[0] * after[0] + before[1] * after[1];
+    // A sharp corner's mitre is held to four times the distance, as a
+    // mitred line's limit holds it.
+    const scale = distance / Math.max(1 / 8, 1 + dot);
+    return [point[0] + (before[0] + after[0]) * scale, point[1] + (before[1] + after[1]) * scale] as const;
+  });
 }

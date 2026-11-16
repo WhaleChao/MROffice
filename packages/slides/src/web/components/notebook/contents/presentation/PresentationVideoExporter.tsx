@@ -32,12 +32,7 @@ import type { DeckHeaderFooter } from "@mrnote/core/web/lib/presentation-header-
 import type { SlideMaster } from "@mrnote/core/web/lib/presentation-master.ts";
 import type { DeckTheme } from "@mrnote/core/web/lib/presentation-theme.ts";
 import type { SlideModel } from "@mrnote/core/web/lib/presentation/deck-model.ts";
-import {
-  computeStepStartOffsets,
-  partitionTimelineSteps,
-  resolveTimelineGroups,
-  timelineClickCount,
-} from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
+import { partitionTimelineSteps, timelineClickCount } from "@mrnote/core/web/lib/presentation-anim-timeline.ts";
 import {
   nativeTimingClickCount,
   nativeTimingInitialStep,
@@ -76,7 +71,12 @@ import {
   type FrameDrawer,
 } from "../../../../lib/presentation-export-video/frame-drawer";
 import { createExportMediaClock, type ExportMediaClock } from "../../../../lib/presentation-export-video/export-media";
-import { captureTransitionLeadMs, clickWaitMs } from "../../../../lib/presentation-export-video/capture-timing";
+import { captureTransitionLeadMs } from "../../../../lib/presentation-export-video/capture-timing";
+import {
+  rehearsedClickDelaysMs,
+  slideGroupBuildsMs,
+  timedClickPlan,
+} from "../../../../lib/presentation/slide-click-schedule";
 import { makeExportAudio, type EncodedExportAudio } from "../../../../lib/presentation-export-video/export-audio";
 import {
   createFrameFonts,
@@ -378,26 +378,36 @@ export function PresentationVideoExporter({
         // (`captureTransitionLeadMs`, as the show's capture holds its builds).
         // A Morph keeps the slide's objects back until it settles: the builds
         // the slide starts by itself play then, after the whole Morph.
-        let built = morphed
+        const built = morphed
           ? await recordMoving()
           : Math.max(0, entered - captureTransitionLeadMs(slideEntranceTransitionMs(slide, position > 0), step));
         const advance = slide.transitionAdvanceAfterMs;
         const recorded = settings.useRecordedTimings && isTransitionAdvanceAfterMs(advance);
         const asked = recorded ? (advance as number) : settings.secondsPerSlide * 1000;
-        // Timed by Seconds spent on each slide, the time the builds leave is
-        // shared by the slide's start and its clicks (`clickWaitMs`); a
-        // recorded timing plays the clicks one after another.
-        const wait = recorded ? 0 : clickWaitMs(asked, groups - first, slideGroupBuildsMs(slide));
-        let waited = 0;
-        for (let group = first + 1; group <= groups; group += 1) {
-          if (wait > 0) {
-            await hold(wait, false);
-            waited += wait;
+        // The clicks come by themselves (`timedClickPlan`): when the slide's
+        // rehearsal says (Use Recorded Timings), else sharing what the builds
+        // leave of the slide's time with its start.
+        const clicks = groups - first;
+        if (clicks <= 0) {
+          await hold(Math.max(0, asked - built));
+        } else {
+          const plan = timedClickPlan({
+            slideMs: asked,
+            clicks,
+            groupBuildsMs: slideGroupBuildsMs(slide),
+            initialAuto: first > 0,
+            rehearsed: recorded ? rehearsedClickDelaysMs(slide, clicks) : null,
+          });
+          // Time since the click before (the first: since the timeline began).
+          let sinceClick = built;
+          for (let click = 1; click <= clicks; click += 1) {
+            const wait = Math.max(0, (plan.delaysMs[click - 1] ?? 0) - sinceClick);
+            if (wait > 0) await hold(wait, false);
+            await show({ index, step: first + click, visit, settle });
+            sinceClick = await record();
           }
-          await show({ index, step: group, visit, settle });
-          built += await record();
+          await hold(Math.max(0, plan.afterLastMs - sinceClick));
         }
-        await hold(Math.max(0, asked - built - waited));
         callbacks.current.onProgress((position + 1) / indexes.length);
       }
       // The show's sound, mixed and encoded once the pictures are made
@@ -467,24 +477,6 @@ export function PresentationVideoExporter({
 }
 
 /** The step a slide opens at: its first build is played with it when that starts by itself. */
-/**
- * How long each of a slide's groups (its first, automatic one included)
- * builds, from the slide's timing: what the click waits share out
- * (`clickWaitMs`). A repeating effect counts one pass.
- */
-function slideGroupBuildsMs(slide: SlideModel): number[] {
-  const tree = slideNativeTimingTree(slide);
-  if (tree) return tree.clicks.map((click) => (Number.isFinite(click.length) ? Math.max(0, click.length) : 0));
-  return resolveTimelineGroups(slide.animationSequence ?? []).map((group) => {
-    const offsets = computeStepStartOffsets(group);
-    let end = 0;
-    group.steps.forEach((step, index) => {
-      end = Math.max(end, (offsets[index] ?? 0) + Math.max(0, Number(step.durationMs) || 0));
-    });
-    return end;
-  });
-}
-
 function initialStep(slide: SlideModel): number {
   const tree = slideNativeTimingTree(slide);
   if (tree) return nativeTimingInitialStep(tree);

@@ -121,19 +121,34 @@ export function textRunSlice(
   return pieces;
 }
 
-/** Office-style typing affinity: replaced glyph first, otherwise glyph left. */
+
+
+
+
+
+
+
 export function textInsertionRunStyle(
   runs: readonly shared.TextRun[],
   delta: TextEditDelta,
 ): shared.RunStyle | undefined {
-  const length = shared.textFromRuns(runs).length;
+  const words = shared.textFromRuns(runs);
+  const length = words.length;
   if (length === 0) return undefined;
+  const rowStart =
+    delta.from === delta.to &&
+    delta.from > 0 &&
+    delta.from < length &&
+    words[delta.from - 1] === "\n" &&
+    words[delta.from] !== "\n";
   const offset =
     delta.from < delta.to
       ? Math.min(delta.from, length - 1)
-      : delta.from > 0
-        ? Math.min(delta.from - 1, length - 1)
-        : 0;
+      : rowStart
+        ? delta.from
+        : delta.from > 0
+          ? Math.min(delta.from - 1, length - 1)
+          : 0;
   let cursor = 0;
   for (const run of runs) {
     const end = cursor + run.text.length;

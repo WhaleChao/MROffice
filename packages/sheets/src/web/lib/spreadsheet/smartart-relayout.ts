@@ -99,6 +99,31 @@ export function smartArtMembersResized<O extends DrawingObjectLike>(
 }
 
 /**
+ * The receipt naming the Office diagram a converted graphic replaces
+ * (`source.nodeType: "importedSmartArtMember"`, its drawing's anchor): every
+ * member of the rebuilt graphic carries it on, so the original-package export
+ * still REPLACES that diagram. A rebuild that dropped it (Reset Graphic,
+ * Change Colors… on a diagram converted from the file) made the export keep
+ * the file's diagram AND install the rebuilt one beside it: two graphics.
+ */
+export function sheetSmartArtConversionReceipt(
+  members: ReadonlyArray<{ source?: unknown }>,
+): Record<string, unknown> | null {
+  for (const member of members) {
+    const source = member.source;
+    if (
+      source &&
+      typeof source === "object" &&
+      (source as Record<string, unknown>).nodeType === "importedSmartArtMember" &&
+      typeof (source as Record<string, unknown>).sourceAnchor === "string"
+    ) {
+      return { ...(source as Record<string, unknown>) };
+    }
+  }
+  return null;
+}
+
+/**
  * `objects` with one graphic's members replaced by the engine's rebuild,
  * laid out in `frame` (drawing-layer px) and kept in the graphic's own frame
  * anchor at that size: item shapes keep their object ids
@@ -135,6 +160,7 @@ export function sheetObjectsWithRebuiltSmartArt<O extends DrawingObjectLike>(
     resetGraphicFormat && carried
       ? smartArtGraphicFormatRecord(carried, SMARTART_RESET_GRAPHIC_FORMAT)
       : carried;
+  const receipt = sheetSmartArtConversionReceipt(members);
   const placed = rebuilt.members.map((member, index) => {
     const base = createSpreadsheetShapeObject(member.kind, { row: 0, col: 0 });
     // A mirrored member's flip rides on the anchor, like its turn.
@@ -152,6 +178,7 @@ export function sheetObjectsWithRebuiltSmartArt<O extends DrawingObjectLike>(
       ...(keptIds[index] ? { id: keptIds[index] } : {}),
       ...identity,
       ...(background ? { smartArtBackground: background } : {}),
+      ...(receipt ? { source: receipt } : {}),
       groupId,
       shape,
       anchor: {

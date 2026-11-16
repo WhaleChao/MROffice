@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import type { BandRichBlock } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import { afterFontsReady } from "@mrnote/core/web/lib/font-face-news.ts";
 
-import { buildBandRichDom, keepBandObjectsOnPaper, layoutBandTabs, type BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
+import { buildBandRichDom, keepBandObjectsOnPaper, layoutBandTabs, wrapBandTextAroundObjects, type BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 
 
 
@@ -94,13 +94,16 @@ export default function BandRichView({
     // band's own width; only a band that holds a tab, or an object Word keeps
     // on the paper, is watched.
     const watched = () => ({
-      tabs: Boolean(host.querySelector(".sheet-band-rich__p[data-band-tabs], .sheet-band-rich__marker[data-band-marker-tab]")),
+      tabs: Boolean(host.querySelector(".sheet-band-rich__p[data-band-tabs], .sheet-band-rich__marker[data-band-marker-tab], [data-band-char-scale]")),
       kept: Boolean(host.querySelector("[data-band-keep-on-paper] [data-band-keep]")),
+      // An object the band's own lines go round (`wrapBandTextAroundObjects`).
+      wraps: Boolean(host.querySelector("[data-band-wrap]")),
     });
     const layout = () => {
-      const { tabs, kept } = watched();
+      const { tabs, kept, wraps } = watched();
       if (tabs) layoutBandTabs(host);
       if (kept) keepBandObjectsOnPaper(host);
+      if (wraps || host.querySelector("[data-band-wrap-push]")) wrapBandTextAroundObjects(host);
     };
     let cancelled = false;
     const fonts = host.ownerDocument.fonts;
@@ -117,8 +120,8 @@ export default function BandRichView({
     // (each read lays the whole document out first: afterFontsReady).
     const stopRedraw = afterFontsReady(host.ownerDocument, redraw);
     fonts?.addEventListener?.("loadingdone", redraw);
-    const { tabs, kept } = watched();
-    if (!tabs && !kept) {
+    const { tabs, kept, wraps } = watched();
+    if (!tabs && !kept && !wraps) {
       return () => {
         cancelled = true;
         stopRedraw();

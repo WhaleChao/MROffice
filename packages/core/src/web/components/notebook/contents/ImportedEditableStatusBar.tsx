@@ -363,9 +363,26 @@ function ImportedEditableIssueScope({
   // file, a save the file did not take): what the 监控 page counts as shown.
   const shownPartial = issues.some((issue) => PARTIAL_ISSUE.test(issue.key));
   const shownPageType = state.kind === "ready" || state.kind === "page-only" ? state.page?.page_type : null;
+  const shownReceipt =
+    state.kind === "ready" || state.kind === "page-only" ? state.page?.editable_page_patchback ?? null : null;
   useEffect(() => {
-    if (shownPartial) reportOfficeExperience("partial", { pageId, pageType: shownPageType, code: "write_back_partial" });
-  }, [shownPartial, pageId, shownPageType]);
+    if (!shownPartial) return;
+    // Which objects were not written and why, as the server's codes, and
+    // the page by a hashed reference: what the 监控 page needs to tell one
+    
+    const receipt = shownReceipt as { declined_changes?: unknown; status?: unknown; reason?: unknown } | null;
+    reportOfficeExperience("partial", {
+      pageId,
+      pageType: shownPageType,
+      code: "write_back_partial",
+      detail: {
+        declined: Array.isArray(receipt?.declined_changes)
+          ? (receipt.declined_changes as Array<{ control?: unknown; reason?: unknown }>)
+          : null,
+        failure: receipt && receipt.status !== "succeeded" ? receipt.reason : null,
+      },
+    });
+  }, [shownPartial, pageId, shownPageType, shownReceipt]);
   const visibleIssues = [...issues];
   if (
     state.kind === "error" ||
@@ -942,7 +959,7 @@ const DECLINED_REASONS: ReadonlySet<string> = new Set([
   "no_place", "not_yet", "source_unwritable", "readback_mismatch", "internal_error", "conflict",
 ]);
 const DECLINED_REMEDIES: ReadonlySet<string> = new Set([
-  "kept_on_page", "redo_with_command", "download_rebuilt", "retry",
+  "kept_on_page", "redo_with_command", "download_rebuilt", "retry", "rebuilt_from_page",
 ]);
 
 function declinedReasonDetail(

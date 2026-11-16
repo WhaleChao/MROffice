@@ -4,7 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { summarizePdfNativeSelectionItems } from "./engine/native/list-text-model";
-import type { PdfNativeListTextSelectionItemEvidence } from "./engine/native/list-text-fidelity";
+import type { PdfNativeListTextSelectionEvidence, PdfNativeListTextSelectionItemEvidence } from "./engine/native/list-text-fidelity";
 import type { PdfNativeParagraphEditBox } from "./native-paragraph-edit-boxes";
 
 /**
@@ -115,4 +115,42 @@ export function leadingRunSelection(
     }
   }
   return found.length === 1 ? found[0] : null;
+}
+
+/**
+ * A selection found again among the boxes of its page read off other bytes
+ * (`sourceSha256` names them): the same words, starting where they started.
+ * A queued edit of a line or a box is planned again so on the version
+ * another window saved first. Historical offsets are never reused: the
+ * selection is the box as the reader reads those bytes. A box of several
+ * lines is found only with `items`, and only where every one of its lines
+ * reads the same words at the same place; with `words`, the line is found by
+ * the words it reads now, its items whatever an edit made them. Null when
+ * the page does not show that there once.
+ */
+export function relocatedRunSelectionOn(
+  boxes: readonly PdfNativeParagraphEditBox[],
+  sourceSha256: string,
+  selection: PdfNativeListTextSelectionEvidence,
+  options: Readonly<{ items?: boolean; words?: string }> = {},
+): PdfNativeListTextSelectionEvidence | null {
+  if (selection.items?.length && !options.items && options.words === undefined) return null;
+  const wanted = options.words ?? selection.item.str;
+  const found = movedRunSelection(boxes, wanted, Number(selection.item.transform[5]),
+    { exactX: Number(selection.item.transform[4]) });
+  if (!found) return null;
+  if (options.words !== undefined) {
+    return Object.freeze({ ...selection, sourceSha256, item: found.item, endOffset: found.endOffset,
+      ...(found.items?.length ? { items: found.items } : { items: undefined }) });
+  }
+  if (found.item.str !== selection.item.str) return null;
+  if (found.items?.length || selection.items?.length) {
+    const before = selection.items ?? [], after = found.items ?? [];
+    if (!options.items || before.length !== after.length || before.some((item, index) =>
+      item.str !== after[index]!.str ||
+      item.transform.some((value, component) => Math.abs(value - after[index]!.transform[component]!) > 0.01)))
+      return null;
+    return Object.freeze({ ...selection, sourceSha256, item: found.item, items: after, endOffset: found.endOffset });
+  }
+  return Object.freeze({ ...selection, sourceSha256, item: found.item, endOffset: found.endOffset });
 }

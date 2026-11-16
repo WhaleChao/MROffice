@@ -38,6 +38,10 @@ export function useWindowTitlebarSlot(): HTMLElement | null {
 export interface WindowDockTarget {
   targetId: string;
   undock: () => void;
+  
+
+
+  switchSide?: () => void;
 }
 
 /** The classic interior's assistant standing as a tab of its own: the way

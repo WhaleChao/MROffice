@@ -24,8 +24,14 @@ export const BARE_NAME_START_CLASS = "\\p{L}_";
  * them), digits, `_` and `.`.
  */
 export const BARE_NAME_PART_CLASS = "\\p{L}\\p{M}\\p{N}_.";
-/** A defined name may also start with a backslash. */
-export const DEFINED_NAME_START_CLASS = `${BARE_NAME_START_CLASS}\\\\`;
+/**
+ * A defined name may also start with a backslash, or with a number that is no
+ * digit (Unicode Nl / No): workbooks Excel saved define `Ⅲ１図基礎表` and
+ * `³_Unknown_value…` (xlsx-rounds R274-X10, R204-X10). A sheet name written
+ * bare keeps the letter rule above.
+ */
+export const DEFINED_NAME_START_CLASS = `${BARE_NAME_START_CLASS}\\p{Nl}\\p{No}\\\\`;
+const DEFINED_NAME_NUMBER_START_RE = /^[\p{Nl}\p{No}]$/u;
 
 const BARE_NAME_START_RE = new RegExp(`^[${BARE_NAME_START_CLASS}]$`, "u");
 const BARE_NAME_PART_RE = new RegExp(`^[${BARE_NAME_PART_CLASS}]$`, "u");
@@ -132,13 +138,26 @@ export function splitSheetQualifier(text: string): { sheet?: string; ref: string
  */
 const DEFINED_NAME_QUOTE_MARKS = new Set(["\u2018", "\u2019", "\u201C", "\u201D"]);
 
+
+
+
+
+
+
+
+
+
+const DEFINED_NAME_CJK_MARKS = ["\u3010", "\u3011", "\u300C", "\u300D", "\u30FB", "\uFF3F"];
+/** Regex source (`u` flag) of the marks a defined name may hold after its first character. */
+export const DEFINED_NAME_LATER_MARK_CLASS = "?\\\\\\u3010\\u3011\\u300C\\u300D\\u30FB\\uFF3F";
+
 /**
  * Characters Excel itself stores in a defined name after its first one, beyond
  * the documented set: a question mark and a backslash (a workbook Excel saved
  * defines `Profile?_YES_NO_filter`, xlsx-rounds R268-X15). Neither is an
  * operator anywhere in a formula, so a name holding one reads as one token.
  */
-const DEFINED_NAME_LATER_MARKS = new Set(["?", "\\"]);
+const DEFINED_NAME_LATER_MARKS = new Set(["?", "\\", ...DEFINED_NAME_CJK_MARKS]);
 
 /**
  * Whether one character may appear in a defined name. Microsoft Support,
@@ -151,6 +170,7 @@ const DEFINED_NAME_LATER_MARKS = new Set(["?", "\\"]);
 export function isDefinedNameCharacter(character: string, first: boolean): boolean {
   return (
     (first && character === "\\") ||
+    (first && DEFINED_NAME_NUMBER_START_RE.test(character)) ||
     (!first && DEFINED_NAME_LATER_MARKS.has(character)) ||
     DEFINED_NAME_QUOTE_MARKS.has(character) ||
     isBareNameCharacter(character, first)
@@ -184,11 +204,19 @@ export function isDefinedNameSpelling(name: string): boolean {
  * "C", "c", "R" and "r" are the Name Box's row / column shorthands). The A1
  * test is deliberately the formula tokenizer's shape — one to three letters and
  * up to seven digits — so a name is never one that a formula would read as a
- * cell. The R1C1 test covers `R`, `C`, `RC`, `R2`, `C3` and `R2C3`.
+ * cell. Letters and digits past Excel's grid are no cell, to Excel and to the
+ * formula reader (`cellRefInGrid`): workbooks Excel saved define `a0`, `Mar00`
+ * (row 0), `qtr1201314` (row 1,201,314) and `YTD1415` (column 17,424)
+ * (xlsx-rounds R202-X04). The R1C1 test covers `R`, `C`, `RC`, `R2`, `C3` and
+ * `R2C3`.
  */
 export function looksLikeCellReference(name: string): boolean {
-  return (
-    /^\$?[A-Za-z]{1,3}\$?[0-9]{1,7}$/.test(name) ||
-    /^(?:R[0-9]*)?(?:C[0-9]*)?$/i.test(name)
-  );
+  const a1 = /^\$?([A-Za-z]{1,3})\$?([0-9]{1,7})$/.exec(name);
+  if (a1) {
+    let column = 0;
+    for (const letter of a1[1].toUpperCase()) column = column * 26 + letter.charCodeAt(0) - 64;
+    const row = Number(a1[2]);
+    if (column <= MAX_GRID_COLUMNS && row >= 1 && row <= MAX_GRID_ROWS) return true;
+  }
+  return /^(?:R[0-9]*)?(?:C[0-9]*)?$/i.test(name);
 }

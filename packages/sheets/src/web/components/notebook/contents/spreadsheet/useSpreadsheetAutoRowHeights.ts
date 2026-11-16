@@ -7,12 +7,13 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { contentKey } from "@mrnote/core/web/lib/content-hash.ts";
-import { clampRowHeight } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
+import { clampRowHeight, MAX_ROW_HEIGHT_PX, officeCombinedRowHeight, officeCombinedRowParts, officeRowHeight, officeRowMetricsKnown, officeStackedLinesHeight, stackedTextLetterSpacing, type OfficeRowFont } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import { SPREADSHEET_WRAP_LINE_HEIGHT } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
-import { measureNativeTextHeightBatch, measureNativeAutoRowHeight, measureNativeParagraphLineHeight, measureNativeTextHeight, type NativeTextLayoutRequest, type NativeTextPart } from "../../../../lib/spreadsheet/native-text-layout";
+import { layoutNativeText, measureNativeTextHeightBatch, measureNativeAutoRowHeight, measureNativeParagraphLineHeight, measureNativeTextHeight, type NativeTextLayoutRequest, type NativeTextLine, type NativeTextPart } from "../../../../lib/spreadsheet/native-text-layout";
 import { clampNativeAutomaticRowHeight, nativeTextAdvances, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { useSpreadsheetTextEngineEpoch } from "./useSpreadsheetTextEngineEpoch";
 import { fontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
+import { officeHintedWrapLines, officeHintedWrapRunLines } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
 
 export interface AutoRowMeasurement {
   row: number;
@@ -39,6 +40,13 @@ export interface AutoRowMeasurement {
   scale?: number;
   numericValue?: boolean;
   parts?: NativeTextPart[];
+  /** The faces of the row's positions with no cell (its format's, else the
+   * columns' and the workbook's): an imported Windows grid's row fits them
+   * with its cells' faces (officeCombinedRowHeight). */
+  rowFonts?: { family: string; sizePt: number; bold?: boolean }[];
+  /** False for a cell aligned top, center, justify or distributed: its lines
+   * do not stand on the row's baseline (officeStackedLinesHeight). */
+  baseline?: false;
 }
 
 /**
@@ -115,11 +123,244 @@ function autoRowParts(item: AutoRowMeasurement): NativeTextPart[] {
     : [{ text: measuredText }];
 }
 
+/** The first family of a CSS font stack, unquoted: the face the cell names. */
+function leadFamily(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const first = value.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim();
+  return first || undefined;
+}
+
+/**
+ * Excel's automatic height, in 96-dpi pixels, of one line of `item`: the
+ * tallest {@link officeRowHeight} of the faces its text is set in (the cell's
+ * and its runs'), as Windows Excel fits a row to a line -- not the browser's
+ * line box for the face standing in for it plus a margin, which was 2 px
+ * over for Calibri, Carlito and Aptos Narrow 11 (22 px against Excel's 20)
+ * and 7 px for a 細明體 line (27 px: R14-X16's rows 18-26 grew past the
+ * 17.25 pt Excel keeps them at). Undefined when a face is one the table does
+ * not know, or a size is unknown: the probe's answer stands.
+ */
+function officeLineHeight(item: AutoRowMeasurement): number | undefined {
+  return officeLineFaces(item)?.height;
+}
+
+/** Whether a CSS font weight is Excel's bold. */
+function boldWeight(weight: unknown): boolean {
+  return weight === "bold" || weight === "bolder" || (typeof weight === "number" ? weight >= 600 : Number(weight) >= 600);
+}
+
+function officeLineFaces(item: AutoRowMeasurement): { height: number; fonts: OfficeRowFont[] } | undefined {
+  let height = 0;
+  const fonts: OfficeRowFont[] = [];
+  for (const style of [item.style, ...(item.parts ?? []).map((part) => ({ ...item.style, ...(part.style as CSSProperties | undefined) }))]) {
+    const family = leadFamily(style.fontFamily);
+    const size = typeof style.fontSize === "number" ? style.fontSize : Number.NaN;
+    if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return undefined;
+    const font = { family, sizePt: size * 0.75, bold: boldWeight(style.fontWeight) };
+    fonts.push(font);
+    height = Math.max(height, officeRowHeight(font));
+  }
+  return height ? { height, fonts } : undefined;
+}
+
+/**
+ * `lines` lines of `item` as Windows Excel stands them: its lines, each its
+ * own line's height, and never less than one line set with the faces of the
+ * row's empty positions too (officeCombinedRowHeight: one Arial 12 line in a
+ * Calibri 11 workbook is 21 px). The other faces do not add to a wrapped
+ * paragraph's first line: two lines of Calibri 10 in a Calibri 11 workbook
+ * with no column formats are 34 px, 2 x 17 (R75-X01, 56 rows), not 20 + 17.
+ * Without the row's faces, or with a face the metrics do not know, the lines
+ * alone. Laid-out lines (`laid`) each stand at the faces of their own text.
+ */
+function officeLinesHeight(item: AutoRowMeasurement, office: number, lines: number, laid?: readonly NativeTextLine[]): number {
+  const faces = officeLineFaces(item);
+  if (lines <= 1 && !laid?.length) {
+    // One line: its faces set with the row's other faces (a top-aligned line
+    // too stands no lower than the row's own line, officeStackedLinesHeight).
+    if (item.baseline === false) {
+      const floor = item.rowFonts?.length ? officeCombinedRowHeight(item.rowFonts) : undefined;
+      return Math.max(office, floor ?? 0);
+    }
+    const combined = faces ? officeCombinedRowHeight(item.rowFonts?.length ? [...faces.fonts, ...item.rowFonts] : faces.fonts) : undefined;
+    return Math.max(office, combined ?? 0);
+  }
+  let own = lines * office;
+  let last = faces ? officeCombinedRowParts(faces.fonts) : undefined;
+  if (laid?.length) {
+    let sum = 0;
+    const fonts = officeLaidLinesFonts(item, laid);
+    for (const lineFonts of fonts) {
+      const height = lineFonts ? officeCombinedRowHeight(lineFonts) : undefined;
+      if (height === undefined) { sum = 0; break; }
+      sum += height;
+    }
+    const lastFonts = fonts[fonts.length - 1];
+    if (sum > 0) {
+      own = sum;
+      last = (lastFonts ? officeCombinedRowParts(lastFonts) : undefined) ?? last;
+    }
+  }
+  const floor = item.rowFonts?.length ? officeCombinedRowParts(item.rowFonts) : undefined;
+  if (!last) return Math.max(own, floor ? floor.ascent + floor.descent + 1 : 0);
+  return officeStackedLinesHeight(own, last, floor, item.baseline !== false);
+}
+
+/**
+ * The faces each laid-out line stands at in Windows Excel: the faces of the
+ * text on it set together (officeCombinedRowHeight), with the face of the
+ * typed break that ends it; an empty line at its own break's face, and an
+ * empty last line, which has no break, at the faces of the line before it
+ * (lookwin p83-lw: 11 pt "aaaa" and an 18 pt break stand an 18 pt line; an
+ * 18 pt line, an 11 pt break and nothing after stand a second 18 pt line).
+ * A rich cell's "男\n" in 新細明體 12 over "Male" in Arial 12 is 22 + 20 px
+ * (R315-X12, 52 rows), not twice its tallest face. The server's
+ * office_rows.office_line_faces is the same rule. Undefined for a line in a
+ * face the metrics do not know.
+ */
+function officeLaidLinesFonts(item: AutoRowMeasurement, laid: readonly NativeTextLine[]): (OfficeRowFont[] | undefined)[] {
+  const out: (OfficeRowFont[] | undefined)[] = [];
+  for (const [index, line] of laid.entries()) {
+    const trailing = !line.parts.length && !line.hardBreak && index === laid.length - 1 && index > 0;
+    if (trailing) {
+      out.push(out[index - 1]);
+      continue;
+    }
+    const styles = line.parts.length
+      ? [...line.parts.map((part) => ({ ...item.style, ...(part.style as CSSProperties | undefined) })),
+        ...(line.hardBreak && line.breakStyle ? [{ ...item.style, ...line.breakStyle }] : [])]
+      : [{ ...item.style, ...line.emptyStyle }];
+    out.push(officeStyleFonts(styles));
+  }
+  return out;
+}
+
+function officeStyleFonts(styles: readonly CSSProperties[]): OfficeRowFont[] | undefined {
+  const fonts: OfficeRowFont[] = [];
+  for (const style of styles) {
+    const family = leadFamily(style.fontFamily);
+    const size = typeof style.fontSize === "number" ? style.fontSize : Number.NaN;
+    if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return undefined;
+    fonts.push({ family, sizePt: size * 0.75, bold: boldWeight(style.fontWeight) });
+  }
+  return fonts;
+}
+
+/** How many lines the laid-out probe `text` holds (its line boxes, by their
+ * vertical extent): 0 when it holds none. */
+function probeLineCount(text: HTMLElement): number {
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  const rects = [...range.getClientRects()].filter((rect) => rect.height > 0).sort((a, b) => a.top - b.top);
+  let lines = 0;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const rect of rects) {
+    if (rect.top >= bottom - 1) {
+      lines += 1;
+      bottom = rect.bottom;
+    } else bottom = Math.max(bottom, rect.bottom);
+  }
+  return lines;
+}
+
 /** The height one cell asks of its row, `text` being a laid-out probe; nothing
  * when the probe is not laid out. */
+/**
+ * The lines Windows Excel's screen wraps an item's plain Latin text into, from
+ * its hinted advance widths (officeHintedWrapLines, lookwin probes p20/p20b:
+ * 96.5-99% of rows' line counts, where the browser's widths reached ~89%);
+ * undefined for turned or stacked text, a single line, or a face, size or
+ * character the table lacks (the measure below answers those). Rich text
+ * wraps each run at its own face's widths (officeHintedWrapRunLines, the
+ * server's office_hinted_wrap_runs: R195-X01's footnote marks), its lines
+ * laid out for the faces each holds (`laid`).
+ */
+function hintedLines(item: AutoRowMeasurement): { count: number; laid?: NativeTextLine[] } | undefined {
+  // An imported Windows grid (96 dpi) only: a page's own sheet keeps the measure it has.
+  if (item.singleLine || item.rotation || item.stacked || item.dpi !== 96) return undefined;
+  if (item.parts && item.parts.length > 1) return hintedRunLines(item, item.parts);
+  const count = hintedLineCount(item);
+  return count === undefined ? undefined : { count };
+}
+
+/** The lines a rich cell's runs wrap into at their own faces' hinted
+ * widths, each line cut into the runs it holds; undefined where the table
+ * cannot say for a run. */
+function hintedRunLines(item: AutoRowMeasurement, parts: readonly NativeTextPart[]): { count: number; laid: NativeTextLine[] } | undefined {
+  const runs = [];
+  for (const part of parts) {
+    const style = { ...item.style, ...(part.style as CSSProperties | undefined) };
+    const family = leadFamily(style.fontFamily);
+    const size = typeof style.fontSize === "number" ? style.fontSize : Number.NaN;
+    if (!family || !(size > 0)) return undefined;
+    runs.push({ text: part.text.replace(/\r\n?/g, "\n"), family, sizePt: size * 0.75, bold: boldWeight(style.fontWeight), italic: style.fontStyle === "italic" });
+  }
+  const lines = officeHintedWrapRunLines(runs, item.width);
+  if (!lines?.length) return undefined;
+  // Each line's pieces of the runs, found in the cell's text from where the
+  // last one ended (the server's cell_line_segments).
+  const flat = runs.map((run) => run.text).join("");
+  const bounds: { start: number; end: number; style: CSSProperties | undefined }[] = [];
+  let offset = 0;
+  for (const [index, run] of runs.entries()) {
+    bounds.push({ start: offset, end: offset + run.text.length, style: parts[index].style as CSSProperties | undefined });
+    offset += run.text.length;
+  }
+  const laid: NativeTextLine[] = [];
+  let cursor = 0;
+  const styleAt = (index: number) => (bounds.find((bound) => index >= bound.start && index < bound.end) ?? bounds[bounds.length - 1])?.style;
+  for (const line of lines) {
+    const found = line ? flat.indexOf(line, cursor) : cursor;
+    const start = found < 0 ? cursor : found;
+    const end = start + line.length;
+    // The typed break that ends the line, past its trailing spaces.
+    let after = end;
+    while (after < flat.length && (flat[after] === " " || flat[after] === "\t")) after += 1;
+    const broken = flat[after] === "\n";
+    cursor = broken ? after + 1 : end;
+    const pieces = bounds.filter((bound) => Math.max(start, bound.start) < Math.min(end, bound.end))
+      .map((bound) => ({ text: flat.slice(Math.max(start, bound.start), Math.min(end, bound.end)), style: bound.style }));
+    // An empty line stands at the face of its own break (officeLaidLinesFonts).
+    laid.push(pieces.length
+      ? { parts: pieces, hardBreak: broken ? "\n" : "", ...(broken ? { breakStyle: styleAt(after) } : {}) }
+      : { parts: [], hardBreak: broken ? "\n" : "", emptyStyle: styleAt(broken ? after : start) });
+  }
+  return { count: lines.length, laid };
+}
+
+function hintedLineCount(item: AutoRowMeasurement): number | undefined {
+  const family = leadFamily(item.style.fontFamily);
+  const size = typeof item.style.fontSize === "number" ? item.style.fontSize : Number.NaN;
+  if (!family || !(size > 0)) return undefined;
+  const bold = boldWeight(item.style.fontWeight);
+  const lines = officeHintedWrapLines(item.text, { family, sizePt: size * 0.75, bold, italic: item.style.fontStyle === "italic" }, item.width);
+  return lines?.length;
+}
+
+/**
+ * A row Windows Excel fits to its lines, px: the faces' own heights, not
+ * floored at the grid's 18 px minimum row (clampRowHeight) -- a wrapped
+ * Arial 8 line is a 15 px row, as Excel fits and prints it (R298-X21: every
+ * "Ranked first" row printed 18 px tall, 11 pages for Excel's 7).
+ */
+function officeAutoRowHeight(height: number): number {
+  return Math.min(MAX_ROW_HEIGHT_PX, Math.max(1, Math.round(height)));
+}
+
 function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, text: HTMLElement): number | null {
   const measuredText = item.text.endsWith("\n") ? `${item.text}\u00a0` : item.text;
   const parts = autoRowParts(item);
+  if (item.text === "" && item.singleLine && item.dpi === 96 && !item.rotation && !item.stacked) {
+    // An empty cell's own font: one line of it, set with the row's other
+    // faces (lookwin p58-lw); a face the metrics do not know asks nothing.
+    const office = officeLineHeight(item);
+    return office === undefined ? 0 : officeAutoRowHeight(officeLinesHeight(item, office, 1));
+  }
+  if (!item.baseHeightOnly && !item.numericValue) {
+    const hinted = hintedLines(item);
+    const office = hinted ? officeLineHeight(item) : undefined;
+    if (hinted && office !== undefined) return officeAutoRowHeight(officeLinesHeight(item, office, hinted.count, hinted.laid));
+  }
   if (item.baseHeightOnly) {
     const raw = item.dpi ? measureNativeParagraphLineHeight(parts, item.style, item.dpi) : undefined;
     const measured = raw !== undefined && item.scale ? Math.round(raw * item.scale * 2) / 2 : raw;
@@ -129,6 +370,16 @@ function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, tex
     ? measureNativeAutoRowHeight(parts, item.style, item.singleLine ? 1e6 : item.width - 5 * 96 / item.dpi, item.dpi, item.numericValue)
     : undefined;
   if (automaticHeight !== undefined) return automaticHeight;
+  // A native paragraph on a grid of Windows pixels: its own lines, each the
+  // automatic height Excel gives its faces (officeLineHeight), where the
+  // faces are known -- as the probe below does for other text.
+  if (item.nativeParagraph && item.dpi === 96 && !item.rotation && !item.stacked) {
+    const office = officeLineHeight(item);
+    const lines = office !== undefined
+      ? layoutNativeText(parts, item.style, item.singleLine ? 1e6 : item.width - 5 * 96 / item.dpi, item.dpi)
+      : undefined;
+    if (office !== undefined && lines?.length) return officeAutoRowHeight(officeLinesHeight(item, office, lines.length, lines));
+  }
   const nativeHeight = item.nativeParagraph && item.dpi
     ? measureNativeTextHeight(parts, item.style, item.singleLine ? 1e6 : item.width - 5 * 96 / item.dpi, item.dpi)
     : undefined;
@@ -179,6 +430,8 @@ function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, tex
   if (item.stacked) {
     text.style.writingMode = "vertical-rl";
     text.style.textOrientation = "upright";
+    // a character to an Excel line of its face, as the cell draws it
+    text.style.letterSpacing = stackedTextLetterSpacing(item.style.fontFamily, item.style.fontSize);
     text.style.whiteSpace = "pre";
     text.style.width = "auto";
   } else if (item.rotation) {
@@ -195,7 +448,18 @@ function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, tex
     : text.scrollHeight;
   // A probe that is not laid out (a hidden window) measures nothing:
   // that is no answer to keep.
-  return measured > 0 ? clampRowHeight(Math.ceil(measured + 4), defaultHeight) : null;
+  if (!(measured > 0)) return null;
+  // Unturned text in faces Excel's metrics are known for, on a grid of Windows
+  // pixels: the row Excel fits to its lines, each line that line's automatic
+  // height (officeLineHeight) -- two wrapped lines of Calibri 11 are 40 px
+  // (30 pt), as Excel fits them, where the browser's pitch plus a margin made
+  // 38 or more. The lines are the probe's own (its wrapping).
+  if (!item.stacked && !item.rotation && (!item.dpi || item.dpi === 96)) {
+    const lines = item.singleLine ? 1 : probeLineCount(text);
+    const office = lines > 0 ? officeLineHeight(item) : undefined;
+    if (office !== undefined) return officeAutoRowHeight(officeLinesHeight(item, office, lines));
+  }
+  return clampRowHeight(Math.ceil(measured + 4), defaultHeight);
 }
 
 function createAutoRowProbe(parent: HTMLElement) {

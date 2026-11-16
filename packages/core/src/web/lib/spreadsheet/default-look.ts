@@ -75,7 +75,12 @@ let defaultLookSwitch: boolean | undefined;
 
 
 export function xlsxDefaultLookEnabled(): boolean {
-  if (typeof window === "undefined") return false;
+  // No window: the command host that runs an AI's or a script's edits, a test.
+  // On there too, as in the window by default: only a sheet the server read
+  // with a defaultStyle has one to lay a format over (xlsx-rounds r301 R301-X14:
+  // Bold and Fill on a cell of xf 0's look lost its centring through the
+  // command layer, where this answered off).
+  if (typeof window === "undefined") return true;
   if (defaultLookSwitch !== undefined) return defaultLookSwitch;
   let asked = new RegExp("[?&]xlsxDefaultLook=([01])").exec(window.location.search)?.[1] ?? null;
   if (asked === null) {

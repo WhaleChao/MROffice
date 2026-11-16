@@ -15,17 +15,83 @@ const SELECTION_COLOR = "rgba(38, 120, 235, 0.26)";
 
 let installs = 0;
 let caret: HTMLDivElement | null = null;
-let hidden: { host: HTMLElement; value: string; priority: string } | null = null;
+/** The host whose own caret is hidden, its caret-color to restore, and the
+ * colour the browser drew that caret in. */
+let hidden: { host: HTMLElement; value: string; priority: string; ink: string } | null = null;
 let frame = 0;
 let last = "";
 let detach: (() => void) | null = null;
 let band: HTMLDivElement | null = null;
 let bandHost: HTMLElement | null = null;
+/** Schedules a redraw while installed (a held size changed with no event). */
+let requestRedraw: (() => void) | null = null;
 
-interface CaretBox {
+/**
+ * On the editing host (or an ancestor of the caret inside it) while a font
+ * size is held at a bare caret: the held size over the size of the text the
+ * caret stands beside.
+ */
+export const OFFICE_CARET_FONT_SCALE_ATTRIBUTE = "data-office-caret-font-scale";
+/** The caret's share above the baseline: a face's ascent over its ascent and descent. */
+const CARET_ASCENT_SHARE = 0.8;
+
+export interface CaretBox {
   left: number;
   top: number;
   height: number;
+}
+
+/**
+ * The scale a held size draws the caret at: `held` over `current`, both in
+ * the surface's own unit. Null when either is unknown or they draw the same
+ * caret (within 1%), so the browser's own caret stays.
+ */
+export function officeCaretFontScale(held: unknown, current: unknown): number | null {
+  if (typeof held !== "number" || typeof current !== "number") return null;
+  if (!(held > 0) || !(current > 0) || !Number.isFinite(held) || !Number.isFinite(current)) return null;
+  const scale = held / current;
+  return Math.abs(scale - 1) < 0.01 ? null : scale;
+}
+
+/**
+ * A caret beside text, redrawn for text `scale` times as large typed there:
+ * that much taller, on the same baseline, as Word draws the insertion point
+ * of a held size.
+ */
+export function officeScaledCaretBox(box: CaretBox, scale: number): CaretBox {
+  if (!(scale > 0) || !Number.isFinite(scale) || scale === 1) return box;
+  const baseline = box.top + box.height * CARET_ASCENT_SHARE;
+  const height = box.height * scale;
+  return { left: box.left, top: baseline - height * CARET_ASCENT_SHARE, height };
+}
+
+/**
+ * States (or, with null, withdraws) the held size's scale on `element`,
+ * the editing host or an element round the caret inside it.
+ */
+export function setOfficeCaretFontScale(element: Element | null | undefined, scale: number | null): void {
+  if (!element) return;
+  const value = scale === null || !(scale > 0) || !Number.isFinite(scale) ? null : String(Math.round(scale * 1000) / 1000);
+  if (element.getAttribute(OFFICE_CARET_FONT_SCALE_ATTRIBUTE) === value) return;
+  if (value === null) element.removeAttribute(OFFICE_CARET_FONT_SCALE_ATTRIBUTE);
+  else element.setAttribute(OFFICE_CARET_FONT_SCALE_ATTRIBUTE, value);
+  requestRedraw?.();
+}
+
+/** The held size's scale round the caret at `at` inside `host`, or null. */
+function caretFontScaleAt(host: HTMLElement, at: Element): number | null {
+  const holder = at.closest(`[${OFFICE_CARET_FONT_SCALE_ATTRIBUTE}]`);
+  if (!holder || !(holder === host || holder.contains(host) || host.contains(holder))) return null;
+  const scale = Number(holder.getAttribute(OFFICE_CARET_FONT_SCALE_ATTRIBUTE));
+  return scale > 0 && Number.isFinite(scale) && scale !== 1 ? scale : null;
+}
+
+/** The colour the browser drew the caret in: the caret colour, else the text's. */
+function typedCaretColor(at: Element): string {
+  const style = getComputedStyle(at);
+  const caret = style.caretColor;
+  if (caret && caret !== "auto" && cssAlpha(caret) > 0.02) return caret;
+  return cssAlpha(style.color) > 0.02 ? style.color : officeCaretColorFor(at);
 }
 
 /** A box with a height: a laid-out character, element or line break. */
@@ -370,11 +436,15 @@ function update(doc: Document): void {
   }
   hideBand();
   const found = caretHost(doc);
-  if (!found || getComputedStyle(found.at).getPropertyValue(OFFICE_TEXT_PAINT_MARK).trim() !== "1") {
+  const painted = found ? getComputedStyle(found.at).getPropertyValue(OFFICE_TEXT_PAINT_MARK).trim() === "1" : false;
+  // A size held at the caret (Grow Font with nothing highlighted).
+  const scale = found ? caretFontScaleAt(found.host, found.at) : null;
+  if (!found || (!painted && scale === null)) {
     hide();
     return;
   }
-  const measured = officeCaretBox(found.range);
+  const beside = officeCaretBox(found.range);
+  const measured = beside && scale !== null ? officeScaledCaretBox(beside, scale) : beside;
   // On the body: cut to what the host's scroller and window leave visible,
   // never painted over the ribbon or past the window (visibleEditorClip).
   const shown = measured
@@ -385,17 +455,20 @@ function update(doc: Document): void {
     hide();
     return;
   }
+  // Painted words take one caret colour for every style; plain words keep
+  // the colour the browser drew their caret in, read before it is hidden.
   if (hidden?.host !== found.host) {
     restoreHostCaret();
     hidden = {
       host: found.host,
       value: found.host.style.getPropertyValue("caret-color"),
       priority: found.host.style.getPropertyPriority("caret-color"),
+      ink: typedCaretColor(found.at),
     };
     found.host.style.setProperty("caret-color", "transparent", "important");
   }
+  const color = painted ? officeCaretColorFor(found.host) : hidden.ink;
   const element = caretElement(doc);
-  const color = officeCaretColorFor(found.host);
   const left = Math.round(box.left - CARET_WIDTH_PX / 2);
   const key = `${left}:${Math.round(box.top)}:${Math.round(box.height)}:${color}`;
   element.style.left = `${left}px`;
@@ -442,7 +515,11 @@ export function installOfficePaintedCaret(doc: Document = document): () => void 
     doc.addEventListener("pointermove", schedule, { capture: true, passive: true });
     // A relayout with no event (an autofit, a remote edit) moves the words.
     const timer = window.setInterval(schedule, 300);
+    requestRedraw = () => {
+      if (!frame) frame = requestAnimationFrame(() => update(doc));
+    };
     detach = () => {
+      requestRedraw = null;
       window.clearInterval(timer);
       doc.removeEventListener("pointermove", schedule, { capture: true });
       for (const [target, name] of events) target.removeEventListener(name, schedule, true);

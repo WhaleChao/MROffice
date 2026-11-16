@@ -47,7 +47,11 @@ import { normalizeHexColor } from "@mrnote/core/web/lib/spreadsheet/color-palett
 import { recomputeSpreadsheetGluedConnectors, spreadsheetConnectorGlueAfterMove } from "./connector-glue";
 import {
   applyDrawingStack,
+  drawingStackArrangeable,
+  drawingStackPaneUnits,
+  drawingStackWithGroupGathered,
   moveInDrawingStack,
+  moveSelectionInDrawingStack,
   sheetDrawingStack,
   type DrawingStackEntry,
   type DrawingStackKind,
@@ -139,6 +143,10 @@ export interface SpreadsheetObjectAnchor {
    * anchor read from a file keeps the element it came in.
    */
   editAs?: "oneCell" | "absolute";
+  /** A one-cell or absolute anchor read from an `xdr:twoCellAnchor` (the
+   * import's reading xlsxAnchorFileMarkers): it prints by its two markers in
+   * the printed grid, as Windows Excel prints it (officePrintAnchorKind). */
+  fileMarkers?: boolean;
   [key: string]: unknown;
 }
 
@@ -1962,14 +1970,42 @@ export function sheetArrangedForDrawing<S extends object>(
   id: string,
   move: DrawingStackMove,
   chartPosition: (chart: StackedChart, ordinal: number) => { x: number; y: number },
-  /** The Selection Pane's row of a group member: it moves among its group only. */
-  options: { withinGroup?: boolean } = {},
+  /**
+   * The Selection Pane's row of a group member: it moves among its group only.
+   * `selection`: every drawing of a live multi-selection (the primary among
+   * them); two or more items move together as Excel moves a ShapeRange.
+   */
+  options: { withinGroup?: boolean; selection?: readonly DrawingStackEntry[] } = {},
 ): S | null {
   const sheet = base as { objects?: readonly DrawingObjectLike[]; charts?: readonly StackedChart[] };
   const objects: readonly DrawingObjectLike[] = sheet.objects ?? [];
   const charts: readonly StackedChart[] = sheet.charts ?? [];
-  // A group (pictures, shapes and charts grouped together, or a SmartArt
-  // graphic's members) moves as one, its members in their own order.
+  const groupOf = sheetDrawingGroupOf(objects, charts);
+  const stack = sheetDrawingStack(objects, charts);
+  const selection = options.withinGroup ? [] : (options.selection ?? []);
+  const units = new Set(
+    selection.map((entry) => {
+      const group = groupOf(entry);
+      return group ? `group:${group}` : `item:${entry.kind}:${entry.id}`;
+    }),
+  );
+  const moved =
+    units.size > 1 && selection.some((entry) => entry.kind === kind && entry.id === id)
+      ? moveSelectionInDrawingStack(stack, selection, move, groupOf)
+      : moveInDrawingStack(stack, kind, id, move, groupOf, options.withinGroup === true);
+  if (!moved) return null;
+  return sheetWithDrawingStack(base, moved, chartPosition);
+}
+
+/**
+ * A drawing's group in the sheet-wide stack: a group (pictures, shapes and
+ * charts grouped together, or a SmartArt graphic's members) moves as one,
+ * its members in their own order.
+ */
+function sheetDrawingGroupOf(
+  objects: readonly DrawingObjectLike[],
+  charts: readonly StackedChart[],
+): (entry: DrawingStackEntry) => string | undefined {
   const groups = new Map<string, string>();
   for (const object of objects) {
     const group = chartDrawingGroupId((object as { groupId?: unknown }).groupId);
@@ -1979,16 +2015,90 @@ export function sheetArrangedForDrawing<S extends object>(
     const group = chartDrawingGroupId(chart.groupId);
     if (group) groups.set(`chart:${chart.id}`, group);
   }
-  const moved = moveInDrawingStack(
-    sheetDrawingStack(objects, charts),
-    kind,
-    id,
+  return (entry) => groups.get(`${entry.kind}:${entry.id}`);
+}
+
+/**
+ * Whether the sheet's Arrange commands are on: Excel greys them only when
+ * the sheet holds a single drawing (a group counts once); at the top or the
+ * bottom of the stack they stay on and change nothing.
+ */
+export function sheetDrawingsArrangeable(base: object): boolean {
+  const sheet = base as { objects?: readonly DrawingObjectLike[]; charts?: readonly StackedChart[] };
+  const objects: readonly DrawingObjectLike[] = sheet.objects ?? [];
+  const charts: readonly StackedChart[] = sheet.charts ?? [];
+  return drawingStackArrangeable(sheetDrawingStack(objects, charts), sheetDrawingGroupOf(objects, charts));
+}
+
+/**
+ * The Selection Pane's units of one container, front first
+ * (`drawingStackPaneUnits`): the sheet's objects and groups (""), or one
+ * group's members (`group:<groupId>`).
+ */
+export function sheetDrawingPaneUnits(base: object, container: string): string[] {
+  const sheet = base as { objects?: readonly DrawingObjectLike[]; charts?: readonly StackedChart[] };
+  const objects: readonly DrawingObjectLike[] = sheet.objects ?? [];
+  const charts: readonly StackedChart[] = sheet.charts ?? [];
+  return drawingStackPaneUnits(sheetDrawingStack(objects, charts), container, sheetDrawingGroupOf(objects, charts));
+}
+
+/**
+ * One Arrange command on Selection Pane units (`sheetDrawingPaneUnits` keys):
+ * the sheet's own objects and groups move as the ribbon moves them (several
+ * at once as Excel moves a ShapeRange); a group's member moves among its
+ * group, as the member's row does in Excel's pane. Null when nothing moves.
+ */
+export function sheetArrangedForPaneUnits<S extends object>(
+  base: S,
+  keys: readonly string[],
+  container: string,
+  move: DrawingStackMove,
+  chartPosition: (chart: StackedChart, ordinal: number) => { x: number; y: number },
+): S | null {
+  const sheet = base as { objects?: readonly DrawingObjectLike[]; charts?: readonly StackedChart[] };
+  const objects: readonly DrawingObjectLike[] = sheet.objects ?? [];
+  const charts: readonly StackedChart[] = sheet.charts ?? [];
+  const groupOf = sheetDrawingGroupOf(objects, charts);
+  const stack = sheetDrawingStack(objects, charts);
+  const entries = keys.flatMap((key): DrawingStackEntry[] => {
+    if (key.startsWith("group:")) {
+      const group = key.slice("group:".length);
+      return stack.filter((entry) => groupOf(entry) === group);
+    }
+    const kind = key.startsWith("chart:") ? "chart" : key.startsWith("object:") ? "object" : null;
+    const id = kind ? key.slice(kind.length + 1) : "";
+    return kind && stack.some((entry) => entry.kind === kind && entry.id === id) ? [{ kind, id }] : [];
+  });
+  const primary = entries[0];
+  if (!primary) return null;
+  if (container) {
+    // A group's member: one at a time, among its group.
+    if (keys.length !== 1) return null;
+    return sheetArrangedForDrawing(base, primary.kind, primary.id, move, chartPosition, { withinGroup: true });
+  }
+  return sheetArrangedForDrawing(
+    base,
+    primary.kind,
+    primary.id,
     move,
-    (entry) => groups.get(`${entry.kind}:${entry.id}`),
-    options.withinGroup === true,
+    chartPosition,
+    keys.length > 1 ? { selection: entries } : {},
   );
-  if (!moved) return null;
-  return sheetWithDrawingStack(base, moved, chartPosition);
+}
+
+/**
+ * Group: the members gathered where the top member stands, as Excel does
+ * (whatever sat between two members ends up under the group), or null when
+ * they already stand together. `keys` are `${kind}:${id}`.
+ */
+export function sheetWithGroupGathered<S extends object>(
+  base: S,
+  keys: ReadonlySet<string>,
+  chartPosition: (chart: StackedChart, ordinal: number) => { x: number; y: number },
+): S | null {
+  const sheet = base as { objects?: readonly DrawingObjectLike[]; charts?: readonly StackedChart[] };
+  const gathered = drawingStackWithGroupGathered(sheetDrawingStack(sheet.objects ?? [], sheet.charts ?? []), keys);
+  return gathered ? sheetWithDrawingStack(base, gathered, chartPosition) : null;
 }
 
 /**

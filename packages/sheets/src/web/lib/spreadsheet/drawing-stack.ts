@@ -165,6 +165,119 @@ export function moveInDrawingStack(
   return next.every((entry, at) => entry === stack[at]) ? null : next;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function moveSelectionInDrawingStack(
+  stack: readonly DrawingStackEntry[],
+  selected: readonly DrawingStackEntry[],
+  move: DrawingStackMove,
+  groupOf: (entry: DrawingStackEntry) => string | undefined = () => undefined,
+): DrawingStackEntry[] | null {
+  const keyOf = (entry: DrawingStackEntry) => `${entry.kind}:${entry.id}`;
+  const unitOf = (entry: DrawingStackEntry) => {
+    const group = groupOf(entry);
+    return group ? `group:${group}` : `item:${keyOf(entry)}`;
+  };
+  const wanted = new Set(selected.map(keyOf));
+  const members = new Map<string, DrawingStackEntry[]>();
+  const topAt = new Map<string, number>();
+  stack.forEach((entry, at) => {
+    const unit = unitOf(entry);
+    const list = members.get(unit);
+    if (list) list.push(entry);
+    else members.set(unit, [entry]);
+    topAt.set(unit, at);
+  });
+  const units = [...topAt.keys()].sort((a, b) => (topAt.get(a) ?? 0) - (topAt.get(b) ?? 0));
+  const chosen = new Set(
+    units.filter((unit) => (members.get(unit) ?? []).some((entry) => wanted.has(keyOf(entry)))),
+  );
+  if (chosen.size === 0) return null;
+  let order = [...units];
+  if (move === "front" || move === "back") {
+    const picked = order.filter((unit) => chosen.has(unit));
+    const rest = order.filter((unit) => !chosen.has(unit));
+    order = move === "front" ? [...rest, ...picked] : [...picked, ...rest];
+  } else if (move === "forward") {
+    for (let at = order.length - 2; at >= 0; at -= 1) {
+      const here = order[at];
+      const above = order[at + 1];
+      if (here !== undefined && above !== undefined && chosen.has(here) && !chosen.has(above)) {
+        order[at] = above;
+        order[at + 1] = here;
+      }
+    }
+  } else {
+    for (let at = 1; at < order.length; at += 1) {
+      const here = order[at];
+      const below = order[at - 1];
+      if (here !== undefined && below !== undefined && chosen.has(here) && !chosen.has(below)) {
+        order[at] = below;
+        order[at - 1] = here;
+      }
+    }
+  }
+  const next = order.flatMap((unit) => members.get(unit) ?? []);
+  return next.every((entry, at) => entry === stack[at]) ? null : next;
+}
+
+
+
+
+
+
+
+
+export function drawingStackWithGroupGathered(
+  stack: readonly DrawingStackEntry[],
+  memberKeys: ReadonlySet<string>,
+): DrawingStackEntry[] | null {
+  const isMember = (entry: DrawingStackEntry) => memberKeys.has(`${entry.kind}:${entry.id}`);
+  const members = stack.filter(isMember);
+  if (members.length < 2) return null;
+  let top = -1;
+  stack.forEach((entry, at) => {
+    if (isMember(entry)) top = at;
+  });
+  const restBelowTop = stack.filter((entry, at) => at < top && !isMember(entry));
+  const restAboveTop = stack.filter((entry, at) => at > top && !isMember(entry));
+  const next = [...restBelowTop, ...members, ...restAboveTop];
+  return next.every((entry, at) => entry === stack[at]) ? null : next;
+}
+
+
+
+
+
+
+
+export function drawingStackArrangeable(
+  stack: readonly DrawingStackEntry[],
+  groupOf: (entry: DrawingStackEntry) => string | undefined = () => undefined,
+): boolean {
+  const units = new Set(
+    stack.map((entry) => {
+      const group = groupOf(entry);
+      return group ? `group:${group}` : `item:${entry.kind}:${entry.id}`;
+    }),
+  );
+  return units.size > 1;
+}
+
 /**
  * Both collections rewritten to a stack: each array in stack order, every
  * item stamped with its stack position. Items the stack does not name keep
@@ -205,4 +318,44 @@ export function applyDrawingStack<
     objectsReordered: nextObjects.reordered,
     chartsReordered: nextCharts.reordered,
   };
+}
+
+/**
+ * The Selection Pane's units of one container, front first (the pane lists
+ * the front-most object first). Container "" is the sheet: each ungrouped
+ * drawing (`object:<id>` / `chart:<id>`) and each group of two or more
+ * drawings (`group:<groupId>`), where its top member stands. Container
+ * `group:<groupId>` is that group's members, which move only among
+ * themselves (Microsoft Support: "for an object that's in a group, you can
+ * only move it within the group").
+ */
+export function drawingStackPaneUnits(
+  stack: readonly DrawingStackEntry[],
+  container: string,
+  groupOf: (entry: DrawingStackEntry) => string | undefined = () => undefined,
+): string[] {
+  const sizes = new Map<string, number>();
+  for (const entry of stack) {
+    const group = groupOf(entry);
+    if (group) sizes.set(group, (sizes.get(group) ?? 0) + 1);
+  }
+  const groupKey = (entry: DrawingStackEntry) => {
+    const group = groupOf(entry);
+    return group && (sizes.get(group) ?? 0) > 1 ? `group:${group}` : null;
+  };
+  const frontFirst = [...stack].reverse();
+  if (container) {
+    return frontFirst
+      .filter((entry) => groupKey(entry) === container)
+      .map((entry) => `${entry.kind}:${entry.id}`);
+  }
+  const units: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of frontFirst) {
+    const key = groupKey(entry) ?? `${entry.kind}:${entry.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    units.push(key);
+  }
+  return units;
 }

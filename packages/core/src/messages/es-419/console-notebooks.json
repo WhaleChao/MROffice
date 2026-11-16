@@ -46,7 +46,7 @@
  "pdf.largeFile.title": "Archivo grande, solo lectura",
  "pdf.largeFile.body": "Este PDF ocupa {size}, más de {limit}: sus páginas se cargan a medida que lees y se puede leer y buscar; para anotarlo o editarlo, descarga el original.",
  "pdf.largeFile.readOnlyReason": "Este PDF ocupa {size}, más de {limit}, así que solo se puede leer; descarga el original para editarlo.",
- "pages.importUploadingPercent": "Subiendo {percent} %",
+ "pages.importUploadingPercent": "Importando {percent} %",
  "pages.importMakingPage": "Creando el archivo…",
  "pages.importFailedTitle": "No se pudieron importar los archivos",
  "pages.importFailedForFile": "No se pudo importar {file}",
@@ -694,6 +694,7 @@
  "importStatus.declinedRemedy.kept_on_page": "Tu cambio se mantiene en esta página; en el archivo descargado el objeto queda como estaba.",
  "importStatus.declinedRemedy.redo_with_command": "Vuelve a hacer el cambio con el comando del editor correspondiente.",
  "importStatus.declinedRemedy.download_rebuilt": "Para obtener un archivo con el cambio, descarga una copia reconstruida a partir de la página (otros detalles del original pueden variar).",
+ "importStatus.declinedRemedy.rebuilt_from_page": "Tu cambio está en el archivo descargado: este objeto se reconstruyó a partir de esta página en lugar de editarse en el original, así que algunos otros detalles pueden variar.",
  "importStatus.declinedRemedy.retry": "Vuelve a guardar en un momento para reintentarlo.",
  "toolbar.textColorAutomatic": "Automático",
  "spreadsheet.pageSetupDialog.errorMargins": "Los márgenes y las distancias del encabezado y el pie de página deben estar entre 0 y 4 pulgadas (0–10.16 cm).",
@@ -1737,5 +1738,8 @@
  "spreadsheet.chartLoadingDeferred": "Cargando gráfico…",
  "spreadsheet.chartsLoadingStructureBlocked": "Los gráficos aún se están cargando. Espera unos segundos y vuelve a insertar o eliminar.",
  "spreadsheet.sheetLoadingOpensSoon": "Esta hoja aún se está cargando. Se abrirá en un momento.",
- "spreadsheet.chartsLoadingMoveBlocked": "Los gráficos aún se están cargando. Espera unos segundos y vuelve a mover las celdas."
+ "spreadsheet.chartsLoadingMoveBlocked": "Los gráficos aún se están cargando. Espera unos segundos y vuelve a mover las celdas.",
+ "spreadsheet.tiledWorkbook.pivotSourceReading": "Una tabla dinámica lee {sheet} ({cells} celdas). Su informe se muestra cuando se lean esas filas.",
+ "spreadsheet.tiledWorkbook.pivotSourceReady": "{sheet} se leyó. Los informes de tabla dinámica ya suman todas las filas.",
+ "spreadsheet.tiledWorkbook.pivotRefreshWaitsForSource": "Leyendo primero {sheet} ({cells} celdas). Actualiza de nuevo la tabla dinámica cuando termine."
 }

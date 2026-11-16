@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import * as Y from "yjs";
 
 import type { PageSaveStatus } from "@mrnote/core/web/hooks/useAutosavedPageDocument.ts";
 import { mergePageDocumentDelta, type PageContentDocument } from "@mrnote/core/web/hooks/usePageContentSync.ts";
@@ -79,6 +80,77 @@ export function deckSlidesToKeep(
     });
   });
   return kept;
+}
+
+/**
+ * The operations a copy's window had made in the deck's room when the copy
+ * was written: its author id in the room document and how many operations
+ * of its own it held (the state vector's clock for it). `null`: the window
+ * had no room (its edits are saved as the page's body). A copy written
+ * before copies named them has none (`undefined`).
+ */
+export interface DeckRecoveredOperations {
+  readonly clientId: number;
+  readonly clock: number;
+}
+
+/** The room document as a window holds it (useAutosavedPageDocument
+ * `collaborationOperations`). */
+export type DeckRoomOperations = { readonly clientId: number; readonly stateVector: string };
+
+function stateVectorClocks(stateVector: string): Map<number, number> | null {
+  try {
+    const text = atob(stateVector);
+    const bytes = new Uint8Array(text.length);
+    for (let at = 0; at < text.length; at += 1) bytes[at] = text.charCodeAt(at);
+    return Y.decodeStateVector(bytes);
+  } catch {
+    return null;
+  }
+}
+
+/** This window's own operations in its room now; null without a room. */
+export function deckOwnOperations(room: DeckRoomOperations | null): DeckRecoveredOperations | null {
+  if (!room) return null;
+  const clocks = stateVectorClocks(room.stateVector);
+  return clocks ? { clientId: room.clientId, clock: clocks.get(room.clientId) ?? 0 } : null;
+}
+
+export function recoveredOperationsOf(copy: AutoRecoverCopy): DeckRecoveredOperations | null | undefined {
+  const content = copy.payload.content as { type?: unknown; operations?: unknown };
+  if (content.type !== RECOVERY_TYPE || !("operations" in content)) return undefined;
+  const operations = content.operations as Partial<DeckRecoveredOperations> | null;
+  if (operations === null) return null;
+  return typeof operations?.clientId === "number" && typeof operations.clock === "number"
+    ? { clientId: operations.clientId, clock: operations.clock } : undefined;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function deckCopyIsBack(
+  copy: AutoRecoverCopy,
+  shownMatches: boolean,
+  room: DeckRoomOperations | null,
+): boolean | null {
+  if (!shownMatches) return false;
+  const operations = recoveredOperationsOf(copy);
+  if (operations === undefined) return false;
+  if (operations === null) return true;
+  if (operations.clock <= 0) return false;
+  const clocks = room ? stateVectorClocks(room.stateVector) : null;
+  if (!clocks) return null;
+  return (clocks.get(operations.clientId) ?? 0) >= operations.clock ? true : null;
 }
 
 export function recoveredSlidesOf(copy: AutoRecoverCopy): DeckRecoveredSlide[] {
@@ -232,9 +304,21 @@ export interface DeckSaveResilienceOptions<S extends DeckSlide> {
     readonly saveNow: () => Promise<unknown>;
   };
   readonly liveSlides: () => readonly S[];
+  
+
+
+
+
+
+
+
+  readonly heldSlides?: () => readonly S[];
   readonly liveDeckFields: () => DeckLevelFields;
   /** A later part's room still has this member's typing to deliver. */
   readonly roomsAwaitingServer: () => boolean;
+  /** The deck's room as this window holds it (its author id and state
+   * vector); null without a room. */
+  readonly roomOperations?: () => DeckRoomOperations | null;
 }
 
 export function useDeckSaveResilience<S extends DeckSlide>(options: DeckSaveResilienceOptions<S>) {
@@ -296,12 +380,17 @@ export function useDeckSaveResilience<S extends DeckSlide>(options: DeckSaveResi
   const buildEntry = useCallback(() => {
     const base = baseRef.current;
     if (!base) return null;
-    const live = optionsRef.current.liveSlides();
+    const { heldSlides, liveSlides } = optionsRef.current;
+    const live = (heldSlides ?? liveSlides)();
     const slides = deckSlidesToKeep(live, base);
     const fields = deckFieldsToKeep(optionsRef.current.liveDeckFields(), baseFieldsRef.current);
     if (slides.length === 0 && fields.length === 0) return null;
+    const room = optionsRef.current.roomOperations?.() ?? null;
     return {
-      payload: { content: { type: RECOVERY_TYPE, slides, fields }, title: optionsRef.current.title },
+      payload: {
+        content: { type: RECOVERY_TYPE, slides, fields, operations: deckOwnOperations(room) },
+        title: optionsRef.current.title,
+      },
       baseContentVersion: optionsRef.current.autosave.page?.content_version ?? 0,
       reason: "unsaved" as const,
     };
@@ -331,14 +420,28 @@ export function useDeckSaveResilience<S extends DeckSlide>(options: DeckSaveResi
         await new Promise((resolve) => window.setTimeout(resolve, 500));
         if (cancelled) return;
       }
-      const shown = new Map(optionsRef.current.liveSlides().map((slide) => [slide.id, deckSlideSignature(slide)]));
-      const fieldsNow = optionsRef.current.liveDeckFields();
-      const left = copies.filter((copy) => {
-        const entries = recoveredSlidesOf(copy);
-        const back = entries.every((entry) => shown.get(entry.id) === deckSlideSignature(entry.slide)) &&
-          recoveredFieldsOf(copy).every((field) => sameValue(fieldsNow[field.key], field.value));
-        if (back) void deleteAutoRecoverCopy(pageId, copy.slot);
-        return !back;
+      const verdicts = (): Array<boolean | null> => {
+        const shown = new Map(optionsRef.current.liveSlides().map((slide) => [slide.id, deckSlideSignature(slide)]));
+        const fieldsNow = optionsRef.current.liveDeckFields();
+        const room = optionsRef.current.roomOperations?.() ?? null;
+        return copies.map((copy) => deckCopyIsBack(
+          copy,
+          recoveredSlidesOf(copy).every((entry) => shown.get(entry.id) === deckSlideSignature(entry.slide)) &&
+            recoveredFieldsOf(copy).every((field) => sameValue(fieldsNow[field.key], field.value)),
+          room,
+        ));
+      };
+      // A copy whose words are shown waits for the room to tell whether its
+      // operations are the server's (the room replays after the page is read).
+      let back = verdicts();
+      for (let waited = 0; back.includes(null) && waited < 20_000; waited += 500) {
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+        if (cancelled) return;
+        back = verdicts();
+      }
+      const left = copies.filter((copy, at) => {
+        if (back[at] === true) void deleteAutoRecoverCopy(pageId, copy.slot);
+        return back[at] !== true;
       });
       if (!cancelled && left.length > 0) setOffered(left);
     })();
@@ -353,7 +456,8 @@ export function useDeckSaveResilience<S extends DeckSlide>(options: DeckSaveResi
   const roomsHolding = enabled && options.roomsAwaitingServer();
   useEffect(() => {
     if (!settled || roomsHolding || !enabled) return;
-    baseRef.current = new Map(optionsRef.current.liveSlides().map((slide) => [slide.id, slide]));
+    const { heldSlides, liveSlides } = optionsRef.current;
+    baseRef.current = new Map((heldSlides ?? liveSlides)().map((slide) => [slide.id, slide]));
     baseFieldsRef.current = optionsRef.current.liveDeckFields();
     clearCurrentAutoRecover(pageId);
     // A copy restored is on the server now: until here it was all there was of it

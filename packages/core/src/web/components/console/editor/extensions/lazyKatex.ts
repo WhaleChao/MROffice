@@ -15,7 +15,8 @@ import {
 } from "./wordDisplayMath";
 import { wordDisplayMathExtents } from "./wordMathMetrics";
 import { officeMathLatex } from "./officeMathSpacing";
-import { applyOfficeMathFit, officeMathFit } from "./officeMathFit";
+import { applyOfficeMathFit, drawnHere, officeMathFit } from "./officeMathFit";
+import { katexNodeWidth } from "../../../../lib/katex-tree-width";
 import katex from "katex";
 import { KATEX_DRAWABLE_STRICT_CODES, katexStrict, prepareLatexForKatex } from "../../../../lib/katex-render";
 import { equationSlotTrust, latexWithSlotsDrawn } from "./equationLiveLatex";
@@ -283,16 +284,75 @@ function katexMarkup(latex: string, displayMode: boolean, office = false): strin
   });
 }
 
+/**
+ * On a breakable display formula (DISPLAY_MATH_WRAPS_ATTR), where the browser
+ * has no hanging indent: its width on one line, as drawn. A formula that
+ * breaks has its later lines an inch in, and Chromium never sizes a box below
+ * its narrowest breaking, a later piece plus that inch: P(x) = |ψ(x)|² stood
+ * in a box 59 px wider than itself, drawn at the box's left, the box centred.
+ * Where `text-indent: … hanging` is understood the stylesheet sizes it alone
+ * (note-editor.css); elsewhere it holds the box to this width.
+ */
+export const DISPLAY_MATH_LINE_WIDTH_PROPERTY = "--math-line-width";
+
+let hangingIndent: boolean | undefined;
+function hangingIndentSupported(): boolean {
+  hangingIndent ??=
+    typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("text-indent", "1px hanging");
+  return hangingIndent;
+}
+
+const lineWidths = new Map<string, string | null>();
+/**
+ * DISPLAY_MATH_LINE_WIDTH_PROPERTY's value for display `latex` (null: not
+ * breakable, or the browser needs none): KaTeX's own layout of the line it
+ * draws, with an office formula's italic corrections (officeMathFit), read
+ * from KaTeX's tree with no layout (within 0.3 px of the browser's,
+ * lib/office-equation-katex-layout.ts), and a hair over so it never breaks a
+ * line that fits.
+ */
+function breakableLineWidth(latex: string, office: boolean): string | null {
+  if (hangingIndentSupported()) return null;
+  const key = (office ? "O:" : ":") + latex;
+  const known = lineWidths.get(key);
+  if (known !== undefined) return known;
+  let width: string | null = null;
+  try {
+    const wrapping = wrappableDisplayLatex(office ? officeMathLatex(latex) : latex);
+    const render = (katex as unknown as {
+      __renderToHTMLTree?: (expression: string, options: katex.KatexOptions) => KatexHtmlTreeNode;
+    }).__renderToHTMLTree;
+    if (wrapping !== null && render) {
+      const tree = render(latexForKatex(`\\displaystyle ${wrapping}`), { ...MARKUP_OPTIONS, displayMode: false });
+      const html = tree.children?.find((child) => child.classes?.includes("katex-html"));
+      const bases = (html?.children ?? []).filter((child) => child.classes?.includes("base"));
+      const em = bases.reduce(
+        (sum, base, index) => sum + katexNodeWidth(base, 1, office ? drawnHere : undefined, bases[index + 1] ?? null),
+        0,
+      );
+      if (em > 0) width = `${(em * 1.005 + 0.1).toFixed(4)}em`;
+    }
+  } catch {
+    width = null;
+  }
+  if (lineWidths.size >= 4096) lineWidths.clear();
+  lineWidths.set(key, width);
+  return width;
+}
+
 function wordDisplayLineMarkup(line: string, aligned?: WordMathLine): string {
   const extents = wordDisplayMathExtents(line);
-  const box = extents ? ` data-word-math-box="true" style="--word-math-ascent:${extents.ascent}em;--word-math-descent:${extents.descent}em"` : "";
+  const ascent = extents ? `--word-math-ascent:${extents.ascent}em;--word-math-descent:${extents.descent}em` : "";
+  const box = extents ? ` data-word-math-box="true"` : "";
   if (aligned && aligned.whole === null) {
-    return `<span class="word-math-line" ${WORD_MATH_POINT_ATTR}="true"${box}>${wordMathPartsMarkup(aligned)}</span>`;
+    return `<span class="word-math-line" ${WORD_MATH_POINT_ATTR}="true"${box}${ascent ? ` style="${ascent}"` : ""}>${wordMathPartsMarkup(aligned)}</span>`;
   }
   const markup = katexMarkup(line, true, true);
   const wraps = !markup.startsWith('<span class="katex-display"');
   const matrix = wraps && MATRIX_ENVIRONMENT.test(line) ? ` ${DISPLAY_MATH_MATRIX_ATTR}="true"` : "";
-  return `<span class="word-math-line"${box}${wraps ? ` ${DISPLAY_MATH_WRAPS_ATTR}="true"` : ""}${matrix}>${markup}</span>`;
+  const lineWidth = wraps ? breakableLineWidth(line, true) : null;
+  const style = [ascent, lineWidth ? `${DISPLAY_MATH_LINE_WIDTH_PROPERTY}:${lineWidth}` : ""].filter(Boolean).join(";");
+  return `<span class="word-math-line"${box}${style ? ` style="${style}"` : ""}${wraps ? ` ${DISPLAY_MATH_WRAPS_ATTR}="true"` : ""}${matrix}>${markup}</span>`;
 }
 
 /** The two sides of a line's alignment point, each keeping its spacing there. */
@@ -317,13 +377,29 @@ const KATEX_FONT_FAMILIES = [
 ] as const;
 
 let katexFontsReady: Promise<void> | null = null;
+let katexFacesOnly: Promise<void> | null = null;
 let katexFontsLoaded = false;
 
-/** Every KaTeX face loaded: what a width read from a typeset formula needs. */
-export async function ensureKatexFonts(): Promise<void> {
+/** How long the KaTeX faces alone are waited for (projectionFontNews). */
+const KATEX_FACES_WAIT_MS = 4000;
+
+/** Every KaTeX face loaded: what a width read from a typeset formula needs.
+ * `wholePage: false` (projectionFontNews) waits for the KaTeX faces alone, at
+ * most a while, not for every face the page is loading (`fonts.ready`): in
+ * WebKit a Chinese document's subsets kept that pending for minutes. */
+export async function ensureKatexFonts(wholePage = true): Promise<void> {
   const fonts = document.fonts;
   if (!fonts?.load) {
     katexFontsLoaded = true;
+    return;
+  }
+  if (!wholePage) {
+    if (katexFontsLoaded) return;
+    katexFacesOnly ??= Promise.race([
+      Promise.allSettled(KATEX_FONT_FAMILIES.map((family) => fonts.load(`16px "${family}"`))).then(() => undefined),
+      new Promise<void>((resolve) => setTimeout(resolve, KATEX_FACES_WAIT_MS)),
+    ]);
+    await katexFacesOnly;
     return;
   }
   if (!katexFontsReady) {
@@ -451,6 +527,14 @@ export function renderKatexCached(
     if (wraps !== el.hasAttribute(DISPLAY_MATH_WRAPS_ATTR)) {
       if (wraps) el.setAttribute(DISPLAY_MATH_WRAPS_ATTR, "true");
       else el.removeAttribute(DISPLAY_MATH_WRAPS_ATTR);
+    }
+    const lineWidth = wraps ? breakableLineWidth(latex, office) : null;
+    if (lineWidth) {
+      if (el.style.getPropertyValue(DISPLAY_MATH_LINE_WIDTH_PROPERTY) !== lineWidth) {
+        el.style.setProperty(DISPLAY_MATH_LINE_WIDTH_PROPERTY, lineWidth);
+      }
+    } else if (el.style.getPropertyValue(DISPLAY_MATH_LINE_WIDTH_PROPERTY)) {
+      el.style.removeProperty(DISPLAY_MATH_LINE_WIDTH_PROPERTY);
     }
     el.toggleAttribute(DISPLAY_MATH_MATRIX_ATTR, wraps && MATRIX_ENVIRONMENT.test(latex));
   }

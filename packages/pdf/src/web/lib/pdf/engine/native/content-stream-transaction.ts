@@ -8717,6 +8717,57 @@ function sameNativeObjectRef(
   );
 }
 
+/**
+ * What each XObject name of one page's resources is (ISO 32000-1 Table 92):
+ * an Image, a Form or a PostScript XObject. A layer move of the page's
+ * content (vector-content-transaction: the Selection pane's objects) tells
+ * a picture's `Do` from a Form's by it. A name whose XObject says no exact
+ * subtype is left out: the caller treats a `Do` it cannot name as content
+ * it does not address.
+ */
+export async function readMraiNativePageXObjectKinds(
+  sourceBytes: Uint8Array,
+  pageNumber: number,
+): Promise<ReadonlyMap<string, "Image" | "Form" | "TextForm" | "PS">> {
+  const pages = await inspectMraiNativeDocumentPageContentGraphs(sourceBytes);
+  const page = pages[pageNumber - 1];
+  if (!page) fail("invalid-request", "Selected PDF page is out of range.");
+  const resourceOwner = await inspectMraiNativeObject(sourceBytes, page.resourceAuthority.owner);
+  const mappings = xObjectDictionaryEntries(
+    sourceBytes,
+    resourceOwner.objectBytes,
+    page.resourceAuthority.dictionaryKind,
+    `PDF page ${pageNumber}`,
+    true,
+  );
+  const kinds = new Map<string, "Image" | "Form" | "TextForm" | "PS">();
+  for (const mapping of mappings) {
+    const dictionary = readMraiNativeObjectDictionarySource(sourceBytes, mapping.target);
+    if (dictionary === null) continue;
+    const subtype = parseMraiNativeTopLevelDictionaryNameEntries(latin1Bytes(dictionary)).filter(
+      (entry) => entry.key === "Subtype",
+    );
+    const name = subtype.length === 1 ? (subtype[0]?.directName ?? null) : null;
+    if (name === "Form") {
+      // A Form shows text with the text state it is drawn in when its own
+      // drawing (or a Form it draws) shows any; one this reader cannot read
+      // is taken to.
+      let drawing: string | null = null;
+      try {
+        const inspected = await inspectMraiNativeObject(sourceBytes, mapping.target);
+        drawing = inspected.streamBytes ? asLatin1(inspected.streamBytes) : null;
+      } catch {
+        drawing = null;
+      }
+      kinds.set(mapping.resourceName, drawing === null || /(^|[^A-Za-z])(BT|Do)(?![A-Za-z])/.test(drawing)
+        ? "TextForm" : "Form");
+    } else if (name === "Image" || name === "PS") {
+      kinds.set(mapping.resourceName, name);
+    }
+  }
+  return kinds;
+}
+
 async function resolveNativeImageRemovalGraph(
   sourceBytes: Uint8Array,
   pageNumber: number,
@@ -9207,6 +9258,20 @@ export async function inspectMraiNativeVectorFormHosts(
       (entry) => entry.key === "Subtype",
     );
     if (names.length !== 1 || names[0].directName !== "Form") continue;
+    // The drawing of a table, chart or SmartArt made in MRAI, which the
+    // page draws as its own content (managed_object_content.py names the
+    // object on the form): its rules and bars are the object's, drawn again
+    // from its model at the next save, and no shapes of the page to move or
+    // restyle one by one. (Such a form has resources of its own.)
+    let managedObject = /\/MRNoteObject(?![A-Za-z0-9])/.test(dictionary);
+    if (managedObject) {
+      try {
+        managedObject = topLevelDictionaryEntries(dictionary).some((entry) => entry.key === "MRNoteObject");
+      } catch (error) {
+        if (!(error instanceof PdfNativeTransactionError)) throw error;
+      }
+    }
+    if (managedObject) continue;
     forms.set(mapping.resourceName, mapping.target);
     try {
       if (!topLevelDictionaryEntries(dictionary).some((entry) => entry.key === "Resources")) {
@@ -21726,6 +21791,41 @@ export async function readMraiNativeEmbeddedImageObject(input: {
     page: Object.freeze({ objectNumber: graph.page.page.objectNumber, generation: graph.page.page.generation }),
     image: Object.freeze({ objectNumber: image.objectNumber, generation: image.generation }),
   });
+}
+
+/**
+ * The page's own paints that draw one image object, by their order among the
+ * page's image paints, with the digest of that object as these bytes hold it.
+ * Two files of one page that each draw the object once, and hold it as the
+ * same bytes, draw the same picture there whatever else of the page differs:
+ * how a picture changed in two windows is found again when the other window
+ * changed more of the page than that picture. `sha256` is null when the
+ * object cannot be read here.
+ */
+export async function listMraiNativeEmbeddedImagePaintsOfObject(input: {
+  readonly sourceBytes: Uint8Array;
+  readonly pageNumber: number;
+  readonly image: Readonly<{ objectNumber: number; generation: number }>;
+}): Promise<Readonly<{ orders: readonly number[]; sha256: string | null }>> {
+  const pageNumber = exactPositiveInteger(input.pageNumber, "embedded image page number");
+  assertObjectReference(input.image.objectNumber, input.image.generation);
+  const graph = await resolveNativeImageRemovalGraph(input.sourceBytes, pageNumber);
+  const orders: number[] = [];
+  graph.invocations.forEach((invocation, order) => {
+    if (invocation.host) return;
+    const image = graph.images.get(invocation.resourceName);
+    if (image && image.objectNumber === input.image.objectNumber && image.generation === input.image.generation) orders.push(order);
+  });
+  let sha256: string | null = null;
+  try {
+    const parsed = parseSourceStructure(input.sourceBytes);
+    const object = parseIndirectObject(input.sourceBytes, parsed, input.image.objectNumber, input.image.generation,
+      undefined, "raw");
+    if (object.streamStart !== null) sha256 = await sha256PdfBytes(object.bytes);
+  } catch {
+    sha256 = null;
+  }
+  return Object.freeze({ orders: Object.freeze(orders), sha256 });
 }
 
 /** What planMraiNativePictureOrigin wrote for `image` on `page`, or null. */

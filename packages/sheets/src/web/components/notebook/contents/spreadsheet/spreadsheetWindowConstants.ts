@@ -61,7 +61,7 @@ export const spreadsheetTaskPaneTabTestId = (id: string) =>
  * workbook files (.xls, .xlsb, OpenDocument, WPS, SYLK, DIF, dBASE, Numbers,
  * Excel 2003 XML) are converted on the server first, as a page import is. */
 export const SPREADSHEET_WORKBOOK_IMPORT_EXTENSIONS = [
-  ".xlsx", ".xlsm", ".xltx", ".xltm", ".xls", ".xlt", ".xlsb", ".ods", ".fods",
+  ".xlsx", ".xlsm", ".xltx", ".xltm", ".xls", ".xlt", ".xlsb", ".ods", ".fods", ".ots", ".sxc", ".wk1", ".wks",
   ".et", ".ett", ".slk", ".dif", ".dbf", ".numbers", ".xml",
 ] as const;
 export function isSpreadsheetWorkbookImportFile(file: { name: string; type?: string }): boolean {
@@ -72,7 +72,7 @@ export function isSpreadsheetWorkbookImportFile(file: { name: string; type?: str
   );
 }
 export const SPREADSHEET_DROP_IMPORT_FILE =
-  /\.(xlsx|xlsm|xltx|xltm|xls|xlt|xlsb|ods|fods|et|ett|slk|dif|dbf|numbers|xml|csv|tsv|psv|txt)$/i;
+  /\.(xlsx|xlsm|xltx|xltm|xls|xlt|xlsb|ods|fods|ots|sxc|wk1|wks|et|ett|slk|dif|dbf|numbers|xml|csv|tsv|psv|txt)$/i;
 
 /** The status bar's export chip wording, per phase (the Docs chip's). */
 export const SPREADSHEET_EXPORT_STATUS_MESSAGE = {

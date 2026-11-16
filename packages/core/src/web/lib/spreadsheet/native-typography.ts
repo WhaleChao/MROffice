@@ -7,12 +7,18 @@ import { PX_PER_PT } from "../office-units";
 import type { CSSProperties } from "react";
 import { officePrimaryFontFamily } from "../../components/office-ribbon/officeTypographyCatalog";
 import { officeFaceName } from "../office-fonts/face-names";
+import { setPrintedCellScripts } from "./cell-text-effects";
 import { ensureOfficeFauxBoldProbe, officeFamilyHasNoBold } from "../office-fonts/faux-bold";
-import { ensureOfficeFontFaces, loadOfficeFamilySpace, officeFontDeclared, officeFontSubstitutes } from "../office-fonts/substitutes";
+import { ensureOfficeFontFaces, loadOfficeFamilySpace, officeFontDeclared, officeFontSubstitutes, setOfficeEmboldenedRegularCuts } from "../office-fonts/substitutes";
 import { columnBaseWidthToPixels, columnFileWidthToPixels } from "./grid-sizing";
-import { isSpreadsheetFauxBoldStroke, spreadsheetEngineIdealAdvances, spreadsheetFauxBoldCss, spreadsheetTextEngineOn } from "./spreadsheet-text-engine";
+import { isSpreadsheetFauxBoldStroke, setSpreadsheetFauxBoldPrinted, spreadsheetEngineIdealAdvances, spreadsheetEngineTextWidth, spreadsheetFauxBoldCss, spreadsheetTextEngineOn } from "./spreadsheet-text-engine";
 import { withScriptFallbacks } from "../office-fonts/script-fallbacks";
+import { OFFICE_COMPLEX_SCALE_PREFIX, officeComplexScaleStack } from "./office-complex-scales";
+import { excelFontRecordOf, excelWindowsDrawnFaces, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
 import { GENERIC_FAMILIES } from "../text-engine/face-index";
+import { fontMeasureContext } from "./font-measure-context";
+
+export { fontMeasureContext };
 import { fontLoadReach } from "./font-load-reach";
 
 /** SpreadsheetML widths are font-relative units, never CSS pixels.
@@ -28,6 +34,10 @@ export interface NativeGridFont {
   headingFamily?: string;
   bodyFamily?: string;
   themeRole?: "major" | "minor";
+  /** The font record's class where Windows lacks the face it names: drawn and
+   * measured in GDI's pick for it (excelFontRecordOf; reading
+   * xlsxFontRecordClass). */
+  record?: ExcelFontRecordClass;
 }
 export interface NativeEditProfile { dpi: 72 | 96; digitWidth: number }
 export interface NativeColumnWidth { width: number; pixels: number; profile?: NativeEditProfile }
@@ -82,7 +92,8 @@ export function normalizeNativeGrid(value: unknown): NativeGrid | undefined {
     ...(typeof value.font.headingFamily === "string" ? { headingFamily: value.font.headingFamily } : {}),
     ...(typeof value.font.bodyFamily === "string" ? { bodyFamily: value.font.bodyFamily } : {}),
     ...(value.font.themeRole === "major" || value.font.themeRole === "minor" ? { themeRole: value.font.themeRole } : {}),
-    ...(value.font.bold === true ? { bold: true } : {}), ...(value.font.italic === true ? { italic: true } : {}) },
+    ...(value.font.bold === true ? { bold: true } : {}), ...(value.font.italic === true ? { italic: true } : {}),
+    ...(excelFontRecordOf(value.font.record) ? { record: excelFontRecordOf(value.font.record) } : {}) },
     ...(metricsFont ? { metricsFont } : {}),
     columns, baseColumnWidth: value.baseColumnWidth, defaultPixels: value.defaultPixels,
     ...(typeof value.sourceThemeFontId === "string" && value.sourceThemeFontId.length <= 100 ? { sourceThemeFontId: value.sourceThemeFontId } : {}),
@@ -119,7 +130,33 @@ export function resolveNativeRowHeights(metrics: NativeRowMetrics | undefined, h
   for (const [key,row] of Object.entries(metrics.rows)) if (heights?.[key] === row.pixels) resolved[key]=row.heightPt / .75;
   const pairedDefault = defaultHeight === metrics.default.pixels;
   const automatic = pairedDefault && !metrics.default.customHeight && finite(fontRowHeight, .05/.75, 4096);
+  // A file saved by Excel at another DPI states its rows in that DPI's lines
+  // (14.4 pt for a Calibri 11 line at 120 dpi): Windows Excel re-fits a row
+  // without customHeight on open (lookwin p26b, p38), so such a row is left to
+  // the automatic fit (lookwin probe p30, 182 rows: re-fitted 147 exact and 22
+  // 1.5 pt off, where k stated lines standing k of the font's own gave 136 / 23;
+  // R101-X17 row 42, 3 lines at 120 dpi, is 4 at 96, p37b). A file whose
+  // default is Excel's own (96 dpi) keeps its rows. The API's
+  // _native_print_sheet applies the same rule.
+  const stated = metrics.default.heightPt / .75;
+  if (automatic && Math.abs(fontRowHeight - metrics.default.pixels) >= .5 && Math.abs(fontRowHeight - stated) >= .5) {
+    for (const [key,row] of Object.entries(metrics.rows)) {
+      if (row.customHeight || heights?.[key] !== row.pixels) continue;
+      delete resolved[key];
+    }
+  }
   return {heights:resolved,defaultHeight:automatic ? clampNativeAutomaticRowHeight(fontRowHeight) : pairedDefault ? metrics.default.heightPt/.75 : defaultHeight};
+}
+
+/** Whether a default row the file marks custom (sheetFormatPr customHeight)
+ * holds the rows that state no height of their own at it: only while no row
+ * of the sheet states a custom height. Once one does, Windows Excel fits
+ * those rows to their content (lookwin p97e-lw: a wrapped bold W92000004 in a
+ * row with no ht stands one line, two once row 1, 3 or 5 states ht
+ * customHeight; R346-X27). The API's writer (custom_row_stated) is the same. */
+export function nativeDefaultHoldsRows(metrics: NativeRowMetrics | undefined): boolean {
+  if (!metrics?.default.customHeight) return false;
+  return !Object.values(metrics.rows).some((row) => row.customHeight);
 }
 
 /** Excel's row limit applies to computed heights as well as authored heights. */
@@ -287,7 +324,18 @@ function latinSerifFace(face: string, standIns: readonly string[]): boolean {
 const fontStackCache = new Map<string, string>();
 let fontStackCacheGeneration = -1;
 
-export function spreadsheetFontStack(family: string | undefined, traits: Pick<NativeGridFont, "bold" | "italic"> = {}): string {
+export function spreadsheetFontStack(
+  family: string | undefined,
+  traits: Pick<NativeGridFont, "bold" | "italic"> & { readonly record?: unknown; readonly fontRecord?: unknown } = {},
+): string {
+  // A face Windows lacks whose record states its class (a grid font's
+  // `record`, a cell's `fontRecord`) is drawn in GDI's pick for that class:
+  // Carlito stating nothing in Arial, charset 134 in SimSun.
+  const record = excelFontRecordOf(traits.fontRecord ?? traits.record);
+  if (record) {
+    const drawn = excelWindowsDrawnFaces(family?.trim(), record);
+    if (drawn) family = drawn.latin;
+  }
   const engine = spreadsheetTextEngineOn();
   if (fontStackCacheGeneration !== typographyGeneration) {
     fontStackCache.clear();
@@ -297,7 +345,8 @@ export function spreadsheetFontStack(family: string | undefined, traits: Pick<Na
   const key = `${engine ? 1 : 0}${mac ? 1 : 0}${traits.bold ? 1 : 0}${traits.italic ? 1 : 0}|${family ?? ""}`;
   const cached = fontStackCache.get(key);
   if (cached !== undefined) return cached;
-  const stack = buildSpreadsheetFontStack(family, traits);
+  // Traits stay in the key: a cascaded bold asks again (resolveSpreadsheetFontStyle).
+  const stack = buildSpreadsheetFontStack(family);
   if (typeof document !== "undefined") {
     if (fontStackCache.size >= 4096) fontStackCache.clear();
     fontStackCache.set(key, stack);
@@ -305,24 +354,34 @@ export function spreadsheetFontStack(family: string | undefined, traits: Pick<Na
   return stack;
 }
 
-function buildSpreadsheetFontStack(family: string | undefined, traits: Pick<NativeGridFont, "bold" | "italic">): string {
+function buildSpreadsheetFontStack(family: string | undefined): string {
   // A cell stores one face, but the shared font picker hands a CSS stack
   // ("Arial, Helvetica, sans-serif"): its first family is the face. Read
   // whole, the stack was one unknown name drawn in the serif fallback (user
   // audit S-006).
   const named = family?.split(",")[0]?.replace(/["'\\;{}()<>]/g, "").trim().slice(0, 200);
+  // A name Windows Excel lacks or aliases is drawn in its pick whatever this
+  // browser has: Carlito, Helvetica Neue and "Calibri (Body)" in Arial,
+  // Helvetica in Arial, Times in Times New Roman (lookwin faces probe; the
+  // name as the file states it, else the stack's first face).
+  const windows = excelWindowsDrawnFaces(family?.trim()) ?? excelWindowsDrawnFaces(named);
   // A face named by its full or PostScript name ("Lucida Sans Regular") is
   // that face of its family, as Excel for Mac opens it (X-028).
-  const face = named && spreadsheetFontAvailable(named) === false ? officeFaceName(named)?.family ?? named : named;
+  const face = windows
+    ? windows.latin
+    : named && spreadsheetFontAvailable(named) === false ? officeFaceName(named)?.family ?? named : named;
   // The face stands first in the stack: its slice holding the space is the
   // line's first available font once loaded (loadOfficeFamilySpace).
   loadOfficeFamilySpace(face);
-  if (face && spreadsheetFontAvailable(face) === false && /Mac/i.test(navigator.platform)) {
-    // Native Mac Excel uses a serif substitute for regular missing faces,
-    // but a sans-serif substitute for bold/italic variants. Keep the requested
-    // family first so an available or explicitly bound face always wins.
-    const latin = traits.bold || traits.italic ? '"Helvetica", "Times New Roman"' : '"Times New Roman"';
-    return servedStack(`"${face}", ${latin}, "MS Mincho", "Malgun Gothic", "Mangal", "Tahoma", serif`);
+  if (!windows && face && spreadsheetFontAvailable(face) === false) {
+    // A face nothing here draws: Windows Excel draws a font record it lacks
+    // in Arial (one that states no class, as most do), Han and kana in
+    // Microsoft YaHei and Hangul in Malgun Gothic, bold and italic alike
+    // (lookwin faces probe, 542 faces). Keep the requested family first so a
+    // face that arrives later still wins.
+    ensureOfficeFontFaces("Arial");
+    const arial = officeFontSubstitutes("Arial").map((name) => `"${name}", `).join("");
+    return servedStack(`"${face}", "Arial", ${arial}${officeComplexScaleStack(face)}"Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", sans-serif`);
   }
   ensureOfficeFontFaces(face);
   const standIns = face ? officeFontSubstitutes(face) : [];
@@ -340,7 +399,15 @@ function buildSpreadsheetFontStack(family: string | undefined, traits: Pick<Nati
     hanSerif && !/^times new roman$/i.test(face ?? "")
       ? (ensureOfficeFontFaces("Times New Roman"), '"Times New Roman", ')
       : "";
-  return servedStack(`${face ? `"${face}", ${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
+  // Arabic, Hebrew and Bengali at the widths Windows Excel sets them in
+  // this face, right behind the face and ahead of its stand-ins
+  // (office-complex-scales.ts), as the API's writer prints them: a stand-in
+  // holding the script draws it at its own width (Tinos' Hebrew for Times
+  // New Roman, 10% wider than Excel's), and what the stand-ins lack would
+  // fall to Wine Tahoma's Arabic, behind every face here, or to the script
+  // fallback's Noto at its own size. Each family covers its script alone.
+  const complex = officeComplexScaleStack(face);
+  return servedStack(`${face ? `"${face}", ${complex}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
 }
 
 /**
@@ -355,9 +422,30 @@ function servedStack(stack: string): string {
   const parts = stack.split(",").map((part) => part.trim()).filter((part) => part && !/^["']?PingFang SC["']?$/i.test(part));
   for (const part of parts) {
     const name = part.replace(/^["']|["']$/g, "");
-    if (!GENERIC_FAMILIES.has(name.toLowerCase())) ensureOfficeFontFaces(name);
+    if (!GENERIC_FAMILIES.has(name.toLowerCase()) && !name.startsWith(OFFICE_COMPLEX_SCALE_PREFIX)) ensureOfficeFontFaces(name);
   }
   return withScriptFallbacks(parts.join(", "));
+}
+
+/** Characters every sheet draws: its numbers, their signs and separators. */
+const WARM_TEXT = "0123456789 .,-+%$()#E/:";
+
+
+
+
+
+
+
+
+
+
+
+export function warmSpreadsheetFamilyMeasures(family: string): boolean {
+  if (!spreadsheetTextEngineOn() || !officeFontDeclared(family)) return false;
+  for (const bold of [false, true]) {
+    spreadsheetEngineTextWidth(WARM_TEXT, `normal ${bold ? 700 : 400} 15px ${spreadsheetFontStack(family, { bold })}`);
+  }
+  return true;
 }
 
 /** Resolve after the style cascade, including conditional/table and rich-run
@@ -486,9 +574,74 @@ export function dropAdvancesTouched(event: Event): boolean {
   return dropped;
 }
 
-export function nativeTextAdvances(text: string, fontCss: string, dpi: number, scale = 1, _purpose: "paint" | "measure" = "paint", advanceOffset = 0): Array<{ text: string; spacing: number; advance?: number }> {
-  // Keep the existing call contract; both screen operations share advances.
-  void _purpose;
+/**
+ * One indent level as Windows Excel prints it, CSS px of the paper: three of
+ * the Normal font's spaces, each a whole printer dot at 600 dpi, at every
+ * page scale -- the indent does not shrink with the page (lookwin p105-lw:
+ * 8.27 pt a level in an Arial 10 workbook at 100, 50 and 25 % and Fit To;
+ * p87-lw: Calibri 11 63 dots, Arial 10 69). The space's design width from
+ * the face's file where the text engine has it, else the browser's.
+ * Undefined without a face or a measure.
+ */
+export function officePrintedIndentStepPx(family: string | undefined, sizePt: number | undefined): number | undefined {
+  if (typeof document === "undefined" || !family || typeof sizePt !== "number" || !(sizePt > 0)) return undefined;
+  const font = `normal 400 1000px ${spreadsheetFontStack(family)}`;
+  const em = spreadsheetEngineIdealAdvances([" "], font)?.[0] ?? fontMeasureContext(font, "none")?.measureText(" ").width;
+  if (typeof em !== "number" || !(em > 0)) return undefined;
+  const dots = Math.round(em / 1000 * sizePt * 600 / 72);
+  return dots > 0 ? 3 * dots * 96 / 600 : undefined;
+}
+
+/**
+ * The printer resolution the editor's print page paints text at, or 0 on
+ * screen. Windows Excel prints a run's glyphs at the printer's whole pixels
+ * per em and each advance in whole printer dots (600 dpi: Calibri 11 at 92
+ * px per em, its digit 47 dots, office-print-metrics; lookwin p100c / p102g:
+ * a long note runs 0.5% past its design width), not at the screen's whole
+ * pixels (Calibri 11's digit 7 px: 5.25 pt where the paper shows 5.64). Lines
+ * still break where the screen breaks them ("measure"); only the painted
+ * advances follow the printer. The API's sheet PDF writer is the same
+ * (notebooks.py FaceMeasure.printed).
+ */
+let printerTextDpi = 0;
+/** The printer's resolution text is painted at (0 off the print page). */
+export function nativeTextPrinterDpi(): number {
+  return printerTextDpi;
+}
+export function setNativeTextPrinterDpi(dpi: number): void {
+  const next = Number.isFinite(dpi) && dpi > 96 ? dpi : 0;
+  if (next === printerTextDpi) return;
+  printerTextDpi = next;
+  advancesCache.clear();
+  // Bold in a face without a bold cut prints as Excel prints it too.
+  setSpreadsheetFauxBoldPrinted(next > 0);
+  // ... in its stand-in's heavier cut where Excel's is heavier than it.
+  setOfficeEmboldenedRegularCuts(next > 0);
+  // Superscripts and subscripts at Excel's printed size and rise.
+  setPrintedCellScripts(next > 0);
+}
+
+
+
+
+
+
+
+
+
+
+
+const designedTextOwners = new Map<object, ReadonlySet<string>>();
+export function setNativeTextDesignedLines(owner: object, lines: ReadonlySet<string> | null): void {
+  if (lines && lines.size) designedTextOwners.set(owner, lines);
+  else designedTextOwners.delete(owner);
+}
+function designedTextLine(text: string): boolean {
+  for (const lines of designedTextOwners.values()) if (lines.has(text)) return true;
+  return false;
+}
+
+export function nativeTextAdvances(text: string, fontCss: string, dpi: number, scale = 1, purpose: "paint" | "measure" = "paint", advanceOffset = 0): Array<{ text: string; spacing: number; advance?: number }> {
   if (typeof document === "undefined" || /[\u0590-\u0fff]/u.test(text)) return [{ text, spacing: 0 }];
   if (textContext === undefined) {
     textContext = document.createElement("canvas").getContext("2d");
@@ -500,43 +653,22 @@ export function nativeTextAdvances(text: string, fontCss: string, dpi: number, s
     });
   }
   if (!textContext) return [{ text, spacing: 0 }];
-  const answerKey = `${text}\u0000${fontCss}\u0000${dpi}\u0000${scale}\u0000${advanceOffset}`;
+  // Painted on the print page at the printer's advances (printerTextDpi);
+  // the screen's grid is 96 dpi.
+  // A text registered as designed (setNativeTextDesignedLines) is painted at
+  // its design advances there (-1).
+  const printer = purpose === "paint" && dpi === 96 && printerTextDpi ? (designedTextOwners.size && designedTextLine(text) ? -1 : printerTextDpi) : 0;
+  const answerKey = `${text}\u0000${fontCss}\u0000${dpi}\u0000${scale}\u0000${advanceOffset}\u0000${printer}`;
   const known = advancesCache.get(answerKey);
   // A copy: callers own what they are given.
   if (known) return known.map((run) => ({ ...run }));
-  const answer = measureNativeTextAdvances(textContext, text, fontCss, dpi, scale, advanceOffset);
+  const answer = measureNativeTextAdvances(textContext, text, fontCss, dpi, scale, advanceOffset, printer);
   if (advancesCache.size > 20000) advancesCache.clear();
   advancesCache.set(answerKey, answer.map((run) => ({ ...run })));
   return answer;
 }
 
-/** A measuring context for each font a sheet draws in, kept with that font
- * set. A measurement just after a canvas font changes resolves the face
- * again (a family list with CJK fallbacks: about 30 µs), and cells in
- * different fonts or sizes interleave on every row, so one shared context
- * switching font paid that for each new text (a cold Japanese workbook:
- * about a second of its first renders). Fonts beyond the bound go oldest
- * first. */
-const measureContexts = new Map<string, CanvasRenderingContext2D>();
-const MAX_MEASURE_CONTEXTS = 48;
-export function fontMeasureContext(font: string, kerning: CanvasFontKerning = "auto"): CanvasRenderingContext2D | null {
-  const key = `${kerning}\u0000${font}`;
-  const known = measureContexts.get(key);
-  if (known) return known;
-  if (typeof document === "undefined") return null;
-  const context = document.createElement("canvas").getContext("2d");
-  if (!context) return null;
-  context.font = font;
-  context.fontKerning = kerning;
-  if (measureContexts.size >= MAX_MEASURE_CONTEXTS) {
-    const oldest = measureContexts.keys().next().value;
-    if (oldest !== undefined) measureContexts.delete(oldest);
-  }
-  measureContexts.set(key, context);
-  return context;
-}
-
-function measureNativeTextAdvances(context: CanvasRenderingContext2D, text: string, fontCss: string, dpi: number, scale: number, advanceOffset: number): Array<{ text: string; spacing: number; advance?: number }> {
+function measureNativeTextAdvances(context: CanvasRenderingContext2D, text: string, fontCss: string, dpi: number, scale: number, advanceOffset: number, printer = 0): Array<{ text: string; spacing: number; advance?: number }> {
   const textContext = context;
   const fontSize = fontCss.match(/([0-9]+(?:\.[0-9]+)?)(px|pt)/);
   if (!fontSize) return [{text,spacing:0}];
@@ -590,7 +722,12 @@ function measureNativeTextAdvances(context: CanvasRenderingContext2D, text: stri
       return { text: segment, spacing: 0 };
     }
     const idealWidth = ideals[index] * pixels / 1000;
-    const desired = Math.round(idealWidth * dpi / 96) * 96 / dpi * safeScale;
+    // At the printer: whole pixels per em, whole dots an advance.
+    const desired = printer > 0
+      ? Math.round(ideals[index] / 1000 * Math.round(pixels * printer / 96)) * 96 / printer * safeScale
+      : printer < 0
+        ? idealWidth * safeScale
+        : Math.round(idealWidth * dpi / 96) * 96 / dpi * safeScale;
     totalDesired += desired;
     const snapped = quantum ? Math.round(totalDesired / quantum) * quantum : totalDesired;
     const targetAdvance = snapped - previousSnapped;

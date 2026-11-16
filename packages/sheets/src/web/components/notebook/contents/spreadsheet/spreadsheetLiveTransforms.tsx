@@ -37,7 +37,8 @@
  * alone re-renders as it moves; the grid is never laid out again for them.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type ReactElement } from "react";
+import { createPortal } from "react-dom";
 import type { Awareness } from "y-protocols/awareness";
 
 import {
@@ -57,6 +58,8 @@ import {
 } from "@mrnote/core/web/lib/collab/live-transform.ts";
 import { sanitizeCollabUser } from "@mrnote/core/web/lib/collab/collab-state.ts";
 import type { ChartDrawingFrame } from "../../../../lib/spreadsheet/chart-groups";
+import { sheetBoxPaneParts, sheetFreezeLinesPx, sheetFrozenPanes } from "./SheetRangePaneLayers";
+import { sheetRangePaneLayer, type SheetFrozenLines, type SheetRangePane } from "./useSheetRangeBoxes";
 import {
   createDrawingPreview,
   type DrawingLiveSize,
@@ -506,19 +509,56 @@ export interface SpreadsheetLiveGestureOverlaysProps {
   readonly columnCount: number;
   readonly rowCount: number;
   readonly gridRtl: boolean;
+  /** The frozen lines: a guide or an outline over frozen cells is drawn over that pane. */
+  readonly frozen?: SheetFrozenLines | null;
 }
 
+/** The peers' guides and outlines: over the cells, under the frozen panes. */
+const LIVE_GESTURE_LAYER = 8;
+
+type PaneLayers = Partial<Record<SheetRangePane, HTMLElement>>;
+
 /** The peers' divider guides and fill / move outlines, in the grid stage. */
-export function SpreadsheetLiveGestureOverlays({ surface, entries, ...geometry }: SpreadsheetLiveGestureOverlaysProps) {
+export function SpreadsheetLiveGestureOverlays({ surface, entries, frozen = null, ...geometry }: SpreadsheetLiveGestureOverlaysProps) {
+  // A frozen pane's parts are drawn on a layer pinned with that pane, as the
+  // range boxes are (SheetRangePaneLayers).
+  const [layers, setLayers] = useState<PaneLayers>({});
+  const panes = sheetFrozenPanes(frozen);
   // A fixed display: contents slot: the stage's own children never change
   // as streams come and go (that restyled every mounted cell).
   return (
     <div data-spreadsheet-stage-slot="live-gestures" style={{ display: "contents" }}>
       {surface
         ? entries.map((entry) => (
-            <SpreadsheetLiveGestureBox key={`${entry.clientId}:${entry.id}`} surface={surface} entry={entry} {...geometry} />
+            <SpreadsheetLiveGestureBox
+              key={`${entry.clientId}:${entry.id}`}
+              surface={surface}
+              entry={entry}
+              frozen={frozen}
+              layers={layers}
+              {...geometry}
+            />
           ))
         : null}
+      {panes.map((pane) => (
+        <div
+          key={pane}
+          ref={(element) => {
+            setLayers((current) => (element && current[pane] !== element ? { ...current, [pane]: element } : current));
+          }}
+          aria-hidden="true"
+          data-testid={`spreadsheet-live-gestures-pane-${pane}`}
+          style={{
+            position: "sticky",
+            ...(pane !== "left" ? { top: 0 } : {}),
+            ...(pane !== "top" ? { left: 0, width: 0 } : {}),
+            height: 0,
+            overflow: "visible",
+            pointerEvents: "none",
+            zIndex: sheetRangePaneLayer(pane, LIVE_GESTURE_LAYER),
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -531,7 +571,13 @@ function SpreadsheetLiveGestureBox({
   columnCount,
   rowCount,
   gridRtl,
-}: Omit<SpreadsheetLiveGestureOverlaysProps, "entries" | "surface"> & { surface: string; entry: SpreadsheetLiveGestureEntry }) {
+  frozen,
+  layers,
+}: Omit<SpreadsheetLiveGestureOverlaysProps, "entries" | "surface"> & {
+  surface: string;
+  entry: SpreadsheetLiveGestureEntry;
+  layers: PaneLayers;
+}) {
   const live = useLiveTransform(surface, entry.id);
   const parsed = parseSpreadsheetLiveId(entry.id);
   if (!live || !parsed || parsed.kind === "drawing") return null;
@@ -544,46 +590,65 @@ function SpreadsheetLiveGestureBox({
     SPREADSHEET_HEADER_WIDTH_PX + (gridRtl ? sheetWidth - end : start);
   const common = {
     position: "absolute" as const,
-    zIndex: 8,
+    zIndex: LIVE_GESTURE_LAYER,
     pointerEvents: "none" as const,
     boxSizing: "border-box" as const,
   };
+  // The box in each pane it spans: the body's here, a frozen pane's on that
+  // pane's pinned layer (in the same content pixels).
+  const freeze = sheetFreezeLinesPx(frozen, rows, columns, rowHeight, colWidth);
+  const inPanes = (box: { left: number; top: number; width: number; height: number }, draw: (style: CSSProperties) => ReactElement) =>
+    sheetBoxPaneParts(box, freeze).map((part) => {
+      const element = draw(part.clip ? { clipPath: part.clip } : {});
+      if (part.pane === "body") return <Fragment key={part.pane}>{element}</Fragment>;
+      const layer = layers[part.pane];
+      return layer ? <Fragment key={part.pane}>{createPortal(element, layer)}</Fragment> : null;
+    });
   if (parsed.kind === "line") {
     const at = offsetOfLine(parsed.index, parsed.axis === "col" ? columns : rows, parsed.axis === "col" ? colWidth : rowHeight) + live.w;
-    return parsed.axis === "col" ? (
-      <div
-        aria-hidden="true"
-        data-testid="spreadsheet-live-resize-guide"
-        data-live-transform-id={entry.id}
-        style={{ ...common, left: leftOf(at, at), top: 0, width: 0, height: SPREADSHEET_HEADER_HEIGHT_PX + sheetHeight, borderLeft: `1px dashed ${entry.color}` }}
-      />
-    ) : (
-      <div
-        aria-hidden="true"
-        data-testid="spreadsheet-live-resize-guide"
-        data-live-transform-id={entry.id}
-        style={{ ...common, left: 0, top: SPREADSHEET_HEADER_HEIGHT_PX + at, width: SPREADSHEET_HEADER_WIDTH_PX + sheetWidth, height: 0, borderTop: `1px dashed ${entry.color}` }}
-      />
+    const guide =
+      parsed.axis === "col"
+        ? { left: leftOf(at, at), top: 0, width: 0, height: SPREADSHEET_HEADER_HEIGHT_PX + sheetHeight }
+        : { left: 0, top: SPREADSHEET_HEADER_HEIGHT_PX + at, width: SPREADSHEET_HEADER_WIDTH_PX + sheetWidth, height: 0 };
+    return (
+      <>
+        {inPanes(guide, (clip) => (
+          <div
+            aria-hidden="true"
+            data-testid="spreadsheet-live-resize-guide"
+            data-live-transform-id={entry.id}
+            style={{
+              ...common,
+              ...guide,
+              ...(parsed.axis === "col" ? { borderLeft: `1px dashed ${entry.color}` } : { borderTop: `1px dashed ${entry.color}` }),
+              ...clip,
+            }}
+          />
+        ))}
+      </>
     );
   }
   const start = spreadsheetAxisOffsetAt(live.x, columns, colWidth);
   const end = spreadsheetAxisOffsetAt(live.x + live.w, columns, colWidth);
   const top = spreadsheetAxisOffsetAt(live.y, rows, rowHeight);
   const bottom = spreadsheetAxisOffsetAt(live.y + live.h, rows, rowHeight);
+  const frame = {
+    left: leftOf(start, end),
+    top: SPREADSHEET_HEADER_HEIGHT_PX + top,
+    width: Math.max(2, end - start),
+    height: Math.max(2, bottom - top),
+  };
   return (
-    <div
-      aria-hidden="true"
-      data-testid={parsed.which === "fill" ? "spreadsheet-live-fill-frame" : "spreadsheet-live-move-frame"}
-      data-live-transform-id={entry.id}
-      title={entry.name}
-      style={{
-        ...common,
-        left: leftOf(start, end),
-        top: SPREADSHEET_HEADER_HEIGHT_PX + top,
-        width: Math.max(2, end - start),
-        height: Math.max(2, bottom - top),
-        border: `2px dashed ${entry.color}`,
-      }}
-    />
+    <>
+      {inPanes(frame, (clip) => (
+        <div
+          aria-hidden="true"
+          data-testid={parsed.which === "fill" ? "spreadsheet-live-fill-frame" : "spreadsheet-live-move-frame"}
+          data-live-transform-id={entry.id}
+          title={entry.name}
+          style={{ ...common, ...frame, border: `2px dashed ${entry.color}`, ...clip }}
+        />
+      ))}
+    </>
   );
 }

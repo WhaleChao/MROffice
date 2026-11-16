@@ -4,6 +4,12 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import "../polyfills/readable-stream-async-iterator";
+import {
+  PDF_JS_CMAP_BASE_URL,
+  PDF_JS_STANDARD_FONT_BASE_URL,
+  PDF_JS_WASM_BASE_URL,
+  PDF_JS_WORKER_URL,
+} from "./pdfjs-asset-urls";
 import { pdfJsFontDocument } from "./pdfjs-font-document";
 
 export type CompatiblePdfJsApi = typeof import("pdfjs-dist");
@@ -108,7 +114,9 @@ export function installPdfJsPlatformPolyfills(): void {
 
 /**
  * Same-origin home of PDF.js 5.7's decoder modules (`public/pdfjs-wasm/`),
- * alongside the packed CMaps and standard fonts.
+ * alongside the packed CMaps and standard fonts. Its URL, like theirs and the
+ * worker's, is named in `pdfjs-asset-urls.ts`: under the pdfjs-dist version
+ * where the server routes it, so a browser may keep the files.
  *
  * PDF.js will not look for these modules at all unless `getDocument` is given
  * a `wasmUrl`: JBIG2, CCITTFax and JPEG 2000 image XObjects are then dropped
@@ -122,7 +130,7 @@ export function installPdfJsPlatformPolyfills(): void {
  * PDF.js turn on `useWorkerFetch`, which is what its ICC (qcms) module
  * requires before it will initialise at all.
  */
-export const PDF_JS_WASM_BASE_URL = "/pdfjs-wasm/";
+export { PDF_JS_WASM_BASE_URL };
 
 /**
  * The same-origin assets every `getDocument` call hands PDF.js, as one value.
@@ -135,9 +143,9 @@ export const PDF_JS_WASM_BASE_URL = "/pdfjs-wasm/";
  * needs to differ.
  */
 export const PDF_JS_DOCUMENT_ASSETS = Object.freeze({
-  cMapUrl: "/pdfjs-cmaps/",
+  cMapUrl: PDF_JS_CMAP_BASE_URL,
   cMapPacked: true,
-  standardFontDataUrl: "/pdfjs-standard-fonts/",
+  standardFontDataUrl: PDF_JS_STANDARD_FONT_BASE_URL,
   wasmUrl: PDF_JS_WASM_BASE_URL,
 } as const);
 
@@ -201,7 +209,7 @@ export function loadCompatiblePdfJs(): Promise<CompatiblePdfJsApi> {
   compatiblePdfJsPromise = build.then((module) => {
     const pdfjs = ((module as { default?: CompatiblePdfJsApi }).default ??
       module) as CompatiblePdfJsApi;
-    pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+    pdfjs.GlobalWorkerOptions.workerSrc = PDF_JS_WORKER_URL;
     return withPdfJsFontDocument(pdfjs);
   });
   return compatiblePdfJsPromise;

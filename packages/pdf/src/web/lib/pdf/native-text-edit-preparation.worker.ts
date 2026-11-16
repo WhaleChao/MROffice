@@ -87,6 +87,7 @@ export async function prepareAndZeroizePdfNativeText(
           ? { paragraphLineStep: input.compile.paragraphLineStep } : {}),
         ...(input.compile.paragraphSizeScale !== undefined
           ? { paragraphSizeScale: input.compile.paragraphSizeScale } : {}),
+        ...(input.compile.rowStarts?.length ? { rowStarts: input.compile.rowStarts } : {}),
       });
       const prepared = await prepareMraiNativeContentStreamTransaction(bytes, plan.request);
       try { await verifyMraiNativeContentStreamCandidate(bytes, prepared); }

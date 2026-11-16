@@ -25,6 +25,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { applyWorkbookEdits, closingEditsSentRecently, isWorkbookClosingEdits, typedCellsMissingFromPage, workbookClosingEdits } from "../../../../lib/spreadsheet/workbook-closing-edits";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -61,6 +62,7 @@ import { downloadUnsavedWorkbookCopy, safeWorkbookFileName } from "../../../../l
 import type { TiledSheets } from "../../../../lib/spreadsheet/tiled-sheets";
 import { importRepairLine, importRepairsFingerprint, readImportRepairs } from "@mrnote/core/web/lib/import-repairs.ts";
 import type { PageExportLastGoodCopy } from "@mrnote/core/web/lib/page-export.ts";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 
 export { downloadLastGoodCopy, preferredLastGoodCopy } from "@mrnote/core/web/lib/page-export-last-good.ts";
 
@@ -68,7 +70,7 @@ export function lastGoodCopyLabel(copy: PageExportLastGoodCopy, t: (key: string,
   let time = "";
   try {
     time = copy.createdAt
-      ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(copy.createdAt))
+      ? new Intl.DateTimeFormat(pageInterfaceLocale(), { dateStyle: "medium", timeStyle: "short" }).format(new Date(copy.createdAt))
       : "";
   } catch {
     time = copy.createdAt ?? "";
@@ -767,7 +769,7 @@ export function SpreadsheetSaveResilienceNotices({
   }>(null);
   const timeFormat = useMemo(() => {
     try {
-      return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+      return new Intl.DateTimeFormat(pageInterfaceLocale(), { dateStyle: "medium", timeStyle: "short" });
     } catch {
       return null;
     }
@@ -862,7 +864,7 @@ export function SpreadsheetSaveResilienceNotices({
           ) : null}
           <div className={styles.actions}>
             {state.accountChanged ? (
-              <Action onClick={() => window.location.reload()} testId="spreadsheet-account-reload">{k("signedOut.reload")}</Action>
+              <Action onClick={() => reloadPage("spreadsheet_signed_out")} testId="spreadsheet-account-reload">{k("signedOut.reload")}</Action>
             ) : (
               <Action onClick={actions.signIn} testId="spreadsheet-sign-in">{k("signIn")}</Action>
             )}
@@ -928,7 +930,7 @@ export function SpreadsheetSaveResilienceNotices({
         <div data-testid="spreadsheet-recovery">
           <ul className={noticeStyles.list}>
             {recovery.copies.map((copy) => {
-              const when = timeFormat ? timeFormat.format(new Date(copy.savedAt)) : new Date(copy.savedAt).toLocaleString();
+              const when = timeFormat ? timeFormat.format(new Date(copy.savedAt)) : new Date(copy.savedAt).toLocaleString(pageInterfaceLocale());
               const moved = copy.baseContentVersion > 0 && serverVersion > copy.baseContentVersion;
               const copyTitle = copy.payload.title || title;
               return (

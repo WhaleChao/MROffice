@@ -6,6 +6,7 @@
 import {
   managedPdfInkIdentitiesForDocument,
   managedPdfShapeIdentitiesForDocument,
+  managedPdfTextMarkupIdentitiesForDocument,
   managedPdfTextNoteIdentitiesForDocument,
 } from "@mrnote/core/web/lib/pdf/managed-note-source-identity.ts";
 import {
@@ -86,7 +87,19 @@ export async function readPdfPageAnnotationLists(input: {
     : undefined;
   if (!isCurrent()) return null;
   const notes = normalizeNativePdfTextAnnotations(rawAnnotations, pageNumber, undefined, noteIdentities);
-  const markups = normalizeNativePdfTextMarkupAnnotations(rawAnnotations, pageNumber);
+  const sourceMarkups = normalizeNativePdfTextMarkupAnnotations(rawAnnotations, pageNumber);
+  // A mark MRAI wrote is that mark, proven by its /NM: named here, so it is
+  // matched to its own row and never read as a mark the file came with.
+  const managedMarkupIds = sourceMarkups.length > 0
+    ? await managedPdfTextMarkupIdentitiesForDocument(document)
+    : null;
+  if (!isCurrent()) return null;
+  const markups = managedMarkupIds && managedMarkupIds.size > 0
+    ? sourceMarkups.map((markup) => {
+        const managedMarkupId = managedMarkupIds.get(markup.nativeSource.objectRef);
+        return managedMarkupId ? { ...markup, managedMarkupId } : markup;
+      })
+    : sourceMarkups;
   const inkImport = normalizeNativePdfInkAnnotations(rawAnnotations, pageNumber, pageView, {
     width: viewport.width,
     height: viewport.height,

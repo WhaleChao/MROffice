@@ -23,6 +23,7 @@ import {
 } from "@mrnote/core/web/lib/office-charts/chart-color-palettes.ts";
 import { OfficeChartTypeMenuItems } from "@mrnote/core/web/components/office-ribbon/OfficeChartTypeMenu.tsx";
 import { presentationChartTypeGroups } from "../../../../lib/presentation-chart-menu";
+import { presentationChartOwnThemeAccents } from "../../../../lib/presentation-chart-theme-accents";
 import {
   DocumentChartFormatRibbon,
   type DocumentChartAreaStyleKey,
@@ -165,6 +166,8 @@ export interface PresentationChartContextRibbonProps {
   elementHit?: { hit: OfficeChartHit; open: boolean; token: number } | null;
   /** Current Selection as it stands (`DocumentChartFormatRibbon.onAreaChange`). */
   onAreaChange?: (area: DocumentChartAreaStyleKey) => void;
+  /** The chart's Current Selection as its clicks left it (`chart-selection-store`). */
+  selectedArea?: string | null;
   /** Office's "More <element> Options…": the Chart Format tab on that element. */
   onOpenFormat?: (area: DocumentChartAreaStyleKey) => void;
   /** The right-click menu's Change Chart Type… / Save as Template…: the
@@ -309,14 +312,20 @@ export function PresentationChartContextRibbon(
       trendlineOptions
     />
   );
+  // A chart varying its colours by point takes the pick on each point, in
+  // the colours the slide draws it with: its part's own theme's, else the
+  // deck's (`buildPresentationChartDisplayPlan`).
+  const paletteAccents = chartThemeAccents(
+    presentationChartOwnThemeAccents(props.authority as PresentationChartBlock) ?? props.accentColors,
+  );
   const colorItems = (
     <OfficeChartColorPaletteMenuItems
       active={chartColorPaletteId(attrs)}
       accents={props.nativeLook?.themeAccents ?? props.accentColors}
       onPreview={(id) =>
-        props.onPreview(id ? chartWithColorPalette(attrs, id) : null)
+        props.onPreview(id ? chartWithColorPalette(attrs, id, paletteAccents) : null)
       }
-      onSelect={(id) => commit(chartWithColorPalette(attrs, id))}
+      onSelect={(id) => commit(chartWithColorPalette(attrs, id, paletteAccents))}
       testIdPrefix="presentation-chart-color-palette"
     />
   );
@@ -596,6 +605,7 @@ export function PresentationChartContextRibbon(
         <DocumentChartFormatRibbon
           application="presentation"
           officeProfile
+          accentColors={paletteAccents}
           sharedShapeStyleRecipes={officeShapeStyleRecipes(props.accentColors)}
           wordArtRecipes={officeWordArtGalleryRecipesForAccents(props.accentColors)}
           testIdPrefix="presentation-chart-format"
@@ -680,6 +690,7 @@ export function PresentationChartContextRibbon(
           focusArea={props.formatFocus}
           elementHit={props.elementHit}
           onAreaChange={props.onAreaChange}
+          selectedArea={props.selectedArea}
         />
       </div>
     );

@@ -421,6 +421,18 @@ export function spreadsheetThemeFontSetForLocale(
   return Object.freeze({ ...fonts, headingFamily, bodyFamily });
 }
 
+/** A UI whose Excel draws a theme-bound font in the slot's Latin face:
+ * every language but Chinese, Japanese and Korean (nativeGridFontForLocale). */
+export function nativeGridLatinLocale(locale: string): boolean {
+  return !/^(?:zh|ja|ko)(?:[-_]|$)/i.test(locale);
+}
+
+
+
+
+
+
+
 
 
 
@@ -437,7 +449,17 @@ export function nativeGridFontForLocale<
   F extends { family: string; themeRole?: "major" | "minor"; bodyFamily?: string; headingFamily?: string },
 >(font: F, fonts: SpreadsheetThemeFontSet, locale: string): F {
   const tag = locale.toLowerCase();
-  if (!tag.startsWith("zh") || /-(?:tw|hk|mo|hant)\b/.test(tag)) return font;
+  if (!tag.startsWith("zh") || /-(?:tw|hk|mo|hant)\b/.test(tag)) {
+    if (!nativeGridLatinLocale(tag) || !font.themeRole) return font;
+    const latin = (font.themeRole === "major" ? fonts.headingLatin : fonts.bodyLatin)?.trim();
+    if (!latin || latin === font.family) return font;
+    return {
+      ...font,
+      family: latin,
+      ...(fonts.bodyLatin?.trim() ? { bodyFamily: fonts.bodyLatin.trim() } : {}),
+      ...(fonts.headingLatin?.trim() ? { headingFamily: fonts.headingLatin.trim() } : {}),
+    };
+  }
   const minor = fonts.minor.scripts.Hans?.trim() || undefined;
   const major = fonts.major.scripts.Hans?.trim() || undefined;
   if (!minor && !major) return font;

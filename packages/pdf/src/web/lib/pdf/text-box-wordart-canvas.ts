@@ -6,12 +6,19 @@
 /**
  * WordArt (艺术字) on a 2-D canvas: a text box's raster appearance drawn
  * with its Office paint, as the server's vector appearance draws it
- * (text_box_wordart.py) -- glow and shadow under the words, an outline twice
- * its width under the fill, the fill flat, see-through, a gradient over the
- * box or Office's pattern. The canvas is in points (the paint's 96-dpi pixel
- * lengths x 0.75); `deviceScale` is the backing's pixels per point, which
- * canvas shadows are measured in.
+ * (text_box_wordart.py) -- glow and shadow under the words, the fill flat,
+ * see-through, a gradient over the box or Office's pattern, and Office's
+ * outline over it: centred and round along each glyph's merged outline.
+ * The canvas is in points (the paint's 96-dpi pixel lengths x 0.75);
+ * `deviceScale` is the backing's pixels per point, which canvas shadows are
+ * measured in.
  */
+import {
+  applyOfficeTextOutlineStroke,
+  officeTextOutlineCanvas,
+  officeTextOutlineCanvasFill,
+  officeTextOutlineLineOfStated,
+} from "@mrnote/core/web/lib/office-text-outline/office-text-outline-css.ts";
 import type { OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
 import { officeFillPatternTile } from "@mrnote/core/web/lib/office-chart-shape-paint.ts";
 import { officeGradientAngleForBox, officePathGradientFocus } from "@mrnote/core/web/lib/office-shape-paint.ts";
@@ -60,12 +67,17 @@ export function pdfWordArtCanvasPainter(
       canvas.height = tile.size;
       const tileContext = canvas.getContext("2d");
       if (tileContext) {
-        tileContext.fillStyle = paint.fillPattern.background;
-        tileContext.fillRect(0, 0, tile.size, tile.size);
-        tileContext.fillStyle = paint.fillPattern.foreground;
-        for (const mark of tile.marks) {
-          if (mark.tag === "rect") tileContext.fillRect(mark.x, mark.y, mark.width, mark.height);
+        if (!tile.paperInMarks) {
+          tileContext.fillStyle = paint.fillPattern.background;
+          tileContext.fillRect(0, 0, tile.size, tile.size);
         }
+        for (const mark of tile.marks) {
+          if (mark.tag !== "rect") continue;
+          tileContext.globalAlpha = mark.opacity ?? 1;
+          tileContext.fillStyle = mark.fill ?? paint.fillPattern.foreground;
+          tileContext.fillRect(mark.x, mark.y, mark.width, mark.height);
+        }
+        tileContext.globalAlpha = 1;
         const pattern = ctx.createPattern(canvas, "repeat");
         if (pattern) {
           pattern.setTransform?.(new DOMMatrix().scale(PX));
@@ -97,18 +109,27 @@ export function pdfWordArtCanvasPainter(
       soft("#000000", 0.31, 0, 0.6, 0.6);
       if (paint.bevel.depth) soft("#000000", 0.22, 0, paint.bevel.depth / 2, paint.bevel.depth / 2);
     }
-    if (paint.outline !== "none" && paint.outlineWidthPt > 0) {
-      ctx.save();
-      ctx.strokeStyle = paint.outline;
-      ctx.lineWidth = fill ? paint.outlineWidthPt * 2 : paint.outlineWidthPt;
-      ctx.lineJoin = "round";
-      ctx.strokeText(text, x, baseline);
-      ctx.restore();
-    }
     if (fill) {
       ctx.save();
       ctx.fillStyle = fill;
-      ctx.fillText(text, x, baseline);
+      // Outlined words are filled from their band's own outlines where an
+      // installed font would draw other glyphs under it.
+      const outlined = paint.outline !== "none" && paint.outlineWidthPt > 0;
+      if (!(outlined && officeTextOutlineCanvasFill(ctx, text, x, baseline))) ctx.fillText(text, x, baseline);
+      ctx.restore();
+    }
+    // Office's outline: one stroke, its width in points as the paint states
+    // it, centred and round along each glyph's merged outline, over the fill
+    // (office-text-outline-css.ts); the text's own contours until the
+    // glyphs' outlines are kept.
+    if (paint.outline !== "none" && paint.outlineWidthPt > 0) {
+      ctx.save();
+      ctx.strokeStyle = paint.outline;
+      ctx.lineWidth = paint.outlineWidthPt;
+      // Its join, cap and dash as Office states them (round and solid where
+      // none is).
+      applyOfficeTextOutlineStroke(ctx, officeTextOutlineLineOfStated(paint.stated?.line), paint.outlineWidthPt);
+      if (!officeTextOutlineCanvas(ctx, text, x, baseline, paint.outlineWidthPt)) ctx.strokeText(text, x, baseline);
       ctx.restore();
     }
   };

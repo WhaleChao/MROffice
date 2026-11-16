@@ -335,6 +335,10 @@ export function createPdfNativeEmbeddedFontInstallation(input: {
       opened = Object.freeze({ firstObjectNumber: value.firstObjectNumber, page: value.page });
       return session;
     },
+    restart() {
+      opened = null;
+      fonts.clear();
+    },
     async packages(): Promise<readonly PdfNativeFontExtensionPackage[]> {
       const packages: PdfNativeFontExtensionPackage[] = [];
       for (const font of fonts.values()) {

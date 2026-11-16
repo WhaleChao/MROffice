@@ -43,6 +43,13 @@ export interface WordTableLayout {
    * right edge; the text in them keeps its own direction.
    */
   readonly bidiVisual?: true;
+  
+
+
+
+
+
+  readonly indentUnstated?: true;
 }
 
 function preferredWidthPct(raw: Record<string, unknown>): { preferredWidthPct?: number } {
@@ -80,7 +87,10 @@ export function readWordTableLayout(tableAttrs: {
   ) {
     return null;
   }
-  const bidi = raw.bidiVisual === true ? { bidiVisual: true as const } : {};
+  const bidi = {
+    ...(raw.bidiVisual === true ? { bidiVisual: true as const } : {}),
+    ...(textAligned && raw.indentUnstated === true ? { indentUnstated: true as const } : {}),
+  };
   if (contentFit === "pct") {
     if (
       typeof contentFitPct !== "number" ||

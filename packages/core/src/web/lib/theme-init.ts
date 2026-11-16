@@ -23,7 +23,7 @@ export const THEME_KEY = "app-theme-choice";
  * 'strict-dynamic'") and the stored theme was not applied before paint.
  * tests/unit/proxy-auth.test.ts recomputes it from the script.
  */
-export const THEME_INIT_SCRIPT_SHA256 = "kzpd61f2eI34vR8oQZ4Vl+bEZlfzk0ZFH2kwQhxTRq0=";
+export const THEME_INIT_SCRIPT_SHA256 = "CAPYASEe9lMJXSIDe4GfISSrNjK9lEI2K7gX3xZp5r8=";
 
 /**
  * Inline IIFE string injected before React hydration so there is no flash of

@@ -79,13 +79,17 @@ export function isPdfTextBoxReadingLandmark(
   );
 }
 
+/** The most of a box's text its context entry carries (the model reads the
+ * circled words whole from the selection; an entry names its box). */
+export const PDF_COMMAND_TEXT_BOX_TEXT_LIMIT = 240;
+
 /** One text box as the Copilot command context describes it. */
 export function pdfCommandTextBoxContextEntry(box: PdfTextBoxCommandTarget) {
   const formulaCandidate = isPdfFormulaTextBoxContextCandidate(box);
   return {
     id: box.id,
     page: box.page,
-    text: box.text.trim().slice(0, 240),
+    text: box.text.trim().slice(0, PDF_COMMAND_TEXT_BOX_TEXT_LIMIT),
     x: box.x,
     y: box.y,
     width: box.width,
@@ -103,12 +107,33 @@ export function pdfCommandTextBoxContextEntry(box: PdfTextBoxCommandTarget) {
     latex: formulaCandidate ? box.latex?.trim().slice(0, 2000) : undefined,
     edited: box.edited,
     created: box.created,
+    // What a change of font has to know of a box someone made
+    // (lib/pdf/copilot-text-font).
+    ...(box.officeFamily ? { officeFamily: box.officeFamily } : {}),
+    ...(box.annotation ? { annotation: true } : {}),
   };
 }
 
 /** Every text box of the page, for a circle to pick from (browser-only:
  * only the circled ones are sent). */
 export const PDF_CIRCLE_TEXT_BOX_POOL_LIMIT = 400;
+
+
+
+
+
+
+
+export function pdfCommandTextBoxWholeTexts(
+  boxes: readonly PdfTextBoxCommandTarget[],
+): Record<string, string> | null {
+  const whole: Record<string, string> = {};
+  for (const box of boxes.slice(0, PDF_CIRCLE_TEXT_BOX_POOL_LIMIT)) {
+    const text = box.text.trim();
+    if (text.length > PDF_COMMAND_TEXT_BOX_TEXT_LIMIT) whole[box.id] = text;
+  }
+  return Object.keys(whole).length ? whole : null;
+}
 
 export function selectPdfCommandTextBoxesForContext(
   boxes: PdfTextBoxCommandTarget[],

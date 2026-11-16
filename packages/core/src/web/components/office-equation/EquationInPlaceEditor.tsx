@@ -24,6 +24,7 @@
  */
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { registerUnsavedWorkFlush } from "../../lib/unsaved-work-hold";
 
 import {
   createVisualMathEditor,
@@ -162,9 +163,27 @@ export function EquationInPlaceEditor({
         if (!live.dom.contains(document.activeElement)) focusDraft();
       });
     });
+    // Taken down with the draft still open (its pane or window closed, the
+    // slide changed, the page going): written as Done writes it, as Office
+    // keeps an equation's words however the box is left. The page going or
+    // the app quitting writes it first (lib/draft-commit-on-leave).
+    const leave = () => {
+      if (!finished) finish(live.getState(), "done");
+    };
+    const unregisterLeave = registerUnsavedWorkFlush(`equation-draft:${Math.random().toString(36).slice(2)}`, leave);
+    window.addEventListener("beforeunload", leave, true);
+    window.addEventListener("pagehide", leave, true);
     return () => {
       cancelAnimationFrame(first);
       cancelAnimationFrame(second);
+      unregisterLeave();
+      window.removeEventListener("beforeunload", leave, true);
+      window.removeEventListener("pagehide", leave, true);
+      try {
+        leave();
+      } catch {
+        // a host gone with it: nothing to write the draft to
+      }
       finished = true;
       for (const type of CONTAINED_EVENTS) host.removeEventListener(type, stop);
       callbacks.current.onController?.(null);

@@ -17,6 +17,7 @@
  */
 
 import presentationChrome from "@mrnote/core/web/lib/presentation/presentation-window-shell.module.css";
+import { OfficeTaskPaneResizeHandle } from "@mrnote/core/web/components/office-ribbon/officeTaskPaneLayout.tsx";
 import {
   OfficeCommentsPane,
   OfficeCommentThread,
@@ -57,6 +58,13 @@ export interface PresentationCommentsPaneCtl {
   presentationCommentThreadAdapter: OfficeCommentThreadAdapter<PresentationCommentThread, PresentationCommentMessage>;
   presentationCommentPaneAdapter: OfficeCommentPaneAdapter<{ commentId: string; comment: SlideComment; slideId: string; slideIndex: number; }, PresentationCommentThread>;
   renderPresentationCommentThread: (entry: { commentId: string; comment: SlideComment; slideId: string; slideIndex: number; }) => JSX.Element;
+  /** The docked pane's left border, which drags its width. */
+  resize?: {
+    readonly width: number;
+    readonly minWidth: number;
+    readonly maxWidth: number;
+    readonly onWidth: (width: number, commit: boolean) => void;
+  };
 }
 
 export function PresentationCommentsPane({ ctl }: { ctl: PresentationCommentsPaneCtl }) {
@@ -84,6 +92,7 @@ export function PresentationCommentsPane({ ctl }: { ctl: PresentationCommentsPan
     presentationCommentThreadAdapter,
     presentationCommentPaneAdapter,
     renderPresentationCommentThread,
+    resize,
   } = ctl;
   return (
           <aside
@@ -94,6 +103,18 @@ export function PresentationCommentsPane({ ctl }: { ctl: PresentationCommentsPan
             data-testid="presentation-comments-panel"
             aria-label={t("presentation.comments.title")}
           >
+            {resize ? (
+              <OfficeTaskPaneResizeHandle
+                width={resize.width}
+                minWidth={resize.minWidth}
+                maxWidth={resize.maxWidth}
+                label={t("presentation.comments.title")}
+                className={presentationChrome.commentsResize}
+                testId="presentation-comments-resize"
+                tabbable={false}
+                onWidth={resize.onWidth}
+              />
+            ) : null}
             {/* The shared Comments pane of all three editors. PowerPoint's
                 Comments pane carries its "New" command under the title
                 (Microsoft Support, "Modern comments in PowerPoint": select

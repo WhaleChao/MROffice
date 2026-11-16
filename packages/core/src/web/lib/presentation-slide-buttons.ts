@@ -645,8 +645,10 @@ export const SPEAKER_NOTES_MAX_LENGTH = 10_000;
 export function slideWithNotes<S extends PresentationButtonSlide>(slide: S, draft: string): S {
   const trimmed = draft.slice(0, SPEAKER_NOTES_MAX_LENGTH);
   const current = typeof slide.notes === "string" ? slide.notes : "";
-  if (trimmed === current) return slide;
   const next = trimmed.trim();
+  // The same notes once trimmed (a draft written after its pause and
+  // committed again on blur): the slide itself, no second step.
+  if (trimmed === current || next === current) return slide;
   if (next) return { ...slide, notes: next };
   const cleared = { ...slide };
   delete cleared.notes;

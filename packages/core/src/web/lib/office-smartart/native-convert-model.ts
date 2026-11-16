@@ -129,6 +129,12 @@ export interface ConvertNativeSmartArtInput {
    * definition takes them.
    */
   customizations?: NativeSmartArtCustomizations | null;
+  /**
+   * The graphic's OWN 3-D Rotation (its document point's `a:scene3d`, as the
+   * projection read it: `nativeSmartArtView.graphicScene3d`), drawn as one
+   * scene over its SmartArt Style's (`./member-camera`).
+   */
+  graphicScene3d?: unknown;
   /** The shape kinds the host draws as presets (a document's few); omitted, all. */
   drawableShape?: ((kind: string) => boolean) | null;
   /** The workbook's / document's body face (`+mn-lt`), which sets how tall the labels' lines stand. */
@@ -410,7 +416,7 @@ export function smartArtConvertRefusal(
 
 const SMART_ART_AS_READ_FIELDS = [
   "shape", "fill", "fillGradient", "fillTransparency", "stroke", "strokeWidth", "strokeStyle", "effect",
-  "shadow", "shapeShadow", "opacity", "shape3d", "scene3d", "style", "smartArtCustom",
+  "shadow", "shapeShadow", "shapeEffects", "opacity", "shape3d", "scene3d", "style", "smartArtCustom",
   "smartArtAuthorPaint", "smartArtAuthorShape", "smartArtAuthorText", "smartArtAuthorTextSize",
   "smartArtAuthorTextFont", "smartArtAuthorTextAlign", "smartArtAuthorCapitals",
 ] as const;

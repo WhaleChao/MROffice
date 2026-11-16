@@ -39,6 +39,7 @@ import { recomputeConnectors } from "./presentation-connectors";
 import {
   assignGroup,
   blockGroupId,
+  blockGroupPath,
   blockNativeGroupAuthority,
   blockNativeGroupMoveAuthority,
   blocksInGroup,
@@ -51,7 +52,11 @@ import { PRESENTATION_OBJECT_GEOMETRY_MAX_EMU } from "./presentation-geometry-li
 import { applyMultiRotate, rotatedBlockBounds } from "./presentation-multi-transform";
 import { presentationRestackedPlaces } from "./presentation-paint-order";
 import { quarterTurn, type QuarterTurnDirection } from "./presentation-rotate-quarter";
-import { presentationNativeSelectionPaneObjectIsWritable } from "./presentation-command-adapters";
+import {
+  applyPresentationNativeObjectOrder,
+  applyPresentationNativeOrderCommand,
+  presentationNativeSelectionPaneObjectIsWritable,
+} from "./presentation-command-adapters";
 import { applyBlockHidden, isBlockHidden, selectionPaneObjectIdentity } from "./presentation-selection-pane";
 import { readSmartArtBlockMarker } from "./presentation-smartart";
 import { canEditBlockContent, canManipulateBlock, isFrameLockedByFile, isLockedFor } from "./presentation-text-case";
@@ -171,8 +176,10 @@ export function presentationImportedOrderChanged(
   before: readonly PresentationBlock[],
   after: readonly PresentationBlock[],
 ): boolean {
+  // A member of a group the file owns is one of its objects too: its order
+  // among the group's members is the file's (`p:grpSp`) to write.
   const imported = (blocks: readonly PresentationBlock[]) =>
-    blocks.filter(isImportedPptxBlock).map((block) => block.id);
+    blocks.filter((block) => isImportedPptxBlock(block) || blockClaimsNativeGroup(block)).map((block) => block.id);
   const was = imported(before);
   const now = imported(after);
   return was.length !== now.length || was.some((id, index) => id !== now[index]);
@@ -875,6 +882,222 @@ export function ungroupBlocks(
  * an object never lands inside a group it passes (PPT-B205).
  */
 export function reorderBlocks(
+  blocks: PresentationBlock[],
+  targets: readonly PresentationBlock[],
+  command: "front" | "forward" | "backward" | "back",
+): PresentationBlock[] | null {
+  // Objects inside a group restack among the group's own objects, the group
+  // where it stands: "in a group, you can only reorder it within the group"
+  // (Microsoft Support, Manage objects with the Selection Pane). Bring to
+  // Front on a member took it out of the group's place, and the save into
+  
+  const plan = presentationReorderUnits(blocks, targets);
+  if (plan.inGroup.size === 0) return reorderSlideObjects(blocks, targets, command);
+  const loose = targets.filter((block) => !plan.inGroupTargetIds.has(block.id));
+  let next = loose.length ? reorderSlideObjects(blocks, loose, command) ?? [...blocks] : [...blocks];
+  let changed = next !== blocks && next.some((block, index) => block !== blocks[index]);
+  for (const [parentKey, unitKeys] of plan.inGroup) {
+    const restacked = restackWithinGroup(next, parentKey.split("\u0000"), unitKeys, command);
+    if (restacked) {
+      next = restacked;
+      changed = true;
+    }
+  }
+  return changed ? presentationRestackedPlaces(next) : null;
+}
+
+/** The groups a block sits in, outermost first (`groupId`, then `groupPath`). */
+function blockGroupChain(block: PresentationBlock): string[] {
+  const outer = blockGroupId(block);
+  return outer ? [outer, ...blockGroupPath(block)] : [];
+}
+
+function chainStartsWith(chain: readonly string[], prefix: readonly string[]): boolean {
+  return prefix.length <= chain.length && prefix.every((id, index) => chain[index] === id);
+}
+
+/** A group's object a block belongs to: one of its own (`b:`) or a group
+ * nested in it (`g:`), whose objects then move together. */
+function unitKeyIn(block: PresentationBlock, parent: readonly string[]): string {
+  const chain = blockGroupChain(block);
+  return chain.length > parent.length ? `g:${chain[parent.length]}` : `b:${block.id}`;
+}
+
+/**
+ * The objects `targets` select, each in the group it is an object of. A
+ * target whose whole group (or a whole group nested in it) is selected is
+ * that group; a group selected whole at the top is an object of the slide.
+ * `inGroup`: per group (its chain joined by NUL) the objects of it to
+ * restack inside it.
+ */
+function presentationReorderUnits(
+  blocks: readonly PresentationBlock[],
+  targets: readonly PresentationBlock[],
+): { inGroup: Map<string, Set<string>>; inGroupTargetIds: Set<string> } {
+  const targetIds = new Set(targets.map((block) => block.id));
+  const inGroup = new Map<string, Set<string>>();
+  const inGroupTargetIds = new Set<string>();
+  for (const target of targets) {
+    const chain = blockGroupChain(target);
+    if (chain.length === 0) continue;
+    // The outermost group of the chain selected whole names the object.
+    let level = -1;
+    for (let depth = 1; depth <= chain.length; depth += 1) {
+      const prefix = chain.slice(0, depth);
+      if (blocks.every((block) => !chainStartsWith(blockGroupChain(block), prefix) || targetIds.has(block.id))) {
+        level = depth;
+        break;
+      }
+    }
+    if (level === 1) continue;
+    const parent = level === -1 ? chain : chain.slice(0, level - 1);
+    const key = parent.join("\u0000");
+    const units = inGroup.get(key) ?? new Set<string>();
+    units.add(unitKeyIn(target, parent));
+    inGroup.set(key, units);
+    inGroupTargetIds.add(target.id);
+  }
+  return { inGroup, inGroupTargetIds };
+}
+
+/**
+ * Bring to Front / Send to Back / Bring Forward / Send Backward among the
+ * objects of one group: its blocks keep the places in the list the group
+ * holds, and a one-step move steps over one whole object of the group (a
+ * group nested in it moves and is stepped over whole). Null when nothing
+ * moves.
+ */
+function restackWithinGroup(
+  blocks: readonly PresentationBlock[],
+  parent: readonly string[],
+  moving: ReadonlySet<string>,
+  command: "front" | "forward" | "backward" | "back",
+): PresentationBlock[] | null {
+  const slots: number[] = [];
+  const units: Array<{ key: string; blocks: PresentationBlock[] }> = [];
+  const unitByKey = new Map<string, { key: string; blocks: PresentationBlock[] }>();
+  blocks.forEach((block, index) => {
+    if (!chainStartsWith(blockGroupChain(block), parent)) return;
+    slots.push(index);
+    const key = unitKeyIn(block, parent);
+    let unit = unitByKey.get(key);
+    if (!unit) {
+      unit = { key, blocks: [] };
+      unitByKey.set(key, unit);
+      units.push(unit);
+    }
+    unit.blocks.push(block);
+  });
+  let order = [...units];
+  if (command === "front" || command === "back") {
+    const stay = order.filter((unit) => !moving.has(unit.key));
+    const go = order.filter((unit) => moving.has(unit.key));
+    order = command === "front" ? [...stay, ...go] : [...go, ...stay];
+  } else if (command === "forward") {
+    for (let index = order.length - 2; index >= 0; index -= 1) {
+      if (moving.has(order[index].key) && !moving.has(order[index + 1].key)) {
+        [order[index], order[index + 1]] = [order[index + 1], order[index]];
+      }
+    }
+  } else {
+    for (let index = 1; index < order.length; index += 1) {
+      if (moving.has(order[index].key) && !moving.has(order[index - 1].key)) {
+        [order[index - 1], order[index]] = [order[index], order[index - 1]];
+      }
+    }
+  }
+  const placed = order.flatMap((unit) => unit.blocks);
+  if (placed.every((block, index) => blocks[slots[index]] === block)) return null;
+  const next = [...blocks];
+  slots.forEach((slot, index) => {
+    next[slot] = placed[index];
+  });
+  return withGroupAltOnFirstMember(next, parent[0]);
+}
+
+/**
+ * The group's own Alt Text (`groupAlt` / `groupDecorative`, the `p:grpSp`'s
+ * description) rides on the group's first object, as the file reads it back
+ * (its first member carries it) and the save looks for it: a restack inside
+ * the group that put another object first moves it there.
+ */
+function withGroupAltOnFirstMember(blocks: PresentationBlock[], groupId: string | undefined): PresentationBlock[] {
+  if (!groupId) return blocks;
+  const members = blocks.map((block, index) => ({ block, index })).filter(({ block }) => blockGroupId(block) === groupId);
+  const carrier = members.find(({ block }) => Object.hasOwn(block, "groupAlt") || Object.hasOwn(block, "groupDecorative"));
+  const first = members[0];
+  if (!carrier || !first || carrier.index === first.index) return blocks;
+  const carried = carrier.block as PresentationBlock & { groupAlt?: unknown; groupDecorative?: unknown };
+  const { groupAlt, groupDecorative, ...rest } = carried;
+  const lead: Record<string, unknown> = { ...(first.block as Record<string, unknown>) };
+  if (Object.hasOwn(carried, "groupAlt")) lead.groupAlt = groupAlt;
+  if (Object.hasOwn(carried, "groupDecorative")) lead.groupDecorative = groupDecorative;
+  const next = [...blocks];
+  next[carrier.index] = rest as PresentationBlock;
+  next[first.index] = lead as PresentationBlock;
+  return next;
+}
+
+
+
+
+
+
+
+
+
+
+export function presentationNativeRestack<S extends { readonly blocks: readonly PresentationBlock[] }>(
+  slide: S,
+  targets: readonly PresentationBlock[],
+  /** Null: `listed` is the order of several commands (a Selection Pane
+   * drop), which the journal takes as a whole new order. */
+  command: "front" | "forward" | "backward" | "back" | null,
+  listed: readonly PresentationBlock[],
+): S | "unchanged" | null {
+  // On a slide holding a group the journal takes the steps that put the list
+  // in the order `reorderBlocks` gives, which never parts a group: a step of
+  // its own over one neighbouring object landed an object between a group's
+  // members (Send Backward over an imported group, and the save refused it).
+  // On a slide that also holds objects the author added (no source: none of
+  // the file's shapes), the journal orders the file's objects among
+  // themselves and the slide takes the list whole, so an added object stands
+  // where the command put it; the journal alone refused such a slide and the
+  // list changed without the canvas, the show or the save (z-order audit
+  
+  const withAuthored = slide.blocks.some((block) => (block as { source?: unknown }).source == null);
+  const restacked =
+    command === null ||
+    withAuthored ||
+    presentationReorderIsWithinGroup(slide.blocks, targets) ||
+    slide.blocks.some((block) => blockGroupId(block))
+      ? applyPresentationNativeObjectOrder(slide as never, listed as never, withAuthored)
+    : applyPresentationNativeOrderCommand(
+        slide as never,
+        targets.map((block) => block.id),
+        command,
+      );
+  if (restacked === null || restacked === "unchanged") return restacked;
+  // The journal rebuilds the list from the slide's own blocks: the group's
+  // Alt Text goes to the object now first in it, as `reorderBlocks` puts it.
+  const restackedSlide = restacked as unknown as S;
+  let blocks = [...restackedSlide.blocks] as PresentationBlock[];
+  for (const groupId of new Set(targets.map((block) => blockGroupId(block)))) {
+    blocks = withGroupAltOnFirstMember(blocks, groupId);
+  }
+  return { ...restackedSlide, blocks } as S;
+}
+
+/** Whether Arrange on `targets` restacks objects inside a group (each
+ * among its own group's objects) rather than objects of the slide. */
+export function presentationReorderIsWithinGroup(
+  blocks: readonly PresentationBlock[],
+  targets: readonly PresentationBlock[],
+): boolean {
+  return presentationReorderUnits(blocks, targets).inGroup.size > 0;
+}
+
+function reorderSlideObjects(
   blocks: PresentationBlock[],
   targets: readonly PresentationBlock[],
   command: "front" | "forward" | "backward" | "back",

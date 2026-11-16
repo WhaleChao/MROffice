@@ -88,6 +88,11 @@ export interface OfficeTextPaintStated {
   };
   scene3d?: {
     camera: string;
+    /** The camera's own rotation (`a:camera/a:rot`), 60 000ths of a degree. */
+    cameraRotation?: { latitude: number; longitude: number; revolution: number };
+    /** `a:camera@fov` (60 000ths of a degree) and `@zoom` (1 000ths of a percent). */
+    fieldOfView?: number;
+    zoom?: number;
     lightRig: {
       rig: string;
       direction: string;
@@ -104,6 +109,9 @@ export interface OfficeTextPaintStated {
     bevelBottom?: { widthEmu?: number; heightEmu?: number; preset?: string };
     extrusionColor?: OfficeColorSource;
     contourColor?: OfficeColorSource;
+    /** 3-D Rotation > Distance from ground (`a:sp3d@z`): EMU toward the
+     * viewer, -4000..4000 pt; DrawingML only (Word's w14 has none). */
+    zEmu?: number;
   };
 }
 
@@ -325,7 +333,11 @@ export function normalizeOfficeTextPaintStated(value: unknown): OfficeTextPaintS
     result.effects = next;
   }
   if ("scene3d" in raw) {
-    const scene = record(raw.scene3d, ["camera", "lightRig"], ["camera", "lightRig"]);
+    const scene = record(
+      raw.scene3d,
+      ["camera", "lightRig", "cameraRotation", "fieldOfView", "zoom"],
+      ["camera", "lightRig"],
+    );
     const rig = record(
       scene.lightRig,
       ["rig", "direction", "latitude", "longitude", "revolution"],
@@ -334,17 +346,34 @@ export function normalizeOfficeTextPaintStated(value: unknown): OfficeTextPaintS
     const lightRig: Record<string, unknown> = { rig: token(rig.rig), direction: token(rig.direction) };
     for (const key of ["latitude", "longitude", "revolution"])
       optional(rig, lightRig, key, (v) => integer(v, 0, MAX_ANGLE));
+    const camera: Record<string, unknown> = {};
+    if (scene.cameraRotation !== undefined) {
+      const turned = record(
+        scene.cameraRotation,
+        ["latitude", "longitude", "revolution"],
+        ["latitude", "longitude", "revolution"],
+      );
+      camera.cameraRotation = {
+        latitude: integer(turned.latitude, 0, MAX_ANGLE),
+        longitude: integer(turned.longitude, 0, MAX_ANGLE),
+        revolution: integer(turned.revolution, 0, MAX_ANGLE),
+      };
+    }
+    optional(scene, camera, "fieldOfView", (v) => integer(v, 0, 10_800_000));
+    optional(scene, camera, "zoom", (v) => integer(v, 1, 2_147_483_647));
     result.scene3d = {
       camera: token(scene.camera),
       lightRig: lightRig as NonNullable<OfficeTextPaintStated["scene3d"]>["lightRig"],
+      ...(camera as Pick<NonNullable<OfficeTextPaintStated["scene3d"]>, "cameraRotation" | "fieldOfView" | "zoom">),
     };
   }
   if ("shape3d" in raw) {
     const shape = record(raw.shape3d, [
       "extrusionHeightEmu", "contourWidthEmu", "material", "bevelTop", "bevelBottom",
-      "extrusionColor", "contourColor",
+      "extrusionColor", "contourColor", "zEmu",
     ]);
     const next: Record<string, unknown> = {};
+    optional(shape, next, "zEmu", (v) => integer(v, -50_800_000, 50_800_000));
     optional(shape, next, "extrusionHeightEmu", (v) => integer(v, 0, 9_144_000));
     optional(shape, next, "contourWidthEmu", (v) => integer(v, 0, 9_144_000));
     optional(shape, next, "material", token);
@@ -363,7 +392,8 @@ export interface OfficeStatedDisplay {
   outline: string;
   outlineWidthPt: number;
   fillGradient?: {
-    angle: number;
+    /** A path gradient has none (`OfficeShapeGradient.angle`). */
+    angle?: number;
     stops: { position: number; color: string }[];
     path?: { kind: string; fillToRect?: { l?: number; t?: number; r?: number; b?: number } };
   };
@@ -438,7 +468,8 @@ export function officeTextPaintDisplayFromStated(
     result.fill = result.fillPattern.foreground;
   } else if (f?.kind === "gradient") {
     const stops = sortedStops(f).map((stop) => ({ position: stop.position / PERCENT, color: resolved(stop.color) }));
-    result.fillGradient = { angle: ((f.angle ?? 0) / 60000 + 90) % 360, stops };
+    // A path gradient has no angle (`OfficeShapeGradient.angle`).
+    result.fillGradient = f.path ? { stops } : { angle: ((f.angle ?? 0) / 60000 + 90) % 360, stops };
     if (f.path) result.fillGradient.path = f.path.fillToRect ? { kind: f.path.kind, fillToRect: { ...f.path.fillToRect } } : { kind: f.path.kind };
     result.fill = stops[0].color;
   }

@@ -22,7 +22,8 @@ export interface NativePictureStyle {
   id: OfficePictureStyleId;
   geometry: string;
   adjustments: Record<string, number>;
-  line?: { color: string; opacity: number; width: number; cmpd?: string };
+  /** `join`: the recipe's `a:miter` / `a:bevel` / `a:round` (none states round). */
+  line?: { color: string; opacity: number; width: number; cmpd?: string; join?: "miter" | "bevel" | "round" };
   fill?: { color: string; opacity: number };
   effects?: Array<Record<string, string | number>>;
   camera?: Record<string, string>;
@@ -32,6 +33,9 @@ export interface NativePictureStyle {
     contourW?: string;
     extrusion?: { color: string; opacity: number };
     extrusionH?: string;
+    prstMaterial?: string;
+     
+    lightRig?: { rig: string; dir: string; rev?: string };
   };
   outlineIdentity: OfficePictureStyleOutline | null;
 }
@@ -96,13 +100,20 @@ export function pictureStylePath(
     y = inset,
     right = w - inset,
     bottom = h - inset,
-    small = Math.min(w, h);
-  const r = Math.max(
-    0,
-    Math.min(
-      (small * (style.adjustments.adj ?? 16667)) / 100000,
-      (right - x) / 2,
-      (bottom - y) / 2,
+    small = Math.min(w, h),
+    // A negative inset pushes the outline out (a flat picture's line,
+    // `lib/office-picture-line`): a rounded corner keeps its centre, its
+    // radius grown by as much.
+    grow = Math.max(0, -inset);
+  const rounded = (radius: number) => (radius > 0 ? Math.min(radius + grow, (right - x) / 2, (bottom - y) / 2) : 0);
+  const r = rounded(
+    Math.max(
+      0,
+      Math.min(
+        (small * (style.adjustments.adj ?? 16667)) / 100000,
+        (right - x) / 2,
+        (bottom - y) / 2,
+      ),
     ),
   );
   if (style.geometry === "ellipse")
@@ -117,8 +128,8 @@ export function pictureStylePath(
   const corner = (value: number | undefined, fallback: number) =>
     Math.max(0, Math.min((small * (value ?? fallback)) / 100000, (right - x) / 2, (bottom - y) / 2));
   if (style.geometry === "round2DiagRect") {
-    const a = corner(style.adjustments.adj1 ?? style.adjustments.adj, 16667);
-    const b = corner(style.adjustments.adj2, 0);
+    const a = rounded(corner(style.adjustments.adj1 ?? style.adjustments.adj, 16667));
+    const b = rounded(corner(style.adjustments.adj2, 0));
     return `M${x + a},${y} H${right - b} Q${right},${y} ${right},${y + b} V${bottom - a} Q${right},${bottom} ${right - a},${bottom} H${x + b} Q${x},${bottom} ${x},${bottom - b} V${y + a} Q${x},${y} ${x + a},${y} Z`;
   }
   if (style.geometry === "snip2DiagRect") {
@@ -127,8 +138,8 @@ export function pictureStylePath(
     return `M${x + a},${y} H${right - b} L${right},${y + b} V${bottom - a} L${right - a},${bottom} H${x + b} L${x},${bottom - b} V${y + a} Z`;
   }
   if (style.geometry === "round2SameRect") {
-    const a = corner(style.adjustments.adj1, 16667);
-    const b = corner(style.adjustments.adj2, 0);
+    const a = rounded(corner(style.adjustments.adj1, 16667));
+    const b = rounded(corner(style.adjustments.adj2, 0));
     return `M${x + a},${y} H${right - a} Q${right},${y} ${right},${y + a} V${bottom - b} Q${right},${bottom} ${right - b},${bottom} H${x + b} Q${x},${bottom} ${x},${bottom - b} V${y + a} Q${x},${y} ${x + a},${y} Z`;
   }
   return `M${x},${y} H${right} V${bottom} H${x} Z`;

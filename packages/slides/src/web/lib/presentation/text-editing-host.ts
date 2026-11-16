@@ -13,7 +13,7 @@
  * (structural split, no behaviour change).
  */
 
-import { normalizeShapeKind } from "@mrnote/core/web/lib/presentation-shapes.ts";
+import { isPresentationConnectorShapeKind, normalizeShapeKind } from "@mrnote/core/web/lib/presentation-shapes.ts";
 import { isPresentationCameoBlock } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import { isTextBoxBlock } from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
 import { NEW_TEXT_BOX_FONT_SIZE_PT, NEW_TEXT_BOX_FONT_SIZE_PX } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
@@ -63,20 +63,28 @@ export function presentationTextEditingHost(block: Element): HTMLElement | null 
   return owns(body) ? body : null;
 }
 
-/**
- * Whether a slide shape takes words typed into it (double-click, Enter / F2,
- * a typed key): not a Cameo feed, a Zoom tile or ink / a custom outline,
- * which the deck keeps text-free. An Action Button takes them, as
- * PowerPoint's Edit Text on the button does.
- */
+
+
+
+
+
+
+
+
+
+
+
+
 export function presentationShapeBlockTakesText(block: PresentationBlock): boolean {
   if (block.type !== "shape") return false;
   const kind = normalizeShapeKind(block.shape);
+  const words = (block as { text?: unknown }).text;
   return (
     !isPresentationCameoBlock(block) &&
     !readZoomTileMarker(block) &&
     kind !== "ink" &&
-    kind !== "custom-geometry"
+    kind !== "custom-geometry" &&
+    !(isPresentationConnectorShapeKind(kind) && !(typeof words === "string" && words.length > 0))
   );
 }
 

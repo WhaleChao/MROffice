@@ -21,7 +21,7 @@ import { signatureMutationImpact } from "./signature-detect";
 import { loadPdfForInspection } from "./encrypted-guard";
 import { readPdfNativeReceiptReplayPolicy, type PdfNativeReceiptReplayPolicy } from "./native-receipt-journal";
 import { PDF_EDITABLE_MAX_BYTES } from "@mrnote/core/web/lib/document-size-limits.ts";
-import { inspectPdfRiskProfileOffThread } from "./source-risk-offthread";
+import { inspectPdfRiskProfileOffThread, warmPdfSourceRiskWorker } from "./source-risk-offthread";
 
 export type PdfSavePolicyHost = "reader" | "native-editor";
 export type PdfSavePolicyRevision = string | number;
@@ -3296,6 +3296,7 @@ async function inspectPdfRiskProfile(
     if (ownedBytes.byteLength > MAX_SOURCE_BYTES) {
       return createUnknownPdfSourceRiskProfile();
     }
+    // (Parsed in one go in the worker this runs in: lib/pdf/pdf-lib-pacing.)
     const doc = await loadPdfForInspection(ownedBytes);
     if (!doc) {
       return freezeRiskProfile({
@@ -3436,6 +3437,9 @@ function cacheRiskProfile(
   // The shared store first (one clean answer per file for every reader,
   
   const store = sourceRiskProfileStore;
+  // (The worker is started beside the store's answer, not after it: a file
+  // the store does not hold is inspected the moment that is known.)
+  if (store) warmPdfSourceRiskWorker();
   const inspection = store
     ? store.read(sha256).catch(() => null).then((stored) => {
         if (stored) return stored;
@@ -3452,6 +3456,26 @@ function cacheRiskProfile(
     riskProfileCache.delete(oldest);
   }
   return inspection;
+}
+
+/**
+ * Start the inspection of `bytes` now, kept by their own digest: the reader
+ * that inspects the same bytes later (`inspectPdfSourceRiskSnapshot`) finds
+ * it under way or done (lib/pdf/source-risk-ahead). The digest is computed
+ * here over these very bytes, never taken from anywhere else.
+ */
+export async function inspectPdfSourceRiskProfileAhead(bytes: Uint8Array): Promise<void> {
+  // Copied before the first await: the caller may zero or reuse its bytes
+  // as soon as this returns, and what is inspected must be what was digested.
+  const owned = new Uint8Array(bytes.byteLength);
+  owned.set(bytes);
+  try {
+    const sha256 = await sha256Hex(owned);
+    // (`cacheRiskProfile` takes its own copy before it returns.)
+    void cacheRiskProfile(sha256, owned).catch(() => undefined);
+  } finally {
+    owned.fill(0);
+  }
 }
 
 const carriedRiskProfiles = new WeakSet<Promise<Readonly<PdfSourceRiskProfile>>>();

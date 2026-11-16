@@ -64,22 +64,36 @@ export function webTableStyleGalleryIsFallback(): boolean {
   return isFallbackPresentationTableCatalog(nativeCatalog());
 }
 
+/**
+ * The deck's own colours a table style's theme colours resolve to besides its
+ * accents: Dark 1 / Light 1 / Dark 2 / Light 2 and the link colours, and the
+ * master's colour map, which names the slot Text 1 / Background 1 / Text 2 /
+ * Background 2 stand for (Light 1 for Text 1 on a dark master). PowerPoint
+ * draws a table's style in the slide's theme through that map: "No Style,
+ * Table Grid" writes its words and lines in Text 1, white on a dark deck.
+ * Without them, Office's own theme (black Dark 1, the light map).
+ */
+export interface TableStyleSchemeColors {
+  readonly slots?: Readonly<Partial<Record<"dk1" | "lt1" | "dk2" | "lt2" | "hlink" | "folHlink", string>>>;
+  readonly map?: Readonly<Partial<Record<"tx1" | "tx2" | "bg1" | "bg2", string>>>;
+}
+
+const LIGHT_TABLE_STYLE_MAP: Readonly<Record<string, string>> = { tx1: "dk1", tx2: "dk2", bg1: "lt1", bg2: "lt2" };
+const TABLE_STYLE_SCHEME_SLOTS = ["dk1", "lt1", "dk2", "lt2", "hlink", "folHlink"] as const;
+const TABLE_STYLE_MAPPED_NAMES = ["tx1", "tx2", "bg1", "bg2"] as const;
+const TABLE_STYLE_MAP_TARGETS = new Set<string>([...TABLE_STYLE_SCHEME_SLOTS.slice(0, 4)]);
+
 function resolveColor(
   catalog: Catalog,
   value: string,
   theme: Record<string, string>,
+  map: Readonly<Record<string, string>> = LIGHT_TABLE_STYLE_MAP,
 ): { color: string; opacity: number } {
   if (!value.startsWith("$")) return { color: value, opacity: 1 };
   const token = catalog.colors[Number(value.slice(1))] as Token;
-  const slot =
-    (
-      { tx1: "dk1", tx2: "dk2", bg1: "lt1", bg2: "lt2" } as Record<
-        string,
-        string
-      >
-    )[token.value.val] ?? token.value.val;
+  const slot = map[token.value.val] ?? token.value.val;
   const base = token.base
-    ? resolveColor(catalog, token.base, theme).color
+    ? resolveColor(catalog, token.base, theme, map).color
     : token.type === "schemeClr"
       ? (theme[slot] ?? "#000000")
       : token.type === "srgbClr"
@@ -126,26 +140,37 @@ export interface WebTableStyle {
 export function createWebTableStyleGallery(
   accentColors: readonly string[] = [],
   locale: "en" | "zh" = "en",
+  scheme?: TableStyleSchemeColors,
 ): readonly WebTableStyle[] {
-  return galleryFromCatalog(nativeCatalog(), accentColors, locale);
+  return galleryFromCatalog(nativeCatalog(), accentColors, locale, scheme);
 }
 
 function galleryFromCatalog(
   catalog: Catalog,
   accentColors: readonly string[],
   locale: "en" | "zh",
+  scheme?: TableStyleSchemeColors,
 ): readonly WebTableStyle[] {
   const theme: Record<string, string> = { ...catalog.defaults };
+  for (const slot of TABLE_STYLE_SCHEME_SLOTS) {
+    const color = scheme?.slots?.[slot];
+    if (typeof color === "string" && /^#[a-f0-9]{6}$/i.test(color)) theme[slot] = color;
+  }
   accentColors.slice(0, 6).forEach((color, i) => {
     if (/^#[a-f0-9]{6}$/i.test(color)) theme[`accent${i + 1}`] = color;
   });
+  const map: Record<string, string> = { ...LIGHT_TABLE_STYLE_MAP };
+  for (const name of TABLE_STYLE_MAPPED_NAMES) {
+    const target = scheme?.map?.[name];
+    if (typeof target === "string" && TABLE_STYLE_MAP_TARGETS.has(target)) map[name] = target;
+  }
   return catalog.styles.map((entry) => {
     const raw = JSON.parse(JSON.stringify(entry)) as Record<string, unknown>;
     const parts = raw.parts as Record<string, Record<string, unknown>>;
     for (const part of Object.values(parts)) {
       for (const field of ["fill", "color"])
         if (typeof part[field] === "string") {
-          const color = resolveColor(catalog, part[field] as string, theme);
+          const color = resolveColor(catalog, part[field] as string, theme, map);
           part[field] = color.color;
           if (field === "fill" && color.opacity < 1)
             part.fillOpacity = color.opacity;
@@ -154,17 +179,17 @@ function galleryFromCatalog(
         (part.borders ?? {}) as Record<string, Record<string, unknown>>,
       ))
         if (typeof border.color === "string")
-          border.color = resolveColor(catalog, border.color, theme).color;
+          border.color = resolveColor(catalog, border.color, theme, map).color;
     }
     if (typeof raw.background === "string")
-      raw.background = resolveColor(catalog, raw.background, theme).color;
+      raw.background = resolveColor(catalog, raw.background, theme, map).color;
     const gradient = raw.backgroundGradient as
       | { angle: number; stops: Array<{ color: string; offset: number }> }
       | undefined;
     if (gradient)
       gradient.stops = gradient.stops.map((stop) => ({
         ...stop,
-        color: resolveColor(catalog, stop.color, theme).color,
+        color: resolveColor(catalog, stop.color, theme, map).color,
       }));
     const look = normalizeTableStyleLook(raw, entry.styleId)!;
     return {
@@ -274,11 +299,12 @@ export function nativeWebTableStyleById(id: unknown): WebTableStyle | null {
 export function webTableStyleLookForTheme(
   styleId: unknown,
   accentColors: readonly string[],
+  scheme?: TableStyleSchemeColors,
 ): TableStyleLook | null {
   if (!nativeWebTableStyleById(styleId)) return null;
   const id = String(styleId).trim().toUpperCase();
   return (
-    createWebTableStyleGallery(accentColors).find((entry) => entry.look.styleId === id)?.look ??
+    createWebTableStyleGallery(accentColors, "en", scheme).find((entry) => entry.look.styleId === id)?.look ??
     null
   );
 }
@@ -292,11 +318,12 @@ export function webTableStyleLookForTheme(
 export function fallbackWebTableStyleLookForTheme(
   styleId: unknown,
   accentColors: readonly string[],
+  scheme?: TableStyleSchemeColors,
 ): TableStyleLook | null {
   if (!isNativeWebTableStyleId(styleId)) return null;
   const id = String(styleId).trim().toUpperCase();
   return (
-    galleryFromCatalog(fallbackPresentationTableCatalog(), accentColors, "en").find(
+    galleryFromCatalog(fallbackPresentationTableCatalog(), accentColors, "en", scheme).find(
       (entry) => entry.look.styleId === id,
     )?.look ?? null
   );

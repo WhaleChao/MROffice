@@ -22,6 +22,7 @@ import {
   sanitizeChartCategories,
   type ChartPointValue,
 } from "./chartBlockShared";
+import { isImeKeydown } from "../../../../lib/soft-keyboard";
 
 /** One series of the grid: a `null` value is an EMPTY cell, the chart's
  * blank point (drawn by its Show empty cells as, never as 0). */
@@ -269,7 +270,7 @@ export function ChartDataGrid({
             if (next) commit(title, next.categories, next.series);
           }}
           onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) return;
+            if (isImeKeydown(event)) return;
             const input = event.target;
             if (
               !(input instanceof HTMLInputElement) ||

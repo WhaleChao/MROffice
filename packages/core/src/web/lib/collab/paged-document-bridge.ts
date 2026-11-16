@@ -33,6 +33,7 @@ import { reportClientError } from "../errors/report-beacon";
 import { PROVISIONAL_PAGES_MIN_BLOCKS } from "../../components/console/editor/native-document/paged/provisionalPages";
 import { markRestoredLayout } from "../../components/console/editor/native-document/paged/restoredLayoutMark";
 import { forgetOpenedProjectionContent, paginationProjectionRefusal, rememberOpenedProjectionContent, restorePaginationProjection } from "../../components/console/editor/native-document/paged/paginationProjectionReceipt";
+import { withProjectionJsonMemo } from "../../components/console/editor/native-document/paged/projectionJsonMemo";
 import { traceDocsLayoutReceipt, tracingDocsLayoutReceipt } from "../docs-layout-receipt-cache";
 import type { JSONContent } from "@tiptap/core";
 import { roomRelativePosition, VersionedMapping } from "./room-relative-position";
@@ -80,6 +81,27 @@ function sameRoomNode(local: ProseMirrorNode, room: ProseMirrorNode): boolean {
   if (!local.hasMarkup(room.type, room.attrs, marks)) return false;
   if (local.isText) return local.text === room.text;
   return sameRoomContent(local.content, room.content);
+}
+
+
+
+
+
+
+
+
+
+
+
+function narrowedTextblockStep(doc: ProseMirrorNode, from: number, to: number, next: ProseMirrorNode): ReplaceStep | "same" | null {
+  const local = doc.nodeAt(from);
+  if (!local || local.nodeSize !== to - from || !local.isTextblock || !local.hasMarkup(next.type, next.attrs, next.marks)) return null;
+  const start = local.content.findDiffStart(next.content);
+  if (start === null) return "same";
+  const end = local.content.findDiffEnd(next.content);
+  if (!end) return null;
+  const overlap = Math.max(0, start - Math.min(end.a, end.b));
+  return new ReplaceStep(from + 1 + start, from + 1 + end.a + overlap, next.slice(start, end.b + overlap));
 }
 
 function sameRoomContent(local: Fragment, room: Fragment): boolean {
@@ -198,6 +220,16 @@ const MAX_POSITION_DERIVATION_DEPTH = 32;
  * pages, a 2.9 s task before its first page showed.
  * `window.__docsHollowFillWhole = true` fills such a document at once (A/B).
  */
+/** `run` after the next frame has been drawn (a task after it). */
+function afterAFrame(run: () => void): void {
+  const task = () => setTimeout(run, 0);
+  if (typeof requestAnimationFrame === "function" && !(typeof document !== "undefined" && document.visibilityState === "hidden")) {
+    requestAnimationFrame(task);
+  } else {
+    setTimeout(run, 16);
+  }
+}
+
 export function fillsInChunks(hollowOn: boolean, drawsHollow: boolean): boolean {
   if (!hollowOn) return true;
   if ((globalThis as { __docsHollowFillWhole?: boolean }).__docsHollowFillWhole === true) return false;
@@ -206,6 +238,18 @@ export function fillsInChunks(hollowOn: boolean, drawsHollow: boolean): boolean 
 
 const FILL_FIRST_BLOCKS = 240;
 const FILL_CHUNK_BLOCKS = 320;
+
+
+
+
+
+
+
+const FILL_CAP_MS = 8_000;
+function fillCapMs(): number {
+  const forced = (globalThis as { __pagedBridgeFillCapMs?: number }).__pagedBridgeFillCapMs;
+  return typeof forced === "number" && Number.isFinite(forced) && forced >= 0 ? forced : FILL_CAP_MS;
+}
 /** How long layout-only updates must pause before their content check. */
 const LAYOUT_ONLY_CHECK_PAUSE_MS = 600;
 /** Layout-only runs kept for the check at the pause, at most. */
@@ -577,7 +621,11 @@ export class PagedDocumentBridge {
   private closedLayoutOnlyRuns: Array<{ base: ProseMirrorNode; end: ProseMirrorNode }> = [];
   /** A long document's first fill still arriving (`fillInChunks`): the room
    * document it shows, its provisional sheets, and the next one to add. */
-  private filling: { canonical: ProseMirrorNode; pages: readonly ProseMirrorNode[]; next: number; filled: number; lane: BackgroundLane } | null = null;
+  private filling: {
+    canonical: ProseMirrorNode; pages: readonly ProseMirrorNode[]; next: number; filled: number; lane: BackgroundLane;
+    /** When it began (Date.now) and how long it may go on in chunks (0: to the end). */
+    startedAt: number; capMs: number;
+  } | null = null;
   /** Authored edits made while the fill was arriving (a command, never a
    * keystroke: the view is not editable): applied once it is complete,
    * mapped through everything the view took meanwhile (`flushFillEdits`). */
@@ -1976,8 +2024,16 @@ export class PagedDocumentBridge {
     } catch { this.setIssue("position-unavailable"); }
   }
 
-  /** The room's document on the pages of the cached layout receipt, or null. */
+  
+
+
+
+
   private restoredLayout(view: EditorView): ProseMirrorNode | null {
+    return withProjectionJsonMemo(() => this.restoredLayoutIn(view));
+  }
+
+  private restoredLayoutIn(view: EditorView): ProseMirrorNode | null {
     try {
       // The room's content under the document's own settings, as the bulk
       // fill lays it out (the canonical node carries only their defaults; the
@@ -2027,18 +2083,24 @@ export class PagedDocumentBridge {
     if (changes.length > 64) return false;
     // Nothing the room changed: what differs is drawn from it here.
     if (changes.length === 0) return true;
-    // Last first, so each block's positions hold for the ones before it.
-    let doc = tr.doc;
-    const steps: ReplaceStep[] = [];
-    for (let index = changes.length - 1; index >= 0; index -= 1) {
-      const change = changes[index]!;
-      const step = new ReplaceStep(change.from, change.to, new Slice(Fragment.from(change.node), 0, 0));
-      const applied = step.apply(doc);
-      if (!applied.doc) return false;
-      doc = applied.doc;
-      steps.push(step);
-    }
-    if (!sameRoomContent(projectPagedDocument(doc).content, room.content)) return false;
+    const stepsFor = (narrow: boolean): ReplaceStep[] | null => {
+      // Last first, so each block's positions hold for the ones before it.
+      let doc = tr.doc;
+      const steps: ReplaceStep[] = [];
+      for (let index = changes.length - 1; index >= 0; index -= 1) {
+        const change = changes[index]!;
+        const narrowed = narrow ? narrowedTextblockStep(doc, change.from, change.to, change.node) : null;
+        if (narrowed === "same") continue;
+        const step = narrowed ?? new ReplaceStep(change.from, change.to, new Slice(Fragment.from(change.node), 0, 0));
+        const applied = step.apply(doc);
+        if (!applied.doc) return null;
+        doc = applied.doc;
+        steps.push(step);
+      }
+      return sameRoomContent(projectPagedDocument(doc).content, room.content) ? steps : null;
+    };
+    const steps = stepsFor(true) ?? stepsFor(false);
+    if (!steps) return false;
     for (const step of steps) tr.step(step);
     return true;
   }
@@ -2102,8 +2164,15 @@ export class PagedDocumentBridge {
     // The chunks after the first are background work (lib/background-work):
     // input elsewhere in the app goes first, input in this window puts them
     // first, and they never wait longer than the deferral cap.
-    const lane = createBackgroundLane({ label: "docs-fill", owner: () => view.dom.closest(".wm-window") ?? view.dom });
-    this.filling = { canonical: this.canonical, pages, next, filled: blocks, lane };
+    // The reader waits for this window (it takes no input until it is filled):
+    
+    // opening's other first-screen work, never held back for it.
+    const capMs = fillCapMs();
+    const lane = createBackgroundLane({
+      label: "docs-fill", owner: () => view.dom.closest(".wm-window") ?? view.dom,
+      ...(capMs > 0 ? { priority: "first-screen" as const } : {}),
+    });
+    this.filling = { canonical: this.canonical, pages, next, filled: blocks, lane, startedAt: Date.now(), capMs };
     // The page ledger holds its passes while the sheets are still arriving
     // (the pages stay hidden under the initial settle meanwhile).
     writeDocumentLayoutStatus(view.dom, PAGED_BULK_FILL_ATTR, "true", view);
@@ -2139,6 +2208,20 @@ export class PagedDocumentBridge {
       queueMicrotask(() => this.flushFillEdits());
       return;
     }
+    // Past its cap: what is in is shown first (a frame), then the rest goes in
+    // with one dispatch, and the view takes input.
+    if (fill.capMs > 0 && Date.now() - fill.startedAt >= fill.capMs) {
+      afterAFrame(() => {
+        if (this.filling !== fill) return;
+        const now = this.view;
+        if (this.closed || !now) { this.endFill(now); return; }
+        if (fill.canonical !== this.canonical) { this.fillChunk(); return; }
+        this.finishFillAtOnce(now);
+        if (this.issue !== null) return;
+        this.fillEnded();
+      });
+      return;
+    }
     // Chunks grow with what is already in: the plugins and the view that
     // still run over the whole document on each dispatch run fewer times.
     let end = fill.next, blocks = 0;
@@ -2161,14 +2244,18 @@ export class PagedDocumentBridge {
     fill.filled += blocks;
     if (end < fill.pages.length) { this.scheduleFillChunk(); return; }
     this.endFill(view);
-    // The view is complete: it may take input now (`editable` is read on
-    // the next update), what was asked of it meanwhile is applied, and its
-    // caret is published at the pause.
+    this.fillEnded();
+  };
+
+  /** The view is complete: it may take input now (`editable` is read on the
+   * next update), what was asked of it meanwhile is applied, and its caret is
+   * published at the pause. */
+  private fillEnded() {
     this.scheduleRefresh();
     // After that refresh: the view must be editable for its edit to pass.
     queueMicrotask(() => this.flushFillEdits());
     this.deferSelectionPublish();
-  };
+  }
 
   /** End a fill early: the sheets still missing go in with one last dispatch,
    * which carries no chunk meta, so the whole-document decorations the

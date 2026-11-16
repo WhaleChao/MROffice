@@ -617,8 +617,26 @@ export interface ConditionalTextContainsRule extends ConditionalDifferentialStyl
   text: string;
   /** How to test: contains / does-not-contain / begins-with / ends-with. */
   operator: TextMatchOperator;
+  
+
+
+
+
+
+
+
+
+  formula?: string;
   textColor?: string;
   backgroundColor?: string;
+}
+
+/** The formula a rule is evaluated by and that moves with it: a formula
+ *  rule's, or a text rule's own (`ConditionalTextContainsRule.formula`). */
+export function conditionalRuleFormula(rule: ConditionalFormatRule): string | undefined {
+  if (rule.kind === "formula") return rule.formula;
+  if (rule.kind === "textContains") return rule.formula;
+  return undefined;
 }
 
 /**
@@ -1316,6 +1334,34 @@ export function ruleAreas(
   return rule.areas && rule.areas.length > 1 ? rule.areas : [rule.range];
 }
 
+/**
+ * `next` (a sheet's rules as an edit leaves them, read through the sheet's own
+ * bounds) with each rule the edit did not move given back the areas `stored`
+ * holds: a rule over whole columns reaches the grid's last row (Excel's
+ * A5:AK1048576), which the sheet's bounds clamp to its last used row for the
+ * grid to draw. Written back clamped, a new rule on the sheet cut it to A5:AK79
+ * (xlsx-rounds R316-X13 RULESHIFT).
+ */
+export function rulesKeepingStoredAreas(
+  stored: unknown,
+  next: readonly ConditionalFormatRule[],
+  bounds: { maxRow?: number; maxCol?: number },
+): ConditionalFormatRule[] {
+  const full = new Map(normalizeRules(stored).flatMap((rule) => (rule.id ? [[rule.id, rule] as const] : [])));
+  if (full.size === 0) return [...next];
+  const shown = new Map(normalizeRules(stored, bounds).flatMap((rule) => (rule.id ? [[rule.id, rule] as const] : [])));
+  return next.map((rule) => {
+    const own = rule.id ? full.get(rule.id) : undefined;
+    const clamped = rule.id ? shown.get(rule.id) : undefined;
+    if (!own || !clamped) return rule;
+    const areas = JSON.stringify(ruleAreas(rule));
+    if (areas !== JSON.stringify(ruleAreas(clamped)) || areas === JSON.stringify(ruleAreas(own))) return rule;
+    const restored: ConditionalFormatRule = { ...rule, range: own.range };
+    if (own.areas && own.areas.length > 1) restored.areas = own.areas;
+    return restored;
+  });
+}
+
 /** Whether a cell lies in any of the rule's areas. */
 export function ruleContains(
   rule: { range: ConditionalRange; areas?: ConditionalRange[] },
@@ -1400,9 +1446,10 @@ export function splitRuleAreas(
     void _areas;
     void _id;
     const candidate: Record<string, unknown> = { ...rest, range: area };
-    if (rule.kind === "formula" && index > 0) {
+    const formula = conditionalRuleFormula(rule);
+    if (formula !== undefined && index > 0) {
       candidate.formula = shiftFormula(
-        rule.formula,
+        formula,
         area.r1 - rule.range.r1,
         area.c1 - rule.range.c1,
       );
@@ -1872,6 +1919,10 @@ function normalizeTextContainsRule(
     text,
     operator: r.operator,
   };
+  if (typeof r.formula === "string") {
+    const formula = r.formula.trim();
+    if (formula !== "" && formula.length <= MAX_CONDITIONAL_FORMULA_LENGTH) rule.formula = formula;
+  }
   applyColors(rule, colors);
   return rule;
 }
@@ -3294,7 +3345,11 @@ export function resolveCellConditionalDisplay(
         break;
       }
       case "textContains": {
-        if (!evaluateTextContains(rule, value)) continue;
+        if (rule.formula !== undefined) {
+          
+          if (!opts.evalFormula) continue;
+          if (!isFormulaTruthy(opts.evalFormula(rule.formula, row, col, rule.range.r1, rule.range.c1))) continue;
+        } else if (!evaluateTextContains(rule, value)) continue;
         const style: ConditionalStyle = {};
         applyDifferentialCss(style, rule);
         effect = { style };
@@ -3512,8 +3567,9 @@ function ruleOnAreas(
     for (const key of NATIVE_RULE_IDENTITY) delete candidate[key];
   }
   if (rowDelta !== 0 || colDelta !== 0) {
-    if (rule.kind === "formula") {
-      candidate.formula = shiftFormula(rule.formula, rowDelta, colDelta);
+    const formula = conditionalRuleFormula(rule);
+    if (formula !== undefined) {
+      candidate.formula = shiftFormula(formula, rowDelta, colDelta);
     } else if (rule.kind === "colorScale" || rule.kind === "dataBar") {
       for (const key of ["min", "mid", "max"] as const) {
         const stop = (rule as unknown as Record<string, FormulaStopLike | undefined>)[key];
@@ -3994,9 +4050,10 @@ export function snapshotRulesForFormatPaste(
       range: clipped,
       ...(clippedAreas.length > 1 ? { areas: clippedAreas } : {}),
     } as Record<string, unknown>;
-    if (rule.kind === "formula") {
+    const formula = conditionalRuleFormula(rule);
+    if (formula !== undefined) {
       candidate.formula = shiftFormula(
-        rule.formula,
+        formula,
         clipped.r1 - rule.range.r1,
         clipped.c1 - rule.range.c1,
       );
@@ -4119,9 +4176,10 @@ export function planRulesForFormatPainter(
           ...newConditionalRuleCopy(rule),
           range: nextRange,
         };
-        if (rule.kind === "formula") {
+        const formula = conditionalRuleFormula(rule);
+        if (formula !== undefined) {
           candidate.formula = shiftFormula(
-            rule.formula,
+            formula,
             rowDelta,
             columnDelta,
           );
@@ -4235,8 +4293,9 @@ export function planRulesForFormatPaste(
       ...(nextAreas.length > 1 ? { areas: nextAreas } : {}),
     };
     if (nextAreas.length <= 1) delete candidate.areas;
-    if (rule.kind === "formula") {
-      candidate.formula = shiftFormula(rule.formula, rowDelta, colDelta);
+    const formula = conditionalRuleFormula(rule);
+    if (formula !== undefined) {
+      candidate.formula = shiftFormula(formula, rowDelta, colDelta);
     }
     const nextRule = normalizeRule(candidate, bounds);
     if (
@@ -4322,8 +4381,9 @@ export function planRulesForTransposedFormatPaste(
     const rowDelta = nextRange.r1 - rule.range.r1;
     const colDelta = nextRange.c1 - rule.range.c1;
     const candidate: Record<string, unknown> = { ...newConditionalRuleCopy(rule), range: nextRange };
-    if (rule.kind === "formula") {
-      candidate.formula = shiftFormula(rule.formula, rowDelta, colDelta);
+    const formula = conditionalRuleFormula(rule);
+    if (formula !== undefined) {
+      candidate.formula = shiftFormula(formula, rowDelta, colDelta);
     }
     const nextRule = normalizeRule(candidate, bounds);
     if (

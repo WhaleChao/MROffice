@@ -2,21 +2,24 @@
 
 [English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
 
-> ### ⬇ 完整功能請安裝 MR Office 桌面版（免費）
->
-> MR Office 桌面版免費，包含這些編輯器和完整服務，在你自己的電腦上離線可用。開源編輯器沒有的功能，桌面版都提供：
->
-> - 開啟和儲存 Word、Excel、PowerPoint 檔案（.docx、.xlsx、.pptx）
-> - 帶函數的公式（SUM、IF、VLOOKUP 等）計算
-> - 圖表
-> - SmartArt 編輯
-> - PDF 編輯後寫回檔案
->
-> **[從 Releases 下載 MR Office →](https://github.com/XinaTian/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
+<p align="center"><b>MR Office 的開源編輯器：文件、試算表、簡報、PDF、手寫和程式碼，全部在瀏覽器中執行。</b></p>
 
-<p align="center"><a href="https://mroffice.ai"><b>🌐 mroffice.ai</b></a> · <a href="https://mroffice.ai">在 MR Office 中體驗 →</a></p>
+<p align="center"><a href="https://demo.mroffice.ai"><b>▶ 線上試用，無需安裝</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ 從 Releases 下載 MR Office</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-> MR Office 的開源編輯器：文件、試算表、簡報、PDF、手寫和程式碼，全部在瀏覽器中執行。
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+
+<table>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/docs.png" alt="文件" width="100%"></a><br><b>文件</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="試算表" width="100%"></a><br><b>試算表</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/slides.png" alt="簡報" width="100%"></a><br><b>簡報</b></td>
+</tr>
+<tr>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/ink.png" alt="手寫" width="100%"></a><br><b>手寫</b></td>
+<td align="center" width="33%"><a href="https://demo.mroffice.ai"><img src="../docs/screenshots/code.png" alt="程式碼" width="100%"></a><br><b>程式碼</b></td>
+</tr>
+</table>
 
 MR Office 是一個結合筆記、AI 與真實檔案的工作空間。本儲存庫公開它的編輯器原始碼：與 MR Office 中執行的是同一套編輯器，你可以自行建置、執行與嵌入。這是開源編輯器，不是一套完整開源的 Office 套件：Microsoft Office 檔案的讀寫由 MR Office 提供（見下文）。
 
@@ -33,16 +36,9 @@ MR Office 是一個結合筆記、AI 與真實檔案的工作空間。本儲存�
 
 帶函數的公式計算、圖表繪製和 SmartArt 排版由 MR Office 自己的引擎完成，在 MR Office 桌面版中提供：開源編輯器會保留檔案中的公式、圖表和 SmartArt，並按儲存時的樣子顯示 SmartArt。
 
-## Word、Excel、PowerPoint 和 PDF 檔案
-
-開啟和儲存 Word、Excel、PowerPoint 檔案（.docx、.xlsx、.pptx），以及把 PDF 的修改寫回檔案，由免費的 MR Office 桌面版提供。桌面版包含以上全部編輯器，在你自己的電腦上離線也能用：
-
-- **MR Office** (免費桌面應用程式): https://github.com/XinaTian/MROffice/releases
-- **官網**: https://mroffice.ai
-
-[所有版本 →](https://github.com/XinaTian/MROffice/releases)
-
 ## 執行編輯器
+
+**▶ [線上試用，無需安裝](https://demo.mroffice.ai)**
 
 六個編輯器位於 `packages/`（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`ink`、`code`，共用 `@mrnote/core`），在 `apps/playground` 中一起執行：
 
@@ -54,6 +50,22 @@ npm run preview   # http://localhost:5178
 ```
 
 `npm run dev` 在同一位址啟動開發伺服器，`npm run smoke` 檢查建置結果。各套件的 README 詳列了它能做的事和嵌入方式。
+
+## 完整功能請安裝 MR Office 桌面版（免費）
+
+MR Office 桌面版免費，包含這些編輯器和完整服務，在你自己的電腦上離線可用。開源編輯器沒有的功能，桌面版都提供：
+
+- 開啟和儲存 Word、Excel、PowerPoint 檔案（.docx、.xlsx、.pptx）
+- 帶函數的公式（SUM、IF、VLOOKUP 等）計算
+- 圖表
+- SmartArt 編輯
+- PDF 編輯後寫回檔案
+
+**[從 Releases 下載 MR Office →](https://github.com/XinaTian/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
+
+### Word、Excel、PowerPoint 和 PDF 檔案
+
+開啟和儲存 Word、Excel、PowerPoint 檔案（.docx、.xlsx、.pptx），以及把 PDF 的修改寫回檔案，由免費的 MR Office 桌面版提供。桌面版包含以上全部編輯器，在你自己的電腦上離線也能用：
 
 ## 授權條款
 

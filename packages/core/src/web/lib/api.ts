@@ -15,7 +15,7 @@ import { noteDesktopFeature } from "@mrnote/core/host/desktop-app.ts";
 
 // A request refused here is a feature of MR Note's service: it is provided
 // by the MR Office desktop app's installer (free: the full service),
-
+// https://github.com/XinaTian/MROffice/releases. The
 // person is told so (with the download link) instead of the button doing
 // nothing.
 const noteNeedsService = () => noteDesktopFeature();

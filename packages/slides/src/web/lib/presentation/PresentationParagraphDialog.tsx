@@ -6,8 +6,10 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 /**
- * PowerPoint's Paragraph dialog, Indents and Spacing page (Home > Paragraph
- * launcher, Line Spacing > Line Spacing Options...). What OK writes is decided
+ * PowerPoint's Paragraph dialog (Home > Paragraph launcher, Line Spacing >
+ * Line Spacing Options...): the Indents and Spacing page, and the Asian
+ * Typography page's Text alignment (`a:pPr@fontAlgn`: Auto, Top, Centered,
+ * Baseline, Bottom; the box Docs' Paragraph dialog shares). What OK writes is decided
  * by `lib/presentation-paragraph-dialog`; the host commits it through the Home
  * paragraph writer. The labels are the Docs Paragraph dialog's own strings
  * (Word and PowerPoint share them) plus PowerPoint's Before text / First line
@@ -19,6 +21,10 @@ import { useLocale, useTranslations } from "@mrnote/core/host/next-intl.tsx";
 
 import { OfficeDialogShell } from "@mrnote/core/web/components/office-ribbon/OfficeDialogShell.tsx";
 import { officeDialogParts } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
+import {
+  OFFICE_TEXT_ALIGNMENT_CHOICES,
+  OfficeTextAlignmentField,
+} from "@mrnote/core/web/components/office-ribbon/OfficeTextAlignmentField.tsx";
 import {
   formatPresentationMeasurement,
   presentationMeasurementUnit,
@@ -36,7 +42,11 @@ import {
   type PresentationParagraphDialogSource,
   type PresentationSpecialIndent,
 } from "@mrnote/core/web/lib/presentation-paragraph-dialog.ts";
-import { PARAGRAPH_INDENT_EMU_LIMIT, type ParagraphAlign } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
+import {
+  PARAGRAPH_INDENT_EMU_LIMIT,
+  type ParagraphAlign,
+  type PresentationFontAlign,
+} from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 
 export interface PresentationParagraphDialogProps {
   readonly open: boolean;
@@ -47,11 +57,20 @@ export interface PresentationParagraphDialogProps {
   readonly spacingWritable: boolean;
   /** False where the target keeps no row indentation (a table cell, objects). */
   readonly indentWritable?: boolean;
+  /** False where the target keeps no rows to state a Text alignment (objects). */
+  readonly fontAlignWritable?: boolean;
   readonly onApply: (result: PresentationParagraphDialogResult) => boolean;
   readonly onCancel: () => void;
 }
 
 const TEST_ID = "presentation-paragraph-dialog";
+
+/** ST_TextFontAlignType and the shared box's choices, both ways. */
+const FONT_ALIGN_CHOICE = { auto: "auto", t: "top", ctr: "center", base: "baseline", b: "bottom" } as const;
+type FontAlignChoice = (typeof OFFICE_TEXT_ALIGNMENT_CHOICES)[number];
+const CHOICE_FONT_ALIGN = Object.fromEntries(
+  Object.entries(FONT_ALIGN_CHOICE).map(([value, choice]) => [choice, value]),
+) as Record<FontAlignChoice, PresentationFontAlign>;
 
 export function PresentationParagraphDialog(
   props: PresentationParagraphDialogProps,
@@ -65,9 +84,11 @@ function PresentationParagraphDialogBody({
   exactWritable,
   spacingWritable,
   indentWritable = false,
+  fontAlignWritable = false,
   onApply,
   onCancel,
 }: PresentationParagraphDialogProps): React.JSX.Element {
+  const [page, setPage] = useState<"indents" | "asian">("indents");
   const t = useTranslations("console-notebooks");
   const word = (key: string, values?: Record<string, string | number>) =>
     t(key as Parameters<typeof t>[0], values as never);
@@ -176,16 +197,40 @@ function PresentationParagraphDialogBody({
           <button
             type="button"
             role="tab"
-            aria-selected
+            aria-selected={page === "indents"}
             className="office-dialog__tab"
             data-testid={`${TEST_ID}-tab-indents`}
+            onClick={() => setPage("indents")}
           >
             {word("toolbar.paragraphTabIndents")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={page === "asian"}
+            className="office-dialog__tab"
+            data-testid={`${TEST_ID}-tab-asian`}
+            onClick={() => setPage("asian")}
+          >
+            {word("toolbar.paragraphTabAsian")}
           </button>
         </div>
       }
     >
-      <div className="grid gap-3">
+      <div className="grid gap-3" hidden={page !== "asian"} data-testid={`${TEST_ID}-asian`}>
+        <section className="office-dialog__group" title={fontAlignWritable ? undefined : unavailable}>
+          <h3>{word("toolbar.paragraphSectionGeneral")}</h3>
+          <OfficeTextAlignmentField
+            testId={`${TEST_ID}-font-align`}
+            value={draft.fontAlign === "" ? "" : FONT_ALIGN_CHOICE[draft.fontAlign]}
+            choices={OFFICE_TEXT_ALIGNMENT_CHOICES}
+            disabled={!fontAlignWritable}
+            placeholder={word("toolbar.fontPickerMixed")}
+            onChange={(choice) => change("fontAlign", CHOICE_FONT_ALIGN[choice])}
+          />
+        </section>
+      </div>
+      <div className="grid gap-3" hidden={page !== "indents"}>
         <section className="office-dialog__group">
           <h3>{word("toolbar.paragraphSectionGeneral")}</h3>
           <label className={officeDialogParts.field}>

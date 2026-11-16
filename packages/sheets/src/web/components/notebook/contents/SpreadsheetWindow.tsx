@@ -5,9 +5,11 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { styleStatesAFormat } from "../../../lib/spreadsheet/style-source-xf";
+import { useDraftCommitOnLeave } from "@mrnote/core/web/lib/draft-commit-on-leave.ts";
 import { reportClientError } from "@mrnote/core/web/lib/errors/report-beacon.ts";
 import { smartArtThemeEffectShadows } from "@mrnote/core/web/lib/office-smartart/theme-effects.ts";
 import { ptToPx, ptToPxRounded } from "@mrnote/core/web/lib/office-units.ts";
+import { planSelectionPaneReorder, type OfficeSelectionPaneMove } from "@mrnote/core/web/components/office-ribbon/officeSelectionPaneReorder.ts";
 import { officePictureGeometryClipPath } from "@mrnote/core/web/lib/office-picture-geometry.ts";
 import { officeObjectHasImportIdentity } from "@mrnote/core/web/lib/office-object-provenance.ts";
 import { useInkArmedFocusRelease } from "@mrnote/ink/web/lib/ink-armed-focus.ts";
@@ -87,7 +89,7 @@ import {
   spreadsheetShapeResizesToFitText,
   withSpreadsheetEquationBoxBody,
 } from "../../../lib/spreadsheet/equation-box";
-import { DEFAULT_CELL_FONT_SIZE_PT, SpreadsheetCellIndexes, cellFontTallerThanDefault, cellTextTurned } from "../../../lib/spreadsheet/cell-indexes";
+import { DEFAULT_CELL_FONT_SIZE_PT, SpreadsheetCellIndexes, borderLineWidthPx, cellFontTallerThanDefault, cellTextTurned, cellTextWraps } from "../../../lib/spreadsheet/cell-indexes";
 import { SpreadsheetRowRevisions } from "../../../lib/spreadsheet/row-revisions";
 import { revealGridWindowRows, spreadsheetGridVisibleRows } from "../../../lib/spreadsheet/grid-scroll";
 import {
@@ -128,7 +130,7 @@ import { SpreadsheetFormulaReferenceOverlay } from "./spreadsheet/SpreadsheetFor
 import { SpreadsheetChartSourceOverlay } from "./spreadsheet/SpreadsheetChartSourceOverlay";
 import type { ChartSourceEdit } from "../../../lib/spreadsheet/chart-source-highlight";
 import { collectSelectionObservations } from "../../../lib/spreadsheet/selection-observations";
-import { filterVisibilityGroups } from "../../../lib/spreadsheet/filter-visibility";
+import { filterMatchText, filterVisibilityGroups } from "../../../lib/spreadsheet/filter-visibility";
 import { useSpreadsheetFilterVisibility } from "./spreadsheet/useSpreadsheetFilterVisibility";
 
 import { useSpreadsheetBackgroundCalculation, type DeriveCalculationPivots } from "./spreadsheet/useSpreadsheetBackgroundCalculation";
@@ -205,7 +207,7 @@ import {
   type SpreadsheetFindTab,
 } from "./spreadsheet/SpreadsheetFindReplaceDialog";
 
-import { nativeAutoRowIsNumeric, nativeTextParagraphWithoutLayout } from "../../../lib/spreadsheet/native-text-layout";
+import { nativeAutoRowIsNumeric, nativeParagraphFontStyle, nativeStrutBaselinePx, nativeTextParagraphWithoutLayout } from "../../../lib/spreadsheet/native-text-layout";
 
 import { invertSheetOwnHistory, type SheetOwnHistoryState } from "../../../lib/spreadsheet/own-history";
 
@@ -322,6 +324,10 @@ import {
   pictureCropHandleRequest,
   pictureCropStart,
   sheetArrangedForDrawing,
+  sheetArrangedForPaneUnits,
+  sheetDrawingPaneUnits,
+  sheetDrawingsArrangeable,
+  sheetWithGroupGathered,
   sheetWithDrawingStack,
   sheetSmartArtGroupAt as sheetSmartArtGroupAtLib,
   spreadsheetLineShapeTakesNoText,
@@ -361,6 +367,8 @@ import {
   type SpreadsheetCell,
 } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
 import { cellShiftedSheet, columnWidthsSheet, defaultColumnWidthSheet, deletedLinesSheet, insertedLinesSheet, lineFormatProtected as lineFormatProtectedFor, manualHiddenSpanSheet, pivotSourcesFollowLines, resolveSpreadsheetNativeGrid, sizeMapsEqual } from "../../../lib/spreadsheet/row-column-buttons";
+import { OFFICE_PRINT_IDENTITY, officePrintAnchorKind, officePrintedDrawingFrame } from "../../../lib/spreadsheet/office-print-metrics";
+import { printedStripEdges } from "../../../lib/spreadsheet/printed-cell-borders";
 import { forecastOutputSheet, type ForecastOutputRequest } from "../../../lib/spreadsheet/forecast-sheet-output";
 import { activeSheetAfterDelete, copiedSheetWorkbook, deletedSheetWorkbook, MAX_SHEETS, movedSheetIndex, movedSheetWorkbook, newWorksheetFor, renamedSheetWorkbook, sheetHiddenWorkbook, sheetUnhideable, tabColoredWorkbook, unhiddenSheet, visibleSheetAfterHiding, workbookNameMirrorsForNewSheet } from "../../../lib/spreadsheet/sheet-buttons";
 import { frozenSheet, splitLinesSheet, splitPlacedSheet, splitRemovedSheet } from "../../../lib/spreadsheet/view-buttons";
@@ -392,7 +400,7 @@ import { defineNamePlan, definedNameMutation, deletedNameMutation, nameManagerSh
   renameCapturesReferences,
   renameCapturedByFormulaLocals,
 } from "../../../lib/spreadsheet/name-buttons";
-import { actualFilterNumberForCell, actualSortTypeForCell, reapplySortPlan, regionFirstRowHasInnerBlank, regionFirstRowHoldsMerge, remapRowSortMergesFailClosed, rowSortedSheet, rowsASortKeepsInPlace, sortArrayCellsOf, sourceOrderAmongVisibleRows } from "../../../lib/spreadsheet/sort-buttons";
+import { actualFilterNumberForCell, actualSortTypeForCell, headerGuessFormatKey, reapplySortPlan, regionFirstRowHoldsMerge, regionHasHeaderRow, remapRowSortMergesFailClosed, rowSortedSheet, rowsASortKeepsInPlace, sortArrayCellsOf, sourceOrderAmongVisibleRows } from "../../../lib/spreadsheet/sort-buttons";
 import { appliedFilterSheet, autoFilterToggledSheet, clearedFiltersSheet, columnConditionFilterPlan, columnValueFilterPlan, establishedAutoFilterRef as establishedAutoFilterRefFor, ordinaryFilterRange, recordedLegacyAutoFilter as recordedLegacyAutoFilterFor } from "../../../lib/spreadsheet/filter-buttons";
 import { dependentSourceDraft, validationDraftRule as validationRuleFromDraft, type ValidationDraft } from "../../../lib/spreadsheet/validation-buttons";
 import { tableHeaderRowToggledSheet, dataTableNativeResizeRefusal, planDataTableResize, planDataTableResizeOutcome, tableConvertedSheets, tableCellEffectiveStyle, tableCreatedSheet, tableFilterButtonToggledSheet, tableRangeResizeBlocked, tableRenamedSheets, tableStyledSheet, tableStyleOptionSheet, tableTotalsToggledSheet, type DataTableResizeOutcome, type DataTableResizeRefusal } from "../../../lib/spreadsheet/table-buttons";
@@ -416,7 +424,7 @@ import {
 } from "../../../lib/spreadsheet/what-if-table-hold";
 import { consolidatePlan, parseConsolidateSource, type ConsolidateSourceParseResult } from "../../../lib/spreadsheet/consolidate-buttons";
 import { advancedFilterCriteriaFormulas, advancedFilterPlan } from "../../../lib/spreadsheet/advanced-filter-buttons";
-import { MAX_PIVOT_SOURCE_CELLS, NEW_PIVOT_LAYOUT_DEFAULTS, pivotClearedAll, pivotNewWorksheet, pivotLiveSource, pivotRefreshPlan, pivotSourceSheetOf, type PivotLiveSource, newPivotChartRecord as newPivotChartRecordFor, nextPivotWorksheetIdentity, pivotCommitPlan, pivotConfigForNewSheet, pivotConfigWithSafeOutput as pivotConfigWithSafeOutputOn, PIVOT_NEW_SHEET_ANCHOR, pivotSourceSnapshot, sheetWithPivotColumnsFitted } from "../../../lib/spreadsheet/pivot-buttons";
+import { MAX_PIVOT_SOURCE_CELLS, pivotSourceReference, pivotSourceRefusal, NEW_PIVOT_LAYOUT_DEFAULTS, pivotClearedAll, pivotNewWorksheet, pivotLiveSource, pivotRefreshPlan, pivotSourceSheetOf, type PivotLiveSource, newPivotChartRecord as newPivotChartRecordFor, nextPivotWorksheetIdentity, pivotCommitPlan, pivotConfigForNewSheet, pivotConfigWithSafeOutput as pivotConfigWithSafeOutputOn, PIVOT_NEW_SHEET_ANCHOR, pivotSourceSnapshot, sheetWithPivotColumnsFitted } from "../../../lib/spreadsheet/pivot-buttons";
 import { autoFilledSheet, cellForFill, edgeFillRequest, resolveCellClipboardScalar, seriesAutoFillPlan, seriesFillRequest, textToColumnsRequest } from "../../../lib/spreadsheet/fill-buttons";
 import { autoOutlinedGroups, outlineGroupsSheet, removeDuplicatesSheet, removeSubtotalsSheet, subtotaledSheet } from "../../../lib/spreadsheet/data-tool-buttons";
 import {
@@ -438,11 +446,12 @@ import { useSpreadsheetNativeGrid } from "./spreadsheet/useSpreadsheetNativeGrid
 import { SpreadsheetFormattedText } from "./spreadsheet/SpreadsheetFormattedText";
 import { SpreadsheetNativeParagraph } from "./spreadsheet/SpreadsheetNativeParagraph";
 import { SpreadsheetNativeText, SpreadsheetNativeTextParts, spreadsheetNativeTextSpacingPx, spreadsheetNativeTextWidthPx } from "./spreadsheet/SpreadsheetNativeText";
+import { excelPrintsTextUnclipped } from "../../../lib/spreadsheet/office-latin-ligatures";
 import { pageLayoutListCaretBackground } from "./spreadsheet/pageLayoutListCaretPaint";
 import { SpreadsheetPhoneticLayer } from "./spreadsheet/SpreadsheetPhoneticLayer";
 import { ConditionalIconGlyph } from "./spreadsheet/ConditionalIconGlyph";
 import { SpreadsheetCellTextEffects } from "./spreadsheet/SpreadsheetCellTextEffects";
-import { normalizeNativeGrid, resolveNativeRowHeights, editNativeRowSizes, clampNativeRowHeight, nativeRowCssClamp, nativeCellPaddingPx, nativeColumnCssClamp, resolveSpreadsheetFontStyle, spreadsheetFontStack } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { normalizeNativeGrid, resolveNativeRowHeights, nativeDefaultHoldsRows, editNativeRowSizes, clampNativeRowHeight, nativeRowCssClamp, nativeCellPaddingPx, nativeColumnCssClamp, resolveSpreadsheetFontStyle, spreadsheetFontStack, setNativeTextDesignedLines, nativeTypographyGeneration, officePrintedIndentStepPx } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { SpreadsheetFontRepair } from "./spreadsheet/SpreadsheetFontRepair";
 import { cachedSpreadsheetFontNeeds, inheritSpreadsheetFontNeeds, normalizeSpreadsheetFontFaces, spreadsheetFontFamilyWithAssets, useSpreadsheetFontFaces } from "./spreadsheet/useSpreadsheetFontFaces";
 import type { OfficeFontFace } from "@mrnote/core/web/components/office-ribbon/officeFontFace.ts";
@@ -454,6 +463,8 @@ import { OfficePictureMenuIcon } from "@mrnote/core/web/components/office-ribbon
 import { OfficePictureStyleGraphic } from "@mrnote/core/web/components/office-ribbon/OfficePictureStyleGraphic.tsx";
 import {
   SPREADSHEET_PICTURE_EFFECT_MENU_KINDS,
+  SPREADSHEET_PICTURE_EFFECT_MENU_KINDS_WITH_SHADOW,
+  spreadsheetPictureShadowInEffects,
   spreadsheetPictureEffectFromParameter,
   spreadsheetPictureEffectParameter,
   spreadsheetPictureEffectPatch,
@@ -582,6 +593,7 @@ import {
 import { useLocale, useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { createPortal, flushSync } from "react-dom";
 import { sheetCoveringRanges } from "../../../lib/spreadsheet/sheet-extent";
+import { asLoadedSpelling } from "../../../lib/spreadsheet/loaded-spelling";
 import { nextPaintOrTimer, snapshotWhenWorkbookSettles } from "../../../lib/spreadsheet/export-settle";
 import { latestScrollFrame, createSpreadsheetGridWindowResolver, spreadsheetGridReachViewport, spreadsheetGridStageSize, spreadsheetGridWindowCovers, spreadsheetGridWindowWithMerges } from "../../../lib/spreadsheet/grid-scroll";
 import ConfirmDialog from "@mrnote/core/web/components/ui/ConfirmDialog.tsx";
@@ -609,7 +621,7 @@ import { askOfficePassword, setDocumentOpenPassword } from "@mrnote/core/web/lib
 import { isApiRequestError } from "@mrnote/core/web/lib/api.ts";
 import PageExportLossConfirmDialog from "@mrnote/core/web/components/ui/PageExportLossConfirmDialog.tsx";
 import { printPdfBlob } from "@mrnote/core/web/lib/print-pdf.ts";
-import { downloadTextFile } from "@mrnote/core/web/lib/download-file.ts";
+import { downloadBlobFile, downloadTextFile } from "@mrnote/core/web/lib/download-file.ts";
 import {
   EXCEL_1900_FICTITIOUS_LEAP_SERIAL,
   excelMaxDateSerial,
@@ -720,6 +732,7 @@ import {
   type PresentationCustomShapeResult,
 } from "@mrnote/core/web/lib/presentation-freeform.ts";
 import { normalizeDocumentShapeAdjustments } from "@mrnote/core/web/lib/document-shapes.ts";
+import { selectionPaneClickSelection } from "@mrnote/core/web/components/office-ribbon/officeSelectionPaneClick.ts";
 import { selectSpreadsheetDrawing, transformSpreadsheetDrawingSelection, spreadsheetDrawingRotateAtBottom, SHEET_DRAWING_HANDLE, SHEET_HANDLE_NAME } from "../../../lib/spreadsheet/drawing-selection";
 import OfficeBordersMenuBody, {
   OFFICE_BORDER_LINE_STYLE_IDS,
@@ -1039,7 +1052,7 @@ import {
   smartArtToggledDirection,
   SMARTART_NO_OUTLINE_COMMANDS,
   SMARTART_SHAPE_SIZE_STEP,
-  resizeSmartArtItem,
+  smartArtMembersWithItemScale,
   smartArtOutlineAfterMove,
   smartArtMembersWithShapeReset,
   smartArtShapeHasOwnReset,
@@ -1204,6 +1217,7 @@ import {
 } from "@mrnote/core/web/__cut__/mfc2dd2a6e6.ts";
 import { createValueStoreWorkbook, sameFormulaResults } from "@mrnote/core/web/lib/spreadsheet/value-store.ts";
 import { cssZoomScalesText, sheetZoomedFontSize, withSheetZoomedFont } from "@mrnote/core/web/lib/css-zoom.ts";
+import { officeNormalLineHeightPx } from "@mrnote/core/web/lib/office-fonts/substitutes.ts";
 import { WorkbookValuesCache } from "@mrnote/core/web/lib/spreadsheet/workbook-values-cache.ts";
 import { calculationRuleKey, type CalculationRuleRequest } from "@mrnote/core/web/lib/spreadsheet/background-calculation-protocol.ts";
 import { calculationRuleRequests } from "../../../lib/spreadsheet/calculation-rule-requests";
@@ -1214,8 +1228,11 @@ import { findInTiles, storedBodyCellKeys, structuredTiledMarker, TiledSheets, fo
  * statistics), not only the cell they paint. */
 /** Excel's empty PivotTable area: 3 columns x 18 rows from the anchor, framed in grey (#999999). */
 const EMPTY_PIVOT_AREA_COLUMNS = 3;
+const EMPTY_CELL_KEYS: ReadonlySet<string> = new Set();
 const EMPTY_PIVOT_AREA_ROWS = 18;
 const EMPTY_PIVOT_FRAME_COLOR = "#999999";
+/** How long after the last key a tiled sheet's arriving tiles wait to be merged (applyTiledModel). */
+const TILED_APPLY_AFTER_KEYS_MS = 600;
 const TILED_WHOLE_RANGE_RULES = new Set(["colorScale", "dataBar", "iconSet", "topBottom", "aboveBelowAverage", "duplicateValues"]);
 import {
   applySpreadsheetPageCommandWithResult,
@@ -1562,7 +1579,7 @@ import {
   cellHorizontalFill,
   cellTextClipAtCellEdgeCss,
   cellTextDirection,
-  cellResolvedTextDirection,
+  generalTextAlignment,
   cellUnderlineIsDouble,
   cellVerticalScript,
   horizontalFillText,
@@ -2010,6 +2027,11 @@ import {
   totalAxisSize,
   wrappedLineCount,
   autoFitCellHeightPx,
+  officeBorderRowExtras,
+  officeRowThickMarkExtras,
+  officeEmptyRowHeight,
+  officeCombinedRowParts,
+  stackedTextLetterSpacing,
 } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import {
   announceCell,
@@ -2120,6 +2142,7 @@ import {
   sheetPivots,
   sheetWithPivotAt,
   normalizePivotRange,
+  pivotLiveSourceRange,
   MAX_PIVOT_VALUE_CAPTION,
   MAX_PIVOT_VALUE_NUMBER_FORMAT,
   pivotComputationMatrix,
@@ -2158,7 +2181,7 @@ import {
   pickPivotBorderEdge,
 } from "../../../lib/spreadsheet/pivot-style-recipes";
 import { pivotStyleCellLook, pivotStyleOptionsOf, savedPivotStyleReport } from "../../../lib/spreadsheet/pivot-style-look";
-import { planWorkbookPivots, withPivotOverlay, type PivotOverlaySheet } from "@mrnote/core/web/lib/spreadsheet/pivot-overlay.ts";
+import { pivotLiveSourceReads, planWorkbookPivots, withPivotOverlay, type PivotLiveSourceRead, type PivotOverlaySheet, type PivotSourceReadable } from "@mrnote/core/web/lib/spreadsheet/pivot-overlay.ts";
 import {
   cellShiftOutcome,
   clearContentsOutcome,
@@ -2188,6 +2211,7 @@ import {
   buildSpreadsheetCsvExportInChunks,
   SpreadsheetCsvExportBudgetError,
   spreadsheetCsvExportExtent,
+  unicodeTextBytes,
 } from "../../../lib/spreadsheet/csv-export";
 import {
   type DelimitedImportDateOrder,
@@ -2231,9 +2255,14 @@ import {
   resolveSpreadsheetPageLayoutRenderPlan,
   createPageLayoutRowMap,
   pageLayoutEdgeScrollStep,
+  pageLayoutDataAreaWidth,
+  pageLayoutWideColumnLimitPx,
+  printedCellWidensRange,
+  pageLayoutSpansKeepPage,
 } from "../../../lib/spreadsheet/page-layout-view";
 import {
   hasManualLineBreak,
+  cellLineShown,
   cellTextOnOneLine,
   autoRowMeasuredText,
   cellWrapTextSetting,
@@ -2347,6 +2376,7 @@ import {
   MAX_SHAPE_TEXT_SIZE,
   MIN_SHAPE_TEXT_SIZE,
   spreadsheetEquationFits,
+  spreadsheetShapeSceneCamera,
   type SpreadsheetInkPoint,
   type SpreadsheetPresetShapeKind,
   type SpreadsheetShapeStyle,
@@ -2472,6 +2502,7 @@ import {
   ruleOverlaps as conditionalRuleOverlaps,
   isClassicNativeConditionalRuleEditable,
   normalizeRules as normalizeConditionalRules,
+  rulesKeepingStoredAreas,
   planRulesForFill as planRulesForConditionalFill,
   rangeHasRule as rangeHasConditionalRule,
   rangesOverlap as conditionalRangesOverlap,
@@ -2494,6 +2525,7 @@ import {
 import {
   defaultSeriesIn,
   excelBuiltInCustomLists,
+  excelLocaleNameLists,
   type AutoFillValueMode,
   type SeriesDateUnit,
   type SeriesIn,
@@ -2680,7 +2712,7 @@ import {
   type NavDirection,
 } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
 import { gridCellWithDefaultLook, xlsxDefaultLookEnabled, type DefaultLookSheet } from "@mrnote/core/web/lib/spreadsheet/default-look.ts";
-import { compactLineStyleCells, deferredLineStyleBudget, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, writeLineBlanksIn, materializeLineStyles, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
+import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, styledColumnEdge, writeLineBlanksIn, materializeLineStyles, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import {
   entryWalkAnchor,
   nextCellInReorderedSelection,
@@ -2880,7 +2912,11 @@ import { useSpreadsheetSheetViewSwitching } from "./spreadsheet/useSpreadsheetSh
 import { useSpreadsheetNameManagerRows } from "./spreadsheet/useSpreadsheetNameManagerRows";
 import { spreadsheetSheetTabContextMenuItems } from "./spreadsheet/spreadsheetSheetTabContextMenuItems";
 import { spreadsheetChartDesignControlState } from "./spreadsheet/spreadsheetChartDesignControlState";
-import { spreadsheetShapeFormatAdapter } from "./spreadsheet/spreadsheetShapeFormatAdapter";
+import {
+  spreadsheetFormatPaneAt,
+  spreadsheetShapeFormatAdapter,
+  type SpreadsheetFormatPaneOpening,
+} from "./spreadsheet/spreadsheetShapeFormatAdapter";
 import { spreadsheetTableReceiptWriters } from "./spreadsheet/spreadsheetTableReceiptWriters";
 import { useSpreadsheetPrimarySelections } from "./spreadsheet/useSpreadsheetPrimarySelections";
 import { useSpreadsheetFilterAnswerAndPopupPlacement } from "./spreadsheet/useSpreadsheetFilterAnswerAndPopupPlacement";
@@ -2952,11 +2988,13 @@ import {
   sheetObjectsAfterPreparedCommit,
   sheetObjectsWithPreparedSmartArt,
   sheetSmartArtConvertsOnEdit,
+  sheetSmartArtDrawingless,
   sheetSmartArtMembersWithTypedWords,
   sheetSmartArtPreparations,
   sheetsToPersist,
 } from "./spreadsheet/spreadsheetSmartArtPrepared";
 import {
+  SMARTART_PREPARE_RETRY_MS,
   smartArtDiagramWhilePreparing,
   useSmartArtPreparationVersion,
   useSmartArtPressesWhilePreparing,
@@ -3033,7 +3071,9 @@ import { renderSpreadsheetChartPasteSpecialDialog } from "./spreadsheet/renderSp
 import { renderSpreadsheetStandardWidthDialog } from "./spreadsheet/renderSpreadsheetStandardWidthDialog";
 import { renderSpreadsheetFillAcrossSheetsDialog } from "./spreadsheet/renderSpreadsheetFillAcrossSheetsDialog";
 import { renderSpreadsheetZoomDialog } from "./spreadsheet/renderSpreadsheetZoomDialog";
-import { renderSpreadsheetIterationDialog, spreadsheetIterationDialogLimits, type SpreadsheetIterationDialogDraft } from "./spreadsheet/renderSpreadsheetIterationDialog";
+import { renderSpreadsheetIterationDialog, renderSpreadsheetPrecisionWarning, spreadsheetIterationDialogLimits, type SpreadsheetIterationDialogDraft } from "./spreadsheet/renderSpreadsheetIterationDialog";
+import { cellsAtKeysRoundedAsDisplayed, cellsRoundedAsDisplayed } from "@mrnote/core/web/lib/spreadsheet/display-precision.ts";
+import { cellsWithTableOwnEdges, sheetWithoutHeaderOwnBorder, tableOwnEdgeKeys, tablesWithOwnBorders } from "@mrnote/core/web/lib/spreadsheet/table-own-borders.ts";
 import { renderSpreadsheetEditRangeConfirmDialog } from "./spreadsheet/renderSpreadsheetEditRangeConfirmDialog";
 import { renderSpreadsheetAddCustomViewDialog } from "./spreadsheet/renderSpreadsheetAddCustomViewDialog";
 import { renderSpreadsheetPasteNamesDialog } from "./spreadsheet/renderSpreadsheetPasteNamesDialog";
@@ -3059,6 +3099,7 @@ import { useTouchInputMode, type TouchFlickDirection } from "@mrnote/core/web/li
 import { registerSpreadsheetCellMaterializer, spreadsheetCellEditorAt, spreadsheetCellNodeAt, spreadsheetGhostCellHandler } from "./spreadsheet/spreadsheetCellLookup";
 import { excelDateSystemArg } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
 import { readErrorCheckingOptions, serverErrorCheckingOptions, subscribeErrorCheckingOptions } from "../../../lib/spreadsheet/error-checking-options";
+import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
 /** The selected SmartArt's frame, in the pane's own workbook window. */
 const spreadsheetSmartArtFrame = (pane: HTMLElement) =>
   nearestMatch(pane, '[data-testid="spreadsheet-smartart-group-frame"]');
@@ -3305,6 +3346,7 @@ function buildFormulaWorkbook(
     nativeFootprints: pivotNativeFootprints,
     chartReports: pivotChartReports,
     chartMatrices: pivotChartMatrices,
+    held: pivotHeld,
   } = planWorkbookPivots(formulaDataSheets, bootstrap.evaluatorFor, pivotOptions);
   const finalInputs = withPivotOverlay(formulaDataSheets, inputs, { plans: pivotPlans, nativeFootprints: pivotNativeFootprints });
   const { workbook, evaluatorFor, memoSnapshot } = createValueStoreWorkbook(finalInputs, { results: values, date1904 });
@@ -3320,6 +3362,8 @@ function buildFormulaWorkbook(
     pivotNativeFootprints,
     pivotChartReports,
     pivotChartMatrices,
+    /** Reports held until their source's rows are read (a large tiled sheet). */
+    pivotHeld,
     inputs: finalInputs,
     pivotSheetIds: formulaDataSheets
       .filter((candidate) => Boolean(candidate.pivot))
@@ -3333,6 +3377,10 @@ const SpreadsheetRibbonHeld = memo(function SpreadsheetRibbonHeld({ children }: 
 
 /** A General numeral a PivotTable value was refitted to (1235, 1.2E+05). */
 const PIVOT_GENERAL_NUMERAL = /^-?\d*\.?\d+(?:E[+-]\d+)?$/;
+
+/** How long a held PivotTable report waits before its source's rows are
+ * asked again after a read of them failed. */
+const PIVOT_SOURCE_READ_RETRY_MS = 5000;
 
 /** Differences of a kept recovery copy listed one by one; the rest are counted. */
 const KEPT_COPY_CELLS_SHOWN = 30;
@@ -3350,7 +3398,18 @@ const KEPT_COPY_CELLS_SHOWN = 30;
  * the last few bodies are kept, by page. Normalization reads nothing but the
  * body, and the sheets are not changed in place by anything that reads them.
  */
-interface NormalizedLoad { text: string; sheets: SheetModel[]; outcome: NormalizeSheetsOutcome }
+interface NormalizedLoad {
+  /** The content's JSON, what a later load of the page is compared by; null
+   * until an idle moment writes it (`loadText`). */
+  text: string | null;
+  readonly content: Record<string, unknown>;
+  sheets: SheetModel[];
+  outcome: NormalizeSheetsOutcome;
+}
+
+function loadText(load: NormalizedLoad): string {
+  return (load.text ??= JSON.stringify(load.content));
+}
 const normalizedLoads = new WeakMap<object, NormalizedLoad>();
 /** The cell maps as the page's load gave them: a sheet still holding its map has
  * not been edited, and a save stamps only results on it (withDisplayCache). */
@@ -3415,9 +3474,14 @@ function normalizeLoadedContent(pageId: string, content: Record<string, unknown>
   let kept = normalizedLoads.get(content);
   let text: string | undefined;
   if (!kept) {
-    text = JSON.stringify(content);
+    // Only a page loaded before is compared by its text: the first load of a
+    // page wrote its JSON before it was drawn, ~90 ms of a 1.6 MB workbook's
+    
     const byPage = normalizedLoadsByPage.get(pageId);
-    if (byPage && byPage.text === text) kept = byPage;
+    if (byPage) {
+      text = JSON.stringify(content);
+      if (loadText(byPage) === text) kept = byPage;
+    }
   }
   noteLoadNormalization(kept ? "reused" : "normalized");
   if (kept) {
@@ -3429,7 +3493,12 @@ function normalizeLoadedContent(pageId: string, content: Record<string, unknown>
   const sheets = normalizeSheets(content, outcome, { deferOtherSheetsLineBlanks: true });
   for (const sheet of sheets) cellsAsLoaded.add(sheet.cells);
   rememberLoadedSheets(pageId, content, sheets);
-  const load: NormalizedLoad = { text: text ?? JSON.stringify(content), sheets, outcome: keptOutcome(outcome) };
+  const load: NormalizedLoad = { text: text ?? null, content, sheets, outcome: keptOutcome(outcome) };
+  if (load.text === null) {
+    const write = () => { loadText(load); };
+    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") window.requestIdleCallback(write, { timeout: 5_000 });
+    else setTimeout(write, 0);
+  }
   normalizedLoads.set(content, load);
   normalizedLoadsByPage.delete(pageId);
   normalizedLoadsByPage.set(pageId, load);
@@ -4011,11 +4080,11 @@ function SpreadsheetWindow({
   // The ONE Format Shape pane (components/office-ribbon/OfficeShapeFormatPane),
   // docked in the same right column the chart pane uses; `tab` is the page it
   // opens on (Size and Position opens Size & Properties, as Excel does).
-  const [shapeFormatPane, setShapeFormatPane] = useState<{ tab: string } | null>(null);
+  const [shapeFormatPane, setShapeFormatPane] = useState<SpreadsheetFormatPaneOpening | null>(null);
   // XLS-A080: Excel's Format Picture pane — the same shared pane, with the
   // picture's own pages (Effects, Size & Properties, Picture); Size and
   // Properties… opens it on Size & Properties.
-  const [pictureFormatPane, setPictureFormatPane] = useState<{ tab: string } | null>(null);
+  const [pictureFormatPane, setPictureFormatPane] = useState<SpreadsheetFormatPaneOpening | null>(null);
   // XLS-A080 Link… on a picture: the draft of its Insert / Edit Link dialog,
   // and where the last press on a linked picture started (a click that did
   // not drag follows the link, as in Excel).
@@ -4197,14 +4266,20 @@ function SpreadsheetWindow({
   // A command that needs all of a large tiled sheet starts reading it, and
   // the person is told when it can run: it used to be refused for good.
   const [tiledWholeAsked, setTiledWholeAsked] = useState(0);
-  const tiledWholeAnnounceRef = useRef<string | null>(null);
-  const wholeSheetMessage = useCallback((sheetId: string) => {
+  const tiledWholeAnnounceRef = useRef<{ sheetId: string; purpose: "move" | "pivot" } | null>(null);
+  // `purpose` names what waits for the read: moving cells (sort, filter,
+  // insert or delete lines) or creating a PivotTable, whose totals would
+  // otherwise be of the rows around the screen only.
+  const wholeSheetMessage = useCallback((sheetId: string, purpose: "move" | "pivot" = "move") => {
     const tiled = tiledRef.current;
     const cells = (tiled?.entry(sheetId)?.cells ?? 0).toLocaleString();
-    if (!tiled?.askWhole(sheetId)) return t("spreadsheet.tiledWorkbook.wholeSheetRefused", { cells });
-    tiledWholeAnnounceRef.current = sheetId;
+    const pivot = purpose === "pivot";
+    if (!tiled?.askWhole(sheetId)) {
+      return t(pivot ? "spreadsheet.tiledWorkbook.wholeSheetRefusedPivot" : "spreadsheet.tiledWorkbook.wholeSheetRefused", { cells });
+    }
+    tiledWholeAnnounceRef.current = { sheetId, purpose };
     setTiledWholeAsked((count) => count + 1);
-    return t("spreadsheet.tiledWorkbook.wholeSheetReading", { cells });
+    return t(pivot ? "spreadsheet.tiledWorkbook.wholeSheetReadingPivot" : "spreadsheet.tiledWorkbook.wholeSheetReading", { cells });
   }, [t]);
   const calculationPendingRef = useRef(false);
   // The calculation (or the filter visibility it feeds) FAILED for the
@@ -4256,6 +4331,24 @@ function SpreadsheetWindow({
   // A structured tiled workbook's cells beyond its body, read as the grid
   // needs them (lib/spreadsheet/tiled-sheets). One adapter per page.
   const tiledRef = useRef<TiledSheets | null>(null);
+  // When a key was last pressed (or text composed): tiles read meanwhile are
+  // merged once the keys stop (applyTiledModel).
+  const tiledLastKeyAtRef = useRef(Number.NEGATIVE_INFINITY);
+  const tiledApplyHeldRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tiledHeldTransformRef = useRef<((previous: SheetModel[]) => SheetModel[]) | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const noteKey = () => { tiledLastKeyAtRef.current = performance.now(); };
+    window.addEventListener("keydown", noteKey, { capture: true, passive: true });
+    window.addEventListener("compositionupdate", noteKey, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("keydown", noteKey, { capture: true });
+      window.removeEventListener("compositionupdate", noteKey, { capture: true });
+      if (tiledApplyHeldRef.current !== null) clearTimeout(tiledApplyHeldRef.current);
+      tiledApplyHeldRef.current = null;
+      tiledHeldTransformRef.current = null;
+    };
+  }, []);
   /** While a line edit shows ahead of the server: the cells typed since, by key
    * (undefined: cleared). They are laid on the server's answer and saved then. */
   const tiledLineEditHeldCellsRef = useRef<Map<string, SpreadsheetCell | undefined> | null>(null);
@@ -4765,6 +4858,9 @@ function SpreadsheetWindow({
   // lib/spreadsheet/view-options.
   const [viewOptions, setViewOptions] =
     useState<SpreadsheetViewOptions>(defaultViewOptions());
+  // Set precision as displayed, for the commit path (replaceActiveSheet).
+  const precisionAsDisplayedRef = useRef(false);
+  precisionAsDisplayedRef.current = viewOptions.precisionAsDisplayed === true;
   const workbookTheme = useMemo(
     () => workbookThemeFromViewOptions(viewOptions),
     [viewOptions],
@@ -6676,6 +6772,7 @@ function SpreadsheetWindow({
   // View ▸ Zoom ▸ Zoom… (Excel's Zoom dialog, XLS-A030).
   // File ▸ Options ▸ Formulas ▸ Enable iterative calculation (X-001).
   const [iterationDialogDraft, setIterationDialogDraft] = useState<SpreadsheetIterationDialogDraft | null>(null);
+  const [precisionWarningOpen, setPrecisionWarningOpen] = useState(false);
   const [zoomDialogDraft, setZoomDialogDraft] = useState<{
     choice: (typeof SPREADSHEET_ZOOM_DIALOG_PRESETS)[number] | "fit" | "custom";
     custom: string;
@@ -7893,6 +7990,9 @@ function SpreadsheetWindow({
   // Go To Special > Objects selects every drawing on the sheet; the drawing
   // layer, declared further down, installs the selector (XLS-A062).
   const selectAllSheetDrawingsRef = useRef<() => boolean>(() => false);
+  // The Selection Pane's Ctrl+Click / Shift+Click (Excel's pane selects
+  // several names; they are selected on the grid as one ShapeRange).
+  const selectPaneDrawingsRef = useRef<(key: string, mode: "toggle" | "range", order: readonly string[]) => boolean>(() => false);
   // Excel answers Go To Special with a multi-area selection of exactly the
   // matching cells. This grid selects one rectangle, so a match set of any
   // other shape is MARKED instead: the cells are highlighted, the real
@@ -9480,10 +9580,19 @@ function SpreadsheetWindow({
   const workbookNativeThemeFonts = useMemo(() => spreadsheetWorkbookThemeFontSet(workbookTheme), [workbookTheme]);
   const nativeGrid = useSpreadsheetNativeGrid(sheet.nativeGrid, sheet.columnWidths, sheet.defaultColumnWidth, workbookThemeFontKey, workbookThemeFontFamily, workbookThemeHeadingFontFamily, workbookNativeThemeFonts, locale);
   const columnWidths = nativeGrid?.widths ?? sheet.columnWidths;
+  // One indent level, px: an imported grid's is its Normal font's three
+  // spaces, as Windows Excel draws it (lookwin p87-lw; Calibri 11 9 px).
+  const indentStepPx = nativeGrid?.indentStepPx;
   const displayDefaultColumnWidth = nativeGrid?.defaultWidth ?? sheet.defaultColumnWidth ?? DEFAULT_SPREADSHEET_COLUMN_WIDTH_PX;
   // The stored default row height is the workbook's own for its own font; the
   // browser's line box replaces it only once a theme change put another face on.
-  const nativeRows = useMemo(() => resolveNativeRowHeights(sheet.nativeGrid?.rowMetrics,sheet.rowHeights,sheet.defaultRowHeight,nativeGrid?.fontReplaced ? nativeGrid.fontRowHeight : undefined),[sheet.nativeGrid?.rowMetrics,sheet.rowHeights,sheet.defaultRowHeight,nativeGrid?.fontReplaced,nativeGrid?.fontRowHeight]);
+  const nativeRows = useMemo(() => resolveNativeRowHeights(sheet.nativeGrid?.rowMetrics,sheet.rowHeights,sheet.defaultRowHeight,
+    // A default the file does not mark custom is the row Excel fits to the
+    // faces of a row's empty positions (officeEmptyRowHeight); a replaced
+    // theme font re-measures it in the new face.
+    nativeGrid?.fontReplaced ? nativeGrid.fontRowHeight
+      : nativeGrid?.automaticDefaultRow ? officeEmptyRowHeight(nativeGrid.rowFont, expandLineStyleRuns(sheet.columnStyles as LineStyleMap | undefined)) : undefined),
+  [sheet.nativeGrid?.rowMetrics,sheet.rowHeights,sheet.defaultRowHeight,nativeGrid,sheet.columnStyles]);
   const displayDefaultRowHeight = nativeRows?.defaultHeight ?? sheet.defaultRowHeight ?? DEFAULT_SPREADSHEET_ROW_HEIGHT_PX;
   const displayCellPadding = nativeGrid ? nativeCellPaddingPx(nativeGrid.dpi) : CELL_BASE_PADDING_X_PX;
   // Excel's room for a number is the column less 5px -- 2px margins and the
@@ -10475,18 +10584,14 @@ function SpreadsheetWindow({
       rowStyles: lines.rowStyles, columnStyles: lines.columnStyles,
     }).cells;
     // Of the blanks, only those whose format shows on paper (a border or a
-    // fill) print, as Excel prints them: RO046's bordered blanks A3:A95 make
-    // its 6 pages; MX060's blanks carry a font and alignment only, and Excel
-    // prints its 6 filled rows on one page.
+    // fill, white too) print, as Excel prints them: RO046's bordered blanks
+    // A3:A95 make its 6 pages; MX060's blanks carry a font and alignment
+    // only, and Excel prints its 6 filled rows on one page
+    // (printedCellWidensRange).
     const visible: Record<string, { value?: unknown }> = {};
     for (const key in own) {
       const cell = own[key] as { value?: unknown; formula?: unknown; style?: Record<string, unknown> } | undefined;
-      if (!cell) continue;
-      const style = cell.style ?? {};
-      const fill = typeof style.backgroundColor === "string" && !/^(#fff(fff)?|transparent)$/i.test(style.backgroundColor);
-      const border = Boolean(style.border) || Boolean(style.borderEdges) || Boolean(style.borderTop || style.borderBottom || style.borderLeft || style.borderRight);
-      const valued = (typeof cell.value === "string" && cell.value !== "") || (typeof cell.formula === "string" && cell.formula !== "");
-      if (valued || fill || border || style.pattern || style.gradientFill) visible[key] = { value: "x" };
+      if (cell && printedCellWidensRange(cell)) visible[key] = { value: "x" };
     }
     // A sparkline is drawn in its cell however empty the cell is, and Excel
     // prints it: P23's sparklines in I1:I8 past the data (A1:H8) printed on a
@@ -10503,8 +10608,20 @@ function SpreadsheetWindow({
         cols = Math.max(cols, merge.col + merge.colSpan);
       }
     }
-    return { rows: Math.min(sheet.rowCount, rows), cols: Math.min(sheet.columnCount, cols) };
+    // The cells the print holds anything in (a value, an own fill or border,
+    // a sparkline): what keeps a trailing page (pageLayoutPagePrints).
+    return { rows: Math.min(sheet.rowCount, rows), cols: Math.min(sheet.columnCount, cols), keys: visible };
   }, [embeddedWorkbook?.presentation, mergeSpans, sheet]);
+  // The lines this window's print paints at their design widths
+  // (setNativeTextDesignedLines), kept with the cells they were read from;
+  
+  const designedLinesOwner = useRef<{ cells?: unknown; lines?: ReadonlySet<string> }>({});
+  // Each printed row's baseline floor (pageLayoutRowDescent), by the cells it was read from.
+  const rowDescentCache = useRef<{ cells?: unknown; byRow?: Map<number, number[]>; descent: Map<number, number> }>({ descent: new Map() });
+  useEffect(() => {
+    const owner = designedLinesOwner.current;
+    return () => setNativeTextDesignedLines(owner, null);
+  }, []);
   // How far the active cell reaches, so reading mode tints the whole row and
   // column a merged anchor occupies rather than only its first line.
   const activeCellSpan = useMemo(() => {
@@ -11316,6 +11433,7 @@ function SpreadsheetWindow({
     namedRanges,
     pageId,
     pivotRefreshRevision,
+    precisionAsDisplayed: viewOptions.precisionAsDisplayed === true,
     sheet,
   });
   // What the automatic calculation runs over: the held tables' results read
@@ -11337,10 +11455,45 @@ function SpreadsheetWindow({
   // C): the reports it holds are read from each answer, in this view's
   // labels and collapsed items (the labels are pivotOutputLabels, below).
   const workbookHasPivots = useMemo(() => formulaDataSheets.some((candidate) => sheetPivots(candidate).length > 0), [formulaDataSheets]);
-  const deriveCalculationPivots = useMemo<DeriveCalculationPivots | undefined>(() => workbookHasPivots
-    ? (bindings, results) => calculationPivotsFromResults(bindings.map((binding) => binding.sheet as unknown as PivotOverlaySheet),
-        bindings.map((binding) => binding.input), results, { date1904: workbookDate1904, labels: pivotOutputLabelsRef.current, collapsed: pivotCollapsed })
-    : undefined, [workbookHasPivots, workbookDate1904, pivotCollapsed, t]);
+  // A large tiled sheet holds only the rows around the screen, and a sheet
+  // not shown none at all: a PivotTable report computed from such a source's
+  // live cells is held (not drawn, not read by formulas, here or in the
+  // session) until every row it reads is in, never totalled over the rows
+  // that happen to be loaded. The rows are read for it (below).
+  const pivotSourceRowsReadable = useCallback<PivotSourceReadable>((sheetId, range) => {
+    const tiled = tiledRef.current;
+    return !tiled || tiled.rowsResident(sheetId, range.r1, range.r2);
+  }, []);
+  const [pivotSourceReadTick, setPivotSourceReadTick] = useState(0);
+  const pivotLiveReadsRef = useRef<{ key: string; reads: readonly PivotLiveSourceRead[] }>({ key: "", reads: [] });
+  const pivotLiveReads = useMemo(() => {
+    const tiled = tiledRef.current;
+    const reads = tiled && workbookHasPivots
+      ? pivotLiveSourceReads(formulaDataSheets).filter((read) => tiled.isTiledSheet(read.sourceSheetId))
+      : [];
+    const key = reads.map((read) => `${read.planKey}\u0000${read.sourceSheetId}\u0000${read.range.r1}:${read.range.r2}`).join("\n");
+    if (key !== pivotLiveReadsRef.current.key) pivotLiveReadsRef.current = { key, reads };
+    return pivotLiveReadsRef.current.reads;
+  }, [formulaDataSheets, workbookHasPivots]);
+  // Which of those reports wait for rows now; the plans are made again when
+  // it changes (the tiles arriving do not always change a sheet's cells).
+  const pivotSourcesHeldKey = useMemo(() => {
+    // Residency is the tiles', read anew when a sheet's cells or the tick move.
+    void formulaDataSheets;
+    void pivotSourceReadTick;
+    return pivotLiveReads
+      .filter((read) => !pivotSourceRowsReadable(read.sourceSheetId, read.range))
+      .map((read) => read.planKey)
+      .join("\n");
+  }, [formulaDataSheets, pivotLiveReads, pivotSourceReadTick, pivotSourceRowsReadable]);
+  const deriveCalculationPivots = useMemo<DeriveCalculationPivots | undefined>(() => {
+    void pivotSourcesHeldKey;
+    return workbookHasPivots
+      ? (bindings, results) => calculationPivotsFromResults(bindings.map((binding) => binding.sheet as unknown as PivotOverlaySheet),
+          bindings.map((binding) => binding.input), results, { date1904: workbookDate1904, labels: pivotOutputLabelsRef.current, collapsed: pivotCollapsed,
+            sourceReadable: pivotSourceRowsReadable })
+      : undefined;
+  }, [workbookHasPivots, workbookDate1904, pivotCollapsed, pivotSourceRowsReadable, pivotSourcesHeldKey, t]);
   // The pictures IMAGE formulas name, as this tab has fetched them: every
   // settled fetch recalculates (IMAGE is volatile) and redraws.
   const webImageRevision = useSyncExternalStore(
@@ -11578,10 +11731,11 @@ function SpreadsheetWindow({
     // The session answering what the file already showed is no change: the
     // same inputs and values read the same. A new evaluator here repainted
     // every row and rebuilt every reader on it, three times over an open.
-    const context = [formulaSource, formulaDataSheets, pivotCollapsed, pivotOutputLabels, workbookDate1904] as const;
+    const context = [formulaSource, formulaDataSheets, pivotCollapsed, pivotOutputLabels, workbookDate1904, pivotSourcesHeldKey] as const;
     const shown = formulaWorkbookRef.current;
     if (shown && shown.context.every((part, index) => part === context[index]) && sameFormulaResults(shown.values, values)) return shown.workbook;
-    const workbook = buildFormulaWorkbook(inputs, activeName, values, formulaDataSheets, { labels: pivotOutputLabels, collapsed: pivotCollapsed }, workbookDate1904);
+    const workbook = buildFormulaWorkbook(inputs, activeName, values, formulaDataSheets,
+      { labels: pivotOutputLabels, collapsed: pivotCollapsed, sourceReadable: pivotSourceRowsReadable }, workbookDate1904);
     formulaWorkbookRef.current = { context, values, workbook };
     return workbook;
   }, [
@@ -11593,8 +11747,54 @@ function SpreadsheetWindow({
     explicitCalculationBusy,
     formulaSource,
     pivotOutputLabels,
+    pivotSourceRowsReadable,
+    pivotSourcesHeldKey,
     workbookDate1904,
   ]);
+  // The rows the held PivotTable reports read: their tiles are read (and kept
+  // from then on, TiledSheets.keepRows), and the person is told the report
+  // waits for its source and when it shows.
+  const pivotSourceAnnouncedRef = useRef(new Set<string>());
+  useEffect(() => {
+    const tiled = tiledRef.current;
+    if (!tiled) return;
+    tiled.keepRows(pivotLiveReads.map((read) => ({ sheetId: read.sourceSheetId, first: read.range.r1, last: read.range.r2 })));
+    const missing = new Map<string, Set<number>>();
+    for (const read of pivotLiveReads) {
+      const tiles = tiled.tilesMissingFor(read.sourceSheetId, read.range.r1, read.range.r2);
+      if (tiles.length === 0) continue;
+      const wanted = missing.get(read.sourceSheetId) ?? new Set<number>();
+      for (const tile of tiles) wanted.add(tile);
+      missing.set(read.sourceSheetId, wanted);
+    }
+    const nameOf = (sheetId: string) => liveSheetsRef.current.find((candidate) => candidate.id === sheetId)?.name ?? sheetId;
+    for (const sheetId of [...pivotSourceAnnouncedRef.current]) {
+      if (missing.has(sheetId)) continue;
+      pivotSourceAnnouncedRef.current.delete(sheetId);
+      toast({ title: t("spreadsheet.tiledWorkbook.pivotSourceReady", { sheet: nameOf(sheetId) }) });
+    }
+    if (missing.size === 0) return;
+    for (const sheetId of missing.keys()) {
+      if (pivotSourceAnnouncedRef.current.has(sheetId)) continue;
+      pivotSourceAnnouncedRef.current.add(sheetId);
+      toast({ title: t("spreadsheet.tiledWorkbook.pivotSourceReading", {
+        sheet: nameOf(sheetId), cells: tiled.cellsOf(sheetId).toLocaleString() }) });
+    }
+    let cancelled = false;
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    void Promise.all([...missing].map(([sheetId, tiles]) => tiled.ensure(sheetId, [...tiles]))).then(() => {
+      if (cancelled) return;
+      applyTiledModelRef.current((previous) => tiled.apply(previous));
+      setPivotSourceReadTick((value) => value + 1);
+    }).catch(() => {
+      // A read that failed is tried again; the report stays held meanwhile.
+      if (!cancelled) retry = setTimeout(() => setPivotSourceReadTick((value) => value + 1), PIVOT_SOURCE_READ_RETRY_MS);
+    });
+    return () => {
+      cancelled = true;
+      if (retry !== null) clearTimeout(retry);
+    };
+  }, [pivotLiveReads, pivotSourcesHeldKey, pivotSourceReadTick, t]);
   // A sheet's table results are held from a calculation of the source as it
   // is now: the one shown when the mode is chosen, the workbook opened or a
   // table added, and after F9 the one that ran without the hold.
@@ -11735,7 +11935,8 @@ function SpreadsheetWindow({
       const sessionSave = !settledBackground && nextCalculationMode === "auto" && !liveAutomaticResults;
       // The arithmetic evaluator reads cells without the PivotTables' reports
       // (the session lays them): with one, the save stamps the session's answer.
-      const localSeed = sessionSave && !nextSheets.some(candidate => sheetPivots(candidate).length > 0)
+      // Nor does it round to the formats shown (Set precision as displayed).
+      const localSeed = sessionSave && viewOptions.precisionAsDisplayed !== true && !nextSheets.some(candidate => sheetPivots(candidate).length > 0)
         ? localArithmeticWorkbookResults(nextSheets, (index) => buildWorkbookSheetInput(nextSheets[index]),
           (cells) => cellIndexes.get(cells as never).formulaKeys) : null;
       const provisionalSeed = sessionSave && !localSeed ? backgroundCalculation.projection ?? new Map<string, EngineValue>() : undefined;
@@ -12501,6 +12702,25 @@ function SpreadsheetWindow({
   // edit, so the session takes them in, without the edit's other effects
   // (trace arrows, Manual's dirty flag).
   const applyTiledModel = useCallback((transform: (previous: SheetModel[]) => SheetModel[]) => {
+    // Tiles that land while the person is typing wait until the keys stop: a
+    // merge renders the whole grid again (a 1.6 MB workbook: 0.2-0.7 s on the
+    
+    // keystrokes it fell between. Applying is idempotent (each tile once), so
+    // the later call takes every tile read meanwhile.
+    const sinceKey = performance.now() - tiledLastKeyAtRef.current;
+    if (sinceKey < TILED_APPLY_AFTER_KEYS_MS) {
+      // The latest ask stands for every held one (its rows to keep).
+      tiledHeldTransformRef.current = transform;
+      if (tiledApplyHeldRef.current === null) {
+        tiledApplyHeldRef.current = setTimeout(() => {
+          tiledApplyHeldRef.current = null;
+          const held = tiledHeldTransformRef.current;
+          tiledHeldTransformRef.current = null;
+          if (held) applyTiledModelRef.current(held);
+        }, TILED_APPLY_AFTER_KEYS_MS - sinceKey + 20);
+      }
+      return;
+    }
     const previous = liveSheetsRef.current;
     const next = transform(previous);
     if (next === previous) return;
@@ -13312,13 +13532,13 @@ function SpreadsheetWindow({
       const preset = selectedChartStylePreviewId === null ? undefined : CHART_STYLE_PRESET_FOR_C_STYLE[String(selectedChartStylePreviewId)];
       if (preset && next.stylePreset !== preset) next = { ...next, stylePreset: preset };
       if (selectedChartColorPalettePreviewId !== null) {
-        next = sheetChartWithChangedColors(next, selectedChartColorPalettePreviewId) ?? next;
+        next = sheetChartWithChangedColors(next, selectedChartColorPalettePreviewId, workbookThemeAccentColors) ?? next;
       }
     } catch {
       return null;
     }
     return next === selectedChartModel ? null : next;
-  }, [selectedChartModel, selectedChartDesignKey, chartQuickLayoutPreview, chartDesktopPreview, selectedChartStylePreviewId, selectedChartColorPalettePreviewId, t]);
+  }, [selectedChartModel, selectedChartDesignKey, chartQuickLayoutPreview, chartDesktopPreview, selectedChartStylePreviewId, selectedChartColorPalettePreviewId, workbookThemeAccentColors, t]);
   // The chart record a surface draws: the record itself, or -- the selected
   // chart under a gallery hover -- the record with the previewed model and
   // the flat fields it derives to (so the frame and the titles show the pick
@@ -14083,6 +14303,18 @@ function SpreadsheetWindow({
       };
     },
     [cellDisplayValue, cellSortNumericValue, formulaEvaluator, sheet.cells, spillOverlay],
+  );
+  // An AutoFilter list entry: the cell's sort key (its type orders the list)
+  // naming the text a tick matches -- what the cell shows, a padded text
+  // format's text without its padding (filterMatchText) -- never the bare
+  // value a text sort key carries (a "Mr. "@ cell lists "Mr. Smith").
+  const filterMenuEntryAt = useCallback(
+    (row: number, col: number) => {
+      const cell = sheet.cells[`${row}:${col}`];
+      const key = cellSortKeyAt(row, col);
+      return { ...key, value: filterMatchText(cell) ?? cellDisplayValue(cell, row, col, false) };
+    },
+    [cellDisplayValue, cellSortKeyAt, sheet.cells],
   );
   // Excel orders text in the collation of its locale: a Chinese UI sorts
   // Chinese by pinyin (zh-TW by stroke), with Latin text still ahead of it.
@@ -15393,9 +15625,10 @@ function SpreadsheetWindow({
     }
     const range = pivotSourceRangeNow();
     if (!range) return false;
-    const rows = range.r2 - range.r1 + 1;
-    const columns = range.c2 - range.c1 + 1;
-    return rows >= 2 && rows * columns <= MAX_PIVOT_SOURCE_CELLS;
+    // A source past MAX_PIVOT_SOURCE_CELLS keeps the command: the click says
+    // why it cannot be summarised (openPivotCreationDialog), where a greyed
+    // button only said "select a source" over a source that was selected.
+    return range.r2 - range.r1 + 1 >= 2;
   }, [hasMultiSelection, pivotSourceRangeNow, ribbonTab]);
   // Merge Across needs more than one COLUMN (each row merges horizontally); a
   // single-column multi-row selection has nothing to merge across.
@@ -18667,6 +18900,11 @@ function SpreadsheetWindow({
       editingCell?.sheetId === sheet.id &&
       editingCell.row === row &&
       editingCell.col === col;
+    // Excel for Mac's Delete key -- the browser names it Backspace -- clears
+    // the selection, as Delete does (its shortcut table: "Clear selection").
+    // Backspace's own meaning, the active cell's entry only, is Windows'.
+    const macClearsSelection = event.key === "Backspace" && !cellEditing &&
+      !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && isMacPlatform();
     // A keystroke that would start editing a locked cell on a protected
     // sheet says why nothing happens (Excel puts up its "protected sheet"
     // message); the read-only input used to swallow it silently.
@@ -18705,8 +18943,8 @@ function SpreadsheetWindow({
       !event.metaKey &&
       !event.ctrlKey &&
       !event.altKey &&
-      (event.key.length === 1 || event.key === "Backspace" || event.key === "F2" ||
-        (event.key === "Delete" && whatIfTablePartRefused(sheet.whatIfTables, selRect))) &&
+      (event.key.length === 1 || (event.key === "Backspace" && !macClearsSelection) || event.key === "F2" ||
+        ((event.key === "Delete" || macClearsSelection) && whatIfTablePartRefused(sheet.whatIfTables, selRect))) &&
       whatIfTableBlockAt(whatIfBlocks, row, col)
     ) {
       event.preventDefault();
@@ -19360,6 +19598,10 @@ function SpreadsheetWindow({
           event.currentTarget.scrollIntoView?.({ block: "nearest", inline: "nearest" });
           break;
         }
+        if (macClearsSelection) {
+          event.preventDefault();
+          clearContentsCommand({ checkboxes: true });
+        }
         break;
       case "Delete":
         // Block clear (Excel parity): Delete clears the contents of the whole
@@ -19709,10 +19951,9 @@ function SpreadsheetWindow({
       if (!(error instanceof FormulaResultUnavailableError)) throw error;
     }
     if (typed && typed.valueType !== "text") return resolveSpreadsheetFontStyle({ ...style, textAlign: "center" });
-    // Text (a typed word, a formula's text result) sits at the side its
-    // reading order starts from: left, or right for right-to-left text
-    // (Context reading order: the first strong character, E23_UnicodeChars'
-    // Arabic, X-092).
+    // Text (a typed word, a formula's text result) sits left, or right when
+    // its first strong character reads right to left, whatever the cell's
+    // reading order (E23_UnicodeChars' Arabic, X-092; lookwin p82-lw).
     let shown: unknown = cell?.value;
     if (cell?.formula) {
       try {
@@ -19721,8 +19962,7 @@ function SpreadsheetWindow({
         if (!(error instanceof FormulaResultUnavailableError)) throw error;
       }
     }
-    const rightToLeft = typeof shown === "string" && cellResolvedTextDirection(cell?.style, shown) === "rtl";
-    return resolveSpreadsheetFontStyle({ ...style, textAlign: rightToLeft ? "right" : "left" });
+    return resolveSpreadsheetFontStyle({ ...style, textAlign: typeof shown === "string" ? generalTextAlignment(shown) : "left" });
   }, [sheet.cells, sheetShowsFormulas, activePivotOutputCells, cellSortNumericValue, formulaEvaluator, spillOverlay]);
 
   // The paint a table style lays on a cell (a style previewed from the
@@ -19828,10 +20068,20 @@ function SpreadsheetWindow({
       const formatColor = typeof computed === "number" && cell?.style?.numberFormat
         ? numberFormatColor(computed, cell.style.numberFormat) : null;
       const pivotStyle = resolvedPivotCellStyle(row, col);
+      // Printed, the edges the grid paints as strips (a hairline, dots,
+      // dash-dot) leave the cell's CSS and travel as variables the page
+      // draws as Excel's printed lines (printedStripEdges).
+      const printing = embeddedWorkbook?.presentation === "print";
+      const printedTable = printing && tablePaint ? printedStripEdges(tablePaint) : undefined;
+      // The diagonal too, where the page draws its printed lines (a grid
+      // read from the file: SpreadsheetPageLayoutView vectorizePrintedBorders).
+      const printedOwn = printing ? printedStripEdges(cell?.style, { diagonal: Boolean(nativeGrid?.dpi) }) : undefined;
       return resolveCellDisplayStyle(row, col, {
-        ...(tablePaint ? cellStyleCss(tablePaint) : {}),
+        ...(tablePaint ? cellStyleCss(printedTable?.style ?? tablePaint) : {}),
+        ...(printedTable?.variables ?? {}),
+        ...(printedOwn?.variables ?? {}),
         ...cellStyleCss(
-            cell?.style,
+            printedOwn?.style ?? cell?.style,
             workbookThemeFontFamily,
             workbookThemeHeadingFontFamily,
             workbookThemeColorId,
@@ -19858,7 +20108,7 @@ function SpreadsheetWindow({
       evalConditionalFormula, condExtentCache, condStatsCache,
       resolvedPivotCellStyle, resolveCellDisplayStyle,
       nativeCellFont,
-      workbookFontAssets.aliases,
+      workbookFontAssets.aliases, embeddedWorkbook?.presentation, nativeGrid?.dpi,
     ],
   );
   // What AutoFit Column Width gives one cell: its shown text measured in the
@@ -19916,6 +20166,37 @@ function SpreadsheetWindow({
     return own&&(!runs||runs.every(run=>precise(run.style,own)));
   },[sheet.cells,nativeGrid,nativeCellFont]);
 
+  // The faces of a row's positions with no cell, which Windows Excel fits the
+  // row to with its cells' (officeCombinedRowHeight): the row's own format's,
+  // else the column formats' and -- while a column has none -- the workbook's
+  // font. A Windows grid of an imported workbook only.
+  const lineStyleFont = useCallback((style: Record<string, unknown> | undefined) => nativeCellFont ? {
+    family: typeof style?.fontFamily === "string" && style.fontFamily.trim() ? style.fontFamily.trim() : nativeCellFont.family,
+    sizePt: typeof style?.fontSize === "number" && style.fontSize > 0 ? style.fontSize * 0.75 : nativeCellFont.sizePt,
+    // Bold has its own line (Arial 11 bold is 20 px, regular 19: lookwin p44).
+    ...(style?.bold === true ? { bold: true } : {}),
+  } : undefined, [nativeCellFont]);
+  const emptyColumnFonts = useMemo(() => {
+    if (!nativeGrid || nativeGrid.dpi !== 96 || !nativeCellFont) return undefined;
+    const fonts = new Map<string, { family: string; sizePt: number; bold?: boolean }>();
+    const columns = expandLineStyleRuns(sheet.columnStyles as LineStyleMap | undefined) ?? {};
+    let styled = 0;
+    for (const key in columns) {
+      if (!/^\d+$/.test(key)) continue;
+      styled += 1;
+      const font = lineStyleFont(columns[key]);
+      if (font) fonts.set(`${font.family}\u0000${font.sizePt}\u0000${font.bold === true}`, font);
+    }
+    if (styled < 16_384) fonts.set(`${nativeCellFont.family}\u0000${nativeCellFont.sizePt}`, { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt });
+    return [...fonts.values()];
+  }, [nativeGrid, nativeCellFont, sheet.columnStyles, lineStyleFont]);
+  const rowEmptyFonts = useCallback((row: number) => {
+    if (!emptyColumnFonts) return undefined;
+    const own = (sheet.rowStyles as LineStyleMap | undefined)?.[String(row)];
+    const font = own ? lineStyleFont(own) : undefined;
+    return font ? [font] : emptyColumnFonts;
+  }, [emptyColumnFonts, sheet.rowStyles, lineStyleFont]);
+
   // What one cell asks of its row's automatic height, its style as given.
   const autoRowCellEntries = useCallback((cell: SpreadsheetCell, key: string) => {
     const entries: AutoRowMeasurement[] = [];
@@ -19949,22 +20230,24 @@ function SpreadsheetWindow({
           style: { ...measuredCss, fontSize: measuredCss.fontSize ?? SPREADSHEET_DEFAULT_FONT_SIZE } });
         return;
       }
-      if (cell && !automaticNativeBase && !cell.style?.wrapText && !cell.value?.startsWith("=") &&
+      if (cell && !automaticNativeBase && !cellTextWraps(cell.style) && !cell.value?.startsWith("=") &&
           (cellWrapTextSetting(cell) === false || (!hasManualLineBreak(cell.value ?? "") && !hasManualLineBreak(cell.display ?? ""))) && !largeFont) return;
       const [row, col] = key.split(":").map(Number);
       if (!Number.isInteger(row) || !Number.isInteger(col) || row < 0 || col < 0 ||
           row >= sheet.rowCount || col >= sheet.columnCount ||
           cell.style?.textRotation || cell.style?.verticalText || isCheckboxCell(cell.style)) return;
       // A manually fixed native default fixes the otherwise unspecified rows.
-      if (sourceDefault?.customHeight && sheet.rowHeights?.[String(row)] === undefined) return;
+      // (Unless a row of the sheet states a custom height: nativeDefaultHoldsRows.)
+      if (nativeDefaultHoldsRows(sheet.nativeGrid?.rowMetrics) && sheet.rowHeights?.[String(row)] === undefined) return;
       if (automaticNativeBase && sheet.rowHeights?.[String(row)] === undefined) {
         const span = spanAt(row, col, mergeSpans);
         const anchor = anchorOf(row, col, mergeSpans);
         const text = cellDisplayValue(cell, row, col, false);
         if ((!span || span.rowSpan === 1) && anchor.row === row && anchor.col === col && hasNativeTextLayout(row, col, text, cell)) {
           // Calibrate the browser's line box against the workbook's own default
-          // row height, unless a theme change replaced the face it describes.
-          const scale = !nativeGrid.fontReplaced && nativeGrid.fontRowHeight && nativeGrid.fontRowHeight > 0
+          // row height, unless the default stands at the font's own row (a
+          // theme replaced the face it describes, or it is not custom).
+          const scale = !nativeGrid.automaticDefaultRow && nativeGrid.fontRowHeight && nativeGrid.fontRowHeight > 0
             ? sourceDefault.pixels / nativeGrid.fontRowHeight : undefined;
           // Wrap Text off: Excel draws the text's line breaks as nothing, on
           // one line, and the automatic row keeps its one-line height
@@ -19977,22 +20260,65 @@ function SpreadsheetWindow({
           });
         }
       }
-      if (!cell.style?.wrapText && !cell.value?.startsWith("=") &&
+      if (!cellTextWraps(cell.style) && !cell.value?.startsWith("=") &&
           (cellWrapTextSetting(cell) === false || (!hasManualLineBreak(cell.value ?? "") && !hasManualLineBreak(cell.display ?? ""))) && !largeFont) return;
-      // Merged cells contribute their single-row font base above, but do not
-      // automatically grow for wrapping. Explicit stored sizes stay intact.
+      // Merged cells contribute their single-row font base (above, on a Mac
+      // grid), but do not automatically grow for wrapping. On a Windows grid
+      // a merge one row high asks its row for one line of its font, as Excel
+      // fits it (an Arial 14 title merged across B2:I2 stands 24 px in an
+      // Arial 10 sheet; it stayed at the 17 px default). Explicit stored
+      // sizes stay intact.
       const span = spanAt(row, col, mergeSpans);
-      if (span && (span.rowSpan > 1 || span.colSpan > 1)) return;
+      const mergedLine = Boolean(span && span.rowSpan === 1 && span.colSpan > 1 && largeFont && !automaticNativeBase);
+      if (span && (span.rowSpan > 1 || span.colSpan > 1) && !mergedLine) return;
       const anchor = anchorOf(row, col, mergeSpans);
-      if (anchor.row !== row || anchor.col !== col) return;
+      if (anchor.row !== row || anchor.col !== col) {
+        // A merge one row high counts its empty cells as any empty cell on a
+        // Windows grid: one in a larger font asks its row for a line of it
+        // (lookwin p95-lw: A2:B2 empty, B2 in Arial 20, stands row 2 34 px;
+        // the API's in_tall_merge). A taller merge fits no row.
+        const anchorSpan = spanAt(anchor.row, anchor.col, mergeSpans);
+        if (anchor.row !== row || !anchorSpan || anchorSpan.rowSpan > 1 || !largeFont || nativeGrid?.dpi !== 96 || sourceDefault?.customHeight ||
+            cellDisplayValue(cell, row, col, false)) return;
+        const storedCovered = sheet.nativeGrid?.rowMetrics?.rows[String(row)];
+        if (sheet.rowHeights?.[String(row)] !== undefined &&
+            !(storedCovered && !storedCovered.customHeight && sheet.rowHeights[String(row)] === storedCovered.pixels)) return;
+        const coveredCss = cellDisplayTextCss(pageLayoutCellStyle(row, col, cell));
+        grows = true;
+        entries.push({ row, width: intrinsicColWidth(col), text: "", singleLine: true, dpi: nativeGrid.dpi, paddingX: displayCellPadding,
+          ...(rowEmptyFonts(row) ? { rowFonts: rowEmptyFonts(row) } : {}),
+          ...(effectiveVerticalAlign(cell.style) !== "bottom" || cell.style?.verticalJustify ? { baseline: false as const } : {}),
+          style: { ...coveredCss, fontSize: coveredCss.fontSize ?? SPREADSHEET_DEFAULT_FONT_SIZE } });
+        return;
+      }
       const text = cellDisplayValue(cell, row, col, false);
       // A number never wraps: too wide for its column it shows #### on one
       // line, and its row fits that line (it grew to the digits' wrapped
       // lines, 240 px for a date at 36 pt).
-      const singleLine = cell.style?.wrapText
+      const singleLine = mergedLine || (cellTextWraps(cell.style)
         ? nativeAutoRowIsNumeric(cell, formulaEvaluator.getComputed(row, col)) && !hasManualLineBreak(text)
-        : cellWrapTextSetting(cell) === false || !hasManualLineBreak(text);
-      if (!text || (singleLine && !largeFont)) return;
+        : cellWrapTextSetting(cell) === false || !hasManualLineBreak(text));
+      if (!text) {
+        // A cell holding nothing still asks its row for one line of its own
+        // font on a Windows grid, as Excel fits an automatic row (lookwin
+        // p58-lw: an empty Calibri 20 cell stands its row 35 px, with or
+        // without a stored height; the server's writer does the same).
+        // An empty merge one row high counts as one (lookwin p95-lw); a
+        // taller one fits no row.
+        // Under a custom default only a cell's text grows a row (R261-X03).
+        if (!largeFont || nativeGrid?.dpi !== 96 || (span && span.rowSpan > 1) || sourceDefault?.customHeight) return;
+        const storedEmpty = sheet.nativeGrid?.rowMetrics?.rows[String(row)];
+        if (sheet.rowHeights?.[String(row)] !== undefined &&
+            !(storedEmpty && !storedEmpty.customHeight && sheet.rowHeights[String(row)] === storedEmpty.pixels)) return;
+        const emptyCss = cellDisplayTextCss(pageLayoutCellStyle(row, col, cell));
+        grows = true;
+        entries.push({ row, width: intrinsicColWidth(col), text: "", singleLine: true, dpi: nativeGrid.dpi, paddingX: displayCellPadding,
+          ...(rowEmptyFonts(row) ? { rowFonts: rowEmptyFonts(row) } : {}),
+          ...(effectiveVerticalAlign(cell.style) !== "bottom" || cell.style?.verticalJustify ? { baseline: false as const } : {}),
+          style: { ...emptyCss, fontSize: emptyCss.fontSize ?? SPREADSHEET_DEFAULT_FONT_SIZE } });
+        return;
+      }
+      if (singleLine && !largeFont) return;
       const nativeParagraph = hasNativeTextLayout(row, col, text, cell);
       // A cell with formatted runs is measured with its runs (live audit
       // B226); it used to be skipped, so two lines of rich text showed one.
@@ -20009,16 +20335,23 @@ function SpreadsheetWindow({
       // falls back to, or an Alt+Enter cell's row comes out a line short of
       // the text the cell draws and its first line is cut off at the top.
       const measuredCss = cellDisplayTextCss(pageLayoutCellStyle(row, col, cell));
-      entries.push({ row, width: intrinsicColWidth(col), text: singleLine ? cellTextOnOneLine(text, cellWrapTextSetting(cell)) : text,
+      // An indented cell of an imported grid wraps in its column less the
+      // indent, as Windows Excel fits its row (lookwin p87-lw; the API's
+      // indented_room). A centred cell takes no indent.
+      const indentRoom = nativeGrid && cellIndentEdge(cell.style) !== "none" ? indentPaddingPx(cell.style?.indent, indentStepPx) : 0;
+      entries.push({ row, width: Math.max(1, intrinsicColWidth(col) - indentRoom), text: singleLine ? cellTextOnOneLine(text, cellWrapTextSetting(cell)) : text,
         ...(singleLine ? { singleLine: true } : {}),
         ...(nativeGrid ? { dpi: nativeGrid.dpi, paddingX: displayCellPadding } : {}),
+        ...(rowEmptyFonts(row) ? { rowFonts: rowEmptyFonts(row) } : {}),
+        // Only a bottom-aligned cell stands its lines on the row's baseline (lookwin p44b/p44c).
+        ...(effectiveVerticalAlign(cell.style) !== "bottom" || cell.style?.verticalJustify ? { baseline: false as const } : {}),
         style: { ...measuredCss, fontSize: measuredCss.fontSize ?? SPREADSHEET_DEFAULT_FONT_SIZE },
         ...(nativeParagraph ? { nativeParagraph: true, numericValue: nativeAutoRowIsNumeric(cell, formulaEvaluator.getComputed(row, col)),
           parts: runParts } : runParts ? { parts: runParts } : {}),
       });
     })();
     return { entries, grows };
-  }, [sheet, mergeSpans, intrinsicColWidth, cellDisplayValue, pageLayoutCellStyle, nativeGrid, displayCellPadding, hasNativeTextLayout, fontRunStyle, formulaEvaluator]);
+  }, [sheet, mergeSpans, intrinsicColWidth, cellDisplayValue, pageLayoutCellStyle, nativeGrid, displayCellPadding, hasNativeTextLayout, fontRunStyle, formulaEvaluator, rowEmptyFonts, indentStepPx]);
 
   const [{ autoRowCandidatesByCells, autoRowCellMeasurements }] = useState(createSpreadsheetWindowCaches);
   const autoRowCandidates = useMemo(() => {
@@ -20032,13 +20365,13 @@ function SpreadsheetWindow({
     // tables, pivots) can react to a value, measures exactly like its source.
     const inheritanceDeps = [cellIndex.autoHeightKeys, sheet.rowCount, sheet.columnCount, sheet.rowHeights, sourceDefault, sheet.defaultRowHeight,
       mergeSpans, intrinsicColWidth, nativeGrid, displayCellPadding, fontRunStyle, workbookThemeFontFamily, workbookThemeHeadingFontFamily,
-      workbookThemeColorId, workbookThemeAccentColors, tableStylePreview, workbookNativeTableStyles, nativeCellFont, workbookFontAssets.aliases];
+      workbookThemeColorId, workbookThemeAccentColors, tableStylePreview, workbookNativeTableStyles, nativeCellFont, workbookFontAssets.aliases, rowEmptyFonts];
     const projection = backgroundCalculation.projection;
     const literalEdit = !automaticNativeBase && backgroundCalculation.pending && projection &&
       conditionalFormats.length === 0 && dataTables.length === 0 && !activePivotOutputCells ? literalEditSources.get(sheet.cells) : undefined;
     const from = literalEdit?.from.deref();
     const previous = from ? autoRowCandidatesByCells.get(from) : undefined;
-    const noCandidate = (cell: SpreadsheetCell | undefined) => !cell?.style?.wrapText &&
+    const noCandidate = (cell: SpreadsheetCell | undefined) => !cellTextWraps(cell?.style) &&
       (cellWrapTextSetting(cell) === false || (!hasManualLineBreak(cell?.value ?? "") && !hasManualLineBreak(cell?.display ?? ""))) &&
       !cellFontTallerThanDefault(cell?.style) && !cellTextTurned(cell?.style);
     if (from && literalEdit && previous && previous.projection === projection && previous.deps.length === inheritanceDeps.length &&
@@ -20155,9 +20488,28 @@ function SpreadsheetWindow({
     }
     return bands;
   }, [sheet.cells, phoneticKeys]);
+  // A Windows grid's row is taller by the heavy lines on its edges, as
+  // Windows Excel's automatic row height is (officeBorderRowExtras).
+  const heavyEdgeKeys = cellIndex.heavyEdgeKeys;
+  const rowThickEdges = (sheet as { rowThickEdges?: unknown }).rowThickEdges;
+  const borderRowExtras = useMemo(() => {
+    if (nativeGrid?.dpi !== 96) return undefined;
+    // The rows the file marks thickTop / thickBot, where the import read them.
+    const marked = officeRowThickMarkExtras(rowThickEdges);
+    if (marked !== null) return marked;
+    if (heavyEdgeKeys.length === 0) return undefined;
+    const lines: { row: number; top: number; bottom: number }[] = [];
+    for (const key of heavyEdgeKeys) {
+      const edges = sheet.cells[key]?.style?.borderEdges;
+      const row = Number(key.slice(0, key.indexOf(":")));
+      if (!edges || !Number.isInteger(row)) continue;
+      lines.push({ row, top: borderLineWidthPx(edges.top?.style), bottom: borderLineWidthPx(edges.bottom?.style) });
+    }
+    return officeBorderRowExtras(lines);
+  }, [nativeGrid?.dpi, sheet.cells, heavyEdgeKeys, rowThickEdges]);
   const gridPreviewFontRows = gridPreviewFont ? `${gridPreviewFont.r1}:${gridPreviewFont.r2}` : null;
   const automaticRowHeights = useMemo(() => {
-    if (!phoneticRowBands && !gridPreviewRowHeights) return measuredRowHeights;
+    if (!phoneticRowBands && !gridPreviewRowHeights && !borderRowExtras) return measuredRowHeights;
     const base = displayDefaultRowHeight ?? effectiveDefaultRowHeight;
     const next: Record<string, number> = { ...(measuredRowHeights ?? {}) };
     // A preview's rows stand as the press would leave them, lower ones too.
@@ -20168,12 +20520,14 @@ function SpreadsheetWindow({
       }
       Object.assign(next, gridPreviewRowHeights);
     }
-    if (!phoneticRowBands) return next;
-    for (const [row, band] of Object.entries(phoneticRowBands)) {
+    for (const [row, band] of Object.entries(phoneticRowBands ?? {})) {
       next[row] = Math.max(next[row] ?? base, base + band);
     }
+    for (const [row, extra] of Object.entries(borderRowExtras ?? {})) {
+      next[row] = (next[row] ?? base) + extra;
+    }
     return next;
-  }, [displayDefaultRowHeight, effectiveDefaultRowHeight, gridPreviewFontRows, gridPreviewRowHeights, measuredRowHeights, phoneticRowBands]);
+  }, [borderRowExtras, displayDefaultRowHeight, effectiveDefaultRowHeight, gridPreviewFontRows, gridPreviewRowHeights, measuredRowHeights, phoneticRowBands]);
   const rowHeights = useMemo(() => {
     const stored = nativeRows?.heights ?? sheet.rowHeights;
     if (!automaticRowHeights) return stored;
@@ -21527,6 +21881,15 @@ function SpreadsheetWindow({
     [colWidth, freeze.freezeCols, freeze.freezeRows, frozenHeaderHeight, frozenHeaderWidth, gridColumnCount, gridRowCount, rowHeight],
   );
   const drawingPanesActive = !gridRtl && (freezeBand.bottom > 0 || freezeBand.right > 0);
+  // The overlays of range boxes (the range finder, a chart's source data)
+  // draw a range in each pane it spans, on layers pinned with the frozen
+  // panes as the drawings are (SheetRangePaneLayers): over the frozen cells a
+  // box on the body's single layer was covered by them. A right-to-left
+  // sheet keeps the single layer, as its drawings do.
+  const overlayFrozenLines = useMemo(
+    () => (drawingPanesActive ? { rows: freeze.freezeRows, cols: freeze.freezeCols } : null),
+    [drawingPanesActive, freeze.freezeRows, freeze.freezeCols],
+  );
   const freezeBandRef = useRef(freezeBand);
   freezeBandRef.current = drawingPanesActive ? freezeBand : { bottom: 0, right: 0 };
   const {
@@ -22530,13 +22893,14 @@ function SpreadsheetWindow({
     const last = filterMenuRange ? filterMenuRange.r2 : sheet.rowCount - 1;
     for (let r = first; r <= last; r += 1) {
       if (hiddenByOtherColumns.has(r)) continue;
-      // The whole sort key, so the list sorts by the value's real type.
-      rows.push([cellSortKeyAt(r, filterMenuCol)]);
+      // The whole sort key, so the list sorts by the value's real type; the
+      // entry is the text a tick matches (filterMenuEntryAt).
+      rows.push([filterMenuEntryAt(r, filterMenuCol)]);
     }
     return filterListValues(rows, 0, sortTextOrder);
     // cellSortKeyAt derives from sheet.cells via formulaEvaluator.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterMenuCol, filterMenuRange, filterListHiddenRows, cellSortKeyAt, sortTextOrder, sheet.cells, sheet.rowCount, formulaEvaluator]);
+  }, [filterMenuCol, filterMenuRange, filterListHiddenRows, cellSortKeyAt, filterMenuEntryAt, sortTextOrder, sheet.cells, sheet.rowCount, formulaEvaluator]);
   const filterMenuOptionLabels = useMemo(
     () =>
       filterMenuCol === null
@@ -22639,13 +23003,14 @@ function SpreadsheetWindow({
     const dataEnd = table.range.r2;
     for (let row = table.range.r1 + 1; row <= dataEnd; row += 1) {
       if (hiddenByOtherColumns.has(row)) continue;
-      rows.push([cellSortKeyAt(row, col)]);
+      rows.push([filterMenuEntryAt(row, col)]);
     }
     return filterListValues(rows, 0, sortTextOrder);
     // cellSortKeyAt derives from sheet.cells via formulaEvaluator.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     cellSortKeyAt,
+    filterMenuEntryAt,
     dataTables,
     filterListHiddenRows,
     formulaEvaluator,
@@ -23350,7 +23715,10 @@ function SpreadsheetWindow({
     return prepareSaveRuntimeRef.current.buildPersistedContent(expectedSheets, referenceStyle, viewOptions, sheet.id, dataSourceInventoryState.inventory, calcState.mode, workbookStructureProtection);
   }, [referenceStyle, viewOptions, sheet.id, dataSourceInventoryState.inventory, calcState.mode, workbookStructureProtection]);
   const csvExportInFlightRef = useRef(false);
-  const downloadCurrentSheetCsv = useCallback(async () => {
+  // The current sheet as text: CSV (UTF-8), or Excel's Save As Unicode Text
+  // (.txt: tab-delimited, CRLF rows, UTF-16 LE), each of the sheet Excel
+  // shows, as Excel saves the active sheet alone in both.
+  const downloadCurrentSheetText = useCallback(async (kind: "csv" | "txt") => {
     if (guestNeedsAccount(onGuestExportRequestRef)) return;
     if (csvExportInFlightRef.current) return;
     // A reopened workbook shows its local preview until the server's page
@@ -23362,7 +23730,7 @@ function SpreadsheetWindow({
       return;
     }
     if (authority === "waited") {
-      void downloadCurrentSheetCsvRef.current();
+      void downloadCurrentSheetTextRef.current(kind);
       return;
     }
     // Dynamic-array results live in the read-only spill overlay, never in
@@ -23386,6 +23754,7 @@ function SpreadsheetWindow({
             ? ""
             : pivotOutputShownText(row, col) ??
               cellDisplayValue(cells[`${row}:${col}`], row, col, false),
+        { delimiter: kind === "txt" ? "\t" : "," },
       );
     } catch (error) {
       if (!(error instanceof SpreadsheetCsvExportBudgetError)) {
@@ -23403,6 +23772,13 @@ function SpreadsheetWindow({
         .replace(/[\\/:*?"<>|]+/g, "-")
         .replace(/\.+$/g, "")
         .slice(0, 120) || t("pages.defaultSpreadsheetTitle");
+    if (kind === "txt") {
+      downloadBlobFile(
+        `${safeBaseName}.txt`,
+        new Blob([unicodeTextBytes(csv)], { type: "text/plain;charset=utf-16le" }),
+      );
+      return;
+    }
     // A UTF-8 BOM keeps Chinese headers legible when the CSV is opened
     // directly by desktop Excel/WPS instead of imported through a wizard.
     downloadTextFile(
@@ -23411,8 +23787,13 @@ function SpreadsheetWindow({
       "text/csv;charset=utf-8",
     );
   }, [activePivotOutputCells, autosave, cellDisplayValue, pivotOutputShownText, sheet.cells, spillOverlay.spilled, t, title]);
-  const downloadCurrentSheetCsvRef = useRef(downloadCurrentSheetCsv);
-  downloadCurrentSheetCsvRef.current = downloadCurrentSheetCsv;
+  const downloadCurrentSheetTextRef = useRef(downloadCurrentSheetText);
+  downloadCurrentSheetTextRef.current = downloadCurrentSheetText;
+  const downloadCurrentSheetCsv = useCallback(() => void downloadCurrentSheetText("csv"), [downloadCurrentSheetText]);
+  const downloadCurrentSheetUnicodeText = useCallback(
+    () => void downloadCurrentSheetText("txt"),
+    [downloadCurrentSheetText],
+  );
   // A workbook just opened keeps changing for a moment (its sheets arrive
   // shard by shard and recalculate), and the export's snapshot refused the
   // first change: "无法导出 XLSX" with no request sent (user audit, a reopened
@@ -23613,8 +23994,8 @@ function SpreadsheetWindow({
   // only the package held. Cleared when the user answers.
   const [pendingLossyExport, setPendingLossyExport] = useState<{
     pageId: string;
-    /** XLSX, or ODS/XLS (converted from the XLSX the same check guards). */
-    format: "xlsx" | "ods" | "xls";
+    /** XLSX, or ODS/XLS/XLTX/FODS (written from the XLSX the same check guards). */
+    format: "xlsx" | "ods" | "xls" | "xltx" | "fods" | "excelxml" | "slk" | "dif";
     expectedContentVersion: number;
     lossCodes: readonly string[];
     lossCount: number;
@@ -23785,7 +24166,7 @@ function SpreadsheetWindow({
         reportExportStatus("ready", formatLabel);
       } catch (error) {
         if (
-          (format === "xlsx" || format === "ods" || format === "xls") &&
+          (format === "xlsx" || format === "ods" || format === "xls" || format === "xltx" || format === "fods" || format === "excelxml" || format === "slk" || format === "dif") &&
           savedContentVersion !== null &&
           !options.lossyConsent &&
           isPageExportLossConfirmationError(error)
@@ -23918,6 +24299,9 @@ function SpreadsheetWindow({
         },
         // "As displayed on sheet" prints every note while Show All Notes is on.
         ...(notesShownAll ? { showAllNotes: true } : {}),
+        // Printed as Excel's File > Print prints, not as its Save as PDF
+        // (the spilled tails, CRITERIA XC-155).
+        printRoute: true,
       });
       let pdf: Blob;
       try {
@@ -23966,6 +24350,7 @@ function SpreadsheetWindow({
         expectedContentVersion: savedPage.content_version,
         spreadsheetView: { ...(await spreadsheetPdfViewForSavedPage(savedPage, capturedSession)), ...scope },
         ...(notesShownAll ? { showAllNotes: true } : {}),
+        printRoute: true,
       });
     } catch {
       // Not prepared: Print draws it as before.
@@ -24378,6 +24763,39 @@ function SpreadsheetWindow({
         const keys = cellMapChangedKeys(sheet.cells, nextSheet.cells, CELLS_A_COMMIT_NAMES);
         knownChange = keys ? { before: sheet.cells, after: nextSheet.cells, keys } : null;
         knownCellChangeRef.current = knownChange;
+      }
+      // Set precision as displayed: a number this edit wrote, or a cell it
+      // formatted, keeps the number its format shows, as Excel stores it.
+      if (calculationMutation === "content" && precisionAsDisplayedRef.current && knownChange?.before === sheet.cells && knownChange.after === nextSheet.cells) {
+        const shown = cellsAtKeysRoundedAsDisplayed(nextSheet.cells, knownChange.keys);
+        if (shown !== nextSheet.cells) {
+          nextSheet = { ...nextSheet, cells: shown as typeof nextSheet.cells };
+          knownChange = { before: sheet.cells, after: nextSheet.cells, keys: knownChange.keys };
+          knownCellChangeRef.current = knownChange;
+        }
+      }
+      // A table's own borders (tableBorderDxfId...) are drawn over the cells'
+      // own edges whatever an edit wrote there, as Excel draws them.
+      // A structural edit (a row inserted under a header copies its lines)
+      // relays each table's outline, header and totals rows too.
+      if (knownChange?.before === sheet.cells && knownChange.after === nextSheet.cells) {
+        const ownTables = tablesWithOwnBorders(nextSheet.dataTables);
+        // A table whose range changed (a structural edit, or one grown by a
+        // write below it) lays its outline again where it was too: the row
+        // it no longer ends on gets its own edges back (R427-X50).
+        const tablesMoved = nextSheet.dataTables !== sheet.dataTables;
+        const earlierTables = tablesMoved ? tablesWithOwnBorders(sheet.dataTables) : [];
+        const anyOwn = ownTables.length > 0 || earlierTables.length > 0;
+        const structural = (calculationMutation === "coordinate" || tablesMoved) && anyOwn
+          ? tableOwnEdgeKeys([...earlierTables, ...ownTables])
+          : null;
+        const relayKeys = structural ? [...new Set([...knownChange.keys, ...structural])] : knownChange.keys;
+        const laid = anyOwn ? cellsWithTableOwnEdges(nextSheet.cells, relayKeys, ownTables) : nextSheet.cells;
+        if (laid !== nextSheet.cells) {
+          nextSheet = { ...nextSheet, cells: laid as typeof nextSheet.cells };
+          knownChange = { before: sheet.cells, after: nextSheet.cells, keys: knownChange.keys };
+          knownCellChangeRef.current = knownChange;
+        }
       }
       if (knownChange?.before === sheet.cells && knownChange.after === nextSheet.cells) recordCellMapEdit(sheet.cells, nextSheet.cells, knownChange.keys);
       if (calculationMutation === "content") {
@@ -27924,9 +28342,22 @@ function SpreadsheetWindow({
   );
   const editTiledLinesRef = useRef(editTiledLines);
   editTiledLinesRef.current = editTiledLines;
+  // The sheet a refused line edit was made on: the page read again opens on
+  // the workbook's saved active sheet, and the person was elsewhere
+  // (xlsx-rounds R427-X86: a co-editor's refused row insert on "Unpivoted"
+  // came back on "About", its notice over a sheet it did not concern).
+  const [tiledLineEditFailureSheet, setTiledLineEditFailureSheet] = useState<string | null>(null);
+  useEffect(() => {
+    if (!tiledLineEditFailureSheet) return;
+    const index = sheets.findIndex((candidate) => candidate.id === tiledLineEditFailureSheet);
+    if (index < 0 || sheets[index]?.sheetPending) return;
+    setTiledLineEditFailureSheet(null);
+    if (index !== activeSheetIndex) activateSheetTab(index);
+  }, [tiledLineEditFailureSheet, sheets, activeSheetIndex, activateSheetTab]);
   useEffect(() => {
     const kept = takeTiledLineEditFailure(pageId);
     if (!kept) return;
+    setTiledLineEditFailureSheet(kept.sheetId);
     setTiledLineEditFailure({
       message: kept.message,
       retry: () => {
@@ -28512,27 +28943,21 @@ function SpreadsheetWindow({
   // What a sort started from ONE selected cell acts on, as Excel decides it:
   // the CURRENT REGION around the active cell (the block bounded by blank rows
   // and columns), less its header row. The header is inferred from the
-  // region's first row differing in kind from what is under it, text over
-  // numbers in ANY column of the region, so sorting the text column of a table
-  // leaves its header in place too. null: the active cell is empty and has no
+  // region's first row differing from the row under it in ANY column of the
+  // region: text directly over a number, or another format (regionHasHeaderRow), so sorting
+  // the text column of a table leaves its header in place too. null: the active cell is empty and has no
   // region. undefined: a cell could not be evaluated, which is no authority to
   // sort at all.
   // The header guess on its own, shared with Remove Duplicates' "My data has
   // headers". Throws when a cell cannot be evaluated.
   const currentRegionHasHeaderRow = useCallback(
-    (region: { r1: number; r2: number; c1: number; c2: number }): boolean => {
-      if (regionFirstRowHasInnerBlank((column) => sortKeyOf(cellSortKeyAt(region.r1, column)).kind === "empty", region)) {
-        return false;
-      }
-      for (let column = region.c1; column <= region.c2; column += 1) {
-        if (sortKeyOf(cellSortKeyAt(region.r1, column)).kind !== "string") continue;
-        for (let row = region.r1 + 1; row <= region.r2; row += 1) {
-          if (sortKeyOf(cellSortKeyAt(row, column)).kind === "number") return true;
-        }
-      }
-      return false;
-    },
-    [cellSortKeyAt],
+    (region: { r1: number; r2: number; c1: number; c2: number }): boolean =>
+      regionHasHeaderRow(
+        (row, column) => sortKeyOf(cellSortKeyAt(row, column)).kind,
+        region,
+        (row, column) => headerGuessFormatKey(sheet.cells[`${row}:${column}`]?.style as Record<string, unknown> | undefined),
+      ),
+    [cellSortKeyAt, sheet.cells],
   );
   const oneCellSortRegion = useCallback(
     (
@@ -31968,6 +32393,49 @@ function SpreadsheetWindow({
       calculationIteration: { enabled: draft.enabled, ...limits },
     }));
     recordWorksheetCalculationMutation(liveSheetsRef.current, { kind: "topology" });
+  };
+  // Set precision as displayed (Excel: Options > Advanced > When calculating
+  // this workbook; calcPr@fullPrecision="0"), a workbook setting. Turned on,
+  // after Excel's warning, every number a cell holds becomes the number its
+  // format shows, for good: the digits cut cannot be had back, by Undo
+  // either (Microsoft Learn, "Floating-point arithmetic may give inaccurate
+  // result in Excel"), so the steps before it go. Turned off, the numbers
+  // stay as they are and calculation reads them whole again.
+  const togglePrecisionAsDisplayed = () => {
+    if (viewOptions.precisionAsDisplayed) {
+      commitViewOptions((current) => {
+        const { precisionAsDisplayed: _off, ...rest } = current;
+        return rest;
+      });
+      recordWorksheetCalculationMutation(liveSheetsRef.current, { kind: "topology" });
+      return;
+    }
+    // Every cell must be here to be rounded: a sheet still loading, or a
+    // large sheet whose cells the browser holds only in part, is not.
+    const live = liveSheetsRef.current;
+    const tiled = tiledRef.current;
+    if (sheetsStillLoading(live) || live.some((model) => tiled?.isTiledSheet(model.id) && !tiled.isWhollyResident(model.id))) {
+      showProtectNotice(t("spreadsheet.formulas.precisionAsDisplayedUnavailable"));
+      return;
+    }
+    setPrecisionWarningOpen(true);
+  };
+  const confirmPrecisionAsDisplayed = () => {
+    setPrecisionWarningOpen(false);
+    const live = liveSheetsRef.current;
+    const rounded = live.map((model) => {
+      const cells = cellsRoundedAsDisplayed(model.cells);
+      return cells === model.cells ? model : { ...model, cells: cells as typeof model.cells };
+    });
+    const nextOptions: SpreadsheetViewOptions = { ...viewOptions, precisionAsDisplayed: true };
+    if (rounded.some((model, index) => model !== live[index])) {
+      if (commitSheets(rounded, false, sheet.id, nextOptions) !== rounded) return;
+    } else {
+      commitViewOptions(() => nextOptions);
+      recordWorksheetCalculationMutation(live, { kind: "topology" });
+    }
+    undoHistoryRef.current = { past: [], future: [] };
+    syncHistoryAvailability();
   };
   // XLS-A025 — Calculation Options. Excel's calcMode is one of auto,
   // autoNoTable and manual; the window's calculation state machine runs Auto
@@ -38419,70 +38887,6 @@ function SpreadsheetWindow({
   );
 
   /**
-   * SmartArt Format > Shapes > Larger / Smaller on one item: the shared
-   * `resizeSmartArtItem` over the members' sheet rectangles, written back as
-   * their anchors in one undo step. (Reset Graphic already rebuilds the
-   * layout here, which is what restores the sizes.)
-   */
-  const resizeSmartArtShapeCommand = useCallback(
-    (direction: "larger" | "smaller", itemId: string | null): boolean => {
-      if (!sheetProtectionAllowsRef.current(sheet, "editObjects")) {
-        showProtectNotice();
-        return false;
-      }
-      if (autosave.readOnly || autosave.loading || !itemId) return false;
-      const group = sheetSmartArtGroupAt(sheetObjects, selectedObjectIdRef.current);
-      const frame = group ? sheetSmartArtFrame(group.members) : null;
-      if (!group || !frame) return false;
-      const resized = resizeSmartArtItem(
-        group.members,
-        itemId,
-        direction === "larger"
-          ? SMARTART_SHAPE_SIZE_STEP
-          : 1 / SMARTART_SHAPE_SIZE_STEP,
-        (member) => objectBoundsPixels(member, colWidth, rowHeight),
-        (member, box) =>
-          ({
-            ...member,
-            anchor: anchorForObjectBounds(
-              member.anchor ?? { kind: "oneCell", from: { row: 0, column: 0 } },
-              {
-                left: Math.max(0, box.left),
-                top: Math.max(0, box.top),
-                width: box.width,
-                height: box.height,
-              },
-              sheet.rowCount,
-              sheet.columnCount,
-              colWidth,
-              rowHeight,
-            ),
-          }) as SpreadsheetObject,
-        4,
-        frame,
-      );
-      if (!resized) return false;
-      const byId = new Map(resized.map((member) => [member.id, member]));
-      const nextObjects = sheetObjects.map((object) => byId.get(object.id) ?? object);
-      const result = replaceActiveSheet({ ...sheet, objects: nextObjects });
-      return result[activeSheetIndex]?.objects === nextObjects;
-    },
-    [
-      activeSheetIndex,
-      autosave.loading,
-      autosave.readOnly,
-      colWidth,
-      replaceActiveSheet,
-      rowHeight,
-      sheet,
-      sheetObjects,
-      sheetSmartArtFrame,
-      sheetSmartArtGroupAt,
-      showProtectNotice,
-    ],
-  );
-
-  /**
    * Reset > Convert > Convert to Shapes (Excel has it; Convert to Text is
    * PowerPoint's alone). The members stay exactly as drawn and lose their
    * SmartArt identity (`releaseSmartArtMembers`), in one undo step.
@@ -38584,6 +38988,13 @@ function SpreadsheetWindow({
         colorTheme?: Partial<SmartArtColorTheme>;
         /** Reset Shape: this item's shapes lose their own paint, move and resize. */
         resetItemId?: string;
+        /**
+         * Larger / Smaller, a handle or Height / Width on one shape: the item's
+         * scale times `factor` (against the shape as it is when the command's
+         * turn comes), and the whole graphic laid out again around it, as Office
+         * does (`smartArtMembersWithItemScale`).
+         */
+        scaleItem?: { itemId: string; factor: number | { x: number; y: number } };
         /** Reset Graphic: the graphic's own line and effect come off; its fill stays (WUA 260). */
         resetGraphicFormat?: boolean;
         allowItemChanges?: boolean;
@@ -38663,7 +39074,16 @@ function SpreadsheetWindow({
         const kind = change.kind ?? liveGroup.marker.kind;
         const sent = change.resetItemId
           ? smartArtMembersWithShapeReset(hostMembers, change.resetItemId)
-          : hostMembers;
+          : change.scaleItem
+            ? (smartArtMembersWithItemScale(
+                liveGroup.members,
+                change.scaleItem.itemId,
+                change.scaleItem.factor,
+                (member) => objectBoundsPixels(member, colWidth, rowHeight),
+                4,
+              ) as unknown as OfficeSmartArtHostNode[] | null)
+            : hostMembers;
+        if (!sent) return null;
         // Change Layout to a layout without picture shapes keeps the
         // pictures for one that shows them again, as Office does
         // (`held-pictures`); the page never holds them.
@@ -38809,6 +39229,36 @@ function SpreadsheetWindow({
     ],
   );
 
+  /**
+   * One SmartArt shape resized -- SmartArt Format > Shapes > Larger / Smaller,
+   * Shape Height / Width on one shape, or its handles -- as Excel keeps it: the
+   * shape's `custScaleX/Y` against its layout box, and the whole graphic laid
+   * out again around it in one undo step (`smartArtMembersWithItemScale`;
+   * PowerPoint for Mac, the golden deck's Basic Block List). `factor` is
+   * against the shape as it is when the command's turn comes, so two Larger
+   * pressed quickly are two steps.
+   */
+  const resizeSmartArtItemCommand = useCallback(
+    (
+      itemId: string | null,
+      factor: number | { x: number; y: number },
+      memberId?: string,
+    ): boolean =>
+      !!itemId &&
+      applySmartArtDesign(
+        () => ({ scaleItem: { itemId, factor }, selectedItemId: itemId }),
+        { select: false, ...(memberId ? { memberId } : {}) },
+      ),
+    [applySmartArtDesign],
+  );
+  const resizeSmartArtShapeCommand = useCallback(
+    (direction: "larger" | "smaller", itemId: string | null): boolean =>
+      resizeSmartArtItemCommand(
+        itemId,
+        direction === "larger" ? SMARTART_SHAPE_SIZE_STEP : 1 / SMARTART_SHAPE_SIZE_STEP,
+      ),
+    [resizeSmartArtItemCommand],
+  );
   /** Change Layout (keeping the diagram's direction). */
   const changeSmartArtLayout = useCallback(
     (kind: SmartArtKind, layoutUrn: string | null = null) =>
@@ -39096,6 +39546,9 @@ function SpreadsheetWindow({
     if (objects.length - 1 + members.length > MAX_SHEET_OBJECTS) return;
     const prepared = sheetObjectsWithPreparedSmartArt(objects, selectedConvertsOnEdit, members);
     writeSheets(liveSheets.map((candidate, at) => (at === index ? { ...candidate, objects: prepared } : candidate)));
+    // A diagram with no drawing of Excel's was drawn as this very conversion
+    // already: it stays drawn so (there is no "original" to show instead).
+    if (sheetSmartArtDrawingless(selectedConvertsOnEdit)) setSmartArtPreparedRevealed(prepared);
     const first = members.find((member) => !member.hidden) ?? members[0];
     setSelectedObjectId(first.id);
     setSmartArtGraphicScopeId(first.id);
@@ -39137,13 +39590,55 @@ function SpreadsheetWindow({
   const smartArtPreparedHere = preparedSheetSmartArt(sheet.objects);
   const smartArtPreparedShown =
     smartArtPreparedHere && smartArtPreparedRevealed !== sheet.objects ? smartArtPreparedHere : null;
-  const smartArtDrawnObjects = useMemo(() => {
-    if (!smartArtPreparedShown) return sheetObjects;
-    const at = sheetObjects.indexOf(smartArtPreparedShown.members[0]);
-    return at < 0
-      ? sheetObjects
-      : [...sheetObjects.slice(0, at), smartArtPreparedShown.native, ...sheetObjects.slice(at)];
-  }, [sheetObjects, smartArtPreparedShown]);
+  // A file's diagram with no cached drawing holds only its frame, which paints
+  // nothing: it is drawn as its conversion, asked for as the sheet opens
+  // (selected or not), over that frame, which keeps taking the presses. Nothing
+  // is written; selecting it places the same conversion as any prepared
+  // diagram's, and its first real edit lands it.
+  const smartArtDisplayMayAsk =
+    hydratedPageId === pageId && !autosave.loading && !embeddedWorkbook;
+  const [smartArtDisplayRetry, setSmartArtDisplayRetry] = useState(0);
+  useEffect(() => {
+    if (!smartArtDisplayMayAsk) return;
+    let failed = false;
+    for (const object of sheetObjects) {
+      if (!sheetSmartArtDrawingless(object) || !isSpreadsheetNativeSmartArtObject(object)) continue;
+      if (!sheetSmartArtConvertsOnEdit(object)) continue;
+      if (prepareSheetSmartArt(object, askSheetSmartArtConversion).state === "failed") failed = true;
+    }
+    if (!failed) return;
+    // No answer from the engine: asked again once the retry delay has passed.
+    const timer = window.setTimeout(() => setSmartArtDisplayRetry((n) => n + 1), SMARTART_PREPARE_RETRY_MS);
+    return () => window.clearTimeout(timer);
+  }, [askSheetSmartArtConversion, sheetObjects, smartArtDisplayMayAsk, smartArtDisplayRetry, smartArtPreparationVersion]);
+  const { drawn: smartArtDrawnObjects, display: smartArtDisplayMembers, labelled: smartArtDisplayLabelledItems } = useMemo(() => {
+    let drawn = sheetObjects;
+    const display = new Set<SpreadsheetObject>();
+    const labelled = new Set<string>();
+    if (smartArtPreparedShown) {
+      const at = sheetObjects.indexOf(smartArtPreparedShown.members[0]);
+      if (at >= 0) drawn = [...sheetObjects.slice(0, at), smartArtPreparedShown.native, ...sheetObjects.slice(at)];
+    }
+    if (!drawn.some(sheetSmartArtDrawingless)) return { drawn, display, labelled };
+    drawn = drawn.flatMap((object) => {
+      if (!sheetSmartArtDrawingless(object) || smartArtPreparedShown?.native === object) return [object];
+      const preparation = sheetSmartArtPreparations.read(object);
+      if (preparation?.state !== "ready") return [object];
+      for (const member of preparation.value) {
+        display.add(member);
+        // An item whose words a label of its own draws: its shape shows no
+        // `[Text]` prompt under them (X24: Beta's node, resized, and its label).
+        const record = member as { smartArtRole?: unknown; smartArtItemId?: unknown; groupId?: unknown };
+        if (record.smartArtRole === "label" && typeof record.smartArtItemId === "string" && typeof record.groupId === "string") {
+          labelled.add(`${record.groupId}:${record.smartArtItemId}`);
+        }
+      }
+      return [object, ...preparation.value];
+    });
+    return { drawn, display, labelled };
+    // The preparations are read through their store; its version says they changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetObjects, smartArtPreparedShown, smartArtPreparationVersion]);
   useSmartArtRevealOnPress(
     smartArtPreparedShown !== null,
     '[data-smartart-prepared="converted"],[data-testid^="spreadsheet-smartart-graphic-hit"],[data-drawing-preview-id^="smartart-frame:"]',
@@ -40120,9 +40615,11 @@ function SpreadsheetWindow({
         nextSheet = { ...sourceSheet, charts: sourceSheet.charts!.map((entry) => entry === chart ? next : entry) };
       } else {
         const anchor = anchorWithDefaults(object!.anchor);
+        const sheetOriginAbsolute = anchor.kind === "absolute" && anchor.origin === "sheet";
         const nextAnchor = anchorForObjectBounds(anchor, { ...frame,
-          left: frame.left + (anchor.kind === "absolute" ? 0 : SPREADSHEET_HEADER_WIDTH_PX),
-          top: anchor.kind === "absolute" ? frame.top : pageLayoutRowMap.toSource(frame.top) + SPREADSHEET_HEADER_HEIGHT_PX },
+          left: frame.left + (anchor.kind === "absolute" && !sheetOriginAbsolute ? 0 : SPREADSHEET_HEADER_WIDTH_PX),
+          top: anchor.kind === "absolute" ? frame.top + (sheetOriginAbsolute ? SPREADSHEET_HEADER_HEIGHT_PX : 0)
+            : pageLayoutRowMap.toSource(frame.top) + SPREADSHEET_HEADER_HEIGHT_PX },
           sourceSheet.rowCount, sourceSheet.columnCount, layoutColWidth, layoutRowHeight);
         if (JSON.stringify(nextAnchor) === JSON.stringify(anchor)) return true;
         nextSheet = { ...sourceSheet, objects: sourceSheet.objects!.map((entry) => entry === object ? { ...entry, anchor: nextAnchor } : entry) };
@@ -40139,10 +40636,19 @@ function SpreadsheetWindow({
       // …nor a SmartArt item its layout does not draw (Office's unused text).
       if (object.hidden || isSmartArtHiddenMember(object)) return [];
       const bounds = objectBoundsPixels(object, layoutColWidth, layoutRowHeight);
-      const width = Math.max(1, bounds.width);
-      const height = Math.max(1, bounds.height);
+      const sheetWidth = Math.max(1, bounds.width);
+      const sheetHeight = Math.max(1, bounds.height);
+      // Drawn at the size the printer gives it (the page places it by its
+      // anchor): a two-cell anchor spans its cells at the grid's print scale.
+      // One the file places by two markers prints by them (officePrintAnchorKind).
+      const printAnchor = officePrintAnchorKind(object.anchor);
+      const [, , width, height] = officePrintedDrawingFrame([0, 0, sheetWidth, sheetHeight], printAnchor, nativeGrid?.printScale ?? OFFICE_PRINT_IDENTITY);
+      // A worksheet-origin absolute position is measured past the headings
+      // (objectBoundsPixels), as a cell anchor is: the page takes them off
+      // both (lookwin probe p7: a shape at 1 in x 3.5 in printed 0.5 in
+      // right and 15 pt low).
       const gridOffset =
-        object.anchor?.kind === "absolute"
+        object.anchor?.kind === "absolute" && object.anchor.origin !== "sheet"
           ? [0, 0]
           : [SPREADSHEET_HEADER_WIDTH_PX, SPREADSHEET_HEADER_HEIGHT_PX];
       const left = Math.max(0, bounds.left - gridOffset[0]);
@@ -40180,7 +40686,11 @@ function SpreadsheetWindow({
             decoding="async"
             style={{
               ...(object.cropRect && !isIdentityCrop(object.cropRect)
-                ? cropToCss(object.cropRect) : { width, height, objectFit: "contain" }),
+                // A picture fills its frame, as on the grid and as Excel
+                // prints it: a two-cell anchor stretched by the printer's
+                // column and row scales (lookwin R13-X27's banner 475 pt
+                // wide at Fit 58 %) printed letterboxed 432 pt wide.
+                ? cropToCss(object.cropRect) : { width, height, objectFit: "fill" }),
               // Page Layout draws the picture's artistic effect, Color,
               // Corrections and Transparency as Normal does.
               filter:
@@ -40215,6 +40725,7 @@ function SpreadsheetWindow({
             <SpreadsheetShapeView
               shape={object.shape}
               effects={object.shapeEffects}
+              keepTextFlat={(object as { keepTextFlat?: unknown }).keepTextFlat === true}
               sketchedNative={(object.source as { nativeSketchGeometry?: unknown } | undefined)?.nativeSketchGeometry === "baked"}
               boxWidthPx={width}
               boxHeightPx={height}
@@ -40283,13 +40794,15 @@ function SpreadsheetWindow({
       const radians = rotation * Math.PI / 180;
       const rotatedWidth = Math.abs(width * Math.cos(radians)) + Math.abs(height * Math.sin(radians));
       const rotatedHeight = Math.abs(width * Math.sin(radians)) + Math.abs(height * Math.cos(radians));
+      const sheetRotatedWidth = Math.abs(sheetWidth * Math.cos(radians)) + Math.abs(sheetHeight * Math.sin(radians));
+      const sheetRotatedHeight = Math.abs(sheetWidth * Math.sin(radians)) + Math.abs(sheetHeight * Math.cos(radians));
       return [
         [
           object.id,
-          [left - (rotatedWidth - width) / 2, top - (rotatedHeight - height) / 2, rotatedWidth, rotatedHeight] as const,
+          [left - (sheetRotatedWidth - sheetWidth) / 2, top - (sheetRotatedHeight - sheetHeight) / 2, sheetRotatedWidth, sheetRotatedHeight] as const,
           label,
           <div key={object.id} data-page-layout-object-paint={object.id} style={{ position: "absolute", left: (rotatedWidth - width) / 2, top: (rotatedHeight - height) / 2, width, height, transform: rotation ? `rotate(${rotation}deg)` : undefined, ...(object.type === "shape" ? (object.shapeEffects ? {} : officeShapeEffectStyle(object.effect, shadowFilterCss(object.shadow))) : { filter: shadowFilterCss(object.shadow) }) }}>{content}</div>,
-          { frame: { left, top, width, height }, rotation, selectionType: object.type === "chart" || object.type === "shape" ? object.type : undefined, groupId: object.groupId, disabledReason: pageLayoutDrawingDisabledReason(object), aspectLocked: objectAspectLocked(object) },
+          { frame: { left, top, width: sheetWidth, height: sheetHeight }, rotation, selectionType: object.type === "chart" || object.type === "shape" ? object.type : undefined, groupId: object.groupId, disabledReason: pageLayoutDrawingDisabledReason(object), aspectLocked: objectAspectLocked(object), printAnchor },
         ] as const,
       ];
     });
@@ -40323,21 +40836,21 @@ function SpreadsheetWindow({
               headerRow={headerRow}
               categoryLevels={categoryLevels}
               xySeries={xySeries.length ? xySeries : undefined}
-              width={chart.width}
-              height={chart.height}
+              width={chart.width * (nativeGrid?.printScale?.x ?? 1)}
+              height={chart.height * (nativeGrid?.printScale?.y ?? 1)}
               themeAccents={workbookThemeAccentColors}
               fontFamily={shapeLabelFontFamily}
               extendedTypes
               ariaLabel={chart.title || chartSourceRangeToA1(chart)}
             />,
-            { frame: { left: chart.x !== undefined ? Math.max(0, chart.x - SPREADSHEET_HEADER_WIDTH_PX) : offsetOfLine(chart.anchor.col, sheet.columnCount, layoutColWidth), top: pageLayoutRowMap.toVisual(chart.y !== undefined ? Math.max(0, chart.y - SPREADSHEET_HEADER_HEIGHT_PX) : offsetOfLine(chart.anchor.row, sheet.rowCount, layoutRowHeight)), width: chart.width, height: chart.height }, rotation: 0, selectionType: chart.type !== "camera" ? "chart" as const : undefined, groupId: chart.groupId, disabledReason: pageLayoutDrawingDisabledReason(undefined, chart.type !== "camera"), constrainSize: clampChartSize },
+            { frame: { left: chart.x !== undefined ? Math.max(0, chart.x - SPREADSHEET_HEADER_WIDTH_PX) : offsetOfLine(chart.anchor.col, sheet.columnCount, layoutColWidth), top: pageLayoutRowMap.toVisual(chart.y !== undefined ? Math.max(0, chart.y - SPREADSHEET_HEADER_HEIGHT_PX) : offsetOfLine(chart.anchor.row, sheet.rowCount, layoutRowHeight)), width: chart.width, height: chart.height }, rotation: 0, selectionType: chart.type !== "camera" ? "chart" as const : undefined, groupId: chart.groupId, disabledReason: pageLayoutDrawingDisabledReason(undefined, chart.type !== "camera"), constrainSize: clampChartSize, printAnchor: "twoCell" as const },
           ] as const,
       );
     // Page Layout paints in the same sheet-wide order as Normal view.
     const levels = drawingStackLevels(sheetDrawingStack(sheetObjects, chartViews.map(({ chart }) => chart)));
     const level = (id: string) => levels.get(id.startsWith("chart:") ? id : `object:${id}`) ?? 0;
     return [...imported, ...floating].sort((a, b) => level(a[0]) - level(b[0]));
-  }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation]);
+  }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation,nativeGrid?.printScale]);
   const pageLayoutDrawingBounds = useMemo(() => [
     ...pageLayoutDrawings.map((drawing) => drawing[1]),
     ...slicers.map((slicer, index) => [slicer.x ?? 12 + index * 184, slicer.y ?? 12,
@@ -40362,6 +40875,7 @@ function SpreadsheetWindow({
     const geometry = resolveSpreadsheetPageLayoutGeometry({
       nativeGridDpi: nativeGrid?.dpi,
       nativeDigitWidth: nativeGrid?.digitWidth,
+      printScale: nativeGrid?.printScale,
       drawingBounds: pageLayoutDrawingBounds,
       totalRows: sheet.rowCount,
       rowOrder: pageLayoutRowMap.order,
@@ -40387,7 +40901,7 @@ function SpreadsheetWindow({
   }, [
     pageBreakPreview,
     normalViewPageBreaks,
-    nativeGrid?.dpi,
+    nativeGrid?.dpi, nativeGrid?.printScale,
     sheet.printSettings,
     sheet.rowCount,
     sheet.columnCount,
@@ -41796,6 +42310,13 @@ function SpreadsheetWindow({
   // carried onto each filled cell. Targets are clamped to the grid bounds so a
   // drag can never address out-of-grid cells. Committed through
   // replaceActiveSheet so undo + autosave fire once.
+  // A drag fill extends the user's lists, then the UI language's own day and
+  // month names (Excel's built-in lists are its Office language's), then the
+  // English and Chinese lists every fill knows.
+  const fillCustomLists = useMemo(() => {
+    const own = excelLocaleNameLists(locale);
+    return own.length > 0 ? [...viewOptions.customLists, ...own] : viewOptions.customLists;
+  }, [locale, viewOptions.customLists]);
   const applyFill = useCallback(
     (
       src: { r1: number; r2: number; c1: number; c2: number },
@@ -41811,7 +42332,7 @@ function SpreadsheetWindow({
       const outcome = autoFilledSheet(sheet, src, target, mode, {
         rangeHasLockedCell: rangeHasLockedCellRef.current,
         merges: mergeSpans,
-        customLists: viewOptions.customLists,
+        customLists: fillCustomLists,
         date1904: excelDateSystemArg(workbookDateSystemRef.current),
       });
       if (!outcome.ok) {
@@ -41833,7 +42354,7 @@ function SpreadsheetWindow({
         flashFill: outcome.flashFill,
       };
     },
-    [replaceActiveSheet, sheet, showProtectNotice, viewOptions.customLists, mergeSpans, t],
+    [replaceActiveSheet, sheet, showProtectNotice, fillCustomLists, mergeSpans, t],
   );
 
   // While a fill-handle drag is active, track the cell under the pointer at the
@@ -42446,9 +42967,27 @@ function SpreadsheetWindow({
     id: string,
     move: DrawingStackMove,
     options: { withinGroup?: boolean } = {},
-  ): SheetModel | null =>
-    sheetArrangedForDrawing(base, kind, id, move, (chart, ordinal) =>
-      stableChartPosition(chart as unknown as SpreadsheetChart, ordinal), options);
+  ): SheetModel | null => {
+    // Shift/Ctrl+click (or Go To Special > Objects) selected several
+    // drawings: the ribbon and menus move them all, as Excel moves a
+    
+    // holds the drawing the command names (the ribbon names the primary; a
+    // Selection Pane row's rail any selected row).
+    const live = drawingSelectionRef.current;
+    const primary = kind === "chart" ? `native:${id}` : `drawing:${id}`;
+    const selection =
+      !options.withinGroup && live?.sheetId === base.id && live.ids.includes(primary) && live.ids.length > 1
+        ? live.ids.flatMap((key): DrawingStackEntry[] =>
+            key.startsWith("native:")
+              ? [{ kind: "chart", id: key.slice("native:".length) }]
+              : key.startsWith("drawing:")
+                ? [{ kind: "object", id: key.slice("drawing:".length) }]
+                : [],
+          )
+        : undefined;
+    return sheetArrangedForDrawing(base, kind, id, move, (chart, ordinal) =>
+      stableChartPosition(chart as unknown as SpreadsheetChart, ordinal), { ...options, ...(selection ? { selection } : {}) });
+  };
   const reorderSheetObject = useCallback(
     (objectId: string, move: "front" | "back" | "forward" | "backward") => {
       const next = arrangedSheetForDrawing(sheet, "object", objectId, move);
@@ -42485,6 +43024,30 @@ function SpreadsheetWindow({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- arrangedSheetForDrawing reads only `sheet`
     [replaceActiveSheet, sheet],
   );
+  // The Selection Pane's drag and Ctrl+Shift+F / Ctrl+Shift+B: a drop is
+  // reached by the sheet's own Arrange moves (`planSelectionPaneReorder`),
+  // committed once -- one Undo step, one save, one update for a second
+  // window.
+  const moveSheetPaneUnits = useCallback(
+    (move: OfficeSelectionPaneMove) => {
+      const chartPosition = (chart: { id: string }, ordinal: number) =>
+        stableChartPosition(chart as unknown as SpreadsheetChart, ordinal);
+      const step = (model: SheetModel, command: DrawingStackMove) =>
+        sheetArrangedForPaneUnits(model, move.keys, move.container, command, chartPosition);
+      const next =
+        move.kind === "step"
+          ? step(sheet, move.direction)
+          : planSelectionPaneReorder({
+              model: sheet,
+              order: (model) => sheetDrawingPaneUnits(model, move.container),
+              moving: move.keys,
+              slot: move.slot,
+              step,
+            });
+      if (next) replaceActiveSheet(next);
+    },
+    [replaceActiveSheet, sheet],
+  );
   // A chart's row selects the chart, as clicking it on the grid does.
   const selectSessionChart = useCallback(
     (chartId: string) => {
@@ -42501,11 +43064,20 @@ function SpreadsheetWindow({
   const selectedObjectStackIndex = selectedObject
     ? drawingStackPosition(drawingStack, "object", selectedObject.id)
     : -1;
+  // Excel greys Bring Forward / Send Backward / Bring to Front / Send to Back
+  // only when the sheet holds a single drawing (a group counts once); at the
+  // top or bottom of the stack they stay on and change nothing (zorder audit
+  
+  const drawingsArrangeable = useMemo(() => sheetDrawingsArrangeable(sheet), [sheet]);
+  const selectedObjectArrangeDisabled = selectedObjectStackIndex < 0 || !drawingsArrangeable;
   const {
     objectArrangeRibbonControls,
   } = spreadsheetObjectArrangeRibbonControls({
     drawingStack,
+    drawingsArrangeable,
     reorderSheetObject,
+    reorderSheetChart,
+    selectedNativeChartId: selectedObject ? null : (selectedNativeChart?.id ?? null),
     selectedObject,
     selectedObjectStackIndex,
     sheet,
@@ -42551,6 +43123,31 @@ function SpreadsheetWindow({
         const grouped = chartGroupFrameRef.current(`drawing:${gesture.objectId}`, preview);
         if (grouped !== undefined) return grouped;
       }
+      // One SmartArt shape resized by its handles (or Shift+arrows): Excel keeps
+      // the size as the shape's custScaleX/Y and lays the whole graphic out again
+      // around it, so the gesture becomes that relayout -- one change, one Undo --
+      // rather than a box edit. A resize that also mirrored the shape stays a box
+      // edit (a flip is no scale).
+      const mirrored =
+        (preview.flipH !== undefined && preview.flipH !== (gesture.sourceObject.anchor?.flipH === true)) ||
+        (preview.flipV !== undefined && preview.flipV !== (gesture.sourceObject.anchor?.flipV === true));
+      if (gesture.kind === "resize" && !preview.members && !mirrored) {
+        const marker = readSmartArtBlockMarker(gesture.sourceObject);
+        const before = objectBoundsPixels(gesture.sourceObject, colWidth, rowHeight);
+        if (
+          marker?.itemId &&
+          (marker.role === "node" || marker.role === "label") &&
+          before.width > 0 &&
+          before.height > 0 &&
+          (Math.abs(preview.width - before.width) > 0.5 || Math.abs(preview.height - before.height) > 0.5)
+        ) {
+          return resizeSmartArtItemCommand(
+            marker.itemId,
+            { x: preview.width / before.width, y: preview.height / before.height },
+            gesture.objectId,
+          );
+        }
+      }
       // The anchor, SmartArt factors and connector glue follow the box
       // (lib/spreadsheet/object-buttons, objectsAfterBoxEdit).
       const nextObjects = objectsAfterBoxEdit(
@@ -42582,7 +43179,7 @@ function SpreadsheetWindow({
       });
       return result[liveIndex]?.objects === nextSheet.objects;
     },
-    [colWidth, pageLayoutDrawingDisabledReason, pageLayoutRowMap.key, replaceActiveSheet, rowHeight, showProtectNotice],
+    [colWidth, pageLayoutDrawingDisabledReason, pageLayoutRowMap.key, replaceActiveSheet, resizeSmartArtItemCommand, rowHeight, showProtectNotice],
   );
 
   // A stroke dragged by its own body moves, with every stroke selected with
@@ -43381,6 +43978,13 @@ function SpreadsheetWindow({
     [selectPivotOutputScope],
   );
 
+  // A large tiled sheet holds only the rows around the screen: whatever a
+  // PivotTable read of it would be the totals of those rows, so the source is
+  // read only once every tile of the sheet is in (null until then).
+  const pivotSourceWhollyResident = useCallback((): boolean => {
+    const tiled = tiledRef.current;
+    return !tiled?.isTiledSheet(sheet.id) || tiled.isWhollyResident(sheet.id);
+  }, [sheet.id]);
   // Snapshot exact typed source values once for both Insert PivotTable
   // commands. Recommended PivotTables persist this cache; later source edits
   // mark the Pivot dirty until the explicit Refresh command replaces it.
@@ -43392,8 +43996,29 @@ function SpreadsheetWindow({
         overlay: spillOverlay,
         sheetRefPrefix,
         columnLabel,
+        whollyResident: pivotSourceWhollyResident(),
       }),
-    [cellDisplayValue, formulaEvaluator, sheet, spillOverlay],
+    [cellDisplayValue, formulaEvaluator, pivotSourceWhollyResident, sheet, spillOverlay],
+  );
+  // Why a PivotTable cannot summarise `range` of this sheet, as the person
+  // reads it, or null. Pure: the dialog's source box asks it while typing.
+  const pivotSourceIssue = useCallback(
+    (range: PivotRange): string | null => {
+      const refusal = pivotSourceRefusal(range, pivotSourceWhollyResident());
+      if (refusal === "partial") {
+        const cells = (tiledRef.current?.entry(sheet.id)?.cells ?? 0).toLocaleString();
+        return t("spreadsheet.tiledWorkbook.wholeSheetReadingPivot", { cells });
+      }
+      if (refusal === "tooLarge") {
+        return t("spreadsheet.pivotSourceTooLarge", {
+          range: pivotSourceReference(sheet.name, range, sheetRefPrefix, columnLabel),
+          cells: ((range.r2 - range.r1 + 1) * (range.c2 - range.c1 + 1)).toLocaleString(),
+          max: MAX_PIVOT_SOURCE_CELLS.toLocaleString(),
+        });
+      }
+      return null;
+    },
+    [pivotSourceWhollyResident, sheet.id, sheet.name, t],
   );
 
   const currentPivotSelectionSnapshot = useCallback(
@@ -43524,6 +44149,22 @@ function SpreadsheetWindow({
         !sourceRange && !hasMultiSelection && activeTable?.headerRow
           ? activeTable
           : null;
+      // A large tiled sheet read around the screen: the region scan sees the
+      // rows read so far (A1:I512 of a 60,001-row sheet) and a preview would
+      // total them as if they were all. The whole sheet is read first, as
+      // sort and filter read it, and the command says so; a source past the
+      // PivotTable bound is refused by name rather than met with silence.
+      if (!pivotSourceWhollyResident()) {
+        showProtectNotice(wholeSheetMessage(sheet.id, "pivot"));
+        return false;
+      }
+      const proposedRange =
+        sourceRange ?? tableAtCell?.range ?? pivotSourceRangeNow() ?? selRect;
+      const proposedIssue = pivotSourceIssue(proposedRange);
+      if (proposedIssue) {
+        showProtectNotice(proposedIssue);
+        return false;
+      }
       const snapshot = sourceRange
         ? pivotSelectionSnapshot(sourceRange)
         : tableAtCell
@@ -43594,9 +44235,15 @@ function SpreadsheetWindow({
       pivotConfigWithSafeOutput,
       pivotCreationNewSheetDisabledReason,
       pivotSelectionSnapshot,
+      pivotSourceIssue,
+      pivotSourceRangeNow,
+      pivotSourceWhollyResident,
+      selRect,
+      sheet.id,
       sheet.pivot,
       showProtectNotice,
       t,
+      wholeSheetMessage,
     ],
   );
 
@@ -43609,11 +44256,19 @@ function SpreadsheetWindow({
     dataTables,
     pivotConfigWithSafeOutput,
     pivotSelectionSnapshot,
+    pivotSourceIssue: (range) =>
+      (range ? pivotSourceIssue(range) : null) ?? t("spreadsheet.pivotPickSource"),
     setPivotCreationDraft,
   });
 
   const pivotCreationResolvedConfig = useMemo(() => {
-    if (!pivotCreationDraft || pivotCreationDraft.config.values.length === 0) {
+    // An entry the source box could not read leaves the rows of an earlier
+    // one in the draft: nothing is previewed or created over them.
+    if (
+      !pivotCreationDraft ||
+      pivotCreationDraft.sourceIssue ||
+      pivotCreationDraft.config.values.length === 0
+    ) {
       return null;
     }
     if (pivotCreationDraft.destinationKind === "new") {
@@ -44231,6 +44886,11 @@ function SpreadsheetWindow({
   );
   const commitCellNoteSessionRef = useRef(commitCellNoteSession);
   commitCellNoteSessionRef.current = commitCellNoteSession;
+  // A note still being typed as the page goes (the window closed, the app
+  // quit): written as a click elsewhere would (lib/draft-commit-on-leave).
+  useDraftCommitOnLeave(`sheet-note:${pageId}`, () => {
+    if (noteSessionRef.current) commitCellNoteSessionRef.current(false);
+  });
   const liveActiveSheetComment = useCallback(
     (key: string) =>
       liveSheetsRef.current[liveActiveSheetIndexRef.current]?.cells[key]
@@ -45400,7 +46060,10 @@ function SpreadsheetWindow({
         showProtectNotice();
         return;
       }
-      replaceActiveSheet(borderModePatchedSheet(sheet, mode, selRect));
+      const patched = borderModePatchedSheet(sheet, mode, selRect);
+      // No Border over a table's whole header row also drops the header
+      // row's own border (Excel removes headerRowBorderDxfId; the outline stays).
+      replaceActiveSheet(mode === "none" ? (sheetWithoutHeaderOwnBorder(patched, selRect) ?? patched) : patched);
     },
     [replaceActiveSheet, sheet, selRect, showProtectNotice],
   );
@@ -50032,6 +50695,13 @@ function SpreadsheetWindow({
       showProtectNotice(t("spreadsheet.spillEditBlocked"));
       return false;
     }
+    // A cell a merged area covers holds nothing: the total would be cut off
+    // by the merge and lost on save (R305-X24 WALK1).
+    const coveredByMerges = coveredCells(mergeSpans);
+    if (targets.some((target) => coveredByMerges.has(`${target.writeRow}:${target.writeCol}`))) {
+      showProtectNotice(t("spreadsheet.pasteBlockedByMerge"));
+      return false;
+    }
 
     const nextSheet = sheetAfterAutoSum(sheet, targets, fn);
     replaceActiveSheet(nextSheet);
@@ -53638,6 +54308,25 @@ function SpreadsheetWindow({
     if (!draft || draft.config.values.length === 0) return false;
     const sourceRange = normalizePivotRange(pivotCreationSourceA1(draft));
     if (!sourceRange) return false;
+    // The dialog's authority is the workbook as it stood when it opened. A
+    // tiled sheet changes under an open dialog without its source changing
+    // (tiles read or let go, results stamped), and OK then did nothing
+    // visible. OK takes the workbook as it is now, on the same sheet, when
+    // the source still reads exactly as the dialog previewed it; the commit
+    // reads and compares the source once more (applyPivotCreationReceipt).
+    let authority = draft.authority;
+    if (authority.sheet !== sheet && sheet.id === draft.sheetId) {
+      const fresh = captureInsertMutationReceipt(authority.controlId);
+      const reread = fresh ? pivotSelectionSnapshot(sourceRange) : null;
+      if (
+        fresh &&
+        reread &&
+        JSON.stringify(reread.scalarMatrix) === JSON.stringify(draft.scalarMatrix) &&
+        JSON.stringify(reread.fields) === JSON.stringify(draft.fields)
+      ) {
+        authority = fresh;
+      }
+    }
     const config =
       draft.destinationKind === "new"
         ? (pivotConfigForNewSheet(
@@ -53655,10 +54344,10 @@ function SpreadsheetWindow({
             );
     if (!config?.output) return false;
     pivotCreationMutationCommandRef.current = {
-      ...draft.authority,
+      ...authority,
       controlId: "XLSCTL.INSERT.PIVOT.APPLY",
       destinationKind: draft.destinationKind,
-      sourceCells: draft.authority.sheet.cells,
+      sourceCells: authority.sheet.cells,
       source: config.source,
       scalarMatrix: draft.scalarMatrix.map((row) =>
         row.map((value) => ({ ...value })),
@@ -53795,22 +54484,27 @@ function SpreadsheetWindow({
   const applyPivotCreationReceipt = (): boolean => {
     const receipt = pivotCreationMutationCommandRef.current;
     try {
-      if (
-        !receipt ||
-        receipt.controlId !== "XLSCTL.INSERT.PIVOT.APPLY" ||
-        !insertReceiptIsCurrent(receipt, "XLSCTL.INSERT.PIVOT.APPLY")
-      ) {
+      if (!receipt || receipt.controlId !== "XLSCTL.INSERT.PIVOT.APPLY") {
         return false;
       }
       const liveSheet =
         liveSheetsRef.current[liveActiveSheetIndexRef.current] ?? null;
       const sourceRange = normalizePivotRange(receipt.source);
       if (
+        !insertReceiptIsCurrent(receipt, "XLSCTL.INSERT.PIVOT.APPLY") ||
         !liveSheet ||
         liveSheet.cells !== receipt.sourceCells ||
         (receipt.destinationKind === "existing" && liveSheet.pivot) ||
         !sourceRange
       ) {
+        // The workbook moved between OK and the commit: the dialog stays
+        // open and says so, rather than doing nothing visible.
+        if (
+          receipt.workbook !== liveSheetsRef.current ||
+          (liveSheet && liveSheet.cells !== receipt.sourceCells)
+        ) {
+          showProtectNotice(t("spreadsheet.pivotSourceChanged"));
+        }
         return false;
       }
       // A table source must still be that table, where the draft read it.
@@ -53836,6 +54530,11 @@ function SpreadsheetWindow({
           JSON.stringify(receipt.scalarMatrix) ||
         JSON.stringify(snapshot.fields) !== JSON.stringify(receipt.fields)
       ) {
+        // The dialog stays open over the rows it previewed: OK says why it
+        // created nothing (it used to do nothing visible at all).
+        showProtectNotice(
+          pivotSourceIssue(sourceRange) ?? t("spreadsheet.pivotSourceChanged"),
+        );
         return false;
       }
       const cacheSnapshot = createPivotCacheSnapshot(
@@ -54314,6 +55013,27 @@ function SpreadsheetWindow({
     replaceActiveSheet({ ...receipt.sheet, objects: receipt.objectCollection.map((object) => byId.get(object.id) ?? object) });
     return true;
   };
+  // Shape Height / Width on ONE SmartArt shape: its scale on that axis, and the
+  // graphic laid out again around it, as a handle or Larger does.
+  const resizeSmartArtShapeFromReceipt = (
+    receipt: { objectCollection: readonly SpreadsheetObject[]; objectId: string; parameter: string },
+    axis: "width" | "height",
+  ): boolean | undefined => {
+    if (smartArtGraphicSelected) return undefined;
+    const object = receipt.objectCollection.find((candidate) => candidate.id === receipt.objectId);
+    const marker = object ? readSmartArtBlockMarker(object) : null;
+    if (!object || !marker?.itemId || (marker.role !== "node" && marker.role !== "label")) return undefined;
+    const size = Number(receipt.parameter);
+    const current = objectSizePixels(object, colWidth, rowHeight)[axis];
+    if (!(size > 0) || !Number.isFinite(size) || !(current > 0)) return undefined;
+    if (Math.abs(size - current) < 0.5) return true;
+    const ratio = size / current;
+    return resizeSmartArtItemCommand(
+      marker.itemId,
+      axis === "width" ? { x: ratio, y: 1 } : { x: 1, y: ratio },
+      object.id,
+    );
+  };
   const reorderShapeFormatReceiptObject = (
     receipt: ShapeFormatMutationReceipt,
     move: "front" | "back" | "forward" | "backward",
@@ -54751,6 +55471,33 @@ function SpreadsheetWindow({
       if (next.primary?.startsWith("native:")) writeSelectedChartSelection({sheetId:sheet.id,chartId:next.primary.slice(7)});
     } finally { drawingSelectionDispatchRef.current = false; }
     const value={...next,sheetId:sheet.id};drawingSelectionRef.current=value;setDrawingSelection(value);
+    return true;
+  };
+  selectPaneDrawingsRef.current = (key, mode, order) => {
+    if (mode === "toggle") return drawingPressRef.current(key, true);
+    const live = drawingSelectionRef.current?.sheetId === sheet.id ? drawingSelectionRef.current : null;
+    const current = live?.ids ?? chartGroupSelection.map((entry) => entry.id);
+    const anchor = live?.primary ?? (current.length === 1 ? current[0] : null);
+    const { keys } = selectionPaneClickSelection(order, current, anchor, key, "range");
+    const items = drawingSelectionEntries.map((entry) => ({ ...entry, hidden: entry.value.hidden }));
+    // Each name of the run, a group's member with its whole group (as a
+    // click on the grid takes it).
+    let ids: string[] = [];
+    for (const candidate of keys) {
+      if (ids.includes(candidate)) continue;
+      ids = selectSpreadsheetDrawing(items, candidate, ids, true)?.ids ?? ids;
+    }
+    if (ids.length === 0) return false;
+    const primary = anchor && ids.includes(anchor) ? anchor : ids.includes(key) ? key : ids[0];
+    drawingSelectionEpochRef.current += 1;
+    drawingSelectionDispatchRef.current = true;
+    try {
+      setSelectedObjectId(primary.startsWith("drawing:") ? primary.slice(8) : null);
+      if (primary.startsWith("native:")) writeSelectedChartSelection({ sheetId: sheet.id, chartId: primary.slice(7) });
+    } finally { drawingSelectionDispatchRef.current = false; }
+    const value = { ids, primary, sheetId: sheet.id };
+    drawingSelectionRef.current = value;
+    setDrawingSelection(value);
     return true;
   };
   // Go To Special > Objects (XLS-A062): every visible chart, shape and
@@ -55665,11 +56412,24 @@ function SpreadsheetWindow({
       delete next.groupRotation;
       return next;
     };
-    return commitChartGroupSheet({
+    const grouped: SheetModel = {
       ...sheet,
       ...(sheet.objects ? { objects: sheet.objects.map((object) => keys.has(`drawing:${object.id}`) ? withGroup(object) : object) } : {}),
       ...(sheet.charts ? { charts: sheet.charts.map((chart) => keys.has(`native:${chart.id}`) ? withGroup(chart) : chart) } : {}),
-    });
+    };
+    // Excel puts a new group where its top member stood: a drawing that sat
+    // between two members ends up under the whole group (zorder audit
+    
+    const stackKeys = new Set(
+      [...keys].flatMap((key) =>
+        key.startsWith("drawing:") ? [`object:${key.slice(8)}`] : key.startsWith("native:") ? [`chart:${key.slice(7)}`] : [],
+      ),
+    );
+    const gathered = groupId
+      ? sheetWithGroupGathered(grouped, stackKeys, (chart, ordinal) =>
+          stableChartPosition(chart as unknown as SpreadsheetChart, ordinal))
+      : null;
+    return commitChartGroupSheet(gathered ?? grouped);
   };
   /**
    * Align / Distribute the selected drawings (Excel's Shape Format > Align):
@@ -56539,6 +57299,7 @@ function SpreadsheetWindow({
     cellDisplay: (row, col) => cellDisplayValue(sheet.cells[`${row}:${col}`], row, col, false),
     cellValue: (row, col) => cellChartValue(sheet.cells[`${row}:${col}`], row, col),
     words: { chartTitle: t("spreadsheet.uiCopy.chartTitle"), axisTitle: t("spreadsheet.uiCopy.axisTitle") },
+    themeAccents: workbookThemeAccentColors,
   });
   /** The chart's current model and binding: its stored model (an imported
    * chart's reading of its part included) with the data cache refreshed from
@@ -56871,15 +57632,15 @@ function SpreadsheetWindow({
       if(!drawing?.[4])return false;
       const occurrence=viewport.querySelector(`[data-page-layout-drawing="${CSS.escape(id)}"]`);
       const pageIndex=Number(occurrence?.closest("[data-print-page-index]")?.getAttribute("data-print-page-index"));
-      const geometry=resolveSpreadsheetPageLayoutGeometry({drawingBounds:pageLayoutDrawingBounds,nativeGridDpi:nativeGrid?.dpi,nativeDigitWidth:nativeGrid?.digitWidth,totalRows:sheet.rowCount,totalCols:sheet.columnCount,rowOrder:pageLayoutRowMap.order,
+      const geometry=resolveSpreadsheetPageLayoutGeometry({drawingBounds:pageLayoutDrawingBounds,nativeGridDpi:nativeGrid?.dpi,nativeDigitWidth:nativeGrid?.digitWidth,printScale:nativeGrid?.printScale,totalRows:sheet.rowCount,totalCols:sheet.columnCount,rowOrder:pageLayoutRowMap.order,
         printSettings:sheet.printSettings,rowHeights:pageLayoutRowHeights,columnWidths,defaultRowHeight:displayDefaultRowHeight,defaultColumnWidth:displayDefaultColumnWidth,
         hiddenRows:pageLayoutHiddenRows,hiddenCols:new Set([...groupHiddenCols,...manualHiddenCols])});
       const page=resolveSpreadsheetPageLayoutRenderPlan(geometry).pages.find(item=>item.index===pageIndex);
       if(!page)return false;
-      const scale=.75*geometry.contentScale;
-      target={left:geometry.colSizes.slice(0,page.colRange[0]).reduce((a,b)=>a+b,0)/scale,
-        top:geometry.rowSizes.slice(0,page.rowRange[0]).reduce((a,b)=>a+b,0)/scale,
-        width:geometry.dataAreaWidth/scale,height:geometry.dataAreaHeight/scale};
+      const scale=.75*geometry.contentScale, print=geometry.printScale??{x:1,y:1};
+      target={left:geometry.colSizes.slice(0,page.colRange[0]).reduce((a,b)=>a+b,0)/(scale*print.x),
+        top:geometry.rowSizes.slice(0,page.rowRange[0]).reduce((a,b)=>a+b,0)/(scale*print.y),
+        width:geometry.dataAreaWidth/(scale*print.x),height:geometry.dataAreaHeight/(scale*print.y)};
     }
     if(!Object.values(target).every(Number.isFinite)||target.width<=0||target.height<=0)return false;
     const horizontal=alignment==="left"||alignment==="center"||alignment==="right";
@@ -58187,6 +58948,7 @@ function SpreadsheetWindow({
         "XLSCTL.CONTEXT.SHAPE.WIDTH.MRAI.APPLY",
         (receipt) =>
           resizeSmartArtGraphicFromReceipt(receipt, "width") ??
+          resizeSmartArtShapeFromReceipt(receipt, "width") ??
           resizeWholeGroupFromReceipt(receipt, "width") ??
           writeShapeFormatPatch(receipt, shapeSizePatch(receipt.object, "width", receipt.parameter, receiptDrawingGrid(receipt.sheet))),
       ),
@@ -58195,6 +58957,7 @@ function SpreadsheetWindow({
         "XLSCTL.CONTEXT.SHAPE.HEIGHT.MRAI.APPLY",
         (receipt) =>
           resizeSmartArtGraphicFromReceipt(receipt, "height") ??
+          resizeSmartArtShapeFromReceipt(receipt, "height") ??
           resizeWholeGroupFromReceipt(receipt, "height") ??
           writeShapeFormatPatch(receipt, shapeSizePatch(receipt.object, "height", receipt.parameter, receiptDrawingGrid(receipt.sheet))),
       ),
@@ -59632,7 +60395,17 @@ function SpreadsheetWindow({
           receipt.nextRules.flatMap((rule) => conditionalRuleAreas(rule)),
         );
         if (receipt.nextRules.length > 0) {
-          nextSheet.conditionalFormats = [...receipt.nextRules];
+          // The rules the dialogs edit are read through the sheet's used rows
+          // (the loader clamps them for the grid to draw); one they leave
+          // where it was keeps the areas the page read, a whole column to the
+          // grid's last row (xlsx-rounds R316-X13: a new rule cut the file's
+          // A5:AK1048576 to A5:AK80). The extent above grows only for the
+          // rules as edited.
+          nextSheet.conditionalFormats = rulesKeepingStoredAreas(
+            asLoadedSpelling(liveSheet.conditionalFormats),
+            receipt.nextRules,
+            { maxRow: liveSheet.rowCount - 1, maxCol: liveSheet.columnCount - 1 },
+          );
         } else {
           delete nextSheet.conditionalFormats;
         }
@@ -62887,7 +63660,24 @@ function SpreadsheetWindow({
       return executeVisibleCommand("XLSCTL.CONTEXT.PIVOT.REFRESH");
     }
     // The cache rebuilt over the source as it is now (lib/spreadsheet/
-    // pivot-buttons, pivotRefreshPlan).
+    // pivot-buttons, pivotRefreshPlan). A large tiled source holds only the
+    // rows around the screen: those rows are no refresh of the cache, so
+    // the rest are read first and the person refreshes again.
+    const refreshTiled = tiledRef.current;
+    const refreshRange = pivotLiveSourceSheet
+      ? pivotLiveSourceRange(pivotConfig, pivotLiveSourceSheet.dataTables) ?? normalizePivotRange(pivotConfig.source)
+      : null;
+    if (refreshTiled && pivotLiveSourceSheet && refreshRange) {
+      const missingTiles = refreshTiled.tilesMissingFor(pivotLiveSourceSheet.id, refreshRange.r1, refreshRange.r2);
+      if (missingTiles.length > 0) {
+        toast({ title: t("spreadsheet.tiledWorkbook.pivotRefreshWaitsForSource", {
+          sheet: pivotLiveSourceSheet.name, cells: refreshTiled.cellsOf(pivotLiveSourceSheet.id).toLocaleString() }) });
+        void refreshTiled.ensure(pivotLiveSourceSheet.id, missingTiles).then(() => {
+          applyTiledModelRef.current((previous) => refreshTiled.apply(previous));
+        }).catch(() => {});
+        return Promise.resolve(false);
+      }
+    }
     const plan = pivotRefreshPlan(
       pivotConfig,
       activePivot,
@@ -63141,6 +63931,21 @@ function SpreadsheetWindow({
     });
   };
   const executeRecommendedPivotLauncher = () => {
+    // The refusals Create PivotTable explains (openPivotCreationDialog): a
+    // tiled sheet not read whole yet, a source past the PivotTable bound.
+    if (!pivotSourceWhollyResident()) {
+      showProtectNotice(wholeSheetMessage(sheet.id, "pivot"));
+      return Promise.resolve(false);
+    }
+    const recommendedIssue = pivotSourceIssue(
+      (!hasMultiSelection && activeTable?.headerRow ? activeTable.range : null) ??
+        pivotSourceRangeNow() ??
+        selRect,
+    );
+    if (recommendedIssue) {
+      showProtectNotice(recommendedIssue);
+      return Promise.resolve(false);
+    }
     const selection = readPageSetupSelectionSnapshot();
     const snapshot = recommendedPivotSourceSnapshot()?.snapshot ?? null;
     if (!selection || !snapshot) return Promise.resolve(false);
@@ -65404,7 +66209,6 @@ function SpreadsheetWindow({
       rotate: !selectedPictureObject?.groupId,
     }),
     colWidth,
-    drawingStack,
     executePictureFormatMutation,
     executeVisibleCommand,
     pictureArrangeControlIdByMove,
@@ -65435,9 +66239,15 @@ function SpreadsheetWindow({
       return (
         <OfficePictureEffectsMenu
           effects={selectedPictureObject.pictureEffects}
-          shadow={false}
+          // Preset and Shadow are the menu's where the picture keeps them in
+          // its Picture Effects (readings row 570), as Excel's menu has them.
+          shadow={spreadsheetPictureShadowInEffects(selectedPictureObject)}
           accentColors={accents}
-          kinds={SPREADSHEET_PICTURE_EFFECT_MENU_KINDS}
+          kinds={
+            spreadsheetPictureShadowInEffects(selectedPictureObject)
+              ? SPREADSHEET_PICTURE_EFFECT_MENU_KINDS_WITH_SHADOW
+              : SPREADSHEET_PICTURE_EFFECT_MENU_KINDS
+          }
           disabled={Boolean(reason)}
           disabledReason={reason}
           controlId="XLSCTL.CONTEXT.PICTURE.EFFECTS.MRAI.APPLY"
@@ -65449,7 +66259,11 @@ function SpreadsheetWindow({
               spreadsheetPictureEffectParameter(kind, value),
             )
           }
-          onThreeDOptions={() => setPictureFormatPane({ tab: "effects" })}
+          // Each submenu's "... Options": Format Picture at its Effects
+          // page, that effect's section in view.
+          onEffectOptions={(section) =>
+            setPictureFormatPane((current) => spreadsheetFormatPaneAt(current, "effects", section))
+          }
         />
       );
     },
@@ -65457,7 +66271,7 @@ function SpreadsheetWindow({
     renderChartRotateMenu,
     rowHeight,
     selectedObjectIdRef,
-    selectedObjectStackIndex,
+    selectedObjectArrangeDisabled,
     selectedPictureObject,
     setPictureStylePreview,
     sheet,
@@ -66062,7 +66876,6 @@ function SpreadsheetWindow({
     canGroupSelection,
     canUngroupSelection,
     cmToPx,
-    drawingStack,
     executeShapeFormatMutation,
     groupDisabledReason,
     groupDrawingSelection,
@@ -66074,7 +66887,7 @@ function SpreadsheetWindow({
     openShapeAltTextPane,
     pxToCm,
     recentColors,
-    selectedObjectStackIndex,
+    selectedObjectArrangeDisabled,
     selectedShapeObject,
     selectedShapeStyle,
     selectionIsGroup,
@@ -66219,6 +67032,8 @@ function SpreadsheetWindow({
     sheetShapeFormatPaneTabs,
   } = spreadsheetFormatPaneTabs({
     selectedGroupRotation: selectedGroupRotationRef.current(),
+    editShapeTextPaint: (edit) => editShapeTextPaint(edit),
+    shapeTextPaintDisabledReason,
     shapeLineDetailDisabledReason,
     shapeOutlineDashDisabledReason,
     shapeFillLineDisabledReason,
@@ -66554,6 +67369,21 @@ function SpreadsheetWindow({
           !spillTargetOccupied(sheet.cells, coveredCellKeys, row, probeCol) &&
           sheet.cells[`${row}:${probeCol}`]?.style?.centerAcross === true)
       : null;
+  // Printed, the Center Across Selection run holding text that covers (row,
+  // col): its text's cell and the blank Center Across Selection cells right
+  // of it, which print only their run's perimeter (lookwin p96-lw; the API's
+  // across_at). Null for a blank run, a merge, or a cell outside any run.
+  const printedCenterAcrossRunAt = (row: number, col: number) => {
+    for (let anchor = col; anchor >= 0 && col - anchor <= 256; anchor -= 1) {
+      const key = `${row}:${anchor}`;
+      const cell = sheet.cells[key];
+      if (cell?.style?.centerAcross !== true || coveredCellKeys.has(key) || spanAt(row, anchor, mergeSpans)) return null;
+      if (!cellDisplayValue(cell, row, anchor, false)) continue;
+      const run = centerAcrossRunAt(row, anchor);
+      return run && run.endCol >= col ? run : null;
+    }
+    return null;
+  };
   const pageLayoutTextSpill = (
     row: number,
     col: number,
@@ -66570,8 +67400,9 @@ function SpreadsheetWindow({
     if (!ignoreEditing && editingCell?.sheetId === sheet.id && editingCell.row === row && editingCell.col === col) return null;
     if (!isCellContentHiddenRef.current(sheet, cell) && shouldShowFormulaText(cell.value, sheetShowsFormulas)) return null;
     if (activePivotOutputCells?.has(`${row}:${col}`) || isCheckboxCell(cell.style)) return null;
-    // Fill repeats the text inside its own cell (B398).
-    if (cell.style?.wrapText === true || cellHorizontalFill(cell.style)) return null;
+    // Fill repeats the text inside its own cell (B398); Justify and
+    // Distributed wrap (cellTextWraps).
+    if (cellTextWraps(cell.style) || cellHorizontalFill(cell.style)) return null;
     let computed: CellValue;
     try {
       computed = formulaEvaluator.getComputed(row, col);
@@ -66580,7 +67411,9 @@ function SpreadsheetWindow({
       return null;
     }
     if (typeof computed === "number") return null;
-    const display = cellDisplayValue(cell, row, col, false);
+    // Wrap Text stated off: the breaks print as nothing, on one line that
+    // spills like any other (R250-X06's TEXTJOIN of reviews over CHAR(10)).
+    const display = cellTextOnOneLine(cellLineShown(cellDisplayValue(cell, row, col, false), cellWrapTextSetting(cell)), cellWrapTextSetting(cell));
     if (!display || display.includes("\n")) return null;
     // Center Across Selection draws over its run of cells, as on the grid.
     if (!cellTextIsOriented(cell.style)) {
@@ -66594,14 +67427,115 @@ function SpreadsheetWindow({
     // it runs on over the columns on its right, which come before it, and a
     // right-aligned one over those after it (P12, Excel's own PDF).
     const align = gridRtl && shownAlign !== "center" ? (shownAlign === "left" ? "right" : "left") : shownAlign;
-    return spillDecision({
+    const textWidthPx = spillTextWidthPx(display, cell.style, workbookFontAssets.aliases, style) * fontScale;
+    const range = spillDecision({
       // Printed, a text runs on past the sheet's stored extent too: the
       // print range reaches the columns it covers (printedColumnsWithSpill).
       row, col, align, columnCount: embeddedWorkbook?.presentation === "print" ? MAX_GRID_COLUMNS : sheet.columnCount, text: display, wrapText: false, shrinkToFit: cell.style?.shrinkToFit === true, active: false, merged: false,
-      textWidthPx: spillTextWidthPx(display, cell.style, workbookFontAssets.aliases, style) * fontScale,
-      cellWidthPx: Math.max(0, cellWidthPx - 2 * CELL_BASE_PADDING_X_PX),
+      textWidthPx,
+      // The cell's padding at the page's scale, as the text and the cell are:
+      // unscaled, a page fitted to 23 % had no room left in any column (16.96
+      // px less 18), and every centred value "spilled" and was centred in the
+      // empty columns around it (R77-X23's FALSE column printed 85 pt left of
+      // its own, Excel's centred in AD).
+      cellWidthPx: Math.max(0, cellWidthPx - 2 * CELL_BASE_PADDING_X_PX * fontScale),
       isOccupied: (probeRow: number, probeCol: number) => spillTargetOccupied(sheet.cells, coveredCellKeys, probeRow, probeCol),
     });
+    // A centred text runs over both sides alike, its centre kept on its own
+    // cell however far the room reaches on one side (centred: the page lays
+    // it out over a box as wide each side and cuts it to the run).
+    const centred = range && align === "center" ? { ...range, centred: true as const } : range;
+    if (!centred || embeddedWorkbook?.presentation !== "print") return centred;
+    // Printed, how far the text reaches (a run carried onto a later page
+    // prints by it, pageLayoutCarriedRunPrints): at the advances the page
+    // draws an imported workbook's text at.
+    // At the advances it is painted at (the printer's), so a tail is judged
+    // by the ink it draws: R305-X04's D33 note, 1,158 screen px where it
+    // prints 1,169 (Excel's line 877 pt), ended 8.5 pt short, and its "."
+    // 1.8 pt into page 7's first column was not drawn.
+    const drawn = nativeGrid ? spreadsheetNativeTextWidthPx(display, style, nativeGrid.dpi, "paint") : undefined;
+    return { ...centred, textWidthPx: drawn !== undefined && Number.isFinite(drawn) ? drawn * fontScale : textWidthPx };
+  };
+  // The editor's Print (Excel's File > Print) draws a wrap-off text with a
+  // line break whose words take an unmapped ligature of its face unclipped
+  // (office-latin-ligatures; the API's print route, cell look "unclipped"):
+  // the cells that do, by row, with the width their one line is drawn at.
+  // Read once a render of the print page, from the few cells holding a break.
+  // Printed, a text holding a line break (CR or LF) that does not wrap is
+  // painted at its faces' design widths, not the printer's, as the API's
+  // writer draws it (`designed`: Windows Excel lays such a line out with
+  // Uniscribe, its ligatures and kerning narrowing it; lookwin p102g-lw,
+  // p100c-lw): its line as drawn, its run texts, and the lines it breaks
+  // into where it is drawn broken. Read once a sheet's cells.
+  const registerPageLayoutDesignedLines = () => {
+    const owner = designedLinesOwner.current;
+    if (embeddedWorkbook?.presentation !== "print") {
+      setNativeTextDesignedLines(owner, null);
+      return;
+    }
+    if (owner.cells !== sheet.cells) {
+      const lines = new Set<string>();
+      for (const key in sheet.cells) {
+        const cell = sheet.cells[key];
+        if (typeof cell?.value !== "string" || !/[\r\n]/.test(cell.value)) continue;
+        if (cell.style?.wrapText || cellTextWraps(cell.style)) continue;
+        const separator = key.indexOf(":");
+        const row = Number(key.slice(0, separator));
+        const col = Number(key.slice(separator + 1));
+        if (!Number.isInteger(row) || !Number.isInteger(col)) continue;
+        const shown = cellDisplayValue(cell, row, col, false);
+        if (typeof shown !== "string" || !/[\r\n]/.test(shown)) continue;
+        const add = (text: string) => {
+          if (!text) return;
+          lines.add(text);
+          lines.add(text.replace(/[\r\n]/g, ""));
+          for (const piece of text.split(/\r\n|\r|\n/)) if (piece) lines.add(piece);
+        };
+        add(shown);
+        for (const run of normalizeCellRuns(cell.runs, cell.value) ?? []) add(run.text);
+      }
+      owner.cells = sheet.cells;
+      owner.lines = lines;
+    }
+    setNativeTextDesignedLines(owner, owner.lines ?? null);
+  };
+  const pageLayoutUnclippedTexts = (): Map<number, { col: number; textWidthPx: number; rich?: boolean }[]> | undefined => {
+    registerPageLayoutDesignedLines();
+    if (embeddedWorkbook?.presentation !== "print" || embeddedWorkbook.printRoute !== "print" || gridRtl) return undefined;
+    let found: Map<number, { col: number; textWidthPx: number; rich?: boolean }[]> | undefined;
+    for (const key in sheet.cells) {
+      const cell = sheet.cells[key];
+      if (typeof cell?.value !== "string" || !/[\r\n]/.test(cell.value)) continue;
+      const separator = key.indexOf(":");
+      const row = Number(key.slice(0, separator));
+      const col = Number(key.slice(separator + 1));
+      if (!Number.isInteger(row) || !Number.isInteger(col)) continue;
+      if (cellTextIsOriented(cell.style) || cell.style?.centerAcross === true || isCheckboxCell(cell.style)) continue;
+      // Wrapped, Justified or Distributed (they wrap), or Wrap Text unstated
+      // (the editor's own entry draws its breaks): clipped as ever.
+      if (cellWrapTextSetting(cell) !== false || cellHorizontalSpreadCss(cell.style) !== null
+        || cellVerticalSpreadJustifyContent(cell.style) || cellHorizontalFill(cell.style)) continue;
+      if (activePivotOutputCells?.has(key) || shouldShowFormulaText(cell.value, sheetShowsFormulas)) continue;
+      const shown = cellDisplayValue(cell, row, col, false);
+      const style = pageLayoutCellStyle(row, col) ?? {};
+      // Left only, as the API's (an aligned text's own clip is not probed).
+      if (style.textAlign !== undefined && style.textAlign !== "left" && style.textAlign !== "start") continue;
+      const family = typeof style.fontFamily === "string" ? style.fontFamily : nativeCellFont?.family;
+      if (!excelPrintsTextUnclipped(family, shown, false)) continue;
+      const line = cellTextOnOneLine(cellLineShown(shown, false), false);
+      // The width it is painted at (a designed line's design widths), not
+      // the screen's hinted one, as a spilled run's (pageLayoutTextSpill).
+      const drawn = nativeGrid ? spreadsheetNativeTextWidthPx(line, style, nativeGrid.dpi, "paint") : undefined;
+      const textWidthPx = drawn !== undefined && Number.isFinite(drawn)
+        ? drawn : spillTextWidthPx(line, cell.style, workbookFontAssets.aliases, style);
+      found ??= new Map();
+      const entries = found.get(row) ?? [];
+      // Rich text prints unclipped on its own page only (the API's
+      // draw_spill_from_left carries no runs on).
+      entries.push(normalizeCellRuns(cell.runs, cell.value)?.length ? { col, textWidthPx, rich: true } : { col, textWidthPx });
+      found.set(row, entries);
+    }
+    return found;
   };
   // Angled cells outside the live grid (Page Layout, the inactive split
   // panes) are drawn as the grid draws them (lib/spreadsheet/angled-cell):
@@ -66673,11 +67607,53 @@ function SpreadsheetWindow({
   // Text that runs on past the last used column prints with the columns it
   // runs over: Excel's print range reaches them (P12, and a probe: a long
   // word in C3 of A1:C5 printed through column I on two pages).
+  // A column wider than the page prints at the page's width, and its text
+  // runs on out of that cut like a spill (lookwin p61-lw, the API's
+  // clamp_col_point): the columns it reaches are counted from the cut.
+  const pageLayoutWideLimitPx = pageLayoutWideColumnLimitPx(pageLayoutDataAreaWidth(sheet.printSettings),
+    normalizePrintSettings(sheet.printSettings)?.scaling, nativeGrid?.printScale);
+  const printedColumnWidthPx = (col: number) => Math.min(intrinsicColWidth(col), pageLayoutWideLimitPx);
+  // The last column a cell's text spilling right reaches, or null.
+  const pageLayoutSpillReach = (row: number, col: number, shown?: string): number | null => {
+    const cell = sheet.cells[`${row}:${col}`];
+    if (!cell || typeof cell.value !== "string" || cell.value === "" || cell.style?.wrapText) return null;
+    const text = shown ?? cellTextOnOneLine(cellLineShown(cellDisplayValue(cell, row, col, false), cellWrapTextSetting(cell)), cellWrapTextSetting(cell));
+    const spill = pageLayoutTextSpill(row, col, intrinsicColWidth(col), 1, true);
+    if (!spill || spill.endCol <= col) return null;
+    // The run's free columns reach to the next occupied cell; the text
+    // covers only as many of them as its width needs.
+    // The run covers the width it is drawn at: an imported workbook's text
+    // at its native advances (what the page draws), with the cell's two
+    // paddings. AutoFit's Excel-for-Mac reading of the width, and the
+    // browser's plain reading, both ran a column long (P12 printed an
+    // empty F after E).
+    const effective = pageLayoutCellStyle(row, col) ?? {};
+    // Printed, at the width the text prints at over the columns' printed
+    // widths, as Excel (and the API's writer) judge it: the printer's
+    // advances, in column pixels by the printer's column scale (Arial 10's
+    // columns print 5.1 % wider than its screen pixels, Calibri 11's 7.4 %,
+    // while the screen's hinted text runs 1-2 % narrow).
+    const printing = embeddedWorkbook?.presentation === "print";
+    const drawnPx = nativeGrid ? spreadsheetNativeTextWidthPx(text, effective, nativeGrid.dpi, printing ? "paint" : "measure") : undefined;
+    const columnScale = printing ? nativeGrid?.printScale?.x : undefined;
+    const drawn = drawnPx !== undefined && columnScale !== undefined && columnScale > 0 ? drawnPx / columnScale : drawnPx;
+    const width = drawn !== undefined
+      ? drawn + 2 * displayCellPadding
+      : spillTextWidthPx(text, cell.style, workbookFontAssets.aliases, effective) + 2 * CELL_BASE_PADDING_X_PX;
+    const centred = spill.startCol < col && spill.endCol > col;
+    let need = centred ? (width - printedColumnWidthPx(col)) / 2 : width - printedColumnWidthPx(col);
+    let reach = col;
+    while (need > 0 && reach < spill.endCol) {
+      reach += 1;
+      need -= intrinsicColWidth(reach);
+    }
+    return reach;
+  };
   const printedColumnsWithSpill = (extent: { rows: number; cols: number }): number => {
     // The room from each column to the last printed one: only a text that
     // could run past it is measured.
     const room = new Float64Array(extent.cols + 1);
-    for (let c = extent.cols - 1; c >= 0; c -= 1) room[c] = room[c + 1] + intrinsicColWidth(c);
+    for (let c = extent.cols - 1; c >= 0; c -= 1) room[c] = room[c + 1] + printedColumnWidthPx(c);
     let cols = extent.cols;
     for (const key in sheet.cells) {
       const cell = sheet.cells[key];
@@ -66685,34 +67661,62 @@ function SpreadsheetWindow({
       if (typeof value !== "string" || value === "" || cell.style?.wrapText) continue;
       const separator = key.indexOf(":");
       const col = Number(key.slice(separator + 1));
-      if (!(col < extent.cols) || estimateTextWidthPx(value, 24) < room[col]) continue;
       const row = Number(key.slice(0, separator));
-      if (!(row < extent.rows)) continue;
-      const spill = pageLayoutTextSpill(row, col, intrinsicColWidth(col), 1, true);
-      if (!spill || spill.endCol + 1 <= cols) continue;
-      // The run's free columns reach to the next occupied cell; the text
-      // covers only as many of them as its width needs.
-      const text = cellDisplayValue(cell, row, col, false);
-      // The run covers the width it is drawn at: an imported workbook's text
-      // at its native advances (what the page draws), with the cell's two
-      // paddings. AutoFit's Excel-for-Mac reading of the width, and the
-      // browser's plain reading, both ran a column long (P12 printed an
-      // empty F after E).
-      const effective = pageLayoutCellStyle(row, col) ?? {};
-      const drawn = nativeGrid ? spreadsheetNativeTextWidthPx(text, effective, nativeGrid.dpi) : undefined;
-      const width = drawn !== undefined
-        ? drawn + 2 * displayCellPadding
-        : spillTextWidthPx(text, cell.style, workbookFontAssets.aliases, effective) + 2 * CELL_BASE_PADDING_X_PX;
-      const centred = spill.startCol < col && spill.endCol > col;
-      let need = centred ? (width - intrinsicColWidth(col)) / 2 : width - intrinsicColWidth(col);
-      let reach = col;
-      while (need > 0 && reach < spill.endCol) {
-        reach += 1;
-        need -= intrinsicColWidth(reach);
-      }
-      if (reach + 1 > cols) cols = Math.min(MAX_GRID_COLUMNS, reach + 1);
+      if (!(col < extent.cols) || !(row < extent.rows)) continue;
+      // What the cell shows, not its formula's text (a TEXTJOIN's result runs
+      // far longer than "=TEXTJOIN(...)"), on one line where Wrap Text is off.
+      const text = cellTextOnOneLine(cellLineShown(cellDisplayValue(cell, row, col, false), cellWrapTextSetting(cell)), cellWrapTextSetting(cell));
+      if (estimateTextWidthPx(text, 24) < room[col]) continue;
+      const reach = pageLayoutSpillReach(row, col, text);
+      if (reach !== null && reach + 1 > cols) cols = Math.min(MAX_GRID_COLUMNS, reach + 1);
     }
     return cols;
+  };
+  // Whether a page of the print holds anything, by worksheet rows and
+  // columns (pageLayoutPrintedPageCount: the trailing pages that hold nothing
+  // do not print, as Excel's and the API's print). Anything: a value, an own
+  // fill or border (not the row's or column's format painted onto blanks), a
+  // merge, a value in its print titles, a drawing over it, a row's `spans`
+  // reaching into a page painting its row's or column's format
+  // (pageLayoutSpansKeepPage), or a spill reaching into it, drawn or not. A
+  // page past the cells' extent prints for a drawing or a spill on it, not
+  // for being there: R305-X04's L:M band, there for one spill on the first
+  // page, printed five more blank pages (Excel and the API print 7, not 12).
+  const pageLayoutPagePrints = (
+    rows: readonly number[], cols: readonly number[], titleRows: readonly number[], titleCols: readonly number[],
+  ): boolean => {
+    if (!printedExtent || !rows.length || !cols.length) return true;
+    const keys = printedExtent.keys;
+    for (const row of rows) for (const col of cols) if (keys[`${row}:${col}`]) return true;
+    for (const row of titleRows) for (const col of cols) if (keys[`${row}:${col}`]) return true;
+    for (const row of rows) for (const col of titleCols) if (keys[`${row}:${col}`]) return true;
+    const rowLow = Math.min(...rows), rowHigh = Math.max(...rows);
+    const colLow = Math.min(...cols), colHigh = Math.max(...cols);
+    if (mergeSpans.some((merge) => merge.row <= rowHigh && merge.row + merge.rowSpan - 1 >= rowLow
+      && merge.col <= colHigh && merge.col + merge.colSpan - 1 >= colLow)) return true;
+    if (pageLayoutSpansKeepPage((sheet as { rowSpans?: unknown }).rowSpans, [rowLow, rowHigh], [colLow, colHigh],
+      () => rows.some((row) => cols.some((col) => {
+        const cell = sheet.cells[`${row}:${col}`];
+        return cell !== undefined && printedCellWidensRange(cell as { value?: unknown; formula?: unknown; style?: Record<string, unknown> });
+      })))) return true;
+    // Drawings, in the page's worksheet pixels.
+    const edge = (count: number, size: (index: number) => number) => {
+      let offset = 0;
+      for (let index = 0; index < count; index += 1) offset += size(index);
+      return offset;
+    };
+    const left = edge(colLow, intrinsicColWidth), right = left + edge(colHigh + 1, intrinsicColWidth) - edge(colLow, intrinsicColWidth);
+    const top = edge(rowLow, intrinsicRowHeight), bottom = top + edge(rowHigh + 1, intrinsicRowHeight) - edge(rowLow, intrinsicRowHeight);
+    if (pageLayoutDrawingBounds.some(([x, y, width, height]) => x < right && x + width > left && y < bottom && y + height > top)) return true;
+    // A spill from the left reaching the page.
+    for (const row of rows) {
+      let source = colLow - 1;
+      while (source >= 0 && !spillTargetOccupied(sheet.cells, EMPTY_CELL_KEYS, row, source)) source -= 1;
+      if (source < 0) continue;
+      const reach = pageLayoutSpillReach(row, source);
+      if (reach !== null && reach >= colLow) return true;
+    }
+    return false;
   };
   const pageLayoutCellContent = (
     row: number,
@@ -66736,26 +67740,40 @@ function SpreadsheetWindow({
     });
     const formatted = showFormula ? formulaToDisplay(cell!.value,row,col) : pivot
       ? typeof pivot.value === "number" && pivot.valueIndex !== undefined ? formatPivotCell(pivot.value,pivot.valueIndex,true) : String(pivot.value ?? "")
-      : printedErrorText(row, col) ?? cellTextOnOneLine(cellDisplayValue(cell,row,col,false,cond.style.numberFormat), cellWrapTextSetting(cell));
+      : printedErrorText(row, col) ?? cellTextOnOneLine(cellLineShown(cellDisplayValue(cell,row,col,false,cond.style.numberFormat), cellWrapTextSetting(cell)), cellWrapTextSetting(cell));
     // A number never runs over its neighbours, on the page as on the grid:
     // General rounds or goes scientific to fit its column, any other format
     // shows # (a date in a narrow column printed "2026年1月23" where Excel
     // prints "#########", P11/P22). Shrink to Fit scales it instead.
+    // The cell's width on the grid: a merge's anchor spans its columns.
+    const spanned = (() => {
+      const span = mergeSpans.find((merge) => merge.row === row && merge.col === col);
+      let width = 0;
+      for (let c = col; c < col + (span?.colSpan ?? 1); c += 1) {
+        width += groupHiddenCols.has(c) || manualHiddenCols.has(c) ? 0 : intrinsicColWidth(c);
+      }
+      return width;
+    })();
     const fittedNumber = (() => {
       if (showFormula || pivot || formatted === "" || cell?.style?.shrinkToFit || printedErrorText(row, col) !== null) return null;
       const value = cellSortNumericValue(cell, row, col);
       if (value === null) return null;
-      const span = mergeSpans.find((merge) => merge.row === row && merge.col === col);
-      let spanned = 0;
-      for (let c = col; c < col + (span?.colSpan ?? 1); c += 1) {
-        spanned += groupHiddenCols.has(c) || manualHiddenCols.has(c) ? 0 : intrinsicColWidth(c);
-      }
       const numFmt = typeof cond.style.numberFormat === "string" && cond.style.numberFormat.trim()
         ? cond.style.numberFormat.trim() : typeof cell?.style?.numberFormat === "string" ? cell.style.numberFormat.trim() : "";
+      // Printed, a number fits on paper, as Excel and the API's writer fit
+      // it: drawn at the printer's advances in the column as wide as it
+      // prints (the Normal font's printer column scale). R6-X22's 1,880,863
+      // in ＭＳ ゴシック 9 (60 px drawn) prints in its 69 px column; read in
+      // the browser's fallback face it showed #########.
+      const printing = embeddedWorkbook?.presentation === "print" && nativeGrid !== null && nativeGrid !== undefined;
+      const printedColumnScale = printing ? nativeGrid?.printScale?.x : undefined;
+      const room = printedColumnScale !== undefined && printedColumnScale > 0 ? spanned * printedColumnScale : spanned;
+      const effective = pageLayoutCellStyle(row, col);
       return fittedCellNumberText(value, formatted,
         normalizeNumberFormatCode(numFmt) === "" && Number.isFinite(Number(formatted)),
-        Math.max(0, spanned - numberFitMarginPx - conditionalIconTextAllowancePx(cond.icon, displayCellPadding)),
-        cell?.style, workbookFontAssets.aliases, pageLayoutCellStyle(row, col), nativeGrid?.digitWidth);
+        Math.max(0, room - numberFitMarginPx - conditionalIconTextAllowancePx(cond.icon, displayCellPadding)),
+        cell?.style, workbookFontAssets.aliases, effective, nativeGrid?.digitWidth,
+        printing && nativeGrid ? (text) => spreadsheetNativeTextWidthPx(text, effective ?? {}, nativeGrid.dpi, "paint") : undefined);
     })();
     // Drawn with the viewer's decimal and thousands separators, as the grid
     // draws it; the fit reads the code's own text.
@@ -66764,7 +67782,14 @@ function SpreadsheetWindow({
       : fittedNumber ?? formatted;
     // A refitted number (1.23E+11, ####) is drawn as plain text.
     const numberLayout = !showFormula && (fittedNumber === null || fittedNumber === formatted) ? cellNumberFormatLayout(row, col) : undefined;
-    const wrap = !showFormula && (cell?.style?.wrapText || (cellWrapTextSetting(cell) !== false && display.includes("\n")));
+    // Vertical Justify and Distributed wrap the text and spread its lines over
+    // the cell, as Excel prints them (lookwin probe p22).
+    const pageSpread = showFormula ? null : cellVerticalSpreadJustifyContent(cell?.style);
+    // Horizontal Justify and Distributed wrap too (cellTextWraps), as the grid
+    // and the API's print lay them out; Distributed spreads each line across
+    // the cell, its indent at both sides (distributedLineUnits).
+    const pageDistributed = !showFormula && !pivot && cell?.style?.horizontalJustify === "distributed";
+    const wrap = !showFormula && (cell?.style?.wrapText || Boolean(pageSpread) || cellTextWraps(cell?.style) || (cellWrapTextSetting(cell) !== false && display.includes("\n")));
     const align = effectiveVerticalAlign(cell?.style);
     const alignmentBox = nativeGrid && nativeTextWidth !== undefined
       ? { width: nativeTextWidth + 5 * 96 / nativeGrid.dpi, textLeft: 3 * 96 / nativeGrid.dpi, textRight: 2 * 96 / nativeGrid.dpi, wrapText: Boolean(cell?.style?.wrapText) }
@@ -66772,9 +67797,23 @@ function SpreadsheetWindow({
     // The same text layout as Normal view, scaled to the page: the
     // cell's indent and its Shrink to Fit size travel with it (live
     // audit B208), where Page Layout drew both as if unset.
-    const indentPx = indentPaddingPx(cell?.style?.indent) * fontScale;
+    // Printed, an imported grid's indent is Excel's printed step at every
+    // page scale (officePrintedIndentStepPx; lookwin p105-lw): R13-X27's
+    // indent 2 prints 16.6 pt in on a page fitted to 58 %, where scaling it
+    // with the page set it 10 pt in.
+    const printedIndentStep = embeddedWorkbook?.presentation === "print" && nativeGrid?.dpi === 96 && cell?.style?.indent
+      ? officePrintedIndentStepPx(nativeGrid.rowFont.family, nativeGrid.rowFont.sizePt) : undefined;
+    const indentPx = printedIndentStep !== undefined
+      ? indentPaddingPx(cell?.style?.indent, printedIndentStep)
+      : indentPaddingPx(cell?.style?.indent, indentStepPx) * fontScale;
+    // Distributed lays its lines out between the indents on both sides.
+    const pageLineWidth = pageDistributed && nativeTextWidth !== undefined
+      ? Math.max(1, nativeTextWidth - 2 * indentPaddingPx(cell?.style?.indent, indentStepPx)) : nativeTextWidth;
     const shrunkPx = !showFormula && !wrap && !runs?.length
-      ? shrinkToFitFontSizePx(cell?.style, display, intrinsicColWidth(col), workbookFontAssets.aliases, pageLayoutCellStyle(row, col), nativeGrid ? displayCellPadding : 4)
+      // Fitted to the whole merge (R112-X03: a merged label shrank to its
+      // first column's width), at the width the page prints it: the text
+      // keeps its point size while the printer widens the columns.
+      ? shrinkToFitFontSizePx(cell?.style, display, spanned * (nativeGrid?.printScale?.x ?? 1), workbookFontAssets.aliases, pageLayoutCellStyle(row, col), nativeGrid ? displayCellPadding : 4)
       : undefined;
     const pageCellFontFamily = pageLayoutCellStyle(row, col)?.fontFamily;
     const phoneticGuide = cellPhoneticGuideLayout(cell, typeof pageCellFontFamily === "string" ? pageCellFontFamily : undefined);
@@ -66796,11 +67835,11 @@ function SpreadsheetWindow({
       ? horizontalFillText(
           display,
           spillTextWidthPx(display, cell?.style, workbookFontAssets.aliases, pageStyle),
-          intrinsicColWidth(col) - 2 * (nativeGrid ? displayCellPadding : 4) - indentPaddingPx(cell?.style?.indent),
+          intrinsicColWidth(col) - 2 * (nativeGrid ? displayCellPadding : 4) - indentPaddingPx(cell?.style?.indent, indentStepPx),
         )
       : display;
     const scriptedStyle = script ? { ...pageStyle, fontSize: scriptBaselineCss(script, pageStyle.fontSize).fontSize } : pageStyle;
-    const raised = (node: ReactNode) => script ? <span style={{ verticalAlign: scriptBaselineCss(script).verticalAlign }}>{node}</span> : node;
+    const raised = (node: ReactNode) => script ? <span style={{ verticalAlign: scriptBaselineCss(script, pageStyle.fontSize).verticalAlign }}>{node}</span> : node;
     const textParts = (parts: Array<{ text: string; style?: CSSProperties }>) => partsWithCellScript(parts, script);
     // A wrapped line's underline stops at its last character, as the grid's
     // (and Excel's) does: the space a line breaks at is not drawn.
@@ -66812,7 +67851,12 @@ function SpreadsheetWindow({
     const pageAngle = frame && !showFormula && !pivot && !wrap && !numberLayout && !cellHorizontalFill(effectStyle)
       ? spreadsheetAngledCellAngle(cell?.style) : null;
     const pageBandAngle = pageAngle !== null ? pageBandAngleAt(row, col) : null;
-    const pageQuarterTurn = pageAngle === null && !showFormula && !pivot && !wrap && !numberLayout && cellTextIsOriented(cell?.style);
+    // Wrapped, a quarter turn breaks its line at the cell's height into
+    // columns across its width (textOrientationCss; the API's wrap_turned,
+    // R259-X01): R5-X05's merged "Species and number of animals killed by
+    // each stunning method" printed flat, wrapped across its 69 px.
+    const pageQuarterTurn = pageAngle === null && !showFormula && !pivot && !numberLayout && cellTextIsOriented(cell?.style);
+    const pageTurnedWrap = pageQuarterTurn && Boolean(wrap);
     const pageBand = pageBandAngle !== null && frame ? spreadsheetAngledCellBand(pageBandAngle, frame.width, frame.height) : null;
     const pageAngledCss = pageAngle !== null && frame
       ? angledTextLayerCss(angledCellTextBox({
@@ -66838,6 +67882,69 @@ function SpreadsheetWindow({
     // the box carries a direction, an accounting rule or a turn.
     const pageParagraphAlone = Boolean(nativeGrid) && !numberLayout && hasNativeTextLayout(row, col, display) &&
       !textDir && !accounting && !pageQuarterTurn && !pageAngledCss;
+    // A Windows grid's one unwrapped line stands its baseline where Excel's
+    // does, by the faces' automatic line (office-row-parts) at the printer's
+    // row scale, as the API's writer stands it (lookwin p53-lw): its ascent
+    // below the top, a centred line's box in the middle, or its descent (the
+    // deeper of its own and the Normal font's) and a pixel above the bottom
+    // -- no padding. Stood by the browser's line box and a 2 px padding, a
+    // bottom-aligned line printed 1.6 pt high (R305-X04 at 100 %, R13-X27).
+    // The row's baseline: the deepest descent of its bottom-aligned cells'
+    // faces, a value's or an empty cell's, in any column (lookwin p106-lw:
+    // Arial 10 beside a Calibri 20 "x", or an empty Calibri 11 cell, stands
+    // on theirs; a top-aligned one moves nothing; R214-X27). The API's
+    // writer is the same (office_row_descent).
+    const pageLayoutRowDescent = (): number => {
+      const cache = rowDescentCache.current;
+      if (cache.cells !== sheet.cells) {
+        cache.cells = sheet.cells;
+        cache.byRow = undefined;
+        cache.descent = new Map();
+      }
+      const known = cache.descent.get(row);
+      if (known !== undefined) return known;
+      if (!cache.byRow) {
+        const byRow = new Map<number, number[]>();
+        for (const key in sheet.cells) {
+          const separator = key.indexOf(":");
+          const keyRow = Number(key.slice(0, separator));
+          const keyCol = Number(key.slice(separator + 1));
+          if (!Number.isInteger(keyRow) || !Number.isInteger(keyCol)) continue;
+          const list = byRow.get(keyRow);
+          if (list) list.push(keyCol);
+          else byRow.set(keyRow, [keyCol]);
+        }
+        cache.byRow = byRow;
+      }
+      let deepest = 0;
+      for (const other of cache.byRow.get(row) ?? []) {
+        const otherStyle = sheet.cells[`${row}:${other}`]?.style;
+        if (otherStyle?.verticalAlign === "top" || otherStyle?.verticalAlign === "middle" || otherStyle?.verticalJustify
+          || cellTextIsOriented(otherStyle)) continue;
+        const drawn = pageLayoutCellStyle(row, other) ?? {};
+        const face = typeof drawn.fontFamily === "string" ? drawn.fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim() : "";
+        const px = typeof drawn.fontSize === "number" ? drawn.fontSize : Number.NaN;
+        if (!face || !(px > 0)) continue;
+        const parts = officeCombinedRowParts([{ family: face, sizePt: px * 0.75, bold: drawn.fontWeight === "bold" || Number(drawn.fontWeight) >= 600 }]);
+        if (parts && parts.descent > deepest) deepest = parts.descent;
+      }
+      cache.descent.set(row, deepest);
+      return deepest;
+    };
+    const officeBaseline = (() => {
+      if (!(pageParagraphAlone || (numberLayout && !textDir && !accounting && !pageQuarterTurn && !pageAngledCss)) || !nativeGrid || nativeGrid.dpi !== 96 || wrap || !frame || !(frame.height > 0) || pageSpread || script || phoneticGuide) return undefined;
+      const family = typeof pageStyle.fontFamily === "string" ? pageStyle.fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim() : "";
+      const sizePx = typeof pageStyle.fontSize === "number" ? pageStyle.fontSize : Number.NaN;
+      if (!family || !(sizePx > 0)) return undefined;
+      const bold = pageStyle.fontWeight === "bold" || Number(pageStyle.fontWeight) >= 600;
+      const own = officeCombinedRowParts([{ family, sizePt: sizePx * 0.75, bold }]);
+      if (!own) return undefined;
+      const unit = fontScale * (nativeGrid.printScale?.y ?? 1);
+      if (align === "top") return own.ascent * unit;
+      if (align === "middle") return (frame.height - (own.ascent + own.descent + 1) * unit) / 2 + own.ascent * unit;
+      const normal = officeCombinedRowParts([nativeGrid.rowFont]);
+      return frame.height - (Math.max(own.descent, normal?.descent ?? 0, pageLayoutRowDescent()) + 1) * unit;
+    })();
     return <>
       {pageBand && frame ? <SpreadsheetAngledBand band={pageBand} width={frame.width} edges={pageAngledEdges(row, col)} testId="spreadsheet-page-layout-angled-cell"/> : null}
       {cond.dataBar ?<span className="spreadsheet-window__data-bar" data-testid="spreadsheet-page-layout-data-bar" aria-hidden style={dataBarPaintCss(cond.dataBar)}/> : null}
@@ -66847,7 +67954,11 @@ function SpreadsheetWindow({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {picture ? <span aria-hidden data-testid="spreadsheet-page-layout-cell-picture" style={{position:"absolute",inset:fontScale,pointerEvents:"none",overflow:"hidden"}}><img src={pictureObjectDisplaySrc(picture.src)} alt="" draggable={false} style={cellPictureImageStyle(picture, cell?.style, fontScale)}/></span> : null}
       {!picture && (showFormula || !isCheckboxCell(cell?.style)) ? <span data-testid={pivot ? "spreadsheet-page-layout-pivot-value" : "spreadsheet-page-layout-cell-text"} aria-hidden
-        style={{position:"absolute",inset:0,display:"flex",alignItems:align==="top"?"flex-start":align==="middle"?"center":"flex-end",padding:`${2*fontScale}px ${(nativeGrid ? displayCellPadding : 4)*fontScale}px`,...(indentPx > 0 ? {paddingLeft:(nativeGrid ? displayCellPadding : 4)*fontScale + indentPx} : {}),...(shrunkPx !== undefined ? {fontSize:shrunkPx*fontScale} : {}),whiteSpace:wrap?pageUnhungSpaces?"pre-line":"pre-wrap":"pre",overflow:"hidden",pointerEvents:"none",
+        style={{position:"absolute",inset:0,display:"flex",
+          // Wrapped lines taller than the row print their first lines, cut
+          // below, at any vertical alignment (lookwin probe p22; the grid's
+          // safe centre / end, X-061, X-261).
+          alignItems:officeBaseline !== undefined ? "flex-start" : pageSpread ? "stretch" : align==="top"?"flex-start":align==="middle"?(wrap ? cellWrappedMiddleJustifyContent() : "center"):(wrap ? cellWrappedBottomJustifyContent() : "flex-end"),padding:`${officeBaseline !== undefined ? 0 : 2*fontScale}px ${(nativeGrid ? displayCellPadding : 4)*fontScale}px`,...(indentPx > 0 ? {paddingLeft:(nativeGrid ? displayCellPadding : 4)*fontScale + indentPx} : {}),...(shrunkPx !== undefined ? {fontSize:shrunkPx*fontScale} : {}),whiteSpace:wrap?pageUnhungSpaces?"pre-line":"pre-wrap":"pre",overflow:"hidden",pointerEvents:"none",
           // The cell's own lines over its text (the grid's display layer);
           // runs carry their own.
           ...(!runs?.length && !pivot ? {textDecorationLine:accounting ? withoutUnderlineDecoration(pageStyle.textDecorationLine) : pageStyle.textDecorationLine,textDecorationStyle:accounting ? undefined : pageStyle.textDecorationStyle,textDecorationThickness:accounting ? undefined : pageStyle.textDecorationThickness} : {}),
@@ -66856,15 +67967,26 @@ function SpreadsheetWindow({
           ...(pageQuarterTurn ? {alignItems:rotatedTextVerticalAnchor(cell?.style) ?? (align==="top"?"flex-start":align==="middle"?"center":"flex-end"),justifyContent:rotatedTextGeneralJustify(cell?.style) ?? (pageStyle.textAlign==="center"?"center":pageStyle.textAlign==="right"?"flex-end":"flex-start")} : {}),
           ...(pageAngledCss?.layer ?? {})}}>
         {pageParagraphAlone && nativeGrid ? <SpreadsheetNativeParagraph parts={pageParagraphParts()} style={pageStyle} dpi={nativeGrid.dpi} scale={fontScale} wrap={Boolean(wrap)}
-          layoutWidth={nativeTextWidth} alignmentBox={alignmentBox} boxStyle={wrap ? {overflowWrap:"anywhere"} : undefined} drawSingleRun/> :
+          layoutWidth={pageLineWidth} alignmentBox={alignmentBox} boxStyle={wrap ? {overflowWrap:"anywhere"} : undefined} drawSingleRun
+          spread={pageSpread ?? undefined} distributed={pageDistributed} officeBaseline={officeBaseline}/> :
         <span dir={textDir} style={{width:"100%",minWidth:0,lineHeight:"normal",overflowWrap:wrap?"anywhere":undefined,
+          // Without a native paragraph, the grid's CSS spreading.
+          ...(pageDistributed && !(nativeGrid && hasNativeTextLayout(row,col,display)) ? cellHorizontalSpreadCss(cell?.style, display) ?? {} : {}),
+          // A formatted number stood at Excel's baseline (officeBaseline):
+          // the browser's own for its font at its normal line height.
+          ...(numberLayout && officeBaseline !== undefined ? (() => {
+            const font = nativeParagraphFontStyle(scriptedStyle, fontScale, display, nativeGrid?.dpi);
+            const size = typeof font.fontSize === "number" ? font.fontSize : Number.NaN;
+            const strut = nativeStrutBaselinePx(font, "normal", nativeTypographyGeneration()) ?? (size > 0 ? 0.915 * size : undefined);
+            return strut !== undefined ? { marginTop: officeBaseline - strut, flex: "none" } : {};
+          })() : {}),
           // The direction reorders the text; where it sits stays the cell's.
           ...(textDir ? {textAlign:pageStyle.textAlign ?? "left"} : {}),
           ...(accounting ? accountingUnderlineBlockCss(accounting, textPadPx + indentPx, textPadPx) : {}),
           ...(pageQuarterTurn ? {width:"auto",...textOrientationCss(cell?.style)} : {}),
-          ...(pageAngledCss?.text ?? {})}}>{numberLayout ? raised(<SpreadsheetFormattedText parts={numberLayout} style={scriptedStyle} dpi={nativeGrid?.dpi} scale={fontScale} wrap={Boolean(wrap)} layoutWidth={nativeTextWidth} alignmentBox={alignmentBox}/>) : nativeGrid&&hasNativeTextLayout(row,col,display)?<SpreadsheetNativeParagraph
+          ...(pageAngledCss?.text ?? {})}}>{pageTurnedWrap ? pagePlainText : numberLayout ? raised(<SpreadsheetFormattedText parts={numberLayout} style={scriptedStyle} dpi={nativeGrid?.dpi} scale={fontScale} wrap={Boolean(wrap)} layoutWidth={nativeTextWidth} alignmentBox={alignmentBox}/>) : nativeGrid&&hasNativeTextLayout(row,col,display)?<SpreadsheetNativeParagraph
           parts={pageParagraphParts()}
-          style={pageStyle} dpi={nativeGrid.dpi} scale={fontScale} wrap={Boolean(wrap)} layoutWidth={nativeTextWidth} alignmentBox={alignmentBox}/>:runs?.length ? nativeGrid ? <SpreadsheetNativeTextParts parts={textParts(runs.map(run=>({text:run.text,style:fontRunStyle(run.style)})))} style={pageStyle} dpi={nativeGrid.dpi} scale={fontScale}/> : textParts(runs.map(run=>({text:run.text,style:fontRunStyle(run.style)}))).map((part,index)=>{
+          style={pageStyle} dpi={nativeGrid.dpi} scale={fontScale} wrap={Boolean(wrap)} layoutWidth={pageLineWidth} alignmentBox={alignmentBox} distributed={pageDistributed}/>:runs?.length ? nativeGrid ? <SpreadsheetNativeTextParts parts={textParts(runs.map(run=>({text:run.text,style:fontRunStyle(run.style)})))} style={pageStyle} dpi={nativeGrid.dpi} scale={fontScale}/> : textParts(runs.map(run=>({text:run.text,style:fontRunStyle(run.style)}))).map((part,index)=>{
           const style=part.style ?? {};
           return <span key={index} style={{...style,...(typeof style.fontSize==="number"?{fontSize:style.fontSize*fontScale}:{})}}>{part.text}</span>;
         }) : nativeGrid ? raised(<SpreadsheetNativeText text={shownText} style={scriptedStyle} dpi={nativeGrid.dpi} scale={fontScale}/>) : script ? <span style={scriptBaselineCss(script)}>{pagePlainText}</span> : pagePlainText}</span>}
@@ -67686,9 +68808,12 @@ function SpreadsheetWindow({
       if (cancelled) return;
       const [keepFirst, keepLast] = tiledKeepRows(sheetId, first, last);
       applyTiledModelRef.current((previous) => tiled.evict(tiled.apply(previous), sheetId, keepFirst, keepLast));
-      if (tiledWholeAnnounceRef.current === sheetId && tiled.isWhollyResident(sheetId)) {
+      const announce = tiledWholeAnnounceRef.current;
+      if (announce?.sheetId === sheetId && tiled.isWhollyResident(sheetId)) {
         tiledWholeAnnounceRef.current = null;
-        toast({ title: t("spreadsheet.tiledWorkbook.wholeSheetReady") });
+        toast({
+          title: t(announce.purpose === "pivot" ? "spreadsheet.tiledWorkbook.wholeSheetReadyPivot" : "spreadsheet.tiledWorkbook.wholeSheetReady"),
+        });
       }
       // A workbook small enough is read whole, the other sheets after the
       // one shown: every command then sees all of it.
@@ -68990,7 +70115,7 @@ function SpreadsheetWindow({
           <ul data-testid="spreadsheet-recovered-copies" className={windowNoticeStyles.list}>
             {keptWorkbookDifferences.map(({ copy, differences }) => (
               <li key={copy.savedAt} data-testid="spreadsheet-recovered-copy" className={windowNoticeStyles.issue}>
-                <p>{t("pages.recoveredCopy.savedAt", { time: new Date(copy.savedAt).toLocaleString() })}</p>
+                <p>{t("pages.recoveredCopy.savedAt", { time: new Date(copy.savedAt).toLocaleString(pageInterfaceLocale()) })}</p>
                 {differences.length > 0 ? (
                   <ul data-testid="spreadsheet-recovered-copy-cells">
                     {differences.slice(0, KEPT_COPY_CELLS_SHOWN).map((difference) => (
@@ -69163,19 +70288,19 @@ function SpreadsheetWindow({
             },
             bringToFront: {
               onSelect: () => void executeShapeFormatMutation(shapeArrangeControlIdByMove.front, "front"),
-              disabled: selectedObjectStackIndex < 0 || selectedObjectStackIndex === drawingStack.length - 1,
+              disabled: selectedObjectArrangeDisabled,
             },
             bringForward: {
               onSelect: () => void executeShapeFormatMutation(shapeArrangeControlIdByMove.forward, "forward"),
-              disabled: selectedObjectStackIndex < 0 || selectedObjectStackIndex === drawingStack.length - 1,
+              disabled: selectedObjectArrangeDisabled,
             },
             sendToBack: {
               onSelect: () => void executeShapeFormatMutation(shapeArrangeControlIdByMove.back, "back"),
-              disabled: selectedObjectStackIndex <= 0,
+              disabled: selectedObjectArrangeDisabled,
             },
             sendBackward: {
               onSelect: () => void executeShapeFormatMutation(shapeArrangeControlIdByMove.backward, "backward"),
-              disabled: selectedObjectStackIndex <= 0,
+              disabled: selectedObjectArrangeDisabled,
             },
             editAltText: {
               onSelect: () => void openShapeAltTextPane(),
@@ -69256,10 +70381,8 @@ function SpreadsheetWindow({
             const pictureId = (suffix: string) =>
               `spreadsheet-picture-context-${suffix}`;
             const glyph = officeContextMenuIcon;
-            const stackTop =
-              selectedObjectStackIndex < 0 ||
-              selectedObjectStackIndex === drawingStack.length - 1;
-            const stackBottom = selectedObjectStackIndex <= 0;
+            const stackTop = selectedObjectArrangeDisabled;
+            const stackBottom = selectedObjectArrangeDisabled;
             const arrange = (
               key: string,
               label: string,
@@ -71332,6 +72455,116 @@ function SpreadsheetWindow({
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="docs-cupertino-menu__rich-item"
+                      disabled={Boolean(embeddedWorkbook) || serverExporting}
+                      aria-label="XLTX"
+                      onSelect={() => void runServerExport("xltx")}
+                      data-testid="spreadsheet-export-xltx"
+                    >
+                      <RibbonMenuRichRow
+                        fileType="workbook"
+                        hoverScene
+                        title={t("spreadsheet.exportMenu.xltxTitle")}
+                        detail={
+                          embeddedWorkbook
+                            ? t("spreadsheet.exportMenu.parentDocument")
+                            : serverExporting
+                              ? t("spreadsheet.exportMenu.exporting")
+                              : t("spreadsheet.exportMenu.xltxDetail")
+                        }
+                        blocked={Boolean(embeddedWorkbook)}
+                        badge="XLTX"
+                      />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="docs-cupertino-menu__rich-item"
+                      disabled={Boolean(embeddedWorkbook) || serverExporting}
+                      aria-label="FODS"
+                      onSelect={() => void runServerExport("fods")}
+                      data-testid="spreadsheet-export-fods"
+                    >
+                      <RibbonMenuRichRow
+                        fileType="workbook"
+                        hoverScene
+                        title={t("spreadsheet.exportMenu.fodsTitle")}
+                        detail={
+                          embeddedWorkbook
+                            ? t("spreadsheet.exportMenu.parentDocument")
+                            : serverExporting
+                              ? t("spreadsheet.exportMenu.exporting")
+                              : t("spreadsheet.exportMenu.fodsDetail")
+                        }
+                        blocked={Boolean(embeddedWorkbook)}
+                        badge="FODS"
+                      />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="docs-cupertino-menu__rich-item"
+                      disabled={Boolean(embeddedWorkbook) || serverExporting}
+                      aria-label="XML"
+                      onSelect={() => void runServerExport("excelxml")}
+                      data-testid="spreadsheet-export-excelxml"
+                    >
+                      <RibbonMenuRichRow
+                        fileType="workbook"
+                        hoverScene
+                        title={t("spreadsheet.exportMenu.excelxmlTitle")}
+                        detail={
+                          embeddedWorkbook
+                            ? t("spreadsheet.exportMenu.parentDocument")
+                            : serverExporting
+                              ? t("spreadsheet.exportMenu.exporting")
+                              : t("spreadsheet.exportMenu.excelxmlDetail")
+                        }
+                        blocked={Boolean(embeddedWorkbook)}
+                        badge="XML"
+                      />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="docs-cupertino-menu__rich-item"
+                      disabled={Boolean(embeddedWorkbook) || serverExporting}
+                      aria-label="SYLK"
+                      onSelect={() => void runServerExport("slk")}
+                      data-testid="spreadsheet-export-slk"
+                    >
+                      <RibbonMenuRichRow
+                        fileType="workbook"
+                        hoverScene
+                        title={t("spreadsheet.exportMenu.slkTitle")}
+                        detail={
+                          embeddedWorkbook
+                            ? t("spreadsheet.exportMenu.parentDocument")
+                            : serverExporting
+                              ? t("spreadsheet.exportMenu.exporting")
+                              : t("spreadsheet.exportMenu.slkDetail")
+                        }
+                        blocked={Boolean(embeddedWorkbook)}
+                        badge="SYLK"
+                      />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="docs-cupertino-menu__rich-item"
+                      disabled={Boolean(embeddedWorkbook) || serverExporting}
+                      aria-label="DIF"
+                      onSelect={() => void runServerExport("dif")}
+                      data-testid="spreadsheet-export-dif"
+                    >
+                      <RibbonMenuRichRow
+                        fileType="workbook"
+                        hoverScene
+                        title={t("spreadsheet.exportMenu.difTitle")}
+                        detail={
+                          embeddedWorkbook
+                            ? t("spreadsheet.exportMenu.parentDocument")
+                            : serverExporting
+                              ? t("spreadsheet.exportMenu.exporting")
+                              : t("spreadsheet.exportMenu.difDetail")
+                        }
+                        blocked={Boolean(embeddedWorkbook)}
+                        badge="DIF"
+                      />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="docs-cupertino-menu__rich-item"
                       onSelect={downloadCurrentSheetCsv}
                       aria-label="CSV"
                       data-testid="spreadsheet-export-csv"
@@ -71342,6 +72575,20 @@ function SpreadsheetWindow({
                         title={t("spreadsheet.exportMenu.csvTitle")}
                         detail={t("spreadsheet.exportMenu.csvDetail")}
                         badge="CSV"
+                      />
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="docs-cupertino-menu__rich-item"
+                      onSelect={downloadCurrentSheetUnicodeText}
+                      aria-label="TXT"
+                      data-testid="spreadsheet-export-txt"
+                    >
+                      <RibbonMenuRichRow
+                        fileType="csv"
+                        hoverScene
+                        title={t("spreadsheet.exportMenu.txtTitle")}
+                        detail={t("spreadsheet.exportMenu.txtDetail")}
+                        badge="TXT"
                       />
                     </DropdownMenuItem>
                     <DropdownMenuItem
@@ -71463,6 +72710,10 @@ function SpreadsheetWindow({
                   ? "conflict"
                   : autosave.syncedToServer && autosave.saveStatus === "unsaved"
                     ? "synced"
+                    // Edits held on this device because the workbook's rooms
+                    // cannot take them (lib/collab/room-unreachable).
+                    : autosave.notConnected
+                    ? "offline"
                     : autosave.error && autosave.saveStatus === "unsaved"
                       ? "error"
                       : autosave.saveSlow
@@ -71470,6 +72721,8 @@ function SpreadsheetWindow({
                         : autosave.saveStatus,
                 statusLabel: !autosave.hasConflict && autosave.syncedToServer && autosave.saveStatus === "unsaved"
                   ? t("pages.synced")
+                  : !autosave.hasConflict && autosave.notConnected
+                  ? t("pages.notConnectedKeptOnDevice")
                   : !autosave.hasConflict && !(autosave.error && autosave.saveStatus === "unsaved") && autosave.saveSlow
                     ? t("pages.savingSlow")
                     : t(`pages.${autosave.saveStatus}` as "pages.saving"),
@@ -77003,6 +78256,13 @@ function SpreadsheetWindow({
                         >
                           {t("spreadsheet.formulas.iterativeCalculationMenu")}
                         </DropdownMenuItem>
+                        <DropdownMenuCheckboxItem
+                          checked={viewOptions.precisionAsDisplayed === true}
+                          data-testid="spreadsheet-ribbon-calculation-precision-as-displayed"
+                          onSelect={togglePrecisionAsDisplayed}
+                        >
+                          {t("spreadsheet.formulas.precisionAsDisplayedMenu")}
+                        </DropdownMenuCheckboxItem>
                       </SpreadsheetRibbonMenuAction>
                       <SpreadsheetRibbonAction
                         {...visibleCommandActionProps(
@@ -80490,6 +81750,7 @@ function SpreadsheetWindow({
               chartFormat: selectedChartDesignTarget ? [{ id:"chart-format-shared",label:"",unwrapped:true,
                 content:<SpreadsheetChartFormatRibbon application="spreadsheet" officeProfile testIdPrefix="spreadsheet-chart-format-ribbon"
                   themeColumns={workbookThemeColumns}
+                  accentColors={workbookThemeAccentColors}
                   translate={t}
                   sharedShapeStyleRecipes={spreadsheetNativeShapeStyleRecipes(workbookThemeAccentColors)}
                   shapeRecentStorageKey={SPREADSHEET_SHAPE_RECENT_STORAGE_KEY}
@@ -80610,6 +81871,7 @@ function SpreadsheetWindow({
                   focusArea={chartFormatFocus ?? undefined}
                   elementHit={chartElementHit}
                   onAreaChange={(area) => setOfficeChartSelectedArea(sheetChartSelectionKey, area)}
+                  selectedArea={sheetChartSelectedArea}
                   formatPaneOpen={chartSharedFormatPaneOpen}
                   onFormatPaneOpenChange={setChartSharedFormatPaneOpen}
                   paneOptions={renderSheetChartPaneOptions}
@@ -80617,10 +81879,10 @@ function SpreadsheetWindow({
                   slots={{arrange:<OfficeHomeRibbonGroup ribbon="chartFormat" label={t("spreadsheet.arrangeMenu")} testId="spreadsheet-chart-format-ribbon-arrange-group" className={spreadsheetHomeStyles.chartDesktopArrange}>
                     <OfficeHomeCommandRow>
                       {renderInsertSplitAction({icon:<OfficeSemanticIcon semanticId="object.bringForward" size={24}/>,label:t("spreadsheet.uiCopy.bringForward"),displayLabel:t("spreadsheet.uiCopy.bringForward"),
-                        disabled:Boolean(desktopChartFormatReason),disabledReason:desktopChartFormatReason??undefined,testId:"spreadsheet-chart-arrange-front",onClick:()=>desktopChartArrange("forward"),
+                        disabled:Boolean(desktopChartFormatReason)||!drawingsArrangeable,disabledReason:desktopChartFormatReason??undefined,testId:"spreadsheet-chart-arrange-front",onClick:()=>desktopChartArrange("forward"),
                         children:(["forward","front"] as const).map(move=><DropdownMenuItem key={move} onSelect={()=>desktopChartArrange(move)}>{move==="front"?(t("spreadsheet.uiCopy.bringToFront")):(t("spreadsheet.uiCopy.bringForward"))}</DropdownMenuItem>)})}
                       {renderInsertSplitAction({icon:<OfficeSemanticIcon semanticId="object.sendBackward" size={24}/>,label:t("spreadsheet.uiCopy.sendBackward"),displayLabel:t("spreadsheet.uiCopy.sendBackward"),
-                        disabled:Boolean(desktopChartFormatReason),disabledReason:desktopChartFormatReason??undefined,testId:"spreadsheet-chart-arrange-back",onClick:()=>desktopChartArrange("backward"),
+                        disabled:Boolean(desktopChartFormatReason)||!drawingsArrangeable,disabledReason:desktopChartFormatReason??undefined,testId:"spreadsheet-chart-arrange-back",onClick:()=>desktopChartArrange("backward"),
                         children:(["backward","back"] as const).map(move=><DropdownMenuItem key={move} onSelect={()=>desktopChartArrange(move)}>{move==="back"?(t("spreadsheet.uiCopy.sendToBack")):(t("spreadsheet.uiCopy.sendBackward"))}</DropdownMenuItem>)})}
                       <OfficeHomeCommand variant="large" icon={<OfficeSemanticIcon semanticId="object.selectionPane" size={24}/>} label={t("toolbar.selectionPane")}
                         testId="spreadsheet-chart-selection-pane" onClick={()=>setSelectionPaneOpen(open=>!open)}/>
@@ -82518,6 +83780,15 @@ function SpreadsheetWindow({
                   testId="spreadsheet-pivot-create-source-pick"
                 />
               </span>
+              {pivotCreationDraft.sourceIssue ? (
+                <span
+                  role="alert"
+                  className={dialogParts.error}
+                  data-testid="spreadsheet-pivot-create-source-issue"
+                >
+                  {pivotCreationDraft.sourceIssue}
+                </span>
+              ) : null}
             </label>
             {/* Excel's "Choose where you want the PivotTable to be placed":
               New Worksheet (its default) or Existing Worksheet + Location. */}
@@ -82932,7 +84203,7 @@ function SpreadsheetWindow({
                 </tbody>
               </table>
             </div>
-          ) : (
+          ) : pivotCreationDraft.sourceIssue ? null : (
             <p
               role="alert"
               data-testid="spreadsheet-pivot-create-error"
@@ -85088,10 +86359,13 @@ function SpreadsheetWindow({
             browseBlankPages
             printMode={embeddedWorkbook?.presentation === "print"}
             printPageStart={embeddedWorkbook?.printPageStart}
+            printRoute={embeddedWorkbook?.printRoute}
+            unclippedTexts={pageLayoutUnclippedTexts()}
             backgroundPicture={sheetBackgroundPicture?.src}
             rightToLeft={gridRtl}
             nativeTextDpi={nativeGrid?.dpi}
             nativeDigitWidth={nativeGrid?.digitWidth}
+            printScale={nativeGrid?.printScale}
             printedNotes={printedNotes}
             headingFont={nativeCellFont
               ? { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt }
@@ -85167,6 +86441,11 @@ function SpreadsheetWindow({
             getTextSpill={(row, col, cellWidthPx, fontScale) =>
               pageLayoutTextSpill(row, col, cellWidthPx, fontScale)
             }
+            cellHoldsValue={(row, col) => spillTargetOccupied(sheet.cells, EMPTY_CELL_KEYS, row, col)}
+            printedUsedColumns={printedExtent?.cols}
+            printedStyledColumns={printedExtent ? styledColumnEdge(sheet) : undefined}
+            printedCenterAcrossRunAt={printedCenterAcrossRunAt}
+            pagePrints={printedExtent ? pageLayoutPagePrints : undefined}
             renderCellContent={(row, col, fontScale, nativeTextWidth, frame) =>
               pageLayoutCellContent(row, col, fontScale, nativeTextWidth, false, frame)
             }
@@ -85653,6 +86932,7 @@ function SpreadsheetWindow({
                   hidden={Boolean(fillDrag || selectionMoveDrag)}
                   viewportRef={gridWrapRef}
                   layoutKey={selRect}
+                  frozen={overlayFrozenLines}
                   rtl={gridRtl}
                   headerTop={sheetHidesHeadings ? 0 : toScreenPx(SPREADSHEET_HEADER_HEIGHT_PX)}
                   headerStart={sheetHidesHeadings ? 0 : toScreenPx(SPREADSHEET_HEADER_WIDTH_PX)}
@@ -85685,6 +86965,7 @@ function SpreadsheetWindow({
                     committedEntry={sheet.cells[`${editingCell.row}:${editingCell.col}`]?.value ?? ""}
                     sheetName={sheet.name}
                     layoutKey={renderWindow}
+                    frozen={overlayFrozenLines}
                   />
                 ) : null}
                 </div>
@@ -85703,6 +86984,7 @@ function SpreadsheetWindow({
                     selectedArea={sheetChartSelectedArea}
                     editable={visibleCommandState("XLSCTL.CONTEXT.CHART.SELECT_DATA.MRAI.APPLY").enabled}
                     layoutKey={renderWindow}
+                    frozen={overlayFrozenLines}
                     onCommit={commitChartSourceEdit}
                   />
                 ) : null}
@@ -85813,11 +87095,13 @@ function SpreadsheetWindow({
                     gridRtl={gridRtl}
                     editingLabel={t("spreadsheet.uiCopy.editing")}
                     editingTag={t("spreadsheet.uiCopy.editing_a22b41")}
+                    frozen={overlayFrozenLines}
                   />
                 </div>
                 <SpreadsheetLiveGestureOverlays
                   surface={liveTransformSurface}
                   entries={sheetLiveTransforms.entries}
+                  frozen={overlayFrozenLines}
                   colWidth={colWidth}
                   rowHeight={rowHeight}
                   columnCount={sheet.columnCount}
@@ -86768,11 +88052,13 @@ function SpreadsheetWindow({
                         } = condDisplay.style;
                         const condDataBar = condDisplay.dataBar;
                         const condIcon = condDisplay.icon;
+                        cellTimingMark("conditional: rules");
                         // Background error checking: Excel's green triangle.
                         const errorFinding =
                           pivotCellProtected || pivotOutputCell
                             ? null
                             : errorIndicatorAt(row, col);
+                        cellTimingMark("conditional: error check");
                         const condBg = condStyle.backgroundColor;
                         const nativeFillPattern = spreadsheetFillPatternCss(
                           cell?.style?.fillPattern,
@@ -87476,7 +88762,7 @@ function SpreadsheetWindow({
                         // native paragraph decides.
                         const cellWrapRoom =
                           spannedWidth - 1 - 2 * displayCellPadding -
-                          indentPaddingPx(cell?.style?.indent);
+                          indentPaddingPx(cell?.style?.indent, indentStepPx);
                         const cellWrapsSoftly =
                           Boolean(cell?.style?.wrapText) &&
                           resolvedForMultiline !== "" &&
@@ -87490,8 +88776,8 @@ function SpreadsheetWindow({
                         // Justify / Distributed wrap like Wrap Text and lay
                         // their lines out across the cell (XLS-A037/A038).
                         cellTimingMark("nf: wrap check");
-                        const cellSpread = cellHorizontalSpreadCss(cell?.style);
-                        const cellIndentInsets = cellIndentInsetsPx(cell?.style);
+                        const cellSpread = cellHorizontalSpreadCss(cell?.style, String(resolvedForMultiline ?? ""));
+                        const cellIndentInsets = cellIndentInsetsPx(cell?.style, indentStepPx);
                         // Turned or stacked text is drawn by the display
                         // layer, the one layer that turns (with its runs when
                         // it has them); the wrapped and spilled layers draw
@@ -87795,6 +89081,23 @@ function SpreadsheetWindow({
                             lineHeightPx >= fontSizePx * 1.2
                             ? lineHeight
                             : undefined;
+                        })();
+                        // ...or, where that box is too small, the font's own
+                        // normal line -- which WebKit sets in the stand-in's
+                        // metrics, ignoring the Office face's overrides: 宋体
+                        // 11pt in a 19px row got Noto Serif SC's 22px line and
+                        // stood over the cell's top, more the more it was
+                        // zoomed (iPad). There the Office face's line is given.
+                        const plainDisplayNormalLine = (() => {
+                          if (plainDisplayLineHeight !== undefined) return undefined;
+                          const size =
+                            plainDisplayFontSize ??
+                            (typeof cell?.style?.fontSize === "number" && cell.style.fontSize > 0
+                              ? cell.style.fontSize
+                              : SPREADSHEET_DEFAULT_FONT_SIZE);
+                          const family = typeof baseCellStyle.fontFamily === "string" ? baseCellStyle.fontFamily : undefined;
+                          const line = officeNormalLineHeightPx(family, size);
+                          return line === null ? undefined : `${line}px`;
                         })();
                         // The display layer's text insets, which an
                         // accounting underline reaches through (B400).
@@ -88621,6 +89924,7 @@ function SpreadsheetWindow({
                                         : cell?.style,
                                       (cell?.value ?? "") !== "",
                                       displayCellPadding,
+                                      indentStepPx,
                                     )),
                                 // Include vertical-alignment padding in the editor
                                 // and reserve one pixel for each collapsed cell edge,
@@ -88810,7 +90114,7 @@ function SpreadsheetWindow({
                                     maxWidth: cell?.style?.centerAcross
                                       ? undefined
                                       : "100%",
-                                    lineHeight: plainDisplayLineHeight ?? "normal",
+                                    lineHeight: plainDisplayLineHeight ?? plainDisplayNormalLine ?? "normal",
                                     // Clipped across, not down: the line box
                                     // is the text's, and an underline sits
                                     // under it (the second line of a Double
@@ -88838,6 +90142,8 @@ function SpreadsheetWindow({
                                       ? clippedCellLineAnchorCss(baseCellStyle.textAlign, cellTextDir)
                                       : {}),
                                     ...textOrientationCss(cell?.style),
+                                    // Stacked a character to an Excel line of its face.
+                                    ...(cell?.style?.verticalText ? { letterSpacing: stackedTextLetterSpacing(baseCellStyle.fontFamily, plainDisplayFontSize ?? baseCellStyle.fontSize) } : {}),
                                     ...(plainDisplayAccounting
                                       // A number is ruled under its own width
                                       // (XLS-A049, measured in Excel); text and a
@@ -88856,7 +90162,10 @@ function SpreadsheetWindow({
                                     const script = plainDisplayScript
                                       ? scriptBaselineCss(plainDisplayScript, plainDisplayFontSize ?? baseCellStyle.fontSize)
                                       : undefined;
-                                    const shown = numberLayout ? <SpreadsheetFormattedText parts={numberLayout} style={baseCellStyle} dpi={nativeGrid?.dpi} wrap={Boolean(cell?.style?.wrapText)} layoutWidth={nativeGrid ? spannedWidth - 5 * 96 / nativeGrid.dpi : undefined}/> : nativeGrid ? <SpreadsheetNativeText text={plainDisplayText} style={{...baseCellStyle,...(plainDisplayFontSize!==undefined?{fontSize:plainDisplayFontSize}:{}),...(script?{fontSize:script.fontSize}:{})}} dpi={nativeGrid.dpi} squeeze={numberSqueeze < 0 && !numberLayout ? numberSqueeze : 0}/> : plainDisplayText;
+                                    // Vertical Text stacks its characters a line apart
+                                    // (textOrientationCss): the native line's advances,
+                                    // widths across, set a spacing of their own over it.
+                                    const shown = numberLayout ? <SpreadsheetFormattedText parts={numberLayout} style={baseCellStyle} dpi={nativeGrid?.dpi} wrap={Boolean(cell?.style?.wrapText)} layoutWidth={nativeGrid ? spannedWidth - 5 * 96 / nativeGrid.dpi : undefined}/> : nativeGrid && !cell?.style?.verticalText ? <SpreadsheetNativeText text={plainDisplayText} style={{...baseCellStyle,...(plainDisplayFontSize!==undefined?{fontSize:plainDisplayFontSize}:{}),...(script?{fontSize:script.fontSize}:{})}} dpi={nativeGrid.dpi} squeeze={numberSqueeze < 0 && !numberLayout ? numberSqueeze : 0}/> : plainDisplayText;
                                     const fitted = numberSqueeze < 0 && !numberLayout
                                       ? <span style={{ letterSpacing: `${numberSqueeze}px` }}>{shown}</span>
                                       : shown;
@@ -89253,7 +90562,7 @@ function SpreadsheetWindow({
                                   // it spills into (B400).
                                   style={{
                                     display: "block",
-                                    lineHeight: plainDisplayLineHeight ?? "normal",
+                                    lineHeight: plainDisplayLineHeight ?? plainDisplayNormalLine ?? "normal",
                                     ...(plainDisplayAccounting ? { textAlign: spillAlign, ...accountingUnderlineBlockCss(plainDisplayAccounting, displayCellPadding, displayCellPadding) } : {}),
                                   }}
                                 >
@@ -89856,6 +91165,7 @@ function SpreadsheetWindow({
                         // made only when the row needs it. Any child or state
                         // of the whole element outside that set keeps the
                         // element, as it keeps the row's cells today.
+                        cellTimingMark("marks+element prep");
                         if (
                           gridRestingCellsOn && ghostCell && !shownAnchor && !active && !editing &&
                           !(autoFilterArrow && worksheetAutoFilterArrows) &&
@@ -90832,10 +92142,13 @@ function SpreadsheetWindow({
                     smartArtEditingIn2d(smartArtEditIn2dKey("spreadsheet", smartArtMarkerOfObject.groupId));
                   const smartArtShapeLocked =
                     smartArtMarkerOfObject !== null && !smartArtGraphicSelected && sheetSmartArtShapeLockedIn3d(object);
+                  // A SmartArt member's diagram camera, or the camera of the
+                  // group the shape came out of (`nativeGroupScene3d`).
+                  const sceneCamera = object.type === "shape" ? spreadsheetShapeSceneCamera(object.shape) : undefined;
                   const smartArtCamera =
-                    object.type === "shape" && object.shape?.scene3d && !smartArtDrawnFlat
+                    sceneCamera && !smartArtDrawnFlat
                       ? smartArtCameraCss(
-                          object.shape.scene3d,
+                          sceneCamera,
                           (object.groupId
                             ? smartArtDiagramBoxes.get(object.groupId)
                             : undefined) ?? committedMemberBox,
@@ -91035,7 +92348,9 @@ function SpreadsheetWindow({
                         ? "original"
                         : smartArtPreparedShown?.members.includes(object)
                           ? "converted"
-                          : undefined
+                          : smartArtDisplayMembers.has(drawnObject)
+                            ? "display"
+                            : undefined
                     }
                     data-copilot-object-hidden={embeddedWorkbook?.previewObject?.sheetId === sheet.id && (embeddedWorkbook.previewObject.kind !== "object" || embeddedWorkbook.previewObject.id !== object.id) ? "true" : undefined}
                     data-drawing-preview-id={`drawing:${object.id}`}
@@ -91690,6 +93005,7 @@ function SpreadsheetWindow({
                         <SpreadsheetShapeView
                           smartArtFaceSpan={smartArtFaceSpan}
                           effects={object.shapeEffects}
+                          keepTextFlat={(object as { keepTextFlat?: unknown }).keepTextFlat === true}
               sketchedNative={(object.source as { nativeSketchGeometry?: unknown } | undefined)?.nativeSketchGeometry === "baked"}
                           boxWidthPx={memberBox.width}
                           boxHeightPx={memberBox.height}
@@ -91743,6 +93059,9 @@ function SpreadsheetWindow({
                             typeof (object as { smartArtItemId?: unknown }).smartArtItemId === "string" &&
                             (((object as { smartArtRole?: unknown }).smartArtRole === "node" &&
                               !sheetSmartArtLabelledItems.has(
+                                `${(object as { groupId?: unknown }).groupId}:${(object as { smartArtItemId?: unknown }).smartArtItemId}`,
+                              ) &&
+                              !smartArtDisplayLabelledItems.has(
                                 `${(object as { groupId?: unknown }).groupId}:${(object as { smartArtItemId?: unknown }).smartArtItemId}`,
                               )) ||
                               (object as { smartArtRole?: unknown }).smartArtRole === "label") &&
@@ -93599,6 +94918,11 @@ function SpreadsheetWindow({
             key={`${selectedPictureObject.id}-${pictureFormatPane.tab}`}
             testIdPrefix="spreadsheet-picture-format-pane"
             initialTab={pictureFormatPane.tab}
+            requestedTab={
+              pictureFormatPane.section
+                ? { id: pictureFormatPane.tab, serial: pictureFormatPane.serial ?? 0, section: pictureFormatPane.section }
+                : undefined
+            }
             labels={{
               title: t("presentation.image.formatPicture"),
               close: t("common.close"),
@@ -93646,6 +94970,11 @@ function SpreadsheetWindow({
             key={`${selectedShapeObject.id}-${shapeFormatPane.tab}`}
             testIdPrefix="spreadsheet-shape-format-pane"
             initialTab={shapeFormatPane.tab}
+            requestedTab={
+              shapeFormatPane.section
+                ? { id: shapeFormatPane.tab, serial: shapeFormatPane.serial ?? 0, section: shapeFormatPane.section }
+                : undefined
+            }
             labels={{
               title: t("spreadsheet.shapeFormat.formatShape"),
               close: t("common.close"),
@@ -93852,8 +95181,14 @@ function SpreadsheetWindow({
           drawingStack,
           reorderSheetChart: reorderSheetChartInPane,
           reorderSheetObject: reorderSheetObjectInPane,
+          reorderSheetGroup: reorderSheetObject,
+          reorderSheetGroupChart: reorderSheetChart,
+          moveSheetPaneUnits,
           selectedChartId: selectedNativeChart?.id ?? null,
           selectedObjectId,
+          selectedDrawingKeys:
+            drawingSelection?.sheetId === sheet.id && drawingSelection.ids.length > 1 ? drawingSelection.ids : null,
+          selectPaneDrawings: (key, mode, order) => selectPaneDrawingsRef.current(key, mode, order),
           selectSessionChart,
           selectionPaneRef,
           selectionPaneRename,
@@ -94423,6 +95758,13 @@ function SpreadsheetWindow({
         confirmIterationDialog,
         iterationDialogDraft,
         setIterationDialogDraft,
+        t,
+      })}
+      {renderSpreadsheetPrecisionWarning({
+        commandDialogReturnFocusTarget,
+        confirmPrecisionAsDisplayed,
+        precisionWarningOpen,
+        setPrecisionWarningOpen,
         t,
       })}
       {renderSpreadsheetZoomDialog({

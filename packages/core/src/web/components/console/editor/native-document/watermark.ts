@@ -29,6 +29,7 @@
  */
 
 import { pxToPt } from "../../../../lib/office-units";
+import { officeWashoutFilterCss } from "../../../../lib/office-picture-adjust-filter";
 import { normalizeCssColor } from "../extensions/cssColor";
 
 /** Hard upper bound for the watermark text (a generous single stamp line). */
@@ -365,4 +366,20 @@ export function pictureWatermarkSizePt(
   return widthPt > 0 && heightPt > 0 && widthPt <= 1_584 && heightPt <= 1_584
     ? { widthPt, heightPt }
     : null;
+}
+
+/**
+ * How a washed-out picture of the document is drawn (a picture watermark,
+ * a header picture Word washes out): Word's Washout correction as a filter,
+ * opaque (0.3 c + 0.805 per channel: black prints 205, mid gray 244; probe
+ * docx-look probes/washout). Drawn at 30 % opacity it printed black at 179
+ * and every watermark twice as dark as Word's (corpus R308-D01, R440-D15).
+ * `window.__docsWashoutOpacity = true` keeps the older look (A/B).
+ */
+export function washoutPictureStyle(
+  owner: Document | null = typeof document === "undefined" ? null : document,
+): { filter: string; opacity: string } {
+  const win = owner?.defaultView as (Window & { __docsWashoutOpacity?: boolean }) | null | undefined;
+  const filter = win?.__docsWashoutOpacity === true ? "" : officeWashoutFilterCss(owner);
+  return filter ? { filter, opacity: "1" } : { filter: "", opacity: "0.3" };
 }

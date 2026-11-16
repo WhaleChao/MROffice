@@ -51,6 +51,53 @@ function boolAttr(key: string, options: { readOnly?: boolean } = {}) {
   };
 }
 
+/**
+ * The head half of a cell block a row cut goes through: a paragraph or
+ * heading cut through its lines draws no space after, which belongs to its
+ * last line on the next page (Word: corpus R417-D03, the 23rd line of a
+ * one-word-wide cell drawn where the page held the line but not the 10pt
+ * space after it). The planner fits the head without it (planTableCellCuts).
+ * `window.__docsCellSplitSpaceAfterOff = true`: as before (A/B).
+ */
+function continuesAttr() {
+  const plain = boolAttr(TABLE_BLOCK_CONTINUES_ATTR);
+  return {
+    ...plain,
+    renderHTML: (attrs: Record<string, unknown>) => {
+      const base = plain.renderHTML(attrs);
+      if (attrs[TABLE_BLOCK_CONTINUES_ATTR] !== true) return base;
+      const off = typeof window !== "undefined" && (window as Window & { __docsCellSplitSpaceAfterOff?: boolean }).__docsCellSplitSpaceAfterOff === true;
+      // A data attribute the stylesheet reads (note-editor.css): a style here
+      // was merged under the paragraph's own margin-bottom and lost.
+      return off ? base : { ...base, "data-page-table-block-space-dropped": "true" };
+    },
+  };
+}
+
+/**
+ * The rest of a cell whose content all stood on the page before draws
+ * nothing in Word: the row's rest is as tall as its other cells' lines, its
+ * stand-in paragraph's line and space after take no room (Word 16.86, probes
+ * tables/probes/tail t1-t4: a 2000-twip cell's empty rest, its 8pt or 12pt
+ * mark, a "Machinery" with 10pt after or none, centred or top: the rest drew
+ * 39.86pt every time, its paddings and three lines; corpus R417-D03 page 10,
+ * where the stand-ins' 11pt line and 10pt after made the rest 33.9pt).
+ * `window.__docsEmptyTailFlatOff = true`: the stand-in keeps its line (A/B).
+ */
+function emptyTailAttr() {
+  const plain = boolAttr(TABLE_CELL_EMPTY_TAIL_ATTR);
+  return {
+    ...plain,
+    renderHTML: (attrs: Record<string, unknown>) => {
+      const base = plain.renderHTML(attrs);
+      if (attrs[TABLE_CELL_EMPTY_TAIL_ATTR] !== true) return base;
+      const off = typeof window !== "undefined" && (window as Window & { __docsEmptyTailFlatOff?: boolean }).__docsEmptyTailFlatOff === true;
+      // The stylesheet flattens the stand-in (note-editor.css).
+      return off ? base : { ...base, "data-page-table-cell-rest-flat": "true" };
+    },
+  };
+}
+
 function intAttr(key: string) {
   const name = dataName(key);
   const normalize = (value: unknown): number | null => {
@@ -246,14 +293,23 @@ export const TablePaginationRuntimeAttrs = Extension.create({
             TABLE_CELL_CONTINUATION_ATTR,
           ),
           [TABLE_CELL_EMPTY_HEAD_ATTR]: boolAttr(TABLE_CELL_EMPTY_HEAD_ATTR),
-          [TABLE_CELL_EMPTY_TAIL_ATTR]: boolAttr(TABLE_CELL_EMPTY_TAIL_ATTR),
+          [TABLE_CELL_EMPTY_TAIL_ATTR]: emptyTailAttr(),
         },
       },
       {
         // Word table cells normally contain paragraphs; heading/codeBlock are
         // also legal in MRNote cells and can be bisected by a measured cursor.
         // A list in a cell is broken between its items (the "listItems" cut).
-        types: ["paragraph", "heading", "codeBlock", "bulletList", "orderedList", "taskList"],
+        types: ["paragraph", "heading"],
+        attributes: {
+          [TABLE_BLOCK_CONTINUES_ATTR]: continuesAttr(),
+          [TABLE_BLOCK_CONTINUATION_ATTR]: boolAttr(
+            TABLE_BLOCK_CONTINUATION_ATTR,
+          ),
+        },
+      },
+      {
+        types: ["codeBlock", "bulletList", "orderedList", "taskList"],
         attributes: {
           [TABLE_BLOCK_CONTINUES_ATTR]: boolAttr(TABLE_BLOCK_CONTINUES_ATTR),
           [TABLE_BLOCK_CONTINUATION_ATTR]: boolAttr(

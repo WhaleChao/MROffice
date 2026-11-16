@@ -122,6 +122,9 @@ export interface FormatPainterSnapshot {
     borderColor?: string;
     borderWidth?: number;
     borderStyle?: "none" | "solid" | "dashed" | "dotted";
+    /** The frame's compound line and corners (`borderCompound` / `borderJoin`). */
+    borderCompound?: string;
+    borderJoin?: string;
     cornerRadius?: number;
   };
   /** Table visual style: thin borders + header-row emphasis. */
@@ -152,7 +155,16 @@ const SHAPE_STYLE_KEYS = [
 
 /** Keys of {@link FormatPainterSnapshot.image}. */
 // The picture border is its colour, width AND dash (PPT-B211).
-const IMAGE_STYLE_KEYS = ["shadow", "borderColor", "borderWidth", "borderStyle", "cornerRadius"] as const;
+// Its compound lines and corners with it (readings row 856).
+const IMAGE_STYLE_KEYS = [
+  "shadow",
+  "borderColor",
+  "borderWidth",
+  "borderStyle",
+  "borderCompound",
+  "borderJoin",
+  "cornerRadius",
+] as const;
 
 /** The Table Style Options (and the thin-grid switch), each stated on or off. */
 export const TABLE_LOOK_OPTION_KEYS = [
@@ -260,6 +272,11 @@ const RUN_STYLE_KEYS = [
   "fontSize",
   "fontFamily",
   "textOutline",
+  "textOutlineWidthPt",
+  "textOutlineJoin",
+  "textOutlineMiterLimit",
+  "textOutlineCap",
+  "textOutlineDash",
 ] as const;
 
 /** The runtime value type each style key MUST carry to be copied. */
@@ -283,6 +300,8 @@ const STYLE_KEY_TYPES: Record<string, StyleKeyType> = {
   borderColor: "string",
   borderWidth: "number",
   borderStyle: "string",
+  borderCompound: "string",
+  borderJoin: "string",
   cornerRadius: "number",
   // table
   borders: "boolean",
@@ -301,6 +320,11 @@ const STYLE_KEY_TYPES: Record<string, StyleKeyType> = {
   highlight: "string",
   fontFamily: "string",
   textOutline: "string",
+  textOutlineWidthPt: "number",
+  textOutlineJoin: "string",
+  textOutlineMiterLimit: "number",
+  textOutlineCap: "string",
+  textOutlineDash: "string",
 };
 
 function valueMatchesType(value: unknown, type: StyleKeyType): boolean {
@@ -600,6 +624,9 @@ export interface FormatPaintPlan {
     borderColor?: string;
     borderWidth?: number;
     borderStyle?: "none" | "solid" | "dashed" | "dotted";
+    /** The frame's compound line and corners (`borderCompound` / `borderJoin`). */
+    borderCompound?: string;
+    borderJoin?: string;
     cornerRadius?: number;
   };
   /** Table look (only when target is a table): see {@link tableWithPaintedLook}. */

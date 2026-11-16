@@ -17,7 +17,7 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 
 import { normalizeDocumentTextBoxOutline } from "@mrnote/core/web/lib/document-borders.ts";
-import { documentFloatingStack, nextDocumentFloatingHeight } from "@mrnote/core/web/lib/document-shapes.ts";
+import { nextDocumentFloatingHeight } from "@mrnote/core/web/lib/document-shapes.ts";
 import {
   DOCUMENT_TEXT_BOX_DEFAULT_OUTLINE,
   DOCUMENT_TEXT_BOX_MAX_EDGE_EMU,
@@ -25,7 +25,6 @@ import {
   documentTextBoxVertFor,
   documentTextBoxWrapPatch,
   documentTextBoxFrameIsEditable,
-  documentTextBoxZOrderHeight,
   type DocumentTextBoxWrap,
 } from "@mrnote/core/web/lib/document-text-box-frame.ts";
 import { EMU_PER_PX, normalizeFloatAnchor, normalizeFloatFrameBody } from "@mrnote/core/web/lib/office-float-anchor.ts";
@@ -39,6 +38,7 @@ import {
 } from "@mrnote/core/web/lib/office-float-anchor-edit.ts";
 import { TEXT_BOX_NODE_NAME } from "@mrnote/core/web/components/console/editor/native-document/contentControls.ts";
 import { floatPaintOf } from "@mrnote/core/web/components/console/editor/native-document/floatingTextBoxLayout.ts";
+import { applyFloatingStackZOrder, floatingStackZOrderAtBoundary } from "@mrnote/core/web/components/console/editor/native-document/floatingStackOrder.ts";
 
 export interface LiveTextBoxFrameTarget {
   readonly pos: number;
@@ -142,20 +142,17 @@ export function setLiveTextBoxZOrder(
   editor: Editor,
   action: "bringForward" | "bringToFront" | "sendBackward" | "sendToBack" | "inFrontOfText" | "behindText",
 ): boolean {
+  if (action !== "inFrontOfText" && action !== "behindText") {
+    // The four stack moves: the one stack's planner, as a shape's.
+    const target = editor.isEditable ? liveTextBoxFrameTarget(editor) : null;
+    return target ? applyFloatingStackZOrder(editor, [target.pos], action) : false;
+  }
   return patchFrame(editor, (attrs) => {
     const anchor = normalizeFloatAnchor(attrs.floatAnchor);
     if (!anchor) return null;
-    if (action === "inFrontOfText" || action === "behindText") {
-      const behind = action === "behindText";
-      if (anchor.wrap.kind === "none" && anchor.behindDoc === behind) return null;
-      return { floatAnchor: { ...anchor, wrap: { kind: "none" }, behindDoc: behind, distTEmu: 0, distBEmu: 0 } };
-    }
-    const height = documentTextBoxZOrderHeight(
-      anchor.relativeHeight,
-      documentFloatingStack(editor.state.doc).heights,
-      action,
-    );
-    return height === null ? null : { floatAnchor: { ...anchor, relativeHeight: height } };
+    const behind = action === "behindText";
+    if (anchor.wrap.kind === "none" && anchor.behindDoc === behind) return null;
+    return { floatAnchor: { ...anchor, wrap: { kind: "none" }, behindDoc: behind, distTEmu: 0, distBEmu: 0 } };
   });
 }
 
@@ -165,9 +162,8 @@ export function textBoxZOrderAtBoundary(
   action: "bringForward" | "bringToFront" | "sendBackward" | "sendToBack",
 ): boolean {
   const target = liveTextBoxFrameTarget(editor);
-  const anchor = target ? normalizeFloatAnchor(target.node.attrs.floatAnchor) : null;
-  if (!anchor) return true;
-  return documentTextBoxZOrderHeight(anchor.relativeHeight, documentFloatingStack(editor.state.doc).heights, action) === null;
+  if (!target || !normalizeFloatAnchor(target.node.attrs.floatAnchor)) return true;
+  return floatingStackZOrderAtBoundary(editor.state.doc, [target.pos], action);
 }
 
 /** The frame's size in EMU, anchored or in line. */

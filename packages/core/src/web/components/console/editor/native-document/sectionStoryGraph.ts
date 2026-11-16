@@ -28,7 +28,7 @@ import type {
 } from "./headerFooter";
 
 export const SECTION_STORY_GRAPH_SCHEMA_VERSION = 1 as const;
-export const SECTION_STORY_MAX_SECTIONS = 512;
+export const SECTION_STORY_MAX_SECTIONS = 4096;
 export const SECTION_STORY_MAX_STORIES = SECTION_STORY_MAX_SECTIONS * 6;
 
 export const WORD_HEADER_RELATIONSHIP_TYPE =

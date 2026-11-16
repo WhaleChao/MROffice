@@ -3,15 +3,18 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { ptToPx } from "./office-units";
+import { ptToPx, pxToPt } from "./office-units";
+import { officeTextOutlineCss } from "./office-text-outline/office-text-outline-css";
 import { pointsToCssPx } from "./presentation/text-units";
 import { cssFontFamilyList } from "./css-font-family";
-import { EMPTY_PRESENTATION_FONT_ALIASES, presentationFontFamilyWithAssets } from "./presentation-font-face-reads";
+import { EMPTY_PRESENTATION_FONT_ALIASES, presentationFontFamilyWithAssets, presentationFontStacksJoined } from "./presentation-font-face-reads";
 import type { CSSProperties } from "react";
 import {
   normalizeRunMath,
   normalizeRunStyle,
   runCarriesMath,
+  runOutlineLine,
+  runOutlineWidthPt,
   splitRun,
   type RunMath,
   type RunStyle,
@@ -483,12 +486,15 @@ export function replaceCellTextRange(
 
 
 
+
+
 function cellRunScriptSize(style: RunStyle | undefined, size: CSSProperties["fontSize"]): CSSProperties["fontSize"] {
   if (!style?.superscript && !style?.subscript) return size;
-  const px = typeof size === "number" ? size : typeof size === "string" ? /^([\d.]+)px$/.exec(size)?.[1] : undefined;
-  const value = Number(px);
+  const stated = typeof size === "number" ? [String(size), "px"] : typeof size === "string" ? /^([\d.]+)(px|pt)$/.exec(size)?.slice(1) : undefined;
+  const value = Number(stated?.[0]);
   if (!(value > 0)) return size === undefined ? "0.67em" : size;
-  return `${(Math.max(1, Math.round((value * 0.75 * 2) / 3)) * 4) / 3}px`;
+  const points = stated?.[1] === "pt" ? value : pxToPt(value);
+  return `${ptToPx(Math.max(1, Math.round((points * 2) / 3)))}px`;
 }
 
 /**
@@ -573,7 +579,7 @@ export function cellTextRunCss(
         ? { fontVariantCaps: "small-caps" as const }
         : {}),
     ...(typeof style?.textOutline === "string" && style.textOutline
-      ? { WebkitTextStroke: `1px ${style.textOutline}` }
+      ? officeTextOutlineCss(style.textOutline, runOutlineWidthPt(style), `${runOutlineWidthPt(style)}pt ${style.textOutline}`, runOutlineLine(style))
       : {}),
     fontStyle: has("italic")
       ? style?.italic
@@ -612,6 +618,40 @@ export function cellTextRunCss(
     // a slide's own run draws it (`runStyleCss`).
     ...cellRunTextPaintCss(style),
   };
+}
+
+
+
+
+
+
+
+
+
+
+
+export function presentationCellTextRunCss(
+  style: RunStyle | undefined,
+  base: CSSProperties = {},
+  inherited: RunStyle = {},
+): CSSProperties {
+  let css = cellTextRunCss(style, base, inherited);
+  // A link is underlined and takes the theme's Hyperlink colour unless its
+  // colour source says its words' own (`linkColor`), as a slide run's link
+  
+  if (typeof style?.href === "string" && style.href) {
+    const lines = String(css.textDecorationLine ?? "none").split(" ").filter((line) => line && line !== "none");
+    css = {
+      ...css,
+      textDecorationLine: lines.includes("underline") ? lines.join(" ") : ["underline", ...lines].join(" "),
+      ...(style.linkColor !== "text" ? { color: `var(--presentation-hyperlink, ${css.color ?? "currentcolor"})` } : {}),
+    };
+  }
+  const own = { ...inherited, ...style }.fontFamily;
+  if (typeof own !== "string" || !own) return css;
+  const served = presentationFontFamilyWithAssets(own, EMPTY_PRESENTATION_FONT_ALIASES) ?? own;
+  const cell = typeof base.fontFamily === "string" && base.fontFamily && base.fontFamily !== own ? base.fontFamily : undefined;
+  return { ...css, fontFamily: presentationFontStacksJoined(served, cell) };
 }
 
 /**

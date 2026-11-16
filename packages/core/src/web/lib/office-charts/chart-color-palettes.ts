@@ -319,6 +319,31 @@ export function chartColorTargetCount(attrs: ChartBlockAttrsV2): number {
 }
 
 /**
+ * How many points a one-series column or bar chart that varies its colours
+ * by point paints (0 for any other chart). Every reader states such a
+ * chart's varying as a fill on each of its points (`sliceStyles`, the
+ * group's `c:varyColors`, unstated in a deck part read as true): Office's
+ * Change Colors then paints each POINT from the palette, by its place among
+ * the points, where it paints a one-series chart that does not vary in one
+ * colour (Excel and PowerPoint, Format Data Series > Fill > Vary colors by
+ * point).
+ */
+export function chartVariedPointCount(
+  attrs: Pick<ChartBlockAttrsV2, "chartType" | "data" | "format">,
+): number {
+  if (attrs.chartType !== "column" && attrs.chartType !== "bar") return 0;
+  if (attrs.data.kind !== "category" || attrs.data.series.length !== 1) return 0;
+  const count = attrs.data.categories.length;
+  const points = (attrs.format?.sliceStyles ?? []) as readonly Record<string, unknown>[];
+  if (count < 1 || points.length < count) return 0;
+  for (let at = 0; at < count; at += 1) {
+    const point = points.find((entry) => entry.pointIndex === at);
+    if (typeof point?.fill !== "string" || point.fill === "none") return 0;
+  }
+  return count;
+}
+
+/**
  * Whether series `seriesIndex` of this chart is drawn as a line: a 2-D line,
  * a scatter that is not a bubble, a radar that draws lines, a combination's
  * line series. Its colour is its LINE (`outline`, its `c:spPr/a:ln`) - and its
@@ -377,14 +402,15 @@ export function chartWithResolvedColorPalette(
   paletteId: ChartColorPaletteId,
   accents: readonly string[] = DEFAULT_CHART_THEME_ACCENTS,
 ): ChartBlockAttrsV2 | null {
-  const count = chartColorTargetCount(attrs);
+  const varied = chartVariedPointCount(attrs);
+  const count = varied || chartColorTargetCount(attrs);
   if (count <= 0 || !chartTakesColorPalette(attrs.chartType)) return null;
   const colors = chartColorPaletteColors(paletteId, accents, count);
   const format: NonNullable<ChartBlockAttrsV2["format"]> = {
     ...(attrs.format ?? {}),
   };
   delete format.colorPalette;
-  const points = attrs.chartType === "pie";
+  const points = attrs.chartType === "pie" || varied > 0;
   const key = points ? "sliceStyles" : "seriesStyles";
   const index = points ? "pointIndex" : "seriesIndex";
   const existing = (format[key] ?? []) as readonly Record<string, unknown>[];
@@ -408,9 +434,10 @@ export function chartResolvedColorPaletteId(
   accents: readonly string[] = DEFAULT_CHART_THEME_ACCENTS,
 ): ChartColorPaletteId | null {
   if (!attrs) return null;
-  const count = chartColorTargetCount(attrs);
+  const varied = chartVariedPointCount(attrs);
+  const count = varied || chartColorTargetCount(attrs);
   if (count <= 0) return null;
-  const points = attrs.chartType === "pie";
+  const points = attrs.chartType === "pie" || varied > 0;
   const entries = (points ? attrs.format?.sliceStyles : attrs.format?.seriesStyles) ?? [];
   const fills = Array.from({ length: count }, (_, at) =>
     (entries as readonly Record<string, unknown>[])
@@ -444,13 +471,20 @@ export function chartColorPaletteId(
  * its bars) went on drawing every line in it while only the legend took the
  * pick. A fill or line colour set afterwards (Format ▸ Fill / ▸ Line) wins
  * over the palette again for its series.
+ * A one-series column or bar chart that varies its colours by point
+ * (`chartVariedPointCount`) keeps varying: each point takes the palette's
+ * colour for its place, against `accents` (the chart's theme), stated on the
+ * point beside the pick -- the writers restate a point holding the pick's
+ * own colour as the pick's theme colour.
  * Null when this chart takes no palette or already shows this one.
  */
 export function chartWithColorPalette(
   attrs: ChartBlockAttrsV2,
   paletteId: ChartColorPaletteId,
+  accents: readonly string[] = DEFAULT_CHART_THEME_ACCENTS,
 ): ChartBlockAttrsV2 | null {
   if (!chartTakesColorPalette(attrs.chartType)) return null;
+  const varied = chartVariedPointCount(attrs);
   const format: NonNullable<ChartBlockAttrsV2["format"]> = {
     ...(attrs.format ?? {}),
     colorPalette: paletteId,
@@ -491,6 +525,15 @@ export function chartWithColorPalette(
       );
     if (kept.length) (format as Record<string, unknown>)[key] = kept;
     else delete format[key];
+  }
+  if (varied > 0) {
+    const kept = (format.sliceStyles ?? []) as readonly Record<string, unknown>[];
+    const colors = chartColorPaletteColors(paletteId, chartThemeAccents(accents), varied);
+    (format as Record<string, unknown>).sliceStyles = colors.map((fill, at) => ({
+      ...(kept.find((entry) => entry.pointIndex === at) ?? {}),
+      pointIndex: at,
+      fill,
+    }));
   }
   if (JSON.stringify(format) === JSON.stringify(attrs.format ?? {})) return null;
   return { ...attrs, format };

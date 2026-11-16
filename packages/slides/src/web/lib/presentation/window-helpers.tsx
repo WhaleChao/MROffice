@@ -17,7 +17,8 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import type { OfficeSemanticIconId } from "@mrnote/core/web/components/office-ribbon/icons/officeIconRegistry.ts";
 import { isValidInlineImageSource } from "@mrnote/core/web/lib/inline-image-source.ts";
-import { hasLayoutGeometry, isImportedPptxBlock } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
+import { hasLayoutGeometry, isImportedPptxBlock, reorderBlocks } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
+import { canReorderBlock } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import type {
   NativePageCommandRejectionReason,
   PresentationBlock,
@@ -62,32 +63,26 @@ export function uniformPresentationSelectionValue<T>(
   return rest.every((value) => Object.is(value, first)) ? first : null;
 }
 
+/**
+ * Whether Bring Forward / Send Backward can move `selection` -- and so Bring
+ * to Front / Send to Back, which can act exactly when the one-step command
+ * can. PowerPoint greys a command that would not move anything. It is the
+ * command's own answer (`reorderBlocks`), so an object inside a group counts
+ * only the group's own objects (it restacks within the group), a whole group
+ * moves as one object, and a selection of read-only objects moves nowhere.
+ */
 export function presentationSelectionLayerCapability(
   blocks: readonly PresentationBlock[],
   selection: readonly PresentationBlock[],
 ): Readonly<{ canMoveBackward: boolean; canMoveForward: boolean }> {
-  const selectedIds = new Set(selection.map((block) => block.id));
-  let unselectedBefore = false;
-  let canMoveBackward = false;
-  for (const block of blocks) {
-    if (selectedIds.has(block.id)) {
-      if (unselectedBefore) canMoveBackward = true;
-    } else {
-      unselectedBefore = true;
-    }
+  if (selection.length === 0 || selection.some((block) => !canReorderBlock(block))) {
+    return { canMoveBackward: false, canMoveForward: false };
   }
-  let unselectedAfter = false;
-  let canMoveForward = false;
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (!block) continue;
-    if (selectedIds.has(block.id)) {
-      if (unselectedAfter) canMoveForward = true;
-    } else {
-      unselectedAfter = true;
-    }
-  }
-  return { canMoveBackward, canMoveForward };
+  const list = [...blocks];
+  return {
+    canMoveBackward: reorderBlocks(list, selection, "backward") !== null,
+    canMoveForward: reorderBlocks(list, selection, "forward") !== null,
+  };
 }
 
 export type PresentationFrameAxis = "width" | "height";

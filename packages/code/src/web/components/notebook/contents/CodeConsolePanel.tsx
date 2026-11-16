@@ -60,6 +60,7 @@ import {
 import type { RunResult } from "@mrnote/core/web/lib/code-runner/js-runner.ts";
 
 import styles from "./CodeSidePanels.module.css";
+import { isImeKeydown } from "@mrnote/core/web/lib/soft-keyboard.ts";
 
 /** Longest single submission accepted at the prompt. */
 export const CODE_CONSOLE_INPUT_LIMIT = CODE_CONSOLE_HISTORY_MAX_ENTRY_CHARS;
@@ -410,7 +411,9 @@ export default function CodeConsolePanel({
 
   const onKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.nativeEvent.isComposing) return;
+      // Safari's pinyin-committing Enter arrives after compositionend
+      // (isComposing false, keyCode 229): it must not run the line.
+      if (isImeKeydown(event)) return;
       const input = event.currentTarget;
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();

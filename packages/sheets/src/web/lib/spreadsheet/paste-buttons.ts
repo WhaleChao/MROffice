@@ -28,7 +28,8 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
 import { normalizeCellPicture, placePictureInCell } from "@mrnote/core/web/lib/spreadsheet/cell-picture.ts";
 import { clonePhonetic, phoneticAfterValueWrite } from "@mrnote/core/web/lib/spreadsheet/cell-phonetic.ts";
-import { normalizeCellRuns } from "@mrnote/core/web/lib/spreadsheet/cell-rich-text.ts";
+import { normalizeCellRuns, textFromRuns } from "@mrnote/core/web/lib/spreadsheet/cell-rich-text.ts";
+import { withRecordFontIfPlain } from "@mrnote/core/web/lib/spreadsheet/cell-record-font.ts";
 import { cloneCellCommentForPaste } from "@mrnote/core/web/lib/spreadsheet/comments.ts";
 import {
   normalizeRule as normalizeConditionalRule,
@@ -125,6 +126,16 @@ export interface PasteGridOptions {
    * need to be the same size"). A write to the merge's own top-left stands.
    */
   refuseValuesUnderMerges?: boolean;
+  /**
+   * The range a write reads and writes (a Fill's source line and the cells it
+   * fills): refused when an existing merged cell lies partly inside it, as
+   * Excel refuses ("We can't do that to a merged cell.", Windows Excel 16.0
+   * build 20527, xlsx-rounds/probe/night3/fillright-merge: J38:J45 copied to
+   * K38 across I39:K39). Written anyway, Fill Right over K38:K45 gave K39 the
+   * borders of J39 and the merge I39:K39 lost its right edge in the file
+   * (R423-X56 WALK1).
+   */
+  refuseMergesCutIn?: { r1: number; c1: number; r2: number; c2: number };
   /** Sheet-level formatting planned before any cell or merge mutation. */
   conditionalFormatPlan?: {
     rules: ConditionalFormatRule[];
@@ -703,6 +714,19 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
   ) {
     return { ok: false, reason: "locked" };
   }
+  const cutIn = options.refuseMergesCutIn;
+  if (
+    cutIn &&
+    mergeSpans.some(
+      (span) =>
+        span.row <= cutIn.r2 && span.row + span.rowSpan - 1 >= cutIn.r1 &&
+        span.col <= cutIn.c2 && span.col + span.colSpan - 1 >= cutIn.c1 &&
+        !(span.row >= cutIn.r1 && span.row + span.rowSpan - 1 <= cutIn.r2 &&
+          span.col >= cutIn.c1 && span.col + span.colSpan - 1 <= cutIn.c2),
+    )
+  ) {
+    return { ok: false, reason: "merge" };
+  }
   if (options.refuseValuesUnderMerges && mergeSpans.length > 0) {
     const covered = coveredCells(mergeSpans);
     for (let r = 0; r < rows.length; r += 1) {
@@ -979,7 +1003,17 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
         }
         delete typedImportWrite.display;
         delete typedImportWrite.chartValueCache;
-        nextCells[key] = typedImportWrite;
+        // The old entry's runs belong to its text: a field converted to
+        // something else (Text to Columns of "2021\n" is the number 2021)
+        // is a plain cell, as Excel writes it and the file reads back
+        // (xlsx-rounds R323-X12 WALK1: a number cell still holding text runs).
+        if (
+          typedImportWrite.runs &&
+          (typedImportWrite.kind !== "text" || textFromRuns(typedImportWrite.runs) !== typedImportWrite.value)
+        ) {
+          delete typedImportWrite.runs;
+        }
+        nextCells[key] = withRecordFontIfPlain(typedImportWrite);
       }
       const textToColumnsFormat = options.textToColumnsFormats?.[c];
       if (textToColumnsFormat) {

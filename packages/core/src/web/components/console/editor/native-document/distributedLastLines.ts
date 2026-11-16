@@ -27,6 +27,7 @@ import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 import { measurementRange } from "./paged/measurementRange";
 import { pageTextWidth } from "../../../../lib/text-engine/page-adapter";
 import { touchedTextblockRanges } from "./touchedTextblocks";
+import { afterFontsReady } from "../../../../lib/font-face-news";
 
 export const distributedLastLinesKey = new PluginKey<DecorationSet>("distributedLastLines");
 const LINE_SPACING_ATTR = "data-docs-distributed-line";
@@ -290,7 +291,9 @@ export const DistributedLastLines = Extension.create({
           };
           const observer = win && "ResizeObserver" in win ? new win.ResizeObserver(schedule) : null;
           observer?.observe(view.dom);
-          void view.dom.ownerDocument.fonts?.ready.then(schedule);
+          // Read once for every caller of this task, a microtask later: a
+          // read of `fonts.ready` lays the page out in Blink (font-face-news).
+          const cancelFontsReady = afterFontsReady(view.dom.ownerDocument, schedule);
           schedule();
           return {
             update(updated, previousState) {
@@ -308,6 +311,7 @@ export const DistributedLastLines = Extension.create({
               }
             },
             destroy() {
+              cancelFontsReady();
               observer?.disconnect();
               if (waitTimer !== null) win?.clearTimeout(waitTimer);
               if (frame !== null) win?.cancelAnimationFrame(frame);

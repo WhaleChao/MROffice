@@ -73,6 +73,12 @@ export interface BackgroundCalculationSheetContext {
    */
   readonly legacyArrays?: ReadonlyArray<readonly [string, number, number]>;
   /**
+   * Set precision as displayed (calcPr@fullPrecision="0"): the formula cells
+   * whose number format rounds the number they keep, as "row:col" key and the
+   * format (display-precision); omitted when the workbook keeps full precision.
+   */
+  readonly displayPrecision?: ReadonlyArray<readonly [string, string]>;
+  /**
    * The sheet's What-If Data Tables (what-if-table-definition): their
    * results are `=TABLE(...)` cells of the snapshot, recalculated from these
    * definitions; omitted when the sheet has none.

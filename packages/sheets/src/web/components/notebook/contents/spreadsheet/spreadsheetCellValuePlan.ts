@@ -4,12 +4,20 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { hasManualLineBreak } from "../../../../lib/spreadsheet/cell-text";
-import { updateCellValue, updateCellValues, type CellMap } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
+import { updateCellValue, updateCellValues } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
 import { withHyperlinkCellStyle } from "../../../../lib/spreadsheet/editing-buttons";
-import { planDataTableResize, rewriteTableReferencesInSheet, tableHeadersForCells } from "../../../../lib/spreadsheet/table-buttons";
+import {
+  planDataTableResize,
+  reconcileTableHeaderWrites,
+  renameTableColumnReferencesInSheet,
+  renameTableColumnsInSheet,
+  tableHeaderRenamesAfterReplace,
+  tableHeadersForCells,
+  type TableColumnRename,
+} from "../../../../lib/spreadsheet/table-buttons";
 import { shiftFormula } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
 import { type MergeSpan } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
-import { isAuthorableTableTotalFormula, MAX_TOTALS_LABEL_LENGTH, normalizeTableColumnNames, renameDataTableColumnReferences, renameDataTableTotalFormulaColumn, tableTotalCellOwnsValue, tableTotalCellValue, tableNativeStructureBlocked, TABLE_TOTAL_KINDS, type DataTable } from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
+import { isAuthorableTableTotalFormula, MAX_TOTALS_LABEL_LENGTH, normalizeTableColumnNames, renameDataTableTotalFormulaColumn, tableTotalCellOwnsValue, tableTotalCellValue, tableNativeStructureBlocked, TABLE_TOTAL_KINDS, type DataTable } from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
 import { inheritInsertedLineFormats } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
 import { tableAutoExpansionColumnName, type SpreadsheetTableAutoCorrectSettings } from "../../../../lib/spreadsheet/table-autocorrect";
 import { type SpreadsheetAutoFillChoice } from "./SpreadsheetAutoFillOptionsButton";
@@ -18,6 +26,15 @@ import { type TextRun as CellTextRun } from "@mrnote/core/web/lib/spreadsheet/ce
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { MAX_SHEET_COLS, MAX_SHEET_ROWS } from "./spreadsheetGridConstants";
 import { type ExcelDateSystemArg } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
+
+// Moved to the shared table layer (the command path renames a cleared header too); kept here for the window's importers.
+export {
+  reconcileTableHeaderWrites,
+  renameTableColumnReferencesInSheet,
+  renameTableColumnsInSheet,
+  tableHeaderRenamesAfterReplace,
+  type TableColumnRename,
+};
 
 /** An entry whose formula is a HYPERLINK call (its friendly name is the link). */
 const HYPERLINK_ENTRY_RE = /^=\s*HYPERLINK\s*\(/i;
@@ -419,7 +436,13 @@ export function planSpreadsheetCellValue(
     const firstDataRow = bodyTable.range.r1 + (bodyTable.headerRow ? 1 : 0);
     const canonical = bodyTable.calculatedFormulas?.[offset];
     const formula = value.trim();
-    if (tableNativeStructureBlocked(bodyTable)) {
+    // A table whose native parts MRAI only carries (an array calculated
+    // column, an extension...) takes no formula into its body: a formula may
+    // make or change a calculated column. A constant stays in its one cell,
+    // as Excel keeps it (an exception in a calculated column), and leaves the
+    
+    // Tabela1's array calculated columns refused 2023 typed into its Year).
+    if (tableNativeStructureBlocked(bodyTable) && formula.startsWith("=")) {
       return { ok: false, reason: "native-column" };
     }
     const dataRows = Array.from(
@@ -779,174 +802,4 @@ export function planSpreadsheetCellValue(
   };
 }
 
-/**
- * The table columns a Replace touched through their header cells: the tables
- * get their column identities from the replaced headers (normalised the way a
- * header edit is) and every renamed column is reported so structured
- * references follow, as they do when the header is edited by hand (live
- * audit B165). The header cells are rewritten to the normalised names.
- */
-export function tableHeaderRenamesAfterReplace(
-  sheet: SheetModel,
-  nextCells: CellMap,
-  replacedKeys: readonly string[],
-): {
-  dataTables: DataTable[] | undefined;
-  renames: { tableName: string; previousName: string; nextName: string }[];
-} {
-  const tables = sheet.dataTables;
-  if (!tables || tables.length === 0 || replacedKeys.length === 0) {
-    return { dataTables: tables, renames: [] };
-  }
-  const replaced = new Set(replacedKeys);
-  const renames: { tableName: string; previousName: string; nextName: string }[] = [];
-  let changed = false;
-  const nextTables = tables.map((table) => {
-    if (!table.headerRow) return table;
-    const { r1, c1, c2 } = table.range;
-    let touched = false;
-    for (let col = c1; col <= c2 && !touched; col += 1) {
-      if (replaced.has(`${r1}:${col}`)) touched = true;
-    }
-    if (!touched) return table;
-    const width = c2 - c1 + 1;
-    const previous =
-      tableHeadersForCells(table, sheet.cells) ??
-      Array.from({ length: width }, (_, index) => `Column${index + 1}`);
-    const raw: string[] = [];
-    for (let col = c1; col <= c2; col += 1) {
-      const key = `${r1}:${col}`;
-      raw.push(
-        replaced.has(key)
-          ? String(nextCells[key]?.value ?? "").trim()
-          : previous[col - c1],
-      );
-    }
-    // Headers not replaced keep their names (S-124's rule, as when typed).
-    const normalized = normalizeTableColumnNames(raw, {
-      keep: raw.map((_name, index) => !replaced.has(`${r1}:${c1 + index}`)),
-    });
-    for (let col = c1; col <= c2; col += 1) {
-      const key = `${r1}:${col}`;
-      if (!replaced.has(key)) continue;
-      const cell = nextCells[key];
-      // A header cleared (Clear Contents, Delete) is no cell any more: it
-      // takes the name its column now has ("Column1"), as Excel writes one
-      // into an emptied header. Left blank, the table kept a name no cell
-      // showed (sheet model fuzz).
-      if (!cell) nextCells[key] = { value: normalized[col - c1], kind: "text" };
-      else if (cell.value !== normalized[col - c1]) {
-        nextCells[key] = { ...cell, value: normalized[col - c1] };
-      }
-    }
-    normalized.forEach((name, index) => {
-      if (name !== previous[index]) {
-        renames.push({ tableName: table.name, previousName: previous[index], nextName: name });
-      }
-    });
-    changed = true;
-    return {
-      ...table,
-      columns: normalized.map((name, index) => ({
-        id: table.columns?.[index]?.id ?? index + 1,
-        name,
-      })),
-    };
-  });
-  return { dataTables: changed ? nextTables : tables, renames };
-}
 
-/**
- * A table's header cells written by any command that does not name tables
- * itself (Paste, Fill, Clear, a script): the header row IS the columns'
- * names in Excel, so a changed header renames its column and its structured
- * references follow, exactly as typing it does. Keyboard Paste over two
- * headers left the columns and their formulas on the old names and the new
- * ones read #REF! (live audit S-123). `previous` is the sheet before the
- * write; returns the sheet with its tables and references brought along and
- * the renames for the other sheets, or null when no header changed.
- */
-export function reconcileTableHeaderWrites(
-  previous: SheetModel,
-  next: SheetModel,
-): { sheet: SheetModel; renames: TableColumnRename[] } | null {
-  const tables = previous.dataTables;
-  if (!tables || tables.length === 0 || next.cells === previous.cells || next.dataTables !== tables) return null;
-  const changed: string[] = [];
-  for (const table of tables) {
-    if (!table.headerRow) continue;
-    const { r1, c1, c2 } = table.range;
-    for (let col = c1; col <= c2; col += 1) {
-      const key = `${r1}:${col}`;
-      if (String(next.cells[key]?.value ?? "") !== String(previous.cells[key]?.value ?? "")) changed.push(key);
-    }
-  }
-  if (changed.length === 0) return null;
-  const cells: CellMap = { ...next.cells };
-  const { dataTables, renames } = tableHeaderRenamesAfterReplace(previous, cells, changed);
-  if (dataTables === tables && renames.length === 0) return null;
-  return {
-    sheet: renameTableColumnsInSheet({ ...next, cells, dataTables }, renames),
-    renames,
-  };
-}
-
-export interface TableColumnRename {
-  readonly tableName: string;
-  readonly previousName: string;
-  readonly nextName: string;
-}
-
-/**
- * Several renamed table columns at once. They take effect together: two
- * headers that trade names (A to B, B to A) swap their references instead of
- * the second rename sweeping up the first one's.
- */
-export function renameTableColumnsInSheet(
-  candidate: SheetModel,
-  renames: readonly TableColumnRename[],
-): SheetModel {
-  if (renames.length <= 1) {
-    return renames.reduce(
-      (current, rename) =>
-        renameTableColumnReferencesInSheet(current, rename.tableName, rename.previousName, rename.nextName),
-      candidate,
-    );
-  }
-  const stand = (index: number) => `MRAIRENAME${index}X${renames.length}`;
-  const parked = renames.reduce(
-    (current, rename, index) =>
-      renameTableColumnReferencesInSheet(current, rename.tableName, rename.previousName, stand(index)),
-    candidate,
-  );
-  return renames.reduce(
-    (current, rename, index) =>
-      renameTableColumnReferencesInSheet(current, rename.tableName, stand(index), rename.nextName),
-    parked,
-  );
-}
-
-/**
- * Follow one renamed table column through a sheet (Excel: renaming a column
- * updates every structured reference to it in the workbook). Explicit
- * `Table[Col]` references are renamed wherever they sit; the in-table
- * `[@Col]` / `[Col]` forms only where the renamed table owns the formula, so
- * the calculated-column template and the physical cells it filled stay equal.
- */
-export function renameTableColumnReferencesInSheet(
-  candidate: SheetModel,
-  tableName: string,
-  oldColumnName: string,
-  newColumnName: string,
-): SheetModel {
-  const tableLower = tableName.toLowerCase();
-  return rewriteTableReferencesInSheet(candidate, (formula, owner) =>
-    renameDataTableColumnReferences(
-      formula,
-      tableName,
-      oldColumnName,
-      newColumnName,
-      { shortFormOwnedByTable: owner?.name.toLowerCase() === tableLower },
-    ),
-  );
-}

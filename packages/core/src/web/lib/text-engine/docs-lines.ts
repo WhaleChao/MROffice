@@ -105,6 +105,32 @@ export interface DocsParagraph {
    * as its lines are filled (`docsEngineLineStarts` sets a tab piece's
    * advance from the pen), measured from the column's left edge. */
   readonly tabStops?: DocsTabLayout;
+  /** A drop cap (`p[data-drop-cap]::first-letter`, drawn as a CSS initial
+   * letter) stands beside the paragraph's first `count` lines, which are
+   * `width` px wide at most: the room right of the letter and its distance
+   * from text. The letter itself is a box of no width in `pieces`. */
+  readonly leadingLines?: { readonly count: number; readonly width: number };
+}
+
+/** The room line `line` of the paragraph has, CSS px. */
+export function docsLineWidth(paragraph: DocsParagraph, line: number): number {
+  const width = line === 0 ? paragraph.firstWidth : paragraph.restWidth;
+  const lead = paragraph.leadingLines;
+  return lead && line < lead.count ? Math.min(width, lead.width) : width;
+}
+
+/** A paragraph whose first letter Word drops (Insert > Drop Cap): the
+ * letter is drawn by the ::first-letter rule in note-editor.css. */
+const DROP_CAP_SELECTOR = '[data-drop-cap="dropped"]:not([data-drop-cap-frame]):not([data-page-split-continuation])';
+
+/** `initial-letter: <size> [<sink>]` as computed: the lines the letter
+ * stands beside, or null where it is not an initial letter (`normal`, a
+ * browser without the property). */
+function initialLetterLines(value: string): number | null {
+  const numbers = value.trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (!numbers.length) return null;
+  const [size, sink = Math.floor(size)] = numbers;
+  return Math.max(Math.ceil(size - 1e-6), Math.round(sink));
 }
 
 /** The paragraph's own tab stops, as `ReadDocsParagraphOptions.tabStops`
@@ -173,6 +199,8 @@ export interface DocsLayoutRules {
   /** Word compatibility mode of the document (null: none recorded). */
   readonly compatibilityMode: number | null;
   readonly kinsoku: KinsokuList | null;
+  /** Ideographs break as Latin letters (wordSetsIdeographsAsLetters). */
+  readonly ideographsAsLetters?: boolean;
 }
 
 const OUT_OF_FLOW_POSITIONS = new Set(["absolute", "fixed"]);
@@ -193,11 +221,18 @@ const CELL_FIT_EPSILON = 1 / 16;
 function fitEpsilon(paragraph: DocsParagraph): number {
   return paragraph.inTableCell ? CELL_FIT_EPSILON : FIT_EPSILON;
 }
+/** On the spans the East Asian spacing projection draws (DocumentPageSetup). */
+const WORD_CJK_SPACING_ATTR = "data-docs-word-cjk-spacing";
 /** On the spans the engine's line corrections draw (documentEngineLineBreaks). */
 export const DOCS_ENGINE_LINE_ATTR = "data-docs-engine-line";
 /** The line break the engine draws before a tab that opens a line: no piece
  * of the paragraph (the engine breaks there by itself). */
 export const DOCS_ENGINE_TAB_BREAK_CLASS = "docs-engine-tab-break";
+/** Harness switch (`window.__docsEngineBreakStrutOff = true`): the engine's
+ * line break revokes its paragraph's leaf line boxes, as before (A/B). */
+export function engineBreakStrutOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsEngineBreakStrutOff?: boolean }).__docsEngineBreakStrutOff === true;
+}
 /** bandTabLayout's box around a tab it laid out. */
 const LAID_TAB_CLASS = "sheet-band-story-tab";
 /** The run's own letter spacing under a correction span, px. */
@@ -330,6 +365,9 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
   const style = view.getComputedStyle(element);
   if (style.writingMode && style.writingMode !== "horizontal-tb") return empty("vertical writing");
   if (style.direction === "rtl") return empty("rtl");
+  // A paragraph the page does not wrap (a Word cell's `w:noWrap`) is one line
+  // whatever its width: the browser draws it so.
+  if (style.whiteSpace === "pre" || style.whiteSpace === "nowrap" || style.getPropertyValue("text-wrap-mode") === "nowrap") return empty("no wrap");
   const padL = px(style.paddingLeft), padR = px(style.paddingRight), borL = px(style.borderLeftWidth), borR = px(style.borderRightWidth);
   let rect: DOMRect | null = null;
   let outer: number;
@@ -347,8 +385,20 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
     const cssWidth = px(style.width);
     outer = borderBox ? cssWidth : cssWidth + padL + padR + borL + borR;
     content = borderBox ? cssWidth - padL - padR - borL - borR : cssWidth;
-    if (!(outer > 0) || !(rect.width > 0)) return empty("not drawn");
-    unscale = outer / rect.width;
+    // A paragraph its indents squeeze to no width (a cell narrower than they
+    // are: R417-D03's "Asset’s ID") still draws, a character a line; its lines
+    // are read at no width, scaled as its parent is, so a mode-14 space there
+    // opens its own line as in Word (docsEngineLineStarts).
+    const squeezed = (!(outer > 0) || !(rect.width > 0)) && cssWidth === 0 && rect.height > 0 && !spaceBreakOff();
+    const parentElement = squeezed ? element.parentElement : null;
+    const parentRect = parentElement?.getBoundingClientRect();
+    if (parentElement && parentRect && parentElement.offsetWidth > 0 && parentRect.width > 0) {
+      content = 0;
+      unscale = parentElement.offsetWidth / parentRect.width;
+    } else {
+      if (!(outer > 0) || !(rect.width > 0)) return empty("not drawn");
+      unscale = outer / rect.width;
+    }
   }
   const textIndent = px(style.textIndent);
   const tabIntervalPx = style.tabSize?.endsWith("px") ? px(style.tabSize) : 0;
@@ -497,6 +547,28 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
       node.childNodes.forEach(walk);
       return;
     }
+    // A tab the page's tab layout has drawn (an inline-block its stop sizes)
+    // is still a tab: it stays with what follows it, and what does not fit
+    // after it takes it to the next line. Read as an atom it gave a break
+    // after itself, and a tab that reached the right edge hung there with
+    // the text after it at the margin (corpus R283-D12's references, a DOI
+    // line under a typed-tab "hanging indent").
+    if (!unlaid && node.classList.contains(LAID_TAB_CLASS) && ATOMIC_DISPLAYS.has(nodeStyle.display)) {
+      const text = Array.from(node.childNodes).find(
+        (child): child is Text => child.nodeType === Node.TEXT_NODE && (child as Text).data.includes("\t"),
+      );
+      flags.add("tab");
+      pieces.push({
+        kind: "tab",
+        text: "\t",
+        advance: atomWidthPx(node, nodeStyle, unscale) + px(nodeStyle.marginLeft) + px(nodeStyle.marginRight),
+        element: node,
+        ...(text ? { node: text, offset: text.data.indexOf("\t") } : {}),
+        fontPx: px(nodeStyle.fontSize),
+        ...runBox(node, nodeStyle),
+      });
+      return;
+    }
     if (ATOMIC_DISPLAYS.has(nodeStyle.display) || REPLACED.has(node.tagName)) {
       // Only an atom's drawn box is read: reading every run's laid the page
       // out again between the editor's writes.
@@ -534,9 +606,30 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
     if (hasPseudoContent(view, node, "::before") || hasPseudoContent(view, node, "::after")) { unsupported ??= "inline pseudo-element"; return; }
     const sideRoom = px(nodeStyle.marginLeft) + px(nodeStyle.paddingLeft) + px(nodeStyle.borderLeftWidth);
     if (sideRoom > 0.01) pieces.push({ kind: "box", text: "​", advance: sideRoom, element: node });
+    const first = pieces.length;
     node.childNodes.forEach(walk);
     const endRoom = px(nodeStyle.marginRight) + px(nodeStyle.paddingRight) + px(nodeStyle.borderRightWidth);
     if (endRoom > 0.01) pieces.push({ kind: "box", text: "​", advance: endRoom, element: node });
+    // The East Asian spacing projection takes a compressed opening mark's
+    // room back with a negative start margin (and a centred mark's with
+    // both): the run's own spacing, like the letter spacing it gives a
+    // closing mark, and the browser breaks on it. Left out, every line with
+    // such a mark measured up to a half-em wider here than drawn, the engine
+    // broke it a character early, and its corrections never took (the
+    
+    if (node.hasAttribute(WORD_CJK_SPACING_ATTR) && (sideRoom < -0.01 || endRoom < -0.01)) {
+      const own: number[] = [];
+      for (let index = first; index < pieces.length; index += 1) {
+        if (pieces[index].kind === "text" || pieces[index].kind === "space") own.push(index);
+      }
+      const take = (index: number | undefined, room: number) => {
+        if (index === undefined || !(room < -0.01)) return;
+        const piece = pieces[index];
+        pieces[index] = { ...piece, advance: piece.advance + room };
+      };
+      take(own[0], sideRoom);
+      take(own[own.length - 1], endRoom);
+    }
   };
   element.childNodes.forEach(walk);
 
@@ -592,7 +685,41 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
       }
     : undefined;
   const inTableCell = element.closest("td, th") !== null;
-  return { pieces, firstWidth, restWidth: content, align, unsupported, pending, flags: [...flags], unscale, overflowPunctuation, inTableCell, ...(strut ? { strut } : {}), chrome, ...(firstLineStrut ? { firstLineStrut } : {}), ...(tabStops ? { tabStops } : {}) };
+  // A drop cap: Word sets the frame's letter beside the paragraph's first
+  // lines and fills each of them only as far as the room right of it
+  // (Windows Word 16, probes/dropcap: R441-D01's "D", lines 2, the first two
+  // lines start at the letter's advance plus its distance from text, the
+  // third at the margin). The browser draws the letter as an initial letter
+  // the same lines high; the engine reads its box and fills those lines
+  // with that room, the letter taking none of theirs.
+  // `window.__docsDropCapLinesOff = true`: the engine reads such a
+  
+  let leadingLines: DocsParagraph["leadingLines"];
+  const dropCapOff = (view as Window & { __docsDropCapLinesOff?: boolean }).__docsDropCapLinesOff === true;
+  if (!unsupported && !dropCapOff && element.matches(DROP_CAP_SELECTOR)) {
+    const letter = view.getComputedStyle(element, "::first-letter");
+    const lines = initialLetterLines(letter.getPropertyValue("initial-letter") || letter.getPropertyValue("-webkit-initial-letter"));
+    const capIndex = pieces.findIndex((piece) => piece.kind !== "box" || piece.advance > 0.01);
+    const cap = capIndex >= 0 ? pieces[capIndex] : undefined;
+    const after = capIndex >= 0 ? pieces[capIndex + 1] : undefined;
+    const capRect = !unlaid && lines !== null && cap?.kind === "text" ? pieceRect(cap) : null;
+    if (unlaid) unsupported ??= "drop cap without layout";
+    else if (lines === null) unsupported ??= "drop cap not an initial letter";
+    // ::first-letter takes the punctuation around the letter with it.
+    else if (!cap || cap.kind !== "text" || /\p{P}/u.test(cap.text) || (after?.kind === "text" && /\p{P}/u.test(after.text))) unsupported ??= "drop cap not one letter";
+    // Drawn as an initial letter, the letter's box is wider than its own
+    // advance (Chromium reports the box at the run's line height, not the
+    // letter's: R441-D01's "D" 22.1 pt wide, 12 pt high at 11 pt).
+    else if (!capRect || !rect || !(capRect.width * unscale > cap.advance * 1.4)) unsupported ??= "drop cap not drawn";
+    else {
+      const contentLeft = rect.left + (padL + borL) / unscale;
+      const end = (capRect.right - contentLeft) * unscale + px(letter.marginRight);
+      leadingLines = { count: lines, width: content - Math.max(0, end) };
+      pieces[capIndex] = { kind: "box", text: "\ufffc", advance: 0, node: cap.node, offset: cap.offset };
+      flags.add("drop-cap");
+    }
+  }
+  return { pieces, firstWidth, restWidth: content, align, unsupported, pending, flags: [...flags], unscale, overflowPunctuation, inTableCell, ...(strut ? { strut } : {}), chrome, ...(firstLineStrut ? { firstLineStrut } : {}), ...(tabStops ? { tabStops } : {}), ...(leadingLines ? { leadingLines } : {}) };
 }
 
 /**
@@ -603,16 +730,25 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
  * min-content its widest piece between two of the browser's break
  * opportunities, the first line's indent added to each and trailing spaces
  * hanging. Null where only the page can say (unsupported, pending, a
- * negative indent).
+ * negative indent). `ideographsAsLetters` (wordSetsIdeographsAsLetters):
+ * a run of ideographs and kana is one word of the min-content, as Word keeps
+ * it (docx-look/probes/cjk3 tc12: mode 12, Calibri defaults, an AutoFit
+ * table whose Japanese cell kept its whole run as its narrowest width and
+ * crushed the "Item" column to 12.9 pt; with SimSun defaults or in mode 15
+ * "Item" kept its width).
  */
-export function docsContentWidths(paragraph: DocsParagraph, columnWidthPx: number): { min: number; max: number } | null {
+export function docsContentWidths(
+  paragraph: DocsParagraph,
+  columnWidthPx: number,
+  ideographsAsLetters = false,
+): { min: number; max: number } | null {
   if (paragraph.unsupported || paragraph.pending) return null;
   const indent = paragraph.restWidth - paragraph.firstWidth;
   if (indent < 0) return null;
   const extra = columnWidthPx - paragraph.restWidth;
   const pieces = paragraph.pieces;
   const texts = pieces.map((piece) => (piece.kind === "box" ? "\ufffc" : piece.kind === "break" ? "\n" : piece.text));
-  const opportunities = lineBreakOpportunities(texts, { kinsoku: null, browser: true });
+  const opportunities = lineBreakOpportunities(texts, { kinsoku: null, browser: true, ideographsAsLetters });
   let max = 0;
   let min = 0;
   let line = indent;
@@ -784,6 +920,53 @@ function docsTabAdvance(paragraph: DocsParagraph, tabs: DocsTabLayout, index: nu
  * fills a line. A paragraph read with its stops (`tabStops`) gets each tab's
  * advance here, from where its line has got to.
  */
+/** Harness switch (`window.__docsSpaceBreakOff = true`): a space after a
+ * character wider than its line hangs in every mode, as before (A/B). */
+function spaceBreakOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsSpaceBreakOff?: boolean }).__docsSpaceBreakOff === true;
+}
+
+/** Harness switch (`window.__docsLastLetterHangOff = true`): the paragraph's
+ * last line of one letter wider than the measure is drawn as it comes, and
+ * the paragraph's closing widgets wrap under it (A/B). */
+function lastLetterHangOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsLastLetterHangOff?: boolean }).__docsLastLetterHangOff === true;
+}
+
+/** Whether the paragraph's last line (of the engine's `starts`) is one
+ * character wider than the measure: a cell narrower than a letter. Word
+ * draws the letter past the edge and its paragraph mark with it, on that
+ * line; a browser sends the editor's closing widgets (a cell-end mark, the
+ * separator and trailing break after it) to a line of their own under it
+ * (tables/probes/narrow: Word's "Asset’s ID" row is 10 lines, 108.1 pt; ours
+ * drew an 11th). */
+export function docsLastLineOverhangs(paragraph: DocsParagraph, starts: readonly number[]): boolean {
+  const pieces = paragraph.pieces;
+  if (lastLetterHangOff() || !starts.length || pieces[pieces.length - 1]?.kind === "break") return false;
+  const line = starts.length - 1;
+  const from = starts[line];
+  const end = contentEnd(pieces, from, pieces.length);
+  let engine = 0;
+  let graphemes = 0;
+  for (let at = from; at < end; at += 1) {
+    const piece = pieces[at];
+    if (piece.kind === "break") return false;
+    engine += piece.advance;
+    if (piece.kind === "text" || piece.kind === "space") graphemes += 1;
+  }
+  const width = line === 0 ? paragraph.firstWidth : paragraph.restWidth;
+  return graphemes === 1 && engine > width + fitEpsilon(paragraph);
+}
+
+/** Whether line `line` of `starts` (the engine's raw starts) is opened by a
+ * space, not after a hard break: a mode-14 space after a character wider than
+ * the line (docsEngineLineStarts), drawn by a break before it. */
+export function docsLineOpensWithSpace(paragraph: DocsParagraph, starts: readonly number[], line: number): boolean {
+  if (line <= 0) return false;
+  const start = starts[line];
+  return paragraph.pieces[start]?.kind === "space" && paragraph.pieces[start - 1]?.kind !== "break" && paragraph.pieces[start - 1]?.kind !== "space";
+}
+
 export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayoutRules): number[] {
   const pieces = paragraph.pieces;
   const count = pieces.length;
@@ -800,7 +983,11 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
     if (piece.kind === "break") continue;
     visible.push(index);
   }
-  const visibleOpportunities = lineBreakOpportunities(visible.map((index) => texts[index]), { kinsoku: rules.kinsoku, word: true });
+  const visibleOpportunities = lineBreakOpportunities(visible.map((index) => texts[index]), {
+    kinsoku: rules.ideographsAsLetters ? null : rules.kinsoku,
+    word: true,
+    ideographsAsLetters: rules.ideographsAsLetters === true,
+  });
   const opportunity = new Array<boolean>(count).fill(false);
   visible.forEach((index, order) => {
     const piece = pieces[index];
@@ -825,10 +1012,11 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
   const hangs = Boolean(paragraph.overflowPunctuation) &&
     (rules.compatibilityMode === null || rules.compatibilityMode < 15 || paragraph.align === "justify" || paragraph.align === "distribute");
   const fit = fitEpsilon(paragraph);
+  const spaceOpensLine = rules.compatibilityMode === null || rules.compatibilityMode < 15;
   let lineStart = 0;
   let lineIndex = 0;
   while (lineStart < count) {
-    const width = lineIndex === 0 ? paragraph.firstWidth : paragraph.restWidth;
+    const width = docsLineWidth(paragraph, lineIndex);
     let used = 0;
     let pendingSpace = 0;
     let lastBreak = -1;
@@ -844,6 +1032,17 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
       }
       if (index > lineStart && opportunity[index]) lastBreak = index;
       if (piece.kind === "space") {
+        // Mode 14 and earlier (or none): a space after a character that did
+        // not fit the line by itself (a cell narrower than one letter) does
+        // not hang; it opens a line of its own, and the next word another.
+        // Windows Word, tables/probes/narrow n1-n6: "Asset’s ID" in a cell
+        // whose text width is -2, 0 or 2 pt draws A|s|s|e|t|’|s| |I|D, ten
+        // lines (R417-D03 page 9's header row, 108.3 pt); with 5 pt "s " hangs
+        // as ever, and in mode 15 the space hangs at every width.
+        if (spaceOpensLine && pendingSpace === 0 && index > lineStart && Number.isFinite(used) && used > width + fit && pieces[index - 1]?.kind === "text" && !spaceBreakOff()) {
+          next = index;
+          break;
+        }
         pendingSpace += piece.advance;
         continue;
       }
@@ -1127,7 +1326,7 @@ export function auditDocsParagraph(element: HTMLElement, rules: DocsLayoutRules,
   const b = browser[firstDiff] ?? paragraph.pieces.length;
   // The engine's slack where the line it ends at the earlier of the two starts.
   const lineFrom = firstDiff > 0 ? engine[firstDiff - 1] : 0;
-  const width = firstDiff <= 1 && lineFrom === 0 ? paragraph.firstWidth : paragraph.restWidth;
+  const width = docsLineWidth(paragraph, firstDiff > 0 ? firstDiff - 1 : 0);
   let used = 0;
   let pendingSpace = 0;
   const until = Math.max(e, b);
@@ -1188,7 +1387,9 @@ export interface DocsLineCorrection {
   /** The tab that opens the next line (its piece index), or null. A browser
    * keeps a tab at the end of a line however full the line is (preserved
    * white space hangs past the measure, Chromium and WebKit alike), so the
-   * line is ended before it by a break the engine draws there. */
+   * line is ended before it by a break the engine draws there. The same
+   * break goes before a space that opens the next line (a mode-14 cell
+   * narrower than a letter, docsLineOpensWithSpace). */
   readonly tabBreak: number | null;
 }
 
@@ -1231,7 +1432,7 @@ export function planDocsLineCorrections(
       if (piece.kind === "text" || piece.kind === "space") graphemes += 1;
     }
     if (!graphemes) continue;
-    const width = line === 0 ? paragraph.firstWidth : paragraph.restWidth;
+    const width = docsLineWidth(paragraph, line);
     // Wider than the measure: a word kept by narrowing, on the paragraph's
     // last line too (corpus R279-D25: left as drawn, the browser sent the
     // word down and a two-line paragraph took three). That line, or one a
@@ -1239,11 +1440,25 @@ export function planDocsLineCorrections(
     const lastLine = to >= pieces.length || pieces[to - 1]?.kind === "break";
     const hangingPx = paragraph.overflowPunctuation && HANGING.has(pieces[end - 1].text) ? pieces[end - 1].advance : 0;
     const overflows = engine - (lastLine ? hangingPx : 0) > width + fit;
-    const squeeze = overflows ? engine - width : 0;
+    // A line of one character wider than the measure (a cell narrower than a
+    // letter) is not a kept word: Word draws the letter whole past the edge.
+    // Squeezed, its letter spacing took the letter's whole width away and a
+    // narrow column's letters stacked on one line (corpus R417-D03 "ID"
+    // columns, tables/probes/narrow).
+    // The paragraph's last such line is narrowed all the same: its letter
+    // draws whole and nothing follows it but the closing widgets, which
+    // then stay on its line as Word's paragraph mark does
+    // (docsLastLineOverhangs).
+    const closing = to >= pieces.length && pieces[to - 1]?.kind !== "break" && graphemes === 1 && !lastLetterHangOff();
+    const squeeze = overflows && (graphemes > 1 || spaceBreakOff() || closing) ? engine - width : 0;
     // The browser leaves a tab on this line for as long as it fits. A justified
     // line takes up the room in its spaces, as Word's does; another is padded.
     const tabOpensNext = !lastLine && pieces[to]?.kind === "tab";
-    let needed = force.has(line) || squeeze > 0 || tabOpensNext;
+    // A browser hangs a space at a line's end however narrow the line: a
+    // line the engine opens with one (mode 14, a cell narrower than a letter)
+    // is ended before it by the same break.
+    const spaceOpensNext = !lastLine && line + 1 < starts.length && docsLineOpensWithSpace(paragraph, starts, line + 1);
+    let needed = force.has(line) || squeeze > 0 || tabOpensNext || spaceOpensNext;
     if (!needed && Math.abs(engine - browser) > SAME_WIDTH) {
       // Does the browser keep this line whole?
       if (browser > width + fit) needed = true;
@@ -1274,7 +1489,7 @@ export function planDocsLineCorrections(
       letterSpacing: (engine - browser - (narrow > 0 && spaces ? 0 : narrow + CORRECTION_SLACK)) / graphemes,
       wordSpacing: narrow > 0 && spaces ? -narrow / spaces : stretches ? room / spaces : 0,
       spacesFrom: lastTab + 1,
-      tabBreak: tabOpensNext ? to : null,
+      tabBreak: tabOpensNext || spaceOpensNext ? to : null,
     });
   }
   return out;

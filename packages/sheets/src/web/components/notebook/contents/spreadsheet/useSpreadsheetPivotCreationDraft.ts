@@ -18,6 +18,9 @@ export interface SpreadsheetPivotCreationDraftInputs {
   dataTables: DataTable[];
   pivotConfigWithSafeOutput: (base: PivotConfig, matrix: string[][], requestedOutput?: string) => PivotConfig | null;
   pivotSelectionSnapshot: (range: PivotRange) => PivotSourceSnapshot | null;
+  /** What the dialog says under a source entry it cannot summarise (null:
+   * the entry is no range at all). */
+  pivotSourceIssue: (range: PivotRange | null) => string;
   setPivotCreationDraft: Dispatch<SetStateAction<PivotCreationDraft | null>>;
 }
 
@@ -26,6 +29,7 @@ export function useSpreadsheetPivotCreationDraft({
   dataTables,
   pivotConfigWithSafeOutput,
   pivotSelectionSnapshot,
+  pivotSourceIssue,
   setPivotCreationDraft,
 }: SpreadsheetPivotCreationDraftInputs) {
   const updatePivotCreationSource = useCallback(
@@ -46,11 +50,20 @@ export function useSpreadsheetPivotCreationDraft({
           : normalizePivotRange(rawSource);
         const snapshot = range ? pivotSelectionSnapshot(range) : null;
         // An unusable entry stops naming a table, so the draft's recipe cannot
-        // stand in for the text (pivotCreationSourceA1).
+        // stand in for the text (pivotCreationSourceA1). The fields and rows
+        // the draft holds are of the last range it could read, not of this
+        // entry: the dialog says why the entry cannot be summarised and shows
+        // no preview of them (a 60,001-row entry over a 6,000-row draft used
+        // to preview, and offer OK on, the 6,000 rows).
         const unresolved = (): PivotCreationDraft => {
           const config: PivotConfig = { ...current.config };
           delete config.sourceTableId;
-          return { ...current, sourceDraft: rawSource, config };
+          return {
+            ...current,
+            sourceDraft: rawSource,
+            sourceIssue: pivotSourceIssue(range),
+            config,
+          };
         };
         if (!snapshot || snapshot.dataRowCount === 0) {
           return unresolved();
@@ -66,13 +79,16 @@ export function useSpreadsheetPivotCreationDraft({
             snapshot.matrix,
             current.outputDraft,
           ) ?? pivotConfigWithSafeOutput(base, snapshot.matrix);
-        if (!next?.output && current.destinationKind !== "new") {
-          return unresolved();
-        }
+        // A source read whole is the draft's from now on, whether or not its
+        // layout has a free place on this sheet yet: the place is checked
+        // where the dialog resolves its recipe (pivotCreationResolvedConfig),
+        // which offers no preview or OK while there is none. Keeping the
+        // earlier entry's rows instead previewed them under the new entry.
         return {
           ...current,
           sheetId: snapshot.sheetId,
           sourceDraft: sourceTable ? sourceTable.name : snapshot.sourceRef,
+          sourceIssue: null,
           outputDraft: next?.output ?? current.outputDraft,
           matrix: snapshot.matrix.map((row) => [...row]),
           scalarMatrix: snapshot.scalarMatrix.map((row) =>
@@ -83,7 +99,7 @@ export function useSpreadsheetPivotCreationDraft({
         };
       });
     },
-    [dataTables, pivotConfigWithSafeOutput, pivotSelectionSnapshot],
+    [dataTables, pivotConfigWithSafeOutput, pivotSelectionSnapshot, pivotSourceIssue],
   );
 
   const setPivotCreationFieldArea = useCallback(

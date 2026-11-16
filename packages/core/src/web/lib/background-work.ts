@@ -485,6 +485,13 @@ export function requestLaneFrame(lane: BackgroundLane, callback: () => void, win
 
 
 
+/** How long since the person last did anything here (a key, a press, a
+ * wheel, a touch, a drag). */
+export function msSinceInput(): number {
+  listen();
+  return clock() - lastInputAt;
+}
+
 export function requestInputQuietCallback(task: () => void, quietMs = 800): () => void {
   listen();
   let cancelled = false;

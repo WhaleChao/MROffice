@@ -104,27 +104,65 @@ export type ChartSeriesMarker = Readonly<{
    */
   fill?: string;
   outline?: string;
+  
+
+
+
+
+
+  shapePaint?: ChartMarkerShapePaint;
 }>;
 
+/**
+ * A marker's own shape paint: its 3-D Format and its Border > Width
+ * (`a:ln@w`, `outlineWidthPt`). Without a width the marker's border is
+ * Office's 0.75 pt, never its series' line width
+ * (`officeChartMarkerBorderWidthPx`).
+ */
+export type ChartMarkerShapePaint = Pick<OfficeChartShapePaint, "bevel" | "format3d" | "outlineWidthPt">;
+
 const MARKER_PAINT = /^(#[0-9a-f]{6}|none)$/;
+/** What a marker's own shape paint may state (`ChartSeriesMarker.shapePaint`). */
+const MARKER_SHAPE_PAINT_KEYS: ReadonlySet<string> = new Set(["bevel", "format3d", "outlineWidthPt"]);
+
+function normalizeChartMarkerShapePaint(value: unknown): ChartMarkerShapePaint | undefined | null {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (Object.keys(value).some((key) => !MARKER_SHAPE_PAINT_KEYS.has(key))) return null;
+  try {
+    const paint = normalizeOfficeChartShapePaint(value);
+    return paint
+      ? {
+          ...(paint.bevel ? { bevel: paint.bevel } : {}),
+          ...(paint.format3d ? { format3d: paint.format3d } : {}),
+          ...(paint.outlineWidthPt !== undefined ? { outlineWidthPt: paint.outlineWidthPt } : {}),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export function normalizeChartSeriesMarker(
   value: unknown,
 ): ChartSeriesMarker | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
   const record = value as Record<string, unknown>;
-  if (Object.keys(record).some((key) => key !== "symbol" && key !== "size" && key !== "fill" && key !== "outline")) {
+  if (Object.keys(record).some((key) => key !== "symbol" && key !== "size" && key !== "fill" && key !== "outline" && key !== "shapePaint")) {
     return undefined;
   }
   const symbol = record.symbol;
   if (!(CHART_MARKER_SYMBOLS as readonly unknown[]).includes(symbol)) return undefined;
-  const paint: { fill?: string; outline?: string } = {};
+  const paint: { fill?: string; outline?: string; shapePaint?: ChartMarkerShapePaint } = {};
   for (const key of ["fill", "outline"] as const) {
     const raw = record[key];
     if (raw === undefined) continue;
     if (symbol === "none" || typeof raw !== "string" || !MARKER_PAINT.test(raw.toLowerCase())) return undefined;
     paint[key] = raw.toLowerCase();
   }
+  const threeD = normalizeChartMarkerShapePaint(record.shapePaint);
+  if (threeD === null || (threeD && symbol === "none")) return undefined;
+  if (threeD) paint.shapePaint = threeD;
   if (record.size === undefined) return { symbol: symbol as ChartMarkerSymbol, ...paint };
   const size = record.size;
   if (
@@ -306,7 +344,7 @@ export function normalizePresentationChartAreaStyle(
       // A picture fill is the element's whole fill: no solid colour beside it.
       (shapePaint.fillPicture && fill !== undefined) ||
       (shapePaint.lineGradient && outline !== shapePaint.lineGradient.stops[0].color) ||
-      ((shapePaint.shadow || shapePaint.glow) && effect !== undefined))) return undefined;
+      ((shapePaint.shadow || shapePaint.glow || shapePaint.softEdge) && effect !== undefined))) return undefined;
   if (textPaint && (textFill !== undefined || textOutline !== undefined || textEffect !== undefined)) return undefined;
   return fill === undefined &&
     outline === undefined &&
@@ -551,6 +589,28 @@ export function presentationChartAreaStyleCss(
   if (!style) return {};
   const paint = style.shapePaint;
   const borderStyle = officeChartBorderStyleCss(paint);
+  // A soft-edged solid box is drawn by the chart's picture, faded in from
+  // its edge (`chart-render-server`): the frame paints no fill or line of
+  // its own over it.
+  if (
+    paint?.softEdge &&
+    style.fill !== undefined &&
+    style.fill !== "none" &&
+    !paint.fillGradient &&
+    !paint.fillPattern &&
+    !paint.fillPicture
+  ) {
+    const { fill: _fill, outline: _outline, shapePaint, ...rest } = style;
+    // Its effects stay the frame's (a shadow, a glow); its fill and line are the picture's.
+    const effects = Object.fromEntries(
+      Object.entries(shapePaint ?? {}).filter(([key]) => ["shadow", "glow", "innerShadow", "bevel", "format3d"].includes(key)),
+    );
+    return {
+      ...presentationChartAreaStyleCss({ ...rest, ...(Object.keys(effects).length ? { shapePaint: effects } : {}) }),
+      backgroundColor: "transparent",
+      border: "none",
+    };
+  }
   return {
     boxSizing: "border-box",
     ...(style.fill === undefined
@@ -713,7 +773,10 @@ export function normalizePresentationChartSliceStyles(
         // A point's own effects alone (a funnel stage's glow or inner
         // shadow, X-051) are a paint of its own.
         !shapePaint?.glow &&
-        !shapePaint?.innerShadow) ||
+        !shapePaint?.innerShadow &&
+        !shapePaint?.softEdge &&
+        !shapePaint?.bevel &&
+        !shapePaint?.format3d) ||
       seen.has(key)
     ) {
       return undefined;
@@ -952,4 +1015,63 @@ export function chartStyleRowExtras(
     if (value !== undefined) extras[name] = value;
   }
   return extras;
+}
+
+/**
+ * Format Data Point (`point:S:P`, a second click on one column, bar or funnel
+ * stage): series S's point P's own row in `sliceStyles` -- its `c:dPt` in
+ * that series -- or undefined. The first series' rows state no series.
+ */
+export function chartPointStyleRow<Row extends { readonly pointIndex: number; readonly seriesIndex?: number }>(
+  rows: readonly Row[] | undefined,
+  seriesIndex: number,
+  pointIndex: number,
+): Row | undefined {
+  return rows?.find((row) => (row.seriesIndex ?? 0) === seriesIndex && row.pointIndex === pointIndex);
+}
+
+/**
+ * `sliceStyles` with series S's point P formatted `style` (null: Reset to
+ * Match Style, the point's row gone). A paint write keeps what the row holds
+ * beside its paint (`chartStyleRowExtras`); the rows stay in series, then
+ * point, order. Undefined when no row is left.
+ */
+export function chartRowsWithPointStyle<Row extends { readonly pointIndex: number; readonly seriesIndex?: number }>(
+  rows: readonly Row[] | undefined,
+  seriesIndex: number,
+  pointIndex: number,
+  style: PresentationChartAreaStyle | null,
+): Row[] | undefined {
+  const normalized = style === null ? null : normalizePresentationChartAreaStyle(style) ?? null;
+  const existing = chartPointStyleRow(rows, seriesIndex, pointIndex);
+  const extras = style === null ? {} : chartStyleRowExtras("sliceStyles", existing, style);
+  delete extras.seriesIndex;
+  const next: Row[] = (rows ?? []).filter((row) => row !== existing);
+  if (normalized || Object.keys(extras).length) {
+    next.push({ ...(seriesIndex ? { seriesIndex } : {}), pointIndex, ...extras, ...(normalized ?? {}) } as unknown as Row);
+  }
+  next.sort((left, right) => (left.seriesIndex ?? 0) - (right.seriesIndex ?? 0) || left.pointIndex - right.pointIndex);
+  return next.length ? next : undefined;
+}
+
+/**
+ * What Format Data Point shows and edits for series S's point P: its own row,
+ * or, before it has one, its series' paint -- what Office copies into a
+ * point's first own formatting, so one change keeps the rest of what the
+ * point showed (its series' colour under a new glow).
+ */
+export function chartPointEffectiveStyle(
+  format: { readonly sliceStyles?: unknown; readonly seriesStyles?: unknown } | undefined,
+  seriesIndex: number,
+  pointIndex: number,
+): PresentationChartAreaStyle | undefined {
+  const own = chartPointStyleRow(normalizePresentationChartSliceStyles(format?.sliceStyles), seriesIndex, pointIndex);
+  if (own) {
+    const { seriesIndex: _series, pointIndex: _point, explosion: _explosion, marker: _marker, ...paint } = own as Record<string, unknown>;
+    return normalizePresentationChartAreaStyle(paint);
+  }
+  const series = normalizePresentationChartSeriesStyles(format?.seriesStyles)?.find((entry) => entry.seriesIndex === seriesIndex);
+  if (!series) return undefined;
+  const { seriesIndex: _series, marker: _marker, smooth: _smooth, barShape: _shape, ...paint } = series as Record<string, unknown>;
+  return normalizePresentationChartAreaStyle(paint);
 }

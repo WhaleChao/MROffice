@@ -739,7 +739,16 @@ export function definitionFromStyleValue(
   if (value.autoUpdate && value.styleType !== "character") def.autoUpdate = true;
   const own: Partial<NamedStyleDefinition> = {};
   if (value.fontFamily) own.fontFamily = value.fontFamily;
-  const px = fontPointsToPixels(value.sizePt);
+  const sourceEffective = source ? resolveNamedStyle(palette, source) : null;
+  // A size box left as the dialog showed it keeps the style's own size: the
+  // box rounds to Word's half-point grid, so a 13px (9.75pt) style renamed
+  // or given a new colour was saved at 10pt. Only a size the writer typed or
+  // picked goes through the grid.
+  const sourceSize = sourceEffective?.fontSize;
+  const px =
+    sourceSize && value.sizePt === fontPixelsToPoints(sourceSize)
+      ? sourceSize
+      : fontPointsToPixels(value.sizePt);
   if (px) own.fontSize = px;
   if (/^#[0-9a-fA-F]{6}$/.test(value.textColor.trim())) {
     own.textColor = value.textColor.trim();
@@ -761,7 +770,6 @@ export function definitionFromStyleValue(
       ? palette.find((style) => style.styleId === def.basedOn)
       : undefined;
   const inherited = parent ? resolveNamedStyle(palette, parent) : null;
-  const sourceEffective = source ? resolveNamedStyle(palette, source) : null;
   for (const field of NAMED_STYLE_FORMAT_FIELDS) {
     const mine = own[field as keyof typeof own];
     if (mine === undefined) continue;

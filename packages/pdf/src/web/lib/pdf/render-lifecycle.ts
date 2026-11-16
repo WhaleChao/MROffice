@@ -165,6 +165,67 @@ export function createPdfSessionDestroyer(
   };
 }
 
+/** The page renders of one document shown by the reader, from its
+ * publication to the end of its pdf.js session. */
+export interface PdfRenderSession {
+  /**
+   * `render`'s own outcome while the session lasts. Once it has ended, a
+   * render still in flight is waited for no longer (resolved), and one asked
+   * for afterwards is not begun.
+   */
+  bound(render: () => Promise<void>): Promise<void>;
+  /** The document's session is over (its worker terminated). Idempotent. */
+  end(): void;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function createPdfRenderSession(): PdfRenderSession {
+  let ended = false;
+  const waiting = new Set<() => void>();
+  return {
+    bound(render) {
+      if (ended) return Promise.resolve();
+      return new Promise<void>((resolve, reject) => {
+        const release = () => resolve();
+        waiting.add(release);
+        let rendering: Promise<void>;
+        try {
+          rendering = render();
+        } catch (error) {
+          rendering = Promise.reject(error);
+        }
+        rendering.then(
+          () => {
+            waiting.delete(release);
+            resolve();
+          },
+          (error: unknown) => {
+            waiting.delete(release);
+            reject(error);
+          },
+        );
+      });
+    },
+    end() {
+      if (ended) return;
+      ended = true;
+      const released = [...waiting];
+      waiting.clear();
+      for (const release of released) release();
+    },
+  };
+}
+
 /** Classify the cancellation errors emitted by pdf.js canvas/text renderers. */
 export function isPdfRenderCancellation(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;

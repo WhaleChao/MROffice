@@ -12,7 +12,7 @@
  */
 
 import { SheetFact } from "../../../../lib/editor/sheet-facts";
-import type { Editor, JSONContent } from "@tiptap/core";
+import type { Command, Editor, JSONContent } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { NodeSelection, type EditorState } from "@tiptap/pm/state";
 import {
@@ -273,6 +273,55 @@ export function tableOfContentsNode(doc: ProseMirrorNode, settingsInput: unknown
   return {
     type: "tableOfContents",
     attrs: { ...settings, cachedEntries: markGeneratedListEntries(tableOfContentsEntries(doc, settings)) },
+  };
+}
+
+/**
+ * The position right after the outermost table holding `pos` (a top-level
+ * block boundary), or null when `pos` is in no table.
+ */
+export function positionAfterOutermostTable(doc: ProseMirrorNode, pos: number): number | null {
+  const resolved = doc.resolve(Math.max(0, Math.min(pos, doc.content.size)));
+  for (let depth = 1; depth <= resolved.depth; depth += 1) {
+    if (resolved.node(depth).type.name === "table") return resolved.after(depth);
+  }
+  return null;
+}
+
+/**
+ * Insert a table of contents at the insertion point -- or, with the caret in
+ * a table cell, right after that table, at the top level. Word can hold a
+ * table of contents in a cell (its TOC field in the cell's paragraphs), but
+ * the page and its DOCX save cannot yet: one put there was refused on save
+ * and came back from a full export as loose paragraphs (FIXQUEUE 177; real
+ * support is 182). Never a silent move: `onPlacedAfterTable` runs when the
+ * table of contents went after the table, for the caller to say so.
+ */
+export function insertTableOfContentsCommand(
+  content: JSONContent | JSONContent[],
+  onPlacedAfterTable?: () => void,
+): Command {
+  const atom = (Array.isArray(content) ? content : [content]).some((item) => item?.type === "tableOfContents");
+  return ({ tr, commands }) => {
+    // A Manual Table is paragraphs, which a cell holds as they are.
+    const after = atom ? positionAfterOutermostTable(tr.doc, tr.selection.from) : null;
+    if (after === null) return commands.insertContent(content);
+    const inserted = commands.insertContentAt(after, content);
+    if (inserted) onPlacedAfterTable?.();
+    return inserted;
+  };
+}
+
+/**
+ * The editor's notice that a table of contents went after the table the
+ * caret was in (the `tableOfContents` extension's `onPlacedAfterTable`
+ * option; the document editor configures it with a localized toast).
+ */
+export function tableOfContentsPlacedAfterTableNotice(editor: Editor): () => void {
+  return () => {
+    const extension = editor.extensionManager.extensions.find((item) => item.name === "tableOfContents");
+    const notify = (extension?.options as { onPlacedAfterTable?: () => void } | undefined)?.onPlacedAfterTable;
+    notify?.();
   };
 }
 

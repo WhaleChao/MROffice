@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import cameraTable from "../office-camera-rotations.shared.json";
+import { OFFICE_CAMERA_DISTANCE_EMU_AT_45 } from "../office-camera-distance";
 import {
   type SmartArtLightRigType,
   type SmartArtMaterial,
@@ -118,6 +120,24 @@ const CHILLY_WITHOUT_POWDER: SmartArtLightRigPaint = { face: [1, 1, 1.046] };
 
 const METAL_THREE_POINT_FACE = { face: [0.98, 0.975, 0.976] as const, top: 108, bottom: 42 };
 
+
+
+
+
+
+
+
+
+
+function metalFaceLight(scene3d: SmartArtScene3d | undefined, shape3d?: SmartArtShape3d): boolean {
+  if (shape3d?.material !== "metal" || lightRigOf(scene3d, shape3d) !== "threePt") return false;
+  const camera = scene3d?.camera;
+  return (
+    !!camera &&
+    (camera.preset !== "orthographicFront" || !!camera.latitude || !!camera.longitude)
+  );
+}
+
  
 function lightRigOf(scene3d: SmartArtScene3d | undefined, shape3d?: SmartArtShape3d): SmartArtLightRigType | undefined {
   return scene3d?.lightRig.rig ?? shape3d?.lightRig?.rig;
@@ -146,7 +166,7 @@ export function smartArtLightRigMatrix(
   scene3d: SmartArtScene3d | undefined,
   shape3d?: SmartArtShape3d,
 ): string | null {
-  const metal = shape3d?.material === "metal" && lightRigOf(scene3d, shape3d) === "threePt";
+  const metal = metalFaceLight(scene3d, shape3d);
   const paint = metal ? { face: METAL_THREE_POINT_FACE.face } : smartArtLightRigPaint(scene3d, shape3d);
   if (!paint) return null;
   const [r, g, b] = paint.face;
@@ -249,7 +269,7 @@ export function smartArtFaceTintPrimitives(
 ): SmartArtFilterPrimitive[] {
   const matrix = smartArtLightRigMatrix(scene3d, shape3d);
   if (!matrix) return [];
-  const metal = shape3d?.material === "metal" && lightRigOf(scene3d, shape3d) === "threePt";
+  const metal = metalFaceLight(scene3d, shape3d);
   const balanced = !metal && span ? lightRigOf(scene3d, shape3d) === "balanced" && lightImage(span, balancedLightAt) : null;
   // Metal's light, across the member as well as down it, where the host says
   // where the member stands in its diagram.
@@ -407,6 +427,43 @@ export const SMARTART_CAMERA_PRESETS: Readonly<Record<string, CameraPreset>> = {
   },
 };
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function sceneCameraPreset(name: string): CameraPreset {
+  const measured = SMARTART_CAMERA_PRESETS[name];
+  if (measured) return measured;
+  const row = (cameraTable.cameras as unknown as Record<string, readonly number[] | undefined>)[name];
+  if (!row) return SMARTART_CAMERA_PRESETS.orthographicFront!;
+  const [x = 0, y = 0, z = 0, fov = 45] = row;
+  const perspective = name.startsWith("perspective");
+  const half = (Math.min(179, Math.max(1, fov)) * Math.PI) / 360;
+  return {
+    latitude: y ? -y : 0,
+    longitude: x,
+    revolution: z,
+    perspective,
+    ...(perspective
+      ? { perspectiveDistanceEmu: Math.round((OFFICE_CAMERA_DISTANCE_EMU_AT_45 * Math.tan(Math.PI / 8)) / Math.tan(half)) }
+      : {}),
+  };
+}
+
 export interface SmartArtCameraAngles {
   latitude: number;
   longitude: number;
@@ -443,9 +500,7 @@ export interface SmartArtCameraAngles {
  * centre out of the frame.
  */
 export function smartArtCameraAngles(scene3d: SmartArtScene3d): SmartArtCameraAngles {
-  const preset =
-    SMARTART_CAMERA_PRESETS[scene3d.camera.preset] ??
-    SMARTART_CAMERA_PRESETS.orthographicFront;
+  const preset = sceneCameraPreset(scene3d.camera.preset);
   const hasExplicitRotation =
     scene3d.camera.latitude !== undefined ||
     scene3d.camera.longitude !== undefined ||
@@ -503,15 +558,24 @@ export function smartArtCameraCss(
   if (!(member.width > 0) || !(member.height > 0)) return null;
   const originX = ((group.left + group.width / 2 - member.left) / member.width) * 100;
   const originY = ((group.top + group.height / 2 - member.top) / member.height) * 100;
-  const preset =
-    SMARTART_CAMERA_PRESETS[scene3d.camera.preset] ??
-    SMARTART_CAMERA_PRESETS.orthographicFront;
+  const preset = sceneCameraPreset(scene3d.camera.preset);
+  // A field of view the camera states itself (Format Shape > 3-D Rotation >
+  // Perspective, `a:camera@fov`) stands the eye at Office's absolute distance
+  // for that view instead of the preset's.
+  const ownFov = typeof scene3d.camera.fov === "number" ? scene3d.camera.fov / 60_000 : undefined;
+  const ownDistanceEmu =
+    preset.perspective && ownFov !== undefined
+      ? Math.round(
+          (OFFICE_CAMERA_DISTANCE_EMU_AT_45 * Math.tan(Math.PI / 8)) /
+            Math.tan((Math.min(179, Math.max(1, ownFov)) * Math.PI) / 360),
+        )
+      : undefined;
   // An ABSOLUTE distance, not a multiple of the diagram: measured across a 4x
   // range of diagram sizes and two slide shapes (see SMARTART_CAMERA_PRESETS).
   // The diagram's own size still decides how much of that distance it spans,
   // which is exactly how PowerPoint gives a bigger diagram more perspective.
   const distance = emuToPx(
-    preset.perspectiveDistanceEmu ?? DEFAULT_PERSPECTIVE_DISTANCE_EMU,
+    ownDistanceEmu ?? preset.perspectiveDistanceEmu ?? DEFAULT_PERSPECTIVE_DISTANCE_EMU,
   );
   // ORDER MATTERS, and it is Office's: `rotateX(lat) rotateY(lon)` composes as
   // Rx·Ry, which shears the diagram VERTICALLY (a tilted diagram's right-hand
@@ -752,10 +816,19 @@ export function smartArtShape3dFilter(
     // A measured ratio of DRAWN pixels (side face over front face), so it
     // scales the encoded channels. It is not DrawingML's `a:shade`, which
     // mixes linear light and would paint the body a third lighter.
-    const face = scaleDrawnColor(
-      fill ?? "#000000",
-      lit ? (lit[0] + lit[1] + lit[2]) / 3 : 0.62,
-    );
+    const shade = lit ? (lit[0] + lit[1] + lit[2]) / 3 : 0.62;
+    if (fill === "none" || fill === "transparent") {
+      // A solid with No Fill has see-through walls: PowerPoint draws only its
+      
+      // three unfilled 30 pt deep boxes under their group's Isometric: Off
+      // Axis 2 Left: white wireframes). Swept, the outline became a slab, and
+      // a drop shadow of an unfilled shape took black for its colour.
+      const edge = shape3d.contourColor;
+      return edge && (shape3d.contourWidthEmu ?? 0) > 0
+        ? `drop-shadow(${offset.dx.toFixed(2)}px ${offset.dy.toFixed(2)}px 0 ${scaleDrawnColor(edge, shade)})`
+        : null;
+    }
+    const face = scaleDrawnColor(fill ?? "#000000", shade);
     for (let layer = 0; layer < layerCount; layer += 1) {
       const reach = 2 ** layer / steps;
       layers.push(

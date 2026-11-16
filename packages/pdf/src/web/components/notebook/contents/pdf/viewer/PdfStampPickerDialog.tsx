@@ -35,6 +35,7 @@ import {
   sanitizeSignatureImage,
 } from "@mrnote/core/web/lib/pdf/signatures.ts";
 import { fitOfficePictureBlob } from "@mrnote/core/web/lib/office-picture-envelope.ts";
+import { pdfStampPictureForWriter } from "../../../../../lib/pdf/stamp-picture-check";
 import type { PdfManagedStampCommandOrigin } from "./readerStamp";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 
@@ -245,15 +246,38 @@ export function PdfStampPickerDialog({
                         setStampUploadError(true);
                         return;
                       }
-                      setStampUploadError(false);
-                      setArmedStamp({
-                        kind: "image",
-                        image,
-                        aspectRatio,
-                        origin: stampPickerOrigin,
+                      // The picture as the PDF's writer takes it: a file a
+                      // browser draws though its data is damaged or cut
+                      // short (or larger than the writer reads) is put on
+                      // the page as the browser draws it, encoded again;
+                      // taken as it was, the writer refused its row, the
+                      // page's PDF was not written and every later write
+                      // was refused with it (stamp-picture-check.ts).
+                      void pdfStampPictureForWriter({
+                        dataUrl: image,
+                        width: preview.naturalWidth,
+                        height: preview.naturalHeight,
+                        maxBytes: SIGNATURE_MAX_IMAGE_BYTES,
+                      }).then((taken) => {
+                        if (stampUploadRunRef.current !== stampUploadRun)
+                          return;
+                        const picture = taken
+                          ? sanitizeSignatureImage(taken)
+                          : null;
+                        if (!picture) {
+                          setStampUploadError(true);
+                          return;
+                        }
+                        setStampUploadError(false);
+                        setArmedStamp({
+                          kind: "image",
+                          image: picture,
+                          aspectRatio,
+                          origin: stampPickerOrigin,
+                        });
+                        setStampPickerImageOnly(false);
+                        setStampPickerOpen(false);
                       });
-                      setStampPickerImageOnly(false);
-                      setStampPickerOpen(false);
                     };
                     preview.onerror = () => {
                       if (stampUploadRunRef.current !== stampUploadRun)

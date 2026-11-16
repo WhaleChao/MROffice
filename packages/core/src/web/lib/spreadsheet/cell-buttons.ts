@@ -40,6 +40,7 @@ import {
   type RunStyle as CellRunStyle,
   type TextRun as CellTextRun,
 } from "./cell-rich-text";
+import { normalizeMerges } from "./merge-cells";
 import type { ChartValueCache } from "./chart-value-cache";
 import { hasComment, isThreadComment, type CellComment } from "./comments";
 import { readCellPicture } from "./cell-picture";
@@ -50,7 +51,7 @@ import {
 } from "./cell-phonetic";
 import { parseSpreadsheetEntry, spreadsheetCellIsText } from "./entry-parse";
 import type { SpreadsheetFillPattern, SpreadsheetGradientFill } from "./fill-pattern";
-import { isExcelNumericText } from "./formula-engine";
+import { isExcelNumericText, literalReadsAsNonText } from "./formula-engine";
 import { enteredFormulaNumberFormat } from "./formula-result-format";
 import {
   autoFitColumnWidth,
@@ -701,6 +702,11 @@ export function cellRunsAfterFontPatch(
           "fontFamily",
           "fontSize",
           "color",
+          // Format Cells > Font > Effects on the whole cell sets every run's
+          // position too, the other one off (xlsx-rounds R406-X11 WALK2: δ¹⁸O
+          // made subscript kept "18" superscript and the other runs plain).
+          "superscript",
+          "subscript",
         ].includes(field),
       )
       .map(([field, fieldValue]) => [
@@ -730,7 +736,7 @@ export function updateCellStyle<S extends CellButtonsSheet>(
     themeColors: themeColorsAfterPatch(previous.style || {}, patch),
     nativeFontSize: nativeFontSizeAfterPatch(previous.style?.nativeFontSize, patch),
   };
-  dropRecordFontOverridden(nextStyle as Record<string, unknown>, patch);
+  dropRecordFontOverridden(nextStyle as Record<string, unknown>, patch, previous.style as Record<string, unknown> | undefined);
   for (const [styleKey, value] of Object.entries(nextStyle)) {
     if (
       value === false ||
@@ -754,10 +760,14 @@ export function updateCellStyle<S extends CellButtonsSheet>(
   // A number format changes how a value shows, never the value a formula
   // reads (Microsoft Support, "Available number formats in Excel"): text
   // entered under the Text format stays text after the cell is formatted as
-  // Number or General, until it is entered again (live audit S-166).
+  // Number or General, until it is entered again (live audit S-166). Only
+  // characters that would read as something else need the marker, as the
+  // workbook reader gives it: "2-3" is text either way, and a marker on it
+  // was a change the export's reading did not keep (xlsx-rounds R376-X12).
   if (
     Object.prototype.hasOwnProperty.call(patch, "numberFormat") &&
     nextCell.value !== "" &&
+    (literalReadsAsNonText(nextCell.value) || nextCell.value.trim().startsWith("=")) &&
     spreadsheetCellIsText(previous) &&
     !spreadsheetCellIsText(nextCell)
   ) {
@@ -932,6 +942,68 @@ export function cellStylePatchedSheet<S extends CellButtonsSheet>(
   return nextSheet;
 }
 
+/**
+ * A sheet whose cell at (row, col) wears xf 0's look (xlsxDefaultLook) as
+ * that look stated on the cell, so a border drawn on it is drawn over the
+ * look, as Excel's new xf is xf 0 plus the borders: a bordered cell of a
+ * vertically centred workbook stays centred (xlsx-rounds R308-X25, R309-X21,
+ * R309-X30, R310-X08 E24). Any other sheet comes back as it was.
+ */
+function withDefaultLookStated<S extends CellButtonsSheet>(sheet: S, row: number, col: number): S {
+  const look = xlsxDefaultLookEnabled() ? (sheet as DefaultLookSheet).defaultStyle : undefined;
+  if (!look || Object.keys(look).length === 0) return sheet;
+  if (cellLookAt(sheet as DefaultLookSheet, row, col).source !== "default") return sheet;
+  return updateCellStyle(sheet, row, col, withDefaultLookUnder(look as NonNullable<SpreadsheetCell["style"]>, {}));
+}
+
+/** A merged area draws its right and bottom lines off its anchor's
+ *  `borderEdges` (the importer states the area's last cells' lines there), so
+ *  a preset's lines on an area inside the rectangle are also the anchor's: its
+ *  bottom is what the preset gives the area's last row, its right what it gives
+ *  the last column, and an edge the preset leaves there untouched stays as it
+ *  was (xlsx-rounds R420-X05: Thick Bottom over AK5:AK7 with AK6:AK7 merged
+ *  went to AK7 only and the merged cell kept drawing its medium line). */
+function mergeAnchorsWithTheirFarLines(
+  patches: ReturnType<typeof borderPresetPatchesForRange>,
+  merges: unknown,
+  rect: { r1: number; c1: number; r2: number; c2: number },
+): ReturnType<typeof borderPresetPatchesForRange> {
+  const spans = normalizeMerges(merges);
+  if (spans.length === 0) return patches;
+  const top = Math.min(rect.r1, rect.r2);
+  const bottom = Math.max(rect.r1, rect.r2);
+  const left = Math.min(rect.c1, rect.c2);
+  const right = Math.max(rect.c1, rect.c2);
+  const byCell = new Map(patches.map((patch) => [`${patch.row}:${patch.col}`, patch]));
+  const out = [...patches];
+  for (const span of spans) {
+    if (span.rowSpan <= 1 && span.colSpan <= 1) continue;
+    const lastRow = span.row + span.rowSpan - 1;
+    const lastCol = span.col + span.colSpan - 1;
+    if (span.row < top || lastRow > bottom || span.col < left || lastCol > right) continue;
+    const anchorKey = `${span.row}:${span.col}`;
+    const edges = { ...(byCell.get(anchorKey)?.edges ?? {}) };
+    for (const [side, key, size] of [
+      ["bottom", `${lastRow}:${span.col}`, span.rowSpan],
+      ["right", `${span.row}:${lastCol}`, span.colSpan],
+    ] as const) {
+      if (size <= 1) continue;
+      const far = byCell.get(key)?.edges;
+      if (far && Object.prototype.hasOwnProperty.call(far, side)) edges[side] = far[side];
+      else delete edges[side];
+    }
+    const index = out.findIndex((patch) => patch.row === span.row && patch.col === span.col);
+    if (Object.keys(edges).length === 0) {
+      if (index >= 0) out.splice(index, 1);
+      continue;
+    }
+    const patch = { row: span.row, col: span.col, edges };
+    if (index >= 0) out[index] = patch;
+    else out.push(patch);
+  }
+  return out;
+}
+
 /** Home > Borders, one gallery preset over a rectangle: each cell's edges
  *  from the shared preset walk, in the chosen line style and colour (the
  *  thick/double presets keep their own line). Protection is the caller's. */
@@ -944,10 +1016,12 @@ export function borderPresetPatchedSheet<S extends CellButtonsSheet>(
   selectedThemeColor: SpreadsheetThemeColor | undefined,
 ): S {
   let nextSheet = sheet;
-  for (const { row, col, edges } of borderPresetPatchesForRange(
-    preset,
+  for (const { row, col, edges } of mergeAnchorsWithTheirFarLines(
+    borderPresetPatchesForRange(preset, rect),
+    (sheet as { merges?: unknown }).merges,
     rect,
   )) {
+    nextSheet = withDefaultLookStated(nextSheet, row, col);
     let own = nextSheet.cells[`${row}:${col}`]?.style?.borderEdges as
       CellBorderEdges | undefined;
     for (const [edge, line] of Object.entries(edges) as Array<
@@ -990,7 +1064,7 @@ export function borderModePatchedSheet<S extends CellButtonsSheet>(
   for (let r = selRect.r1; r <= selRect.r2; r += 1) {
     for (let c = selRect.c1; c <= selRect.c2; c += 1) {
       nextSheet = updateCellStyle(
-        nextSheet,
+        withDefaultLookStated(nextSheet, r, c),
         r,
         c,
         borderPatchForCell(mode, r, c, selRect),

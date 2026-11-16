@@ -24,6 +24,7 @@ import {
 import { clearRulesForClearAll, normalizeRules, type ValidationRule } from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
 import type { DataTable } from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
 import { shiftFormula } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
+import { MAX_GRID_COLUMNS, MAX_GRID_ROWS } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import { lineStyleAt, patchLineStyles } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import { cellsAfterMergesRemoved, normalizeMerges, rangeHasMerge, removeMergesInRange, type MergeSpan } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
 import { whatIfTablePartRefused, whatIfTablesAfterOverwrite } from "@mrnote/core/web/lib/spreadsheet/what-if-table-definition.ts";
@@ -64,9 +65,11 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
   if (clearsValues && whatIfTablePartRefused(sheet.whatIfTables, range)) return "what-if-table";
   const whatIfTablesLeft = clearsValues ? whatIfTablesAfterOverwrite(sheet.whatIfTables, [range]) : null;
   const mergeSpans = normalizeMerges(sheet.merges);
+  // As stored, a whole-column rule to the grid's last row: read through the
+  // sheet's used rows, clearing part of it cut the rest short (R316-X13).
   const conditionalFormats = normalizeConditionalRules(sheet.conditionalFormats, {
-    maxRow: sheet.rowCount - 1,
-    maxCol: sheet.columnCount - 1,
+    maxRow: MAX_GRID_ROWS - 1,
+    maxCol: MAX_GRID_COLUMNS - 1,
   });
   const validations = normalizeRules(sheet.validations);
   const wouldClearComment =

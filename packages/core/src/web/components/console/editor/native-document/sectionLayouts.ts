@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { ptToPx } from "../../../../lib/office-units";
+import { wordBorderRuleWidthPt } from "../../../../lib/document-borders";
 import type { EditorState } from "@tiptap/pm/state";
 
 import {
@@ -50,8 +51,10 @@ import { sheetsOf } from "./paged/sheetMeasureMemo";
  * non-default section value such as header distance / unequal columns).
  */
 
-// Word sets no limit on sections (docx.js' page-number-formats probe: 168).
-export const MAX_SECTION_LAYOUTS = 512;
+// Word sets no limit on sections (docx.js' page-number-formats probe: 168; a
+// book converted from PDF holds one section per printed page, R442-D01: 625).
+// The API's bound (document_section_layouts.MAX_SECTION_LAYOUTS), the same.
+export const MAX_SECTION_LAYOUTS = 4096;
 export const MAX_SECTION_COLUMNS = 45;
 /** Runtime-only page decoration carrying exact unequal column tracks.
  *
@@ -246,6 +249,12 @@ export interface SectionLayout {
   footnotePr?: SectionNoteProperties;
   /** The section's own `w:endnotePr` numbering (placement is document-wide). */
   endnotePr?: Omit<SectionNoteProperties, "position">;
+  /**
+   * Page Setup > Section direction: Right-to-left (`w:bidi`), stated only
+   * when it is one. Word draws the section's line numbers beside the text's
+   * right edge (corpus R404-D02).
+   */
+  rightToLeft?: true;
 }
 
 /**
@@ -360,6 +369,7 @@ export function normalizeSectionLayouts(
         "pageBorders",
         "footnotePr",
         "endnotePr",
+        "rightToLeft",
       ])
     ) {
       return null;
@@ -734,6 +744,10 @@ export function normalizeSectionLayouts(
       if (!notes) return null;
       layout[key] = notes;
     }
+    if (item.rightToLeft !== undefined) {
+      if (item.rightToLeft !== true) return null;
+      layout.rightToLeft = true;
+    }
 
     layouts.push(layout);
   }
@@ -745,6 +759,14 @@ export function sectionLayoutsNeedFidelityModel(
   layouts: readonly SectionLayout[],
 ): boolean {
   if (layouts.length === 0) return false;
+  // A right-to-left section alone changes nothing laid out without the model
+  // (only its line numbers' side, which the model's lineNumbers ask for).
+  layouts = layouts.map((layout) => {
+    if (!layout.rightToLeft) return layout;
+    const leftToRight = { ...layout };
+    delete leftToRight.rightToLeft;
+    return leftToRight;
+  });
   if (layouts.length > 1) {
     const first = JSON.stringify(layouts[0]);
     if (layouts.some((layout) => JSON.stringify(layout) !== first)) return true;
@@ -1013,6 +1035,16 @@ export const PAGE_BORDER_CSS_PROPERTIES: readonly string[] = [
 /** Word paints `w:color="auto"` on a border as black. */
 const PAGE_BORDER_AUTO_COLOR = "000000";
 
+function pageBorderLineWidthOnly(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsPageBorderLineWidth?: boolean }).__docsPageBorderLineWidth === true;
+}
+
+/** `window.__docsPageBorderBandPushOff = true` measures a border from the
+ * text from the page's margins alone, as before (A/B). */
+function pageBorderBandPushOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsPageBorderBandPushOff?: boolean }).__docsPageBorderBandPushOff === true;
+}
+
 /** One page-border edge as CSS, or `null` when it paints nothing. */
 function pageBorderEdgeCss(
   edge: SectionBorderEdge | undefined,
@@ -1029,9 +1061,16 @@ function pageBorderEdgeCss(
     typeof edge.color === "string" && /^[0-9a-fA-F]{6}$/.test(edge.color)
       ? edge.color
       : PAGE_BORDER_AUTO_COLOR;
-  // `w:sz` is eighths of a point: px = sz / 8 * 4/3 = sz / 6.
+  // `w:sz` is eighths of a point: px = sz / 8 * 4/3 = sz / 6. A compound
+  // rule is drawn as wide as Word draws its lines and gaps together (CSS
+  // `double` splits that width in thirds): one line's width, it drew the
+  // double rule of a page as one hairline (corpus R441-D03: two 0.5 pt lines
+  // and their 0.5 pt gap, 1.5 pt in all). `window.__docsPageBorderLineWidth
+  // = true` keeps the older width (A/B).
+  const ruleWidthPt = pageBorderLineWidthOnly() ? null : wordBorderRuleWidthPt(edge.style, edge.sizeEighths / 8);
+  const widthPx = ruleWidthPt !== null ? ptToPx(ruleWidthPt) : edge.sizeEighths / 6;
   return {
-    width: `${Math.round((edge.sizeEighths / 6) * 100) / 100}px`,
+    width: `${Math.round(widthPx * 100) / 100}px`,
     style,
     color: `#${literal.toUpperCase()}`,
   };
@@ -1086,18 +1125,35 @@ export function sectionLayoutPageBorderCss(
     painted = true;
     const spacePt = borders.edges[side]?.spacePt ?? 0;
     const spacePx = ptToPx(spacePt);
+    // Measured from the text, the rule's inner edge stands `w:space` out
+    // from it and the rule runs outward (a compound rule is wide).
     const insetPx =
       borders.offsetFrom === "page"
         ? spacePx
         : Math.max(
             0,
             sectionTwipsToPx(layout.pageMargins[PAGE_BORDER_SIDE_MARGIN_TWIPS[side]]) -
-              spacePx,
+              spacePx -
+              (pageBorderLineWidthOnly() ? 0 : Number.parseFloat(css.width) || 0),
           );
     properties[`--page-border-${side}`] =
       `${css.width} ${css.style} ${css.color}`;
-    properties[`--page-border-${side}-inset`] =
-      `${Math.round(insetPx * 100) / 100}px`;
+    // Measured from the text, the top and bottom rules stand off the text
+    // where it really starts and ends: a header taller than the top margin
+    // pushes the body down and the rule with it, a footer taller than the
+    // bottom margin lifts both (the sheet's own band overflow,
+    // stampSheetBandOverflow). Windows Word 16, corpus R379-D02 and R399-D02
+    // (thickThinSmallGap top, space 1 pt, header past its 0.5 in margin):
+    // the rule stands under the header, 1 pt over the body's first line; the
+    // page drew it at the margin, over the header's words. A margin stated
+    // exact (negative) lets the band overlap the body, which stays put.
+    const pushedBy =
+      borders.offsetFrom !== "page" && (side === "top" || side === "bottom") && !pageBorderBandPushOff() &&
+      layout.pageMargins[PAGE_BORDER_SIDE_MARGIN_TWIPS[side]] >= 0
+        ? `var(--sheet-band-extra-${side}-self, 0px)`
+        : null;
+    const inset = `${Math.round(insetPx * 100) / 100}px`;
+    properties[`--page-border-${side}-inset`] = pushedBy ? `calc(${inset} + ${pushedBy})` : inset;
   }
   if (!painted) return null;
   // `w:zOrder="back"` puts the border behind the text; the layer then paints

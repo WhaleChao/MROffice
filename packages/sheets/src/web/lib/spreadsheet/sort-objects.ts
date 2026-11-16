@@ -56,10 +56,29 @@ export function objectsAfterRowSort<O extends DrawingObjectLike>(
     const top = bounds.top - DEFAULT_SPREADSHEET_HEADER_HEIGHT_PX;
     const x = bounds.left - DEFAULT_SPREADSHEET_HEADER_WIDTH_PX;
     if (x < left - epsilon || x + bounds.width > right + epsilon) return object;
+    // A Move and size object goes by its anchor's cells, not its drawn box
+    
+    // sorted): one anchored from row r into a later row stays, even one
+    // ending right on that row's top edge (61 ovals, 32 at offset 0); one
+    // anchored inside row r goes with row r, even when its offsets reach past
+    // the row's height (six ovals with a row offset of up to 159 px went with
+    // their anchor row, where their drawn top had sent them elsewhere).
+    const anchorRows = object.anchor.kind === "twoCell" ? [object.anchor.from?.row, object.anchor.to?.row] : [];
+    const byAnchor = anchorRows.length === 2 && anchorRows.every((value) => typeof value === "number" && Number.isFinite(value));
     let row = span.r1;
-    while (row <= span.r2 && rowTop(row + 1) <= top + epsilon) row += 1;
-    if (row > span.r2 || top < rowTop(row) - epsilon) return object;
-    if (top + bounds.height > rowTop(row + 1) + epsilon) return object;
+    if (byAnchor) {
+      if (Number(anchorRows[1]) > Number(anchorRows[0])) return object;
+      row = Number(anchorRows[0]);
+      if (row < span.r1 || row > span.r2) return object;
+    } else {
+      while (row <= span.r2 && rowTop(row + 1) <= top + epsilon) row += 1;
+      if (row > span.r2 || top < rowTop(row) - epsilon) return object;
+      // "Move but don't size" (a one-cell anchor) travels with the row its
+      // top-left corner sits in, whatever rows it reaches into (Excel for Mac
+      
+      // into row 6 went with row 5; xlsx-rounds R311-X12 E9).
+      if (object.anchor.kind !== "oneCell" && top + bounds.height > rowTop(row + 1) + epsilon) return object;
+    }
     const destination = destinationOf(row);
     if (destination === undefined || destination === row) return object;
     changed = true;

@@ -108,8 +108,20 @@ export function takeRestoredLayout(root: object): boolean {
 /** When a document's latest part came in (a document held as parts). */
 const partArrivals = new WeakMap<object, number>();
 
+/** A part's append about to be dispatched, for the ledger's update to tell it from an edit. */
+const partDispatches = new WeakMap<object, number>();
+
 export function notePartArrived(root: object): void {
-  partArrivals.set(root, performance.now());
+  const now = performance.now();
+  partArrivals.set(root, now);
+  partDispatches.set(root, now);
+}
+
+/** Whether the change the ledger sees now is a part's append (once per part). */
+export function takePartArrival(root: object): boolean {
+  const at = partDispatches.get(root);
+  partDispatches.delete(root);
+  return at !== undefined && performance.now() - at < 2000;
 }
 
 /** How long since the document's latest part came in; Infinity if none did. */

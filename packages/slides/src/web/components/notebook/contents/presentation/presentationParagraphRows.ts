@@ -17,11 +17,13 @@ import type { CSSProperties } from "react";
 import { CSS_PX_PER_POINT } from "@mrnote/core/web/lib/presentation/text-units.ts";
 import type { NativeListIndent, NativeParagraphMetrics } from "@mrnote/core/web/lib/native-drawing-geometry.ts";
 import { ensureOfficeFontFaces, officeFontMetricMatchesWidths, officeFontSubstitution } from "@mrnote/core/web/lib/office-fonts/substitutes.ts";
+import symbolShapeCoverage from "@mrnote/core/web/lib/office-fonts/symbol-shapes/coverage.json";
 import {
   type NativeBulletMarker,
   nativeBulletGlyph,
-  normalizeBulletChar,
+  normalizeBlockBulletChar,
   normalizeNumberFormat,
+  paragraphEndLineFontSize,
   renderParagraphs,
 } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 import { normalizeRuns, type TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
@@ -64,10 +66,65 @@ function faceDrawsText(typeface: string, text: string): boolean | undefined {
   );
 }
 
+
+
+
+
+
+const SYMBOL_SHAPE_CODES: ReadonlyMap<string, ReadonlySet<number>> = new Map(
+  Object.entries(symbolShapeCoverage as Record<string, string[]>).map(([family, codes]) => [
+    family.toLowerCase(),
+    new Set(codes.map((code) => parseInt(code, 16))),
+  ]),
+);
+
+/** Whether a served shape face draws `text` (one character) for `typeface`; undefined when the face has none. */
+
+
+
+
+
+
+
+
+
+
+
+
+
+function markerSlotCss(indent: number): CSSProperties {
+  return {
+    marginInlineStart: Math.min(0, indent) / AUTOFIT_EMU_PER_PX,
+    width: Math.abs(indent) / AUTOFIT_EMU_PER_PX,
+    minWidth: "max-content",
+  } as CSSProperties;
+}
+
+export function symbolShapeFaceDraws(typeface: string, text: string): boolean | undefined {
+  const codes = SYMBOL_SHAPE_CODES.get(typeface.trim().toLowerCase());
+  if (!codes) return undefined;
+  const code = text.length === 1 ? text.charCodeAt(0) : -1;
+  return code >= 0 && codes.has(code >= 0xf000 ? code : code + 0xf000);
+}
+
 export function symbolFontIsAvailable(typeface: string, text: string): boolean {
   const key = `${typeface}:${text}`;
   const cached = symbolFontAvailability.get(key);
   if (cached !== undefined) return cached;
+  // Wingdings 2 / 3's circles, squares, rhombuses and triangles are drawn by
+  // the served shape faces at Office's own box and advance (Office's themes
+  // set list bullets in them: a 2007 theme's U+F097 filled circle, Facet's
+  // U+F07D triangle), whatever the browser measures before the face arrives;
+  // their other characters keep the stand-ins below.
+  if (symbolShapeFaceDraws(typeface, text) === true) {
+    try {
+      ensureOfficeFontFaces(typeface);
+    } catch {
+      /* the declaration is the shape face's; the glyph still names its face */
+    }
+    symbolFontAvailability.set(key, true);
+    return true;
+  }
   let available = true;
   // A symbol face with a metric-exact open stand-in the page serves (Wine
   // Wingdings for Wingdings, `metric: "exact"`) draws its glyph wherever it
@@ -148,6 +205,8 @@ export interface PresentationParagraphRowPlan {
   readonly markerFollowsText: boolean;
   readonly rowJustify?: CSSProperties["justifyContent"];
   readonly dir?: "rtl";
+  /** Text alignment (`a:pPr@fontAlgn`): the row's own, else what its level inherits. */
+  readonly fontAlign?: "auto" | "t" | "ctr" | "base" | "b";
 }
 
 /** Plan every row of a body. */
@@ -168,7 +227,7 @@ export function planPresentationParagraphRows({
   autofitScale,
 }: PresentationParagraphRowsInput): PresentationParagraphRowPlan[] {
   const rendered = renderParagraphs(paragraphs, {
-    bulletChar: normalizeBulletChar(bulletChar),
+    bulletChar: normalizeBlockBulletChar(bulletChar),
     numberFormat: normalizeNumberFormat(numberFormat),
     // The scheme and restart the PACKAGE wrote. The receipt has carried them
     // since §31; until now the canvas numbered every row with the bounded
@@ -325,7 +384,8 @@ export function planPresentationParagraphRows({
     // PowerPoint lays it out: it took the box's size instead, 18 pt on a
     // shape's label, so every blank line pushed the rows below it down
     
-    const endFontSize = (paragraphs[index] as { endFontSize?: unknown } | undefined)?.endFontSize;
+    
+    const endFontSize = paragraphEndLineFontSize(paragraphs[index]);
     if (!firstRun && typeof endFontSize === "number" && endFontSize > 0) {
       const endCss = runStyleCss({ fontSize: endFontSize }, fontSizeUnit, fontAliases, autofitScale);
       if (endCss.fontSize !== undefined) rowTextStyle.fontSize = endCss.fontSize;
@@ -395,16 +455,8 @@ export function planPresentationParagraphRows({
       ...ladderStyle,
     };
     const markerBoxCss: CSSProperties = {
-      ...(native ? {
-        marginInlineStart: native.indent / AUTOFIT_EMU_PER_PX,
-        width: Math.max(0, -native.indent) / AUTOFIT_EMU_PER_PX,
-        minWidth: "max-content",
-      } as CSSProperties : {}),
-      ...(ladder ? {
-        marginInlineStart: ladder.indent / AUTOFIT_EMU_PER_PX,
-        width: Math.max(0, -ladder.indent) / AUTOFIT_EMU_PER_PX,
-        minWidth: "max-content",
-      } as CSSProperties : {}),
+      ...(native ? markerSlotCss(native.indent) : {}),
+      ...(ladder ? markerSlotCss(ladder.indent) : {}),
     };
     return {
       index,
@@ -424,6 +476,9 @@ export function planPresentationParagraphRows({
       markerFollowsText,
       ...(rowJustify ? { rowJustify } : {}),
       ...(paragraphs[index]?.dir ? { dir: paragraphs[index]!.dir } : {}),
+      ...((paragraphs[index]?.fontAlign ?? paragraphs[index]?.fontAlignInherited)
+        ? { fontAlign: paragraphs[index]!.fontAlign ?? paragraphs[index]!.fontAlignInherited }
+        : {}),
     };
   });
 }

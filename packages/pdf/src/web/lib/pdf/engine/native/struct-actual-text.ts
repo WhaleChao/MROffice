@@ -26,6 +26,7 @@ import {
   sha256PdfBytes,
   type PdfNativeStructActualTextRevision,
 } from "./content-stream-transaction";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 /** The refusal for an edit of text whose structure element's /ActualText
  * cannot be written in step with it: the element is shared or reached in a
@@ -226,7 +227,7 @@ async function readPdfStructActualTextIndex(sourceBytes: Uint8Array): Promise<St
     // write: the edit is written and the tree left as it stands, as WPS
     
     try {
-      const doc = await PDFDocument.load(Uint8Array.from(sourceBytes), { updateMetadata: false });
+      const doc = await PDFDocument.load(Uint8Array.from(sourceBytes), { parseSpeed: pdfLibParseSpeed(), updateMetadata: false });
       return readIndex(doc);
     } catch {
       return Object.freeze({ owners: new Map(), pagesWithActualText: new Set<string>(), pageIndexes: new Map(),

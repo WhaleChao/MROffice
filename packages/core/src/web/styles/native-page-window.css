@@ -4156,7 +4156,24 @@
 [data-smartart-prepared="converted"] > * {
   opacity: 0;
 }
+/* A diagram with no drawing of its own, drawn as its conversion until its first
+   real edit: the file's frame under it takes the presses. */
+[data-smartart-prepared="display"],
+[data-smartart-prepared="display"] * {
+  pointer-events: none !important;
+}
 
+
+ 
+.presentation-window__block[data-hit-where-drawn]:has(> [data-words-turned]),
+.presentation-window__block[data-hit-where-drawn]:has(> .presentation-window__shape-block > [data-office-shape-turned]),
+.presentation-window__block[data-hit-where-drawn]:has(> .presentation-window__shape-block > [data-office-shape-turned]) > .presentation-window__shape-block {
+  pointer-events: none;
+}
+.presentation-window__block[data-hit-where-drawn] > [data-words-turned],
+.presentation-window__block[data-hit-where-drawn] > .presentation-window__shape-block > [data-office-shape-turned] {
+  pointer-events: auto;
+}
 
 /* A SmartArt label is the centred single-line band the engine sizes at
    1.6 x its font size, the way Office lays the text on a node. The slide

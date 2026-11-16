@@ -45,10 +45,47 @@ interface DesktopOpenedFile {
   readonly existingPage?: { readonly pageId: string; readonly notebookId: string };
 }
 
+/** A page a document opened from the system already became (unchanged since). */
+export interface DesktopReopenedPage {
+  readonly pageId: string;
+  readonly notebookId: string;
+}
+
+/** What ``DesktopBridge.onDocumentsOpened``'s listener is told. */
+export interface DesktopDocumentsOpened {
+  /** Documents opened again, each unchanged since it became a page: the page
+   * shows these pages where it is, and takes no file (``reopens``). Absent:
+   * new documents wait, taken with ``takeOpenFiles``. */
+  readonly reopened?: readonly DesktopReopenedPage[];
+}
+
+export interface DesktopDocumentsOpenedOptions {
+  /** The page shows a document opened again where it is (the pages it
+   * became, ``DesktopDocumentsOpened.reopened``) instead of the window going
+   * to the open route and loading the notebook again. */
+  readonly reopens?: boolean;
+  /** The notebook it shows: only pages of it are handed over (``reopens``). */
+  readonly notebookId?: string;
+}
+
 export interface DesktopBridge {
   readonly platform: string;
   /** ``keep`` (MRNote Classic): look without taking them. */
   takeOpenFiles(keep?: boolean): Promise<DesktopOpenedFile[]>;
+  /**
+   * MR Office / Classic: a notebook's page takes the documents opened from
+   * the system while it is shown, where it is (``listener`` hears when some
+   * wait; take them with ``takeOpenFiles``). Returns the unsubscribe.
+   * Absent in older builds, where the window loads the open route again.
+   */
+  onDocumentsOpened?(listener: (opened?: DesktopDocumentsOpened) => void, options?: DesktopDocumentsOpenedOptions): () => void;
+  /**
+   * MR Office / Classic: pages handed to ``onDocumentsOpened``'s listener as
+   * documents opened again (``DesktopDocumentsOpened.reopened``) that are
+   * gone: the app hands their documents over again as new ones, imported as
+   * any other. Absent in builds that never hand pages over.
+   */
+  reopenedPagesMissing?(pageIds: readonly string[]): Promise<boolean>;
   /** Bytes start..end of a large opened file (absent in older builds). */
   readOpenFile?(token: string, start: number, end: number): Promise<Uint8Array | null>;
   /**
@@ -80,6 +117,11 @@ export const DESKTOP_OPEN_FILES_QUERY = "openFiles=desktop";
 /** Dispatched with those documents (``detail: File[]``) once the notebook's
  * windows are restored; its page list imports them as a drop. */
 export const DESKTOP_OPEN_FILES_EVENT = "mrnote:desktop-open-files";
+/** Documents opened again from the system are shown as the pages they became,
+ * in the notebook shown (lib/open-files/desktop-in-place
+ * `showReopenedPagesInPlace`): as for files handed over, MR Office's home
+ * steps back so their windows come forward. */
+export const DESKTOP_PAGES_REOPENED_EVENT = "mrnote:desktop-pages-reopened";
 
 export function desktopBridge(): DesktopBridge | null {
   if (typeof window === "undefined") return null;
@@ -128,5 +170,29 @@ export async function takeDesktopOpenFiles(options: { keep?: boolean } = {}): Pr
     });
   } catch {
     return [];
+  }
+}
+
+/** MR Office / Classic: hear documents opened from the system while this
+ * page is shown (``DesktopBridge.onDocumentsOpened``); the unsubscribe, or
+ * null where the app cannot hand them to the page. */
+export function onDesktopDocumentsOpened(
+  listener: (opened?: DesktopDocumentsOpened) => void,
+  options?: DesktopDocumentsOpenedOptions,
+): (() => void) | null {
+  const subscribe = desktopBridge()?.onDocumentsOpened;
+  return typeof subscribe === "function" ? subscribe(listener, options) : null;
+}
+
+/** MR Office / Classic: these pages, handed over as documents opened again,
+ * are gone; the app hands their documents over again as new ones. False
+ * where it cannot (an older build). */
+export async function desktopReopenedPagesMissing(pageIds: readonly string[]): Promise<boolean> {
+  const missing = desktopBridge()?.reopenedPagesMissing;
+  if (typeof missing !== "function") return false;
+  try {
+    return (await missing(pageIds)) === true;
+  } catch {
+    return false;
   }
 }

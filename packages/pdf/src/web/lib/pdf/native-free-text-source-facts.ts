@@ -16,6 +16,7 @@ import {
 } from "pdf-lib";
 
 import type { NativePdfFreeTextSourceFacts } from "./native-free-text-annotations";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 const OBJECT_REF_RE = /^([1-9][0-9]{0,9})R([0-9]{1,5})?$/u;
 const MAX_RD = 14_400;
@@ -32,6 +33,7 @@ function documentFor(
     pending = readBytes()
       .then((bytes) =>
         PDFDocument.load(bytes, {
+          parseSpeed: pdfLibParseSpeed(),
           ignoreEncryption: true,
           updateMetadata: false,
           throwOnInvalidObject: false,

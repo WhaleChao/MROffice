@@ -405,6 +405,7 @@ export function OfficeInkRuler({ ruler, onChange, length, zoom = 1, label, testI
     background: "linear-gradient(180deg, rgba(255,255,255,0.86), rgba(236,240,245,0.86))",
     boxShadow: "0 1px 2px rgba(15,23,42,0.18), 0 6px 18px rgba(15,23,42,0.18), inset 0 0 0 1px rgba(15,23,42,0.22)",
     backdropFilter: "blur(2px)",
+    WebkitBackdropFilter: "blur(2px)",
     outline: "none",
   };
   return (

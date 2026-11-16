@@ -82,6 +82,7 @@ import {
 } from "@mrnote/core/web/lib/office-fonts/embeddable-faces.ts";
 import {
   planMraiNativeListTextParagraphFormat,
+  pdfNativeParagraphPlanClearOfOtherText,
   planMraiNativeListTextPropertyReplacement,
   type PdfNativeListTextPropertyReplacementInput,
   type PdfNativeParagraphFormat,
@@ -1051,6 +1052,9 @@ async function planPdfNativeFontExtensionRunTextEdit(input: {
    * text box the words were typed into): only the paragraph route sets
    * words in a frame. */
   readonly paragraphFrame?: Readonly<{ right?: number; lineStep?: number; sizeScale?: number }>;
+  /** Where the editor's rows start in the new text (native-text-row-starts):
+   * the paragraph route keeps words typed at the end of a row on it. */
+  readonly rowStarts?: readonly number[];
 }): Promise<PdfNativeFontExtensionTextPlan> {
   if (
     !input.source.resourceId ||
@@ -1849,6 +1853,17 @@ export async function planPdfNativeFontExtensionTextEdit(
   // cannot (a part made bold as the box's new words, missing from its
   
   if (input.paragraphFormat || input.paragraphFrame) return planPdfNativeFontExtensionParagraphTextEdit(input);
+  // Words typed where two rows meet, the editor saying which row holds them:
+  // the paragraph route first, where its rows settle a line break (the run
+  // route sets them in the run it finds, whichever row that is). Where they
+  // settle none, or it cannot, the routes are tried as ever.
+  if (input.rowStarts?.length) {
+    try {
+      return await planPdfNativeFontExtensionParagraphTextEdit(input, true);
+    } catch (rowError) {
+      if (rowError instanceof Error && /source is stale/u.test(rowError.message)) throw rowError;
+    }
+  }
   if (boldFace) {
     try {
       return await planPdfNativeFontExtensionParagraphTextEdit(input);
@@ -1881,6 +1896,8 @@ export async function planPdfNativeFontExtensionTextEdit(
 /** The paragraph route: the paragraph rewrite with a substitute face. */
 async function planPdfNativeFontExtensionParagraphTextEdit(
   input: PdfNativeFontExtensionTextEditInput,
+  /** Refused unless the editor's rows settle a line break of the edit. */
+  rowsMustDecide = false,
 ): Promise<PdfNativeFontExtensionTextPlan> {
   const sourceBytes = ownedPdfSourceBytes(input.sourceBytes);
   const sourceSha256 = await sha256PdfBytes(sourceBytes);
@@ -1909,6 +1926,8 @@ async function planPdfNativeFontExtensionParagraphTextEdit(
     replacementText: input.replacementText,
     ...(input.paragraphFormat ? { format: input.paragraphFormat } : {}),
     ...(input.paragraphFrame ? { frame: input.paragraphFrame } : {}),
+    ...(input.rowStarts?.length && !input.paragraphFrame
+      ? { rowEdit: { rowStarts: input.rowStarts, ...(rowsMustDecide ? { mustDecide: true } : {}) } } : {}),
     substituteFaceName: PDF_NATIVE_FALLBACK_FONT_NAME,
     async install(text) {
       let metrics: Awaited<ReturnType<typeof measurePdfNativeFontExtensionText>>;
@@ -2292,6 +2311,8 @@ export async function planPdfNativeEmbeddedFontParagraphFormatEdit(input: {
   readonly library: PdfNativeEmbeddedFontLibrary;
   readonly transactionId: string;
   readonly baseSessionRevision: number;
+  /** Refused, not written with a notice, where it runs into other text. */
+  readonly refuseOverOtherText?: boolean;
 }): Promise<PdfNativeFontExtensionTextPlan> {
   if (!input.source.resourceId || !input.source.resourceVersionId || !input.transactionId ||
     !Number.isSafeInteger(input.baseSessionRevision) || input.baseSessionRevision < 0) {
@@ -2307,14 +2328,14 @@ export async function planPdfNativeEmbeddedFontParagraphFormatEdit(input: {
     sourceSha256,
     pageNumber: input.selection.pageNumber,
   });
-  const plan = await planMraiNativeListTextParagraphFormat({
+  const plan = pdfNativeParagraphPlanClearOfOtherText(await planMraiNativeListTextParagraphFormat({
     sourceBytes,
     selection: input.selection,
     replacementText: input.replacementText,
     format: input.format,
     ...(input.fontOptions ? { fontOptions: input.fontOptions } : {}),
     embeddedFonts: installation,
-  });
+  }), input.refuseOverOtherText === true);
   const packages = await installation.packages();
   const request = plan.request;
   const consolidation = request.pageContentConsolidation ?? null;

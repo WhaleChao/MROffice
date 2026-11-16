@@ -24,7 +24,7 @@ import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
 import { normalizeNativeBulletReceipt, paragraphStatesIndent } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 import { normalizeRuns } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import { normalizeVerticalAnchor } from "@mrnote/core/web/lib/presentation-vertical-anchor.ts";
-import { flippedTextTransform } from "../../../../lib/presentation-shape-text-rect";
+import { flippedTextTransform } from "@mrnote/core/web/lib/presentation-shape-text-rect.ts";
 import { textColumnsCss } from "@mrnote/core/web/lib/presentation-text-columns.ts";
 import {
   normalizeParagraphsWithRuns,
@@ -53,6 +53,7 @@ import {
   officePercentLeadingFlatRowCss,
   reducedOfficeLineHeight,
   type PresentationFontSizeUnit,
+  presentationTextPaintOwnsShadow,
 } from "../../../../lib/presentation/text-layout-css";
 import { PresentationAutofitScaleContext, PresentationRunsText } from "./PresentationRunsText";
 import {
@@ -67,7 +68,10 @@ import { textEngineOn } from "@mrnote/core/web/lib/text-engine/page-adapter.ts";
 import { planPresentationParagraphRows } from "./presentationParagraphRows";
 import { OFFICE_HIT_TEXT_ATTRIBUTE } from "@mrnote/core/web/components/office-ribbon/OfficeDrawingSelection.tsx";
 import { OfficeTextWarpMarker } from "@mrnote/core/web/components/office-text-warp/OfficeTextWarpMarker.tsx";
+import { OfficeTextShadowCopyMarker } from "@mrnote/core/web/components/office-text-warp/OfficeTextShadowCopyMarker.tsx";
+import { officeShapeTextTurn } from "@mrnote/core/web/lib/office-shape-effects-paint.ts";
 import type { TextWarpShadow } from "@mrnote/core/web/lib/office-text-warp-render.ts";
+import { presentationTextShapingCss } from "../../../../lib/presentation/presentation-text-shaping";
 
 /**
  * The label's words made the editor (`PresentationCanvasShapeBlock`): the
@@ -194,6 +198,13 @@ function ShapeTextOverlayDrawing({
   // (`authoredShapeAutofitBox`, PPT-B315); the bounds are never read, as a
   // shape always has its own frame.
   const labelStyleCss = textBlockStyleCss(style, undefined, fontSizeUnit, fontAliases);
+  // The label's WordArt states its shadow: Home > Text Shadow adds none
+  // (`presentationTextPaintOwnsShadow`).
+  if (presentationTextPaintOwnsShadow((block as { textPaint?: unknown }).textPaint)) delete labelStyleCss.textShadow;
+  // The label's tab settings (`a:pPr@defTabSz`, `a:tabLst`; readings row 834),
+  // which the engine sets its tabs by, as a text box's.
+  const labelTabStops = (style as { tabStops?: unknown } | undefined)?.tabStops;
+  const labelDefaultTabPx = (style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx;
   const labelFit = autofitRenderForBlock(
     block,
     { width: 0, height: 0 },
@@ -366,6 +377,8 @@ function ShapeTextOverlayDrawing({
             fontSizeUnit={fontSizeUnit}
             fontAliases={fontAliases}
             autofitScale={labelFit.fontScale}
+            tabStops={labelTabStops}
+            defaultTabPx={labelDefaultTabPx}
             kerning={asRecord(block.source)?.nativeKerning}
             widthPx={editWidthEmu === null ? null : editWidthEmu / AUTOFIT_EMU_PER_PX}
             wrap={shapeTextWraps}
@@ -480,8 +493,43 @@ function ShapeTextOverlayDrawing({
       autofitScale: labelFit.fontScale,
     });
   })();
-  return (
-    <PresentationAutofitScaleContext.Provider value={labelFit.fontScale}>
+  // Format Shape > 3-D Rotation: the words lie on the shape's front and turn
+  // with it unless Keep text flat is checked; typed into, they lie flat, as
+  // PowerPoint edits them. A SmartArt member's words are its diagram's.
+  const textTurn = block.scene3d
+    ? null
+    : officeShapeTextTurn(
+        block.shapeEffects,
+        {
+          width: (typeof block.width === "number" && Number.isFinite(block.width) ? block.width : 952500) / 9525,
+          height: (typeof block.height === "number" && Number.isFinite(block.height) ? block.height : 952500) / 9525,
+        },
+        {
+          keepTextFlat: (block as { keepTextFlat?: unknown }).keepTextFlat,
+          editing: editor !== undefined,
+          // The block wears its flips outside the words' turned layer
+          // (`buildBlockTransform`): the turn is taken through them, as the
+          // shape's own is (`flippedCameraTurn`), so a flipped shape's words
+          // lean with it as PowerPoint draws them (text3d-flip-probe).
+          frame: {
+            flipH: (block as { flipH?: unknown }).flipH === true,
+            flipV: (block as { flipV?: unknown }).flipV === true,
+          },
+        },
+      );
+  // PowerPoint's shaping of the label's words where the browser draws them:
+  // no common ligatures, and no kerning below the label's `kern` size
+  
+  // drawn kerned and took a word onto a line PowerPoint ends before it).
+  const shapingSizes = (buildParagraphs ? buildParagraphs.flatMap((paragraph) => paragraph.runs ?? []) : runs ?? []).map((run) =>
+    typeof run.style?.fontSize === "number" ? run.style.fontSize : undefined,
+  );
+  const shapingCss = presentationTextShapingCss(
+    asRecord(block.source)?.nativeKerning,
+    shapingSizes.length ? shapingSizes : null,
+    labelFit.fontScale,
+  );
+  const label = (
     <div
       className="presentation-shape-text"
       data-testid="presentation-shape-text"
@@ -507,6 +555,7 @@ function ShapeTextOverlayDrawing({
         ...(textReflection ? { WebkitBoxReflect: textReflection } : {}),
         boxSizing: "border-box",
         pointerEvents: "none",
+        ...shapingCss,
       }}
     >
       {/* WordArt Transform: the label's words drawn bent (shared painter). */}
@@ -516,22 +565,45 @@ function ShapeTextOverlayDrawing({
         noWrap={!shapeTextWraps}
         align={alignCss.textAlign === "left" || alignCss.textAlign === "right" || alignCss.textAlign === "justify" ? alignCss.textAlign : "center"}
       />
+      {/* Text Effects > Shadow > Perspective on a label's straight words (shared copy). */}
+      <OfficeTextShadowCopyMarker
+        warp={(block as { textWarp?: unknown }).textWarp}
+        shadow={(block as { textPaint?: { shadow?: TextWarpShadow } }).textPaint?.shadow ?? null}
+      />
       {engineEligible ? (
         <PresentationEngineOrFallback
           rows={engineRows}
           bodyStyle={textCss}
           fontSizeUnit={fontSizeUnit}
           autofitScale={labelFit.fontScale}
+          tabStops={labelTabStops}
+          defaultTabPx={labelDefaultTabPx}
           kerning={asRecord(block.source)?.nativeKerning}
           widthPx={engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX}
           wrap={shapeTextWraps}
           colorOverride={colorOverride}
+          naturalLines={Boolean(asRecord(block.source)?.nativeSmartArtView)}
           fallback={labelBody}
         />
       ) : (
         labelBody
       )}
     </div>
+  );
+  return (
+    <PresentationAutofitScaleContext.Provider value={labelFit.fontScale}>
+      {textTurn ? (
+        // The shape's box, turned about its centre as the shape's own
+        // effects frame is (`OfficeShapeEffectsFrame`).
+        <div
+          data-presentation-shape-text-turn=""
+          style={{ position: "absolute", inset: 0, pointerEvents: "none", ...textTurn }}
+        >
+          {label}
+        </div>
+      ) : (
+        label
+      )}
     </PresentationAutofitScaleContext.Provider>
   );
 }

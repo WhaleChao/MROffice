@@ -260,6 +260,8 @@ export interface PdfAnnotationFormatContextRibbonLabels {
   sendToBack: string;
   alreadyAtFront: string;
   alreadyAtBack: string;
+  /** Absent where the ribbon has no Selection pane (other editors' use). */
+  selectionPane?: string;
   editVertices: string;
   exitVertexEdit: string;
   mask: string;
@@ -415,6 +417,7 @@ export function createPdfAnnotationFormatContextRibbonLabels(
     sendToBack: t("pdf.annotationFormat.sendToBack"),
     alreadyAtFront: t("pdf.annotationFormat.alreadyAtFront"),
     alreadyAtBack: t("pdf.annotationFormat.alreadyAtBack"),
+    selectionPane: t("toolbar.selectionPane"),
     editVertices: t("pdf.annotationFormat.editVertices"),
     exitVertexEdit: t("pdf.annotationFormat.exitVertexEdit"),
     mask: t("pdf.annotationFormat.mask"),
@@ -777,6 +780,8 @@ function PdfShapeEditingGroups({
   onMergeShapes,
   onReorder,
   onToggleVertexEdit,
+  onSelectionPane,
+  selectionPaneOpen,
   onMaskShape,
   onRotateBy,
   onFormatPane,
@@ -799,6 +804,9 @@ function PdfShapeEditingGroups({
   onMergeShapes?: (operation: PdfNativeVectorMergeOperation) => void;
   onReorder?: (direction: "forward" | "backward" | "front" | "back") => void;
   onToggleVertexEdit?: () => void;
+  /** Selection Pane (Office: Arrange > Selection Pane, Alt+F10). */
+  onSelectionPane?: () => void;
+  selectionPaneOpen?: boolean;
   onMaskShape?: () => void;
   onRotateBy?: (degrees: number) => void;
   /** Format Shape (the Shape Styles group's launcher): the pane beside. */
@@ -1500,6 +1508,19 @@ function PdfShapeEditingGroups({
             })}
           </OfficeHomeCommandStack>
         ) : null}
+        {model.nativeSource && onSelectionPane && labels.selectionPane ? (
+          <OfficeHomeCommand
+            activation="click"
+            controlId="PDFCTL.CONTEXT.SHAPE.SELECTION_PANE"
+            displayLabel={labels.selectionPane}
+            icon={<OfficeSemanticIcon semanticId="object.selectionPane" size={18} />}
+            label={labels.selectionPane}
+            active={selectionPaneOpen === true}
+            testId="pdf-annotation-shape-selection-pane"
+            variant="compact"
+            onClick={onSelectionPane}
+          />
+        ) : null}
         </span>
       </OfficeHomeRibbonGroup>
 
@@ -1683,6 +1704,8 @@ export function PdfAnnotationFormatContextRibbon({
   onMergeShapes,
   onReorder,
   onToggleVertexEdit,
+  onSelectionPane,
+  selectionPaneOpen,
   onMaskShape,
   onStyleChange,
   onSizeChange,
@@ -1706,6 +1729,9 @@ export function PdfAnnotationFormatContextRibbon({
   onMergeShapes?: (operation: PdfNativeVectorMergeOperation) => void;
   onReorder?: (direction: "forward" | "backward" | "front" | "back") => void;
   onToggleVertexEdit?: () => void;
+  /** Selection Pane (Office: Arrange > Selection Pane, Alt+F10). */
+  onSelectionPane?: () => void;
+  selectionPaneOpen?: boolean;
   onMaskShape?: () => void;
   onStyleChange: (change: PdfAnnotationStyleChange) => void;
   onSizeChange?: (
@@ -1740,6 +1766,8 @@ export function PdfAnnotationFormatContextRibbon({
         onMergeShapes={onMergeShapes}
         onReorder={onReorder}
         onToggleVertexEdit={onToggleVertexEdit}
+        onSelectionPane={onSelectionPane}
+        selectionPaneOpen={selectionPaneOpen}
         onMaskShape={onMaskShape}
         onRotateBy={onRotateBy}
         onFormatPane={onFormatPane}

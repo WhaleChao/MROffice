@@ -34,7 +34,8 @@ import {
   type ChartSourceSeriesCells,
 } from "../../../../lib/spreadsheet/chart-source-highlight";
 
-import { sheetCellAtPoint, sheetOverlayStage, useSheetRangeBoxes } from "./useSheetRangeBoxes";
+import { SheetRangePaneLayers, type SheetRangePaneLayerRefs } from "./SheetRangePaneLayers";
+import { sheetCellAtPoint, sheetOverlayStage, useSheetRangeBoxes, type SheetFrozenLines, type SheetRangePane } from "./useSheetRangeBoxes";
 
 type Corner = "nw" | "ne" | "sw" | "se";
 type Side = "top" | "right" | "bottom" | "left";
@@ -46,6 +47,10 @@ const HANDLE_PX = 6;
 const HANDLE_HIT_PX = 12;
 /** The width of an outline's edge that answers a press (a move). */
 const EDGE_HIT_PX = 6;
+/** The outline's layer in the body: over the cells and what is drawn in them
+ * (the fill handle at 5, the comment indicator at 8), under the drawings (a
+ * chart covers the outline of the cells it stands on) and the frozen panes. */
+const BODY_LAYER = 9;
 
 const CORNER_CURSOR: Record<Corner, string> = {
   nw: "nwse-resize",
@@ -74,6 +79,7 @@ export function SpreadsheetChartSourceOverlay({
   selectedArea,
   editable,
   layoutKey,
+  frozen = null,
   onCommit,
 }: {
   kind: "native" | "drawing";
@@ -92,6 +98,8 @@ export function SpreadsheetChartSourceOverlay({
   editable: boolean;
   /** Changes when the grid lays out again (scroll window, sizes, zoom). */
   layoutKey: unknown;
+  /** The frozen lines: data across a freeze line is outlined in each pane. */
+  frozen?: SheetFrozenLines | null;
   onCommit: (edit: ChartSourceEdit) => void;
 }) {
   const cellValueRef = useRef(cellValue);
@@ -117,7 +125,8 @@ export function SpreadsheetChartSourceOverlay({
     [signature],
   );
   const hostRef = useRef<HTMLDivElement>(null);
-  const boxes = useSheetRangeBoxes(hostRef, spans, layoutKey);
+  const layersRef = useRef<SheetRangePaneLayerRefs>({});
+  const boxes = useSheetRangeBoxes(hostRef, spans, layoutKey, frozen, layersRef);
   const handles = Boolean(reading && editable && chartSourceEditable(reading, only));
 
   const dragRef = useRef<Drag | null>(null);
@@ -204,18 +213,8 @@ export function SpreadsheetChartSourceOverlay({
   };
 
   if (!reading) return null;
-  return (
-    <div
-      ref={hostRef}
-      aria-hidden="true"
-      data-testid="spreadsheet-chart-source-overlay"
-      data-dragging={preview ? "true" : undefined}
-      // Over the cells and what is drawn in them (the fill handle at 5, the
-      // comment indicator at 8), under the drawings (a chart covers the
-      // outline of the cells it stands on) and the frozen panes.
-      style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 9 }}
-    >
-      {boxes.map((measured) => {
+  const drawn = (pane: SheetRangePane) =>
+    boxes.filter((measured) => measured.pane === pane).map((measured) => {
         const box = measured.span;
         const [top, right, bottom, left] = measured.edges;
         const sides: [Side, boolean][] = [["top", top], ["right", right], ["bottom", bottom], ["left", left]];
@@ -231,8 +230,9 @@ export function SpreadsheetChartSourceOverlay({
         const outset = (own: boolean) => (own ? OUTLINE_PX / 2 : 0);
         return (
           <div
-            key={box.key}
+            key={`${box.key}@${measured.pane}`}
             data-testid="spreadsheet-chart-source-box"
+            data-pane={measured.pane}
             data-role={box.role}
             data-range={`${box.range.r1}:${box.range.c1}:${box.range.r2}:${box.range.c2}`}
             data-color={box.color}
@@ -307,7 +307,19 @@ export function SpreadsheetChartSourceOverlay({
               : null}
           </div>
         );
-      })}
-    </div>
+    });
+  // The body's outlines in the host, under the frozen panes; a frozen pane's
+  // on a layer pinned with that pane, over its cells (SheetRangePaneLayers).
+  return (
+    <SheetRangePaneLayers
+      hostRef={hostRef}
+      layersRef={layersRef}
+      frozen={frozen}
+      bodyLayer={BODY_LAYER}
+      testId="spreadsheet-chart-source-overlay"
+      hostProps={{ "data-dragging": preview ? "true" : undefined }}
+    >
+      {drawn}
+    </SheetRangePaneLayers>
   );
 }

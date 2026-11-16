@@ -19,6 +19,7 @@ import {
   MRAI_NATIVE_CONTENT_APPEND_ACTION,
 } from "./vocabulary";
 import { MRAI_NATIVE_BOX_MARK_TAG } from "./box-mark";
+import { PDF_NATIVE_SYNTHETIC_BOLD_STROKE_EM } from "../../native-synthetic-style";
 import { buildPdfNativeSfntSubset, type PdfNativeSfntGlyphCopy } from "./sfnt/sfnt-subset";
 import { readSfntProgram } from "@mrnote/core/web/lib/pdf/engine/native/sfnt/sfnt-reader.ts";
 import { PDF_COMPLEX_SCRIPT_FONTS } from "../../unicode-font-asset";
@@ -104,6 +105,13 @@ export interface PdfNativeContentAppendTextContent {
   readonly top: number;
   readonly rotation?: PdfNativeContentAppendRotation;
   readonly lineHeightPoints: number;
+  /**
+   * The words set bold: the bundled face has one weight, so its outlines
+   * are stroked in the text's colour as well as filled, as a line's own
+   * bold is drawn in place where its font has no bold face
+   * (PDF_NATIVE_SYNTHETIC_BOLD_STROKE_EM).
+   */
+  readonly bold?: boolean;
   /**
    * Each line as it prints, left to right, where a line holds words of a
    * complex script (Arabic, Hebrew, Thai, Devanagari, Bengali): the API's
@@ -559,6 +567,7 @@ async function buildTextBlock(
     "BT",
     `/${resourceName} ${fmt(content.fontSizePoints)} Tf`,
     `${fmt(content.color.r)} ${fmt(content.color.g)} ${fmt(content.color.b)} rg`,
+    ...syntheticBoldOperators(content),
     `${fmt(a)} ${fmt(b)} ${fmt(c)} ${fmt(d)} ${fmt(baselineX)} ${fmt(baselineY)} Tm`,
     `${fmt(content.lineHeightPoints)} TL`,
   ];
@@ -808,6 +817,7 @@ async function buildShapedTextBlock(
     `/${MRAI_NATIVE_BOX_MARK_TAG} BMC`,
     "BT",
     `${fmt(content.color.r)} ${fmt(content.color.g)} ${fmt(content.color.b)} rg`,
+    ...syntheticBoldOperators(content),
   ];
   let current: string | null = null;
   const place = (x: number, y: number) => operators.push(`${fmt(a)} ${fmt(b)} ${fmt(c)} ${fmt(d)} ${fmt(x)} ${fmt(y)} Tm`);
@@ -1315,4 +1325,16 @@ function pathColorOperator(color: PdfNativeContentAppendColor, stroke: boolean):
     return `${color.cmyk.map((component) => fmt(component)).join(" ")} ${stroke ? "K" : "k"}`;
   }
   return `${fmt(color.r)} ${fmt(color.g)} ${fmt(color.b)} ${stroke ? "RG" : "rg"}`;
+}
+
+/** Bold in the one weight the bundled face has: its outlines stroked in the
+ * text's own colour over their fill (text render mode 2), the stroke as
+ * wide as a bold set in place is. Inside the block's own q ... Q. */
+function syntheticBoldOperators(content: PdfNativeContentAppendTextContent): string[] {
+  if (content.bold !== true) return [];
+  return [
+    `${fmt(content.color.r)} ${fmt(content.color.g)} ${fmt(content.color.b)} RG`,
+    `${fmt(PDF_NATIVE_SYNTHETIC_BOLD_STROKE_EM * content.fontSizePoints)} w`,
+    "2 Tr",
+  ];
 }

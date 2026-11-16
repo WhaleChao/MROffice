@@ -23,6 +23,8 @@ import {
   normalizePresentationChartAxisStyles,
   normalizePresentationChartAxisTitleStyles,
   normalizePresentationChartSeriesStyles,
+  chartPointStyleRow,
+  chartRowsWithPointStyle,
   normalizePresentationChartSliceStyles,
   presentationChartAxisStylePart,
   type PresentationChartAreaStyle,
@@ -55,7 +57,7 @@ export type SpreadsheetChartFormat = Pick<ChartBlockFormat,
   "dataLabelRegionLayout" | "binIntervalClosed" | "parentLabelLayout" | "histogramBins" | "boxWhisker" | "gapWidth" | "displayBlanksAs" | "legend" | "axisOptions" |
   "hiddenSeries" | "hiddenCategories" | "text" | "axisTitleStyles"> & { layout?: SpreadsheetChartLayout };
 export type SpreadsheetChartFormatTarget = typeof SPREADSHEET_CHART_AREA_KEYS[number]
-  | `series:${number}` | `slice:${number}` | "axis:category" | "axis:value";
+  | `series:${number}` | `slice:${number}` | `point:${number}:${number}` | "axis:category" | "axis:value";
 
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -173,6 +175,9 @@ export function normalizeSpreadsheetChartFormat(value: unknown): SpreadsheetChar
 export function spreadsheetChartAreaStyle(format: SpreadsheetChartFormat | undefined, target: SpreadsheetChartFormatTarget): PresentationChartAreaStyle | undefined {
   if (target.startsWith("series:")) return format?.seriesStyles?.find(item => item.seriesIndex === Number(target.slice(7)));
   if (target.startsWith("slice:")) return format?.sliceStyles?.find(item => item.pointIndex === Number(target.slice(6)));
+  // One point of a series (Format Data Point): its own `c:dPt` row.
+  const point = /^point:(\d+):(\d+)$/.exec(target);
+  if (point) return chartPointStyleRow(format?.sliceStyles, Number(point[1]), Number(point[2]));
   if (target.startsWith("axis:")) return format?.axisStyles?.find(item => item.axis === target.slice(5));
   return format?.[target as typeof SPREADSHEET_CHART_AREA_KEYS[number]];
 }
@@ -208,6 +213,11 @@ export function patchSpreadsheetChartArea(
     if (patch) items.push({ seriesIndex, ...patch } as NonNullable<SpreadsheetChartFormat["seriesStyles"]>[number]);
     if (items.length) next.seriesStyles = items.sort((a, b) => a.seriesIndex - b.seriesIndex);
     else delete next.seriesStyles;
+  } else if (/^point:\d+:\d+$/.test(target)) {
+    const [, seriesIndex, pointIndex] = target.split(":").map(Number);
+    const rows = chartRowsWithPointStyle(next.sliceStyles, seriesIndex, pointIndex, patch);
+    if (rows) next.sliceStyles = rows;
+    else delete next.sliceStyles;
   } else if (target.startsWith("slice:")) {
     const pointIndex = Number(target.slice(6));
     const items = (next.sliceStyles ?? []).filter(item => item.pointIndex !== pointIndex);
@@ -245,8 +255,11 @@ export function spreadsheetChartRenderFormat(
   if (!normalized) return defaults;
   const series = new Map(defaults.seriesStyles?.map(item => [item.seriesIndex, item]));
   for (const item of normalized.seriesStyles ?? []) series.set(item.seriesIndex, { ...series.get(item.seriesIndex), ...item });
-  const slices = new Map(defaults.sliceStyles?.map(item => [item.pointIndex, item]));
-  for (const item of normalized.sliceStyles ?? []) slices.set(item.pointIndex, { ...slices.get(item.pointIndex), ...item });
+  // A point is its series' and its index (a column's own colour in the
+  // second series is not the first series' point of that index).
+  const pointKey = (item: { seriesIndex?: number; pointIndex: number }) => `${item.seriesIndex ?? 0}:${item.pointIndex}`;
+  const slices = new Map(defaults.sliceStyles?.map(item => [pointKey(item), item]));
+  for (const item of normalized.sliceStyles ?? []) slices.set(pointKey(item), { ...slices.get(pointKey(item)), ...item });
   const sharedFormat={...normalized};
   delete sharedFormat.layout;
   if(sharedFormat.dataLabels===false)for(const key of Object.keys(sharedFormat))if(key.startsWith("dataLabel")&&key!=="dataLabels")delete (sharedFormat as Record<string,unknown>)[key];

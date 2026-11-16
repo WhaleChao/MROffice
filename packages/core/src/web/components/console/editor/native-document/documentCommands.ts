@@ -2768,6 +2768,8 @@ type PdfTextBoxEditModel = {
   align?: "left" | "center" | "right";
   fontFamily?: string;
   sourceFontName?: string;
+  /** The Office family a box someone made is set in (its font menu). */
+  officeFamily?: string;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
@@ -4069,7 +4071,7 @@ export function applyPdfPageCommandWithResult(
     if (operation.op === "set_pdf_text_box") {
       const id = (operation.id || "").trim();
       if (!id) continue;
-      const text = typeof operation.text === "string" ? operation.text : "";
+      const givenText = typeof operation.text === "string" ? operation.text : "";
       const hasExplicitPage = operation.page !== undefined;
       if (
         hasExplicitPage &&
@@ -4095,6 +4097,15 @@ export function applyPdfPageCommandWithResult(
       const existingIndex = edits.findIndex(
         (edit) => edit.id === id && (edit.page ?? 0) === page,
       );
+      // A change of look alone (`keepText`) leaves the box the words it has:
+      // the command was answered from a context that carries only the first
+      // of a long box's words.
+      const text =
+        operation.keepText === true &&
+        existingIndex >= 0 &&
+        typeof edits[existingIndex].text === "string"
+          ? edits[existingIndex].text
+          : givenText;
       const align =
         operation.align === "left" ||
         operation.align === "center" ||
@@ -4126,6 +4137,10 @@ export function applyPdfPageCommandWithResult(
         typeof value === "string" ? value.slice(0, max) : undefined;
       const fontFamily = shortString(operation.fontFamily);
       const sourceFontName = shortString(operation.sourceFontName, 200);
+      // Present on a command that sets the box's face: a family's name, or
+      // null for a face of the box's own five.
+      const setsOfficeFamily = "officeFamily" in operation;
+      const officeFamily = shortString(operation.officeFamily, 200);
       const latex = boundedString(operation.latex);
       const previousEdit =
         existingIndex >= 0 ? edits[existingIndex] : undefined;
@@ -4210,6 +4225,7 @@ export function applyPdfPageCommandWithResult(
       if (sourceFontName !== undefined) {
         runPatch.sourceFontName = sourceFontName;
       }
+      if (setsOfficeFamily) runPatch.officeFamily = officeFamily;
       const runFontSize = unitFraction(operation.fontSize);
       if (runFontSize !== undefined) runPatch.fontSize = runFontSize;
       if (color !== undefined) runPatch.color = color;
@@ -4256,6 +4272,7 @@ export function applyPdfPageCommandWithResult(
             sourceFontName ??
             prev.sourceFontName ??
             contextTarget?.sourceFontName,
+          officeFamily: setsOfficeFamily ? officeFamily : prev.officeFamily,
           bold: bold ?? prev.bold ?? contextTarget?.bold,
           italic: italic ?? prev.italic ?? contextTarget?.italic,
           underline: underline ?? prev.underline,
@@ -4305,6 +4322,7 @@ export function applyPdfPageCommandWithResult(
           align,
           fontFamily: fontFamily ?? contextTarget?.fontFamily,
           sourceFontName: sourceFontName ?? contextTarget?.sourceFontName,
+          ...(officeFamily !== undefined ? { officeFamily } : {}),
           bold: bold ?? contextTarget?.bold,
           italic: italic ?? contextTarget?.italic,
           underline,

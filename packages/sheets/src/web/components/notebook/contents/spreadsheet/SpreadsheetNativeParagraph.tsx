@@ -4,11 +4,12 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
-import { layoutNativeText, layoutNativeTextBatch, nativeTextLayoutIsKnown, nativeTextTouchedBy, resolveRelativePartFontSizes, type NativeTextLayoutRequest, nativeTextFontLead, nativeParagraphLineStyle, measureNativeParagraphLineHeight, measureNativeLineAdvance, nativeTextAlignmentOffset, type NativeTextAlignmentBox, type NativeTextPart, type NativeTextLine } from "../../../../lib/spreadsheet/native-text-layout";
-import { nativeTextLayoutQuantum, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { layoutNativeText, layoutNativeTextBatch, nativeTextLayoutIsKnown, nativeTextTouchedBy, resolveRelativePartFontSizes, type NativeTextLayoutRequest, nativeTextFontLead, nativeParagraphLineStyle, nativeParagraphLinePitch, measureNativeLineAdvance, nativeTextAlignmentOffset, nativeStrutBaselinePx, type NativeTextAlignmentBox, type NativeTextPart, type NativeTextLine } from "../../../../lib/spreadsheet/native-text-layout";
+import { nativeTextLayoutQuantum, nativeTypographyGeneration, resolveSpreadsheetTextStyle, subscribeNativeTypography } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { fontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
+import { distributedLineUnits } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
 import { SpreadsheetNativeTextParts, spreadsheetNativeTextPaint } from "./SpreadsheetNativeText";
 
 /** A paragraph whose lines the commit's batch has yet to lay out. */
@@ -36,15 +37,36 @@ function requestNativeTextLayout(request:NativeTextLayoutRequest,done:()=>void):
   return()=>{batchListeners.delete(done)};
 }
 
-export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false}: {
+const noTypographySubscription=()=>()=>{};
+const noTypographyGeneration=()=>0;
+export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false,spread,distributed=false,officeBaseline}: {
   parts:readonly NativeTextPart[];style:CSSProperties;dpi:number;scale?:number;wrap?:boolean;layoutWidth?:number;alignmentBox?:NativeTextAlignmentBox;
+  /** Vertical Justify / Distributed: the lines spread over the paragraph's
+   * box, which fills the cell (the page's text box; lookwin probe p22). Lines
+   * taller than the box keep to its top, as Excel prints them. */
+  spread?:"space-between"|"space-evenly";
   /** The paragraph is its own box in the cell (a box around it set these). */
   boxStyle?:CSSProperties;
   /** A single line of one plain run in the paragraph's own font draws its
    * glyph runs in the line itself rather than in a text span inside it. */
   drawSingleRun?:boolean;
+  /** Horizontal Distributed (Indent): each wrapped line of one plain run
+   * spreads across the layout width (the cell less its indent at both
+   * sides) by its words, or by character with CJK, and a line of one unit
+   * is centred (distributedLineUnits; the API's print draws the same). */
+  distributed?:boolean;
+  /** Where Windows Excel stands the line's baseline, px below the
+   * paragraph's top edge (a Windows grid's one printed line, set by its
+   * vertical alignment and its faces' automatic line, as the API's writer
+   * stands it): the paragraph moves so its baseline is there, the browser's
+   * own (nativeStrutBaselinePx) read for its font and line height. */
+  officeBaseline?:number;
 }) {
   const ref=useRef<HTMLSpanElement>(null);
+  // A paragraph standing at Excel's baseline reads the browser's again when
+  // a font arrives (only those subscribe).
+  const typographyGeneration=useSyncExternalStore(officeBaseline!==undefined?subscribeNativeTypography:noTypographySubscription,
+    officeBaseline!==undefined?nativeTypographyGeneration:noTypographyGeneration,noTypographyGeneration);
   // A part sized relative to the paragraph is laid out at its pixels.
   const signature=JSON.stringify([resolveRelativePartFontSizes(parts,style),style,dpi,scale,wrap,layoutWidth,alignmentBox]);
   const stable=useMemo(()=>JSON.parse(signature) as [NativeTextPart[],CSSProperties,number,number,boolean,number|null,NativeTextAlignmentBox|null],[signature]);
@@ -123,7 +145,7 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     document.fonts?.addEventListener("loadingdone",fontsLoaded);
     return()=>{cancelled=true;observer.disconnect();document.fonts?.removeEventListener("loadingdone",fontsLoaded)};
   },[signature,stable,laidOutInRender]);
-  const lineHeight=measureNativeParagraphLineHeight(stable[0],style,dpi);
+  const lineHeight=nativeParagraphLinePitch(stable[0],style,dpi);
   // Only a fixed line height needs the wrapper (its zero line height keeps
   // the runs from stretching the line box); otherwise the runs sit in the
   // line directly, one element less for every cell on screen.
@@ -133,13 +155,24 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
   const shown=laidOutInRender?(awaitingBatch?null:renderLayout):layout?.signature===signature?layout:null;
   const lines=shown?.lines;
   const base=resolveSpreadsheetTextStyle(style,stable[0][0]?nativeTextFontLead(stable[0][0]):"",dpi);
-  const fixedLines=lineHeight!==undefined&&lines!==undefined;
-  const paragraphStyle:CSSProperties={...boxStyle,display:"block",width:"100%",minWidth:0,...(fixedLines?{position:"relative",height:lineHeight*scale*lines.length}:{}),lineHeight:lineHeight===undefined?"normal":`${lineHeight*scale}px`,fontFamily:base.fontFamily,fontSize:typeof base.fontSize==="number"?base.fontSize*scale:base.fontSize,fontWeight:base.fontWeight,fontStyle:base.fontStyle,textAlign:base.textAlign};
+  const spreading=Boolean(spread)&&lines!==undefined&&lines.length>1;
+  const fixedLines=lineHeight!==undefined&&lines!==undefined&&!spreading;
+  // One line stood at Excel's baseline: the browser's own, read for this
+  // font and line height, and the difference taken up above the paragraph.
+  // Where nothing lays out a probe, a line box's usual split stands in.
+  const strutSize=typeof base.fontSize==="number"?base.fontSize*scale:undefined;
+  const strut=officeBaseline!==undefined&&lineHeight!==undefined&&(lines===undefined||lines.length===1)&&!spreading
+    ?nativeStrutBaselinePx({fontFamily:base.fontFamily,fontSize:strutSize??base.fontSize,fontWeight:base.fontWeight,fontStyle:base.fontStyle},lineHeight*scale,typographyGeneration)
+      ??(strutSize!==undefined?(lineHeight*scale-1.12*strutSize)/2+0.9*strutSize:undefined):undefined;
+  const paragraphStyle:CSSProperties={...boxStyle,display:"block",width:"100%",minWidth:0,...(fixedLines?{position:"relative",height:lineHeight*scale*lines.length}:{}),
+    ...(strut!==undefined&&officeBaseline!==undefined?{marginTop:officeBaseline-strut,flex:"none"}:{}),
+    ...(spreading?{display:"flex",flexDirection:"column",justifyContent:spread,height:"100%"}:{}),
+    lineHeight:lineHeight===undefined?"normal":`${lineHeight*scale}px`,fontFamily:base.fontFamily,fontSize:typeof base.fontSize==="number"?base.fontSize*scale:base.fontSize,fontWeight:base.fontWeight,fontStyle:base.fontStyle,textAlign:base.textAlign};
   // One line that sits where the paragraph does (no fixed line box, no
   // alignment offset, no line break to carry): the paragraph and its line are
   // two blocks of the same box, so one element draws both. Most cells on a
   // sheet are this, and the grid mounts one node less for each.
-  const only=lines?.length===1&&!fixedLines&&shown?.offsets[0]===undefined&&!lines[0].hardBreak?lines[0]:undefined;
+  const only=lines?.length===1&&!fixedLines&&shown?.offsets[0]===undefined&&!lines[0].hardBreak&&!distributed?lines[0]:undefined;
   if(only){
     const lineStyle={...paragraphStyle,...nativeParagraphLineStyle(only,style,scale,dpi,lineHeight)};
     const run=drawSingleRun&&lineHeight===undefined&&only.parts.length===1&&!Object.keys(only.parts[0].style??{}).length?resolveRelativePartFontSizes(only.parts,style)[0]:undefined;
@@ -154,12 +187,34 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     }
     return <span ref={ref} data-spreadsheet-native-paragraph="" data-native-text-line="" style={lineStyle}>{paintParts(only.parts)}</span>;
   }
+  // Distributed: each line's units at their places, the gaps between them
+  // equal (or the line centred, or at the start where it overfills).
+  const distributedRoom=distributed&&wrap&&stable[5]!=null&&parts.length===1&&!Object.keys(parts[0]?.style??{}).length?stable[5]:undefined;
+  const distributedLine=(line:NativeTextLine)=>{
+    if(distributedRoom===undefined)return null;
+    const text=line.parts.map(part=>part.text).join("");
+    if(!text.trim()||line.parts.some(part=>Object.keys(part.style??{}).length))return null;
+    const {mode,units}=distributedLineUnits(text);
+    const widths=units.map(unit=>measureNativeLineAdvance([{text:unit}],style,dpi));
+    if(widths.some(width=>width===undefined))return null;
+    const total=widths.reduce<number>((sum,width)=>sum+(width??0),0);
+    if(mode==="center"||total>=distributedRoom){
+      const trimmed=text.trim();
+      const advance=measureNativeLineAdvance([{text:trimmed}],style,dpi);
+      const start=mode==="center"&&advance!==undefined?(distributedRoom-advance)/2:0;
+      return <span style={{marginLeft:start*scale}}>{paintParts([{text:trimmed}])}</span>;
+    }
+    const gap=(distributedRoom-total)/(units.length-1);
+    return units.map((unit,index)=><span key={index} style={index?{marginLeft:gap*scale}:undefined}>{paintParts([{text:unit}])}</span>);
+  };
   return <span ref={ref} data-spreadsheet-native-paragraph="" style={paragraphStyle}>
     {lines?lines.map((line,index)=>{
       const terminal=resolveSpreadsheetTextStyle({...style,...line.breakStyle},"",dpi);
       const offset=shown?.offsets[index];
-      return <span key={index} data-native-text-line="" style={{...nativeParagraphLineStyle(line,style,scale,dpi,lineHeight),...(fixedLines?{position:"absolute",top:index*lineHeight*scale,left:offset??0,width:"100%",...(offset!==undefined?{textAlign:"left"}:{})}:offset!==undefined?{textAlign:"left",position:"relative",left:offset}:{})}}>
-        {paintParts(line.parts)}
+      return <span key={index} data-native-text-line="" style={{...nativeParagraphLineStyle(line,style,scale,dpi,lineHeight),...(fixedLines?{position:"absolute",top:index*lineHeight*scale,left:offset??0,width:"100%",...(offset!==undefined?{textAlign:"left"}:{})}:offset!==undefined?{textAlign:"left",position:"relative",left:offset}:{}),
+        ...(spreading?{flex:"none",...(lineHeight!==undefined?{height:lineHeight*scale}:{})}:{}),
+        ...(distributedRoom!==undefined?{textAlign:"left"}:{})}}>
+        {distributedLine(line)??paintParts(line.parts)}
         {line.hardBreak?<><span style={{fontFamily:terminal.fontFamily,fontWeight:terminal.fontWeight,fontStyle:terminal.fontStyle,fontSize:typeof terminal.fontSize==="number"?terminal.fontSize*scale:terminal.fontSize,lineHeight:lineHeight===undefined?undefined:0}}/><span style={{display:"none"}}>{line.hardBreak}</span></>:null}
       </span>;
     }):paintParts(parts)}

@@ -75,9 +75,10 @@ export function useSpreadsheetSmartArtDiagramCommands({
     [applySmartArtDesign],
   );
   /**
-   * Reset Graphic: the default quick style, and the colours of the variation
-   * the diagram wears (Office's default, accent 1, unless it names another)
-   * resolved against the workbook's theme, as an inserted diagram is. The
+   * Reset Graphic: the default quick style and Office's default colour
+   * variation (accent 1, `accent1_2`) resolved against the workbook's theme,
+   * as an inserted diagram is -- PowerPoint's Reset puts a Colorful diagram
+   * back on it (SmartArt probe B10b), and Excel runs the same command. The
    * fixed default set was Office 2013's blue, never this workbook's accent.
    */
   const resetSmartArtDiagram = useCallback(
@@ -90,6 +91,7 @@ export function useSpreadsheetSmartArtDiagramCommands({
           colors: { ...reset.colors, fontSize: current.fontSize },
           ...(reset.nodePaint ? { nodePaint: reset.nodePaint } : {}),
           styleId: reset.styleId,
+          colorsId: reset.colorsId,
           authorPaint: false,
           // Reset keeps a Right to Left and the background colour applied to
           // the whole graphic (Microsoft Support, "Restore the default layout

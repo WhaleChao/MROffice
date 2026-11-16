@@ -18,6 +18,7 @@ import {
 import {
   OfficeShapeFormatTab,
   type OfficeShapeEffect,
+  type OfficeShapeEffectAdapter,
   type OfficeShapeFormatAdapter,
   type OfficeShapeFormatLabels,
   OfficeSmartArtEditIn2dCommand,
@@ -112,6 +113,7 @@ export function PresentationSmartArtFormatTab({
   graphicSelected = false,
   graphicOutline = null,
   picture = null,
+  effectsMenu,
 }: {
   labels: OfficeShapeFormatLabels;
   /** The page and every targeted member may change. */
@@ -160,6 +162,13 @@ export function PresentationSmartArtFormatTab({
     readonly onStyle: (styleId: string) => void;
     readonly onReset: () => void;
   } | null;
+  /**
+   * Shape Effects as PowerPoint draws it (Preset, Shadow, Reflection, Glow,
+   * Soft Edges, Bevel, 3-D Rotation with every variation): the deck's shared
+   * Effects menu (`OfficePictureEffectsMenu`) over the targeted shapes'
+   * `shapeEffects`, drawn by the host. Absent, the one-name preset list.
+   */
+  effectsMenu?: OfficeShapeEffectAdapter["render"];
 }) {
   const t = useTranslations("console-notebooks");
   const [aspectLocked, setAspectLocked] = useState(false);
@@ -229,6 +238,7 @@ export function PresentationSmartArtFormatTab({
         ? ["none", "shadow", "reflection", "glow", "softEdge"]
         : ["none", "shadow", ...OFFICE_SHAPE_EFFECT_PRESETS],
       onPick: commands.effect,
+      ...(effectsMenu ? { render: effectsMenu } : {}),
       cascade: {
         presets: t("office.shapeEffects.presets"),
         category: (effect) =>

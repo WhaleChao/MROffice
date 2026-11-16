@@ -28,7 +28,7 @@ import { measurementRange } from "./measurementRange";
 import { SheetMeasureMemo, sheetsOf } from "./sheetMeasureMemo";
 import { MEASURE_HORIZON_EVENT, sheetsWithinMeasureHorizon } from "./measureHorizon";
 import { editorFontFamilies, facesUsedBy, loadedFaceRanges, textDrawsCodePointIn } from "./ledger/ledgerFontRanges";
-import { newFontFacesOf } from "../../../../../lib/font-face-news";
+import { afterFontsReady, newFontFacesOf } from "../../../../../lib/font-face-news";
 import { clearLayoutPending, markLayoutPending, registerLayoutSettler } from "./layoutPending";
 import { REBALANCE_META as PAGINATION_MOVE_META } from "./pageRebalanceExtension";
 
@@ -723,7 +723,9 @@ export const BandTabLayout = Extension.create({
             markLayoutPending(editorView.dom, "band-tabs");
             schedule();
           };
-          void fonts?.ready.then(fontsChanged);
+          // Read once for every caller of this task, a microtask later: a
+          // read of `fonts.ready` lays the page out in Blink (font-face-news).
+          const cancelFontsReady = afterFontsReady(editorView.dom.ownerDocument, fontsChanged);
           // A face that arrives later (an Office font asset loaded for this
           // run) changes the text's width without resizing the story. A
           // subset of some characters changes only the sheets drawing them
@@ -791,6 +793,7 @@ export const BandTabLayout = Extension.create({
               clearLayoutPending(editorView.dom, "band-tabs");
               unregisterSettler();
               observer?.disconnect();
+              cancelFontsReady();
               fonts?.removeEventListener?.("loadingdone", facesLoaded);
               editorView.dom.removeEventListener(MEASURE_HORIZON_EVENT, horizonWidened);
             },

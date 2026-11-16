@@ -179,6 +179,11 @@ function serialize(value: object): string {
     .join(",")}}`;
 }
 
+/** Whether a `withProjectionJsonMemo` scope is open (tests). */
+export function projectionJsonMemoOpen(): boolean {
+  return scope !== null;
+}
+
 /** Run `fn` with every `stableProjectionJson` text kept per object for its
  * duration (nested scopes share the outermost one). `fn` must not mutate
  * JSON it has already serialized. */

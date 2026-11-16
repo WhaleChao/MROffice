@@ -25,7 +25,7 @@ import { isChartNode } from "./documentObjectNodes";
 import { type DocumentChartAreaStyleKey } from "./DocumentChartFormatRibbon";
 import { chartSupportsDataLabels, normalizeChartBlockAttrs, validateChartBlockAttrsV2, type CategoryChartData, type ChartBlockAttrsV2, type ChartData, type ChartFamily, type ChartSubtype } from "../extensions/chartBlockShared";
 import { chartFormatWithDataLabelContents } from "../../../../lib/office-charts/chart-elements";
-import { chartStyleRowExtras, comparePresentationChartAxisStyles, normalizePresentationChartAreaStyle, normalizePresentationChartAxisStyles, presentationChartAxisStylePart, normalizePresentationChartSliceStyles, normalizePresentationChartSeriesStyles, type PresentationChartAreaPaint, type PresentationChartAreaStyle, type PresentationChartEffectPreset } from "../../../../lib/presentation-chart-area-style";
+import { chartPointEffectiveStyle, chartPointStyleRow, chartRowsWithPointStyle, chartStyleRowExtras, comparePresentationChartAxisStyles, normalizePresentationChartAreaStyle, normalizePresentationChartAxisStyles, presentationChartAxisStylePart, normalizePresentationChartSliceStyles, normalizePresentationChartSeriesStyles, type PresentationChartAreaPaint, type PresentationChartAreaStyle, type PresentationChartEffectPreset } from "../../../../lib/presentation-chart-area-style";
 import { normalizeDocumentChartHost } from "../extensions/documentChartHost";
 import { chartWorkbookData, sameChartWorkbookDataShape, type DocumentChartWorkbook } from "../extensions/documentChartWorkbook";
 import {
@@ -359,6 +359,11 @@ export function liveDocumentChartAreaStyle(
       (entry) => entry.pointIndex === pointIndex,
     );
   }
+  // One point of a series (Format Data Point): its own `c:dPt` row.
+  const pointMatch = /^point:([0-9]+):([0-9]+)$/.exec(area);
+  if (pointMatch) {
+    return chartPointEffectiveStyle(format, Number(pointMatch[1]), Number(pointMatch[2]));
+  }
   if (seriesMatch) {
     const seriesIndex = Number(seriesMatch[1]);
     return normalizePresentationChartSeriesStyles(format?.seriesStyles)?.find(
@@ -377,6 +382,29 @@ export function setLiveDocumentChartAreaStyle(
   style: PresentationChartAreaStyle,
 ): boolean {
   if (!target.valid) return false;
+  const pointMatch = /^point:([0-9]+):([0-9]+)$/.exec(area);
+  if (pointMatch) {
+    // Format Data Point: series S's point P's own row (`c:dPt`), its paint
+    // over its series'.
+    if (!normalizePresentationChartAreaStyle(style)) return false;
+    const format: NonNullable<ChartBlockAttrsV2["format"]> = { ...(target.attrs.format ?? {}) };
+    const rows = chartRowsWithPointStyle(
+      normalizePresentationChartSliceStyles(format.sliceStyles),
+      Number(pointMatch[1]),
+      Number(pointMatch[2]),
+      style,
+    );
+    if (rows) format.sliceStyles = rows;
+    else delete format.sliceStyles;
+    const next: ChartBlockAttrsV2 = { ...target.attrs, format };
+    if (
+      !validateChartBlockAttrsV2(next).valid ||
+      JSON.stringify(target.attrs.format ?? {}) === JSON.stringify(format)
+    ) {
+      return false;
+    }
+    return commitLiveDocumentChartAttrs(editor, target, canonicalDocumentChartNodeAttrs(target, next));
+  }
   const seriesMatch = /^series:([0-9]+)$/.exec(area);
   const sliceMatch = /^slice:([0-9]+)$/.exec(area);
   // A series' marker or Smoothed line (a point's explosion) is written even
@@ -652,6 +680,7 @@ export function resetLiveDocumentChartAreaStyle(
   const format = { ...(target.attrs.format ?? {}) };
   const seriesMatch = /^series:([0-9]+)$/.exec(area);
   const sliceMatch = /^slice:([0-9]+)$/.exec(area);
+  const pointMatch = /^point:([0-9]+):([0-9]+)$/.exec(area);
   const axisMatch = /^axis:(category|value)$/.exec(area);
   if (axisMatch) {
     const axis = axisMatch[1] as "category" | "value";
@@ -691,6 +720,12 @@ export function resetLiveDocumentChartAreaStyle(
   } else if (area === "dataLabelLeaderLineStyle") {
     if (format.dataLabelLeaderLineStyle === undefined) return false;
     delete format.dataLabelLeaderLineStyle;
+  } else if (pointMatch) {
+    const current = normalizePresentationChartSliceStyles(format.sliceStyles);
+    if (!chartPointStyleRow(current, Number(pointMatch[1]), Number(pointMatch[2]))) return false;
+    const rows = chartRowsWithPointStyle(current, Number(pointMatch[1]), Number(pointMatch[2]), null);
+    if (rows) format.sliceStyles = rows;
+    else delete format.sliceStyles;
   } else if (sliceMatch) {
     const pointIndex = Number(sliceMatch[1]);
     const current =
@@ -855,7 +890,7 @@ export function documentChartWithColorPalette(
   if (!target.valid) return null;
   return documentChartPaletteAsSeriesPaint(target)
     ? chartWithResolvedColorPalette(target.attrs, paletteId, accents)
-    : chartWithColorPalette(target.attrs, paletteId);
+    : chartWithColorPalette(target.attrs, paletteId, accents);
 }
 
 export function documentChartActiveColorPaletteId(

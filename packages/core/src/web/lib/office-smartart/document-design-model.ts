@@ -39,7 +39,7 @@ import {
   type SmartArtOutlineItem,
 } from "./outline";
 import {
-  resizeSmartArtItem,
+  smartArtMembersWithItemScale,
   smartArtOutlineAfterTextEdit,
   smartArtConnectorColor,
   smartArtPaletteNode,
@@ -349,53 +349,26 @@ export function documentSmartArtPicturePatch(
  * would be a different picture; both are refusals, not results.
  */
 /**
- * SmartArt Format > Shapes > Larger / Smaller on one item, through the shared
- * {@link resizeSmartArtItem}. A member lives in the group's own child space,
- * which is the graphic's frame: the grown shape stays inside it.
+ * One item resized -- Larger / Smaller, a handle, a typed size -- as Word keeps
+ * it: the item's shapes carry their scale times `factor`
+ * ({@link smartArtMembersWithItemScale}), every box as it is; the rebuild then
+ * lays the whole graphic out around the grown shape
+ * (`documentSmartArtResizePatch`, the engine host's `document.rebuild`).
+ * `null` when refused.
  */
-export function documentSmartArtResizePatch(
+export function documentSmartArtItemScaledAttrs(
   diagram: DocumentSmartArtDiagram,
   itemId: string,
-  factor: number,
-): DocumentSmartArtPatch | null {
-  const coordinate = {
-    width: diagram.attrs.groupCoordinateWidthEmu ?? 0,
-    height: diagram.attrs.groupCoordinateHeightEmu ?? 0,
-  };
-  if (coordinate.width < 1 || coordinate.height < 1) return null;
-  const resized = resizeSmartArtItem(
+  factor: number | { readonly x: number; readonly y: number },
+): DocumentSmartArtDiagram["attrs"] | null {
+  const members = smartArtMembersWithItemScale(
     diagram.members,
     itemId,
     factor,
-    (member) => ({
-      left: member.xEmu,
-      top: member.yEmu,
-      width: member.widthEmu,
-      height: member.heightEmu,
-    }),
-    (member, box) => {
-      const width = Math.min(coordinate.width, Math.round(box.width));
-      const height = Math.min(coordinate.height, Math.round(box.height));
-      return {
-        ...member,
-        xEmu: Math.min(Math.max(0, Math.round(box.left)), coordinate.width - width),
-        yEmu: Math.min(Math.max(0, Math.round(box.top)), coordinate.height - height),
-        widthEmu: width,
-        heightEmu: height,
-      };
-    },
+    (member) => ({ left: member.xEmu, top: member.yEmu, width: member.widthEmu, height: member.heightEmu }),
     12_700,
-    { left: 0, top: 0, width: coordinate.width, height: coordinate.height },
-    diagram.kind,
   );
-  if (!resized) return null;
-  return documentSmartArtVerifiedPatch(
-    diagram,
-    diagram.kind,
-    diagram.styleId ?? undefined,
-    coordinate,
-    resized,
-  );
+  return members ? { ...diagram.attrs, groupMembers: members } : null;
 }
 
 /**

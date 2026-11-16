@@ -640,6 +640,17 @@ export const TRACKED_FORMAT_MARK_NAMES = new Set([
   "charBorder",
 ]);
 
+/**
+ * Run marks a revision's snapshot may name beside the tracked ones: Word's
+ * `w:rPrChange` holds the complete previous `w:rPr`, its `w:lang` too (an
+ * imported revision's snapshot names the run's proofing language). Recorded
+ * live, a snapshot holds the tracked marks only, so such a mark is put back
+ * (and the current one taken off) only when the snapshot names it. A
+ * snapshot that named one was refused whole: Reject All and Accept All left
+ * the revision standing (corpus R456-D10 E43).
+ */
+export const SNAPSHOT_ONLY_FORMAT_MARK_NAMES = new Set(["proofingLanguage"]);
+
 export const TRACKED_PARAGRAPH_FORMAT_ATTRS = [
   "customStyleName",
   "customStyleId",
@@ -686,8 +697,33 @@ export const PARAGRAPH_FORMAT_HEADING_LEVEL_KEY = "headingLevel";
  */
 export const PARAGRAPH_FORMAT_LIST_LEVEL_KEY = "listLevel";
 
+/**
+ * The paragraph properties of Word's `w:pPrChange` the import states beside
+ * the tracked ones (its complete previous `w:pPr`): the East Asian
+ * typography and the line-number / hyphenation opt-outs. A live snapshot
+ * does not record them, so they are restored only from an imported revision
+ * (one that names no heading level). A snapshot that named one was refused
+ * whole: Reject All and Accept All left the revision standing (corpus
+ * R456-D10 E43, 39 paragraphs).
+ */
+export const IMPORTED_PARAGRAPH_FORMAT_ATTRS = [
+  "suppressLineNumbers",
+  "suppressAutoHyphens",
+  "snapToGrid",
+  "wordWrap",
+  "kinsoku",
+  "overflowPunct",
+  "topLinePunct",
+  "textAlignment",
+  "adjustRightInd",
+  "mirrorIndents",
+  "autoSpaceDE",
+  "autoSpaceDN",
+] as const;
+
 const PARAGRAPH_FORMAT_SNAPSHOT_KEYS: readonly string[] = [
   ...TRACKED_PARAGRAPH_FORMAT_ATTRS,
+  ...IMPORTED_PARAGRAPH_FORMAT_ATTRS,
   PARAGRAPH_FORMAT_HEADING_LEVEL_KEY,
   PARAGRAPH_FORMAT_LIST_LEVEL_KEY,
 ];
@@ -955,7 +991,10 @@ function boundedJsonValue(value: unknown, depth = 0): unknown {
 export function normalizeFormatMarkSnapshots(
   value: unknown,
 ): TrackedFormatMarkSnapshot[] | null {
-  if (!Array.isArray(value) || value.length > TRACKED_FORMAT_MARK_NAMES.size) {
+  if (
+    !Array.isArray(value) ||
+    value.length > TRACKED_FORMAT_MARK_NAMES.size + SNAPSHOT_ONLY_FORMAT_MARK_NAMES.size
+  ) {
     return null;
   }
   const seen = new Set<string>();
@@ -965,7 +1004,10 @@ export function normalizeFormatMarkSnapshots(
     const record = item as Record<string, unknown>;
     if (
       typeof record.type !== "string" ||
-      !TRACKED_FORMAT_MARK_NAMES.has(record.type) ||
+      !(
+        TRACKED_FORMAT_MARK_NAMES.has(record.type) ||
+        SNAPSHOT_ONLY_FORMAT_MARK_NAMES.has(record.type)
+      ) ||
       seen.has(record.type)
     ) {
       return null;
@@ -1600,6 +1642,12 @@ function clearParagraphFormatRevision(
     for (const key of TRACKED_PARAGRAPH_FORMAT_ATTRS) {
       attrs[key] = specAttrs?.[key]?.default ?? null;
     }
+    if (!(PARAGRAPH_FORMAT_HEADING_LEVEL_KEY in previousAttrs)) {
+      // An imported revision: Word's previous pPr, complete.
+      for (const key of IMPORTED_PARAGRAPH_FORMAT_ATTRS) {
+        if (key in attrs) attrs[key] = specAttrs?.[key]?.default ?? null;
+      }
+    }
     const {
       [PARAGRAPH_FORMAT_HEADING_LEVEL_KEY]: headingLevel,
       [PARAGRAPH_FORMAT_LIST_LEVEL_KEY]: listLevel,
@@ -1691,6 +1739,11 @@ function restoreRunFormatRevision(
   }
   for (const name of TRACKED_FORMAT_MARK_NAMES) {
     const type = tr.doc.type.schema.marks[name];
+    if (type) tr.removeMark(range.from, range.to, type);
+  }
+  for (const snapshot of range.authority.previousMarks) {
+    if (!SNAPSHOT_ONLY_FORMAT_MARK_NAMES.has(snapshot.type)) continue;
+    const type = tr.doc.type.schema.marks[snapshot.type];
     if (type) tr.removeMark(range.from, range.to, type);
   }
   tr.removeMark(range.from, range.to, formatType);
@@ -1798,8 +1851,16 @@ export function resolveParagraphMarkRevisions(
     const index = $pos.index();
     const boundary = pos + node.nodeSize;
     const next = removes ? tr.doc.nodeAt(boundary) : null;
-    if (removes && node.content.size === 0 && parent.canReplace(index, index + 1)) {
+    const emptyItem = removes && holdsNoContent(node) ? emptyListItemAround(tr.doc, pos, node) : null;
+    if (removes && holdsNoContent(node) && parent.canReplace(index, index + 1)) {
       tr.delete(pos, pos + node.nodeSize);
+    } else if (emptyItem) {
+      // The only paragraph of a list item, emptied by the rejection: Word
+      // removes the paragraph -- the item, numbered or bulleted, is gone, and
+      // the list with it when that was its only item (R456-D10 E43: eleven
+      // inserted objectives, each its own one-item list, were left as empty
+      // numbered items; their mark and format revisions with them).
+      tr.delete(emptyItem.from, emptyItem.to);
     } else if (removes && next?.isTextblock && canJoin(tr.doc, boundary)) {
       // The paragraph mark itself goes: the paragraph runs on into the next
       // one, which keeps ITS mark -- the merged paragraph has the following
@@ -1820,6 +1881,40 @@ export function resolveParagraphMarkRevisions(
     changed = true;
   }
   return changed;
+}
+
+/** Nothing left in the paragraph but where Word's last layout broke its page
+ * (``sourcePageBreak``, w:lastRenderedPageBreak): a cache of the old layout,
+ * no content of the paragraph (R456-D10 E43: an inserted objective that had
+ * crossed a page kept its marker, and with it an empty numbered item). */
+function holdsNoContent(node: ProseMirrorNode): boolean {
+  let content = false;
+  node.forEach((child) => {
+    if (child.type.name !== "sourcePageBreak") content = true;
+  });
+  return !content;
+}
+
+/** The range to delete for an empty paragraph whose mark goes when it is the
+ * only content of its list item: the item, or the whole list when the item is
+ * its only one and the list's parent can do without it. */
+function emptyListItemAround(
+  doc: ProseMirrorNode, pos: number, node: ProseMirrorNode,
+): { from: number; to: number } | null {
+  const $pos = doc.resolve(pos);
+  const item = $pos.parent;
+  if (!/listItem|taskItem/.test(item.type.name) || item.childCount !== 1 || $pos.depth < 2) return null;
+  if (item.firstChild !== node) return null;
+  const itemPos = $pos.before();
+  const list = $pos.node($pos.depth - 1);
+  const itemIndex = $pos.index($pos.depth - 1);
+  if (list.childCount > 1) {
+    return list.canReplace(itemIndex, itemIndex + 1) ? { from: itemPos, to: itemPos + item.nodeSize } : null;
+  }
+  const listPos = $pos.before($pos.depth - 1);
+  const container = $pos.node($pos.depth - 2);
+  const listIndex = $pos.index($pos.depth - 2);
+  return container.canReplace(listIndex, listIndex + 1) ? { from: listPos, to: listPos + list.nodeSize } : null;
 }
 
 /** The first paragraph of the list item after the one whose last paragraph

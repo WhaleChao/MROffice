@@ -50,7 +50,9 @@ export function spreadsheetShapeTextInset(
     // Calibri's 0.507), so a line Office fills exactly -- Basic Venn's "项目"
     // in its 48 pt -- broke a character early. The words may reach a little
     // past it on the side their alignment leaves open (the print does too).
-    const slack = spanX * (smartArtTextBox.width / unit) * SMARTART_LABEL_WRAP_SLACK;
+    // (Not for words at a size the author fixed: Office breaks those by its
+    // measures exactly, X24ui's 28 pt Georgia "gamm" / "a".)
+    const slack = smartArtTextBox.exact ? 0 : spanX * (smartArtTextBox.width / unit) * SMARTART_LABEL_WRAP_SLACK;
     const align = shape.textAlign;
     const slackLeft = align === "right" ? slack : align === "left" || align === "justify" ? 0 : slack / 2;
     return {

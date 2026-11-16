@@ -458,7 +458,7 @@ export function nativeAutofitRender(
  * through the undo stack.
  */
 export function dropNativeAutofitReceipt(block: object): void {
-  const target = block as { source?: Record<string, unknown> };
+  const target = block as { source?: Record<string, unknown>; autofit?: unknown; style?: unknown };
   const source = target.source;
   if (
     typeof source !== "object" ||
@@ -466,6 +466,21 @@ export function dropNativeAutofitReceipt(block: object): void {
     !("nativeAutofitReceipt" in source)
   ) {
     return;
+  }
+  // A Resize shape to fit text box (`a:spAutoFit`) states no autofit of its
+  // own: its receipt is what says its frame follows its words. Dropped with
+  // nothing in its place, the retyped box became Do not Autofit -- its frame
+  // stayed as tall as the file drew it however few rows its words now take,
+  
+  // 5 body: PowerPoint shrank the box to its four rows, MRAI kept it tall).
+  // The mode stays, stated; only the measured extent goes.
+  const style =
+    target.style && typeof target.style === "object" && !Array.isArray(target.style)
+      ? (target.style as { autofit?: unknown })
+      : undefined;
+  const stated = style && "autofit" in style ? style.autofit : target.autofit;
+  if ((stated === undefined || stated === null) && nativeAutofitResizesShape(block)) {
+    target.autofit = "resize-shape";
   }
   const next = { ...source };
   delete next.nativeAutofitReceipt;

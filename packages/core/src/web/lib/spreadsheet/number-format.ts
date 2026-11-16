@@ -2046,7 +2046,7 @@ function renderFractionSection(abs: number, section: string, autoMinus: boolean)
  * pixel metrics here). Used when a NUMERIC cell carries a Text ("@") custom
  * format — Excel/Sheets echo the value as text rather than printing a literal @.
  */
-function renderTextSection(text: string, section: string): string {
+function renderTextSection(text: string, section: string, pad = " "): string {
   let out = "";
   for (let i = 0; i < section.length; i += 1) {
     const ch = section[i];
@@ -2074,13 +2074,13 @@ function renderTextSection(text: string, section: string): string {
       out += section[i + 1];
       i += 1;
     } else if ((ch === "_" || ch === "*") && i + 1 < section.length) {
-      if (ch === "_") out += " ";
+      if (ch === "_") out += pad;
       i += 1;
     } else if (ch === "_" || ch === "*") {
       // A stored code is trimmed, so zh-CN Accounting's closing `_ ` reserve
       // arrives as a lone `_`: still the reserved space, never a literal `_`
       // (" 甲乙_" under `_ @_`). A trailing `*` repeats nothing.
-      if (ch === "_") out += " ";
+      if (ch === "_") out += pad;
     } else {
       out += ch;
     }
@@ -2350,6 +2350,20 @@ export function numberFormatLayout(
  * text alone under a purely numeric format). PURE.
  */
 export function applyTextFormat(text: string, format: string): string {
+  return applyTextFormatPadded(text, format, " ");
+}
+
+
+
+
+
+
+
+export function applyTextFormatUnpadded(text: string, format: string): string {
+  return applyTextFormatPadded(text, format, "");
+}
+
+function applyTextFormatPadded(text: string, format: string, pad: string): string {
   const f = (format || "").trim();
   if (!f || f.toLowerCase() === "general") return text;
   const sections = splitSections(f);
@@ -2360,7 +2374,7 @@ export function applyTextFormat(text: string, format: string): string {
         ? sections[0]
         : null;
   if (textSection === null) return text;
-  return renderTextSection(text, textSection.trim());
+  return renderTextSection(text, textSection.trim(), pad);
 }
 
 /**
@@ -2621,6 +2635,75 @@ export function formatDecimalPlaces(format: string | undefined): number {
   const seg = splitSections(f)[0] ?? "";
   if (isDateTimeSection(seg)) return 0;
   return scanDecimalTokens(seg).fractionalPlaceholders.length;
+}
+
+/** `value` rounded half away from zero to `decimals` places of its 15-digit
+ *  decimal form, as Excel shows it (1.005 at two places is 1.01). */
+function roundShown(value: number, decimals: number): number {
+  const magnitude = Math.abs(Number(Math.abs(value).toPrecision(15)));
+  const rounded = Number(`${Math.round(Number(`${magnitude}e${decimals}`))}e-${decimals}`);
+  return value < 0 ? -rounded : rounded;
+}
+
+function sectionShownRounder(section: string): ((value: number) => number) | null {
+  if (!section || /^general$/i.test(section.trim()) || isDateTimeSection(section) || isFractionSection(section)) return null;
+  const scan = scanDecimalTokens(section);
+  // A section of text alone shows no number.
+  if (scan.lastMantissaPlaceholder < 0) return null;
+  const decimals = scan.fractionalPlaceholders.length;
+  let percent = 0;
+  let scale = 0;
+  let integerPlaceholders = 0;
+  for (let index = 0; index < section.length; index += 1) {
+    const char = section[index];
+    if (char === '"') {
+      index += 1;
+      while (index < section.length && section[index] !== '"') index += 1;
+    } else if (char === "\\") {
+      index += 1;
+    } else if (char === "[") {
+      while (index < section.length && section[index] !== "]") index += 1;
+    } else if (char === "%") {
+      percent += 1;
+    } else if (char === "," && index > scan.lastMantissaPlaceholder && (scan.exponentIndex < 0 || index < scan.exponentIndex)) {
+      // A comma after the last digit placeholder scales by a thousand.
+      scale += 1;
+    } else if (/[0#?]/.test(char) && (scan.dotIndex < 0 || index < scan.dotIndex) && (scan.exponentIndex < 0 || index < scan.exponentIndex)) {
+      integerPlaceholders += 1;
+    }
+  }
+  if (scan.exponentIndex >= 0) {
+    // Engineering notation (##0.0E+0) moves its exponent in threes; left as it is.
+    if (integerPlaceholders > 1) return null;
+    return (value) => (value === 0 ? 0 : Number(value.toExponential(Math.min(20, decimals))));
+  }
+  const up = 100 ** percent;
+  const down = 1000 ** scale;
+  // Back from the shown scale at 15 digits: 1234.6 at a thousands comma is 1234600.
+  return (value) => Number(((roundShown((value * up) / down, decimals) * down) / up).toPrecision(15));
+}
+
+/**
+ * Set precision as displayed (Excel: File > Options > Advanced; xlsx
+ * calcPr@fullPrecision="0"): the number a cell keeps is the one its format
+ * shows -- its decimal places, a percent's two more, a thousands scaling
+ * comma's three fewer, a scientific mantissa's digits. Null where the format
+ * shows the number as it is (General, a date or time, a fraction, text).
+ * xlsx-rounds formula truth R172-X05: 19225824182.69/1000000 under #,##0 is
+ * kept as 19226.
+ */
+export function displayedPrecisionRounder(format: string | undefined): ((value: number) => number) | null {
+  const f = (format || "").trim();
+  if (!f || f.toLowerCase() === "general") return null;
+  const sections = splitSections(f);
+  const positive = sectionShownRounder(sections[0] ?? "");
+  const negative = sections.length > 1 ? sectionShownRounder(sections[1] ?? "") : positive;
+  if (!positive && !negative) return null;
+  return (value) => {
+    if (!Number.isFinite(value)) return value;
+    const round = value < 0 ? negative : positive;
+    return round ? round(value) : value;
+  };
 }
 
 /**

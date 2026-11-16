@@ -42,8 +42,15 @@ import {
 } from "@mrnote/core/web/lib/presentation/text-selection.ts";
 import type { PresentationFontSizeUnit } from "../../../../lib/presentation/text-layout-css";
 import type { PresentationFontAliases } from "@mrnote/core/web/lib/presentation-font-faces.ts";
-import { PresentationEngineTextBody, presentationEngineLineStarts, usePresentationEngineBody, type PresentationEngineBodyAnswer } from "./PresentationEngineTextBody";
+import {
+  PresentationEngineTextBody,
+  presentationEngineDrawsSame,
+  presentationEngineLineStarts,
+  usePresentationEngineBody,
+  type PresentationEngineBodyAnswer,
+} from "./PresentationEngineTextBody";
 import { presentationRowsText, presentationRowsWithTypedText } from "./presentationEngineEditing";
+import { PowerPointLineFitAfterPaintContext } from "./usePowerPointLineFit";
 import type { PresentationParagraphRowPlan } from "./presentationParagraphRows";
 
 const PX_PER_PT = 4 / 3;
@@ -98,10 +105,30 @@ export function PresentationEngineEditLayer({
 }) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   // Letters the host holds that `rows` (the window's last drawing) does not.
-  const [typed, setTyped] = useState<{ base: readonly PresentationParagraphRowPlan[]; rows: readonly PresentationParagraphRowPlan[] } | null>(null);
+  const [typed, setTyped] = useState<{
+    base: readonly PresentationParagraphRowPlan[];
+    /** `presentationRowsText(base)`. */
+    baseText: string;
+    rows: readonly PresentationParagraphRowPlan[];
+    /** The host's words they were laid out from. */
+    text: string;
+  } | null>(null);
   // The host's words are something the engine cannot follow until the window draws them.
   const [staleFor, setStaleFor] = useState<readonly PresentationParagraphRowPlan[] | null>(null);
-  const typedRows = typed && rows && typed.base === rows ? typed.rows : null;
+  const rowsText = useMemo(() => (rows ? presentationRowsText(rows) : null), [rows]);
+  // The window drawing again while letters are held (anything but their own
+  // draw: a save's status, a collaborator's caret) plans the same rows anew:
+  // the same words, a new object. The letters stay laid out on the new rows;
+  // falling back to the window's drawing showed the host's own rows for that
+  // key (the words it lacked read as a mismatch), and the body's height came
+  // and went with them, which the window reads as a letter that started a
+  
+  const typedRows = useMemo(() => {
+    if (!typed || !rows || rowsText === null) return null;
+    if (typed.base === rows) return typed.rows;
+    if (typed.baseText !== rowsText) return null;
+    return presentationRowsWithTypedText(rows, typed.text, rowsText);
+  }, [typed, rows, rowsText]);
   const stale = staleFor !== null && staleFor === rows;
   const local = usePresentationEngineBody({
     enabled: typedRows !== null,
@@ -117,8 +144,12 @@ export function PresentationEngineEditLayer({
     widthPx,
     wrap,
   });
-  const drawn = typedRows !== null ? (local.status === "ok" ? local : null) : answer;
-  const drawnRows = typedRows ?? rows ?? NO_ROWS;
+  const laid = typedRows !== null ? (local.status === "ok" ? local : null) : answer;
+  const laidRows = typedRows ?? rows ?? NO_ROWS;
+  // The window lays out the letters this layer already drew (its typing
+  // burst ends, `typingBurstRef`): the drawing made for them stays, so the
+  // body is not drawn a second time, nor its caret's map made again.
+  const { drawn, rows: drawnRows } = useKeptDrawing(laid, laidRows);
   const hitMap = useMemo<OfficeTextHitMap | null>(
     () => (drawn ? { layout: drawn.layout, runLengths: drawn.input.rowRuns.map((runs) => runs.map((run) => run.text.length)) } : null),
     [drawn],
@@ -129,20 +160,20 @@ export function PresentationEngineEditLayer({
   // the engine cannot follow shows the host's own rows.
   const readWords = useCallback(() => {
     const host = hostOf(wrapperRef.current);
-    if (!host || !rows || presentationPreviewComposing(host)) return;
+    if (!host || !rows || rowsText === null || presentationPreviewComposing(host)) return;
     const text = presentationPreviewPlainText(host);
-    if (text === presentationRowsText(rows)) {
+    if (text === rowsText) {
       setTyped(null);
       setStaleFor(null);
       return;
     }
-    const next = presentationRowsWithTypedText(rows, text);
+    const next = presentationRowsWithTypedText(rows, text, rowsText);
     if (next === null) {
       setStaleFor(rows);
       return;
     }
-    setTyped({ base: rows, rows: next });
-  }, [rows]);
+    setTyped({ base: rows, baseText: rowsText, rows: next, text });
+  }, [rows, rowsText]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -215,7 +246,10 @@ export function PresentationEngineEditLayer({
     setMismatch(Boolean(host && drawn && presentationPreviewPlainText(host) !== drawnText && !presentationPreviewComposing(host)));
   }, [drawn, drawnText, typedRows]);
 
-  const reveal = stale || mismatch || drawn === null;
+  // Letters laid out here are the host's own words: no mismatch while they are
+  // (the last check's answer is the window's drawing's, and stayed up while
+  // the letters came, showing the host's rows).
+  const reveal = stale || (mismatch && typedRows === null) || drawn === null;
   const heightPt = drawn ? drawn.layout.height : answer?.layout.height ?? 0;
   // The drawing changes with the words, not with the caret: a caret moved or
   // a selection made draws the paint layer alone (`PresentationEngineCaretPaint`).
@@ -242,7 +276,11 @@ export function PresentationEngineEditLayer({
       style={{ position: "relative", width: "100%", height: reveal ? undefined : px(heightPt) }}
     >
       <div data-presentation-engine-edit-rows="" style={reveal ? undefined : { position: "absolute", left: 0, top: 0, width: "100%" }}>
-        {children}
+        {
+
+
+}
+        <PowerPointLineFitAfterPaintContext.Provider value={!reveal}>{children}</PowerPointLineFitAfterPaintContext.Provider>
       </div>
       {drawn && !reveal ? (
         <div
@@ -260,6 +298,31 @@ export function PresentationEngineEditLayer({
       ) : null}
     </div>
   );
+}
+
+type OkAnswer = Extract<PresentationEngineBodyAnswer, { status: "ok" }>;
+
+/**
+ * `laid`, or the drawing last committed when `laid` draws the same body
+ * (`presentationEngineDrawsSame`): one drawing object while the words and
+ * their places stay what they are, whichever layout said so.
+ */
+function useKeptDrawing(
+  laid: OkAnswer | null,
+  laidRows: readonly PresentationParagraphRowPlan[],
+): { drawn: OkAnswer | null; rows: readonly PresentationParagraphRowPlan[] } {
+  const keptRef = useRef<{ drawn: OkAnswer; rows: readonly PresentationParagraphRowPlan[] } | null>(null);
+  // The last committed drawing (written below, after each commit): read, never written, while rendering.
+  /* eslint-disable react-hooks/refs */
+  const kept = keptRef.current;
+  const keep = laid !== null && kept !== null && kept.drawn !== laid && presentationEngineDrawsSame(kept.drawn, kept.rows, laid, laidRows);
+  const drawn = keep ? kept.drawn : laid;
+  const rows = keep ? kept.rows : laidRows;
+  useLayoutEffect(() => {
+    keptRef.current = drawn ? { drawn, rows } : null;
+  }, [drawn, rows]);
+  return { drawn, rows };
+  /* eslint-enable react-hooks/refs */
 }
 
 /** One host's selection as the body's offsets, read once per frame for every painter of it. */
@@ -284,7 +347,10 @@ function useHostSelection(wrapperRef: { readonly current: HTMLDivElement | null 
       const active = doc.activeElement;
       let next: { start: number; end: number } | null = null;
       if (active && (active === host || host.contains(active))) {
-        const range = presentationPreviewSelection(host, presentationPreviewPlainText(host).length);
+        // Offsets read from the host's own words cannot pass their end, and
+        // the painters stop at the engine's lines: no length to clamp to (the
+        // host's words were read a second time each key for it).
+        const range = presentationPreviewSelection(host, Number.MAX_SAFE_INTEGER);
         if (range) next = { start: range.start, end: range.end };
       }
       const same = shared.value === next || (shared.value && next && shared.value.start === next.start && shared.value.end === next.end);

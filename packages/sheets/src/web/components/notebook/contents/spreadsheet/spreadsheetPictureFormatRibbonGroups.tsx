@@ -25,7 +25,6 @@ import { type SpreadsheetObject, type SheetModel } from "./spreadsheetSheetModel
 import { OfficeHomeMenuTrigger, SpreadsheetRibbonAction, DropdownMenuContent, DropdownMenuItem } from "./SpreadsheetRibbonControls";
 import { type PictureFormatWriterControlId } from "./spreadsheetMutationReceipts";
 import { type SparseAxisSizeResolver } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
-import { type DrawingStackEntry } from "../../../../lib/spreadsheet/drawing-stack";
 import type { OfficeThemeGridColors } from "@mrnote/core/web/lib/office-theme-color-grid.ts";
 import {
   SpreadsheetPictureColorMenu,
@@ -39,7 +38,6 @@ export interface SpreadsheetPictureFormatRibbonGroupsInputs {
    
   arrangeLane: ReactNode;
   colWidth: SparseAxisSizeResolver;
-  drawingStack: DrawingStackEntry[];
   executePictureFormatMutation: (controlId: PictureFormatWriterControlId, parameter: string | number, surface?: "visible" | "keyboard" | "navigation") => Promise<boolean | void>;
   executeVisibleCommand: (controlId: string) => Promise<boolean>;
   pictureArrangeControlIdByMove: { readonly front: "XLSCTL.CONTEXT.PICTURE.BRING_TO_FRONT.MRAI.APPLY"; readonly forward: "XLSCTL.CONTEXT.PICTURE.BRING_FORWARD.MRAI.APPLY"; readonly backward: "XLSCTL.CONTEXT.PICTURE.SEND_BACKWARD.MRAI.APPLY"; readonly back: "XLSCTL.CONTEXT.PICTURE.SEND_TO_BACK.MRAI.APPLY"; };
@@ -60,7 +58,8 @@ export interface SpreadsheetPictureFormatRibbonGroupsInputs {
   renderChartRotateMenu: (prefix?: string) => JSX.Element;
   rowHeight: SparseAxisSizeResolver;
   selectedObjectIdRef: RefObject<string | null>;
-  selectedObjectStackIndex: number;
+  /** Excel: the layer commands grey only when the sheet holds one drawing. */
+  selectedObjectArrangeDisabled: boolean;
   selectedPictureObject: SpreadsheetObject | null;
   setPictureStylePreview: Dispatch<SetStateAction<{ readonly sheetId: string; readonly objectId: string; readonly style: OfficePictureStyleId; } | null>>;
   sheet: SheetModel;
@@ -72,7 +71,6 @@ export interface SpreadsheetPictureFormatRibbonGroupsInputs {
 export function spreadsheetPictureFormatRibbonGroups({
   arrangeLane,
   colWidth,
-  drawingStack,
   executePictureFormatMutation,
   executeVisibleCommand,
   pictureArrangeControlIdByMove,
@@ -90,7 +88,7 @@ export function spreadsheetPictureFormatRibbonGroups({
   renderChartRotateMenu,
   rowHeight,
   selectedObjectIdRef,
-  selectedObjectStackIndex,
+  selectedObjectArrangeDisabled,
   selectedPictureObject,
   setPictureStylePreview,
   sheet,
@@ -283,8 +281,7 @@ export function spreadsheetPictureFormatRibbonGroups({
                     controlId={pictureArrangeControlIdByMove.forward}
                     disabled={
                       Boolean(pictureTransformDisabledReason) ||
-                      selectedObjectStackIndex < 0 ||
-                      selectedObjectStackIndex === drawingStack.length - 1
+                      selectedObjectArrangeDisabled
                     }
                     disabledReason={pictureTransformDisabledReason}
                     homeVariant="large"
@@ -323,8 +320,7 @@ export function spreadsheetPictureFormatRibbonGroups({
                         )}
                         disabled={
                           Boolean(pictureTransformDisabledReason) ||
-                          selectedObjectStackIndex < 0 ||
-                          selectedObjectStackIndex === drawingStack.length - 1
+                          selectedObjectArrangeDisabled
                         }
                         data-testid="spreadsheet-ribbon-arrange-forward-menu-item"
                         onSelect={() =>
@@ -343,8 +339,7 @@ export function spreadsheetPictureFormatRibbonGroups({
                         )}
                         disabled={
                           Boolean(pictureTransformDisabledReason) ||
-                          selectedObjectStackIndex < 0 ||
-                          selectedObjectStackIndex === drawingStack.length - 1
+                          selectedObjectArrangeDisabled
                         }
                         data-testid="spreadsheet-ribbon-arrange-front"
                         onSelect={() =>
@@ -369,7 +364,7 @@ export function spreadsheetPictureFormatRibbonGroups({
                     controlId={pictureArrangeControlIdByMove.backward}
                     disabled={
                       Boolean(pictureTransformDisabledReason) ||
-                      selectedObjectStackIndex <= 0
+                      selectedObjectArrangeDisabled
                     }
                     disabledReason={pictureTransformDisabledReason}
                     homeVariant="large"
@@ -408,7 +403,7 @@ export function spreadsheetPictureFormatRibbonGroups({
                         )}
                         disabled={
                           Boolean(pictureTransformDisabledReason) ||
-                          selectedObjectStackIndex <= 0
+                          selectedObjectArrangeDisabled
                         }
                         data-testid="spreadsheet-ribbon-arrange-backward-menu-item"
                         onSelect={() =>
@@ -427,7 +422,7 @@ export function spreadsheetPictureFormatRibbonGroups({
                         )}
                         disabled={
                           Boolean(pictureTransformDisabledReason) ||
-                          selectedObjectStackIndex <= 0
+                          selectedObjectArrangeDisabled
                         }
                         data-testid="spreadsheet-ribbon-arrange-back"
                         onSelect={() =>

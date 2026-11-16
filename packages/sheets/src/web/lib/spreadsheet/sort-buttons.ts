@@ -13,8 +13,9 @@
  */
 
 import { isFormulaError, type SheetEvaluator, type SpillOverlay } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
-import type { CellMap, SpreadsheetCell } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
-import { recordCellMapRowPermutation } from "@mrnote/core/web/lib/spreadsheet/cell-map-lineage.ts";
+import { EXPLICIT_DEFAULT_BLANK_CELL, type CellMap, type SpreadsheetCell } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
+import { recordCellMapEdit, recordCellMapRowPermutation } from "@mrnote/core/web/lib/spreadsheet/cell-map-lineage.ts";
+import { lineStyleAt, sameLineStyle, storedColumnStyles, type LineStyle, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import { remapMergesByRowPermutation, type MergeSpan } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
 import type { SortFormatPlacement, SortLevel, SortOn } from "./multi-sort";
 import { parseA1Range } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
@@ -180,6 +181,44 @@ export function regionFirstRowHasInnerBlank(
   return false;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function regionHasHeaderRow(
+  kindAt: (row: number, column: number) => "empty" | "string" | "number" | string,
+  region: { r1: number; r2: number; c1: number; c2: number },
+  formatAt?: (row: number, column: number) => string,
+): boolean {
+  if (regionFirstRowHasInnerBlank((column) => kindAt(region.r1, column) === "empty", region)) return false;
+  if (region.r2 <= region.r1) return false;
+  for (let column = region.c1; column <= region.c2; column += 1) {
+    if (kindAt(region.r1, column) === "string" && kindAt(region.r1 + 1, column) === "number") return true;
+    if (formatAt && formatAt(region.r1, column) !== formatAt(region.r1 + 1, column)) return true;
+  }
+  return false;
+}
+
+/** A cell's format as {@link regionHasHeaderRow} compares it: its own style's
+ * keys in a fixed order, none for a cell without one. */
+export function headerGuessFormatKey(style: Readonly<Record<string, unknown>> | undefined | null): string {
+  if (!style) return "";
+  const keys = Object.keys(style).filter((key) => style[key] !== undefined).sort();
+  return keys.length ? JSON.stringify(keys.map((key) => [key, style[key]])) : "";
+}
+
 /**
  * A merge in the first row of a one-cell sort's current region. Excel's header
  * guess refuses such a region whatever is under it, where a stated header sorts
@@ -276,7 +315,7 @@ export function actualSortTypeForCell(
 ):
   | { valueType: "boolean"; booleanValue: boolean }
   | { valueType: "error" }
-  | { valueType: "text" }
+  | { valueType: "text"; value: string }
   | null {
   const key = `${row}:${col}`;
   if (cell?.formula && overlay.blocked.has(key)) return { valueType: "error" };
@@ -288,7 +327,11 @@ export function actualSortTypeForCell(
   // The evaluator already answered "not a number" (the caller asked first):
   // what it computed is text, and the key says so, so '2 and a formula's
   // "100" sort among the words instead of being re-read as numbers.
-  if (typeof value === "string" && value !== "") return { valueType: "text" };
+  // Text sorts on the text itself, never its display (Excel's Sort on Cell
+  // Values): a word under an accounting format's text section (_-@_-) shows
+  // padded, and the padding sorted it before every other word (xlsx-rounds
+  // R431-X34 E10: "United Kingdom" held at the top of B6:K23).
+  if (typeof value === "string" && value !== "") return { valueType: "text", value };
   return null;
 }
 
@@ -699,45 +742,164 @@ export function sourceOrderAmongVisibleRows(
   return order;
 }
 
-const AREA_LINK_FIELDS = ["hyperlink", "hyperlinkTooltip", "hyperlinkDisplay", "hyperlinkInArea"] as const;
+const AREA_LINK_FIELDS = ["hyperlink", "hyperlinkTooltip", "hyperlinkDisplay", "hyperlinkInArea", "hyperlinkRank"] as const;
+const LINK_FIELDS = ["hyperlink", "hyperlinkTooltip", "hyperlinkDisplay", "hyperlinkRank"] as const;
+
+type LinkLayer = { hyperlink?: unknown; hyperlinkTooltip?: unknown; hyperlinkDisplay?: unknown; hyperlinkRank?: unknown };
+
+type AreaLinkCell = SpreadsheetCell & {
+  hyperlink?: unknown;
+  hyperlinkInArea?: boolean;
+  hyperlinkRank?: unknown;
+  hyperlinkArea?: LinkLayer;
+  hyperlinkOwnUnder?: LinkLayer;
+};
+
+function linkLayer(from: LinkLayer): Record<string, unknown> {
+  const layer: Record<string, unknown> = {};
+  for (const field of LINK_FIELDS) if (from[field] !== undefined) layer[field] = from[field];
+  return layer;
+}
+
+/** A link's display text where it lands on a cell, as the import reads one: kept
+ *  only while it differs from the cell's own text (R428-X35 E9: I101:I110's
+ *  display over the I101 a sort brought, whose text it is). */
+function shownOver(layer: Record<string, unknown>, cell: AreaLinkCell | undefined): Record<string, unknown> {
+  if (cell && layer.hyperlinkDisplay !== undefined && layer.hyperlinkDisplay === cell.value) {
+    const rest = { ...layer };
+    delete rest.hyperlinkDisplay;
+    return rest;
+  }
+  return layer;
+}
+
+/** Whether a cell's own link is listed in the file before the area's over the
+ *  place it lands on: the first link over a cell is the one it reads, and
+ *  Excel's sort keeps the links' order (Windows Excel, xlsx-rounds
+ *  probe/night9/x35). A link with no place in the file is new: the save writes
+ *  it before the area's (as it always has); one of a page imported before the
+ *  places were read is over the area's too. */
+function ownReadsFirst(own: LinkLayer, area: LinkLayer): boolean {
+  const ownRank = own.hyperlinkRank;
+  const areaRank = area.hyperlinkRank;
+  if (typeof ownRank !== "number" || typeof areaRank !== "number") return true;
+  return ownRank < areaRank;
+}
+
+
+
+
+
+
+
+
 
 
 
 
 function areaLinksStayInPlace(before: CellMap, after: CellMap, r1: number, r2: number, c1: number, c2: number): void {
   const places: [string, Record<string, unknown>][] = [];
-  for (const key of Object.keys(before)) {
-    const cell = before[key] as (SpreadsheetCell & { hyperlinkInArea?: boolean }) | undefined;
-    if (!cell?.hyperlinkInArea) continue;
+  const inside = (key: string) => {
     const at = key.indexOf(":");
     const row = Number(key.slice(0, at));
     const col = Number(key.slice(at + 1));
-    if (row < r1 || row > r2 || col < c1 || col > c2) continue;
-    const link: Record<string, unknown> = {};
-    for (const field of AREA_LINK_FIELDS) {
-      if (cell[field as keyof typeof cell] !== undefined) link[field] = cell[field as keyof typeof cell];
+    return row >= r1 && row <= r2 && col >= c1 && col <= c2;
+  };
+  for (const key of Object.keys(before)) {
+    const cell = before[key] as AreaLinkCell | undefined;
+    if (!inside(key)) continue;
+    if (cell?.hyperlinkInArea) {
+      const link: Record<string, unknown> = {};
+      for (const field of AREA_LINK_FIELDS) {
+        if (cell[field as keyof typeof cell] !== undefined) link[field] = cell[field as keyof typeof cell];
+      }
+      places.push([key, link]);
+    } else if (cell?.hyperlinkArea && typeof cell.hyperlinkArea.hyperlink === "string") {
+      const link: Record<string, unknown> = { ...cell.hyperlinkArea, hyperlinkInArea: true };
+      places.push([key, link]);
     }
-    places.push([key, link]);
   }
   if (places.length === 0) return;
   for (const key of Object.keys(after)) {
-    const cell = after[key] as (SpreadsheetCell & { hyperlinkInArea?: boolean }) | undefined;
-    if (!cell?.hyperlinkInArea) continue;
-    const at = key.indexOf(":");
-    const row = Number(key.slice(0, at));
-    const col = Number(key.slice(at + 1));
-    if (row < r1 || row > r2 || col < c1 || col > c2) continue;
+    const cell = after[key] as AreaLinkCell | undefined;
+    if (!cell || !inside(key) || (!cell.hyperlinkInArea && !cell.hyperlinkArea)) continue;
     const rest = { ...cell } as Record<string, unknown>;
-    for (const field of AREA_LINK_FIELDS) delete rest[field];
+    // The area's link and its mark are the place's, not the cell's: they stay.
+    // The cell's own link held beneath goes with it, now the link it has.
+    if (cell.hyperlinkInArea) {
+      for (const field of AREA_LINK_FIELDS) delete rest[field];
+      if (cell.hyperlinkOwnUnder && typeof cell.hyperlinkOwnUnder.hyperlink === "string") {
+        Object.assign(rest, linkLayer(cell.hyperlinkOwnUnder));
+      }
+      delete rest.hyperlinkOwnUnder;
+    }
+    delete rest.hyperlinkArea;
     after[key] = rest as unknown as SpreadsheetCell;
   }
   // A link of one cell brought onto the place keeps its cell: the file then holds
-  // both, as Excel writes them (B6 sorted to B5 inside B2:B8).
+  // both, as Excel writes them (B6 sorted to B5 inside B2:B8), the first in the
+  // file shown over the other.
   for (const [key, link] of places) {
-    const moved = after[key] as (SpreadsheetCell & { hyperlink?: unknown }) | undefined;
-    if (moved?.hyperlink) continue;
-    after[key] = { ...(moved ?? { value: "", kind: "text" }), ...link } as SpreadsheetCell;
+    const moved = after[key] as AreaLinkCell | undefined;
+    if (moved?.hyperlink) {
+      const area = shownOver(linkLayer(link), moved);
+      if (ownReadsFirst(moved, area)) {
+        after[key] = { ...moved, hyperlinkArea: area } as SpreadsheetCell;
+        continue;
+      }
+      const own = linkLayer(moved);
+      const rest = { ...moved } as Record<string, unknown>;
+      for (const field of LINK_FIELDS) delete rest[field];
+      after[key] = { ...rest, ...shownOver(link, moved), hyperlinkOwnUnder: own } as unknown as SpreadsheetCell;
+      continue;
+    }
+    after[key] = { ...(moved ?? { value: "", kind: "text" }), ...shownOver(link, moved) } as SpreadsheetCell;
   }
+}
+
+/**
+ * A row format stays on its row number and a cell moves with its row, so a
+ * position with no cell shows something else once its row is sorted. Excel
+ * writes it an explicit cell in what the row brought: the source's own row or
+ * column format, or none at all (Excel 16 Mac, xlsx-rounds evidence/
+ * xprobe-sortrowfmt and xprobe-sortrowfmt2), as the tiled sort does
+ * (workbook_tiles/row_sort `_line_format_blanks`). The blanks a sheet's line
+ * formats were opened into move as cells already; past the opening's budget
+ * (R378-X08: 43 formatted rows across 16,384 columns) the column formats were
+ * not, and a blank under column R's left line read its new row's format. The
+ * sorted map stays the pure reorder it is recorded as; the blanks are an edit
+ * of it.
+ */
+function withSortedLineFormatBlanks(
+  sheet: SortButtonSheet,
+  sorted: CellMap,
+  dataR1: number,
+  c1: number,
+  c2: number,
+  sourceOrder: readonly number[],
+): CellMap {
+  const rowStyles = (sheet as { rowStyles?: LineStyleMap }).rowStyles;
+  if (!rowStyles || Object.keys(rowStyles).length === 0) return sorted;
+  const columnStyles = storedColumnStyles(sheet);
+  let out: CellMap | null = null;
+  const keys: string[] = [];
+  sourceOrder.forEach((source, offset) => {
+    const destination = dataR1 + offset;
+    if (destination === source || !(String(destination) in rowStyles || String(source) in rowStyles)) return;
+    for (let col = c1; col <= c2; col += 1) {
+      const key = `${destination}:${col}`;
+      if (sheet.cells[`${source}:${col}`] !== undefined || sorted[key] !== undefined) continue;
+      const shown = lineStyleAt(rowStyles, columnStyles, source, col) ?? {};
+      if (sameLineStyle(shown, lineStyleAt(rowStyles, columnStyles, destination, col) ?? {})) continue;
+      const { locked, ...look } = shown as LineStyle & { locked?: unknown };
+      out ??= { ...sorted };
+      out[key] = { ...EXPLICIT_DEFAULT_BLANK_CELL, style: { ...look }, ...(locked === false ? { locked: false } : {}) } as SpreadsheetCell;
+      keys.push(key);
+    }
+  });
+  if (!out) return sorted;
+  recordCellMapEdit(sorted, out, keys);
+  return out;
 }
 
 export function rowSortedSheet<S extends SortButtonSheet>(
@@ -794,7 +956,7 @@ export function rowSortedSheet<S extends SortButtonSheet>(
   // What the sort did: what is derived from the cells follows it, and a tiled
   // sheet's save sends the order instead of every cell it moved.
   recordCellMapRowPermutation(sheet.cells, nextCells, { dataR1, c1, c2, sourceOrder: [...sourceOrder], relocated });
-  const next: S = { ...sheet, cells: nextCells };
+  const next: S = { ...sheet, cells: withSortedLineFormatBlanks(sheet, nextCells, dataR1, c1, c2, sourceOrder) };
   if (sortState !== undefined) next.sortState = sortState;
   else delete next.sortState;
   if (sheet.merges !== undefined) {

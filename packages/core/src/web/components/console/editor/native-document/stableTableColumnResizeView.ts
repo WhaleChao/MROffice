@@ -21,6 +21,7 @@ import type { EditorView } from "@tiptap/pm/view";
 
 import borderDragStyles from "./DocumentTableBorderDrag.module.css";
 import { nativeTableGridWidths } from "./nativeTableGridView";
+import { noWrapSlots } from "./tableNoWrap";
 import { logicalTableFragmentsAt } from "./paged/tableFragmentGroups";
 import {
   TABLE_FRAGMENT_ID_ATTR,
@@ -118,6 +119,17 @@ function textAlignedTableOutsetPx(node: ProseMirrorNode): number {
   return Number.isFinite(total) && total > 0 ? total : 0;
 }
 
+/** Whether every one of a table's `columns` holds a w:noWrap cell (tableNoWrap). */
+function noWrapEveryColumn(node: ProseMirrorNode, columns: number): boolean {
+  if (typeof window !== "undefined" && (window as Window & { __docsNoWrapStatedWidthOff?: boolean }).__docsNoWrapStatedWidthOff === true) return false;
+  const slots = noWrapSlots(node);
+  if (!slots || columns <= 0) return false;
+  const held = new Set<number>();
+  for (const slot of slots) held.add(Number(slot.split(":")[1]));
+  for (let column = 0; column < columns; column += 1) if (!held.has(column)) return false;
+  return true;
+}
+
 function syncNativeGridDisplay(table: HTMLTableElement, colgroup: HTMLTableColElement, node: ProseMirrorNode, view?: EditorView | null): void {
   if (readWordTableLayout(node.attrs)?.bidiVisual) table.dataset.wordBidiVisual = "true";
   else delete table.dataset.wordBidiVisual;
@@ -173,8 +185,16 @@ function syncNativeGridDisplay(table: HTMLTableElement, colgroup: HTMLTableColEl
   // A stated width under the columns: Word draws the table at it and shares it out
   // (wordMinContentFloorWidths; Word 16.86, a table of tblW 8328 over 12000 twips of
   // cells draws 8328). Above them, or fixed, the branch below keeps the grid.
+  // Every column holding a cell Word may not wrap (w:noWrap): Word does not
+  // shrink the columns to the stated width but keeps the grid (truth machine,
+  
+  // 5000 and 5238 twips over a 5238-twip grid of noWrap cells in a 4950-twip
+  // column all drew 262.1pt; without noWrap, tblW 5140 drew 257pt; corpus
+  // R425-D02's two-column results table). `window.__docsNoWrapStatedWidthOff`:
+  // as before (A/B).
   const statedPx = wordLayout?.preferredWidthTwips !== undefined && !wordLayout.fixedLayout &&
-    !normalizeTablePositioning(node.attrs.tablePositioning) && wordLayout.preferredWidthTwips / 15 < total * 0.985
+    !normalizeTablePositioning(node.attrs.tablePositioning) && wordLayout.preferredWidthTwips / 15 < total * 0.985 &&
+    !noWrapEveryColumn(node, widths.length)
     ? wordLayout.preferredWidthTwips / 15 : null;
   if (statedPx !== null) {
     table.style.width = `${nativeBox ? statedPx + nativeBox.usedWidthPx : statedPx}px`;
@@ -1487,6 +1507,8 @@ export class StableTableColumnResizeView extends TableView {
                 contentFit: null,
                 contentFitPct: null,
                 textAligned: layout.textAligned,
+                // Where the table stands is not what a column drag changes.
+                ...(layout.indentUnstated ? { indentUnstated: true } : {}),
               },
             },
           });

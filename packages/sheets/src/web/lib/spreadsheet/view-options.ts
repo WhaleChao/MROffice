@@ -171,6 +171,12 @@ export interface SpreadsheetViewOptions {
    * @iterateDelta). Kept when off too, as Excel keeps the limits.
    */
   calculationIteration?: SpreadsheetCalculationIteration;
+  /**
+   * File ▸ Options ▸ Advanced ▸ Set precision as displayed (xlsx
+   * calcPr@fullPrecision="0"): a formula's number is kept as its format shows
+   * it, and the formulas that read it read that.
+   */
+  precisionAsDisplayed?: true;
   /** View ▸ Show ▸ Ruler off (Page Layout view's rulers, XLS-A030). */
   hideRuler?: true;
   /** View ▸ Workbook Views ▸ Custom Views (XLS-A030). */
@@ -367,6 +373,7 @@ export function normalizeViewOptions(raw: unknown): SpreadsheetViewOptions {
       ? { calculationExceptDataTables: true as const }
       : {}),
     ...(calculationIteration ? { calculationIteration } : {}),
+    ...(source.precisionAsDisplayed === true ? { precisionAsDisplayed: true as const } : {}),
     ...(source.hideRuler === true ? { hideRuler: true as const } : {}),
     ...(customViews.length > 0 ? { customViews } : {}),
     spellCheck: source.spellCheck !== false,
@@ -484,6 +491,7 @@ export function serializeViewOptions(
     out.calculationExceptDataTables = true;
   }
   if (options.calculationIteration) out.calculationIteration = { ...options.calculationIteration };
+  if (options.precisionAsDisplayed) out.precisionAsDisplayed = true;
   if (options.hideRuler) out.hideRuler = true;
   if (options.customViews?.length) out.customViews = options.customViews;
   if (options.chartTemplates?.length) {

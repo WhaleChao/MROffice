@@ -387,8 +387,9 @@ export interface OfficeSmartArtDesignTabDiagram {
   onConvertToShapes?: () => void;
   onConvertToText?: () => void;
   /**
-   * SmartArt Format > Shapes > Larger / Smaller on the selected item
-   * (`resizeSmartArtItem`). PowerPoint for the web has one SmartArt tab, so
+   * SmartArt Format > Shapes > Larger / Smaller on the selected item: its scale,
+   * the graphic laid out again around it (`smartArtMembersWithItemScale`).
+   * PowerPoint for the web has one SmartArt tab, so
    * the Shapes group sits in it here rather than on a second tab.
    */
   onResizeShape?: (direction: "larger" | "smaller") => void;

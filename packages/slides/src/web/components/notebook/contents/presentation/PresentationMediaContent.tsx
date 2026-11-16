@@ -39,6 +39,7 @@ import { PresentationPictureStyleGraphic } from "./PresentationPictureStyleGraph
 import { presentationPictureOrientationCss } from "../../../../lib/presentation-picture-orientation";
 import { PresentationPictureEffectsFrame } from "./PresentationPictureEffectsFrame";
 import { PresentationClipShapeFrame, type ClipShapeStroke } from "./PresentationClipShapeFrame";
+import { officePictureLineCompound, officePictureLineJoin, officePictureLineOutset } from "@mrnote/core/web/lib/office-picture-line.ts";
 import { normalizePictureClipShape } from "../../../../lib/presentation-picture-crop-shape";
 import { PresentationVideoPoster } from "./PresentationVideoPoster";
 import { PresentationAudioIcon, PresentationVideoPlaceholder } from "./PresentationMediaStaticFace";
@@ -1155,7 +1156,12 @@ function PresentationEmbedDrawing({
         style={{
           ...(fillParent
             ? videoKeep
-              ? { ...cropToCss(videoKeep), display: "block", maxWidth: "none" }
+              ? // The block's own "video { max-height: 100% }" (native-page-window.css)
+                // would cap the crop's taller-than-the-frame element: a top or
+                // bottom crop then drew the poster short of the frame's foot
+                
+                // the kept rectangle over the whole frame).
+                { ...cropToCss(videoKeep), display: "block", maxWidth: "none", maxHeight: "none" }
               : { width: "100%", height: "100%", objectFit: "fill" as const }
             : { width: "100%", maxWidth: 560 }),
           ...interactionStyle,
@@ -1423,22 +1429,35 @@ export function CroppedImageContent(props: Parameters<typeof CroppedImageDrawing
     const src = officeGraphicStretchedSrc(painted.src);
     return src === painted.src ? painted : { ...painted, src };
   }, [props.block]);
-  // Picture Border on a picture cropped to a shape follows the shape: the
-  // frame draws it along the outline, and the picture itself draws no
+  // Picture Border: drawn by the frame around the picture, where PowerPoint
+  // draws it (`lib/office-picture-line`): outside the picture (centred on a
+  // 3-D one), with its compound lines and corners. On a picture cropped to a
+  // shape it follows the shape, and the picture itself draws no rectangular
   
   const clipShape = (props.block as { clipShape?: unknown }).clipShape;
   const clipCustomPath = (props.block as { clipCustomPath?: unknown }).clipCustomPath;
   const shapeStroke = useMemo((): ClipShapeStroke | null => {
-    if (
-      (!normalizePictureClipShape(clipShape) && !clipCustomPath) ||
-      nativePictureStyle(props.block.pictureStylePreset)
-    )
-      return null;
-    const effects = resolveImageEffects(props.block);
-    return effects.borderWidth > 0 && effects.borderStyle !== "none"
-      ? { width: effects.borderWidth, color: effects.borderColor, style: effects.borderStyle }
-      : null;
-  }, [clipShape, clipCustomPath, props.block]);
+    if (nativePictureStyle(props.block.pictureStylePreset)) return null;
+    const effects = resolveImageEffects({
+      ...props.block,
+      cornerRadius: effectivePresentationImageCornerRadius(props.block),
+    });
+    if (!(effects.borderWidth > 0 && effects.borderStyle !== "none")) return null;
+    // An inline picture (no slide geometry) keeps its CSS frame, placed
+    // likewise (`imageEffectsCss`); the frame around it would not fit it.
+    if (!props.fillParent && !normalizePictureClipShape(clipShape) && !clipCustomPath) return null;
+    const line = props.block as { borderCompound?: unknown; borderJoin?: unknown; pictureEffects?: unknown };
+    const compound = officePictureLineCompound(line.borderCompound);
+    return {
+      width: effects.borderWidth,
+      color: effects.borderColor,
+      style: effects.borderStyle,
+      ...(compound ? { compound } : {}),
+      join: officePictureLineJoin(line.borderJoin),
+      outset: officePictureLineOutset(effects.borderWidth, line.pictureEffects),
+      radius: normalizePictureClipShape(clipShape) || clipCustomPath ? 0 : effects.cornerRadius,
+    };
+  }, [clipShape, clipCustomPath, props.block, props.fillParent]);
   const block = useMemo(
     () =>
       shapeStroke
@@ -1509,7 +1528,9 @@ function CroppedImageDrawing({
     ...(block.pictureEffects?.shadow ? { shadow: false } : {}),
   });
   const effectsCss: CSSProperties = {
-    ...imageEffectsCss(effects),
+    ...imageEffectsCss(effects, {
+      lineOutset: officePictureLineOutset(effects.borderWidth, block.pictureEffects),
+    }),
     // Crop to Shape > Oval: the bitmap shows inside the ellipse of its
     // frame and the corners show the slide (PPT-B364).
     ...((block as { clipShape?: unknown }).clipShape === "ellipse"
@@ -1536,7 +1557,7 @@ function CroppedImageDrawing({
     ...frameCss
   } = effectsCss;
   const frameApart =
-    (frameCss.border !== undefined || frameCss.boxShadow !== undefined) &&
+    (frameCss.outline !== undefined || frameCss.boxShadow !== undefined) &&
     (imageFilter !== undefined || contentOpacity !== undefined);
   // A recolour draws through an SVG filter defined beside the picture, in
   // the wrapper a cropped picture already has.

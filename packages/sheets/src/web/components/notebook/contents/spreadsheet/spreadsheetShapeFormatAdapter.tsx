@@ -22,7 +22,6 @@ import { pushRecentColor } from "@mrnote/core/web/lib/spreadsheet/color-palette.
 import { themeColorGrid } from "@mrnote/core/web/lib/spreadsheet/theme-colors.ts";
 import { type SheetModel, type SpreadsheetObject } from "./spreadsheetSheetModel";
 import { type ShapeFormatWriterControlId, type ShapeRotationDialogAuthority } from "./spreadsheetMutationReceipts";
-import { type DrawingStackEntry } from "../../../../lib/spreadsheet/drawing-stack";
 import { type SpreadsheetShapeStyle } from "@mrnote/core/web/lib/spreadsheet/shapes.ts";
 import { type Dispatch, type SetStateAction } from "react";
 import { type ResolvedSpreadsheetVisibleControl } from "../../../../lib/spreadsheet/visible-command-authority";
@@ -48,6 +47,27 @@ function spreadsheetShapeMenuDash(style: SpreadsheetShapeStyle | null): OfficeMe
  * SpreadsheetWindow: Edit Shape ▸ Reroute Connectors, Merge Shapes, Reorder
  * Objects, Group ▸ Regroup and the selection count beside Arrange.
  */
+/**
+ * Where the worksheet's Format Shape / Format Picture pane opens: its page
+ * (`tab`), and the section a command brings into view there (an Effects
+ * submenu's "... Options": `effects-glow`, ...), `serial` telling a repeated
+ * request from the one already shown.
+ */
+export interface SpreadsheetFormatPaneOpening {
+  readonly tab: string;
+  readonly section?: string;
+  readonly serial?: number;
+}
+
+/** The pane at `tab` with `section` in view, a new request after `current`. */
+export function spreadsheetFormatPaneAt(
+  current: SpreadsheetFormatPaneOpening | null,
+  tab: string,
+  section: string,
+): SpreadsheetFormatPaneOpening {
+  return { tab, section, serial: (current?.serial ?? 0) + 1 };
+}
+
 export interface SpreadsheetShapeFormatPptParity {
   readonly reroute: { readonly enabled: boolean; readonly run: () => boolean };
   readonly merge: {
@@ -80,7 +100,6 @@ export interface SpreadsheetShapeFormatAdapterInputs {
   canGroupSelection: boolean;
   canUngroupSelection: boolean;
   cmToPx: (cm: string) => number;
-  drawingStack: DrawingStackEntry[];
   executeShapeFormatMutation: (controlId: ShapeFormatWriterControlId, parameter: string | number, surface?: "visible" | "keyboard") => Promise<boolean | void>;
   groupDisabledReason: string | undefined;
   groupDrawingSelection: () => boolean;
@@ -92,7 +111,8 @@ export interface SpreadsheetShapeFormatAdapterInputs {
   openShapeAltTextPane: () => boolean;
   pxToCm: (px: number) => string;
   recentColors: string[];
-  selectedObjectStackIndex: number;
+  /** Excel: the layer commands grey only when the sheet holds one drawing. */
+  selectedObjectArrangeDisabled: boolean;
   selectedShapeObject: SpreadsheetObject | null;
   selectedShapeStyle: SpreadsheetShapeStyle | null;
   selectionIsGroup: boolean;
@@ -100,7 +120,7 @@ export interface SpreadsheetShapeFormatAdapterInputs {
   setObjectSnapToShape: Dispatch<SetStateAction<boolean>>;
   setRecentColors: Dispatch<SetStateAction<string[]>>;
   setSelectionPaneOpen: Dispatch<SetStateAction<boolean>>;
-  setShapeFormatPane: Dispatch<SetStateAction<{ tab: string; } | null>>;
+  setShapeFormatPane: Dispatch<SetStateAction<SpreadsheetFormatPaneOpening | null>>;
   setShapeLastFillColor: Dispatch<SetStateAction<string>>;
   setShapeLastKind: Dispatch<SetStateAction<SpreadsheetPresetShapeKind>>;
   setShapeLastStrokeColor: Dispatch<SetStateAction<string>>;
@@ -163,7 +183,6 @@ export function spreadsheetShapeFormatAdapter({
   canGroupSelection,
   canUngroupSelection,
   cmToPx,
-  drawingStack,
   executeShapeFormatMutation,
   groupDisabledReason,
   groupDrawingSelection,
@@ -175,7 +194,7 @@ export function spreadsheetShapeFormatAdapter({
   openShapeAltTextPane,
   pxToCm,
   recentColors,
-  selectedObjectStackIndex,
+  selectedObjectArrangeDisabled,
   selectedShapeObject,
   selectedShapeStyle,
   selectionIsGroup,
@@ -574,8 +593,11 @@ export function spreadsheetShapeFormatAdapter({
                       JSON.stringify({ kind, value, accent1: accents.accent1 }),
                     )
                   }
-                  // 3-D Options...: Format Shape at its Effects page.
-                  onThreeDOptions={() => setShapeFormatPane({ tab: "effects" })}
+                  // Each submenu's "... Options": Format Shape at its
+                  // Effects page, that effect's section in view.
+                  onEffectOptions={(section) =>
+                    setShapeFormatPane((current) => spreadsheetFormatPaneAt(current, "effects", section))
+                  }
                 />
               );
             },
@@ -674,6 +696,12 @@ export function spreadsheetShapeFormatAdapter({
                   onPick={(kind, value) =>
                     void editShapeTextPaint((paint) => withOfficeTextEffect(paint, kind, value))
                   }
+                  // Each submenu's "... Options": Format Shape > Text
+                  // Options, where the words' effects and whole 3-D are
+                  // edited, that effect's section in view.
+                  onEffectOptions={(section) =>
+                    setShapeFormatPane((current) => spreadsheetFormatPaneAt(current, "text", section))
+                  }
                 />
               );
             },
@@ -698,11 +726,7 @@ export function spreadsheetShapeFormatAdapter({
                   : action === "sendBackward"
                     ? shapeArrangeControlIdByMove.backward
                     : shapeArrangeControlIdByMove.back,
-            atBoundary: (action) =>
-              action === "bringForward" || action === "bringToFront"
-                ? selectedObjectStackIndex < 0 ||
-                  selectedObjectStackIndex === drawingStack.length - 1
-                : selectedObjectStackIndex <= 0,
+            atBoundary: () => selectedObjectArrangeDisabled,
             onAction: (action) =>
               void executeShapeFormatMutation(
                 action === "bringForward"

@@ -172,6 +172,7 @@ import {
   NodeSelection,
   Selection as ProseMirrorSelection,
   TextSelection,
+  type EditorState,
   type SelectionBookmark,
   type Transaction,
 } from "@tiptap/pm/state";
@@ -288,6 +289,7 @@ import {
   officeChartSelectedArea,
   selectOfficeChartHit,
   setOfficeChartSelectedArea,
+  useOfficeChartSelectedArea,
 } from "@mrnote/core/web/lib/office-charts/chart-selection-store.ts";
 import type { PresentationCustomGeometryTool } from "@mrnote/core/web/lib/presentation-freeform.ts";
 import { OfficeArtisticEffectsMenu } from "@mrnote/core/web/components/office-ribbon/OfficeArtisticEffectsMenu.tsx";
@@ -310,9 +312,13 @@ import {
   deleteDocumentShapes,
   documentShapeLassoSelection,
   groupDocumentShapes,
+  DOCUMENT_SMARTART_ITEM_RESIZE_EVENT,
   DOCUMENT_SMARTART_MEMBER_SELECTION_EVENT,
+  DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT,
+  documentShapePickedGroupMember,
   DOCUMENT_SMARTART_PICTURE_SLOT_EVENT,
   documentShapeEditPointsAvailable,
+  type DocumentSmartArtItemResizeDetail,
   type DocumentSmartArtMemberSelectionDetail,
   type DocumentSmartArtPictureSlotDetail,
   lastDocumentSmartArtMemberSelection,
@@ -861,8 +867,8 @@ import {
 } from "@mrnote/core/web/lib/office-smartart/picture-command.ts";
 import {
   documentSmartArtItemMemberIds,
+  documentSmartArtItemScaledAttrs,
   documentSmartArtPicturePatch,
-  documentSmartArtResizePatch,
   readDocumentSmartArtDiagram,
   sameDocumentSmartArtDiagram,
   type DocumentSmartArtDiagram,
@@ -1350,7 +1356,9 @@ import {
   selectedCaptionTarget,
   selectedDocumentIndexTarget,
   selectedTableOfContentsTarget,
+  insertTableOfContentsCommand,
   tableOfContentsNode,
+  tableOfContentsPlacedAfterTableNotice,
   updateCaptionList,
   updateTableOfContents,
   type ReferenceAtomSelectionTarget,
@@ -1402,6 +1410,8 @@ import {
   rotatePicture,
   setPictureBorder,
   setPicture3dEffect,
+  setPictureLookEffect,
+  setPictureShadowEffect,
   setPictureCorrections,
   setPictureRecolor,
   setPictureSaturation,
@@ -1442,6 +1452,7 @@ import {
   liveDocumentShapeMovesWithText,
   liveDocumentShapePositionPreset,
   setLiveDocumentShapeZOrder,
+  liveDocumentShapeZOrderAtBoundary,
   liveDocumentStackMemberPos,
   startLiveDocumentShapeEditPoints,
   toggleLiveDocumentShapeAspectRatio,
@@ -1555,7 +1566,15 @@ import {
   removePhoneticGuides,
   type PhoneticGuideTarget,
 } from "./native-document/phoneticGuideCommands";
-import { normalizePicture3d, picture3dBlocker } from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
+import {
+  PICTURE_LOOK_EFFECT_KINDS,
+  normalizePicture3d,
+  picture3dBlocker,
+  pictureLookEffects,
+  pictureLookEffectsBlocker,
+  pictureShadowBlocker,
+  pictureShadowEffect,
+} from "@mrnote/core/web/components/console/editor/native-document/pictureEffects.ts";
 import DocumentPictureFormatPane from "./native-document/DocumentPictureFormatPane";
 import {
   DocumentContextMenu,
@@ -1563,6 +1582,7 @@ import {
 } from "./DocumentContextMenu";
 import DocumentParagraphAsianTypography from "./native-document/DocumentParagraphAsianTypography";
 import DocumentShapeFormatPane from "./native-document/DocumentShapeFormatPane";
+import DocumentTextEffectsPane from "./native-document/DocumentTextEffectsPane";
 import DocumentAccessibilityPanel from "./DocumentAccessibilityPanel";
 import { DocumentFocusModeExit } from "./native-document/DocumentFocusModeExit";
 import { DocumentFitTextDialog } from "./native-document/DocumentFitTextDialog";
@@ -2373,8 +2393,6 @@ import {
   documentChartEditableWorkbook,
   documentChartHostWithWorkbook,
   documentChartLayout,
-  documentChartLayoutOneLayer,
-  documentChartLayoutToEdge,
   documentChartSize,
   normalizeDocumentChartHost,
   type DocumentChartLayout,
@@ -4266,6 +4284,9 @@ const requestedMarkupFilterByEditor = new WeakMap<
   TrackedChangeMarkupFilter
 >();
 const requestedCitationStyleByEditor = new WeakMap<Editor, CitationStyle>();
+// Keys for the charts the Format pane is open on (see chartFormatPaneKey).
+let documentChartFormatKeySeq = 0;
+const nextDocumentChartFormatKey = () => String(++documentChartFormatKeySeq);
 type CaptionListKind = CaptionListLabel;
 const requestedCaptionListKindByEditor = new WeakMap<Editor, CaptionListKind>();
 type TocOutlineChoice = 1 | 2 | 3 | "none";
@@ -6904,6 +6925,7 @@ async function convertLiveDocumentPreservedSmartArt(
     undefined,
     editor.state.doc.attrs.documentThemeColors,
     editor.state.doc.attrs.documentDesign,
+    editor.state.doc.attrs.defaultFontFamily,
   );
   if (!sameTarget()) return false;
   if (!attrs) {
@@ -7550,6 +7572,11 @@ function readEditingState(editor: Editor): ToolbarSnapshot {
     ...(typeof italic === "boolean" ? { italic, italicMixed: false } : {}),
     ...(typeof underline === "boolean" ? { underline, underlineMixed: false } : {}),
   };
+}
+
+/** Whether every plugin's state is the one it was, by identity. */
+function samePluginStates(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function readDocumentEditingState(editor: Editor): ToolbarSnapshot {
@@ -10729,12 +10756,21 @@ function DocumentToolbar({
   const [pictureFormatPaneOpening, setPictureFormatPaneOpening] = useState<{
     readonly tab: "layout" | "effects";
     readonly focusAlt: boolean;
+    readonly section?: string;
   } | null>(null);
   const pictureFormatTriggerRef = useRef<HTMLButtonElement>(null);
   const [shapeFormatPaneOpen, setShapeFormatPaneOpen] = useState(false);
+  // Format Text Effects for the words (Text Effects > 3-D Options…).
+  const [textEffectsPaneOpen, setTextEffectsPaneOpen] = useState(false);
   const [shapeFormatPaneSection, setShapeFormatPaneSection] = useState<
     "shape" | "effects" | "text" | "alt" | "link"
   >("shape");
+  // Shape Effects > "... Options": the Effects page's section to bring into
+  // view (a new serial asks again).
+  const [shapeFormatPaneReveal, setShapeFormatPaneReveal] = useState<{
+    readonly section: string;
+    readonly serial: number;
+  } | null>(null);
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
   // Review > Editor / Spelling & Grammar: where the Editor pane opens; a new
   // object reopens it there (null = closed).
@@ -12452,14 +12488,25 @@ function DocumentToolbar({
     readonly editor: Editor;
     readonly node: ProseMirrorNode;
     readonly pos: number;
+    // Which chart this is through its own edits (see chartFormatPaneKey).
+    readonly formatKey: string;
   } | null>(
     initialChartContextTarget
       ? {
           editor,
           node: initialChartContextTarget.node,
           pos: initialChartContextTarget.pos,
+          formatKey: nextDocumentChartFormatKey(),
         }
       : null,
+  );
+  // A chart without a block id (an inline chart, `inlineChart`) is a new node
+  // after every edit to it. This key stays the chart's while the selection
+  // stays on it (the same node, or a node at the same place), so the Format
+  // pane Word keeps open while one effect after another is set, and the
+  // element chosen in it, outlive the edit that just replaced the node.
+  const [chartFormatPaneKey, setChartFormatPaneKey] = useChangedState<string | null>(
+    chartContextTargetRef.current?.formatKey ?? null,
   );
   const [chartContextTarget, setChartContextTarget] =
     useChangedState<LiveDocumentChartTarget | null>(initialChartContextTarget);
@@ -15203,13 +15250,19 @@ function DocumentToolbar({
         chartContextTargetRef.current = null;
         setChartContextTarget(null);
         setChartContextSelectionIdentity(null);
+        setChartFormatPaneKey(null);
         return;
       }
+      const sameChart = previous !== null && previous.editor === editor &&
+        (previous.node === target.node || previous.pos === target.pos);
+      const formatKey = sameChart ? previous.formatKey : nextDocumentChartFormatKey();
       chartContextTargetRef.current = {
         editor,
         node: target.node,
         pos: target.pos,
+        formatKey,
       };
+      setChartFormatPaneKey(formatKey);
       setChartContextTarget((current) =>
         current?.node === target.node && current.pos === target.pos
           ? current
@@ -15276,10 +15329,18 @@ function DocumentToolbar({
     };
     // What the last full read of the toolbar state was read from.
     let readContext: ToolbarReadContext | null = null;
+    // The plugins' states at that read. The ribbon reads several of them (Show
+    // Markup's filter, suggesting, comments, formatting marks), and a command
+    // that changes only a plugin's state moves nothing of the selection, the
+    // stored marks or the document's attributes.
+    let readPluginStates: readonly unknown[] = [];
+    const pluginStatesOf = (state: EditorState) =>
+      state.plugins.map((plugin) => plugin.getState(state));
     const noteReadContext = () => {
       readContext = toolbarReadContext(editor.state, editor.isEditable);
+      readPluginStates = pluginStatesOf(editor.state);
     };
-    const refreshEditingState = (keepUnchangedRead = false) => {
+    const refreshEditingState = (keepUnchangedRead = false, alsoPluginStates = false) => {
       rememberEditorSelection();
       setPictureCropModeActive(isDocumentImageCropActive(editor.state));
       refreshPictureContextSelectionIdentity();
@@ -15294,7 +15355,10 @@ function DocumentToolbar({
       // moves while a long document lays out; each read the whole ribbon).
       if (keepUnchangedRead) {
         const next = toolbarReadContext(editor.state, editor.isEditable);
-        if (sameToolbarReadContext(readContext, next)) return;
+        if (
+          sameToolbarReadContext(readContext, next) &&
+          (!alsoPluginStates || samePluginStates(readPluginStates, pluginStatesOf(editor.state)))
+        ) return;
       }
       const editingState = readEditingState(editor);
       noteReadContext();
@@ -15462,7 +15526,11 @@ function DocumentToolbar({
         transaction.getMeta?.(PAGED_HISTORY_APPLIED_META) === undefined &&
         transaction.getMeta?.("mrnotePagedCanonicalHistory") === undefined &&
         transaction.getMeta?.("mrnotePagedCanonicalRemote") === undefined;
-      refreshEditingState(derivedPagination || metaOnly || machine);
+      // A transaction of either kind can be a command that changed only a
+      // plugin's state the ribbon reads (Show Markup's filter: Accept All
+      // Shown stayed greyed after choosing Insertions), so it reads again
+      // when a plugin's state changed. Page moves keep their own skip.
+      refreshEditingState(derivedPagination || metaOnly || machine, !derivedPagination);
     };
     runtime.on("selectionUpdate", refreshSelectionState);
     runtime.on("transaction", refreshTransactionState);
@@ -19547,8 +19615,14 @@ function DocumentToolbar({
   const insertDefaultTableOfContents = useCallback(() => {
     if (editor.isDestroyed || !editor.isEditable) return false;
     tocSelectionRef.current = null;
+    // In a table cell: after the table, said (FIXQUEUE 177).
     insertionChain()
-      .insertContent(tableOfContentsNode(editor.state.doc, undefined))
+      .command(
+        insertTableOfContentsCommand(
+          tableOfContentsNode(editor.state.doc, undefined),
+          tableOfContentsPlacedAfterTableNotice(editor),
+        ),
+      )
       .run();
   }, [editor, insertionChain]);
 
@@ -19574,7 +19648,9 @@ function DocumentToolbar({
             .run();
           return;
         }
-        insertionChain().insertContent(content).run();
+        insertionChain()
+          .command(insertTableOfContentsCommand(content, tableOfContentsPlacedAfterTableNotice(editor)))
+          .run();
       };
       // A Manual Table is a gallery block too: Word replaces it the same way.
       const existing =
@@ -21153,6 +21229,9 @@ function DocumentToolbar({
           // the page (MsoZOrderCmd); the stack moves are simply at their end.
           isEnabled: () => {
             if (liveImagePlacementTarget(editor) !== null) return true;
+            // An object picked in its group moves among its group's objects
+            // whatever the page's stack holds.
+            if (documentShapePickedGroupMember(editor)) return true;
             const shape = liveDocumentShapeTarget(editor);
             const stack = resolveDocumentShapeStack(editor.state.doc);
             return Boolean(shape && stack.complete);
@@ -21534,6 +21613,15 @@ function DocumentToolbar({
       setSmartArtDesignOutlineItemId(null);
     }
   }, [documentSmartArtDiagram, smartArtFileNode]);
+  // An object picked inside a plain group (or its Selection Pane row) is
+  // what Bring Forward / Send Backward move: their greyed state is read
+  // again when it is picked or let go.
+  const [, setGroupMemberPickTick] = useState(0);
+  useEffect(() => {
+    const onPick = () => setGroupMemberPickTick((tick) => tick + 1);
+    window.addEventListener(DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT, onPick);
+    return () => window.removeEventListener(DOCUMENT_SHAPE_GROUP_MEMBER_PICK_EVENT, onPick);
+  }, []);
   // A shape selected on the canvas IS the item the outline verbs act on, as
   // on a slide (the node view announces it; the frame announces `null`).
   const documentSmartArtGroupId = documentSmartArtDiagram?.groupId ?? null;
@@ -21702,6 +21790,46 @@ function DocumentToolbar({
     },
     [commitServedSmartArt, documentSmartArtDiagram],
   );
+  /**
+   * One item resized -- Larger / Smaller, its handles -- as Word keeps it: the
+   * shape's custScaleX/Y, and the whole graphic laid out again around it in one
+   * undo step (`documentSmartArtItemScaledAttrs`, the engine host's rebuild).
+   * `factor` is against the shape as it is when the command's turn comes.
+   */
+  const resizeDocumentSmartArtItem = useCallback(
+    (itemId: string, factor: number | { x: number; y: number }): boolean => {
+      if (!documentSmartArtDiagram) return false;
+      void commitServedSmartArt(async (diagram, signal, colorTheme) => {
+        const attrs = documentSmartArtItemScaledAttrs(diagram, itemId, factor);
+        if (!attrs) return null;
+        return (
+          await smartArtEngine(
+            "document.rebuild",
+            {
+              attrs,
+              ...(colorTheme ? { colorTheme } : {}),
+              kind: diagram.kind,
+              outline: [...diagram.outline],
+            },
+            { signal },
+          )
+        ).patch;
+      });
+      return true;
+    },
+    [commitServedSmartArt, documentSmartArtDiagram],
+  );
+  // The canvas hands a shape's handle resize to the relayout above.
+  useEffect(() => {
+    if (!documentSmartArtGroupId) return;
+    const onResize = (event: Event) => {
+      const detail = (event as CustomEvent<DocumentSmartArtItemResizeDetail>).detail;
+      if (detail?.groupId !== documentSmartArtGroupId) return;
+      if (resizeDocumentSmartArtItem(detail.itemId, detail.factor)) event.preventDefault();
+    };
+    window.addEventListener(DOCUMENT_SMARTART_ITEM_RESIZE_EVENT, onResize);
+    return () => window.removeEventListener(DOCUMENT_SMARTART_ITEM_RESIZE_EVENT, onResize);
+  }, [documentSmartArtGroupId, resizeDocumentSmartArtItem]);
   /**
    * Reset Shape (the shape menu): the pressed shape's item loses its own
    * paint, move and resize, and the diagram is rebuilt at its own layout.
@@ -22116,9 +22244,19 @@ function DocumentToolbar({
   const chartFormatObjectIdentity =
     typeof chartContextTarget?.node.attrs.block_id === "string" && chartContextTarget.node.attrs.block_id.length > 0
       ? chartContextTarget.node.attrs.block_id : chartContextTarget?.node ?? null;
+  // What the Format pane and the element chosen in it belong to: the chart's
+  // block id, else the key it keeps through its own edits (an inline chart's
+  // node is replaced by each of them: a Glow picked on Format Legend closed
+  // the pane and put it back on Chart Area).
+  const chartFormatPaneIdentity =
+    typeof chartFormatObjectIdentity === "string"
+      ? chartFormatObjectIdentity
+      : chartFormatObjectIdentity && chartFormatPaneKey
+        ? `inline:${chartFormatPaneKey}`
+        : chartFormatObjectIdentity;
   const chartFormatSelectionIdentity = useMemo(
-    () => ({ editor, target: chartFormatObjectIdentity }),
-    [editor, chartFormatObjectIdentity],
+    () => ({ editor, target: chartFormatPaneIdentity }),
+    [editor, chartFormatPaneIdentity],
   );
   // The selected chart's key in the shared chart element selection
   // (`chart-selection-store`): the node's block id, else its place -- the
@@ -22132,9 +22270,21 @@ function DocumentToolbar({
   useEffect(() => {
     keepOfficeChartSelections(officeChartHostKey(editor), chartSelectionKey ? [chartSelectionKey] : []);
   }, [editor, chartSelectionKey]);
+  // The chart's Current Selection as its clicks left it: the Chart Format
+  // ribbon opens on it (two clicks on a column before the tab is shown
+  // select that point).
+  const chartSelectedArea = useOfficeChartSelectedArea(chartSelectionKey);
+  // The chart the Format pane and the colour pickers write to. A chart with a
+  // block id stays that chart through its own edits, so the pane Word keeps
+  // open while one effect after another is set is not closed by the edit it
+  // just made (a Glow preset picked on Format Legend closed the pane); one
+  // without a block id is this very node at this place.
+  const chartFormatStableIdentity = typeof chartFormatObjectIdentity === "string" ? chartFormatObjectIdentity : null;
+  const chartFormatNode = chartFormatStableIdentity ? null : chartContextTarget?.node;
+  const chartFormatPos = chartFormatStableIdentity ? null : chartContextTarget?.pos;
   const chartFormatAuthority = useMemo(
-    () => ({ node: chartContextTarget?.node, pos: chartContextTarget?.pos }),
-    [chartContextTarget?.node, chartContextTarget?.pos],
+    () => (chartFormatStableIdentity ? { chart: chartFormatStableIdentity } : { node: chartFormatNode, pos: chartFormatPos }),
+    [chartFormatStableIdentity, chartFormatNode, chartFormatPos],
   );
   const [chartFormatPaneContainer, setChartFormatPaneContainer] = useState<HTMLElement | null>(null);
   // Word's "More <element> Options…" commands open the Format pane scoped to
@@ -22286,7 +22436,7 @@ function DocumentToolbar({
     ? liveDocumentDrawingPlacementState(editor)
     : null;
   const displayedChartPlacement = chartContextTarget
-    ? documentChartPlacementState(editor.state.doc, chartContextTarget.node.attrs)
+    ? documentChartPlacementState(editor.state.doc, chartContextTarget.node.attrs, chartContextTarget.pos)
     : undefined;
   const commitChartPlacement = (command: DocumentChartPlacementCommand): boolean =>
     setLiveDocumentChartPlacement(editor, command);
@@ -23034,13 +23184,10 @@ function DocumentToolbar({
     selectedDocumentShapeStackIndex >= 0 &&
     selectedDocumentShapeStack.complete &&
     selectedDocumentShapeStack.backToFront.length > 1;
+  // Greyed when the command has nothing to do on the selection (one member,
+  // or the Shift / Ctrl + clicked set), by the planner the command runs.
   const shapeZOrderAtBoundary = (action: DocumentShapeZOrderAction) =>
-    selectedDocumentShapeStackIndex < 0 ||
-    ((action === "sendBackward" || action === "sendToBack") &&
-      selectedDocumentShapeStackIndex === 0) ||
-    ((action === "bringForward" || action === "bringToFront") &&
-      selectedDocumentShapeStackIndex ===
-        selectedDocumentShapeStack.backToFront.length - 1);
+    liveDocumentShapeZOrderAtBoundary(editor, action);
   const executeLayoutFeature = useCallback(
     (
       featureId: LayoutSliceFeatureId,
@@ -28408,17 +28555,11 @@ function DocumentToolbar({
           },
           onResizeShape: (direction) => {
             if (!smartArtDesignSelectedItemId) return;
-            commitLiveDocumentSmartArt(
-              editor,
-              documentSmartArtDiagram,
-              (diagram) =>
-                documentSmartArtResizePatch(
-                  diagram,
-                  smartArtDesignSelectedItemId,
-                  direction === "larger"
-                    ? SMARTART_SHAPE_SIZE_STEP
-                    : 1 / SMARTART_SHAPE_SIZE_STEP,
-                ),
+            resizeDocumentSmartArtItem(
+              smartArtDesignSelectedItemId,
+              direction === "larger"
+                ? SMARTART_SHAPE_SIZE_STEP
+                : 1 / SMARTART_SHAPE_SIZE_STEP,
             );
           },
           canResizeShape:
@@ -29148,10 +29289,12 @@ function DocumentToolbar({
                       effect: "none",
                     })
                   }
-                  // 3-D Options... / 3-D Rotation Options...: Format Shape
-                  // opened at its Effects page, as Word opens it.
-                  onThreeDOptions={() => {
+                  // Each submenu's "... Options" (Glow Options..., 3-D
+                  // Options..., ...): Format Shape opened at its Effects
+                  // page with that effect's section in view, as Word opens it.
+                  onEffectOptions={(section) => {
                     setShapeFormatPaneSection("effects");
+                    setShapeFormatPaneReveal((current) => ({ section, serial: (current?.serial ?? 0) + 1 }));
                     setShapeFormatPaneOpen(true);
                   }}
                 />
@@ -30051,6 +30194,7 @@ function DocumentToolbar({
             <>
               <DocumentChartFormatRibbon
                 attrs={chartContextTarget?.attrs ?? null}
+                accentColors={chartThemeAccents}
                 selectionIdentity={chartFormatSelectionIdentity}
                 authority={chartFormatAuthority}
                 paneContainer={chartFormatPaneContainer}
@@ -30058,6 +30202,7 @@ function DocumentToolbar({
                 focusArea={chartFormatFocus}
                 elementHit={chartElementHit}
                 onAreaChange={(area) => setOfficeChartSelectedArea(chartSelectionKey, area)}
+                selectedArea={chartSelectedArea}
                 selectionPaneOpen={selectionPaneOpen}
                 // Format > Accessibility > Alt Text: Word's Alt Text pane on
                 // the selected chart.
@@ -32300,6 +32445,16 @@ function DocumentToolbar({
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
                     <DropdownMenuSeparator />
+                    {/* 3-D Options…: Format Text Effects > 3-D Format of
+                        the selected words (bevels, depth, contour,
+                        material, lighting), as Word's dialog edits them. */}
+                    <DropdownMenuItem
+                      data-testid="document-toolbar-text-effects-3d-options"
+                      disabled={!editor.isEditable}
+                      onSelect={() => setTextEffectsPaneOpen(true)}
+                    >
+                      {t("office.pictureEffects.threeDOptions")}
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       data-testid="document-toolbar-text-effects-clear"
                       onSelect={() =>
@@ -44836,12 +44991,30 @@ function DocumentToolbar({
                     ) : null}
                   </div>
                   {desktopInteroperabilityVisible ? (() => {
-                    // Picture Format > Picture Effects: Bevel and 3-D Rotation
-                    // on the picture's `picture3d` (the shared menu; 3-D
-                    // Options... opens Format Picture > Effects). The picture's
-                    // shadow, glow, reflection and soft edges are the file's.
+                    // Picture Format > Picture Effects: Shadow (reading row
+                    // 547), Reflection, Glow and Soft Edges on the picture's
+                    // own effect list (reading row 545) and Bevel and 3-D
+                    // Rotation on its `picture3d` (the shared menu; 3-D
+                    // Options... opens Format Picture > Effects). A kind its blocker
+                    // holds (a Picture Style owns both; a file read before the
+                    // reading keeps either) is left out.
                     const target = liveImageAltTarget(editor);
-                    const block = target ? picture3dBlocker(target.attrs as Record<string, unknown>) : "preserved";
+                    const attrs = (target?.attrs ?? {}) as Record<string, unknown>;
+                    const threeDBlock = target ? picture3dBlocker(attrs) : "preserved";
+                    const lookBlock = target ? pictureLookEffectsBlocker(attrs) : "preserved";
+                    const shadowBlock = target ? pictureShadowBlocker(attrs) : "preserved";
+                    const kinds = [
+                      ...(shadowBlock ? [] : (["shadow"] as const)),
+                      ...(lookBlock ? [] : (["reflection", "glow", "softEdge"] as const)),
+                      ...(threeDBlock ? [] : (["bevel", "rotation3d"] as const)),
+                    ];
+                    const block =
+                      threeDBlock && lookBlock && shadowBlock
+                        ? threeDBlock === "styled" || lookBlock === "styled" || shadowBlock === "styled"
+                          ? "styled"
+                          : "preserved"
+                        : null;
+                    const pictureShadow = pictureShadowEffect(attrs);
                     const reason = !editor.isEditable
                       ? t("toolbar.documentReadOnly")
                       : block === "styled"
@@ -44851,7 +45024,11 @@ function DocumentToolbar({
                           : undefined;
                     return (
                       <OfficePictureEffectsMenu
-                        effects={normalizePicture3d(target?.attrs.picture3d) ?? undefined}
+                        effects={{
+                          ...(pictureShadow ? { shadow: pictureShadow } : {}),
+                          ...pictureLookEffects(attrs),
+                          ...(normalizePicture3d(target?.attrs.picture3d) ?? {}),
+                        }}
                         shadow={false}
                         accentColors={{
                           accent1: "#4472c4",
@@ -44861,15 +45038,21 @@ function DocumentToolbar({
                           accent5: "#5b9bd5",
                           accent6: "#70ad47",
                         }}
-                        kinds={["bevel", "rotation3d"]}
+                        kinds={kinds.length ? kinds : ["bevel", "rotation3d"]}
                         disabled={Boolean(reason)}
                         disabledReason={reason}
                         testId="document-toolbar-picture-effects"
                         iconSemanticId="image.enhance"
                         labels={presentationEffectsMenuLabels(t, t("toolbar.pictureEffects"))}
-                        onPick={(kind, value) => void setPicture3dEffect(editor, kind, value)}
-                        onThreeDOptions={() => {
-                          setPictureFormatPaneOpening({ tab: "effects", focusAlt: false });
+                        onPick={(kind, value) =>
+                          void (kind === "shadow"
+                            ? setPictureShadowEffect(editor, value)
+                            : (PICTURE_LOOK_EFFECT_KINDS as readonly string[]).includes(kind)
+                              ? setPictureLookEffect(editor, kind, value)
+                              : setPicture3dEffect(editor, kind, value))
+                        }
+                        onEffectOptions={(section) => {
+                          setPictureFormatPaneOpening({ tab: "effects", focusAlt: false, section });
                           setPictureFormatPaneTarget(liveImageAltTarget(editor));
                         }}
                       />
@@ -46306,21 +46489,29 @@ function DocumentToolbar({
                 setRibbonTab("chartDesign");
                 activateOfficeControl(testId, how);
               };
+              // The chart's place in the document's one floating stack, as
+              // its Arrange group shows it (`displayedChartPlacement`): the
+              // same planner every member steps by (`floatingStackOrder`).
+              // The menu stepped the coarse host layout's height by 1 -- no
+              // step at all past Word's heights 1024 apart -- and greyed every
+              // chart floated by Layout Options (its anchor is `floatAnchor`).
               const layerRefused =
-                displayedChartLayout.mode === "floating" ? null : t("toolbar.chartLayerNeedsWrap");
+                displayedChartPlacement && displayedChartPlacement.wrap !== "inline"
+                  ? null
+                  : t("toolbar.chartLayerNeedsWrap");
+              const forwardRefused =
+                layerRefused ??
+                (displayedChartPlacement?.canBringForward ? null : t("presentation.bringForwardAtFront"));
+              const backwardRefused =
+                layerRefused ??
+                (displayedChartPlacement?.canSendBackward ? null : t("presentation.sendBackwardAtBack"));
               const layerStep = (step: 1 | -1) => {
-                const next = documentChartLayoutOneLayer(displayedChartLayout, step);
-                if (next) commitChartLayout(next);
+                setLiveDocumentChartPlacement(editor, { kind: "order", step: step > 0 ? "forward" : "backward" });
               };
               // Bring to Front / Send to Back: past every floating object of
               // the document's one stack (shapes, pictures, frames, charts).
               const layerEdge = (edge: "front" | "back") => {
-                const next = documentChartLayoutToEdge(
-                  displayedChartLayout,
-                  edge,
-                  documentFloatingStack(editor.state.doc).heights,
-                );
-                if (next) commitChartLayout(next);
+                setLiveDocumentChartPlacement(editor, { kind: "order", step: edge });
               };
               const commands: Partial<Record<OfficeChartContextCommandId, OfficeChartContextCommand>> = {
                 cut: { run: clipboard("cut"), disabledReason: refused },
@@ -46394,19 +46585,19 @@ function DocumentToolbar({
                 // its stack); a chart in line with its text has no layer.
                 bringToFront: {
                   run: () => layerEdge("front"),
-                  disabledReason: refused ?? layerRefused,
+                  disabledReason: refused ?? forwardRefused,
                 },
                 bringForward: {
                   run: () => layerStep(1),
-                  disabledReason: refused ?? layerRefused,
+                  disabledReason: refused ?? forwardRefused,
                 },
                 sendToBack: {
                   run: () => layerEdge("back"),
-                  disabledReason: refused ?? layerRefused,
+                  disabledReason: refused ?? backwardRefused,
                 },
                 sendBackward: {
                   run: () => layerStep(-1),
-                  disabledReason: refused ?? layerRefused,
+                  disabledReason: refused ?? backwardRefused,
                 },
                 // Group: this chart with the shapes picked beside it.
                 group: {
@@ -50164,6 +50355,21 @@ function DocumentToolbar({
           }
         />
       ) : null}
+      {textEffectsPaneOpen ? (
+        <DocumentDockedPane docks={taskPaneDocks} pane="format-text-effects">
+          <DocumentTextEffectsPane
+            textEffects={editor.isDestroyed ? null : editor.getAttributes(TEXT_EFFECTS_MARK)}
+            canEdit={!editor.isDestroyed && editor.isEditable}
+            onChange={(kind, value) => {
+              restoredChain().setTextEffect3d(kind, value).run();
+            }}
+            onClose={() => {
+              setTextEffectsPaneOpen(false);
+              editor.commands.focus(null, { scrollIntoView: false });
+            }}
+          />
+        </DocumentDockedPane>
+      ) : null}
       {shapeFormatPaneOpen && selectedDocumentShape ? (
         <DocumentDockedPane docks={taskPaneDocks} pane="format-shape">
         <DocumentShapeFormatPane
@@ -50172,6 +50378,7 @@ function DocumentToolbar({
           canEdit={!editor.isDestroyed && editor.isEditable}
           draftConflictMessage={t("toolbar.shapeFormatDraftConflict")}
           initialSection={shapeFormatPaneSection}
+          revealSection={shapeFormatPaneSection === "effects" ? shapeFormatPaneReveal : null}
           isChinese={isChineseLocale}
           linkTargets={shapeFormatLinkTargets}
           onClose={() => {
@@ -50865,19 +51072,27 @@ function DocumentToolbar({
                       ? {
                           bringToFront: {
                             onSelect: () => executeLayoutFeature("layout.object.layer", "bringToFront"),
-                            disabled: !layoutCommandDecisions["layout.object.layer"].enabled,
+                            disabled:
+                              !layoutCommandDecisions["layout.object.layer"].enabled ||
+                              shapeZOrderAtBoundary("bringToFront"),
                           },
                           bringForward: {
                             onSelect: () => executeLayoutFeature("layout.object.layer", "bringForward"),
-                            disabled: !layoutCommandDecisions["layout.object.layer"].enabled,
+                            disabled:
+                              !layoutCommandDecisions["layout.object.layer"].enabled ||
+                              shapeZOrderAtBoundary("bringForward"),
                           },
                           sendToBack: {
                             onSelect: () => executeLayoutFeature("layout.object.layer", "sendToBack"),
-                            disabled: !layoutCommandDecisions["layout.object.layer"].enabled,
+                            disabled:
+                              !layoutCommandDecisions["layout.object.layer"].enabled ||
+                              shapeZOrderAtBoundary("sendToBack"),
                           },
                           sendBackward: {
                             onSelect: () => executeLayoutFeature("layout.object.layer", "sendBackward"),
-                            disabled: !layoutCommandDecisions["layout.object.layer"].enabled,
+                            disabled:
+                              !layoutCommandDecisions["layout.object.layer"].enabled ||
+                              shapeZOrderAtBoundary("sendBackward"),
                           },
                         }
                       : null,

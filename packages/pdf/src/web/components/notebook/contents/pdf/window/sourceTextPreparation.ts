@@ -14,6 +14,9 @@ export interface PdfSourceTextPreparationDiagnostic {
   stage: PdfSourceTextPreparationStage;
   failure: PdfSourceTextPreparationStage | null;
   cause?: unknown;
+  /** The server write was sent and no server answered it (a dropped
+   * connection, a gateway's 5xx): the same write may be asked again. */
+  unanswered?: boolean;
 }
 
 /** Preserve the existing rejection result; expose only a bounded local stage. */

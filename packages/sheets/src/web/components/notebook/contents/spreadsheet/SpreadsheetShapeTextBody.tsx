@@ -6,7 +6,9 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { ptToPx } from "@mrnote/core/web/lib/office-units.ts";
+import { OFFICE_SCENE_LABEL_LINE_SPACING } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import { OfficeTextWarpMarker } from "@mrnote/core/web/components/office-text-warp/OfficeTextWarpMarker.tsx";
+import { OfficeTextShadowCopyMarker } from "@mrnote/core/web/components/office-text-warp/OfficeTextShadowCopyMarker.tsx";
 import { PresentationRunsText } from "@mrnote/slides/web/components/notebook/contents/presentation/PresentationRunsText.tsx";
 import { OFFICE_HIT_TEXT_ATTRIBUTE } from "@mrnote/core/web/components/office-ribbon/OfficeDrawingSelection.tsx";
 import { officeShapeTextFontCss } from "@mrnote/core/web/lib/office-shape-text-font.ts";
@@ -16,7 +18,7 @@ import { cellTextRunCss, cellTextRunsInRange } from "@mrnote/core/web/lib/presen
 import type { TextRun } from "@mrnote/core/web/lib/presentation-runs.ts";
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { wordEastAsianSingleLineFactor } from "@mrnote/core/web/lib/document-word-line-metrics.ts";
-import { wordFontLineMetrics } from "@mrnote/core/web/components/console/editor/native-document/wordFontMetrics.ts";
+import { wordFontLineMetrics, wordGridFontLineMetrics } from "@mrnote/core/web/components/console/editor/native-document/wordFontMetrics.ts";
 
 import {
   MAX_SHAPE_TEXT_SIZE,
@@ -64,6 +66,24 @@ export function spreadsheetShapeEastAsianLine(fontStack: string): number | null 
     if (metrics) return metrics.box * wordEastAsianSingleLineFactor(family);
   }
   return null;
+}
+
+/**
+ * A shape's single line, per em. Windows Excel steps the lines of a shape it
+ * read from its file (a body reading, not SmartArt) by the face's own line --
+ * its ascender less descender plus line gap: Calibri and Aptos Narrow 11 pt
+ * 13.43 pt apart, Arial and Times New Roman 12.65, Verdana 13.37, Segoe UI
+ * 14.63 (lookwin p98-lw), the PDF writer's lines (presentation_pdf
+ * `_face_line_ems`). Office's 1.2 for any other shape (SmartArt keeps
+ * Office's lines, `framed` a SmartArt label's own box) or an unknown face.
+ */
+export function spreadsheetShapeSingleLine(shape: SpreadsheetShapeStyle, framed = false): number {
+  if (framed || shape.smartArtStyle !== undefined) return SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
+  const face = shape.textFontFamily?.split(",")[0]?.trim().replace(/^["']|["']$/g, "");
+  if (!face || !normalizeOfficeTextLayout(shape.textLayout)?.bodyPr) return SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
+  const metrics = wordGridFontLineMetrics(face);
+  const line = metrics ? metrics.box + metrics.lineGap : NaN;
+  return line >= 0.8 && line <= 3 ? line : SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
 }
 
 /**
@@ -115,8 +135,21 @@ export function spreadsheetShapeTextPaintCss(
     // A word longer than the line is broken where the line ends, as Office
     // breaks it (K30_DuplicateImageNames: "Economi" in a narrow box, the
     // rest clipped; X-124), never run past the box's edge.
-    ...(body?.wrap === "none" ? {} : { overflowWrap: "break-word" as const }),
-    lineHeight: SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT,
+    // A SmartArt shape's words (its own text box, `framed`) break anywhere:
+    // the box is laid out at the words' widest, so `break-word`, which does
+    // not narrow that, let a word set by hand at 28 pt run out of both sides
+    // where Excel breaks it ("gamm" / "a", SmartArt probe X24ui).
+    ...(body?.wrap === "none" ? {} : { overflowWrap: framed ? ("anywhere" as const) : ("break-word" as const) }),
+    // A SmartArt shape's words stand at Office's SmartArt spacing, 90 % of
+    // the single line, as the engine fitted them: drawn at the full single
+    // line, a label wrapped to two lines ran out under its box where Excel
+    // draws both (SmartArt probe X24ui, 28 pt Georgia "gamm" / "a").
+    // A shape read from Excel's file steps by its face's own line
+    // (`spreadsheetShapeSingleLine`).
+    lineHeight:
+      framed || shape.smartArtStyle !== undefined
+        ? SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT * OFFICE_SCENE_LABEL_LINE_SPACING
+        : spreadsheetShapeSingleLine(shape),
     // Font > Character Spacing (`a:rPr@spc`, points): the space Office adds
     // after each character (X-162).
     ...(shape.textCharacterSpacing ? { letterSpacing: `${ptToPx(shape.textCharacterSpacing)}px` } : {}),
@@ -182,7 +215,7 @@ export function spreadsheetShapeEditorParagraphs(
   const ownAlign = shapeOwnAlign(shape);
   const fontSize = shapeTextSize(shape);
   return officeTextLayoutLines(text, layout).map((line) => {
-    const css = shapeTextLineCss(line, ownAlign ?? (textBox ? "left" : "center"), ownAlign, fontSize);
+    const css = shapeTextLineCss(line, ownAlign ?? (textBox ? "left" : "center"), ownAlign, fontSize, spreadsheetShapeSingleLine(shape));
     return {
       block: css.block,
       ...(line.marker !== null ? { marker: { text: line.marker, css: css.marker } } : {}),
@@ -300,6 +333,32 @@ export function SpreadsheetShapeTextBody({
     const next = eastAsian && node ? spreadsheetShapeEastAsianLine(getComputedStyle(node).fontFamily) : null;
     setEastAsianLine((current) => (current === next ? current : next));
   }, [eastAsian, text, shape.textFontFamily, shape.textRuns]);
+  // A clipped body (`a:bodyPr@vertOverflow` clip / ellipsis) as Windows
+  // Excel draws it: the lines whose foot falls inside the text area, the
+  // next one left out whole rather than cut (lookwin p101-lw), anchored as
+  // the body. Measured off the drawn body: its whole lines' height, for a
+  // body of one size and one line pitch.
+  const clipsWholeLines =
+    (layout?.bodyPr?.vertOverflow === "clip" || layout?.bodyPr?.vertOverflow === "ellipsis") &&
+    !framed &&
+    shape.smartArtStyle === undefined &&
+    !eastAsian &&
+    layout?.bodyPr?.vert === undefined &&
+    !shape.textRuns?.some((run) => run.style?.fontSize !== undefined) &&
+    !lines.some(lineSpaced);
+  const [keptHeight, setKeptHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const node = bodyRef.current;
+    let next: number | null = null;
+    if (clipsWholeLines && node) {
+      const style = getComputedStyle(node);
+      const inner = node.clientHeight - (Number.parseFloat(style.paddingTop) || 0) - (Number.parseFloat(style.paddingBottom) || 0);
+      const pitch = spreadsheetShapeSingleLine(shape) * shapeTextSize(shape);
+      const kept = pitch > 0 && inner > 0 ? Math.floor((inner + 0.01) / pitch) * pitch : 0;
+      next = kept >= pitch ? kept : null;
+    }
+    setKeptHeight((current) => (current === next ? current : next));
+  }, [clipsWholeLines, shape, inset, text]);
   if (!text) return null;
   // Each run wears its own format.
   const runs = runsSpelling(shape.textRuns, text);
@@ -337,6 +396,7 @@ export function SpreadsheetShapeTextBody({
     (line) => line.marker !== null || line.marginPx !== 0 || line.align || lineSpaced(line),
   );
   const fontSize = shapeTextSize(shape);
+  const single = spreadsheetShapeSingleLine(shape, framed);
   const font = officeShapeTextFontCss(shape, {
     familyStack: (family) => spreadsheetFontStack(family),
     boldByDefault: Boolean(shape.textArt),
@@ -360,6 +420,41 @@ export function SpreadsheetShapeTextBody({
         });
       })()
     : null;
+  const content: ReactNode = drawsLayout ? (
+      <span
+        data-spreadsheet-shape-text="layout"
+        style={{
+          display: "block",
+          width: "100%",
+          ...officeAnchorCenterBoundsCss(anchorCtr),
+        }}
+      >
+        {lines.map((line, index) => (
+          <ShapeTextLine
+            key={index}
+            line={line}
+            eastAsianLine={eastAsianLine ? (EAST_ASIAN_TEXT.test(line.text) ? eastAsianLine : 0) : null}
+            fallbackAlign={ownAlign ?? (textBox ? "left" : "center")}
+            ownAlign={ownAlign}
+            fontSize={fontSize}
+            single={single}
+            words={
+              lineRuns?.[index]?.length
+                ? spreadsheetShapeRunSpans(lineRuns[index]!, font, `line${index}`)
+                : undefined
+            }
+          />
+        ))}
+      </span>
+    ) : runs ? (
+      <span data-spreadsheet-shape-text="runs">{spreadsheetShapeRunSpans(runs, font, "runs")}</span>
+    ) : wordsHit ? (
+      // Hit where the words are (the shared geometry-hit rule passes the
+      // body's own box through): bare text needs an element to be hit.
+      <span>{text}</span>
+    ) : (
+      text
+    );
   return (
     <span
       style={{
@@ -405,11 +500,19 @@ export function SpreadsheetShapeTextBody({
         // whose schema default is `overflow`: a file that states the body
         // draws its words past the shape unless it says `clip`/`ellipsis`.
         // A shape with no body reading keeps the clipped label it always drew.
-        overflow: body && body.vertOverflow !== "clip" && body.vertOverflow !== "ellipsis" ? "visible" : "hidden",
+        // A SmartArt shape's words always have the body reading's default:
+        // a label longer than its shape spills above and below it, centred,
+        
+        overflow:
+          (body || framed || shape.smartArtStyle !== undefined) &&
+          body?.vertOverflow !== "clip" &&
+          body?.vertOverflow !== "ellipsis"
+            ? "visible"
+            : "hidden",
         ...(body?.vertOverflow === "ellipsis" ? { textOverflow: "ellipsis" } : {}),
         // Insets, wrap, line box and WordArt look: the in-shape editor's too.
         ...spreadsheetShapeTextPaintCss(shape, framed),
-        ...(eastAsianLine ? { lineHeight: Math.max(SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT, eastAsianLine) } : {}),
+        ...(eastAsianLine ? { lineHeight: Math.max(single, eastAsianLine) } : {}),
       }}
       data-spreadsheet-shape-text-body=""
       ref={bodyRef}
@@ -424,40 +527,9 @@ export function SpreadsheetShapeTextBody({
         noWrap={body?.wrap === "none"}
         align={ownAlign ?? (textBox ? "left" : "center")}
       />
-      {drawsLayout ? (
-        <span
-          data-spreadsheet-shape-text="layout"
-          style={{
-            display: "block",
-            width: "100%",
-            ...officeAnchorCenterBoundsCss(anchorCtr),
-          }}
-        >
-          {lines.map((line, index) => (
-            <ShapeTextLine
-              key={index}
-              line={line}
-              eastAsianLine={eastAsianLine ? (EAST_ASIAN_TEXT.test(line.text) ? eastAsianLine : 0) : null}
-              fallbackAlign={ownAlign ?? (textBox ? "left" : "center")}
-              ownAlign={ownAlign}
-              fontSize={fontSize}
-              words={
-                lineRuns?.[index]?.length
-                  ? spreadsheetShapeRunSpans(lineRuns[index]!, font, `line${index}`)
-                  : undefined
-              }
-            />
-          ))}
-        </span>
-      ) : runs ? (
-        <span data-spreadsheet-shape-text="runs">{spreadsheetShapeRunSpans(runs, font, "runs")}</span>
-      ) : wordsHit ? (
-        // Hit where the words are (the shared geometry-hit rule passes the
-        // body's own box through): bare text needs an element to be hit.
-        <span>{text}</span>
-      ) : (
-        text
-      )}
+      {/* Text Effects > Shadow > Perspective on straight words (shared copy). */}
+      <OfficeTextShadowCopyMarker warp={shape.textWarp} shadow={shape.textPaint?.shadow ?? null} />
+      {keptHeight !== null ? <span data-spreadsheet-shape-text="kept" style={{ display: "block", maxHeight: keptHeight, overflow: "hidden", ...(drawsLayout ? { width: "100%" } : {}) }}>{content}</span> : content}
     </span>
   );
 }
@@ -490,6 +562,7 @@ function shapeTextLineCss(
   fallbackAlign: "left" | "center" | "right" | "justify",
   ownAlign: "left" | "center" | "right" | "justify" | undefined,
   fontSize: number,
+  single: number = SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT,
 ): { block: CSSProperties; marker: CSSProperties } {
   const gutter = line.indentPx < 0 ? -line.indentPx : 0;
   return {
@@ -501,7 +574,7 @@ function shapeTextLineCss(
       // Paragraph ▸ Spacing: Before / After and Line Spacing (Multiple).
       lineHeight:
         line.lineSpacing !== undefined
-          ? SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT * line.lineSpacing
+          ? single * line.lineSpacing
           : undefined,
       marginBlockStart: line.spaceBeforePx ? `${line.spaceBeforePx}px` : undefined,
       marginBlockEnd: line.spaceAfterPx ? `${line.spaceAfterPx}px` : undefined,
@@ -536,6 +609,7 @@ function ShapeTextLine({
   fontSize,
   words,
   eastAsianLine = null,
+  single = SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT,
 }: {
   line: OfficeTextLine;
   /** Office's East Asian line, per em, for a line holding East Asian text;
@@ -548,10 +622,12 @@ function ShapeTextLine({
   /** Home ▸ Alignment on the shape: overrides the line's own receipt. */
   ownAlign?: "left" | "center" | "right" | "justify";
   fontSize: number;
+  /** The body's single line, per em (`spreadsheetShapeSingleLine`). */
+  single?: number;
 }) {
-  const css = shapeTextLineCss(line, fallbackAlign, ownAlign, fontSize);
+  const css = shapeTextLineCss(line, fallbackAlign, ownAlign, fontSize, single);
   if (eastAsianLine !== null) {
-    css.block.lineHeight = Math.max(SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT, eastAsianLine) * (line.lineSpacing ?? 1);
+    css.block.lineHeight = Math.max(single, eastAsianLine) * (line.lineSpacing ?? 1);
   }
   return (
     <span data-spreadsheet-shape-line={line.marker === null ? "plain" : "marked"} style={css.block}>

@@ -36,8 +36,15 @@ import { hasAnyBullet, textFromParagraphs } from "../presentation-paragraphs";
 import { normalizeRuns, textFromRuns } from "../presentation-point-runs";
 import {
   PRESENTATION_CONTENT_TYPE,
+  presentationPageContentObjectSchema,
   presentationPageContentSchema,
+  presentationSlideSchema,
+  refinePresentationPageContent,
 } from "../native-page-schemas";
+import { z } from "zod";
+import { PRESENTATION_MEDIA_KEY } from "../presentation-page-media";
+import { presentationListInPaintOrder } from "../presentation-paint-order";
+import { PRESENTATION_DECK_RECEIPTS_KEY } from "../presentation-deck-receipts";
 import {
   DEFAULT_SLIDE_TRANSITION,
   isDirectionalSlideTransition,
@@ -257,6 +264,13 @@ export interface SlideModel {
   transitionAdvanceOnClick?: boolean;
   /** OOXML `advTm` in milliseconds; omission means automatic advance is off. */
   transitionAdvanceAfterMs?: number;
+  /**
+   * Read only: when each click came in PowerPoint's Rehearse Timings (the
+   * slide's tag TIMING), ms, each after the click before (the first after
+   * the slide's start). Use Timings and Create a Video play the clicks then
+   * (`slide-click-schedule`).
+   */
+  rehearsedClickTimingsMs?: readonly number[];
   /**
    * Which element spells this slide's Zoom. PowerPoint's own Zoom gallery
    * entry writes Office 2010's `p14:warp`, and so does a Zoom picked new in
@@ -519,6 +533,9 @@ const HOISTED_TEXT_STYLE_KEYS = [
   // title sits 284pt in from its frame in PowerPoint and flush here.
   "indentLevel",
   "textShadow",
+  // The words' shadow as they state it (PPTX readings row 805), beside
+  // `textShadow`: drawn by `presentationTextShadowCss` from `style`.
+  "textShadowEffect",
   // `a:bodyPr@wrap="none"`: the importer states it at the top level; the
   // text drew wrapped without it (PPT-B360).
   "textWrap",
@@ -1195,9 +1212,217 @@ export function normalizePresentationBlock(
   };
 }
 
-export function normalizeSlides(
+function normalizeStoredSlide(
+  slide: unknown,
+  index: number,
+  /** The whole deck read as its schema says (`presentationPageContentSchema`). */
+  parsedSuccess: boolean,
+  issues?: PresentationReadIssue[],
+): SlideModel {
+  const slideRecord = asRecord(slide) ?? {};
+  const {
+    blocks: rawBlocksValue,
+    id,
+    notes,
+    title,
+    transition,
+    transitionDurationMs: rawTransitionDurationMs,
+    transitionDirection: rawTransitionDirection,
+    transitionAdvanceOnClick: rawTransitionAdvanceOnClick,
+    transitionAdvanceAfterMs: rawTransitionAdvanceAfterMs,
+    layout,
+    layoutId,
+    masterId,
+    animationSequence: rawSequence,
+    animationTiming: rawAnimationTiming,
+    hidden: rawHidden,
+    comments: rawComments,
+    commentAuthority: rawCommentAuthority,
+    ...slideExtras
+  } = slideRecord;
+  const rawBlocks = Array.isArray(rawBlocksValue) ? rawBlocksValue : [];
+  const slideId = typeof id === "string" ? id : undefined;
+  const blocks = rawBlocks
+    .slice(0, MAX_PRESENTATION_BLOCKS_PER_SLIDE)
+    .map((block, blockIndex) => {
+      try {
+        return normalizePresentationBlock(block, blockIndex);
+      } catch {
+        const codes: string[] = [];
+        const read = normalizePresentationBlock(block, blockIndex, {
+          onIssue: (code) => codes.push(code),
+        });
+        for (const code of codes) issues?.push({ slideId, blockId: read.id, code });
+        return read;
+      }
+    });
+  // Normalize the persisted animation timeline: drop/clamp invalid steps and
+  // prune any step whose blockId no longer matches a block on this slide so
+  // the persisted sequence never dangles. Only retain a non-empty result so
+  // decks that never authored a timeline stay byte-clean (no key persisted).
+  const blockIds = new Set(blocks.map((block) => block.id));
+  for (const block of blocks) {
+    if (block.type !== "shape") continue;
+    const clickAction = block.clickAction;
+    if (clickAction?.kind !== "play-media") continue;
+    const target = blocks.find(
+      (candidate) => candidate.id === clickAction.targetBlockId,
+    );
+    if (
+      !target ||
+      target.type !== "embed" ||
+      normalizeEmbedKind(target.kind) !== clickAction.mediaKind ||
+      !resolveEmbed({ kind: target.kind, url: target.url }).url
+    ) {
+      // The button stays, without the play action its clip cannot take;
+      // the action is kept as stored and written back on save.
+      const index = blocks.indexOf(block);
+      const { clickAction: storedAction, ...rest } = block;
+      const preserved = asRecord(
+        (block as unknown as Record<string, unknown>)[PRESENTATION_READ_PRESERVED_KEY],
+      );
+      blocks[index] = {
+        ...rest,
+        [PRESENTATION_READ_PRESERVED_KEY]: { ...(preserved ?? {}), clickAction: storedAction },
+      } as typeof block;
+      issues?.push({
+        slideId,
+        blockId: block.id,
+        code: "presentation_action_button_media_target_invalid",
+      });
+    }
+  }
+  // A step that was stored without an identity (decks from before steps
+  // were born with one) gets a deterministic id derived from the slide,
+  // its block and its position, so every collaborator loading this deck
+  // derives the same ids and the animation list merges per step instead
+  // of as one whole value. The ids persist through the normal save.
+  const prunedSequence = pruneSequence(normalizeAnimationSequence(rawSequence), blockIds);
+  const normalizedSequence = assignTimelineStepIds(
+    // A slide saved under the timing before PowerPoint's: every step
+    // keeps its start (`migrateLegacyAnimationSequence`).
+    rawAnimationTiming === POWERPOINT_ANIMATION_TIMING
+      ? prunedSequence
+      : migrateLegacyAnimationSequence(prunedSequence),
+    String(id || `slide-${index + 1}`),
+  );
+  // Normalize the persisted transition against the allowed set; only retain
+  // it when it differs from the default so existing decks stay byte-clean.
+  const normalizedTransition = normalizeSlideTransition(transition);
+  // Normalize the persisted transition duration: a usable value is clamped
+  // to the supported range; absent / non-numeric → undefined so a slide that
+  // never set a duration persists NO field (CSS default, byte-clean).
+  const normalizedTransitionDurationMs = normalizeTransitionDuration(
+    rawTransitionDurationMs,
+  );
+  const normalizedTransitionDirection =
+    isDirectionalSlideTransition(normalizedTransition) &&
+    isSlideTransitionDirectionForKind(
+      normalizedTransition,
+      rawTransitionDirection,
+    )
+      ? rawTransitionDirection
+      : undefined;
+  const normalizedTransitionAdvanceOnClick =
+    rawTransitionAdvanceOnClick === false ? false : undefined;
+  const normalizedTransitionAdvanceAfterMs =
+    isTransitionAdvanceAfterMs(rawTransitionAdvanceAfterMs)
+      ? rawTransitionAdvanceAfterMs
+      : undefined;
+  // Normalize the persisted layout id against the allowed set; only retain
+  // it when it differs from the default (`blank`) so decks that never chose a
+  // layout stay byte-clean and a stale value can't reference a missing layout.
+  const normalizedLayout =
+    // An Office deck's custom layout id (PPT-B030) is kept as is.
+    layout === undefined ? undefined : normalizeSlideLayoutRef(layout);
+  // A native explicit blank is part of the source snapshot. Retain it so
+  // loading and exporting do not manufacture a representation-only Save.
+  // A slide that SAYS it is on the Blank layout keeps saying so too: an
+  // empty one is an empty canvas, as PowerPoint's Blank layout has no
+  // placeholder (`blocksLeftOnSlide`), and only the stated layout tells
+  // it from a legacy slide that lost its last block.
+  const keepStatedBlankLayout = layout === DEFAULT_LAYOUT_ID;
+  // Normalize the persisted master reference: keep only a usable (non-empty,
+  // length-capped) id, dropped otherwise so a stale value never lingers. A
+  // dangling id (no matching master) degrades to no master at render time.
+  const normalizedMasterId = normalizeMasterId(masterId);
+  const normalizedNativeLayoutId = normalizeMasterLayoutId(layoutId);
+  // Persistent review comments: drop malformed entries + cap; only retain a
+  // non-empty list so a slide that never authored a comment stays byte-clean
+  // (no `comments` key). A comment's `blockId` anchor is NOT pruned against
+  // the slide's blocks here (a comment may intentionally outlive a deleted
+  // object as a "what happened to X" note); the render edge degrades a
+  // dangling anchor to a slide-level comment.
+  const normalizedComments =
+    parsedSuccess && Array.isArray(rawComments)
+      ? (JSON.parse(JSON.stringify(rawComments)) as SlideComment[])
+      : normalizeComments(rawComments);
+  // An imported slide stored before the importer listed its objects at
+  // their `p:spTree` places (a SmartArt diagram after every other object,
+  // while it painted at its frame's place) is read in paint order, so the
+  // Selection Pane and Arrange see the slide the canvas shows; the next save
+  
+  // A slide that records reorders of its imported objects already lists
+  // them as they paint.
+  const listedAsPainted =
+    slideExtras.nativeShapeOrderTarget === undefined &&
+    typeof asRecord(slideExtras.source)?.slideId === "string"
+      ? presentationListInPaintOrder(blocks)
+      : null;
+  const listedBlocks = listedAsPainted
+    ? listedAsPainted.flatMap((at) => {
+        const block = blocks[at];
+        return block ? [block] : [];
+      })
+    : blocks;
+  return {
+    ...slideExtras,
+    ...(typeof notes === "string" ? { notes } : {}),
+    ...(normalizedComments.length > 0
+      ? { comments: normalizedComments }
+      : {}),
+    ...(rawCommentAuthority !== undefined
+      ? { commentAuthority: rawCommentAuthority }
+      : {}),
+    ...(normalizedTransition !== DEFAULT_SLIDE_TRANSITION
+      ? { transition: normalizedTransition }
+      : {}),
+    ...(normalizedTransitionDurationMs !== undefined
+      ? { transitionDurationMs: normalizedTransitionDurationMs }
+      : {}),
+    ...(normalizedTransitionDirection !== undefined
+      ? { transitionDirection: normalizedTransitionDirection }
+      : {}),
+    ...(normalizedTransitionAdvanceOnClick === false
+      ? { transitionAdvanceOnClick: false }
+      : {}),
+    ...(normalizedTransitionAdvanceAfterMs !== undefined
+      ? { transitionAdvanceAfterMs: normalizedTransitionAdvanceAfterMs }
+      : {}),
+    ...(normalizedLayout && (normalizedLayout !== DEFAULT_LAYOUT_ID || keepStatedBlankLayout)
+      ? { layout: normalizedLayout }
+      : {}),
+    ...(normalizedNativeLayoutId
+      ? { layoutId: normalizedNativeLayoutId }
+      : {}),
+    ...(normalizedMasterId ? { masterId: normalizedMasterId } : {}),
+    ...(normalizedSequence.length > 0
+      ? { animationSequence: normalizedSequence, animationTiming: POWERPOINT_ANIMATION_TIMING }
+      : {}),
+    // Only an explicit `true` hides a slide; a visible slide persists no
+    // `hidden` key (byte-clean). See `normalizeHiddenFlag`.
+    ...(normalizeHiddenFlag(rawHidden) ? { hidden: true } : {}),
+    id: String(id || `slide-${index + 1}`),
+    title: String(title ?? ""),
+    // An empty Blank slide stays empty; the editor draws it as an empty
+    // canvas (`slideUsesCanvas`). Any other empty slide gets its body.
+    blocks: blocksLeftOnSlide({ layout }, listedBlocks, () => randomUUID()),
+  };
+}
+
+/** The deck's slides read as a whole: its content parsed by its schema at once. */
+function readSlidesWhole(
   storedContent: Record<string, unknown> | undefined,
-  /** Blocks read without a setting they contradict (see `PresentationReadIssue`). */
   issues?: PresentationReadIssue[],
 ): SlideModel[] {
   // A picture every slide inherits is stored once (`presentation-page-media`);
@@ -1209,191 +1434,145 @@ export function normalizeSlides(
     : Array.isArray(content?.slides)
       ? content.slides
       : [];
-  const slides = rawSlides
+  return rawSlides
     .slice(0, MAX_PRESENTATION_SLIDES)
-    .map((slide, index) => {
-      const slideRecord = asRecord(slide) ?? {};
-      const {
-        blocks: rawBlocksValue,
-        id,
-        notes,
-        title,
-        transition,
-        transitionDurationMs: rawTransitionDurationMs,
-        transitionDirection: rawTransitionDirection,
-        transitionAdvanceOnClick: rawTransitionAdvanceOnClick,
-        transitionAdvanceAfterMs: rawTransitionAdvanceAfterMs,
-        layout,
-        layoutId,
-        masterId,
-        animationSequence: rawSequence,
-        animationTiming: rawAnimationTiming,
-        hidden: rawHidden,
-        comments: rawComments,
-        commentAuthority: rawCommentAuthority,
-        ...slideExtras
-      } = slideRecord;
-      const rawBlocks = Array.isArray(rawBlocksValue) ? rawBlocksValue : [];
-      const slideId = typeof id === "string" ? id : undefined;
-      const blocks = rawBlocks
-        .slice(0, MAX_PRESENTATION_BLOCKS_PER_SLIDE)
-        .map((block, blockIndex) => {
-          try {
-            return normalizePresentationBlock(block, blockIndex);
-          } catch {
-            const codes: string[] = [];
-            const read = normalizePresentationBlock(block, blockIndex, {
-              onIssue: (code) => codes.push(code),
-            });
-            for (const code of codes) issues?.push({ slideId, blockId: read.id, code });
-            return read;
-          }
-        });
-      // Normalize the persisted animation timeline: drop/clamp invalid steps and
-      // prune any step whose blockId no longer matches a block on this slide so
-      // the persisted sequence never dangles. Only retain a non-empty result so
-      // decks that never authored a timeline stay byte-clean (no key persisted).
-      const blockIds = new Set(blocks.map((block) => block.id));
-      for (const block of blocks) {
-        if (block.type !== "shape") continue;
-        const clickAction = block.clickAction;
-        if (clickAction?.kind !== "play-media") continue;
-        const target = blocks.find(
-          (candidate) => candidate.id === clickAction.targetBlockId,
-        );
-        if (
-          !target ||
-          target.type !== "embed" ||
-          normalizeEmbedKind(target.kind) !== clickAction.mediaKind ||
-          !resolveEmbed({ kind: target.kind, url: target.url }).url
-        ) {
-          // The button stays, without the play action its clip cannot take;
-          // the action is kept as stored and written back on save.
-          const index = blocks.indexOf(block);
-          const { clickAction: storedAction, ...rest } = block;
-          const preserved = asRecord(
-            (block as unknown as Record<string, unknown>)[PRESENTATION_READ_PRESERVED_KEY],
-          );
-          blocks[index] = {
-            ...rest,
-            [PRESENTATION_READ_PRESERVED_KEY]: { ...(preserved ?? {}), clickAction: storedAction },
-          } as typeof block;
-          issues?.push({
-            slideId,
-            blockId: block.id,
-            code: "presentation_action_button_media_target_invalid",
-          });
-        }
-      }
-      // A step that was stored without an identity (decks from before steps
-      // were born with one) gets a deterministic id derived from the slide,
-      // its block and its position, so every collaborator loading this deck
-      // derives the same ids and the animation list merges per step instead
-      // of as one whole value. The ids persist through the normal save.
-      const prunedSequence = pruneSequence(normalizeAnimationSequence(rawSequence), blockIds);
-      const normalizedSequence = assignTimelineStepIds(
-        // A slide saved under the timing before PowerPoint's: every step
-        // keeps its start (`migrateLegacyAnimationSequence`).
-        rawAnimationTiming === POWERPOINT_ANIMATION_TIMING
-          ? prunedSequence
-          : migrateLegacyAnimationSequence(prunedSequence),
-        String(id || `slide-${index + 1}`),
-      );
-      // Normalize the persisted transition against the allowed set; only retain
-      // it when it differs from the default so existing decks stay byte-clean.
-      const normalizedTransition = normalizeSlideTransition(transition);
-      // Normalize the persisted transition duration: a usable value is clamped
-      // to the supported range; absent / non-numeric → undefined so a slide that
-      // never set a duration persists NO field (CSS default, byte-clean).
-      const normalizedTransitionDurationMs = normalizeTransitionDuration(
-        rawTransitionDurationMs,
-      );
-      const normalizedTransitionDirection =
-        isDirectionalSlideTransition(normalizedTransition) &&
-        isSlideTransitionDirectionForKind(
-          normalizedTransition,
-          rawTransitionDirection,
-        )
-          ? rawTransitionDirection
-          : undefined;
-      const normalizedTransitionAdvanceOnClick =
-        rawTransitionAdvanceOnClick === false ? false : undefined;
-      const normalizedTransitionAdvanceAfterMs =
-        isTransitionAdvanceAfterMs(rawTransitionAdvanceAfterMs)
-          ? rawTransitionAdvanceAfterMs
-          : undefined;
-      // Normalize the persisted layout id against the allowed set; only retain
-      // it when it differs from the default (`blank`) so decks that never chose a
-      // layout stay byte-clean and a stale value can't reference a missing layout.
-      const normalizedLayout =
-        // An Office deck's custom layout id (PPT-B030) is kept as is.
-        layout === undefined ? undefined : normalizeSlideLayoutRef(layout);
-      // A native explicit blank is part of the source snapshot. Retain it so
-      // loading and exporting do not manufacture a representation-only Save.
-      // A slide that SAYS it is on the Blank layout keeps saying so too: an
-      // empty one is an empty canvas, as PowerPoint's Blank layout has no
-      // placeholder (`blocksLeftOnSlide`), and only the stated layout tells
-      // it from a legacy slide that lost its last block.
-      const keepStatedBlankLayout = layout === DEFAULT_LAYOUT_ID;
-      // Normalize the persisted master reference: keep only a usable (non-empty,
-      // length-capped) id, dropped otherwise so a stale value never lingers. A
-      // dangling id (no matching master) degrades to no master at render time.
-      const normalizedMasterId = normalizeMasterId(masterId);
-      const normalizedNativeLayoutId = normalizeMasterLayoutId(layoutId);
-      // Persistent review comments: drop malformed entries + cap; only retain a
-      // non-empty list so a slide that never authored a comment stays byte-clean
-      // (no `comments` key). A comment's `blockId` anchor is NOT pruned against
-      // the slide's blocks here (a comment may intentionally outlive a deleted
-      // object as a "what happened to X" note); the render edge degrades a
-      // dangling anchor to a slide-level comment.
-      const normalizedComments =
-        parsed.success && Array.isArray(rawComments)
-          ? (JSON.parse(JSON.stringify(rawComments)) as SlideComment[])
-          : normalizeComments(rawComments);
-      return {
-        ...slideExtras,
-        ...(typeof notes === "string" ? { notes } : {}),
-        ...(normalizedComments.length > 0
-          ? { comments: normalizedComments }
-          : {}),
-        ...(rawCommentAuthority !== undefined
-          ? { commentAuthority: rawCommentAuthority }
-          : {}),
-        ...(normalizedTransition !== DEFAULT_SLIDE_TRANSITION
-          ? { transition: normalizedTransition }
-          : {}),
-        ...(normalizedTransitionDurationMs !== undefined
-          ? { transitionDurationMs: normalizedTransitionDurationMs }
-          : {}),
-        ...(normalizedTransitionDirection !== undefined
-          ? { transitionDirection: normalizedTransitionDirection }
-          : {}),
-        ...(normalizedTransitionAdvanceOnClick === false
-          ? { transitionAdvanceOnClick: false }
-          : {}),
-        ...(normalizedTransitionAdvanceAfterMs !== undefined
-          ? { transitionAdvanceAfterMs: normalizedTransitionAdvanceAfterMs }
-          : {}),
-        ...(normalizedLayout && (normalizedLayout !== DEFAULT_LAYOUT_ID || keepStatedBlankLayout)
-          ? { layout: normalizedLayout }
-          : {}),
-        ...(normalizedNativeLayoutId
-          ? { layoutId: normalizedNativeLayoutId }
-          : {}),
-        ...(normalizedMasterId ? { masterId: normalizedMasterId } : {}),
-        ...(normalizedSequence.length > 0
-          ? { animationSequence: normalizedSequence, animationTiming: POWERPOINT_ANIMATION_TIMING }
-          : {}),
-        // Only an explicit `true` hides a slide; a visible slide persists no
-        // `hidden` key (byte-clean). See `normalizeHiddenFlag`.
-        ...(normalizeHiddenFlag(rawHidden) ? { hidden: true } : {}),
-        id: String(id || `slide-${index + 1}`),
-        title: String(title ?? ""),
-        // An empty Blank slide stays empty; the editor draws it as an empty
-        // canvas (`slideUsesCanvas`). Any other empty slide gets its body.
-        blocks: blocksLeftOnSlide({ layout }, blocks, () => randomUUID()),
-      };
-    });
+    .map((slide, index) => normalizeStoredSlide(slide, index, parsed.success, issues));
+}
+
+// ── Reading a deck slide by slide ─────────────────────────────────────────
+//
+// A deck's room hands the window its whole content at every collaborator's
+// key, and reading it whole parsed every slide by the deck's schema each time:
+
+
+// every slide it did not change as the same object, so a slide is read once
+// per stored object: expanded with the deck's media and receipts, parsed by
+// the slide schema, normalized. The deck's own fields are read once per set of
+// stored values, and the deck-wide rules run over the whole deck so read each
+// time. The result is the whole read's, slide for slide
+// (`tests/unit/presentation-read-slide-by-slide.test.ts`): the deck is valid
+// exactly when its own fields, its slide count, every slide and the deck-wide
+// rules are; a deck that is not is read from its raw slides, as before.
+
+interface StoredSlideRead {
+  readonly media: unknown;
+  readonly receipts: unknown;
+  /** The slide with the deck's media and receipts put in (`expandPresentationMedia`). */
+  readonly expanded: unknown;
+  readonly parse: { success: true; data: unknown } | { success: false };
+}
+
+interface StoredSlideNormalized {
+  readonly read: StoredSlideRead;
+  readonly parsedSuccess: boolean;
+  /** What the slide's identity comes from when it has none of its own. */
+  readonly position: number | null;
+  readonly slide: SlideModel;
+  readonly issues: readonly PresentationReadIssue[];
+}
+
+const storedSlideReads = new WeakMap<object, StoredSlideRead>();
+const storedSlideNormals = new WeakMap<object, StoredSlideNormalized>();
+let lastDeckFieldsRead: { keys: unknown[]; parse: { success: true; data: Record<string, unknown> } | { success: false } } | null = null;
+
+const deckFieldsSchema = presentationPageContentObjectSchema.omit({ slides: true });
+const deckRulesSchema = z.any().superRefine(
+  refinePresentationPageContent as (value: unknown, ctx: z.RefinementCtx) => void,
+);
+
+function knownStoredSlideRead(stored: Record<string, unknown>, slide: unknown): StoredSlideRead | null {
+  const known = slide !== null && typeof slide === "object" ? storedSlideReads.get(slide) : undefined;
+  return known && known.media === stored[PRESENTATION_MEDIA_KEY] && known.receipts === stored[PRESENTATION_DECK_RECEIPTS_KEY]
+    ? known : null;
+}
+
+function readStoredSlide(stored: Record<string, unknown>, slide: unknown, expandedWithDeck?: unknown): StoredSlideRead {
+  const media = stored[PRESENTATION_MEDIA_KEY];
+  const receipts = stored[PRESENTATION_DECK_RECEIPTS_KEY];
+  const key = slide !== null && typeof slide === "object" ? slide : null;
+  const known = knownStoredSlideRead(stored, slide);
+  if (known) return known;
+  let expanded = expandedWithDeck;
+  if (expanded === undefined) {
+    const one: Record<string, unknown> = { slides: [slide] };
+    if (media !== undefined) one[PRESENTATION_MEDIA_KEY] = media;
+    if (receipts !== undefined) one[PRESENTATION_DECK_RECEIPTS_KEY] = receipts;
+    expanded = (expandPresentationMedia(one).slides as unknown[])[0];
+  }
+  const parsed = presentationSlideSchema.safeParse(expanded);
+  const read: StoredSlideRead = {
+    media, receipts, expanded,
+    parse: parsed.success ? { success: true, data: parsed.data } : { success: false },
+  };
+  if (key) storedSlideReads.set(key, read);
+  return read;
+}
+
+function readDeckFields(stored: Record<string, unknown>) {
+  const keys = Object.keys(stored).filter((key) => key !== "slides").sort().flatMap((key) => [key, stored[key]]);
+  const last = lastDeckFieldsRead;
+  if (last && last.keys.length === keys.length && last.keys.every((value, at) => value === keys[at])) return last.parse;
+  const fields: Record<string, unknown> = {};
+  for (const key of Object.keys(stored)) if (key !== "slides") fields[key] = stored[key];
+  const expanded = expandPresentationMedia({ ...fields, slides: [] }) as Record<string, unknown>;
+  const { slides: _slides, ...withoutSlides } = expanded;
+  const parsed = deckFieldsSchema.safeParse(withoutSlides);
+  const parse = parsed.success
+    ? { success: true as const, data: parsed.data as Record<string, unknown> }
+    : { success: false as const };
+  lastDeckFieldsRead = { keys, parse };
+  return parse;
+}
+
+function readSlidesOneByOne(
+  storedContent: Record<string, unknown> | undefined,
+  issues?: PresentationReadIssue[],
+): SlideModel[] | null {
+  const stored = asRecord(storedContent);
+  if (!stored || !Array.isArray(stored.slides)) return null;
+  const storedSlides = stored.slides as unknown[];
+  // A deck opened (most slides not read yet) is expanded once, whole: one
+  // slide at a time it is a pass over the deck's receipts per slide.
+  const unread = storedSlides.filter((slide) => !knownStoredSlideRead(stored, slide)).length;
+  const expandedWhole = unread > 8
+    ? ((expandPresentationMedia(stored) as Record<string, unknown>).slides as unknown[] | undefined) : undefined;
+  const reads = storedSlides.map((slide, index) => readStoredSlide(stored, slide, expandedWhole?.[index]));
+  const fields = readDeckFields(stored);
+  let success = fields.success && storedSlides.length >= 1 && storedSlides.length <= MAX_PRESENTATION_SLIDES &&
+    reads.every((read) => read.parse.success);
+  if (success && fields.success) {
+    const slides = reads.map((read) => (read.parse as { data: unknown }).data);
+    success = deckRulesSchema.safeParse({ ...fields.data, slides }).success;
+  }
+  return storedSlides.slice(0, MAX_PRESENTATION_SLIDES).map((slide, index) => {
+    const read = reads[index];
+    const record = asRecord(read.expanded);
+    const position = typeof record?.id === "string" && record.id ? null : index;
+    const key = slide !== null && typeof slide === "object" ? slide : null;
+    const known = key ? storedSlideNormals.get(key) : undefined;
+    if (known && known.read === read && known.parsedSuccess === success && known.position === position) {
+      issues?.push(...known.issues);
+      return known.slide;
+    }
+    const own: PresentationReadIssue[] = [];
+    const normalized = normalizeStoredSlide(
+      success ? (read.parse as { data: unknown }).data : read.expanded, index, success, own,
+    );
+    issues?.push(...own);
+    if (key) storedSlideNormals.set(key, { read, parsedSuccess: success, position, slide: normalized, issues: own });
+    return normalized;
+  });
+}
+
+/** @internal the whole-deck reading, for the slide-by-slide read's comparison. */
+export const normalizeSlidesWholeForTests = readSlidesWhole;
+
+export function normalizeSlides(
+  storedContent: Record<string, unknown> | undefined,
+  /** Blocks read without a setting they contradict (see `PresentationReadIssue`). */
+  issues?: PresentationReadIssue[],
+): SlideModel[] {
+  const slides = readSlidesOneByOne(storedContent, issues) ?? readSlidesWhole(storedContent, issues);
   if (slides.length === 0) return [defaultSlide()];
   // The backend seeds a brand-new presentation page as ONE slide holding ONE
   // empty legacy body-text block (no geometry, no placeholder role). That shape

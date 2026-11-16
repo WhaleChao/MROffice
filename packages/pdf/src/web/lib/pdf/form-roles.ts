@@ -14,6 +14,7 @@
  * others stay shown, marked in their role's colour, and locked.
  */
 import { PDFDict, PDFDocument, PDFHexString, PDFName, PDFRef, PDFString } from "pdf-lib";
+import { pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
 export interface PdfFormRole {
   readonly name: string;
@@ -95,7 +96,7 @@ export async function readPdfFormFieldRoles(
   let pending = documents.get(owner);
   if (!pending) {
     pending = readBytes()
-      .then((bytes) => PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false }))
+      .then((bytes) => PDFDocument.load(bytes, { parseSpeed: pdfLibParseSpeed(), ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false }))
       .catch(() => null);
     documents.set(owner, pending);
   }

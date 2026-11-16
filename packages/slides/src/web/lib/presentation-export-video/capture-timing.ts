@@ -23,23 +23,3 @@ export function captureTransitionLeadMs(leadMs: number, frameMs: number): number
   const frames = Math.ceil(leadMs / frameMs - 1e-6);
   return (frames + 1) * frameMs;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-export function clickWaitMs(askedMs: number, clicks: number, groupBuildsMs: readonly number[]): number {
-  if (!(clicks > 0) || !(askedMs > 0)) return 0;
-  let builds = 0;
-  for (const build of groupBuildsMs) builds += Math.max(0, Number.isFinite(build) ? build : 0);
-  return Math.max(0, askedMs - builds) / (clicks + 1);
-}

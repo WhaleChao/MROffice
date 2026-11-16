@@ -11,9 +11,16 @@
  * functions.
  */
 
-import { nativeBlockFollowingTheme, nativeSlideThemeFollow, nativeThemeFollow } from "./presentation-native-theme-follow";
+import {
+  nativeBlockFollowingTheme,
+  nativeSlideThemeFollow,
+  nativeThemeFollow,
+  nativeThemeFontFollow,
+} from "./presentation-native-theme-follow";
 import { designPxToPoints } from "@mrnote/core/web/lib/presentation/text-units.ts";
 import {
+  presentationBlockKeepingThemeBindings,
+  presentationBlockThemeColorBindings,
   presentationBlockUnderTheme,
   presentationThemeGridColors,
   presentationThemeSlotPicks,
@@ -25,6 +32,7 @@ import {
   presentationTextFrameMatchesStyle,
 } from "@mrnote/core/web/lib/presentation-shape-style-adapter.ts";
 import { blocksWithShapeStyleRecipe } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
+import { officeShapeStyleRecipeSlots } from "@mrnote/core/web/lib/office-shape-style-catalog.ts";
 import type {
   PresentationBlock,
   PresentationShapeBlock,
@@ -59,6 +67,7 @@ import { presentationTextUsesPoints } from "@mrnote/core/web/lib/presentation-te
 import { resolvePresentationTextStyle } from "./presentation-text-style-resolve";
 import { SHAPE_LABEL_DEFAULT_FONT_PX } from "./presentation/text-layout-css";
 import { mergeMasterTheme } from "@mrnote/core/web/lib/presentation-master.ts";
+import { presentationTableStyleSchemeColors } from "./presentation/table-style-scheme";
 import {
   normalizeBgGradient,
   normalizeBgPatternFill,
@@ -260,7 +269,8 @@ function nativePaintStatesNoThemeColour(block: PresentationBlock): boolean {
   const source = record.source;
   if (!source || (typeof source.shapeId !== "string" && typeof source.slideId !== "string")) return false;
   const paintFields = new Set(["fill", "fillTo", "fillGradient", "stroke"]);
-  if (record.themeColors && Object.keys(record.themeColors).some((field) => paintFields.has(field))) return false;
+  const bindings = presentationBlockThemeColorBindings(block);
+  if (bindings && Object.keys(bindings).some((field) => paintFields.has(field))) return false;
   const inherited = source.nativeInheritedPaint?.fields;
   return !(Array.isArray(inherited) && inherited.some((field) => paintFields.has(String(field))));
 }
@@ -271,12 +281,34 @@ function blockIsUnpaintedNative(block: PresentationBlock): boolean {
   return typeof record.source?.shapeId === "string" && unpainted(record.fill) && unpainted(record.stroke);
 }
 
+/** Light / dark pairs named either way (`bg1` is `lt1`, `tx1` is `dk1`, ...). */
+const SLOT_ALIASES: Readonly<Record<string, string>> = { bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" };
+
+/** Whether every theme colour a block states for its fill and line is the slot the recipe paints it in. */
+function blockThemeSlotsAgreeWith(
+  block: PresentationBlock,
+  slots: { readonly fill?: string; readonly stroke?: string },
+): boolean {
+  const bindings = presentationBlockThemeColorBindings(block) as Record<string, { slot?: unknown } | undefined> | undefined;
+  if (!bindings) return true;
+  const same = (stated: unknown, painted: string | undefined) =>
+    typeof stated !== "string" || painted === undefined || (SLOT_ALIASES[stated] ?? stated) === painted;
+  return (
+    same(bindings.fill?.slot, slots.fill) &&
+    same(bindings.stroke?.slot, slots.stroke) &&
+    same(bindings.outlineColor?.slot, slots.stroke)
+  );
+}
+
 export function slidesRestyledForTheme<S extends PresentationButtonSlide>(
   slides: readonly S[],
   nextTheme: DeckTheme | undefined,
   previousTheme?: DeckTheme | undefined,
 ): S[] {
   const accents = resolveThemeAccentColors(mergeMasterTheme(nextTheme ?? undefined, undefined));
+  // Dark 1 / Light 1 and the master's colour map: the words and lines of a
+  // style that draws them in Text 1 (white on a dark master).
+  const scheme = presentationTableStyleSchemeColors(mergeMasterTheme(nextTheme ?? undefined, undefined));
   let restyled = false;
   const before = layoutFrameSourceForTheme(previousTheme);
   const after = layoutFrameSourceForTheme(nextTheme);
@@ -319,14 +351,27 @@ export function slidesRestyledForTheme<S extends PresentationButtonSlide>(
     );
     const after = before ? stylesAfter.get(before.id) : undefined;
     if (!before || !after || JSON.stringify(after) === JSON.stringify(before)) return block;
+    // The style the object wears is the one its own theme colours name: a
+    // fill bound to Background 1 is no Accent 3 style because the old scheme's
+    
+    // restyled such text boxes in the new Accent 3 grey).
+    if (!blockThemeSlotsAgreeWith(block, officeShapeStyleRecipeSlots(before))) return block;
     const restyled = blocksWithShapeStyleRecipe([block], [block], after)?.[0];
     if (!restyled) return block;
-    // The style's theme colours stay bound, now to the new theme's.
-    return reconcilePresentationThemeColors(undefined, restyled, presentationThemeSlotPicks(themeColors));
+    // The style's theme colours stay bound, now to the new theme's, and so
+    // does a reference the object stated that the restyled colour still is
+    
+    return presentationBlockKeepingThemeBindings(
+      block,
+      reconcilePresentationThemeColors(undefined, restyled, presentationThemeSlotPicks(themeColors)),
+      themeColors,
+    );
   };
   // A deck opened from a file: what its words inherit, drawn at once (the server's
   // reading of the written file then corrects what this got wrong).
-  const nativeFollow = presentationDeckHasNativePptxSource(slides) ? nativeThemeFollow(previousTheme, nextTheme) : null;
+  const nativeFollow = presentationDeckHasNativePptxSource(slides)
+    ? (nativeThemeFollow(previousTheme, nextTheme) ?? nativeThemeFontFollow(previousTheme, nextTheme))
+    : null;
   const nextSlides = reflowed.map((slide) => {
     let changed = false;
     const slideFollow = nativeFollow ? nativeSlideThemeFollow(nativeFollow, slide) : null;
@@ -358,23 +403,27 @@ export function slidesRestyledForTheme<S extends PresentationButtonSlide>(
       // file resolved under Office's own theme; that one is the built-in
       // style too. So is the recipe's look, applied while the measured looks
       // were away (a guest page).
+      // (The import resolved it in the deck's own Dark 1 / Light 1 and colour
+      // map too: those first, then the accents alone, as before.)
+      const previousMerged = previousTheme === undefined ? null : mergeMasterTheme(previousTheme, undefined);
       if (
         (table as { source?: unknown }).source &&
         ![
-          previousTheme === undefined
+          previousMerged === null
             ? null
-            : resolveThemeAccentColors(mergeMasterTheme(previousTheme, undefined)),
-          OFFICE_TABLE_STYLE_ACCENTS,
+            : ([resolveThemeAccentColors(previousMerged), presentationTableStyleSchemeColors(previousMerged)] as const),
+          previousMerged === null ? null : ([resolveThemeAccentColors(previousMerged), undefined] as const),
+          [OFFICE_TABLE_STYLE_ACCENTS, undefined] as const,
         ].some(
           (before) =>
             before !== null &&
-            (sameTableStyleLook(webTableStyleLookForTheme(table.tableStyleId, before), table.tableStyleLook) ||
-              sameTableStyleLook(fallbackWebTableStyleLookForTheme(table.tableStyleId, before), table.tableStyleLook)),
+            (sameTableStyleLook(webTableStyleLookForTheme(table.tableStyleId, before[0], before[1]), table.tableStyleLook) ||
+              sameTableStyleLook(fallbackWebTableStyleLookForTheme(table.tableStyleId, before[0], before[1]), table.tableStyleLook)),
         )
       ) {
         return block;
       }
-      const look = webTableStyleLookForTheme(table.tableStyleId, accents);
+      const look = webTableStyleLookForTheme(table.tableStyleId, accents, scheme);
       if (!look || sameTableStyleLook(look, table.tableStyleLook)) return block;
       changed = true;
       return { ...table, tableStyleLook: look } as PresentationBlock;
@@ -400,6 +449,7 @@ export function slidesWithServedTableStyleLooks<S extends PresentationButtonSlid
   theme: DeckTheme | undefined,
 ): S[] {
   const accents = resolveThemeAccentColors(mergeMasterTheme(theme ?? undefined, undefined));
+  const scheme = presentationTableStyleSchemeColors(mergeMasterTheme(theme ?? undefined, undefined));
   let restyled = false;
   const nextSlides = slides.map((slide) => {
     let changed = false;
@@ -407,11 +457,12 @@ export function slidesWithServedTableStyleLooks<S extends PresentationButtonSlid
       if (block.type !== "table") return block;
       const table = block as PresentationTableBlock;
       if (!table.tableStyleLook || !isNativeWebTableStyleId(table.tableStyleId)) return block;
-      const carriesFallback = [accents, OFFICE_TABLE_STYLE_ACCENTS].some((before) =>
-        sameTableStyleLook(fallbackWebTableStyleLookForTheme(table.tableStyleId, before), table.tableStyleLook),
+      const carriesFallback = ([[accents, scheme], [accents, undefined], [OFFICE_TABLE_STYLE_ACCENTS, undefined]] as const).some(
+        ([before, beforeScheme]) =>
+          sameTableStyleLook(fallbackWebTableStyleLookForTheme(table.tableStyleId, before, beforeScheme), table.tableStyleLook),
       );
       if (!carriesFallback) return block;
-      const look = webTableStyleLookForTheme(table.tableStyleId, accents);
+      const look = webTableStyleLookForTheme(table.tableStyleId, accents, scheme);
       if (!look || sameTableStyleLook(look, table.tableStyleLook)) return block;
       changed = true;
       return { ...table, tableStyleLook: look } as PresentationBlock;
