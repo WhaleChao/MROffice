@@ -28,6 +28,9 @@ export const UNEQUAL_COLUMN_FLOW_ATTR = "data-page-unequal-column-flow";
  * token, joined by `|`. The page is placed as stacked column regions. */
 export const COLUMN_REGIONS_ATTR = "data-page-column-regions";
 export const UNEQUAL_COLUMN_SHEET_ID_ATTR = "data-page-unequal-column-id";
+/** A part a print copy draws inside a sheet beside its blocks (its header and
+ * footer, notes, line numbers): no column block, so never one of the slots. */
+export const SHEET_PRINT_PART_ATTR = "data-sheet-print-part";
 
 const COLUMN_RULE_IMAGE_VAR = "--page-unequal-column-rule-image";
 const COLUMN_RULE_TOP_VAR = "--page-unequal-column-rule-top";
@@ -1456,12 +1459,16 @@ function projectionRuleState(document: Document): ProjectionRuleState {
 
 /** The fixed rules of child positions `from`..`to`. An unset property makes
  * its declaration invalid at computed-value time: the block then keeps the
- * automatic top, left and width of its absolute position, and no clip. */
+ * automatic top, left and width of its absolute position, and no clip. A print
+ * copy's own parts after the blocks are left alone (zero specificity added):
+ * taken for slots, a page's header lost its margin-box left and stood at the
+ * paper's right edge, and Chromium shrank every page of the PDF to fit it
+ * (R308-D01's even headers, its pages printed at 78 %). */
 function slotRulesText(from: number, to: number): string {
   const rules: string[] = [];
   for (let position = from; position <= to; position += 1) {
     rules.push(
-      `article[${UNEQUAL_COLUMN_SHEET_ID_ATTR}][${UNEQUAL_COLUMN_FLOW_ATTR}="true"] > :nth-child(${position}) { ` +
+      `article[${UNEQUAL_COLUMN_SHEET_ID_ATTR}][${UNEQUAL_COLUMN_FLOW_ATTR}="true"] > :nth-child(${position}):where(:not([${SHEET_PRINT_PART_ATTR}])) { ` +
         `top: var(${slotTopVar(position)}); left: var(${slotLeftVar(position)}); ` +
         `width: var(${slotWidthVar(position)}) !important; clip-path: var(${slotClipVar(position)}); }`,
     );

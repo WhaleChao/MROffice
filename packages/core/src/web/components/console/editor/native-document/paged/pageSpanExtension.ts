@@ -34,7 +34,8 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 import { PAGE_BLOCK_NODE } from "./pageBlockExtension";
 import { HOLLOW_SHEET_ATTR } from "./pageSheetView";
-import { sheetTrailingAutoLeadingCreditPx } from "./pageEdgeLeading";
+import { sheetTrailingAutoLeadingCreditPx, trailingAutoLeadingCreditPx } from "./pageEdgeLeading";
+import { UNEQUAL_COLUMN_FLOW_ATTR, unequalColumnCount } from "./unequalColumnProjection";
 import {
   computePhysicalPageStarts,
   documentEvenAndOddHeaders,
@@ -345,6 +346,23 @@ function intrinsicBlockHeight(dom: HTMLElement): number {
   return Math.max(dom.offsetHeight || 0, paginationLayoutRect(dom).height || 0);
 }
 
+/**
+ * Whether `dom` is a page of newspaper columns the projector has placed
+ * (unequalColumnProjection): there every column's last line may hang its Auto
+ * leading past the foot, as the projector lets it (its `footCreditPx`, Word's
+ * page edge), and the page's extent is read the same way. Read from the last
+ * block in DOM order alone (sheetTrailingAutoLeadingCreditPx gives a column
+ * page none), a left column the projector filled to the foot read 8 px past
+ * the page: every page of R308-D01's two-column body was stamped two pages,
+ * and its PDF came out 19 pages where Word has 11.
+ * `window.__docsColumnFootSpanOff = true` reads them as before (A/B).
+ */
+function projectedColumnFeet(dom: HTMLElement): boolean {
+  if (dom.getAttribute(UNEQUAL_COLUMN_FLOW_ATTR) !== "true") return false;
+  if ((dom.ownerDocument.defaultView as (Window & { __docsColumnFootSpanOff?: boolean }) | null)?.__docsColumnFootSpanOff === true) return false;
+  return (unequalColumnCount(dom) ?? 0) > 1;
+}
+
 /** Count the same body border boxes as the structural rebalancer, which
  * suppresses the final block's after-spacing at a page edge. Article height
  * is not independent evidence: a trailing nested-list margin can enlarge it,
@@ -354,6 +372,7 @@ function intrinsicBlockHeight(dom: HTMLElement): number {
 export function measureSheetBodyExtent(dom: HTMLElement, paddingBottom: number): number {
   const scale = paginationLayoutScale(dom);
   const sheetTop = paginationLayoutRect(dom, scale).top;
+  const columnFeet = projectedColumnFeet(dom);
   let bodyBottom: number | null = null;
   for (const child of Array.from(dom.children)) {
     if (!(child instanceof HTMLElement) || child.matches(".ProseMirror-widget")) continue;
@@ -388,7 +407,7 @@ export function measureSheetBodyExtent(dom: HTMLElement, paddingBottom: number):
     }
     const rect = paginationLayoutRect(child, scale);
     if (!(rect.height > 0)) continue;
-    bodyBottom = Math.max(bodyBottom ?? 0, rect.bottom - sheetTop);
+    bodyBottom = Math.max(bodyBottom ?? 0, rect.bottom - sheetTop - (columnFeet ? trailingAutoLeadingCreditPx(child) : 0));
   }
   // During a zero-layout/mounting frame there is no body evidence yet. Keep
   // the existing measurement fallback until the actual blocks are measurable.

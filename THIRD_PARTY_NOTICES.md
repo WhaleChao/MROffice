@@ -457,11 +457,15 @@ Fonts are under the SIL Open Font License 1.1 (or the license named in the file 
 - apps/playground/public/fonts/office/mrai-metric-aptoslight/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-aptosnarrow/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-aptossemibold/LICENSE-OFL-1.1.txt
+- apps/playground/public/fonts/office/mrai-metric-arial-arabic/LICENSE-OFL-1.1.txt
+- apps/playground/public/fonts/office/mrai-metric-arial-hebrew/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-arialblack/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-calibrilight/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-cambria/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-consolas/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-microsoftsansserif/LICENSE-OFL-1.1.txt
+- apps/playground/public/fonts/office/mrai-metric-segoeui/LICENSE-MIT_AND_OFL-1.1.txt
+- apps/playground/public/fonts/office/mrai-metric-sylfaen-georgian/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-trebuchetms/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/mrai-metric-verdana/LICENSE-Bitstream-Vera.txt
 - apps/playground/public/fonts/office/noto-color-emoji/LICENSE-OFL-1.1.txt

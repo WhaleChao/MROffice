@@ -25,6 +25,7 @@ import { OfficeFormatPreviewProvider } from "@mrnote/core/web/components/office-
 import { pdfFormatPreviewAdapter } from "./pdf/pdfFormatPreview";
 import { reportOfficeExperience } from "@mrnote/core/web/lib/office-experience-report.ts";
 import { effectiveTextBoxKind } from "@mrnote/core/web/lib/pdf/text-box-kind.ts";
+import { pdfDevErrorText } from "../../../lib/pdf/dev-error-text";
 import { renderFormulaBoxAppearance } from "./pdf/viewer/exportRendering";
 import { formatFileSize } from "@mrnote/core/web/lib/errors/upload-failure.ts";
 import { refuseStrayNativeDrag } from "@mrnote/core/web/lib/native-drag-guard.ts";
@@ -195,7 +196,7 @@ import { createPdfPendingRowsLedger, forgetPdfPendingEditsSavedHere, isPdfPendin
 import { markPdfTextLatency, startPdfTextLatency } from "../../../lib/pdf/text-edit-latency";
 import { pdfNativeParagraphFormatWithRules } from "../../../lib/pdf/native-paragraph-format-rules";
 import { createPdfTextBackgroundSaveQueue } from "../../../lib/pdf/text-background-save";
-import { deliverPdfNativeTextQueuedDraft, type PdfNativeTextQueuedDraft } from "../../../lib/pdf/native-text-queued-draft";
+import { deliverPdfNativeTextQueuedDraft, pdfNativeTextQueuedDraftHoldsWords, type PdfNativeTextQueuedDraft } from "../../../lib/pdf/native-text-queued-draft";
 import { pdfNativeTextTypingDrafts, type PdfNativeTextTypingDraft, type PdfNativeTextTypingDrafts } from "../../../lib/pdf/native-text-typing-drafts";
 import { pdfNativeTextEditBoxAtPoint } from "./pdf/viewer/nativeTextDom";
 import { PDF_NATIVE_TEXT_ABANDONED_EVENT, PDF_NATIVE_TEXT_STAGED_TEXT_ATTR, pdfNativeTextCaretClick, type PdfNativeTextAbandonedKeys, type PdfNativeTextContinuationCapture } from "../../../lib/pdf/native-text-continuation";
@@ -3603,6 +3604,14 @@ export default function PdfPageWindow({
   /** Words typed in the open line and not written yet, proved or not
    * (PdfNativeListTextEditDialog onUnsavedTypingChange): the save status. */
   const [nativeListTextUnsavedTyping, setNativeListTextUnsavedTyping] = useState(false);
+  /** Words carried for a line that has not taken them yet
+   * (carryNativeTextDraftRef): typed by the reader and, until then, in no
+   * file, no saved row and no open line. 保存中 while the window is writing
+   * them there itself, 未保存 once they wait for the reader: the shown status
+   * of the page they were typed on. */
+  const nativeTextCarriedWordsRef = useRef(new Map<object, Readonly<{ pageId: string; state: PdfReaderHeldState }>>());
+  const [nativeTextCarriedWords, setNativeTextCarriedWords] =
+    useState<readonly Readonly<{ pageId: string; state: PdfReaderHeldState }>[]>([]);
   const [nativeListTextDraftState, setNativeListTextDraftState] =
     useState<Pick<PdfNativeListTextDraftState, "dirty" | "canCommit" | "commitBlockedReason"> | null>(null);
   const nativeListTextDraftStateRef =
@@ -7181,8 +7190,18 @@ export default function PdfPageWindow({
   const textBoxChangesHeld: PdfReaderHeldState | null = !textBoxChangesAwaitWrite ? null
     : officeAutosaveOn && !pendingPdfPatchbackRepairRef.current &&
       (!page || readPdfPatchbackReceiptSnapshot(page)?.status !== "failed") ? "saving" : "unsaved";
+  // And so do words carried for a line that has not taken them (a line the
+  // PDF's writer refused, its words on their way back into it; keys typed
+  // ahead; a draft put back after a reload): in no file, no saved row and
+  // no open line meanwhile. The window read 已保存 over the words of a
+  // paragraph the writer had refused, for as long as it stood open (random
+  
+  const carriedWordsHere = nativeTextCarriedWords.filter((held) => held.pageId === pageId);
+  const carriedWordsHeld: PdfReaderHeldState | null = !carriedWordsHere.length ? null
+    : officeAutosaveOn && carriedWordsHere.every((held) => held.state === "saving") ? "saving" : "unsaved";
   const windowShownSaveStatus: PageSaveStatus = pdfWindowShownSaveStatus(windowSaveStatus, {
-    reader: readerHeldWork === "unsaved" || textBoxChangesHeld === "unsaved" ? "unsaved" : readerHeldWork ?? textBoxChangesHeld,
+    reader: readerHeldWork === "unsaved" || textBoxChangesHeld === "unsaved" || carriedWordsHeld === "unsaved" ? "unsaved"
+      : readerHeldWork ?? textBoxChangesHeld ?? carriedWordsHeld,
     quarantinedRows: quarantinedRowCount,
   });
   const windowSaveStatusLabel = windowSyncedToServer
@@ -20216,6 +20235,18 @@ export default function PdfPageWindow({
   carryNativeTextDraftRef.current = (carry, input, options) => {
     const finish = carry.finish;
     const stops = nativeTextQueuedDraftStopsRef.current;
+    // The words it holds are nowhere else until a line takes them: said by
+    // the window's status from now (nativeTextCarriedWords) -- being written
+    // there by the window itself, or, late or a draft, left to the reader.
+    const words = pdfNativeTextQueuedDraftHoldsWords(carry) ? { pageId: livePageIdRef.current } : null;
+    const holdWords = (state: PdfReaderHeldState | null) => {
+      if (!words) return;
+      const held = nativeTextCarriedWordsRef.current;
+      if (state) held.set(words, { pageId: words.pageId, state });
+      else if (!held.delete(words)) return;
+      if (mountedRef.current) setNativeTextCarriedWords([...held.values()]);
+    };
+    holdWords(finish ? "saving" : "unsaved");
     let carried = () => {};
     if (finish) {
       const written = new Promise<void>(resolve => { carried = resolve; });
@@ -20223,6 +20254,11 @@ export default function PdfPageWindow({
     }
     const stop: () => void = deliverPdfNativeTextQueuedDraft(carry, (applied, late) => {
       stops.delete(stop);
+      // In a line now: its editor answers for the words. Said here, in the
+      // same render -- the editor says so itself a render later, and the
+      // window would read 已保存 in between.
+      if (applied && words) setNativeListTextUnsavedTyping(true);
+      holdWords(null);
       try { options?.onDone?.(applied); } catch { /* the caller's own bookkeeping */ }
       markPdfTextLatency("open.queued-draft-carried", { applied, finish, late });
       // A late carry was reopened by the reader: it stays a draft in front
@@ -20271,6 +20307,7 @@ export default function PdfPageWindow({
       // The saved revision's line did not reopen on its own: the typing
       // is kept (never dropped) and the reader is told where it is.
       carried();
+      holdWords("unsaved");
       markPdfTextLatency("open.queued-draft-late", { finish });
       if (options?.onLate) options.onLate();
       else toast({ title: t("pdf.nativeTextEdit.draftRetained") });
@@ -20283,6 +20320,7 @@ export default function PdfPageWindow({
         if (!stops.has(stop)) return;
         stop();
         stops.delete(stop);
+        holdWords(null);
         carried();
       },
     });
@@ -20965,7 +21003,7 @@ export default function PdfPageWindow({
       }
       return true;
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] move not staged", error);
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] move not staged", pdfDevErrorText(error));
       // Not one the working copy takes: the caller writes it directly.
       const staged = document?.getSnapshot().pendingOperationIds.includes(moveId) ?? false;
       if (staged && nativeWorkingDisplayHeldRef.current) {
@@ -21062,7 +21100,7 @@ export default function PdfPageWindow({
         if (staged) announceNativeEditNotices();
         else { notMoved(); toast({ description: t("pdf.nativeTextEdit.formatNotApplied") }); }
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] detached move not staged", error);
+        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] detached move not staged", pdfDevErrorText(error));
         notMoved();
         toast({ variant: "destructive", description: t("pages.saveFailed") });
       } finally {
@@ -22008,7 +22046,7 @@ export default function PdfPageWindow({
           window.setTimeout(() => { void Promise.resolve().then(() => staged.flush()).catch(() => undefined); }, 0);
         }
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] detached finish not staged", error);
+        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] detached finish not staged", pdfDevErrorText(error));
         nativeWorkingHistoryRef.current.delete(id);
         nativeLineModel.dropped(lineKey);
         if (nativeWorkingStagedLineRef.current === lineKey) nativeWorkingStagedLineRef.current = null;
@@ -22258,7 +22296,7 @@ export default function PdfPageWindow({
       markPdfTextLatency("held-command.staged", { label: recipe.label, keepEditor: Boolean(input.keepEditor) });
       return true;
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] command not staged", error);
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] command not staged", pdfDevErrorText(error));
       const staged = document?.getSnapshot().pendingOperationIds.includes(id) ?? false;
       nativeWorkingCommandRefusedRef.current = !staged;
       if (staged && nativeWorkingDisplayHeldRef.current) {
@@ -36064,7 +36102,7 @@ export default function PdfPageWindow({
           }, () => undefined);
         }
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] held queue not restored", error);
+        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] held queue not restored", pdfDevErrorText(error));
         // The planner was out of reach as the copy opened (a loaded machine):
         // the queue is still kept, and is brought back again in a moment.
         // Asked again for as long as the window is open (every two seconds,
@@ -40020,7 +40058,7 @@ export default function PdfPageWindow({
       markPdfTextLatency("held-command.staged", { label: "text-row-format", rows: rows.length });
       return true;
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] row format not staged", error);
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] row format not staged", pdfDevErrorText(error));
       // The box goes whole or not at all.
       for (; staged > 0; staged -= 1) document?.undoHeld();
       // The character the face lacks (applyNativeRowFormat sets a Latin face
@@ -40677,7 +40715,7 @@ export default function PdfPageWindow({
       markPdfTextLatency("held-command.staged", { label: "text-box-format", parts: parts.length, rules: ruleStretches.length });
       return true;
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] box format not staged", error);
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] box format not staged", pdfDevErrorText(error));
       // A planner that could not run (the browser's Worker failed twice) is
       // a moment: the finish is asked again (false). A plan refused is the
       // format this box cannot take (null): said as such, not as a retry
@@ -40829,7 +40867,7 @@ export default function PdfPageWindow({
       }
       await handNativeWorkingStagedPage(document, selection.pageNumber, { ...target.hand, oneLine: true });
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] typed words not staged", error);
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] typed words not staged", pdfDevErrorText(error));
       if (!document.getSnapshot().pendingOperationIds.includes(id)) {
         nativeWorkingHistoryRef.current.delete(id);
         return keepDraft();
@@ -41011,7 +41049,7 @@ export default function PdfPageWindow({
         else if (applied === false) toast({ variant: "destructive", description: t("pages.saveFailed") });
         else announceNativeEditNotices();
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] detached row format not staged", error);
+        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] detached row format not staged", pdfDevErrorText(error));
         toast({ description: t("pdf.nativeTextEdit.formatNotApplied") });
       } finally {
         target.previews?.release();
@@ -41078,7 +41116,7 @@ export default function PdfPageWindow({
           if (applied !== true) toast({ description: t("pdf.nativeTextEdit.formatNotApplied") });
         } finally { binding.bytes.fill(0); }
       } catch (error) {
-        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] paragraph settings not staged", error);
+        if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] paragraph settings not staged", pdfDevErrorText(error));
         toast({ description: t("pdf.nativeTextEdit.formatNotApplied") });
       } finally {
         if (claimed) {
@@ -41923,7 +41961,7 @@ export default function PdfPageWindow({
       markPdfTextLatency("held-delete.staged", { runs: stagedIds.length });
       return true;
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] delete not staged", error);
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] delete not staged", pdfDevErrorText(error));
       if (stagedIds.length > 1 || (stagedIds.length && remaining.length)) {
         rollBack();
         return null;
@@ -45581,7 +45619,7 @@ export default function PdfPageWindow({
     try {
       moved = direction === "undo" ? document.undoHeld() : document.redoHeld();
     } catch (error) {
-      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] held step refused", error);
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] held step refused", pdfDevErrorText(error));
       if (committing) nativeWorkingDisplayHeldRef.current = false;
       return false;
     }
@@ -48802,7 +48840,7 @@ export default function PdfPageWindow({
       return authority.source;
     } catch (error) {
       if (process.env.NODE_ENV !== "production") {
-        console.warn("[pdf-history] source authority unavailable", error);
+        console.warn("[pdf-history] source authority unavailable", pdfDevErrorText(error));
       }
       return null;
     } finally {
@@ -52211,7 +52249,7 @@ export default function PdfPageWindow({
       } catch (error) {
         handoffs.delete(id);
         if (process.env.NODE_ENV !== "production") {
-          console.warn("[pdf-content-append] created box handoff failed", error);
+          console.warn("[pdf-content-append] created box handoff failed", pdfDevErrorText(error));
         }
         field.remove();
         document.removeEventListener("pointerdown", onPressElsewhere, true);

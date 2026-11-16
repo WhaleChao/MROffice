@@ -214,6 +214,7 @@ import {
 } from "./charEffectsExtension";
 import { TocEntryTitleMark, TocEntryPageMark } from "./tocEntryExtension";
 import { TocNavigation } from "./tocNavigationExtension";
+import { CitationLinkNavigation } from "./citationLinkNavigation";
 import { ClipboardTextProjection } from "./clipboardTextProjection";
 import { BandTabLayout } from "./paged/bandTabLayout";
 import { DocumentUnderline } from "./underlineExtension";
@@ -3498,6 +3499,9 @@ export function createNativeDocumentPluginRegistry({
         TocEntryPageMark,
         // Click a TOC entry → scroll to its heading (id or caption-text match).
         TocNavigation,
+        // An AI answer's citation link (pasted or applied) opens the cited
+        // place in its window and flashes it, as the answer's chip does.
+        CitationLinkNavigation,
         // Copy as plain text what the reader sees: no hidden deleted text,
         
         ClipboardTextProjection,

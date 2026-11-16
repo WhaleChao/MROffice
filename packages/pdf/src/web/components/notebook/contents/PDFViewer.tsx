@@ -4,6 +4,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { pdfDevErrorText } from "../../../lib/pdf/dev-error-text";
 import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import type { PdfArmedTextKind } from "@mrnote/core/web/lib/pdf/text-box-create.ts";
 import { resolveManagedTextBoxPreviewAnnotationId } from "../../../lib/pdf/native-text-box-roundtrip";
@@ -13385,7 +13386,7 @@ export default function PDFViewer({
       } catch (err) {
         advanceDeskewCanvasBitmapEpoch();
         if (!isPdfRenderCancellation(err)) {
-          console.warn("[pdf] canvas render error", err);
+          console.warn("[pdf] canvas render error", pdfDevErrorText(err));
         }
         discardRenderCanvas();
         if (renderLifecycleV2) {
@@ -13760,7 +13761,7 @@ export default function PDFViewer({
           }
         } catch (err) {
           if (!isPdfRenderCancellation(err)) {
-            console.warn("[pdf] text layer error (selection disabled)", err);
+            console.warn("[pdf] text layer error (selection disabled)", pdfDevErrorText(err));
           }
         }
         if (!renderIsCurrent()) return;
@@ -14201,7 +14202,7 @@ export default function PDFViewer({
         });
       } catch (err) {
         if (!isPdfRenderCancellation(err)) {
-          console.warn("[pdf] annotation load error", err);
+          console.warn("[pdf] annotation load error", pdfDevErrorText(err));
         }
       }
     },
@@ -14908,7 +14909,7 @@ export default function PDFViewer({
       } catch (err) {
         const message = err instanceof Error ? err.message : "";
         if (!/cancel/i.test(message)) {
-          console.warn("[pdf] thumbnail render error", err);
+          console.warn("[pdf] thumbnail render error", pdfDevErrorText(err));
         }
       } finally {
         thumbRenderTasksRef.current.delete(pageNumber);
@@ -17560,7 +17561,7 @@ export default function PDFViewer({
             capturePdfOcrDocumentAuthority(pageNumber),
           )
         ) {
-          console.warn("[pdf] page ocr preflight error", err);
+          console.warn("[pdf] page ocr preflight error", pdfDevErrorText(err));
           setOcrFailedPages((prev) => new Set(prev).add(pageNumber));
         }
       } finally {
@@ -17904,7 +17905,7 @@ export default function PDFViewer({
         if (stopped) return;
 
       } catch (error) {
-        console.warn("[pdf] page OCR queue error", error);
+        console.warn("[pdf] page OCR queue error", pdfDevErrorText(error));
         if (operationGeneration !== ocrPreflightRequestGenerationRef.current) {
           return;
         }
@@ -18070,7 +18071,7 @@ export default function PDFViewer({
             capturePdfOcrDocumentAuthority(authority.pageNumber),
           )
         ) {
-          console.warn("[pdf] OCR review error", error);
+          console.warn("[pdf] OCR review error", pdfDevErrorText(error));
           setOcrReviewError(
             t("pdf.viewer.notice.ocrReviewSaveFailed"),
           );

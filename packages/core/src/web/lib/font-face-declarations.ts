@@ -108,6 +108,84 @@ export function noteFontFaceSource(
   }
   registry.notedCount = (registry.notedCount ?? 0) + 1;
   unkeyed.push(entry);
+  queueFacesNotice();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const facesListeners = new Set<() => void>();
+let facesNoticeQueued = false;
+
+function queueFacesNotice(): void {
+  if (facesNoticeQueued || facesListeners.size === 0) return;
+  facesNoticeQueued = true;
+  setTimeout(() => {
+    facesNoticeQueued = false;
+    for (const listener of [...facesListeners]) {
+      try {
+        listener();
+      } catch {
+        /* one listener's failure leaves the others told */
+      }
+    }
+  }, 0);
+}
+
+/** Hear when faces are declared or a family's registration settles. */
+export function onFontFacesNoted(listener: () => void): () => void {
+  facesListeners.add(listener);
+  return () => {
+    facesListeners.delete(listener);
+  };
+}
+
+const familyKey = (family: string): string => family.trim().replace(/^["']|["']$/g, "").trim().toLowerCase();
+/** Families (normalized) whose faces are being registered, and how many registrations each. */
+const familiesRegistering = new Map<string, number>();
+let familyRegistrationsSettled = 0;
+
+/**
+ * A family's faces are being registered (the font registry asked, its faces
+ * not all declared yet): until the returned call, a reader that finds no face
+ * declared for it waits rather than passing on to the stack's next family.
+ * The call is idempotent.
+ */
+export function noteFamilyRegistration(family: string): () => void {
+  const key = familyKey(family);
+  if (!key) return () => {};
+  familiesRegistering.set(key, (familiesRegistering.get(key) ?? 0) + 1);
+  let settled = false;
+  return () => {
+    if (settled) return;
+    settled = true;
+    const left = (familiesRegistering.get(key) ?? 1) - 1;
+    if (left > 0) familiesRegistering.set(key, left);
+    else familiesRegistering.delete(key);
+    familyRegistrationsSettled += 1;
+    queueFacesNotice();
+  };
+}
+
+/** Whether `family`'s faces are still being registered (`noteFamilyRegistration`). */
+export function familyRegistrationPending(family: string): boolean {
+  return familiesRegistering.size > 0 && familiesRegistering.has(familyKey(family));
+}
+
+/** Moves each time a family's registration settles: a cache of answers that
+ * waited on one keys on it. */
+export function familyRegistrationGeneration(): number {
+  return familyRegistrationsSettled;
 }
 
 /** The faces noted as added to `doc`, in the order noted (each builder

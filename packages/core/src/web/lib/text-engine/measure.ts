@@ -25,6 +25,7 @@ import { pairKerning } from "./kerning";
 import { officePairKerning } from "./office-kerning";
 import { apiFaceOrder, onApiFaceOrderKnown } from "./face-order";
 import { faceVerification, faceVerificationDetail, faceVerificationGeneration, installedTwinVerification, localOnlyFaceState, onFaceVerified, systemFamilyState } from "./verify";
+import { familyRegistrationGeneration, familyRegistrationPending, onFontFacesNoted } from "../font-face-declarations";
 
 export interface EngineFont {
   /** CSS font-family list. */
@@ -91,7 +92,7 @@ const textCache = new Map<string, Measurement>();
 const TEXT_CACHE_LIMIT = 50_000;
 
 function currentEpoch(): string {
-  return `${faceIndexSignature()}|${faceMetricsGeneration()}|${faceVerificationGeneration()}|${apiFaceOrder()}`;
+  return `${faceIndexSignature()}|${faceMetricsGeneration()}|${faceVerificationGeneration()}|${apiFaceOrder()}|${familyRegistrationGeneration()}`;
 }
 
 /** The face a font draws a code point in, as `measureLineBoxHeight` resolved it, until the epoch moves. */
@@ -125,12 +126,14 @@ export function textEngineAnswerEpoch(): string {
 }
 
 /** Hear when faces load or are verified (an answer may have moved from
- * pending). */
+ * pending), and when faces are declared or a family's registration settles
+ * (an answer that passed over an undeclared family may now land in it). */
 export function onTextEngineChange(listener: () => void): () => void {
   const a = onFaceMetricsLoaded(listener);
   const b = onFaceVerified(listener);
   const c = onApiFaceOrderKnown(listener);
-  return () => { a(); b(); c(); };
+  const d = onFontFacesNoted(listener);
+  return () => { a(); b(); c(); d(); };
 }
 
 /** The face that draws `codePoint` in a family list, per CSS font fallback. */
@@ -141,6 +144,11 @@ export function resolveFace(
   for (const family of families) {
     if (GENERIC_FAMILIES.has(family)) return `generic family ${family}`;
     const faces = declaredFaces(family);
+    // A family whose faces the page is still registering (the font registry
+    // asked, its slices not all declared): what draws it is not known yet.
+    // Passed over, the line was measured in the stack's next family and drawn
+    
+    if (!faces.length && familyRegistrationPending(family)) return "pending";
     // An undeclared name is a system font, or nothing: the engine cannot
     // know what an installed one draws. Docs (`followLocalOnly`) asks the
     // browser whether the name draws anything; one that does not is passed

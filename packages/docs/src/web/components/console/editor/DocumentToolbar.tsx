@@ -2617,6 +2617,7 @@ import {
 import { pictureLink, pictureLinkAttrs } from "@mrnote/core/web/components/console/editor/native-document/pictureLink.ts";
 import { patchOfficeTextPaint, type OfficeTextPaint } from "@mrnote/core/web/lib/office-text-paint.ts";
 import type { RunStyle } from "@mrnote/core/web/lib/presentation-runs.ts";
+import { openCitationHref } from "@mrnote/core/web/lib/answer-citation-links.ts";
 
 // Corrections / Color / Transparency presets preview on the same landscape
 // the Picture Styles thumbnails use, with the preset's own filter applied.
@@ -4116,6 +4117,8 @@ function openDocumentLinkAtSelection(editor: Editor): void {
     return;
   }
   if (!/^(https?:|mailto:|tel:)/i.test(href)) return;
+  // An AI answer's citation opens its place in the app (lib/answer-citation-links).
+  if (openCitationHref(href)) return;
   window.open(href, "_blank", "noopener,noreferrer");
 }
 

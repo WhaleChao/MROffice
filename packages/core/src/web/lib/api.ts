@@ -86,10 +86,20 @@ export function answerApiRequestLocally(path: string, method: string, body?: unk
 /** A request the editors make on their own (a gallery's previews fetched in
  * the background, a soft availability probe), not for something the person
  * asked for: refused without telling them. */
-const BACKGROUND_REQUEST = /[?&]busy=soft\b|\/previews(\?|$)|\/capabilit(y|ies)(\?|\/|$)|-availability(\?|$)/;
+const BACKGROUND_REQUEST = /[?&]busy=soft\b|\/previews(\?|$)|\/capabilit(y|ies)(\?|\/|$)|-availability(\?|$)|\/office-data\//;
+
+/** Whether the person has just acted (a click or a key the browser counts as
+ * activation). A request an editor makes on its own as it opens -- reading its
+ * font registry, say -- has none: telling the person then put "This is in the
+ * MR Office desktop app" over every new document before they had done
+ * anything. A browser that cannot tell keeps the old behaviour. */
+function personJustActed(): boolean {
+  const activation = typeof navigator !== "undefined" ? (navigator as Navigator & { userActivation?: { isActive: boolean } }).userActivation : undefined;
+  return activation ? activation.isActive : true;
+}
 
 function unavailable(path: string): ApiRequestError {
-  if (!BACKGROUND_REQUEST.test(path)) noteNeedsService();
+  if (!BACKGROUND_REQUEST.test(path) && personJustActed()) noteNeedsService();
   if (typeof localStorage !== "undefined") {
     try {
       if (localStorage.getItem("mrnote-editors:trace-inert") === "1") console.debug("[api] not available:", path);

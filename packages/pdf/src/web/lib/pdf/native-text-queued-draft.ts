@@ -18,7 +18,10 @@
  * One change is followed: a line whose font was read right meanwhile
  * (native-font-reading-repair.ts) holds letters where the draft's original
  * had the blanks its font named them, and the draft's own change is put
- * onto the line as it reads now (rereadPdfNativeTextQueuedDraft).
+ * onto the line as it reads now (rereadPdfNativeTextQueuedDraft). And a
+ * paragraph's box is its line, though it holds the rows a line break apart
+ * where the line reads them a blank apart or not apart at all: the draft's
+ * change is put onto the rows (rowedPdfNativeTextQueuedDraft).
  *
  * A carry whose automatic reopen does not come (the saved revision's line
  * was not found, Edit mode was held) is never dropped: the reader is told
@@ -58,6 +61,14 @@ export type PdfNativeTextQueuedDraft = Readonly<{
   typedAhead?: Readonly<{ text: string; caretMove: "start" | "end" | null; line: (value: string) => boolean }>;
 }>;
 
+/** Whether the carry holds words of the reader's: a draft that is not the
+ * line as it read, or keys typed ahead. Until its line takes it they are in
+ * no file, no saved row and no open line, and the window says so (a line
+ * given back as it was, to be opened again, holds none). */
+export function pdfNativeTextQueuedDraftHoldsWords(carry: PdfNativeTextQueuedDraft): boolean {
+  return carry.typedAhead ? carry.typedAhead.text.length > 0 : carry.value !== carry.originalText;
+}
+
 /** How long a late carry stays waiting for the reader to reopen its line. */
 export const QUEUED_DRAFT_KEEP_MS = 30 * 60_000;
 
@@ -91,6 +102,50 @@ export function rereadPdfNativeTextQueuedDraft(current: string, carry: PdfNative
   }
   if (read !== current.length || named === 0) return null;
   at.push(current.length);
+  return carriedOnto(current, carry, at);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function rowedPdfNativeTextQueuedDraft(current: string, carry: PdfNativeTextQueuedDraft): PdfNativeTextQueuedDraft | null {
+  const original = carry.originalText;
+  if (current === original || !current.includes("\n")) return null;
+  // Where each unit of the original stands in the rows (a blank a break
+  // stands for, at the break).
+  const at: number[] = [];
+  let read = 0, rows = 0;
+  for (let index = 0; index < original.length;) {
+    if (read < current.length && original[index] === current[read]) { at.push(read); index += 1; read += 1; continue; }
+    if (current[read] !== "\n") return null;
+    // The break stands for the blanks the line holds here, but for the ones
+    // the next row begins with.
+    let blanks = 0, kept = 0;
+    while (original[index + blanks] === " ") blanks += 1;
+    while (current[read + 1 + kept] === " ") kept += 1;
+    if (kept > blanks) return null;
+    for (let owned = blanks - kept; owned > 0; owned -= 1) { at.push(read); index += 1; }
+    read += 1;
+    rows += 1;
+  }
+  if (read !== current.length || rows === 0) return null;
+  at.push(current.length);
+  return carriedOnto(current, carry, at);
+}
+
+/** The draft's change put onto `current`, where `at[i]` is the place in it
+ * of the original's unit `i` (and `at[original.length]` its end). */
+function carriedOnto(current: string, carry: PdfNativeTextQueuedDraft, at: readonly number[]): PdfNativeTextQueuedDraft {
+  const original = carry.originalText;
   // The stretch the draft changed: it ends at the caret where the text
   // after the caret is the original's end (typed or deleted in one place),
   // and starts where the draft stops reading as the original.
@@ -105,6 +160,10 @@ export function rereadPdfNativeTextQueuedDraft(current: string, carry: PdfNative
   let before = 0;
   const most = Math.min(value.length, original.length) - after;
   while (before < most && value[before] === original[before]) before += 1;
+  // An end of the stretch among the blanks one break stands for: the whole
+  // break is the draft's, its blanks written out as the draft has them.
+  while (before > 0 && at[before] === at[before - 1]) before -= 1;
+  while (after > 0 && at[original.length - after] === at[original.length - after - 1]) after -= 1;
   const head = current.slice(0, at[before]);
   const tail = current.slice(at[original.length - after]);
   const next = head + value.slice(before, value.length - after) + tail;
@@ -121,7 +180,8 @@ export function rereadPdfNativeTextQueuedDraft(current: string, carry: PdfNative
 /** Puts the carried draft into `input` through the element's own value setter
  * and an input event, so the editor's state follows as if it were typed.
  * Returns false (and changes nothing) when the box is another text (a line
- * whose font was read right meanwhile takes the draft read the same way). */
+ * whose font was read right meanwhile takes the draft read the same way; a
+ * paragraph's box, its rows a line break apart, takes it on its rows). */
 export function applyPdfNativeTextQueuedDraft(input: HTMLTextAreaElement, carry: PdfNativeTextQueuedDraft): boolean {
   if (carry.typedAhead) {
     if (!carry.typedAhead.line(input.value)) return false;
@@ -129,7 +189,7 @@ export function applyPdfNativeTextQueuedDraft(input: HTMLTextAreaElement, carry:
     return true;
   }
   if (input.value !== carry.originalText) {
-    const reread = rereadPdfNativeTextQueuedDraft(input.value, carry);
+    const reread = rereadPdfNativeTextQueuedDraft(input.value, carry) ?? rowedPdfNativeTextQueuedDraft(input.value, carry);
     return reread !== null && applyPdfNativeTextQueuedDraft(input, reread);
   }
   if (carry.value !== carry.originalText) {

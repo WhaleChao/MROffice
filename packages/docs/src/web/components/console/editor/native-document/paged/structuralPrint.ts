@@ -14,6 +14,7 @@
 
 import { flushDeferredInkPaints } from "@mrnote/core/web/components/console/editor/native-document/deferredInkPaint.ts";
 import { PAPER_UNDERLAY_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/paperUnderlay.ts";
+import { SHEET_PRINT_PART_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/unequalColumnProjection.ts";
 import { flushInkLightLayers, INK_LIGHT_HOST_ATTR, printInkLightLayer } from "@mrnote/core/web/components/console/editor/native-document/paged/inkLightLayer.ts";
 import type { RichBandsConfig, SectionBandEntry } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import {
@@ -90,6 +91,13 @@ function measuredLineNumberError(detail?: unknown): PrintReadinessError {
     "The measured line-number projection is not safe to print.",
     detail,
   );
+}
+
+/** `window.__docsPrintColumnsHostOff = true`: the copy leaves the
+ * content-columns host out, as before (A/B of one build). */
+function printColumnsHostOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsPrintColumnsHostOff?: boolean }).__docsPrintColumnsHostOff === true;
 }
 
 function strictCoordinate(value: string | null): number | null {
@@ -193,6 +201,7 @@ function appendMeasuredLineNumbers(
   const overlay = doc.createElement("div");
   overlay.className = LINE_NUMBER_OVERLAY_CLASS;
   overlay.setAttribute("data-line-number-print-copy", "true");
+  overlay.setAttribute(SHEET_PRINT_PART_ATTR, "");
   overlay.setAttribute("contenteditable", "false");
   overlay.setAttribute("aria-hidden", "true");
   overlay.setAttribute("inert", "");
@@ -1015,9 +1024,20 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
   // the copy printed a two-column section as one column with its projected
   // blocks scattered over the page (AI70H H128 E04: a table drawn over the
   // footer, its words gone from the PDF).
+  // The surface the editors hand over is a childless copy of theirs
+  // (useDocumentStructuralPrintOptions: cloneNode(false)), which contains no
+  // host: asked whether it contained one, the copy never had it, and every
+  // print and server PDF of a newspaper-column section came out one narrow
+  // column, its second column's words lost (R308-D01, R459-D17). The host is
+  // taken unless it is the surface or stands outside it.
   const columnsHost = options.root.closest<HTMLElement>(".note-editor-content-columns");
   let contentParent: HTMLElement = surfaceClone;
-  if (columnsHost && columnsHost !== options.surface && options.surface.contains(columnsHost)) {
+  if (
+    columnsHost &&
+    columnsHost !== options.surface &&
+    !columnsHost.contains(options.surface) &&
+    !printColumnsHostOff()
+  ) {
     const hostClone = doc.createElement("div");
     hostClone.className = columnsHost.className;
     const hostStyle = columnsHost.getAttribute("style");
@@ -1102,6 +1122,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       const underlay = doc.createElement("div");
       underlay.setAttribute("aria-hidden", "true");
       underlay.setAttribute("data-print-sheet-underlay", "");
+      underlay.setAttribute(SHEET_PRINT_PART_ATTR, "");
       underlay.style.cssText = `position:absolute;inset:0;z-index:${PRINT_BAND_Z_INDEX - 1};pointer-events:none;overflow:hidden`;
       underlay.appendChild(doc.importNode(options.firstSheetUnderlay, true));
       clone.insertBefore(underlay, clone.firstChild);
@@ -1228,6 +1249,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       if (!rich && !text) return;
       const band = doc.createElement("div");
       band.className = `sheet-band-print ${className}`;
+      band.setAttribute(SHEET_PRINT_PART_ATTR, "");
       // Word draws the header and footer stories under the body, its pictures
       // behind the text included: a shape in the header stood over the scans
       // behind R286-D01's pages, white over all but their last lines.
@@ -1267,6 +1289,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       if (zone) {
         const wrapper = doc.createElement("div");
         wrapper.className = "sheet-footnote-print";
+        wrapper.setAttribute(SHEET_PRINT_PART_ATTR, "");
         wrapper.appendChild(doc.importNode(zone, true));
         clone.appendChild(wrapper);
       }

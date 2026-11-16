@@ -19,7 +19,7 @@
 import generated from "./substitutes.generated.json";
 import cjkLatinFaces from "./cjk-latin-faces.json";
 import powerPointTable from "./powerpoint-substitutes.json";
-import { notedFontFaces, noteFontFaceSource, type DeclaredFontFace } from "../font-face-declarations";
+import { notedFontFaces, noteFamilyRegistration, noteFontFaceSource, type DeclaredFontFace } from "../font-face-declarations";
 import { loadOfficeDataParts, officeDataObtainable, officeDataPartKnown } from "../office-data/store";
 import { parseUnicodeRange } from "../text-engine/face-index";
 import { officeFamilyHasNoBold } from "./faux-bold";
@@ -356,6 +356,61 @@ export const THAI_SANS_FALLBACK_FAMILY = "Browallia New";
 
 const pendingFaces: (() => void)[] = [];
 let drainingFaces = false;
+
+
+
+
+
+
+
+
+
+
+
+const registrationsInFlight = new Map<Promise<unknown>, string>();
+
+function trackRegistration<T>(work: Promise<T>, what: string): Promise<T> {
+  registrationsInFlight.set(work, what);
+  const done = () => {
+    registrationsInFlight.delete(work);
+  };
+  work.then(done, done);
+  return work;
+}
+
+/** What keeps `officeFontFacesPending` true, for a print's log: the registrations
+ * in flight by what they ask for, and the faces still queued. */
+export function officeFontRegistrationsPending(): string[] {
+  const out = [...new Set(registrationsInFlight.values())].slice(0, 8);
+  if (pendingFaces.length > 0 || madeFaces.length > 0 || drainingFaces) out.push(`faces queued ${pendingFaces.length + madeFaces.length}`);
+  return out;
+}
+
+/** Whether a face registration is still under way (see `registrationsInFlight`). */
+export function officeFontFacesPending(): boolean {
+  return registrationsInFlight.size > 0 || pendingFaces.length > 0 || madeFaces.length > 0 || drainingFaces;
+}
+
+/**
+ * Resolves once no face registration is under way (true), or at `timeoutMs`
+ * with one still going (false). A registration that starts while it waits is
+ * waited for too.
+ */
+export async function officeFontFacesSettled(timeoutMs: number): Promise<boolean> {
+  const end = Date.now() + Math.max(0, timeoutMs);
+  // A print's wait: faces queued as registrations answer are declared at once.
+  flushOfficeFontFaces();
+  while (officeFontFacesPending()) {
+    flushOfficeFontFaces();
+    const left = end - Date.now();
+    if (left <= 0) return false;
+    await Promise.race([
+      Promise.allSettled([...registrationsInFlight.keys()]),
+      new Promise<void>((resolve) => setTimeout(resolve, Math.min(25, left))),
+    ]);
+  }
+  return true;
+}
 /** When the current task began declaring faces (-1: it has not). */
 let sliceStart = -1;
 const FACE_SLICE_MS = 6;
@@ -451,6 +506,18 @@ export function loadOfficeFamilySpace(
   }
 }
 
+/** Called once every face queued so far is in the document (`afterFacesDeclared`). */
+const facesDeclaredWaiters: (() => void)[] = [];
+
+/** Runs `done` once every face queued so far is added to its document: at
+ * once when none waits, else after the drain's last slice. */
+function afterFacesDeclared(done: () => void): void {
+  // Only a drain under way adds faces later (the fast path adds a face as it
+  // is made); a waiter queued with none would wait for good.
+  if (drainingFaces || pendingFaces.length > 0) facesDeclaredWaiters.push(done);
+  else done();
+}
+
 function drainFaces(): void {
   const end = now() + FACE_SLICE_MS;
   try {
@@ -463,8 +530,26 @@ function drainFaces(): void {
     else {
       drainingFaces = false;
       addMadeFaces();
+      for (const done of facesDeclaredWaiters.splice(0)) done();
     }
   }
+}
+
+
+
+
+
+
+
+
+
+export function flushOfficeFontFaces(): void {
+  if (!drainingFaces && pendingFaces.length === 0) return;
+  while (pendingFaces.length > 0) pendingFaces.shift()!();
+  // The drain's own next slice finds nothing left and ends.
+  drainingFaces = false;
+  addMadeFaces();
+  for (const done of facesDeclaredWaiters.splice(0)) done();
 }
 
 function addFace(...args: Parameters<typeof declareFace>): void {
@@ -488,6 +573,17 @@ function addFace(...args: Parameters<typeof declareFace>): void {
   pendingFaces.push(() => declareFace(...args));
 }
 
+/** Whether this engine applies a face's `font-variation-settings` descriptor
+ * (Chromium does; WebKit has no such FontFace attribute and ignores it in
+ * a rule too). Read once. */
+let variationHonored: boolean | undefined;
+function faceVariationHonored(): boolean {
+  if (variationHonored === undefined) {
+    variationHonored = typeof FontFace === "undefined" || "variationSettings" in FontFace.prototype;
+  }
+  return variationHonored;
+}
+
 function declareFace(
   doc: Document,
   family: string,
@@ -507,10 +603,31 @@ function declareFace(
   
   // own weight is stated as the face's wght; a static file has no such axis
   // and is drawn as it is.
-  const variationSettings = drawnWeight !== undefined && drawnWeight !== weight ? `"wght" ${drawnWeight}` : undefined;
+  let variationSettings = drawnWeight !== undefined && drawnWeight !== weight ? `"wght" ${drawnWeight}` : undefined;
+  let declaredWeight = weight;
+  if (variationSettings && drawnWeight !== undefined && !faceVariationHonored()) {
+    // WebKit (Safari, Playwright WebKit 26) neither exposes nor applies a
+    // face's font-variation-settings descriptor, in a FontFace or an
+    // @font-face rule: the stand-in drew at the asked weight, its axis
+    
+    // drawn at 400, the title 1251 px where Chromium draws it at 1320
+    // px; Montserrat Semi-Bold Bold's regular is drawn at 700). It does
+    // clamp the axis to the face's weight descriptor, so the face is
+    // declared at the weight it is drawn at (CSS Fonts 4 §5.2: a regular
+    // request finds the lightest face above 500 when none is at 400-500, so
+    // a regular drawn at 600-900 is still found), a bold one at no less than
+    // 700 so a bold request finds it. A regular drawn at 700 or more is then
+    // also what a bold request finds first: such a family's bold runs draw at
+    // the regular's weight (Montserrat Semi-Bold Bold's at 700, not 900) --
+    // the runs that name the style are the regular ones. The text engine
+    // reads the declared weight (no stated wght) and so measures what WebKit
+    // draws.
+    variationSettings = undefined;
+    declaredWeight = weight >= 600 ? Math.max(drawnWeight, 700) : drawnWeight;
+  }
   try {
     const face = new FontFace(family, sources.join(","), {
-      weight: String(weight),
+      weight: String(declaredWeight),
       style: italic ? "italic" : "normal",
       display: "swap",
       ...(range ? { unicodeRange: range } : {}),
@@ -532,7 +649,7 @@ function declareFace(
         ...(overrides ? { ascentOverride: overrides[0], descentOverride: overrides[1], lineGapOverride: overrides[2] } : {}),
         ...(variationSettings ? { variationSettings } : {}),
       },
-      declared: { family, weight: String(weight), style: italic ? "italic" : "normal", ...(range ? { unicodeRange: range } : {}) },
+      declared: { family, weight: String(declaredWeight), style: italic ? "italic" : "normal", ...(range ? { unicodeRange: range } : {}) },
     });
   } catch {
     // An engine that rejects a descriptor leaves the family to its fallbacks.
@@ -642,7 +759,8 @@ export function ensureOfficeAliasFamily(
   if (!done) aliasFamilies.set(doc, (done = new Set()));
   if (done.has(alias)) return;
   done.add(alias);
-  void loadOfficeDataParts("font-registry", faces.map(normalize))
+  const settle = noteFamilyRegistration(alias);
+  void trackRegistration(loadOfficeDataParts("font-registry", faces.map(normalize))
     .then((served) => {
       const registry = served as Registry | undefined;
       if (!registry) {
@@ -662,7 +780,8 @@ export function ensureOfficeAliasFamily(
     .catch(() => {
       done.delete(alias);
       registrationGeneration += 1;
-    });
+    })
+    .finally(() => afterFacesDeclared(settle)), `registry ${alias}`);
 }
 
 /**
@@ -809,7 +928,11 @@ export function ensureOfficeFontFaces(
   if (names.has(key)) return;
   names.add(key);
   const styled = table[key] ? [] : styledFamilyCandidates(family);
-  void loadOfficeDataParts("font-registry", [key, ...styled.map((candidate) => normalize(candidate.base))])
+  // Until the registry has answered and the faces it names are in the
+  // document, the text engine waits for this family rather than measuring the
+  // stack's next one (`noteFamilyRegistration`).
+  const settle = noteFamilyRegistration(key);
+  void trackRegistration(loadOfficeDataParts("font-registry", [key, ...styled.map((candidate) => normalize(candidate.base))])
     .then((served) => {
       const registry = served as Registry | undefined;
       const name = registry ? registryIndexOf(registry).get(key) : undefined;
@@ -872,9 +995,9 @@ export function ensureOfficeFontFaces(
           // scaled stand-in joins it only once the probe finds no such face
           // (or gives no answer), and draws where the real face cannot.
           addFace(doc, name, weight, italic, localSources, undefined);
-          void localFaceInstalled(localSources).then((installed) => {
+          void trackRegistration(localFaceInstalled(localSources).then((installed) => {
             if (!installed) addSlices([]);
-          });
+          }), `local probe ${name}`);
         }
       }
       const slug = CJK_LATIN.names[key] ?? CJK_LATIN.names[normalize(name)];
@@ -898,7 +1021,8 @@ export function ensureOfficeFontFaces(
     .catch(() => {
       names.delete(key);
       registrationGeneration += 1;
-    });
+    })
+    .finally(() => afterFacesDeclared(settle)), `registry ${key}`);
 }
 
 /**

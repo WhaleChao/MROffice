@@ -41,6 +41,17 @@ const IDLE = Object.freeze({
   syncedToServer: false,
   workbookRoomsAheadOfSave: false,
   workbookCatchingUp: false,
+  // The hook's optional flags and readings, absent unless something is so;
+  // read through the Proxy they were inert values, which are truthy: every
+  // open-source document said "Not connected. Changes are kept on this
+  // device" in red before anything had happened.
+  notConnected: undefined,
+  saveSlow: undefined,
+  roomFoldBehind: undefined,
+  saveSentAt: undefined,
+  lastSaveAcknowledgement: undefined,
+  causalUpgradeHeldBy: undefined,
+  blockedRecoveryDraft: null,
   queueSave: noop,
   replacePendingDraft: noop,
   saveNow: resolved,
