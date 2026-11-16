@@ -10,6 +10,7 @@ import {
   type OfficeColorSource,
 } from "./office-shape-paint";
 import { OFFICE_CHART_FILL_PATTERNS } from "./office-chart-shape-paint";
+import type { OfficeTextShadowAlign } from "./office-text-paint";
 import { isOfficeCameraPreset } from "./office-picture-effects";
 
 export type OfficeStatedFill =
@@ -398,7 +399,19 @@ export interface OfficeStatedDisplay {
     path?: { kind: string; fillToRect?: { l?: number; t?: number; r?: number; b?: number } };
   };
   fillPattern?: { preset: (typeof OFFICE_CHART_FILL_PATTERNS)[number]; foreground: string; background: string };
-  shadow?: { color: string; blur: number; offsetX: number; offsetY: number; opacity: number };
+  /** With a perspective shadow's transform, as the server's `_shadow_display` states it. */
+  shadow?: {
+    color: string;
+    blur: number;
+    offsetX: number;
+    offsetY: number;
+    opacity: number;
+    scale?: number;
+    scaleY?: number;
+    skewX?: number;
+    skewY?: number;
+    align?: OfficeTextShadowAlign;
+  };
   innerShadow?: { color: string; blur: number; offsetX: number; offsetY: number; opacity: number };
   glow?: { color: string; radius: number; opacity: number };
   reflection?: { opacity: number; blur: number; distance: number };
@@ -430,16 +443,53 @@ function resolved(color: OfficeColorSource): string {
   return hex;
 }
 
+const SHADOW_ALIGNS = new Set(["tl", "t", "tr", "l", "ctr", "r", "bl", "b", "br"]);
+
 function shadowDisplay(s: OfficeStatedShadow | Omit<OfficeStatedShadow, "align" | "rotateWithShape">) {
   const distance = (s.distanceEmu ?? 0) / 9525;
   const angle = (((s.direction ?? 0) / 60000) * Math.PI) / 180;
-  return {
+  const shown: {
+    color: string;
+    blur: number;
+    offsetX: number;
+    offsetY: number;
+    opacity: number;
+    scale?: number;
+    scaleY?: number;
+    skewX?: number;
+    skewY?: number;
+    align?: OfficeTextShadowAlign;
+  } = {
     color: resolved(s.color),
     blur: round((s.blurEmu ?? 0) / 9525, 3),
     offsetX: round(distance * Math.cos(angle), 3),
     offsetY: round(distance * Math.sin(angle), 3),
     opacity: round(officeStopOpacity(s.color.transforms), 4),
   };
+  if (s.scaleX !== undefined || s.scaleY !== undefined || s.skewX !== undefined || s.skewY !== undefined) {
+    // A perspective shadow is drawn as the copy it is, scaled and skewed about
+    // its anchor -- the server's `_shadow_display` / `shadow_transform`, key
+    // for key (Word's run `w14:shadow` reaches the page only as this
+    
+    const scale = (s.scaleX ?? 100_000) / 1000;
+    const scaleY = (s.scaleY ?? s.scaleX ?? 100_000) / 1000;
+    const skewX = (s.skewX ?? 0) / 60000;
+    const skewY = (s.skewY ?? 0) / 60000;
+    const align = ("align" in s ? s.align : undefined) ?? "b";
+    const ok =
+      scale >= 10 && scale <= 400 &&
+      Math.abs(scaleY) >= 10 && Math.abs(scaleY) <= 400 &&
+      Math.abs(skewX) <= 80 && Math.abs(skewY) <= 80 &&
+      SHADOW_ALIGNS.has(align);
+    if (ok) {
+      if (scale !== 100) shown.scale = scale;
+      if (scaleY !== scale) shown.scaleY = scaleY;
+      if (skewX) shown.skewX = skewX;
+      if (skewY) shown.skewY = skewY;
+      if (align !== "ctr") shown.align = align as OfficeTextShadowAlign;
+    }
+  }
+  return shown;
 }
 
 /**

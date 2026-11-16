@@ -107,6 +107,7 @@ import {
   normalizeParagraphDirection,
   normalizeParagraphIndentEmu,
   type ParagraphAlign,
+  type ParagraphRunDefaults,
   type PresentationFontAlign,
   paragraphIndexAtOffset,
   paragraphMarkerFields,
@@ -117,6 +118,11 @@ import {
   textFromParagraphs,
 } from "./presentation-paragraphs";
 import { rowsWithLayoutHiddenMarkers } from "./presentation-smartart-markers";
+// A cycle (that module formats runs through this one); both are only called, never read at load.
+import {
+  presentationBlockWithCanonicalTextPaint,
+  presentationBlockWithRunTextPaints,
+} from "./presentation-run-text-paint";
 import {
   applyRunFormat,
   applyStylePatch,
@@ -164,6 +170,10 @@ export const FONT_RUN_CLEAR_PATCH = {
   // A run's own text shadow (readings row 808) is cleared with the rest.
   textShadow: undefined,
   textShadowEffect: undefined,
+  // And its WordArt: Text Fill, Text Outline and Text Effects are `a:rPr`'s,
+  // which Clear All Formatting empties (truth c64cleartx: fill, `a:ln`, glow
+  // and shadow all gone; the body's Transform kept).
+  textPaint: undefined,
 } as Readonly<Partial<RunStyle>>;
 
 // Only these fields are authenticated block-level inheritance in the current
@@ -1634,7 +1644,10 @@ export function textBlockWithFormattingCleared(
   textBlock: PresentationTextBlock,
   selection: LiveTextSelection,
 ): PresentationTextBlock | null {
-  const next = formattingCleared(textBlock, selection);
+  const cleared = formattingCleared(textBlock, selection);
+  // A paint every character still wears is the box's again; one only some
+  // keep stays on their runs (`presentationBlockWithCanonicalTextPaint`).
+  const next = cleared && presentationBlockWithCanonicalTextPaint(cleared);
   // Clearing words already at the default (the size goes and comes back)
   // changes nothing: no save, no Undo step.
   return next && stableJson(next) === stableJson(textBlock) ? null : next;
@@ -1656,7 +1669,13 @@ function formattingCleared(
   const blockId = textBlock.id;
   
   if (selection && selection.blockId === blockId && selection.end <= selection.start) return null;
-  const materialized = materializeBlockFontInheritance(textBlock);
+  // The box's own WordArt paint is every character's: it goes onto the runs
+  // first, so the cleared ones lose it and the rest keep theirs (PowerPoint
+  // clears the selected characters' Text Fill, Outline and Effects alone,
+  // truth c64cleartx C). Kept on the box, the paint was written back onto
+  
+  const unpainted = presentationBlockWithRunTextPaints(textBlock);
+  const materialized = materializeBlockFontInheritance(unpainted);
   const cleared =
     formatTextBlockRunSelection(
       materialized,
@@ -1688,8 +1707,15 @@ function formattingCleared(
   const { textShadow: _shadow, textShadowEffect: _effect, letterSpacing: _spacing, ...rest } = style!;
   void _shadow;
   void _effect;
-  void _spacing;
-  return { ...base, style: rest as PresentationTextBlock["style"] };
+  // Spacing every row's own run defaults state (`a:pPr/a:defRPr@spc`,
+  // readings row 885) is the rows', not the words': it stays, as PowerPoint
+  // keeps the paragraph's defRPr through Clear All Formatting.
+  const rows = normalizeParagraphsWithRuns(base.paragraphs);
+  const rowsSpacing =
+    _spacing !== undefined &&
+    Boolean(rows?.length) &&
+    rows!.every((row) => row.runDefaults?.letterSpacing === _spacing);
+  return { ...base, style: (rowsSpacing ? { ...rest, letterSpacing: _spacing } : rest) as PresentationTextBlock["style"] };
 }
 
 /** The runs of `block` inside [from, to) handed back to their rows' list level (`runStyleHandedToLevel`). */
@@ -1701,7 +1727,13 @@ function withRunsHandedToLevel(
 ): PresentationTextBlock {
   // Words cleared of every format are kept as plain text (no runs): they get
   // one run again to carry the level's.
-  const handRuns = (own: readonly TextRun[] | undefined, text: string, start: number, level: number): TextRun[] | undefined => {
+  const handRuns = (
+    own: readonly TextRun[] | undefined,
+    text: string,
+    start: number,
+    level: number,
+    runDefaults?: ParagraphRunDefaults,
+  ): TextRun[] | undefined => {
     const runs = own ?? (text ? runsFromText(text) : undefined);
     if (!runs) return undefined;
     let cursor = start;
@@ -1709,7 +1741,8 @@ function withRunsHandedToLevel(
       const runStart = cursor;
       cursor += run.text.length;
       if (run.text.length === 0 || runStart < from || cursor > to) return run;
-      return { ...run, style: runStyleHandedToLevel(run.style, ladder, level) };
+      // Back to the level, under the row's own run defaults (readings row 885).
+      return { ...run, style: runStyleHandedToLevel(run.style, ladder, level, runDefaults) };
     });
   };
   const paragraphs = normalizeParagraphsWithRuns(block.paragraphs);
@@ -1718,7 +1751,7 @@ function withRunsHandedToLevel(
     const next = paragraphs.map((paragraph) => {
       const start = offset;
       offset += paragraph.text.length + 1;
-      const runs = handRuns(paragraph.runs, paragraph.text, start, Number(paragraph.level ?? 0));
+      const runs = handRuns(paragraph.runs, paragraph.text, start, Number(paragraph.level ?? 0), paragraph.runDefaults);
       return runs ? { ...paragraph, runs } : paragraph;
     });
     return { ...block, paragraphs: next };

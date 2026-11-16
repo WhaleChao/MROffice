@@ -14,6 +14,7 @@
  */
 
 import type { Node as PmNode } from "@tiptap/pm/model";
+import { pictureObjectTokenSha } from "./page-picture-objects";
 import { SheetFact } from "./editor/sheet-facts";
 import { normalizeOfficeTextWarp, type OfficeTextWarp } from "./office-text-warp";
 import { WORD_LINE_MULTIPLE_MAX, WORD_LINE_MULTIPLE_MIN } from "./office-units";
@@ -1847,6 +1848,12 @@ export interface DocumentShapeGroupMember {
   readonly outlineCap?: OfficeStrokeDetail["outlineCap"];
   readonly outlineJoin?: OfficeStrokeDetail["outlineJoin"];
   readonly outlineMiterLimit?: number;
+  /**
+   * Shape Outline > Sketched on the member's own line (a canvas of sketched
+   * boxes, corpus R460-D01), drawn as a leaf shape's is. Absent on every
+   * group stored before members carried it.
+   */
+  readonly outlineSketch?: OfficeLineSketch;
   readonly effect?: DocumentShapeEffectPreset;
   /**
    * WordArt on the member's words (Shape Format > WordArt Styles, Text Fill,
@@ -2273,7 +2280,10 @@ function documentShapeMemberPicture(
   if (
     src !== undefined &&
     (typeof src !== "string" ||
-      !src.startsWith("data:image/") ||
+      // The inline spelling, or the stored file's own picture named by
+      // digest (an import in picture-reference mode names a group's picture
+      // as it names one beside it).
+      !(src.startsWith("data:image/") || pictureObjectTokenSha(src) !== null) ||
       src.length > 4_000_000)
   ) {
     return null;
@@ -2285,7 +2295,9 @@ function documentShapeMemberPicture(
     if (
       typeof value !== "number" ||
       !Number.isFinite(value) ||
-      value < 0 ||
+      // Negative is an OUTSET (the source reaches past the picture: it is
+      // drawn smaller than its frame), bounded as an image's crop is.
+      value < -400 ||
       value >= 100 ||
       // `a:srcRect`'s own unit: a thousandth of a percent.
       Math.abs(value * 1_000 - Math.round(value * 1_000)) > 1e-6
@@ -3229,6 +3241,7 @@ function normalizeDocumentShapeGroupMembersUncached(
       // so an ordinary group normalizes to exactly the object it did before.
       ...(attrs.outlineAlign ? { outlineAlign: attrs.outlineAlign } : {}),
       ...officeStrokeDetail(attrs),
+      ...(kind === "shape" && attrs.outlineSketch ? { outlineSketch: attrs.outlineSketch } : {}),
       effect: attrs.effect,
       // The member's WordArt, read by the leaf normalizer as a shape's; a
       // connector or a picture draws no words to paint.
@@ -4403,6 +4416,7 @@ export function documentShapeUngroupMembers(
       outlineStyle: member.outlineStyle,
       ...(member.outlineDash ? { outlineDash: member.outlineDash } : {}),
       ...officeStrokeDetail(member),
+      ...(member.outlineSketch ? { outlineSketch: member.outlineSketch } : {}),
       effect: member.effect,
       ...(member.textPaint ? { textPaint: member.textPaint } : {}),
       textFill: member.textFill,

@@ -451,6 +451,7 @@ export interface LocatorForLocate {
     slide_number?: number;
     block_id?: string | null;
     page_number?: number;
+    line?: string | null;
     first_line?: number;
   } | null;
 }
@@ -480,6 +481,9 @@ export function locateTargetForLocator(
   } else if (anchor?.kind === "pdf_page") {
     if (Number.isInteger(anchor.page_number) && Number(anchor.page_number) >= 1) {
       target.pdfPage = Number(anchor.page_number);
+      // The cited line on that page, not the source's snippet (often the
+      // head of another page of the same read).
+      if (anchor.line?.trim()) target.snippet = anchor.line.trim();
     }
   } else if (anchor?.kind === "slide_object") {
     // A deck: its slide (by id, else by place), the object on it and, for a

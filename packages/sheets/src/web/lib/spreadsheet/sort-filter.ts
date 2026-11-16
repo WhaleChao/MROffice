@@ -242,8 +242,17 @@ export function sortRows<T extends SortFilterRow>(
 
 
 
+
+
+
 export function filterValueKey(value: string): string {
-  return value.replace(/ +$/, "").toLowerCase();
+  return filterValueText(value).toLowerCase();
+}
+
+
+
+export function filterValueText(value: string): string {
+  return value.replace(/^ +| +$/g, "");
 }
 
 /** The ticked values of one filter as the keys cells are matched by. */
@@ -267,7 +276,7 @@ export function distinctColumnValues<T extends SortFilterRow>(
   colIndex: number,
 ): string[] {
   
-  // of spaces is a blank.
+  // value, a cell of spaces is a blank.
   const seen = new Set<string>();
   const order: string[] = [];
   for (const row of rows) {
@@ -275,7 +284,7 @@ export function distinctColumnValues<T extends SortFilterRow>(
     const key = filterValueKey(raw);
     if (!seen.has(key)) {
       seen.add(key);
-      order.push(key === "" ? "" : raw.replace(/ +$/, ""));
+      order.push(key === "" ? "" : filterValueText(raw));
     }
   }
   return order;
@@ -344,7 +353,7 @@ export function filterListValues<T extends SortFilterRow>(
     if (keys.has(key)) continue;
     keys.add(key);
     
-    const value = key === "" ? "" : raw.replace(/ +$/, "");
+    const value = key === "" ? "" : filterValueText(raw);
     representative.set(value, cell && value === raw ? cell : { ...(cell ?? {}), value });
     order.push(value);
   }
@@ -354,8 +363,8 @@ export function filterListValues<T extends SortFilterRow>(
 /**
  * Apply a column filter, returning the indices (into `rows`) of the rows whose
  * value in `colIndex` is a member of `allowedSet`. Values are compared by their
- * filter key ({@link filterValueKey}, matching distinctColumnValues): "alpha"
- * and "alpha " are one value, as Excel matches them, " alpha" another, and a
+ * filter key ({@link filterValueKey}, matching distinctColumnValues): "alpha",
+ * " alpha" and "alpha " are one value, as Excel matches them, and a
  * blank (or a cell of spaces) is the empty string "". A `null` / undefined `allowedSet` means "no filter" — every
  * row index is returned. This NEVER mutates `rows`; the caller hides the
  * excluded rows from the view.

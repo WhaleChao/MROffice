@@ -120,7 +120,10 @@ export function authenticatePdfDurableContentCommit(options: {
   // saved -- the Undo was written, then refused here, its history cleared
   // and 「保存失败…没有可安全撤销的原生 PDF 修改」 said over a page that was
   
-  if (!pageStoredJsonEquals(savedContent, asJsonKeeps(submittedContent))) return null;
+  // The page answered is read the same way: one the window projected from
+  // its own records (not a server's JSON) carries those keys too, and did
+  // not even equal itself.
+  if (!pageStoredJsonEquals(asJsonKeeps(savedContent) as typeof savedContent, asJsonKeeps(submittedContent))) return null;
   const contentSignature = JSON.stringify(savedContent);
   const dataItemId = getDataItemId(savedContent);
   if (!dataItemId || dataItemId !== getDataItemId(submittedContent))

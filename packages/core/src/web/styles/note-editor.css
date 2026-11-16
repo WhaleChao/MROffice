@@ -10726,6 +10726,344 @@ body[data-copilot-stack-front="true"] .code-inline-copilot:has([data-copilot-dra
   color: var(--office-dialog-danger, #991b1b);
 }
 
+/* Review > Reviewing Pane: the revisions and the AI changes, one tab each. */
+.track-changes-panel-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 12px 0;
+  border-bottom: 1px solid var(--office-dialog-divider, #e2e8f0);
+}
+.track-changes-panel-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--office-dialog-muted, #6b7280);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.track-changes-panel-tab[aria-selected="true"] {
+  color: var(--office-dialog-ink, #1a1a2e);
+  border-bottom-color: var(--office-accent, #2563eb);
+}
+.track-changes-panel-tab-count {
+  min-width: 16px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 999px;
+  background: var(--office-dialog-surface-muted, #f1f5f9);
+}
+
+/* AI changes: one group per AI instruction. */
+.ai-review-empty {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--office-dialog-muted, #9ca3af);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ai-review-groups,
+.ai-review-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ai-review-group {
+  border: 1px solid var(--office-dialog-divider, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ai-review-group--open {
+  border-color: color-mix(in srgb, var(--office-accent, #2563eb) 35%, var(--office-dialog-divider, #e2e8f0));
+}
+.ai-review-group-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  text-align: left;
+  background: var(--office-dialog-surface-muted, #f8fafc);
+  border: none;
+  cursor: pointer;
+  color: var(--office-dialog-ink, #1a1a2e);
+}
+.ai-review-group-head > svg {
+  margin-top: 3px;
+  flex: none;
+}
+.ai-review-group-title {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ai-review-group-meta,
+.ai-review-change-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--office-dialog-muted, #6b7280);
+}
+.ai-review-prompt {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.ai-review-group-counts {
+  font-size: 11px;
+  color: var(--office-dialog-muted, #6b7280);
+}
+.ai-review-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+.ai-review-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--office-dialog-surface-muted, #f1f5f9);
+  color: var(--office-dialog-muted, #475569);
+}
+.ai-review-chip--latest {
+  background: color-mix(in srgb, var(--office-accent, #2563eb) 14%, transparent);
+  color: var(--office-accent, #1d4ed8);
+}
+.ai-review-chip--protect {
+  background: rgba(22, 163, 74, 0.12);
+  color: #166534;
+}
+.ai-review-chip--field {
+  background: rgba(217, 119, 6, 0.14);
+  color: #92400e;
+}
+.ai-review-sections {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.ai-review-label {
+  font-size: 11px;
+  color: var(--office-dialog-muted, #6b7280);
+  margin-right: 2px;
+}
+.ai-review-section {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--office-dialog-divider, #e2e8f0);
+  background: transparent;
+  color: var(--office-dialog-ink, #1a1a2e);
+  cursor: pointer;
+}
+.ai-review-section:hover {
+  background: var(--office-dialog-surface-muted, #f1f5f9);
+}
+.ai-review-banner {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  border-radius: 6px;
+}
+.ai-review-banner > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.ai-review-banner--key {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.ai-review-banner--held {
+  background: rgba(22, 163, 74, 0.08);
+  color: #166534;
+  border: 1px solid rgba(22, 163, 74, 0.25);
+}
+.ai-review-bulk {
+  display: flex;
+  gap: 8px;
+}
+.ai-review-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  border-radius: 6px;
+  background: var(--office-dialog-surface-muted, #f1f5f9);
+  color: var(--office-dialog-ink, #1a1a2e);
+}
+.ai-review-confirm-key {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(217, 119, 6, 0.6);
+  background: transparent;
+  color: #92400e;
+  cursor: pointer;
+}
+.ai-review-confirm-key:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.12);
+}
+.ai-review-note,
+.ai-review-state {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--office-dialog-muted, #6b7280);
+}
+.ai-review-state {
+  padding: 0 10px;
+}
+.ai-review-change {
+  border: 1px solid var(--office-dialog-divider, #e2e8f0);
+  border-left-width: 3px;
+  border-left-color: var(--office-accent, #2563eb);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.ai-review-change--key {
+  border-left-color: #d97706;
+  background: rgba(245, 158, 11, 0.05);
+}
+.ai-review-change--held {
+  border-left-color: #16a34a;
+}
+.ai-review-change--decided {
+  opacity: 0.72;
+}
+.ai-review-change--focused {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--office-accent, #2563eb) 35%, transparent);
+}
+.ai-review-change-jump {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 7px 10px 4px;
+  font: inherit;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.ai-review-change-jump:hover {
+  background: var(--office-dialog-surface-muted, #f8fafc);
+}
+.ai-review-change-section {
+  font-size: 10.5px;
+  color: var(--office-dialog-muted, #94a3b8);
+}
+.ai-review-diff {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--office-dialog-ink, #1f2937);
+  word-break: break-word;
+}
+.ai-review-context {
+  color: var(--office-dialog-muted, #94a3b8);
+}
+.ai-review-del {
+  color: #b91c1c;
+  text-decoration: line-through;
+  text-decoration-color: rgba(220, 38, 38, 0.6);
+}
+.ai-review-ins {
+  color: #166534;
+  text-decoration: underline;
+  text-decoration-color: rgba(22, 163, 74, 0.5);
+}
+.ai-review-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+}
+.ai-review-field-change {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px;
+  color: #92400e;
+}
+.ai-review-field-change del {
+  color: #b91c1c;
+}
+.ai-review-field-change ins {
+  color: #166534;
+  text-decoration: none;
+  font-weight: 600;
+}
+.ai-review-change-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 8px;
+}
+.ai-review-status {
+  font-size: 11.5px;
+  color: var(--office-dialog-muted, #6b7280);
+}
+.ai-review-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--office-accent, #2563eb);
+  cursor: pointer;
+}
+.ai-review-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* The pane's open group's places, shaded in the document. */
+.mrnote-ai-review-change {
+  background: color-mix(in srgb, var(--office-accent, #2563eb) 12%, transparent);
+  border-radius: 2px;
+}
+.mrnote-ai-review-change--key {
+  background: rgba(245, 158, 11, 0.24);
+  box-shadow: inset 0 -2px 0 rgba(217, 119, 6, 0.65);
+}
+.mrnote-ai-review-change--focused {
+  outline: 2px solid color-mix(in srgb, var(--office-accent, #2563eb) 55%, transparent);
+  outline-offset: 1px;
+}
+
 /* ============================================================
    Editor body (split when BacklinksPanel is open)
    ============================================================ */

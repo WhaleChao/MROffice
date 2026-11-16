@@ -54,19 +54,31 @@ function isIdeograph(ch: string): boolean {
     || (code >= 0xf900 && code <= 0xfaff) || (code >= 0x20000 && code <= 0x3ffff);
 }
 
+export const OFFICE_HINTED_WRAP_ROOM_STEP_PX = 29;
+export const OFFICE_HINTED_WRAP_ROOM_STEP_FROM_PX = 56;
+
 /**
- * The room a wrapped line of a `columnPx` column breaks at: 0.978 x px - 5.2,
- * not a fixed padding (lookwin p66-lw: 39 Calibri 11 columns of 40-300 px,
- * the room px - 7 up to 100 px, px - 10 at 150-160, px - 14 at 270; p65-lw's
- * 47 px column wraps at 40). Over 1,418 rows 1,398 give Excel's line count
- * (px - 8: 1,342); p20 Calibri 199/200 and Arial 198/200 (px - 8: 193, 196);
- * p35 East Asian 1,427/1,440 (1,416).
+ * The room a wrapped line of a `columnPx` column breaks at, for a face of
+ * `emPx` whole pixels per em: the column less a margin of 2 p + 1 px,
+ * p = (em - 1) // 8 + 2 (7 px for 9-16 px ems, 8-12 pt; 9 px for 17-24,
+ * 13-18 pt; 5 px at 6 pt), then a pixel less again every 29 px of that past
+ * 56 (lookwin p110b-lw: Windows Excel's own row heights on resave, 99 column
+ * widths of 20-600 px at Calibri 11; p110/p110c/p110d-lw: Calibri, Arial and
+ * Times New Roman at 6-18 pt alike, 260 of 269 widths x sizes, the misses at
+ * 19 pt and over). A line fits while its hinted width is at most the room.
+ * The linear 0.978 x px - 5.2 before it gave a 300 px column 288; Excel's is
+ * 285. The API's office_hinted_wrap_room is the same rule.
  */
-export function officeHintedWrapRoom(columnPx: number): number {
-  return OFFICE_HINTED_WRAP_ROOM_SCALE * columnPx - OFFICE_HINTED_WRAP_ROOM_LESS_PX;
+export function officeHintedWrapRoom(columnPx: number, emPx = 15): number {
+  const margin = 2 * (Math.floor((Math.max(1, Math.trunc(emPx)) - 1) / 8) + 2) + 1;
+  const width = columnPx - margin;
+  return width - Math.max(0, Math.floor((width - OFFICE_HINTED_WRAP_ROOM_STEP_FROM_PX) / OFFICE_HINTED_WRAP_ROOM_STEP_PX));
 }
-export const OFFICE_HINTED_WRAP_ROOM_SCALE = 0.978;
-export const OFFICE_HINTED_WRAP_ROOM_LESS_PX = 5.2;
+
+/** GDI's whole pixels per em of a `sizePt` face at 96 dpi (the advances table's key). */
+function emPxOf(sizePt: number): number {
+  return Math.floor((sizePt * 96) / 72 + 0.5);
+}
 
 export interface OfficeHintedWrapFace {
   readonly family: string;
@@ -138,7 +150,7 @@ function tokens(paragraph: string): string[] {
 export function officeHintedWrapLines(text: string, face: OfficeHintedWrapFace, columnPx: number): string[] | undefined {
   const advance = advancesOf(face);
   if (!advance) return undefined;
-  return wrapWith(text, (_at, ch) => advance(ch), columnPx);
+  return wrapWith(text, (_at, ch) => advance(ch), columnPx, emPxOf(face.sizePt));
 }
 
 /** One rich-text run: its text and the face it is set in. */
@@ -154,6 +166,7 @@ export interface OfficeHintedWrapRun extends OfficeHintedWrapFace {
 export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], columnPx: number): string[] | undefined {
   let text = "";
   const owners: ((ch: string) => number | undefined)[] = [];
+  let emPx: number | undefined;
   for (const run of runs) {
     const piece = String(run.text).replace(/\r\n?/g, "\n");
     if (!piece) continue;
@@ -161,16 +174,18 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
     if (!advance) return undefined;
     text += piece;
     owners.push(...Array.from(piece, () => advance));
+    // The cell's margin is its first run's face's.
+    emPx ??= emPxOf(run.sizePt);
   }
   if (!owners.length) return undefined;
-  return wrapWith(text, (at, ch) => owners[at]?.(ch), columnPx);
+  return wrapWith(text, (at, ch) => owners[at]?.(ch), columnPx, emPx ?? 15);
 }
 
 /** The rule over `text`, `advanceAt(index, character)` the advance of the
  * character at that code point index. */
-function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | undefined, columnPx: number): string[] | undefined {
+function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | undefined, columnPx: number, emPx = 15): string[] | undefined {
   if (!Number.isFinite(columnPx)) return undefined;
-  const room = officeHintedWrapRoom(columnPx);
+  const room = officeHintedWrapRoom(columnPx, emPx);
   const lines: string[] = [];
   let offset = 0;
   for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {

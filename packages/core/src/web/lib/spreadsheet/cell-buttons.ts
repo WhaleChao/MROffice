@@ -61,6 +61,7 @@ import {
   type SizeMap,
 } from "./grid-sizing";
 import { lineStyleAt, materializeLineStyles, patchLineStyles, writeLineBlanksIn, type LineStyleMap } from "./line-styles";
+import { styleWithOwnEdgeUnderTable } from "./table-own-borders";
 import { nativeFontSizeAfterPatch, nativeFontSizeCss, type NativeFontSize } from "./native-font-size";
 import { officePixelsToPoints } from "../../components/office-ribbon/officeTypographyCatalog";
 import {
@@ -911,6 +912,13 @@ export function cellStylePatchedSheet<S extends CellButtonsSheet>(
           ? withEdgesPatch(r, c, cellEdges, patch)
           : patch;
       nextSheet = updateCellStyle(nextSheet, r, c, overDefault ? withDefaultLookUnder(overDefault, cellPatch) : cellPatch);
+      for (const [side, edgePatch] of Object.entries(cellEdges ?? {})) {
+        if (!edgePatch || (side !== "top" && side !== "right" && side !== "bottom" && side !== "left")) continue;
+        const pen = edgePatch as { style?: string | null; color?: string | null; themeColor?: object };
+        nextSheet = withOwnEdgeUnderTable(nextSheet, r, c, side, pen.style
+          ? { style: pen.style, color: pen.color ?? null, theme: pen.themeColor ?? null }
+          : null);
+      }
     }
   }
   // A whole-row / whole-column selection (the header click) is a LINE
@@ -1049,9 +1057,31 @@ export function borderPresetPatchedSheet<S extends CellButtonsSheet>(
       delete bindings[`borderEdges.${edge}.color`];
       if (line !== null && selectedThemeColor) bindings[`borderEdges.${edge}.color`] = selectedThemeColor;
       nextSheet = updateCellStyle(nextSheet, row, col, {...patch, themeColors:bindings});
+      nextSheet = withOwnEdgeUnderTable(nextSheet, row, col, edge, line === null ? null : {
+        style: keepsPresetLineStyle ? line : selectedLineStyle,
+        color: selectedColor,
+        theme: line !== null && selectedThemeColor ? selectedThemeColor : null,
+      });
     }
   }
   return nextSheet;
+}
+
+
+
+function withOwnEdgeUnderTable<S extends CellButtonsSheet>(
+  sheet: S,
+  row: number,
+  col: number,
+  side: string,
+  edge: Parameters<typeof styleWithOwnEdgeUnderTable>[2],
+): S {
+  const key = `${row}:${col}`;
+  const cell = sheet.cells[key];
+  if (!cell?.style) return sheet;
+  const style = styleWithOwnEdgeUnderTable(cell.style, side, edge);
+  if (style === cell.style) return sheet;
+  return { ...sheet, cells: { ...sheet.cells, [key]: { ...cell, style } } };
 }
 
 /** All / Outside / No Borders as the legacy per-side flags over a rectangle. */

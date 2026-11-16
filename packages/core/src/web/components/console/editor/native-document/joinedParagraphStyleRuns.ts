@@ -32,6 +32,8 @@ type RunLook = {
   color: string | null;
   bold: boolean | null;
   italic: boolean | null;
+  /** The style's underline ("single", "double", ...); null for none. */
+  underline?: string | null;
 };
 
 const record = (value: unknown): Record<string, unknown> | null =>
@@ -70,7 +72,7 @@ export function paragraphStyleRunLook(docAttrs: Record<string, unknown>, styleId
     chain.unshift(style);
     current = typeof style.basedOn === "string" ? style.basedOn : null;
   }
-  const look: RunLook = { family: null, sizePt: null, color: null, bold: null, italic: null };
+  const look: RunLook = { family: null, sizePt: null, color: null, bold: null, italic: null, underline: null };
   let themedFace = false;
   for (const style of chain) {
     const rPr = record(style.rPr) ?? {};
@@ -88,6 +90,10 @@ export function paragraphStyleRunLook(docAttrs: Record<string, unknown>, styleId
     if (typeof color === "string" && /^[0-9a-f]{6}$/i.test(color)) look.color = `#${color.toLowerCase()}`;
     if (rPr.bold === true || rPr.bold === false) look.bold = rPr.bold;
     if (rPr.italic === true || rPr.italic === false) look.italic = rPr.italic;
+    // Word's `wave` is the editor's `wavy` (underlineStyles.ts).
+    if (typeof rPr.underline === "string") {
+      look.underline = rPr.underline === "none" ? null : rPr.underline === "wave" ? "wavy" : rPr.underline;
+    }
   }
   if (themedFace) look.family = undefined;
   if (look.sizePt === null) {
@@ -171,6 +177,26 @@ export function restyleJoinedRuns(
       if (current && typeof current.attrs.value === "boolean") continue;
       if (old && current) edits.push(() => tr.removeMark(start, end, type));
       if (next && !current) edits.push(() => tr.addMark(start, end, type.create()));
+    }
+    // The style's underline, as the import states it: a bare mark for its
+    // single line, else the line's name (corpus R455-D04 E6: a Subtitle line
+    // joined onto a Title underlined by its style draws the Title's
+    // underline in Word, and the file it saves says so).
+    const underlineType = schema.marks.underline;
+    const oldLine = before.underline ?? null;
+    const nextLine = after.underline ?? null;
+    if (underlineType && oldLine !== nextLine) {
+      const current = mark("underline");
+      const value = current ? String(current.attrs.underlineStyle ?? "single") : null;
+      // No mark under a style that underlines is the run's own "no line".
+      if (current ? value === oldLine : oldLine === null) {
+        edits.push(() => {
+          tr.removeMark(start, end, underlineType);
+          if (nextLine !== null) {
+            tr.addMark(start, end, underlineType.create(nextLine === "single" ? {} : { underlineStyle: nextLine }));
+          }
+        });
+      }
     }
     return false;
   });

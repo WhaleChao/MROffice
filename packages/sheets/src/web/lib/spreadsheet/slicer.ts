@@ -113,6 +113,19 @@ export const MAX_SLICER_COLUMNS = 8;
 export const MIN_SLICER_BUTTON_HEIGHT = 20;
 export const MAX_SLICER_BUTTON_HEIGHT = 64;
 
+
+
+
+
+
+
+
+
+
+const STORED_SLICER_MIN_PX = 1;
+const STORED_SLICER_MAX_PX = 100_000;
+const STORED_SLICER_MAX_BUTTON_PX = 10_000;
+
 /** Max slicers a sheet may carry (DoS bound on iteration / overlay render). */
 export const MAX_SLICERS = 64;
 /** How far one more slicer steps down-right when its spot is taken. */
@@ -471,16 +484,16 @@ export function normalizeSlicer(
   if (x !== undefined) out.x = x;
   const y = clampOffset(r.y);
   if (y !== undefined) out.y = y;
-  const width = clampInteger(r.width, MIN_SLICER_WIDTH, MAX_SLICER_WIDTH);
+  const width = clampInteger(r.width, STORED_SLICER_MIN_PX, STORED_SLICER_MAX_PX);
   if (width !== undefined) out.width = width;
-  const height = clampInteger(r.height, MIN_SLICER_HEIGHT, MAX_SLICER_HEIGHT);
+  const height = clampInteger(r.height, STORED_SLICER_MIN_PX, STORED_SLICER_MAX_PX);
   if (height !== undefined) out.height = height;
   const columns = clampInteger(r.columns, 1, MAX_SLICER_COLUMNS);
   if (columns !== undefined) out.columns = columns;
   const buttonHeight = clampInteger(
     r.buttonHeight,
-    MIN_SLICER_BUTTON_HEIGHT,
-    MAX_SLICER_BUTTON_HEIGHT,
+    STORED_SLICER_MIN_PX,
+    STORED_SLICER_MAX_BUTTON_PX,
   );
   if (buttonHeight !== undefined) out.buttonHeight = buttonHeight;
   if (

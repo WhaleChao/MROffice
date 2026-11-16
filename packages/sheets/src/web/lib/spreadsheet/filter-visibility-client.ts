@@ -5,6 +5,9 @@
  */
 import { filterVisibilitySteps, type PreparedFilterVisibility } from "./filter-visibility";
 import { yieldCalculationTask, BackgroundCalculationCancelledError } from "@mrnote/core/web/lib/spreadsheet/background-calculation-protocol.ts";
+import { startResilientWorker } from "@mrnote/core/web/lib/worker-start.ts";
+
+const filterWorkerStart = startResilientWorker("spreadsheet-filter-visibility");
 
 export async function drainFilterVisibility<T>(steps: Generator<void, T>, isCurrent: () => boolean, yieldTask = yieldCalculationTask): Promise<T> {
   for (;;) {
@@ -33,7 +36,10 @@ export class FilterVisibilityClient {
     if (typeof Worker === "undefined") return drainFilterVisibility(filterVisibilitySteps(input), current);
     try {
       return await new Promise<number[]>((resolve, reject) => {
-        const worker = new Worker(new URL("./filter-visibility.worker.ts", import.meta.url), {type:"module", name:"mrnote-spreadsheet-filter-visibility"});
+        // One more start after a pause when one fails (lib/worker-start.ts);
+        // none: the run drains on the page's thread, as with no Worker.
+        const worker = filterWorkerStart.create(() => new Worker(new URL("./filter-visibility.worker.ts", import.meta.url), {type:"module", name:"mrnote-spreadsheet-filter-visibility"}));
+        if (!worker) return reject(new Error("Filter worker unavailable."));
         this.worker = worker;
         const timeout = setTimeout(() => finish(new Error("Filter worker timed out.")), 30_000);
         const cancellation = setInterval(() => { if (!current()) finish(new BackgroundCalculationCancelledError()); }, 16);
@@ -43,9 +49,10 @@ export class FilterVisibilityClient {
           if (error) reject(error); else resolve(rows!);
         };
         this.reject = error => finish(error);
-        worker.onerror = () => finish(new Error("Filter worker unavailable."));
+        worker.onerror = () => { filterWorkerStart.failed(worker, "error"); finish(new Error("Filter worker unavailable.")); };
         worker.onmessageerror = () => finish(new Error("Filter worker response unavailable."));
         worker.onmessage = event => {
+          filterWorkerStart.started(worker);
           if (!current()) return finish(new BackgroundCalculationCancelledError());
           const rows: unknown = event.data?.rows;
           if (!Array.isArray(rows) || new Set(rows).size !== rows.length || rows.some(row => !Number.isSafeInteger(row) || !input.some(group => row >= group.first && row <= group.last))) return finish(new Error("Invalid filter visibility result."));

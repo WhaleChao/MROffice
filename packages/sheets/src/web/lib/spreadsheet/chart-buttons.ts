@@ -816,6 +816,32 @@ export function insertChartSelectionLayout(
   if (!LABEL_RULE_TYPES.has(type)) {
     const { c1, c2, outer } = insertChartSelectionColumns(rect, type, value);
     const range = { r1: rect.r1, c1, r2: rect.r2, c2 };
+    if ((type === "treemap" || type === "sunburst") && rect.r2 > rect.r1 && c2 > c1) {
+      // A tree map's or a sunburst's points start on the first row whose
+      // value columns hold a number; every row above it heads the selection
+      
+      // probe/n20-x56: A2:G13 over a title row, a blank row and a row of
+      // year names plots A6:B13 / C6:C13, the series named by C2:C5). Read
+      // as one name row, the rows between were points whose levels were
+      // all blank, and the file could not carry the chart (R437-X56 WALK1,
+      // xlsx_chart_hierarchy_empty_row). The name row kept is the last of
+      // them. A blank top-left cell is Excel's other rule (one name row):
+      // left as it was.
+      const blankCell = (row: number, col: number) =>
+        String(value(row, col) ?? "").trim() === "" && String(display(row, col) ?? "").trim() === "";
+      const numberRow = (row: number) => {
+        for (let col = c1 + 1; col <= c2; col += 1) {
+          const raw = String(value(row, col) ?? "").trim();
+          if (raw !== "" && Number.isFinite(Number(raw))) return true;
+        }
+        return false;
+      };
+      if (!blankCell(rect.r1, rect.c1) && !numberRow(rect.r1) && excelChartRangeLabelLines(rect, value, display).firstRow) {
+        let first = rect.r1 + 1;
+        while (first <= rect.r2 && !numberRow(first)) first += 1;
+        if (first > rect.r1 + 1 && first <= rect.r2) range.r1 = first - 1;
+      }
+    }
     // A tree map, a sunburst and a stock chart read their first row as the
     // series' names by Excel's label rule: "A 店" / 50 or 门店 / 2024 on top
     // is a point, every row plotted, the series named by its place (Excel

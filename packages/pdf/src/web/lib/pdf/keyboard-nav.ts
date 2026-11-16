@@ -45,6 +45,21 @@ export interface ShortcutKeyEvent {
   shiftKey: boolean;
 }
 
+/**
+ * Cmd+Up / Cmd+Down: macOS's keys for the start and the end of a text (what
+ * Ctrl+Home / Ctrl+End are elsewhere). An editor on the page takes them as it
+ * takes Home and End: left to the browser with the caret already at that end,
+ * nothing moved and the key scrolled the file to its first or last page
+ * instead, away from the line being typed in. Shift (extending a selection)
+ * is the caller's to read.
+ */
+export function pdfTextEdgeKey(
+  event: Pick<ShortcutKeyEvent, "key" | "metaKey" | "ctrlKey" | "altKey">,
+): "start" | "end" | null {
+  if (!event.metaKey || event.ctrlKey || event.altKey) return null;
+  return event.key === "ArrowUp" ? "start" : event.key === "ArrowDown" ? "end" : null;
+}
+
 /** Optional per-call routing switches (all default off). */
 export interface ViewerShortcutOptions {
   /**

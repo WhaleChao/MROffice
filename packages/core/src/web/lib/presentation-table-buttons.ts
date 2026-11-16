@@ -63,6 +63,7 @@ import {
   normalizeTableStyleLook,
   persistedCellStyle,
   TABLE_STYLE_PRESETS,
+  tableStyleLookCellPaint,
   type CellStyleInput,
   type ResolvedCellStyle,
   type TableBorderSelectionPosition,
@@ -92,6 +93,68 @@ function lookIsCarriedByTable(
     normalizeTableStyleLook(table.tableStyleLook, table.tableStyleId)
       ?.styleId === styleId
   );
+}
+
+/** The same colour, either way it is spelt. */
+function sameHex(a: unknown, b: unknown): boolean {
+  return typeof a === "string" && typeof b === "string" && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/** Two edges that draw the same line. */
+function sameEdge(a: unknown, b: unknown): boolean {
+  const left = a as { style?: unknown; color?: unknown; width?: unknown } | null | undefined;
+  const right = b as { style?: unknown; color?: unknown; width?: unknown } | null | undefined;
+  if (!left || !right) return false;
+  if ((left.style === "none") !== (right.style === "none")) return false;
+  if (left.style === "none") return true;
+  return (
+    left.style === right.style &&
+    sameHex(left.color, right.color) &&
+    Math.abs(Number(left.width ?? 0) - Number(right.width ?? 0)) < 0.01
+  );
+}
+
+
+
+
+
+
+
+
+
+
+function cellsWithoutOldStylePaint(table: PresentationTableBlock): PresentationTableBlock {
+  const look = normalizeTableStyleLook(table.tableStyleLook, table.tableStyleId);
+  if (!look) return table;
+  const flags = table as unknown as Parameters<typeof tableStyleLookCellPaint>[1];
+  const rowCount = table.rows.length;
+  let changed = false;
+  const rows = table.rows.map((row, rowIndex) => {
+    let rowChanged = false;
+    const next = row.map((cell, colIndex) => {
+      const paint = tableStyleLookCellPaint(look, flags, rowIndex, rowCount, colIndex, row.length);
+      if (!paint) return cell;
+      const record = cell as unknown as Record<string, unknown>;
+      const drop: string[] = [];
+      if (paint.color !== null && sameHex(record.color, paint.color)) drop.push("color");
+      if ("bold" in record && record.bold === paint.bold) drop.push("bold");
+      if ("italic" in record && record.italic === paint.italic) drop.push("italic");
+      for (const side of ["top", "bottom", "left", "right"] as const) {
+        const key = `border${side[0].toUpperCase()}${side.slice(1)}`;
+        const edge = paint.edges[side] ?? { style: "none", color: "#000000", width: 1 };
+        if (key in record && sameEdge(record[key], edge)) drop.push(key);
+      }
+      if (!drop.length) return cell;
+      rowChanged = true;
+      const stripped = { ...record };
+      for (const key of drop) delete stripped[key];
+      return stripped as unknown as typeof cell;
+    });
+    if (!rowChanged) return row;
+    changed = true;
+    return next;
+  });
+  return changed ? { ...table, rows } : table;
 }
 
 /**
@@ -136,7 +199,7 @@ export function applyPresentationTableStyleSelection(
     // Grid" kept a full grey grid on the slide, in the show and in the
     
     const styled: PresentationTableBlock = {
-      ...table,
+      ...cellsWithoutOldStylePaint(table),
       tableStyleId: styleId,
       tableStyleLook: selection.look,
     };

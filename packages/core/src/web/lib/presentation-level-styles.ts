@@ -9,6 +9,7 @@ import {
   type RunStyle,
   type TextRun,
 } from "./presentation-runs";
+import type { ParagraphRunDefaults } from "./presentation-paragraphs";
 
 /** One level's inherited character formatting (points; a flag only when on). */
 export interface PresentationLevelStyle {
@@ -134,11 +135,25 @@ export function runStyleHandedToLevel(
   style: RunStyle | undefined,
   ladder: readonly PresentationLevelStyle[],
   level: number,
+  runDefaults?: ParagraphRunDefaults,
 ): RunStyle {
   const entry = presentationLevelStyleAt(ladder, level);
   const next: Record<string, unknown> = { ...(style ?? {}) };
   for (const key of PRESENTATION_LEVEL_STYLE_KEYS) withLevelValue(next, key, entry);
-  next.inheritedKeys = [...PRESENTATION_LEVEL_STYLE_KEYS];
+  // The row's own run defaults (`a:pPr/a:defRPr`, readings row 885) lie over
+  // the level: what they state is the words' after Clear All Formatting, and
+  // stays the row's, as the import reads a run that states nothing there.
+  const own = PRESENTATION_LEVEL_STYLE_KEYS.filter((key) => runDefaults?.[key] !== undefined);
+  for (const key of own) {
+    next[key] = runDefaults![key];
+    if (key === "color") {
+      delete next.colorFromList;
+      delete next.recipeColor;
+    }
+    if (key === "fontFamily") delete next.themeFontRole;
+  }
+  if (runDefaults?.letterSpacing !== undefined) next.letterSpacing = runDefaults.letterSpacing;
+  next.inheritedKeys = PRESENTATION_LEVEL_STYLE_KEYS.filter((key) => !own.includes(key));
   return next as RunStyle;
 }
 

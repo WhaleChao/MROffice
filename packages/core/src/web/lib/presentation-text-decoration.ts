@@ -18,6 +18,12 @@ import type { CSSProperties } from "react";
 import type { OfficeChartTextUnderline } from "./office-charts/chart-text";
 
 export const PRESENTATION_UNDERLINE_STYLES = [
+  // Words only (`u="words"`, readings row 896). Windows PowerPoint draws it
+  // exactly as the single line -- under spaces, tabs and trailing spaces
+  // alike (truth census62-work/words-ul) -- unlike Word, which skips the
+  // spaces; it is kept as its own kind so the file keeps its token and the
+  // Font dialog shows it, and drawn as `sng` (`presentationTextDecorationCss`).
+  "words",
   "double",
   "heavy",
   "dotted",
@@ -96,7 +102,8 @@ export function presentationTextDecorationCss(
   underline: PresentationUnderlineStyle | undefined,
   strike: "double" | undefined,
 ): Pick<CSSProperties, "textDecorationStyle" | "textDecorationThickness"> {
-  const kind = underline ?? (strike === "double" ? "double" : undefined);
+  // Words only draws as the single line in PowerPoint (row 896): no kind of its own.
+  const kind = (underline === "words" ? undefined : underline) ?? (strike === "double" ? "double" : undefined);
   if (!kind) return {};
   const css: Pick<
     CSSProperties,

@@ -24,6 +24,7 @@
  */
 
 import { normalizeOfficeShapeShadow } from "./office-shape-paint";
+import { nativeSlideSizeLayoutProjection } from "./presentation-slide-size";
 import { ptToPx } from "./office-units";
 import {
   dropNativeParagraphReceipts,
@@ -1170,7 +1171,20 @@ export const NATIVE_LAYOUT_STYLE_FIELDS: readonly string[] = [
 
 
 
-const NATIVE_LAYOUT_CARRIED_STYLE_KEYS = ["tabStops", "latinLineBreak"] as const;
+const NATIVE_LAYOUT_CARRIED_STYLE_KEYS = [
+  "tabStops",
+  "latinLineBreak",
+  // A layout box's theme references with a shade or the like (its `p:style`
+  // outline reference, API readings row 891), carried beside `themeColors`
+  // and not restated by Layout / Reset (the server's
+  // `LAYOUT_STYLE_CARRIED_FIELDS`). Refused here, every slide on a layout
+  // whose placeholder its `p:style` paints with a shaded outline was a
+  
+  "themeColorsTransformed",
+  // Whether the layout's face follows the theme's heading or body font
+  // (API readings row 843), carried beside `fontFamily`.
+  "themeFontRole",
+] as const;
 const NATIVE_LAYOUT_STYLE_KEYS: ReadonlySet<string> = new Set([
   ...NATIVE_LAYOUT_STYLE_FIELDS,
   ...NATIVE_LAYOUT_CARRIED_STYLE_KEYS,
@@ -1212,6 +1226,40 @@ function nativeLayoutThemeColors(value: unknown): boolean {
             (typeof item === "string" && item.length <= 128 && !/[\u0000-\u001f\u007f]/.test(item)),
         ),
     )
+  );
+}
+/** A layout box's theme references with transforms:
+ * `{ outlineColor: { slot, transforms: [[kind, value], ...], rgb } }`, the
+ * page schema's `presentationThemeColorsTransformedSchema`. */
+function nativeLayoutThemeColorsTransformed(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const entries = Object.entries(value as Record<string, unknown>);
+  return (
+    entries.length > 0 &&
+    entries.every(([field, reference]) => {
+      if (!["fill", "stroke", "outlineColor"].includes(field)) return false;
+      if (!reference || typeof reference !== "object" || Array.isArray(reference)) return false;
+      const { slot, transforms, rgb, ...rest } = reference as Record<string, unknown>;
+      return (
+        Object.keys(rest).length === 0 &&
+        typeof slot === "string" &&
+        /^[A-Za-z0-9]{1,16}$/.test(slot) &&
+        typeof rgb === "string" &&
+        /^#[0-9a-fA-F]{6}$/.test(rgb) &&
+        Array.isArray(transforms) &&
+        transforms.length >= 1 &&
+        transforms.length <= 8 &&
+        transforms.every(
+          (step) =>
+            Array.isArray(step) &&
+            step.length === 2 &&
+            typeof step[0] === "string" &&
+            /^[A-Za-z]{1,16}$/.test(step[0]) &&
+            typeof step[1] === "number" &&
+            Number.isFinite(step[1]),
+        )
+      );
+    })
   );
 }
 const NATIVE_LAYOUT_BAND_PLACEHOLDER_TYPES = new Set([
@@ -1383,6 +1431,14 @@ function nativeLayoutStyle(value: unknown): Record<string, unknown> | null {
     }
     if (key === "tabStops") {
       if (!nativeLayoutTabStops(item)) return null;
+      continue;
+    }
+    if (key === "themeColorsTransformed") {
+      if (!nativeLayoutThemeColorsTransformed(item)) return null;
+      continue;
+    }
+    if (key === "themeFontRole") {
+      if (item !== "heading" && item !== "body") return null;
       continue;
     }
     if (key === "textShadowEffect") {
@@ -3300,6 +3356,9 @@ export function resetNativeSlideToLayout(
   const originalByShapeId = new Map(
     receipt.placeholders.map((placeholder) => [placeholder.shapeId, placeholder]),
   );
+  // The layout as the deck now draws it: after a Slide Size, scaled with the
+  // slides as the package's layouts are written.
+  const resized = nativeSlideSizeLayoutProjection(slide);
   const blocks = (Array.isArray(slide.blocks) ? slide.blocks : []).map((value) => {
     if (!value || typeof value !== "object" || Array.isArray(value)) return value;
     const block = value as Record<string, unknown>;
@@ -3328,7 +3387,7 @@ export function resetNativeSlideToLayout(
     const next = { ...block };
     if (kinds.has("geometry")) {
       for (const key of NATIVE_LAYOUT_GEOMETRY_KEYS) delete next[key];
-      Object.assign(next, baseline.layoutGeometry);
+      Object.assign(next, resized ? resized.geometry(baseline.layoutGeometry) : baseline.layoutGeometry);
     }
     if (next.type === "text" && [...kinds].some((kind) => kind !== "geometry")) {
       const style =
@@ -3338,7 +3397,11 @@ export function resetNativeSlideToLayout(
       for (const key of NATIVE_LAYOUT_NESTED_STYLE_KEYS) delete style[key];
       for (const key of NATIVE_LAYOUT_NESTED_STYLE_KEYS) {
         if (Object.hasOwn(baseline.layoutStyle, key)) {
-          style[key] = baseline.layoutStyle[key];
+          const value = baseline.layoutStyle[key];
+          style[key] =
+            key === "fontSize" && resized && typeof value === "number" && Number.isFinite(value)
+              ? resized.scaleFont(value)
+              : value;
         }
       }
       if (Object.keys(style).length > 0) next.style = style;

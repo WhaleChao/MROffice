@@ -50087,6 +50087,8 @@ export default function PDFViewer({
   // `paragraph_index` counts the page's plain-text blocks, not PDF pages, so
   // only the snippet can name a page here; without one the open window is
   // the agreed fallback.
+  /** Attempts (about 250 ms apart) a cited line waits for its text layer. */
+  const PDF_LOCATE_LINE_WAITS = 12;
   const pdfLocateRef = useRef<{
     requestId: string;
     page: number | null;
@@ -50094,6 +50096,8 @@ export default function PDFViewer({
     lineScrolled: boolean;
     /** The named page's text has been asked for and answered (or failed). */
     pageTextRead?: boolean;
+    /** Attempts that found the page's text layer without the line's span. */
+    lineWaits?: number;
   } | null>(null);
   const resolvePdfLocate = useCallback(
     (_scope: Element, request: PageLocateRequest): HTMLElement | null => {
@@ -50154,8 +50158,14 @@ export default function PDFViewer({
         "div[data-pdf-text-layer]",
       );
       const entry = findPageTextRef.current.get(current.page);
-      if (wrapper && (!layer || !entry) && current.pageTextRead) {
-        // The named page has no text to point into (a scan): the page.
+      if (
+        wrapper &&
+        current.pageTextRead &&
+        (!entry || (!entry.text.trim() && !layer))
+      ) {
+        // The named page has no text to point into (a scan): the page. One
+        // with text waits for its text layer, so its line is found (in
+        // WebKit the layer is drawn after the text is read).
         return (
           wrapper.querySelector<HTMLElement>("[data-pdf-page-locate]") ?? wrapper
         );
@@ -50170,8 +50180,17 @@ export default function PDFViewer({
       entry.itemStarts.forEach((start, index) => {
         if (start <= rawStart) itemIndex = index;
       });
-      const line = textLayerItemSpans(layer).item(itemIndex);
-      if (!line) return overlay;
+      const spans = textLayerItemSpans(layer);
+      const line = spans.item(itemIndex);
+      if (!line) {
+        // The page's text layer is still being drawn (in WebKit its spans
+        // come, and are tagged, after the page's text is read): ask again
+        
+        // runs in six flashed page 4 instead of its cited line).
+        const complete = spans.tagged && spans.length >= entry.itemStarts.length;
+        current.lineWaits = (current.lineWaits ?? 0) + 1;
+        return complete || current.lineWaits > PDF_LOCATE_LINE_WAITS ? overlay : null;
+      }
       if (!current.lineScrolled) {
         // The line may sit below the fold of a tall page: land a little above
         // it, through the reader's own scroll (never scrollIntoView, which

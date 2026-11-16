@@ -65,6 +65,8 @@ export interface TextStyleSnapshot {
   fontSize?: number;
   /** The box's own font: a font chosen before typing is stated here, not on a run (PPT-B342). */
   fontFamily?: string;
+  /** That font is the theme's heading or body font (a placeholder's, API readings row 843). */
+  themeFontRole?: "heading" | "body";
   color?: string;
   bold?: boolean;
   italic?: boolean;
@@ -252,6 +254,7 @@ export function tableWithPaintedLook<T extends Record<string, unknown>>(
 const TEXT_STYLE_KEYS = [
   "fontSize",
   "fontFamily",
+  "themeFontRole",
   "color",
   "bold",
   "italic",
@@ -319,6 +322,7 @@ const STYLE_KEY_TYPES: Record<string, StyleKeyType> = {
   subscript: "boolean",
   highlight: "string",
   fontFamily: "string",
+  themeFontRole: "string",
   textOutline: "string",
   textOutlineWidthPt: "number",
   textOutlineJoin: "string",
@@ -379,13 +383,23 @@ export function paintableKind(block: PaintableBlock | null | undefined): Paintab
  * has no runs or the first run carries no usable formatting.
  */
 function captureRunStyle(block: PaintableBlock): RunStyle | undefined {
-  const runs = block.runs;
+  // The first character's run: the block's flat runs, else its first row's
+  // (a shape label held as rows states no flat runs).
+  const rows = (block as { paragraphs?: unknown }).paragraphs;
+  const firstRow = Array.isArray(rows) ? (rows[0] as { runs?: unknown } | undefined) : undefined;
+  const runs = Array.isArray(block.runs) && block.runs.length > 0 ? block.runs : firstRow?.runs;
   if (!Array.isArray(runs) || runs.length === 0) return undefined;
   const first = runs[0] as TextRun | undefined;
   const style = first?.style;
   if (!style || typeof style !== "object") return undefined;
-  const picked = pickStyle(style as Record<string, unknown>, RUN_STYLE_KEYS);
-  return picked as RunStyle | undefined;
+  const picked = pickStyle(style as Record<string, unknown>, RUN_STYLE_KEYS) as RunStyle | undefined;
+  // A face that follows the theme's heading or body font goes as that
+  // reference, so the painted words follow the theme as the source's do.
+  const role = (style as { themeFontRole?: unknown }).themeFontRole;
+  if (picked?.fontFamily && (role === "heading" || role === "body")) {
+    return { ...picked, themeFontRole: role } as RunStyle;
+  }
+  return picked;
 }
 
 /** One newline-aware selected run span supplied by the Presentation adapter. */
@@ -578,7 +592,24 @@ export function captureFormatSnapshot(
   const styleObj = block.style;
   if (styleObj && typeof styleObj === "object") {
     const text = pickStyle(styleObj as Record<string, unknown>, TEXT_STYLE_KEYS);
-    if (text) snapshot.text = text as TextStyleSnapshot;
+    // A placeholder's face from its layout (`source.layoutStyle`, API readings
+    // row 843) says there whether it follows the theme's heading or body font.
+    const layoutStyle = (block as { source?: { layoutStyle?: Record<string, unknown> } }).source?.layoutStyle;
+    if (
+      text &&
+      text.themeFontRole === undefined &&
+      layoutStyle &&
+      typeof text.fontFamily === "string" &&
+      text.fontFamily === layoutStyle.fontFamily &&
+      (layoutStyle.themeFontRole === "heading" || layoutStyle.themeFontRole === "body")
+    ) {
+      (text as Record<string, unknown>).themeFontRole = layoutStyle.themeFontRole;
+    }
+    if (text && !(typeof text.fontFamily === "string" && (text.themeFontRole === "heading" || text.themeFontRole === "body"))) {
+      // A role names a theme font only beside the face it resolved to.
+      delete (text as Record<string, unknown>).themeFontRole;
+    }
+    if (text && Object.keys(text).length > 0) snapshot.text = text as TextStyleSnapshot;
   }
 
   const runStyle = captureRunStyle(block);
@@ -696,11 +727,91 @@ export function planFormatPaint(
   if (kind === "text" || shapeHasText) {
     if (snapshot.text) plan.textPatch = cloneRecord(snapshot.text);
     if (snapshot.runStyle) plan.runStylePatch = cloneRecord(snapshot.runStyle);
+    // A SHAPE's words: every character takes what the source's first
+    // character wears -- its run's own format over its box's -- written on
+    // the shape's runs, over their own formats; the shape's box keeps its own
+    // (truth c64painter P1 / P4: a rectangle's and a content placeholder's
+    // runs of 28 / 16 pt Cambria all became 24 pt bold, their `a:lstStyle`
+    // untouched). Left on the box, a run that stated its own size and face
+    // stayed as it was, and the save could not write a box-level change to a
+    
+    // its box (P2 / P3: its `a:lstStyle` level 1), as before.
+    if (shapeHasText && snapshot.scope !== "text-selection" && (snapshot.text || snapshot.runStyle)) {
+      plan.runStylePatch = sourceCharacterFormat(snapshot);
+      plan.textPatch = snapshot.text?.align !== undefined ? { align: snapshot.text.align } : undefined;
+    }
     if (kind === "text" && snapshot.paragraph) {
       plan.paragraphPatch = cloneRecord(snapshot.paragraph);
     }
+    if (kind === "text" && snapshot.scope !== "text-selection" && typeof target.text === "string" && target.text !== "") {
+      // A text box takes the format on its box (truth c64painter P2: the
+      // box's `a:lstStyle` level 1 states the source's format, every run's
+      // `a:rPr` emptied), so a run that stated its own size or italic no
+      // longer keeps it, and words typed into the emptied box take it (P3).
+      const effective = sourceCharacterFormat(snapshot);
+      const box: Record<string, unknown> = { ...(plan.textPatch ?? {}) };
+      for (const key of TEXT_STYLE_KEYS) {
+        if (key === "align") continue;
+        const value = effective[key as keyof FormatPainterRunStylePatch];
+        if (value === null) delete box[key];
+        else if (value !== undefined) box[key] = value;
+      }
+      plan.textPatch = Object.keys(box).length > 0 ? (box as TextStyleSnapshot) : undefined;
+      // The runs wear the same format themselves: the save reads a run that
+      // states no flag as the flag it stated before (a run's `b="0"` stayed
+      // under a bold box, census64 replay), so the box alone is not what the
+      // file then draws.
+      plan.runStylePatch = effective;
+    }
   }
   return plan;
+}
+
+/** The character format keys Format Painter carries whole. */
+const SOURCE_CHARACTER_KEYS = [
+  "fontSize",
+  "fontFamily",
+  "themeFontRole",
+  "color",
+  "bold",
+  "italic",
+  "underline",
+  "strike",
+  "superscript",
+  "subscript",
+] as const satisfies readonly (keyof FormatPainterRunStylePatch)[];
+
+/**
+ * The source's first character's whole format, as Format Painter carries it:
+ * its run's own over its box's, a flag neither states off (`null`: the
+ * painted run states none and draws it off, as PowerPoint writes it -- truth
+ * c64painter P1: a target's `i="1"` gone under a source that states no
+ * italic), and a face that names no theme font no longer following one.
+ */
+function sourceCharacterFormat(snapshot: FormatPainterSnapshot): FormatPainterRunStylePatch {
+  const box = snapshot.text
+    ? (Object.fromEntries(
+        Object.entries(snapshot.text).filter(([key, value]) => key !== "align" && value !== undefined),
+      ) as FormatPainterRunStylePatch)
+    : {};
+  const run = snapshot.runStyle ?? {};
+  const effective: FormatPainterRunStylePatch = {
+    bold: null,
+    italic: null,
+    underline: null,
+    strike: null,
+    superscript: null,
+    subscript: null,
+    ...box,
+    ...run,
+  };
+  for (const flag of ["bold", "italic", "underline", "strike", "superscript", "subscript"] as const) {
+    if (effective[flag] === false) effective[flag] = null;
+  }
+  if (effective.fontFamily !== undefined && effective.fontFamily !== null && !Object.hasOwn(run, "themeFontRole") && !Object.hasOwn(box, "themeFontRole")) {
+    effective.themeFontRole = null;
+  }
+  return effective;
 }
 
 /** True when a paint plan carries no applicable patch (a no-op paint). */

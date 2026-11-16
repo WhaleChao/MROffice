@@ -11,6 +11,7 @@
  * functions.
  */
 
+import { tableStyleLookHasThemeRefs, tableStyleLookUnderTheme } from "./presentation-table-style-theme-refs";
 import {
   nativeBlockFollowingTheme,
   nativeSlideThemeFollow,
@@ -224,6 +225,12 @@ export function themeAfterColorScheme(
 const OFFICE_TABLE_STYLE_ACCENTS = ["#156082", "#e97132", "#196b24", "#0f9ed5", "#a02b93", "#4ea72e"] as const;
 
 /** Two table looks that say the same, whatever order their keys are in. */
+
+
+
+
+const TABLE_LOOK_IDENTITY_KEYS = new Set(["styleName", "themeColors"]);
+
 function sameTableStyleLook(left: unknown, right: unknown): boolean {
   const canonical = (value: unknown): unknown =>
     Array.isArray(value)
@@ -231,6 +238,7 @@ function sameTableStyleLook(left: unknown, right: unknown): boolean {
       : value && typeof value === "object"
         ? Object.fromEntries(
             Object.keys(value as Record<string, unknown>)
+              .filter((key) => !TABLE_LOOK_IDENTITY_KEYS.has(key))
               .sort()
               .map((key) => [key, canonical((value as Record<string, unknown>)[key])]),
           )
@@ -394,6 +402,15 @@ export function slidesRestyledForTheme<S extends PresentationButtonSlide>(
       if (block.type !== "table") return block;
       const table = block as PresentationTableBlock;
       if (!table.tableStyleLook) return block;
+      // A look that names the theme colours it draws (reading row 897) is
+      // repainted by them, a file's own style or a built-in alike, as
+      
+      if (tableStyleLookHasThemeRefs(table.tableStyleLook)) {
+        const repainted = tableStyleLookUnderTheme(table.tableStyleLook, themeColors);
+        if (repainted === table.tableStyleLook) return block;
+        changed = true;
+        return { ...table, tableStyleLook: repainted } as PresentationBlock;
+      }
       // An imported table's look was resolved from its file's style; it
       // follows the theme only when it IS the built-in style the GUID names,
       // resolved against the old theme (its file then states theme colours

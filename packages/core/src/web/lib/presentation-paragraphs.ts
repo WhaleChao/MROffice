@@ -129,6 +129,41 @@ export interface SlideParagraph {
    */
   fontAlign?: PresentationFontAlign;
   fontAlignInherited?: PresentationFontAlign;
+  
+
+
+
+
+
+
+
+
+  runDefaults?: ParagraphRunDefaults;
+}
+
+/** {@link SlideParagraph.runDefaults}. */
+export interface ParagraphRunDefaults {
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+  fontFamily?: string;
+  letterSpacing?: number;
+}
+
+/** A row's run defaults as stored, or undefined when none reads. */
+export function normalizeParagraphRunDefaults(value: unknown): ParagraphRunDefaults | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const out: ParagraphRunDefaults = {};
+  const finite = (item: unknown): item is number => typeof item === "number" && Number.isFinite(item);
+  if (finite(raw.fontSize) && raw.fontSize >= 1 && raw.fontSize <= 4000) out.fontSize = raw.fontSize;
+  if (typeof raw.bold === "boolean") out.bold = raw.bold;
+  if (typeof raw.italic === "boolean") out.italic = raw.italic;
+  if (typeof raw.color === "string" && raw.color) out.color = raw.color;
+  if (typeof raw.fontFamily === "string" && raw.fontFamily) out.fontFamily = raw.fontFamily;
+  if (finite(raw.letterSpacing)) out.letterSpacing = raw.letterSpacing;
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** ST_TextFontAlignType, in OOXML's own words. */
@@ -165,10 +200,14 @@ export function normalizeParagraphEndFontSize(value: unknown): number | undefine
 /** A row's own formatting the editor carries without drawing or authoring it. */
 export function paragraphCarriedFields(
   record: unknown,
-): Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited"> {
+): Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults"> {
   if (!record || typeof record !== "object") return {};
   const raw = record as Record<string, unknown>;
-  const out: Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited"> = {};
+  const out: Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults"> = {};
+  // The row's own run defaults go with it through every rebuild, as its
+  // `a:pPr` does in PowerPoint (readings row 885).
+  const runDefaults = normalizeParagraphRunDefaults(raw.runDefaults);
+  if (runDefaults !== undefined) out.runDefaults = runDefaults;
   const endFontSize = normalizeParagraphEndFontSize(raw.endFontSize);
   if (endFontSize !== undefined) out.endFontSize = endFontSize;
   if (raw.endScript === "super" || raw.endScript === "sub") out.endScript = raw.endScript;

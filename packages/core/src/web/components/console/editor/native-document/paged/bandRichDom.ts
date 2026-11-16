@@ -1211,7 +1211,8 @@ function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRich
     // PNG under the journal's white title, and the band drew neither.
     if (paintOwn && member.kind === "picture" && typeof member.src === "string" && member.src) {
       const picture = doc.createElement("img");
-      picture.src = member.src;
+      // Inline, or named by digest (`mrai-picture:`), as a band picture is.
+      drawDocumentPicture(picture, member.src);
       picture.alt = "";
       picture.draggable = false;
       picture.style.position = "absolute";

@@ -145,6 +145,11 @@ import BacklinksPanel from "@mrnote/core/web/components/console/editor/Backlinks
 import CommentsPanel from "@mrnote/core/web/components/console/editor/CommentsPanel.tsx";
 import DocumentOutlinePanel from "./DocumentOutlinePanel";
 import TrackChangesPanel from "@mrnote/core/web/components/console/editor/TrackChangesPanel.tsx";
+import {
+  OPEN_AI_REVIEW_EVENT,
+  takePendingAiReviewOpen,
+  type OpenAiReviewDetail,
+} from "@mrnote/core/web/__cut__/mdc1651b936.ts";
 import StylesPanel, { type StylesPanelCreateRequest } from "@mrnote/core/web/components/console/editor/StylesPanel.tsx";
 import CitationPicker from "@mrnote/core/web/components/console/editor/CitationPicker.tsx";
 import CrossReferencePicker, {
@@ -2426,6 +2431,8 @@ export default function NoteEditor({
   // beside the other side panels. Additive — a document with no tracked changes
   // shows the panel's empty state.
   const [trackChangesOpen, setTrackChangesOpen] = useState(false);
+  // Review > AI changes asked for one group (the run card's "逐条审阅").
+  const [aiReviewRequest, setAiReviewRequest] = useState<{ groupId: string | null; nonce: number } | null>(null);
   const trackChangesReturnFocusRef = useRef<HTMLElement | null>(null);
   // Styles pane (Word/WPS "Styles" / 样式 registry): lists the built-in paragraph
   // presets plus the document's user-defined named styles, applies one to the
@@ -12510,6 +12517,26 @@ export default function NoteEditor({
     trackChangesReturnFocusRef.current = stablePanelReturnFocusTarget();
     setTrackChangesOpen(true);
   }, [closeTrackChangesPanel, trackChangesOpen]);
+  // An AI change's review asked for this page: the Reviewing Pane opens on
+  // its AI changes, at the group (asked before this editor was mounted too).
+  useEffect(() => {
+    if (guestMode || !pageId) return;
+    const open = (groupId: string | null) => {
+      trackChangesReturnFocusRef.current ??= stablePanelReturnFocusTarget();
+      setTrackChangesOpen(true);
+      setAiReviewRequest({ groupId, nonce: Date.now() });
+    };
+    const pending = takePendingAiReviewOpen(pageId);
+    if (pending) open(pending.groupId);
+    const onOpen = (event: Event) => {
+      const detail = (event as CustomEvent<OpenAiReviewDetail>).detail;
+      if (detail?.pageId !== pageId) return;
+      takePendingAiReviewOpen(pageId);
+      open(detail.groupId);
+    };
+    window.addEventListener(OPEN_AI_REVIEW_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_AI_REVIEW_EVENT, onOpen);
+  }, [guestMode, pageId]);
   const closeOutlinePanel = useCallback(() => {
     const returnFocus = outlineReturnFocusRef.current;
     outlineReturnFocusRef.current = null;
@@ -13709,6 +13736,8 @@ export default function NoteEditor({
               <TrackChangesPanel
                 editor={usableEditor}
                 onClose={closeTrackChangesPanel}
+                pageId={guestMode ? null : pageId}
+                aiReviewRequest={aiReviewRequest}
               />
             </DocumentDockedPane>
           ) : null}

@@ -26,6 +26,7 @@ import { pdfFormatPreviewAdapter } from "./pdf/pdfFormatPreview";
 import { reportOfficeExperience } from "@mrnote/core/web/lib/office-experience-report.ts";
 import { effectiveTextBoxKind } from "@mrnote/core/web/lib/pdf/text-box-kind.ts";
 import { pdfDevErrorText } from "../../../lib/pdf/dev-error-text";
+import { pdfReaderRefusalText } from "../../../lib/pdf/reader-refusal-text";
 import { renderFormulaBoxAppearance } from "./pdf/viewer/exportRendering";
 import { formatFileSize } from "@mrnote/core/web/lib/errors/upload-failure.ts";
 import { refuseStrayNativeDrag } from "@mrnote/core/web/lib/native-drag-guard.ts";
@@ -192,7 +193,7 @@ import { pdfKeptObjectKey } from "../../../lib/pdf/kept-object-change";
 import { askPdfReaderWorkNow, pdfReaderHeldWork, pdfReaderHoldsWork, pdfReaderRetryPauseMs, pdfWindowShownSaveStatus, type PdfReaderHeldState } from "../../../lib/pdf/reader-held-work";
 import { PDF_SAVE_PRESS_POLL_MS, pdfSavePressStep } from "../../../lib/pdf/save-press";
 import { usePdfReaderHeldWork } from "../../../lib/pdf/use-reader-held-work";
-import { createPdfPendingRowsLedger, forgetPdfPendingEditsSavedHere, isPdfPendingEditDurable, isPdfPendingEditSaved, listPdfPendingEditRows, notePdfPendingEditSaving, onPdfPendingEditSaved, PDF_PENDING_ROW_PAGE_CHANGED, pdfNativeChainSaveTaken, pdfNativeJournalTakesKeptTextBlocks, pdfPendingEditRowHasTypedWords, resavePdfPendingEdit, savePdfPendingEdit, withdrawPdfPendingEdit, writePdfPendingEditRows, type PdfPendingEditRow, type PdfPendingRowAttempt } from "../../../lib/pdf/pending-edits";
+import { createPdfPendingRowsLedger, forgetPdfPendingEditsSavedHere, isPdfPendingEditDurable, isPdfPendingEditSaved, listPdfPendingEditRows, notePdfPendingEditSaving, onPdfPendingEditSaved, PDF_PENDING_ROW_PAGE_CHANGED, pdfNativeChainSaveTaken, pdfNativeJournalTakesKeptTextBlocks, pdfPendingEditRowHasTypedWords, resavePdfPendingEdit, savePdfPendingEdit, stagePdfPendingRowWords, withdrawPdfPendingEdit, writePdfPendingEditRows, type PdfPendingEditRow, type PdfPendingRowAttempt } from "../../../lib/pdf/pending-edits";
 import { markPdfTextLatency, startPdfTextLatency } from "../../../lib/pdf/text-edit-latency";
 import { pdfNativeParagraphFormatWithRules } from "../../../lib/pdf/native-paragraph-format-rules";
 import { createPdfTextBackgroundSaveQueue } from "../../../lib/pdf/text-background-save";
@@ -14873,7 +14874,20 @@ export default function PdfPageWindow({
         ? (nativeListTextHostRef.current?.selection ?? null)
         : selectionOverride;
       // The selection is on the file's page: the reader's page, there.
-      const availabilityPage = nativeTextFilePageOf(current.currentPage) ?? -1;
+      // The page shown is a bar only to a selection left behind on another
+      // page (a ribbon command on the reader's own selection). A line the
+      // reader pressed (asked about by name) or one already open is of its
+      // own page, which a continuous view has on the screen whatever page
+      // counts as the one shown: a word typed into a line of page 1, the
+      // file scrolled until page 2 was the one shown, and the line left was
+      // refused with 「页面已变化，请重新选择文本」, its words kept unsaved in
+      
+      // the line's own page host is what is checked.
+      const openLine = nativeListTextDialogLeaseRef.current ?? nativeWorkingSelectionRef.current;
+      const ownPage = availabilitySelection !== null && (selectionOverride !== undefined ||
+        (openLine !== null && samePdfNativeListTextTarget(availabilitySelection, openLine.selection)));
+      const availabilityPage = ownPage && availabilitySelection
+        ? availabilitySelection.pageNumber : nativeTextFilePageOf(current.currentPage) ?? -1;
       const availability = readPdfNativeListTextAvailabilityCode({
         writable: nativeListWritableRef.current(),
         sourceReady: Boolean(
@@ -17845,12 +17859,26 @@ export default function PdfPageWindow({
     pending.controller.abort();
     void pending.promise.then(disposePreparedTextActivation, () => undefined);
   }, [disposePreparedTextActivation]);
+  // A line prepared under the pointer is of the page it was prepared on.
   useEffect(() => () => {
     clearNativeTextPreparation();
-    activeNativeTextPreparationRef.current?.abort();
   }, [
     clearNativeTextPreparation, pageId, dataItemId, page?.content_version,
     currentPage, matchedSourceRiskSnapshot?.identity.sha256, pageWritable.writable,
+  ]);
+  // A line being opened is ended by what changes its file or the right to
+  // write it -- never by another page becoming the one shown. Its page is
+  // still on the screen in a continuous view, and the reader scrolling on
+  // (a wheel, a key the browser scrolls with) while the line's proof was read
+  // used to end the opening: the box closed with nothing said and the words
+  
+  // A page no longer drawn ends it by itself (its box is gone when the
+  // proof arrives).
+  useEffect(() => () => {
+    activeNativeTextPreparationRef.current?.abort();
+  }, [
+    pageId, dataItemId, page?.content_version,
+    matchedSourceRiskSnapshot?.identity.sha256, pageWritable.writable,
   ]);
 
   const handleOpenNativeListTextEditSelfRef = useRef<((trigger: HTMLElement | null,
@@ -36253,6 +36281,44 @@ export default function PdfPageWindow({
           // on a guess.
           return { refused: PDF_PENDING_ROW_PAGE_CHANGED };
         }
+        // One edit is staged on the copy at a time. A line left while a row
+        // was being compiled found the copy "already being prepared", went
+        // by the engine's plan and was refused there as "already staged":
+        
+        // opened on a row whose compile ran a minute). Held as any stage
+        // holds it, a line left meanwhile is queued behind the row
+        // (detachNativeTextFinish); a row met while one is staged waits.
+        if (nativeWorkingStagingRef.current || nativeDetachedFinishPageRef.current !== null ||
+          nativeDetachQueueRef.current.length) return "later";
+        /** The row's words alone, as the window that left the line writes
+         * them: compiled on the copy, else by the engine's plan
+         * (stagePdfPendingRowWords; prepareNativeTextOnHead as the detached
+         * finish's own stageByEngine asks it). */
+        const stageWords = () => stagePdfPendingRowWords({
+          compile: async () => {
+            await document.stageText({ id: row.editId, selection, replacementText: payload.replacementText },
+              { start: false });
+          },
+          taken: () => document.getSnapshot().pendingOperationIds.includes(row.editId),
+          byEngine: async () => {
+            const snapshot = document.getSnapshot();
+            if (snapshot.workingSha256 !== head) return "later";
+            const headBytes = document.copyBytes();
+            try {
+              const operation = await prepareNativeTextOnHead({ pageId,
+                pageContentVersion: nativeListTextRuntimeRef.current.pageContentVersion, selection, snapshot, headBytes,
+                id: row.editId, replacementText: payload.replacementText, format: null, proof: null, keepTextRules: [],
+                lane: "pending-row" });
+              try {
+                // (The copy moved under the plan: planned again on the next try.)
+                if (document.getSnapshot().workingSha256 !== head) return "later";
+                document.stageEngine(operation, { start: false });
+              } finally { operation.candidateBytes.fill(0); }
+            } finally { headBytes.fill(0); }
+            return "staged";
+          },
+        });
+        nativeWorkingStagingRef.current = true;
         try {
           if (payload.kind !== "text") {
             // Its commands in the order the window that saved it tried
@@ -36282,18 +36348,18 @@ export default function PdfPageWindow({
               if (document.getSnapshot().workingSha256 !== head) { operation.candidateBytes.fill(0); return "later"; }
               try { document.stageEngine(operation, { start: false }); } finally { operation.candidateBytes.fill(0); }
             } else if (payload.words === true) {
-              await document.stageText({ id: row.editId, selection, replacementText: payload.replacementText },
-                { start: false });
+              return await stageWords();
             } else {
               throw refusal ?? new Error("The saved edit cannot be written.");
             }
           } else {
-            await document.stageText({ id: row.editId, selection, replacementText: payload.replacementText },
-              { start: false });
+            return await stageWords();
           }
         } catch (error) {
           markPdfTextLatency("working.server-pending-skipped", { why: String((error as Error)?.message ?? error).slice(0, 80) });
           throw error;
+        } finally {
+          nativeWorkingStagingRef.current = false;
         }
         return "staged";
       };
@@ -40801,10 +40867,19 @@ export default function PdfPageWindow({
   const stageDetachedTypedText = useCallback(async (typedText: string, target: NativeRowFormatTarget): Promise<boolean> => {
     const selection = target.local?.selection ?? target.lease?.selection;
     if (!selection || typedText === selection.item.str) return false;
-    const keepDraft = () => {
+    // Said as every other refused write is: that the PDF did not take the
+    // change (the planner's own reason where the window's language has it),
+    // then that the words are kept. "Your draft is kept" alone did not say
+    // the words were not written -- the page read 已保存 with the line as it
+    // was, and the reader opened the line, left it and was told the same
+    
+    // line of Arabic).
+    const keepDraft = (refusal?: unknown) => {
       if (retainPdfNativeTextDraft({ pageId: target.boundPage, lineKey: pdfNativeListTextTargetKey(selection),
         sourceSha256: selection.sourceSha256, text: typedText, lineText: pdfNativeListTextTargetText(selection) })) {
-        toast({ title: t("pdf.nativeTextEdit.draftRetained") });
+        toast({ title: refusal instanceof Error && refusal.message
+          ? pdfReaderRefusalText(refusal.message, t) : t("pdf.editRefusedGeneric"),
+        description: t("pdf.nativeTextEdit.draftRetained"), variant: "destructive" });
       }
       return false;
     };
@@ -40870,7 +40945,7 @@ export default function PdfPageWindow({
       if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] typed words not staged", pdfDevErrorText(error));
       if (!document.getSnapshot().pendingOperationIds.includes(id)) {
         nativeWorkingHistoryRef.current.delete(id);
-        return keepDraft();
+        return keepDraft(error);
       }
     } finally {
       if (nativeWorkingDisplayHeldRef.current) {
@@ -41031,7 +41106,7 @@ export default function PdfPageWindow({
           // Pub. 15, a paragraph whose bold is printed twice).
           if (!kept && retainPdfNativeTextDraft({ pageId: target.boundPage, lineKey: pdfNativeListTextTargetKey(selection),
             sourceSha256: selection.sourceSha256, text: typedText, lineText: pdfNativeListTextTargetText(selection) })) {
-            toast({ title: t("pdf.nativeTextEdit.draftRetained") });
+            // (stageDetachedTypedText has said so, with why.)
             return;
           }
         }
@@ -41042,7 +41117,8 @@ export default function PdfPageWindow({
         if (applied === false && typedText !== undefined && retainPdfNativeTextDraft({ pageId: target.boundPage,
           lineKey: pdfNativeListTextTargetKey(selection), sourceSha256: selection.sourceSha256, text: typedText,
           lineText: pdfNativeListTextTargetText(selection) })) {
-          toast({ title: t("pdf.nativeTextEdit.draftRetained") });
+          toast({ title: t("pdf.editRefusedGeneric"), description: t("pdf.nativeTextEdit.draftRetained"),
+            variant: "destructive" });
           return;
         }
         if (applied === null) toast({ description: t("pdf.nativeTextEdit.formatNotApplied") });

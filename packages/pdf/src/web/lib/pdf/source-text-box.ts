@@ -7,6 +7,7 @@ import type { PdfNativeListTextSelectionProof } from "./engine/native/list-text-
 import type { PdfFallbackTextPiece, PdfFallbackTextProofData } from "./source-text-fallback";
 import { scanPdfSourceTextBoxAppearanceSeals, type PdfSourceTextBoxSealIndex } from "./source-text-box-seal-scan";
 import { boxRectContains, expandRectForGlyphCover, type BoxRect } from "@mrnote/core/web/lib/pdf/text-box-geometry.ts";
+import { startResilientWorker } from "@mrnote/core/web/lib/worker-start.ts";
 
 function readFallbackPieces(value: unknown): readonly PdfFallbackTextPiece[] | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > 1024) return null;
@@ -439,22 +440,25 @@ const sealIndexes = new Map<string, Promise<PdfSourceTextBoxSealIndex | null>>()
 let sealWorker: Worker | null = null;
 let sealRequestId = 0;
 const sealRequests = new Map<number, (index: PdfSourceTextBoxSealIndex | null) => void>();
+const sealWorkerStart = startResilientWorker("pdf-text-box-seals");
 
 function sealIndexWorker(): Worker | null {
   if (sealWorker) return sealWorker;
   if (typeof Worker === "undefined") return null;
-  try {
-    sealWorker = new Worker(new URL("./source-text-box-seals.worker.ts", import.meta.url),
-      { type: "module", name: "mrnote-pdf-text-box-seals" });
-  } catch {
-    return null;
-  }
+  // One more start after a pause when one fails (lib/worker-start.ts); none:
+  // no seal index, as with no Worker.
+  const started = sealWorkerStart.create(() => new Worker(new URL("./source-text-box-seals.worker.ts", import.meta.url),
+    { type: "module", name: "mrnote-pdf-text-box-seals" }));
+  if (!started) return null;
+  sealWorker = started;
   sealWorker.onmessage = (event: MessageEvent<{ id: number; index?: PdfSourceTextBoxSealIndex }>) => {
+    sealWorkerStart.started(started);
     const resolve = sealRequests.get(event.data.id);
     sealRequests.delete(event.data.id);
     resolve?.(event.data.index ?? null);
   };
   sealWorker.onerror = () => {
+    sealWorkerStart.failed(started, "error");
     for (const resolve of sealRequests.values()) resolve(null);
     sealRequests.clear();
     sealWorker?.terminate();

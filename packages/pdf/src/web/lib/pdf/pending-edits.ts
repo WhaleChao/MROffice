@@ -330,6 +330,39 @@ export function pdfPendingRowAttemptOfError(error: unknown): PdfPendingRowAttemp
   return Object.freeze({ refused: message.slice(0, 120) || "refused" });
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export async function stagePdfPendingRowWords(input: Readonly<{
+  compile: () => Promise<void>;
+  /** The copy holds the edit although the compile threw. */
+  taken: () => boolean;
+  byEngine: () => Promise<PdfPendingRowAttempt>;
+}>): Promise<PdfPendingRowAttempt> {
+  try {
+    await input.compile();
+    return "staged";
+  } catch (error) {
+    if (input.taken()) return "staged";
+    if (pdfPendingRowAttemptOfError(error) === "later") throw error;
+    markPdfTextLatency("working.server-pending-engine", {
+      why: String((error as { message?: unknown } | null)?.message ?? error).slice(0, 80) });
+  }
+  return input.byEngine();
+}
+
 /** What a window remembers of the rows it tried, across its tries. */
 export type PdfPendingRowsLedger = {
   /** Refusals so far, by edit: a row is given up only when refused twice. */

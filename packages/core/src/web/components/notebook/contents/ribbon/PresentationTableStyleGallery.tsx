@@ -61,6 +61,7 @@ import {
   createWebTableStyleGallery,
   isNativeWebTableStyleId,
   nativeWebTableStyleSlot,
+  presentationTableStyleLabelKey,
   type TableStyleSchemeColors,
 } from "../../../../lib/presentation-table-web-gallery";
 import { useOfficeData } from "../../../../lib/office-data/use-office-data";
@@ -204,9 +205,11 @@ export function PresentationTableStyleGallery({
       known.add(look.styleId);
       const id = `deck:${look.styleId}` as const;
       selectionById.set(id, { kind: "look", look });
+      const labelKey = presentationTableStyleLabelKey(look);
       documentItems.push({
         id,
         label: look.styleName ?? look.styleId,
+        ...(labelKey ? { labelKey } : {}),
         preview: <StylePreview look={look} table={table} />,
       });
       if (look.styleId === currentId) value = id;

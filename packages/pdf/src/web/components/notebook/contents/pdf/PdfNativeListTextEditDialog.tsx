@@ -227,6 +227,7 @@ import {
 } from "../../../../lib/pdf/native-text-rule-range";
 import { pdfNativeTextLinearTurned } from "../../../../lib/pdf/native-text-turn";
 import { officeObjectTextKey } from "@mrnote/core/web/lib/office-object-nudge.ts";
+import { pdfTextEdgeKey } from "../../../../lib/pdf/keyboard-nav";
 import { savePdfTextKeyboardInput, usePdfTextKeyboardInput } from "../../../../lib/pdf/text-keyboard-input";
 import {
   readPdfNativeTextDoublePress,
@@ -9566,6 +9567,15 @@ function PdfNativeListTextInlineEditor({
       else event.preventDefault();
       return true;
     }
+    // Cmd+Up / Cmd+Down (macOS's Ctrl+Home / Ctrl+End) are the block's as Home
+    // and End below are: the caret already waits after the words, so the
+    // browser had nothing to move and scrolled the file to its last page
+    // instead -- under a line whose proof was still being read, that ended
+    
+    if (pdfTextEdgeKey(event)) {
+      event.preventDefault();
+      return true;
+    }
     if (event.metaKey || event.ctrlKey) return false;
     if ((event.key === "Delete" || event.key === "Backspace") && !event.altKey) {
       event.preventDefault();
@@ -9632,6 +9642,7 @@ function PdfNativeListTextInlineEditor({
       aria-invalid={displayedError || previewError ? true : undefined}
       aria-describedby={[
         "pdf-native-list-text-edit-geometry",
+        initialLayoutType3 ? "pdf-native-list-text-edit-type3" : null,
         displayedError ? "pdf-native-list-text-edit-error" : null,
         effectiveApplyDisabledReason && !displayedError && !submitting
           ? "pdf-native-list-text-edit-disabled-reason"
@@ -9783,10 +9794,15 @@ function PdfNativeListTextInlineEditor({
         // Match the existing PdfTextBoxOverlay's frame-local Home/End
         // contract. On macOS the browser otherwise scrolls the outer PDF to
         // its first/last page, invalidating an in-flight source selection.
-        if (!event.altKey && (event.key === "Home" || event.key === "End")) {
+        // Cmd+Up / Cmd+Down are the same keys on macOS: with the caret already
+        // at that end the browser moved nothing and scrolled the file to its
+        // first or last page.
+        const edgeKey = event.altKey ? null : event.key === "Home" ? "start" : event.key === "End" ? "end"
+          : pdfTextEdgeKey(event);
+        if (edgeKey) {
           event.preventDefault();
           const input = event.currentTarget;
-          const offset = event.key === "Home" ? 0 : input.value.length;
+          const offset = edgeKey === "start" ? 0 : input.value.length;
           const anchor = input.selectionDirection === "backward"
             ? input.selectionEnd : input.selectionStart;
           input.setSelectionRange(
@@ -12506,6 +12522,21 @@ function PdfNativeListTextInlineEditor({
           {translate("pdf.nativeTextEdit.layoutFallbackNotice")}
         </span>
       ) : null}
+      {
+
+
+
+}
+      {initialLayoutType3 && !displayedError ? (
+        <span
+          id="pdf-native-list-text-edit-type3"
+          role="status"
+          data-testid="pdf-native-list-text-edit-type3-notice"
+          className="basis-full rounded border border-amber-400/40 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          {translate("pdf.nativeTextEdit.type3WordsNotEditable")}
+        </span>
+      ) : null}
       {displayedError ? (
         <span
           id="pdf-native-list-text-edit-error"
@@ -12517,7 +12548,7 @@ function PdfNativeListTextInlineEditor({
         </span>
       ) : null}
     </>
-  ), [displayedError, effectiveApplyDisabledReason, geometryNotice, manualLayoutChanged,
+  ), [displayedError, effectiveApplyDisabledReason, geometryNotice, initialLayoutType3, manualLayoutChanged,
     openedInFallbackLane, refusalFallbackEligible, submitting, translate]);
   const shownRibbonStatus = useDeferredValue(ribbonStatus);
   // Live Preview (components/office-ribbon/officeFormatPreview.tsx): the

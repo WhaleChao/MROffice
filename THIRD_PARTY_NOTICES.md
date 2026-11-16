@@ -439,6 +439,7 @@ Fonts are under the SIL Open Font License 1.1 (or the license named in the file 
 - apps/playground/public/fonts/cjk-latin/LICENSE-noto-serif-sc.txt
 - apps/playground/public/fonts/cjk-latin/LICENSE-noto-serif-tc.txt
 - apps/playground/public/fonts/cjk-latin/LICENSE-noto-serif.txt
+- apps/playground/public/fonts/cjk-latin/LICENSE-varela-round.txt
 - apps/playground/public/fonts/office/archivo-black/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/arimo/LICENSE-OFL-1.1.txt
 - apps/playground/public/fonts/office/barlow/LICENSE-OFL-1.1.txt

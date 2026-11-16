@@ -59,6 +59,8 @@ const LOSS_LABELS_EN: Record<string, string> = {
   xlsx_drawing_object_link_not_projected:
     "Drawing object links are not projected yet",
   worksheets_omitted: "The workbook exceeds the worksheet import limit",
+  xlsx_cell_text_truncated:
+    "Some cells hold more than Excel's 32,767 characters: as Excel does, only the first 32,767 are shown here; the file keeps the full text until you edit the cell",
   xlsx_defined_name_not_projected:
     "Some defined names are over the editor's limit: they stay in the file and keep working in formulas, but are not shown here and cannot be edited",
   xlsx_defined_name_unsupported:

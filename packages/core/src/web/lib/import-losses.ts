@@ -99,6 +99,10 @@ const IMPORT_LOSS_MESSAGE_KEY: Readonly<Record<string, string>> = {
   // A drawing the projection read and the page builder could not publish
   // (a part of it fails the page's own model): said, never silent.
   docx_shape_not_projected: "docxShape",
+  // A picture inside a drawn group whose bytes the page could not hold (the
+  // page was past its stored budget): the member draws as its frame, the
+  // source file keeps the picture.
+  docx_group_picture_page_budget_exceeded: "docxGroupPicturePageBudget",
   // An embedded object (Insert > Object) the page shows by its picture only:
   // linked, floating, or an embedding too large or of a kind the page cannot
   // carry (`document_docx_ole_object`). The source file keeps the object.

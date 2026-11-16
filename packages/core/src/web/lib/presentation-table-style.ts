@@ -1323,6 +1323,40 @@ function lookEdge(
  * the look contributes nothing to this cell, so the caller can fall through to
  * the preset path untouched.
  */
+/** What a resolved table style paints on one cell, part over part as the
+ * canvas draws it: its words' colour, weight and slant and its four edges.
+ * Null when no part reaches the cell. */
+export interface TableStyleLookCellPaint {
+  color: string | null;
+  bold: boolean;
+  italic: boolean;
+  edges: Partial<Record<"top" | "bottom" | "left" | "right", TableCellBorder>>;
+}
+
+export function tableStyleLookCellPaint(
+  look: TableStyleLook | null,
+  flags: TableRowEmphasisFlags,
+  rowIndex: number,
+  rowCount: number,
+  colIndex: number,
+  colCount: number,
+): TableStyleLookCellPaint | null {
+  if (!look) return null;
+  const applied = lookPartsForCell(look, flags, rowIndex, rowCount, colIndex, colCount);
+  if (applied.length === 0) return null;
+  const paint: TableStyleLookCellPaint = { color: null, bold: false, italic: false, edges: {} };
+  for (const { part, region } of applied) {
+    if (part.color !== undefined) paint.color = part.color;
+    if (part.bold) paint.bold = true;
+    if (part.italic) paint.italic = true;
+    for (const side of ["top", "bottom", "left", "right"] as const) {
+      const border = lookEdge(part, region, side);
+      if (border) paint.edges[side] = border;
+    }
+  }
+  return paint;
+}
+
 export function tableStyleLookCellCss(
   look: TableStyleLook | null,
   flags: TableRowEmphasisFlags,

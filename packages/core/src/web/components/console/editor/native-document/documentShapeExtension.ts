@@ -6,6 +6,7 @@
 import { readSmartArtGraphicEffect, smartArtGraphicFormatStyle } from "../../../../lib/spreadsheet/smartart-background";
 import { EMU_PER_PT, EMU_PER_PX, ptToPx } from "../../../../lib/office-units";
 import { textHasEastAsian } from "./noteTextStyle";
+import { drawDocumentPicture } from "../../../../lib/document-picture-references";
 import { wordGridFontLineMetrics } from "./wordFontMetrics";
 import { inkLightStandIn, inkStrokeRestsInLayer, LightInkView, placeWokenInkStage, restInkStrokeSoon } from "./paged/inkLightLayer";
 import { documentThemeBodyLatin } from "../../../../lib/document-design";
@@ -6041,7 +6042,11 @@ function createDocumentShapeNodeView(
         // the frame it is, wearing the glyph every host already draws for a
         // picture that holds none, so it reads as a picture rather than as a
         // blank box. The import receipt names that member.
-        picture.src = member.src ?? SMARTART_PICTURE_PLACEHOLDER_ICON_SRC;
+        // Its bytes inline, or the stored file's own picture named by digest
+        // (`mrai-picture:<sha256>`, as an imported picture beside the group
+        // is: drawn from the page that holds it).
+        if (member.src) memberWarps.push(drawDocumentPicture(picture, member.src));
+        else picture.src = SMARTART_PICTURE_PLACEHOLDER_ICON_SRC;
         picture.alt = "";
         picture.setAttribute("aria-hidden", "true");
         picture.draggable = false;

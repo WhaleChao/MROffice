@@ -27,6 +27,36 @@
    "400": "heiti-sc-400.woff2",
    "700": "heiti-sc-700.woff2"
   },
+  "hg-gothic-e": {
+   "400": "hg-gothic-e-400.woff2"
+  },
+  "hg-maru-gothic-mpro": {
+   "400": "hg-maru-gothic-mpro-400.woff2"
+  },
+  "hg-mincho-e": {
+   "400": "hg-mincho-e-400.woff2"
+  },
+  "hg-soei-kakugothic-ub": {
+   "400": "hg-soei-kakugothic-ub-400.woff2"
+  },
+  "hgp-gothic-e": {
+   "400": "hgp-gothic-e-400.woff2"
+  },
+  "hgp-mincho-e": {
+   "400": "hgp-mincho-e-400.woff2"
+  },
+  "hgp-soei-kakugothic-ub": {
+   "400": "hgp-soei-kakugothic-ub-400.woff2"
+  },
+  "hgs-gothic-e": {
+   "400": "hgs-gothic-e-400.woff2"
+  },
+  "hgs-mincho-e": {
+   "400": "hgs-mincho-e-400.woff2"
+  },
+  "hgs-soei-kakugothic-ub": {
+   "400": "hgs-soei-kakugothic-ub-400.woff2"
+  },
   "hiragino-mincho": {
    "400": "hiragino-mincho-400.woff2",
    "700": "hiragino-mincho-700.woff2"
@@ -117,6 +147,26 @@
   "gulim": "gulim",
   "heiti sc": "heiti-sc",
   "heiti tc": "heiti-sc",
+  "hggothice": "hg-gothic-e",
+  "hgmarugothicmpro": "hg-maru-gothic-mpro",
+  "hgminchoe": "hg-mincho-e",
+  "hgpgothice": "hgp-gothic-e",
+  "hgpminchoe": "hgp-mincho-e",
+  "hgpsoeikakugothicub": "hgp-soei-kakugothic-ub",
+  "hgp創英角ｺﾞｼｯｸub": "hgp-soei-kakugothic-ub",
+  "hgp明朝e": "hgp-mincho-e",
+  "hgpｺﾞｼｯｸe": "hgp-gothic-e",
+  "hgsgothice": "hgs-gothic-e",
+  "hgsminchoe": "hgs-mincho-e",
+  "hgsoeikakugothicub": "hg-soei-kakugothic-ub",
+  "hgssoeikakugothicub": "hgs-soei-kakugothic-ub",
+  "hgs創英角ｺﾞｼｯｸub": "hgs-soei-kakugothic-ub",
+  "hgs明朝e": "hgs-mincho-e",
+  "hgsｺﾞｼｯｸe": "hgs-gothic-e",
+  "hg丸ｺﾞｼｯｸm-pro": "hg-maru-gothic-mpro",
+  "hg創英角ｺﾞｼｯｸub": "hg-soei-kakugothic-ub",
+  "hg明朝e": "hg-mincho-e",
+  "hgｺﾞｼｯｸe": "hg-gothic-e",
   "hiragino kaku gothic pro": "hiragino-sans",
   "hiragino kaku gothic pron": "hiragino-sans",
   "hiragino mincho pro": "hiragino-mincho",
@@ -194,6 +244,16 @@
   "fangsong": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+0391-03A1,U+03A3-03A9,U+03B1-03C1,U+03C3-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
   "gulim": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "heiti-sc": "U+0020-007E,U+00A1-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hg-gothic-e": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hg-maru-gothic-mpro": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hg-mincho-e": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hg-soei-kakugothic-ub": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hgp-gothic-e": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026,U+3000-3003,U+3005-3019,U+301C-301D,U+301F-3020,U+3033-3035,U+303B-303D,U+3041-3096,U+3099-30FF,U+FF01-FF9F",
+  "hgp-mincho-e": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026,U+3000-3003,U+3005-3019,U+301C-301D,U+301F-3020,U+3033-3035,U+303B-303D,U+3041-3096,U+3099-30FF,U+FF01-FF9F",
+  "hgp-soei-kakugothic-ub": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026,U+3000-3003,U+3005-3019,U+301C-301D,U+301F-3020,U+3033-3035,U+303B-303D,U+3041-3096,U+3099-30FF,U+FF01-FF9F",
+  "hgs-gothic-e": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hgs-mincho-e": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "hgs-soei-kakugothic-ub": "U+0020-007E,U+00A0-00B4,U+00B6-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "hiragino-mincho": "U+0020-007E,U+00A0-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "hiragino-sans": "U+0020-007E,U+00A0-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "kaiti": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+0391-03A1,U+03A3-03A9,U+03B1-03C1,U+03C3-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
@@ -276,6 +336,76 @@
     "700": "metric-clones/ttf/cjk-latin/heiti-sc-700.ttf.gz"
    },
    "source": "noto-sans-sc"
+  },
+  "hg-gothic-e": {
+   "family": "MRAI-Metric-HGGothicE",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hg-gothic-e-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "hg-maru-gothic-mpro": {
+   "family": "MRAI-Metric-HGMaruGothicMPRO",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hg-maru-gothic-mpro-400.ttf.gz"
+   },
+   "source": "varela-round"
+  },
+  "hg-mincho-e": {
+   "family": "MRAI-Metric-HGMinchoE",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hg-mincho-e-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "hg-soei-kakugothic-ub": {
+   "family": "MRAI-Metric-HGSoeiKakugothicUB",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hg-soei-kakugothic-ub-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "hgp-gothic-e": {
+   "family": "MRAI-Metric-HGPGothicE",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hgp-gothic-e-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "hgp-mincho-e": {
+   "family": "MRAI-Metric-HGPMinchoE",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hgp-mincho-e-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "hgp-soei-kakugothic-ub": {
+   "family": "MRAI-Metric-HGPSoeiKakugothicUB",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hgp-soei-kakugothic-ub-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "hgs-gothic-e": {
+   "family": "MRAI-Metric-HGSGothicE",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hgs-gothic-e-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "hgs-mincho-e": {
+   "family": "MRAI-Metric-HGSMinchoE",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hgs-mincho-e-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "hgs-soei-kakugothic-ub": {
+   "family": "MRAI-Metric-HGSSoeiKakugothicUB",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/hgs-soei-kakugothic-ub-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
   },
   "hiragino-mincho": {
    "family": "MRAI-Metric-HiraginoMinchoProN",

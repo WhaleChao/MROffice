@@ -265,6 +265,11 @@ export interface PageContentSyncOptions {
   isCausalScopeCurrent?: () => boolean;
   activateCausal?: (page: PageItem, checkpoint: PageCausalCheckpoint) => Promise<PageItem>;
   onCausalReconnect?: () => void;
+  /** The durable page this view's causal model was set up from was refused
+   * as a checkpoint (identity_mismatch, invalid, projection_mismatch): the
+   * caller reads the page whole again at once; a new durable page sets the
+   * model up again. */
+  onCausalSourceRefused?: (code: string) => void;
   /** Only the original restored generation, not every subsequent draft. */
   recoveredCausalDraft?: { recovery: PageCausalRecovery; content: PageContentDocument } | null;
 }
@@ -501,6 +506,7 @@ function useLegacyPageContentSync({
   isCausalScopeCurrent,
   activateCausal,
   onCausalReconnect,
+  onCausalSourceRefused,
   sourceScopeKey = "",
 }: PageContentSyncOptions): LegacyContentController {
   const [localOrigin] = useState(() => Symbol("mrn-page-json-local"));
@@ -661,13 +667,15 @@ function useLegacyPageContentSync({
   const causalScopeRef = useRef(isCausalScopeCurrent);
   const activateCausalRef = useRef(activateCausal);
   const causalReconnectRef = useRef(onCausalReconnect);
+  const causalSourceRefusedRef = useRef(onCausalSourceRefused);
   useLayoutEffect(() => {
     durablePageRef.current = durablePage;
     recoveredCausalDraftRef.current = recoveredCausalDraft;
     causalScopeRef.current = isCausalScopeCurrent;
     activateCausalRef.current = activateCausal;
     causalReconnectRef.current = onCausalReconnect;
-  }, [durablePage, recoveredCausalDraft, isCausalScopeCurrent, activateCausal, onCausalReconnect]);
+    causalSourceRefusedRef.current = onCausalSourceRefused;
+  }, [durablePage, recoveredCausalDraft, isCausalScopeCurrent, activateCausal, onCausalReconnect, onCausalSourceRefused]);
   const causalReadyRef = useRef(false);
   /** The body of a durable page whose checkpoint is being merged into the room. */
   const pendingAdoptionRef = useRef<PageContentDocument | null>(null);
@@ -1771,6 +1779,14 @@ function useLegacyPageContentSync({
             causalFailureCause = error instanceof PageCausalCheckpointError &&
               ["invalid", "incomplete"].includes(error.code) ? "invalid_data" : "session_changed";
             bootstrapStarted = false; bootstrapping = null; causalStatus = "failed"; notifyHistory();
+            // The page it was set up from is refused as a checkpoint: no retry of
+            // that same page can take, and the keys typed meanwhile wait in this
+            
+            // copy joined to the stored page was retried every 2 s, refused each time).
+            if (error instanceof PageCausalCheckpointError && error.code !== "incomplete") {
+              const code = error.code;
+              queueMicrotask(() => { if (!disposed) causalSourceRefusedRef.current?.(code); });
+            }
           }
           return false;
         });

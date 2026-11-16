@@ -257,6 +257,22 @@ export function webTableStyleGallerySlots(
   }));
 }
 
+/**
+ * The catalogue key (`office.tableStyle.*`) a table style is shown under in
+ * the UI's language: a built-in's by its GUID, else by its name when the name
+ * is one of the 74 (the catalogue's Chinese capture or PowerPoint's English,
+ * which a save writes and readings row 893 reads); null for a deck's own
+ * style, shown under the name the deck gives it.
+ */
+export function presentationTableStyleLabelKey(look: { styleId?: unknown; styleName?: unknown }): string | null {
+  const id = typeof look.styleId === "string" ? look.styleId.trim().toUpperCase() : "";
+  const byId = PRESENTATION_TABLE_STYLE_INDEX.find(([, , styleId]) => styleId.toUpperCase() === id);
+  if (byId) return webTableStyleLabelKey(byId[3]);
+  if (typeof look.styleName !== "string" || !look.styleName.trim()) return null;
+  const key = webTableStyleLabelKey(look.styleName.trim());
+  return PRESENTATION_TABLE_STYLE_INDEX.some(([, , , styleName]) => webTableStyleLabelKey(styleName) === key) ? key : null;
+}
+
 const NATIVE_STYLE_IDS: ReadonlySet<string> = new Set(
   PRESENTATION_TABLE_STYLE_INDEX.map(([, , styleId]) => styleId.toUpperCase()),
 );

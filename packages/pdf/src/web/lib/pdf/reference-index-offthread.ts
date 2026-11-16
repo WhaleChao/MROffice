@@ -15,6 +15,7 @@
  * fails, the index is built here, whole, as before.
  */
 import { buildReferenceIndex, type PdfReferenceIndex, type PdfReferencePageInput } from "./reference-index";
+import { startResilientWorker } from "@mrnote/core/web/lib/worker-start.ts";
 
 type Response = { ready?: true; id?: number; index?: PdfReferenceIndex; error?: string };
 
@@ -23,36 +24,47 @@ const WORKER_START_MS = 4_000;
 let worker: Worker | null = null;
 let ready: Promise<boolean> | null = null;
 let broken = false;
+const workerStart = startResilientWorker("pdf-reference-index");
 let sequence = 0;
 const pending = new Map<number, (index: PdfReferenceIndex | null) => void>();
 
 function startWorker(): Promise<boolean> {
   if (ready) return ready;
   if (broken || typeof Worker === "undefined") return Promise.resolve(false);
+  // One more start after a pause when this one fails (lib/worker-start.ts);
+  // none while the pause runs or once given up: the caller works here then.
+  const started = workerStart.create(() => new Worker(new URL("./reference-index.worker.ts", import.meta.url), { type: "module", name: "mrnote-pdf-reference-index" }));
+  if (!started) {
+    if (workerStart.gaveUp) broken = true;
+    return Promise.resolve(false);
+  }
   ready = new Promise<boolean>((resolve) => {
-    let started: Worker;
-    try {
-      started = new Worker(new URL("./reference-index.worker.ts", import.meta.url), { type: "module", name: "mrnote-pdf-reference-index" });
-    } catch {
-      broken = true;
-      resolve(false);
-      return;
-    }
-    const giveUp = () => {
-      broken = true;
+    let startedNow = false;
+    let over = false;
+    const giveUp = (reason: string) => {
+      // Once: an error and the start deadline must not count as two starts.
+      if (over) return;
+      over = true;
+      clearTimeout(timer);
+      // A worker that failed at its work, or a second failed start, is given
+      // up; a first failed start leaves the next call a fresh one.
+      if (workerStart.failed(started, startedNow ? `failed at work: ${reason}` : reason) === "gave_up") broken = true;
+      if (!broken) ready = null;
       started.terminate();
       if (worker === started) worker = null;
       for (const settle of pending.values()) settle(null);
       pending.clear();
       resolve(false);
     };
-    const timer = setTimeout(giveUp, WORKER_START_MS);
-    started.onerror = giveUp;
-    started.onmessageerror = giveUp;
+    const timer = setTimeout(() => giveUp("no word by its start deadline"), WORKER_START_MS);
+    started.onerror = () => giveUp("error");
+    started.onmessageerror = () => giveUp("message error");
     started.onmessage = (event: MessageEvent<Response>) => {
       const data = event.data;
       if (data?.ready) {
         clearTimeout(timer);
+        startedNow = true;
+        workerStart.started(started);
         worker = started;
         resolve(true);
         return;

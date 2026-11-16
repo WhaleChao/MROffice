@@ -48,6 +48,7 @@ import { inspectorChipStyle } from "../../../../lib/presentation/window-chrome-s
 import { readVerticalAnchor, persistedVerticalAnchor, VERTICAL_ANCHORS } from "@mrnote/core/web/lib/presentation-vertical-anchor.ts";
 import { MIN_TABLE_AXIS_PX, MAX_TABLE_AXIS_PX, axisSizeAt } from "@mrnote/core/web/lib/presentation-table-size.ts";
 import { normalizeEmbedKind, assetBackedPresentationMediaSource, EMBED_KINDS } from "@mrnote/core/web/lib/presentation-embed.ts";
+import { PresentationEmbedAddressInput } from "./PresentationEmbedAddressInput";
 import { PresentationVideoFormatFields } from "./PresentationVideoFormatMenus";
 import type {
   PresentationEmbedBlock,
@@ -865,15 +866,11 @@ export function PresentationBlockInspector({ ctl }: { ctl: PresentationBlockInsp
                       </option>
                     ))}
                   </select>
-                  <input
-                    value={inspectorBlock.url || ""}
-                    onChange={(event) =>
-                      updateEmbedBlock(inspectorBlock.id, {
-                        url: event.target.value,
-                      })
-                    }
+                  <PresentationEmbedAddressInput
+                    kind={inspectorBlock.kind}
+                    url={inspectorBlock.url}
                     placeholder={t("presentation.embedUrlPlaceholder")}
-                    data-testid="presentation-embed-url"
+                    onCommit={(url) => updateEmbedBlock(inspectorBlock.id, { url })}
                     disabled={
                       assetBackedPresentationMediaSource(
                         inspectorBlock as Record<string, unknown>,

@@ -1296,7 +1296,19 @@ function mapSlideSizeBlockFonts<B extends object>(
   if (Array.isArray(source.paragraphs)) {
     result.paragraphs = source.paragraphs.map((row) => {
       const entry = record(row);
-      return entry && Array.isArray(entry.runs) ? { ...entry, runs: runs(entry.runs) } : row;
+      if (!entry) return row;
+      const ownsEnd = typeof entry.endFontSize === "number" && Number.isFinite(entry.endFontSize);
+      if (!Array.isArray(entry.runs) && !ownsEnd) return row;
+      const scaled: Record<string, unknown> = Array.isArray(entry.runs) ? { ...entry, runs: runs(entry.runs) } : { ...entry };
+      // A paragraph's end mark (`a:endParaRPr`) scales with its words, as the
+      // Slide Size writer scales its `@sz`: an empty line keeps its height
+      
+      // 10.5 at 4:3).
+      if (ownsEnd) {
+        sizes.push(entry.endFontSize as number);
+        scaled.endFontSize = next(entry.endFontSize as number, sizes.length - 1);
+      }
+      return scaled;
     });
   }
   if (source.type === "table" && Array.isArray(source.rows)) {
@@ -1417,6 +1429,43 @@ export function resizeSlideSizeBlock<B extends SlideSizeGeometryBlock>(
     top: Math.round(top * scale + offsetY),
     width: Math.max(0, Math.round(width * scale)),
     height: Math.max(0, Math.round(height * scale)),
+  };
+}
+
+
+
+
+
+
+
+
+
+
+export function nativeSlideSizeLayoutProjection(slide: {
+  readonly widthEmu?: unknown;
+  readonly heightEmu?: unknown;
+  readonly source?: unknown;
+}): {
+  geometry: <G extends SlideSizeGeometryBlock>(geometry: G) => G;
+  fontScale: number;
+  scaleFont: (value: number) => number;
+} | null {
+  const source =
+    slide.source && typeof slide.source === "object" && !Array.isArray(slide.source)
+      ? (slide.source as Record<string, unknown>)
+      : null;
+  if (!source?.slideSizeRevision) return null;
+  const strategy = source.slideSizeFitStrategy;
+  if (strategy !== "maximize" && strategy !== "ensure-fit") return null;
+  const receipt = parseNativeSlideSizeAuthority(source.slideSizeAuthority);
+  if (!receipt || !boundedExtent(slide.widthEmu) || !boundedExtent(slide.heightEmu)) return null;
+  const shown = { widthEmu: slide.widthEmu, heightEmu: slide.heightEmu };
+  if (sameSlideSize(shown, receipt.slideSize)) return null;
+  const fontScale = slideSizeContentScale(receipt.slideSize, shown, strategy);
+  return {
+    geometry: (geometry) => resizeSlideSizeBlock(geometry, receipt.slideSize, shown, strategy),
+    fontScale,
+    scaleFont: (value) => slideSizeScaledFont(value, fontScale),
   };
 }
 

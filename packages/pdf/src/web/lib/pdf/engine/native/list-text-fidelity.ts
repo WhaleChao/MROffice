@@ -6502,7 +6502,8 @@ function keptPerEvent<T>(event: object, metrics: FontMetrics, kind: string, read
     kept = new Map();
     byFont.set(metrics, kept);
   }
-  if (kept.has(kind)) return kept.get(kind) as T;
+  const known = kept.get(kind);
+  if (known !== undefined || kept.has(kind)) return known as T;
   const value = read();
   kept.set(kind, value);
   return value;
@@ -6538,25 +6539,110 @@ interface PlanShowFacts {
   /** isPdfJsWhiteSpaceText of the show's text. */
   whiteSpace: boolean | undefined;
 }
+/** Where each show of a list stands and whether it can ink, as numbers a
+ * walk of the whole list reads without touching the shows: what the room
+ * beside a run is measured from (sameLineGrowthCapacity, sameLineLeftRoom),
+ * asked once for every run of a line a browser printed a show to a glyph. */
+interface PlanShowPlaces {
+  /** The show's text space on the page (showToPage): its origin, its second
+   * axis' length times its size (the ink a stacked show stands in). */
+  readonly originX: Float64Array;
+  readonly originY: Float64Array;
+  readonly size: Float64Array;
+  /** 1: no codes (bounds nothing). */
+  readonly empty: Uint8Array;
+  /** 1: the show has a text and every glyph of it reads as the reader's
+   * white space (showInksNothing, where its font is one the rule knows). */
+  readonly whiteSpace: Uint8Array;
+  /** The show's font, as its place among `fontNames`. */
+  readonly font: Int32Array;
+  readonly fontNames: readonly string[];
+}
+/** The shows of a list that read alike in one font: the same text, the same
+ * display, the same reading of their unnamed codes and the same item a
+ * raised neighbour would make of them. Whether an item can stand on a show
+ * that does not read as it is asked of these alone, so a plan asks it once
+ * for all of them (showCannotReadAsItem). A show has a class once each of
+ * those readings is kept. */
+interface PlanShowClass {
+  readonly text: string;
+  readonly display: string;
+  readonly unnamed: string | null;
+  readonly raisedShown: string | null;
+}
+interface PlanShowClasses {
+  /** Each show's class by its place in the list; -1 while it has none. */
+  readonly of: Int32Array;
+  readonly classes: PlanShowClass[];
+  readonly places: Map<string, number>;
+}
 interface PlanPageFacts {
   anyVertical: boolean | undefined;
   /** Whether no show stands twice in the list: a show's place in it is then
    * where a walk meets it. */
   distinct: boolean | undefined;
+  places: PlanShowPlaces | undefined;
   readonly shows: (PlanShowFacts | undefined)[];
   readonly inFont: Map<FontMetrics, (PlanShowFontFacts | undefined)[]>;
+  readonly classes: Map<FontMetrics, PlanShowClasses>;
+  /** pdfJsReaderOriginDrift of each show, by the fonts the shows before it
+   * are read in (a plan's resolved fonts, by name and tables). */
+  readonly originDrift: Map<string, (number | undefined)[]>;
+  /** nextInkedShowReach of each show from the end of its own codes, by the
+   * font the show is measured in and those same fonts of the page. */
+  readonly raisedReach: Map<string, (ReturnType<typeof nextInkedShowReach> | undefined)[]>;
 }
 type PlanShowFactTable = Map<readonly TextEvent[], PlanPageFacts>;
 const MAX_PLAN_SHOW_FACT_LISTS = 8;
+
+/** The show facts of the plans asked of one source reader. A box of many
+ * items is opened by a plan for each item (the paragraph tier proves them
+ * one by one), and each of those asked the same shows the same things from
+ * nothing: the facts are of the show and the font alone, so the plans of one
+ * reader share them, and they go with the reader. */
+const READER_SHOW_FACTS = new WeakMap<object, PlanShowFactTable>();
+function readerShowFacts(reader: object): PlanShowFactTable {
+  let table = READER_SHOW_FACTS.get(reader);
+  if (!table) READER_SHOW_FACTS.set(reader, table = new Map());
+  return table;
+}
 
 function planPageFacts(table: PlanShowFactTable, events: readonly TextEvent[]): PlanPageFacts {
   let page = table.get(events);
   if (!page) {
     if (table.size >= MAX_PLAN_SHOW_FACT_LISTS) table.delete(table.keys().next().value!);
-    page = { anyVertical: undefined, distinct: undefined, shows: [], inFont: new Map() };
+    page = { anyVertical: undefined, distinct: undefined, places: undefined, shows: [], inFont: new Map(), classes: new Map(),
+      originDrift: new Map(), raisedReach: new Map() };
     table.set(events, page);
   }
   return page;
+}
+
+function planShowPlaces(events: readonly TextEvent[], page: PlanPageFacts): PlanShowPlaces {
+  if (page.places) return page.places;
+  const count = events.length;
+  const originX = new Float64Array(count), originY = new Float64Array(count), size = new Float64Array(count);
+  const empty = new Uint8Array(count), whiteSpace = new Uint8Array(count), font = new Int32Array(count);
+  const fontNames: string[] = [];
+  const fontPlaces = new Map<string, number>();
+  for (let at = 0; at < count; at += 1) {
+    const event = events[at];
+    const known = (page.shows[at] ??= { toPage: undefined, whiteSpace: undefined });
+    const origin = showToPage(event, known);
+    originX[at] = origin[4];
+    originY[at] = origin[5];
+    size[at] = event.fontSize * Math.hypot(origin[2], origin[3]);
+    empty[at] = event.codes.length === 0 ? 1 : 0;
+    whiteSpace[at] = event.text !== null && (known.whiteSpace ??= isPdfJsWhiteSpaceText(event.text)) ? 1 : 0;
+    let place = fontPlaces.get(event.fontName);
+    if (place === undefined) {
+      place = fontNames.length;
+      fontNames.push(event.fontName);
+      fontPlaces.set(event.fontName, place);
+    }
+    font[at] = place;
+  }
+  return (page.places = { originX, originY, size, empty, whiteSpace, font, fontNames });
 }
 
 function anyShowVertical(events: readonly TextEvent[], page: PlanPageFacts | undefined): boolean {
@@ -6644,8 +6730,20 @@ function pdfJsReaderChunks(
   metrics: FontMetrics,
   view: PdfJsReaderView | null = null,
 ): readonly PdfJsReaderChunk[] | null {
-  return keptPerEvent(event, metrics, view ? `chunks:${pdfJsReaderViewText(view)}` : 'chunks',
+  return keptPerEvent(event, metrics, view ? pdfJsReaderViewChunksKind(view) : 'chunks',
     () => pdfJsReaderChunksUnkept(event, metrics, view));
+}
+
+/** The name a view's chunks are kept under: one string a view, made once
+ * (a string made again for every show asked is hashed again for each). */
+const pdfJsReaderViewChunksKinds = new WeakMap<PdfJsReaderView, string>();
+function pdfJsReaderViewChunksKind(view: PdfJsReaderView): string {
+  let kind = pdfJsReaderViewChunksKinds.get(view);
+  if (kind === undefined) {
+    kind = `chunks:${pdfJsReaderViewText(view)}`;
+    pdfJsReaderViewChunksKinds.set(view, kind);
+  }
+  return kind;
 }
 
 function pdfJsReaderChunksUnkept(
@@ -10145,6 +10243,9 @@ function raisedNeighbourGapSelectionProjection(
   inFont?: PlanShowFontFacts,
   /** The show's place among the events, where the caller knows it. */
   at?: number,
+  /** The reach of each show to the next inked one, by its place, as the
+   * caller's plan keeps it for this font and these fonts of the page. */
+  reaches?: (ReturnType<typeof nextInkedShowReach> | undefined)[],
 ): PdfJsTextSelectionProjection | null {
   const reading = !inFont ? raisedNeighbourShowReading(event)
     : inFont.raisedNeighbour === undefined ? (inFont.raisedNeighbour = raisedNeighbourShowReading(event)) : inFont.raisedNeighbour;
@@ -10163,7 +10264,9 @@ function raisedNeighbourGapSelectionProjection(
     if (error instanceof PdfNativeTransactionError) return null;
     throw error;
   }
-  const reach = nextInkedShowReach(event, events, geometry, metricsFor, false, at);
+  const reach = reaches && at !== undefined
+    ? (reaches[at] === undefined ? (reaches[at] = nextInkedShowReach(event, events, geometry, metricsFor, false, at)) : reaches[at])
+    : nextInkedShowReach(event, events, geometry, metricsFor, false, at);
   if (!reach) return null;
   const { along, across, axis } = reach;
   const height = geometry.height;
@@ -12424,6 +12527,44 @@ function frameFacesKeepTheirCharacters(
   return true;
 }
 
+/**
+ * Whether a font slot could be written with this character at all, in any
+ * text: kept with a code its own run drew it with (a kept unit, the run's
+ * own code for a character typed again, a Standard 14 alias), set as one of
+ * the letters of a code that spells several, or encoded afresh on its own.
+ * Every way resolveReplacementCodes writes a character is one of these, so
+ * a slot this says no for refuses every text that holds the character.
+ */
+function fixedResourceSlotMaySet(
+  character: string,
+  event: TextEvent,
+  metrics: FontMetrics,
+): boolean {
+  let drawn: readonly number[] = [];
+  try {
+    drawn = codeValues(event.codes, metrics.codeUnitBytes);
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+  }
+  if (
+    drawn.some(
+      (code) =>
+        metrics.decode.get(code)?.includes(character) === true ||
+        STANDARD14_DISPLAY_ALIAS_CHARACTERS.get(code) === character,
+    ) ||
+    metrics.ligatureEncodings?.some((entry) => entry.text.includes(character))
+  ) {
+    return true;
+  }
+  try {
+    encodeText(character, metrics);
+    return true;
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    return false;
+  }
+}
+
 function encodeWithFixedResourceSlots(
   replacementText: string,
   events: readonly TextEvent[],
@@ -12595,7 +12736,26 @@ function encodeWithFixedResourceSlots(
     memo.set(key, null);
     return null;
   };
-  const result = solve(0, 0);
+  // A character no slot can be written with has no assignment: said before
+  // the search. The search finds that out only by trying every stretch of
+  // the text in every slot from every start -- each try an alignment of the
+  // slot's run with the stretch -- before it answers the same null. A word
+  // typed at the end of a 175-character paragraph a browser printed, its
+  // subset short of some of the word's letters and digits, was refused
+  
+  // 100 characters), past the 45 s the browser's Worker is given -- and
+  // that refusal is what sends the words to the font extension. Every
+  // character but a line's separator space is written by a slot, so the
+  // answer is the search's own.
+  const unsettable = [...new Set(characters)].some(
+    (character) =>
+      character !== " " &&
+      !events.some((event) => {
+        const metrics = metricsByResource.get(event.fontName);
+        return metrics !== undefined && fixedResourceSlotMaySet(character, event, metrics);
+      }),
+  );
+  const result = unsettable ? null : solve(0, 0);
   if (!result) {
     // Say which boundary was hit: a character no slot font can set is the
     // missing-glyph refusal the font extension answers; anything else is a
@@ -14673,6 +14833,12 @@ function pageImageBoxes(
   return Object.freeze(boxes);
 }
 
+const singleLineFitTables = new WeakMap<FontMetrics, Map<string, Readonly<{
+  advances: PdfNativeSingleLineFitHint["advances"];
+  encodings: NonNullable<PdfNativeSingleLineFitHint["encodings"]>;
+}>>>();
+const MAX_SINGLE_LINE_FIT_TABLES_PER_FONT = 256;
+
 /** Advance and code bytes of every character the font writes at this text
  * state, for a writer that sets a run (or part of one) in another font. */
 function singleLineFitCharacterTable(
@@ -14691,9 +14857,16 @@ function singleLineFitCharacterTable(
   sourceUnits?: NonNullable<PdfNativeSingleLineFitHint["sourceUnits"]>;
   inkedBlankCodes?: NonNullable<PdfNativeSingleLineFitHint["inkedBlankCodes"]>;
 }> {
-  const advances: Array<readonly [string, number]> = [];
-  const encodings: Array<readonly [string, readonly number[]]> = [];
-  const preferred = runCodes?.length ? codesTheRunUses(runCodes, metrics) : null;
+  // The table is of the font, the text state and the run's codes, and a
+  // line a browser printed asks it for every glyph, a show to a glyph: the
+  // runs that draw the same codes at the same state share one.
+  const exact = (value: number) => (Object.is(value, -0) ? "-0" : String(value));
+  const tableKey = [fontSize, characterSpacing, wordSpacing, horizontalScale].map(exact).join("|") +
+    `|${runCodes?.length ? runCodes.join(",") : ""}`;
+  let tables = singleLineFitTables.get(metrics);
+  if (!tables) singleLineFitTables.set(metrics, tables = new Map());
+  const known = tables.get(tableKey);
+  const preferred = known || !runCodes?.length ? null : codesTheRunUses(runCodes, metrics);
   const advanceOf = (codes: Uint8Array) =>
     ((glyphAdvance(codes, metrics, fontSize) +
       textSpacingAdvance(codes, characterSpacing, wordSpacing, metrics)) *
@@ -14726,24 +14899,32 @@ function singleLineFitCharacterTable(
       sourceUnits.push(Object.freeze([text, Object.freeze([...bytes]), advance] as const));
     }
   }
-  for (const character of metrics.encode.keys()) {
-    try {
-      const codes = encodeText(character, metrics, preferred);
-      const advance =
-        ((glyphAdvance(codes, metrics, fontSize) +
-          textSpacingAdvance(codes, characterSpacing, wordSpacing, metrics)) *
-          horizontalScale) /
-        100;
-      if (!Number.isFinite(advance) || advance < 0) continue;
-      advances.push(Object.freeze([character, advance] as const));
-      encodings.push(Object.freeze([character, Object.freeze([...codes])] as const));
-    } catch {
-      // A character this font cannot write back exactly is left out.
+  let table = known;
+  if (!table) {
+    const advances: Array<readonly [string, number]> = [];
+    const encodings: Array<readonly [string, readonly number[]]> = [];
+    for (const character of metrics.encode.keys()) {
+      try {
+        const codes = encodeText(character, metrics, preferred);
+        const advance =
+          ((glyphAdvance(codes, metrics, fontSize) +
+            textSpacingAdvance(codes, characterSpacing, wordSpacing, metrics)) *
+            horizontalScale) /
+          100;
+        if (!Number.isFinite(advance) || advance < 0) continue;
+        advances.push(Object.freeze([character, advance] as const));
+        encodings.push(Object.freeze([character, Object.freeze([...codes])] as const));
+      } catch {
+        // A character this font cannot write back exactly is left out.
+      }
     }
+    table = Object.freeze({ advances: Object.freeze(advances), encodings: Object.freeze(encodings) });
+    if (tables.size >= MAX_SINGLE_LINE_FIT_TABLES_PER_FONT) tables.delete(tables.keys().next().value!);
+    tables.set(tableKey, table);
   }
   return Object.freeze({
-    advances: Object.freeze(advances),
-    encodings: Object.freeze(encodings),
+    advances: table.advances,
+    encodings: table.encodings,
     ...(sourceUnits?.length ? { sourceUnits: Object.freeze(sourceUnits) } : {}),
     ...(inkedBlanks.length ? { inkedBlankCodes: Object.freeze(inkedBlanks) } : {}),
   });
@@ -14841,20 +15022,10 @@ function sameLineGrowthCapacity(
     if (Math.abs(component) <= 1e-9) continue;
     limit = Math.min(limit, ((component > 0 ? high : low) - start) / component);
   }
-  const others = [...events, ...siblings];
-  for (let at = 0; at < others.length; at += 1) {
-    const other = others[at];
-    if (other === text) continue;
-    const known = page && at < events.length ? (page.shows[at] ??= { toPage: undefined, whiteSpace: undefined }) : undefined;
-    // An empty show (Distiller leaves `()Tj` between words) draws nothing
-    // and bounds nothing; nor does a show that inks nothing, every glyph it
-    // draws read as the reader's white space through its own font (Word
-    // sets the space after a run as a show of its own, where the run ends).
-    if (other.codes.length === 0 || showInksNothing(other, metricsByResource, known)) continue;
-    const origin = showToPage(other, known);
-    const otherAlong = alongOf(origin[4], origin[5]);
-    const otherAcross = acrossOf(origin[4], origin[5]);
-    if (otherAlong < endAlong - 0.5) continue;
+  // What a show standing at (x, y) on the page, of that size, leaves of the
+  // room.
+  const bound = (otherAlong: number, otherAcross: number, otherSize: number) => {
+    if (otherAlong < endAlong - 0.5) return;
     if (Math.abs(otherAcross) > 0.5) {
       // Text set off the line's baseline whose ink still stands in the
       // line's own band -- a fraction's numerator over the line and its
@@ -14864,13 +15035,12 @@ function sameLineGrowthCapacity(
       
       // its size under its baseline, seven tenths over it -- a line above
       // or below, set at any leading a reader reads, stays clear of that.
-      const otherSize = other.fontSize * Math.hypot(origin[2], origin[3]);
       const size = text.fontSize * acrossLength;
       if (otherSize > 0 && otherAcross + STACKED_INK_OVER_EM * otherSize > -STACKED_INK_UNDER_EM * size &&
         otherAcross - STACKED_INK_UNDER_EM * otherSize < STACKED_INK_OVER_EM * size) {
         limit = Math.min(limit, otherAlong);
       }
-      continue;
+      return;
     }
     // Text that stands further off than the reader keeps two runs of a row
     // in one line is another box's (SAME_BOX_GAP_EM): the line stops short
@@ -14883,6 +15053,32 @@ function sameLineGrowthCapacity(
     const ownSize = text.fontSize * acrossLength;
     limit = Math.min(limit, otherAlong - endAlong > SAME_BOX_GAP_EM * ownSize
       ? otherAlong - CLEAR_OF_OTHER_BOX_EM * ownSize : otherAlong);
+  };
+  // An empty show (Distiller leaves `()Tj` between words) draws nothing
+  // and bounds nothing; nor does a show that inks nothing, every glyph it
+  // draws read as the reader's white space through its own font (Word
+  // sets the space after a run as a show of its own, where the run ends).
+  if (page) {
+    // The list's own shows, from where the plan already read them to stand
+    // (planShowPlaces): the same shows, places and order as the walk below.
+    const { originX, originY, size, empty, whiteSpace, font, fontNames } = planShowPlaces(events, page);
+    const fontKnown = fontNames.map((name) => metricsByResource.has(name));
+    // (alongOf and acrossOf, written out.)
+    const lineX = toPage[4], lineY = toPage[5];
+    const alongX = along[0], alongY = along[1], acrossX = across[0], acrossY = across[1];
+    const reached = endAlong - 0.5;
+    for (let at = 0; at < events.length; at += 1) {
+      if (empty[at] === 1 || (whiteSpace[at] === 1 && fontKnown[font[at]])) continue;
+      const otherAlong = (originX[at] - lineX) * alongX + (originY[at] - lineY) * alongY;
+      if (otherAlong < reached || events[at] === text) continue;
+      bound(otherAlong, (originX[at] - lineX) * acrossX + (originY[at] - lineY) * acrossY, size[at]);
+    }
+  }
+  for (const other of page ? siblings : [...events, ...siblings]) {
+    if (other === text) continue;
+    if (other.codes.length === 0 || showInksNothing(other, metricsByResource)) continue;
+    const origin = showToPage(other, undefined);
+    bound(alongOf(origin[4], origin[5]), acrossOf(origin[4], origin[5]), other.fontSize * Math.hypot(origin[2], origin[3]));
   }
   // A picture standing beyond the show on its line bounds the free space;
   // one the show already runs across, or that starts before its end, does
@@ -14958,24 +15154,45 @@ function sameLineLeftRoom(
     if (Math.abs(component) <= 1e-9) continue;
     limit = Math.max(limit, ((component > 0 ? low : high) - start) / component);
   }
-  const others = [...events, ...siblings];
-  for (let at = 0; at < others.length; at += 1) {
-    const other = others[at];
-    if (other === text) continue;
-    const known = page && at < events.length ? (page.shows[at] ??= { toPage: undefined, whiteSpace: undefined }) : undefined;
-    if (other.codes.length === 0 || showInksNothing(other, metricsByResource, known)) continue;
-    const origin = showToPage(other, known);
-    const otherAlong = alongOf(origin[4], origin[5]);
-    if (Math.abs(acrossOf(origin[4], origin[5])) > 0.5 || otherAlong >= -0.5) continue;
+  // A show begun on the line before its start: where it ends bounds the
+  // line. False when its font is not known or its advance cannot be read.
+  const boundBy = (other: TextEvent, origin: PdfMatrix): boolean => {
     const otherMetrics = metricsByResource.get(other.fontName) ?? (other.fontName === text.fontName ? metrics : undefined);
-    if (!otherMetrics) return null;
+    if (!otherMetrics) return false;
     const advance = textEventCodesAdvance(other.codes, other, otherMetrics);
-    if (!Number.isFinite(advance)) return null;
+    if (!Number.isFinite(advance)) return false;
     const endX = origin[0] * advance + origin[4];
     const endY = origin[1] * advance + origin[5];
     // Any show begun before the line's start bounds it, the one kerned
     // into its first glyph included: the line may not grow over it.
     limit = Math.max(limit, Math.min(alongOf(endX, endY), 0));
+    return true;
+  };
+  if (page) {
+    // The list's own shows, from where the plan already read them to stand
+    // (planShowPlaces): the same shows, places and order as the walk below.
+    const { originX, originY, empty, whiteSpace, font, fontNames } = planShowPlaces(events, page);
+    const fontKnown = fontNames.map((name) => metricsByResource.has(name));
+    // (alongOf and acrossOf, written out.)
+    const lineX = toPage[4], lineY = toPage[5];
+    const alongX = along[0], alongY = along[1], acrossX = across[0], acrossY = across[1];
+    for (let at = 0; at < events.length; at += 1) {
+      if (empty[at] === 1 || (whiteSpace[at] === 1 && fontKnown[font[at]])) continue;
+      const otherAlong = (originX[at] - lineX) * alongX + (originY[at] - lineY) * alongY;
+      if (otherAlong >= -0.5 ||
+        Math.abs((originX[at] - lineX) * acrossX + (originY[at] - lineY) * acrossY) > 0.5) continue;
+      const other = events[at];
+      if (other === text) continue;
+      if (!boundBy(other, showToPage(other, page.shows[at]))) return null;
+    }
+  }
+  for (const other of page ? siblings : [...events, ...siblings]) {
+    if (other === text) continue;
+    if (other.codes.length === 0 || showInksNothing(other, metricsByResource)) continue;
+    const origin = showToPage(other, undefined);
+    const otherAlong = alongOf(origin[4], origin[5]);
+    if (Math.abs(acrossOf(origin[4], origin[5])) > 0.5 || otherAlong >= -0.5) continue;
+    if (!boundBy(other, origin)) return null;
   }
   const lineHeight = text.fontSize * acrossLength;
   for (const box of imageBoxes) {
@@ -15149,8 +15366,19 @@ function sameLineShiftPlan(
   }
   if (members.length === 0) return null;
   const tokens = tokenizeContentGraphics(streamText);
-  const tokensBetween = (from: number, to: number) =>
-    tokens.filter((token) => token.start >= from && token.end <= to);
+  // (The tokens stand in stream order, none over another: the ones between
+  // two places are the run of them from the first that starts there.)
+  const tokensBetween = (from: number, to: number) => {
+    let first = 0, past = tokens.length;
+    while (first < past) {
+      const middle = (first + past) >>> 1;
+      if (tokens[middle].start >= from) past = middle;
+      else first = middle + 1;
+    }
+    let end = first;
+    while (end < tokens.length && tokens[end].end <= to) end += 1;
+    return tokens.slice(first, end);
+  };
   // Something painted among the runs that would move -- a fraction's bar, a
   // radical's, a rule under a word, each stroked between two text objects --
   // stays where it is when only the text operands move: "softmax(" typed
@@ -17988,7 +18216,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
    * this only after the frame compiler has refused the line. */
   groupOwnsFrameLines = false,
   prescreenGroup = false,
-  showFacts: PlanShowFactTable = new Map(),
+  showFacts: PlanShowFactTable = readerShowFacts(inspectObject),
 ): Promise<PlannedNativeTextReplacement> {
   exactRef(input.target, "content stream");
   exactRef(input.font.page, "page");
@@ -22060,7 +22288,56 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
   let showsInFont = pageFacts.inFont.get(metrics);
   if (!showsInFont) pageFacts.inFont.set(metrics, showsInFont = []);
   const showsDistinct = (pageFacts.distinct ??= new Set(events).size === events.length);
+  // Where the reader starts a show's item when the shows before it on its
+  // line hold glyphs it never moved its matrix by: a fact of the show's
+  // place in the list and of the fonts those shows are read in.
+  let showOriginDrifts = pageFacts.originDrift.get(resolvedFontsReading);
+  if (!showOriginDrifts) pageFacts.originDrift.set(resolvedFontsReading, showOriginDrifts = []);
+  const originDrifts = showOriginDrifts;
+  const readerOriginDriftAt = (index: number): number =>
+    (originDrifts[index] ??= pdfJsReaderOriginDrift(events, index, resolvedMetricsFor));
+  // How far each show reaches to the next inked one (a raised neighbour's
+  // gap): of the show, the font it is measured in and those same fonts.
+  const raisedReachKey = `${textEventReadingId(metrics)}|${resolvedFontsReading}`;
+  let raisedReaches = pageFacts.raisedReach.get(raisedReachKey);
+  if (!raisedReaches) pageFacts.raisedReach.set(raisedReachKey, raisedReaches = []);
+  // What the item's own text rules out for every show that does not read
+  // as it (the projections below, each by the first thing it asks): no gap
+  // is folded into an item that does not open or close with its space, and
+  // nothing is cropped off a show on no page.
+  const itemText = singleSelectionItem?.str ?? "";
+  const noGapItem = input.originalText !== itemText;
+  const noLeadingGapItem = noGapItem || !itemText.startsWith(" ");
+  const noTrailingGapItem = noGapItem || !itemText.endsWith(" ");
+  const noRightCrop = context.kind !== "page" || context.visiblePageBounds === null;
+  const showCannotReadAsItem = (text: string, display: string, raisedShown: string | null): boolean =>
+    !text.startsWith(itemText) && !display.startsWith(" ") && noLeadingGapItem && noTrailingGapItem &&
+    raisedShown !== itemText && (noRightCrop || itemText.length >= display.length);
+  // The shows that read alike are asked together: once every reading of a
+  // show is kept, the answer for its class is the answer for it.
+  let showClasses: PlanShowClasses | null = null;
+  if (singleSelectionItem && allowPdfJsSpaceProjection) {
+    showClasses = pageFacts.classes.get(metrics) ?? null;
+    if (!showClasses || showClasses.of.length !== events.length) {
+      showClasses = { of: new Int32Array(events.length).fill(-1), classes: [], places: new Map() };
+      pageFacts.classes.set(metrics, showClasses);
+    }
+  }
+  const classPassedOver: (boolean | undefined)[] = [];
   for (let index = 0; index < events.length; index += 1) {
+    if (showClasses !== null) {
+      const place = showClasses.of[index];
+      if (place >= 0) {
+        let passedOver = classPassedOver[place];
+        if (passedOver === undefined) {
+          const shows = showClasses.classes[place];
+          passedOver = classPassedOver[place] = !readsAsOriginalText(shows.display) &&
+            !(shows.unnamed !== null && readsAsOriginalText(shows.unnamed)) &&
+            showCannotReadAsItem(shows.text, shows.display, shows.raisedShown);
+        }
+        if (passedOver) continue;
+      }
+    }
     const text = events[index];
     if (
       text.text === null ||
@@ -22090,6 +22367,28 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
           ? (inFont.unnamedDisplay = pdfJsUnnamedCodeShowDisplay(text, metrics)) : inFont.unnamedDisplay;
         fullDisplayMatches = unnamed !== null && readsAsOriginalText(unnamed);
       }
+      // A show of other words that none of the projections below can read
+      // as the item, by what each asks of the two texts before it measures
+      // anything: it is passed over as they would pass it over. A run of a
+      // line a browser printed is asked of every show of the page, a show
+      // to a glyph, and each of the six said no in turn (11.6 million
+      // shows for one paragraph of walk file 0304). Only once the show's
+      // readings are kept: a show read for the first time is read below.
+      if (inFont.leadingGap !== undefined && inFont.raisedNeighbour !== undefined) {
+        if (showClasses !== null && showClasses.of[index] === -1 && inFont.unnamedDisplay !== undefined) {
+          const raisedShown = inFont.raisedNeighbour?.shown ?? null;
+          const key = JSON.stringify([text.text, text.displayText, inFont.unnamedDisplay, raisedShown]);
+          let place = showClasses.places.get(key);
+          if (place === undefined) {
+            place = showClasses.classes.length;
+            showClasses.classes.push({ text: text.text, display: text.displayText, unnamed: inFont.unnamedDisplay, raisedShown });
+            showClasses.places.set(key, place);
+          }
+          showClasses.of[index] = place;
+        }
+        if (!fullDisplayMatches &&
+          showCannotReadAsItem(text.text, text.displayText, inFont.raisedNeighbour?.shown ?? null)) continue;
+      }
       if (
         !fullDisplayMatches ||
         !selectionItemMatchesTextEvent(
@@ -22099,7 +22398,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
           (inFont.omittedAdvance ??= pdfJsReaderOmittedAdvance(Uint8Array.from(text.codes), text, metrics)),
           allowPdfJsSpaceProjection ? metrics : undefined,
           allowPdfJsSpaceProjection
-            ? pdfJsReaderOriginDrift(events, index, resolvedMetricsFor)
+            ? readerOriginDriftAt(index)
             : 0,
         )
       ) {
@@ -22119,7 +22418,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         selectionProjection = fullDisplayMatches
           ? (trailingSourceSpaceSelectionProjection(singleSelectionItem, text, metrics) ??
             leadingSourceSpaceSelectionProjection(singleSelectionItem, text, metrics) ??
-            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor, inFont, at) ??
+            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor, inFont, at, raisedReaches) ??
             leadingGapSelectionProjection(
               singleSelectionItem, text, events, metrics, resolvedMetricsFor, input.originalText, input.replacementText, inFont,
             ) ??
@@ -22139,7 +22438,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
             ) ??
             // A show that opens with its word space and runs on to a raised
             // or lowered show after it (" (tCO" before a subscript "2").
-            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor, inFont, at) ??
+            raisedNeighbourGapSelectionProjection(singleSelectionItem, text, events, metrics, resolvedMetricsFor, inFont, at, raisedReaches) ??
             rightCroppedSelectionProjection(
               singleSelectionItem,
               text,

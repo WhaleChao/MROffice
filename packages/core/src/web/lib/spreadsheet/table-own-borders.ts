@@ -132,6 +132,35 @@ function markedSides(style: OwnEdgeCell["style"] | undefined): Side[] {
   return Array.isArray(raw) ? raw.filter((side): side is Side => side === "top" || side === "right" || side === "bottom" || side === "left") : [];
 }
 
+
+
+
+
+
+
+
+
+
+
+
+export function styleWithOwnEdgeUnderTable<T extends object | undefined>(
+  style: T,
+  side: string,
+  edge: { style: string; color?: string | null; theme?: object | null } | null,
+): T {
+  if (!style || (side !== "top" && side !== "right" && side !== "bottom" && side !== "left")) return style;
+  if (!markedSides(style as OwnEdgeCell["style"]).includes(side as Side)) return style;
+  const under = ownUnder(style as OwnEdgeCell["style"]);
+  under[side as Side] = edge
+    ? {
+        style: edge.style,
+        ...(edge.color ? { color: edge.color.toLowerCase() } : {}),
+        ...(edge.theme ? { theme: { ...(edge.theme as Record<string, unknown>) } } : {}),
+      }
+    : null;
+  return { ...style, tableEdgesUnder: under } as T;
+}
+
 /**
  * The cells a structural edit (rows or columns inserted, deleted or moved)
  * may have left a table's own edges wrong on: each table's outline, header

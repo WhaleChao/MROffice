@@ -27,13 +27,13 @@ import type {
   PresentationBlock,
   PresentationShapeBlock,
   PresentationTextBlock,
-} from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
+} from "../components/console/editor/native-document/documentCommands";
 import {
   normalizeOfficeTextPaint,
   officeTextPaintWithFontColor,
   type OfficeTextPaint,
-} from "@mrnote/core/web/lib/office-text-paint.ts";
-import { shapeTextPaintPatch } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
+} from "./office-text-paint";
+import { shapeTextPaintPatch } from "./presentation-shape-buttons";
 import {
   formatTextBlockRunSelection,
   normalizeParagraphsWithRuns,
@@ -41,14 +41,14 @@ import {
   presentationEditableText,
   selectedTextRange,
   type LiveTextSelection,
-} from "@mrnote/core/web/lib/presentation-text-buttons.ts";
+} from "./presentation-text-buttons";
 import {
   normalizeRuns,
   runsFromText,
   sameRunTextPaint,
   type RunStyle,
   type TextRun,
-} from "@mrnote/core/web/lib/presentation-point-runs.ts";
+} from "./presentation-point-runs";
 
 /**
  * What a WordArt command does to one run's paint: the paint it wears now

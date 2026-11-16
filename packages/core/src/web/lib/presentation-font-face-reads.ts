@@ -13,6 +13,8 @@ import { withScriptFallbacks } from "./office-fonts/script-fallbacks";
 import { pageDocumentJsonEquals } from "./page-save-acknowledgement";
 import { normalizeOfficeFontFace, type OfficeFontFace, type OfficeFontRole } from "../components/office-ribbon/officeFontFace";
 import { officeFontRegistrationGeneration, officeFontSubstitution, withOfficeFontSubstitutes } from "./office-fonts/substitutes";
+import substituteTable from "./office-fonts/substitutes.generated.json";
+import { POWERPOINT_WINDOWS_FACES, windowsOfficeFace, windowsOfficeMeasured } from "./office-fonts/windows-office-faces";
 
 export type PresentationFontRequirement = {
   family: string;
@@ -198,23 +200,68 @@ export function presentationFontFamilyWithAssets(
   return stack;
 }
 
+/** Every open face the page serves as some Office family's stand-in (lower-case). */
+let servedStandIns: ReadonlySet<string> | null = null;
+/** Pictogram and symbol faces: their private-use codes are pictures, which Calibri would draw as letters or boxes. */
+const SYMBOL_FACE_NAME = /dingbat|sorts|awesome|icons?\b|symbol|wingding|webding|linea-|mt extra|marlett|bookshelf|outlook/i;
+const EAST_ASIAN_NAME = /[\u1100-\u11ff\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef]/;
+
+
+
+
+
+
+
+
+
+function powerPointLacksUnmeasured(name: string): boolean {
+  if (windowsOfficeMeasured(name) || EAST_ASIAN_NAME.test(name) || SYMBOL_FACE_NAME.test(name) || officeFontSubstitution(name)) return false;
+  servedStandIns ??= new Set(Object.values(substituteTable as Record<string, { substitutes?: string[] }>).flatMap((entry) => entry.substitutes ?? []).map((face) => face.toLowerCase()));
+  return !servedStandIns.has(name.toLowerCase());
+}
+
+
+
+
+
+
+
+
+
+
+
+
+function powerPointWindowsName(name: string): string | undefined {
+  const drawn = windowsOfficeFace(name, POWERPOINT_WINDOWS_FACES);
+  if (drawn) return drawn.by === "fallback" ? missingFaceStack(drawn.face) : `"${drawn.face}"`;
+  return powerPointLacksUnmeasured(name) ? missingFaceStack("Calibri") : undefined;
+}
+
+/** A missing face's stack, as `withPowerPointMissingFace` ends an unknown one: Arial for its Arabic, Calibri, Arial. */
+function missingFaceStack(face: string): string {
+  return `"${POWERPOINT_MISSING_SCRIPT_FAMILY}", "${face}", Arial`;
+}
+
 function buildPresentationFontFamily(family: string, aliases: PresentationFontAliases): string {
-  const mapped = !Object.keys(aliases).length
-    ? family
-    : family
-        .split(",")
-        .map((token) => {
-          const name = token
-            .trim()
-            .replace(/^["']|["']$/g, "")
-            .toLowerCase();
-          if (!Object.hasOwn(aliases, name)) return token;
-          // A deck's embedded face is already a quoted list (its own family,
-          // then the typeface: `presentationEmbeddedFamilyCss`).
-          const alias = aliases[name];
-          return alias.startsWith('"') ? alias : `"${alias}"`;
-        })
-        .join(",");
+  const tokens = family.split(",");
+  let changed = false;
+  const mappedTokens = tokens.map((token) => {
+    const own = token.trim().replace(/^["']|["']$/g, "").trim();
+    const name = own.toLowerCase();
+    if (Object.hasOwn(aliases, name)) {
+      // A deck's embedded face is already a quoted list (its own family,
+      // then the typeface: `presentationEmbeddedFamilyCss`): a face the deck
+      // embeds, or the reader bound, is one PowerPoint has.
+      const alias = aliases[name];
+      return alias.startsWith('"') ? alias : `"${alias}"`;
+    }
+    if (!own || CSS_GENERIC_FAMILIES.has(name)) return token;
+    const windows = powerPointWindowsName(own);
+    if (windows === undefined) return token;
+    changed = true;
+    return windows;
+  });
+  const mapped = changed ? dedupeFamilies(mappedTokens.join(",")) : mappedTokens.join(",");
   // Each Office name with its open substitute right behind it, as Docs and
   // the worksheet stack theirs: the static alias rule for "Calibri" carries
   // only Carlito's Latin slices, so Greek and Cyrillic words fell to the
@@ -224,7 +271,22 @@ function buildPresentationFontFamily(family: string, aliases: PresentationFontAl
   // a character the stand-in has no glyph for -- Arial's Arabic, Cambria's
   // Cyrillic -- is drawn by a face of its own script on every machine, the
   // print page's included, not by whatever the reader's system picks.
-  return withScriptFallbacks(withOfficeFontSubstitutes(withPowerPointMissingFace(mapped, family, aliases)));
+  return withScriptFallbacks(withOfficeFontSubstitutes(withPowerPointMissingFace(mapped, changed ? mapped : family, aliases)));
+}
+
+/** A stack's families with each name once (two lacked faces both became Calibri). */
+function dedupeFamilies(stack: string): string {
+  const seen = new Set<string>();
+  return stack
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => {
+      const key = part.replace(/^["']|["']$/g, "").trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(", ");
 }
 
 
@@ -275,7 +337,10 @@ export function presentationOfficeLightFontWeight(
     ?.split(",")[0]
     ?.trim()
     .replace(/^["']|["']$/g, "");
-  const weight = officeFontSubstitution(primary)?.weight;
+  // A face PowerPoint for Windows draws in another is that face's weight:
+  // "Avenir Light" is Calibri's regular, "Myriad Pro Light" Segoe UI Light.
+  const drawn = windowsOfficeFace(primary, POWERPOINT_WINDOWS_FACES)?.face ?? primary;
+  const weight = officeFontSubstitution(drawn)?.weight;
   return weight !== undefined && weight < 400 ? weight : undefined;
 }
 

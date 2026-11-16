@@ -23,7 +23,7 @@ import type {
 import { tableWithPaintedLook, type FormatPaintPlan } from "@mrnote/core/web/lib/presentation-format-painter.ts";
 import { applyRunFormat, normalizeRuns, runsFromText, textFromRuns, type RunStyle } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import { pictureBorderIsOpaque } from "./presentation-picture-effects";
-import { presentationBlockWithFontColor } from "./presentation-run-text-paint";
+import { presentationBlockWithFontColor } from "@mrnote/core/web/lib/presentation-run-text-paint.ts";
 import { shapeBlockWithPatch } from "@mrnote/core/web/lib/presentation-shape-buttons.ts";
 import {
   flatRunsFromParagraphs,
@@ -46,7 +46,10 @@ function paintWholeText(textBlock: PresentationTextBlock, plan: FormatPaintPlan)
   let merged: PresentationTextBlock = textBlock;
   if (plan.textPatch) {
     const nextStyle = { ...(textBlock.style || {}), ...plan.textPatch };
-    for (const [k, v] of Object.entries(nextStyle)) {
+    // Only what the paint states: a setting of the target's own that is
+    // false (`spaceFirstLastPara`) is no format the painter carries, and taken
+    
+    for (const [k, v] of Object.entries(plan.textPatch)) {
       if (v === false || v === undefined || v === null || v === "") {
         delete nextStyle[k as keyof PresentationTextStyle];
       }

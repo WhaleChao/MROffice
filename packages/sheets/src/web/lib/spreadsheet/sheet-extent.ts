@@ -159,3 +159,33 @@ export function grownRowsStayHidden<S extends { rowCount: number }>(before: { ro
   if (hidden.size > MAX_GRID_ROW_SIZE_OVERRIDES) return after;
   return { ...after, manuallyHiddenRows: [...hidden].sort((a, b) => a - b) };
 }
+
+
+
+
+
+
+
+
+
+
+
+
+export function insertedRowsKeepTheirShowing<S extends { rowCount: number }>(
+  before: { rowCount: number },
+  after: S,
+  at: number,
+  count: number,
+): S {
+  const lines = after as S & { rowsHiddenByDefault?: unknown; manuallyHiddenRows?: unknown };
+  if (lines.rowsHiddenByDefault !== true || !(after.rowCount > before.rowCount)) return after;
+  const listed = Array.isArray(lines.manuallyHiddenRows) ? (lines.manuallyHiddenRows as unknown[]) : [];
+  const hidden = new Set(listed.filter((row): row is number => Number.isInteger(row)));
+  for (let row = Math.max(0, before.rowCount); row < after.rowCount; row += 1) {
+    const from = row - count;
+    const moved = row >= at + count && from >= at && from < before.rowCount;
+    if (!moved) hidden.add(row);
+  }
+  if (hidden.size > MAX_GRID_ROW_SIZE_OVERRIDES) return after;
+  return { ...after, manuallyHiddenRows: [...hidden].sort((a, b) => a - b) };
+}

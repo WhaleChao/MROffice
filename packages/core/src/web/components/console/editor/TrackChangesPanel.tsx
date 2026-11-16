@@ -5,7 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "../../../../host/next-intl";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { Editor } from "@tiptap/react";
@@ -24,11 +24,19 @@ import {
 import { isDocumentTrackingLocked } from "./native-document/documentProtection";
 import type { TrackedObjectKind } from "./native-document/trackChanges";
 import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
+import { aiEditReviewEnabled, fetchAiEditReview } from "../../../__cut__/mdc1651b936";
 
 interface TrackChangesPanelProps {
   editor: Editor;
   onClose: () => void;
+  /** A native document page: the pane also lists its AI changes, one group
+   * per AI instruction (`AiEditReviewPane`). */
+  pageId?: string | null;
+  /** Open on the AI changes tab, on this group (a new `nonce` each ask). */
+  aiReviewRequest?: { groupId: string | null; nonce: number } | null;
 }
+
+const AiEditReviewPane = lazy(() => import("./AiEditReviewPane"));
 
 type RuntimeEditor = Editor & {
   on?: (event: string, cb: () => void) => void;
@@ -119,8 +127,41 @@ const OBJECT_LABEL_KEYS = {
 export default function TrackChangesPanel({
   editor,
   onClose,
+  pageId: pageIdProp,
+  aiReviewRequest,
 }: TrackChangesPanelProps) {
+  const [aiReviewOn] = useState(aiEditReviewEnabled);
+  const pageId = aiReviewOn ? pageIdProp : null;
   const t = useTranslations("console-notebooks");
+  const [tab, setTab] = useState<"revisions" | "ai">(() => (aiReviewRequest && pageId ? "ai" : "revisions"));
+  const [aiOpenCount, setAiOpenCount] = useState<number | null>(null);
+  // A new ask for the AI changes turns the pane to them (React's
+  // "adjusting state when a prop changes").
+  const [seenAiRequest, setSeenAiRequest] = useState(aiReviewRequest);
+  if (aiReviewRequest !== seenAiRequest) {
+    setSeenAiRequest(aiReviewRequest);
+    if (aiReviewRequest && pageId) setTab("ai");
+  }
+  // The AI tab's count before it is opened, and the tab a document with no
+  // revisions but open AI changes opens on.
+  useEffect(() => {
+    if (!pageId) return;
+    let cancelled = false;
+    void fetchAiEditReview(pageId)
+      .then((groups) => {
+        if (cancelled) return;
+        const open = groups.reduce(
+          (sum, group) => sum + group.changes.filter((c) => c.status === "pending" || c.status === "held").length,
+          0,
+        );
+        setAiOpenCount((current) => current ?? open);
+        if (open > 0 && getTrackedChanges(editor.state).length === 0) setTab("ai");
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [editor, pageId]);
   const [snapshot, setSnapshot] = useState<TrackedChangesSnapshot>(() => ({
     doc: editor.state.doc,
     changes: getTrackedChanges(editor.state),
@@ -303,9 +344,29 @@ export default function TrackChangesPanel({
       dockRight={false}
       className="ai-panel track-changes-panel"
       headerActions={
-        <span className="track-changes-panel-count">{changes.length}</span>
+        <span className="track-changes-panel-count">{tab === "ai" ? aiOpenCount ?? "" : changes.length}</span>
       }
     >
+      {pageId ? (
+        <div className="track-changes-panel-tabs" role="tablist" aria-label={t("trackChanges.title")}>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "revisions"}
+            className="track-changes-panel-tab"
+            data-testid="track-changes-tab-revisions"
+            onClick={() => setTab("revisions")}
+          >
+            {t("aiReview.revisionsTab")}
+            <span className="track-changes-panel-tab-count">{changes.length}</span>
+          </button>
+          {null}
+        </div>
+      ) : null}
+      {pageId && tab === "ai" ? (
+        null
+      ) : (
+      <>
 
       <div className="track-changes-panel-bulk">
         <button
@@ -430,6 +491,8 @@ export default function TrackChangesPanel({
           </ul>
         )}
       </div>
+      </>
+      )}
     </OfficeTaskPane>
   );
 }

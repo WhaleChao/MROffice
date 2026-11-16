@@ -231,7 +231,11 @@ export function sectionStoryBoundarySyncTransaction(
   const bandsOwned = bandsValue !== oldAttrs.sectionBands;
   const graphPresent = graphValue !== null && graphValue !== undefined;
   const bandsPresent = bandsValue !== null && bandsValue !== undefined;
-  if ((!graphPresent || graphOwned) && (!bandsPresent || bandsOwned)) return null;
+  const startValue = newAttrs.pageNumberStartSection;
+  const startFollows =
+    startValue === oldAttrs.pageNumberStartSection &&
+    typeof startValue === "number" && Number.isInteger(startValue) && startValue > 0;
+  if ((!graphPresent || graphOwned) && (!bandsPresent || bandsOwned) && !startFollows) return null;
   if (!batchTouchesSectionBreaks(transactions)) return null;
 
   const before = liveBreaks(oldState.doc);
@@ -253,6 +257,17 @@ export function sectionStoryBoundarySyncTransaction(
   if (bandsPresent && !bandsOwned) {
     const next = alignSectionBands(bandsValue, owners, graphPresent ? graphValue : null);
     if (next) tr = (tr ?? newState.tr).setDocAttribute("sectionBands", next);
+  }
+  if (startFollows) {
+    // The section page numbering starts at follows its section, as Word's
+    // own w:pgNumType rides that section's break: a deleted break before it
+    // merges it into the section before (which takes its formatting), an
+    // inserted one before it moves it on (corpus R456-D21 E59: the first
+    // break deleted, the numbered footer of the merged first section lost
+    // its PAGE field in the export).
+    const next = owners.findIndex((owner) => owner >= (startValue as number));
+    const moved = next < 0 ? owners.length - 1 : next;
+    if (moved !== startValue) tr = (tr ?? newState.tr).setDocAttribute("pageNumberStartSection", moved);
   }
   if (!tr) return null;
   tr.setMeta(SECTION_STORY_BOUNDARY_SYNC_META, { sections: owners.length });

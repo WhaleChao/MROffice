@@ -37,6 +37,12 @@ export type OfficeTableStyleGalleryItemId =
 export interface OfficeTableStyleGalleryDocumentItem {
   readonly id: `deck:${string}` | `current:${string}`;
   readonly label: string;
+  /**
+   * A built-in style's catalogue key (`office.tableStyle.*`): the item shows
+   * the style's name in the UI's language, whatever language the file stores
+   * it in (readings row 893 stores PowerPoint's English name).
+   */
+  readonly labelKey?: string;
   readonly preview: ReactNode;
   readonly disabled?: boolean;
   readonly disabledReason?: string;
@@ -127,7 +133,7 @@ export function OfficeTableStyleGallery({
     const documentIds = documentItems.map((item) => {
       items.push({
         id: item.id,
-        label: item.label,
+        label: item.labelKey ? t(item.labelKey) : item.label,
         groupId: "deck",
         ...(item.disabled ? { disabled: true } : {}),
         ...(item.disabledReason ? { disabledReason: item.disabledReason } : {}),

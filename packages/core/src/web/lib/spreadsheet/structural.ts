@@ -29,7 +29,7 @@ import {
   isCellRefString,
   isRangeRefString,
 } from "./named-ranges";
-import { invalidateDataTableTotalFormulaColumn } from "./data-table";
+import { defaultTableColumnName, invalidateDataTableTotalFormulaColumn } from "./data-table";
 import { parseA1Range } from "./print-settings";
 import {
   normalizeWhatIfTables,
@@ -1383,15 +1383,14 @@ function remapDataTables<T extends StructuralDataTable>(
         );
         if (delta > 0 && at > c1 && at <= c2) {
           const offset = at - c1;
-          const used = new Set(columns.map((column) => column.name.toLowerCase()));
-          // The interface language's Excel name ("列2" in Chinese).
-          const base = `${spreadsheetDefaultNames().column}${offset + 1}`;
-          let name = base;
-          let suffix = 2;
-          while (used.has(name.toLowerCase())) {
-            name = `${base}${suffix}`;
-            suffix += 1;
-          }
+          // Excel names the inserted column "Column" with the first number no
+          // column of the table holds, from 1 -- not by its place: Windows Excel
+          // 16 named a column inserted 29th in Table128 "Column1" (office-truth
+          
+          const name = defaultTableColumnName(
+            columns.map((column) => column.name),
+            (number) => `${spreadsheetDefaultNames().column}${number}`,
+          );
           const id = Math.max(0, ...columns.map((column) => column.id)) + 1;
           columns.splice(offset, 0, { id, name });
         }

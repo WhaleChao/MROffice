@@ -24,10 +24,13 @@ import {
 import {
   normalizeOfficeTextPaintStated,
   officeStatedLineColor,
+  officeTextPaintDisplayFromStated,
   sortedStops,
   type OfficeStatedFill,
   type OfficeTextPaintStated,
 } from "../../../../lib/office-text-paint-stated";
+import { attachOfficeTextShadowCopy, officeTextShadowTransformed } from "../../../../lib/office-text-shadow-copy";
+import type { OfficeTextShadow } from "../../../../lib/office-text-paint";
 
 /**
  * Closed, developer-authored text-effect values. None of these values is ever
@@ -835,6 +838,23 @@ function wordReflectionCss(
   return `below ${offset} linear-gradient(transparent ${end}%, rgba(255, 255, 255, ${start}))`;
 }
 
+
+
+
+
+
+
+
+
+
+export function textEffectsPerspectiveShadow(value: unknown): OfficeTextShadow | null {
+  const attrs = normalizeTextEffectMarkAttributes(value);
+  const outer = attrs.stated?.paint?.effects?.outerShadow;
+  if (!outer || !axisStatesSource(attrs, "shadow")) return null;
+  const shadow = officeTextPaintDisplayFromStated({ effects: { outerShadow: outer } } as OfficeTextPaintStated, "#000000").shadow;
+  return shadow && officeTextShadowTransformed(shadow) ? (shadow as OfficeTextShadow) : null;
+}
+
 /** Fixed CSS declarations for a normalized text-effect mark. */
 export function textEffectsCss(value: unknown): string {
   const attrs = normalizeTextEffectMarkAttributes(value);
@@ -859,7 +879,9 @@ export function textEffectsCss(value: unknown): string {
   if (attrs.relief !== "none") shadows.push(RELIEF_CSS[attrs.relief]);
   const statedShadow = paint?.effects?.outerShadow;
   if (statedShadow && axisStatesSource(attrs, "shadow")) {
-    const shadow = wordShadowCss(statedShadow);
+    // A perspective shadow is the copy the mark view paints behind the words
+    // (`textEffectsPerspectiveShadow`), never a moved halo.
+    const shadow = textEffectsPerspectiveShadow(attrs) ? null : wordShadowCss(statedShadow);
     if (shadow) shadows.push(shadow);
   } else if (attrs.shadow !== "none") {
     shadows.push(SHADOW_CSS[attrs.shadow]);
@@ -1091,11 +1113,29 @@ export const TextEffectsMark = TiptapMark.create({
     return ({ mark }) => {
       const dom = document.createElement("span");
       for (const [name, value] of Object.entries(textEffectsRendered(mark.attrs))) dom.setAttribute(name, value);
+      const perspective = textEffectsPerspectiveShadow(mark.attrs);
+      if (!perspective) {
+        return {
+          dom,
+          contentDOM: dom,
+          ignoreMutation: (mutation) =>
+            mutation.type === "attributes" && mutation.target === dom && mutation.attributeName === "style",
+        };
+      }
+      // A perspective shadow: the words in an inner span, the shared shadow
+      // copy's canvas behind them in the outer one -- outside the content, so
+      // the editor never reads it as text.
+      const outer = document.createElement("span");
+      outer.setAttribute("data-text-effects-shadow-copy", "");
+      outer.append(dom);
+      const dispose = attachOfficeTextShadowCopy({ source: dom, host: outer, shadow: perspective });
       return {
-        dom,
+        dom: outer,
         contentDOM: dom,
         ignoreMutation: (mutation) =>
-          mutation.type === "attributes" && mutation.target === dom && mutation.attributeName === "style",
+          mutation.target === outer ||
+          (mutation.type === "attributes" && mutation.target === dom && mutation.attributeName === "style"),
+        destroy: dispose,
       };
     };
   },

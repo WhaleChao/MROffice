@@ -487,6 +487,97 @@ export function dropNativeAutofitReceipt(block: object): void {
   target.source = next;
 }
 
+/**
+ * What a text box's words lay out by, apart from its frame (a resized frame
+ * already parts from the receipt) -- the server's twin is
+ * `editable_page_patchback._pptx_refitted_shrink_step`'s reading, key for key.
+ */
+const AUTOFIT_LAYOUT_STYLE_KEYS = [
+  "fontSize",
+  "fontFamily",
+  "bold",
+  "italic",
+  "lineSpacing",
+  "spaceBefore",
+  "spaceAfter",
+  "letterSpacing",
+  "writingMode",
+  "textWrap",
+  "indentLevel",
+] as const;
+
+function autofitLayoutReading(block: Record<string, unknown>): string {
+  const style =
+    block.style && typeof block.style === "object" && !Array.isArray(block.style)
+      ? (block.style as Record<string, unknown>)
+      : {};
+  const effective = (key: string): unknown => (key in style ? style[key] : block[key]);
+  return JSON.stringify([
+    block.text ?? null,
+    block.runs ?? null,
+    block.paragraphs ?? null,
+    block.textInsets ?? null,
+    AUTOFIT_LAYOUT_STYLE_KEYS.map((key) => effective(key) ?? null),
+  ]);
+}
+
+function hasNativeAutofitReceipt(block: unknown): block is Record<string, unknown> & { source: Record<string, unknown> } {
+  const source = (block as { source?: unknown } | null)?.source;
+  return typeof source === "object" && source !== null && "nativeAutofitReceipt" in source;
+}
+
+/**
+ * Whether two deck themes draw text in different fonts (Design > Variants >
+ * Fonts, a theme or variant applied): the theme's body/heading families and
+ * its font scheme. Text boxes in theme fonts lay out anew.
+ */
+export function deckThemeFontsDiffer(previous: unknown, next: unknown): boolean {
+  const fonts = (theme: unknown) => {
+    const record = theme && typeof theme === "object" ? (theme as Record<string, unknown>) : {};
+    return JSON.stringify([record.fontFamily ?? null, record.fontSchemeId ?? null, record.fontScheme ?? null]);
+  };
+  return fonts(previous) !== fonts(next);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function slidesWithStaleAutofitReceiptsDropped<S extends { blocks?: readonly unknown[] }>(
+  nextSlides: readonly S[],
+  previousSlides: readonly S[],
+  themeFontsChanged = false,
+): S[] {
+  const previousById = new Map<unknown, Record<string, unknown>>();
+  for (const slide of previousSlides) {
+    for (const block of slide.blocks ?? []) {
+      if (block && typeof block === "object") previousById.set((block as { id?: unknown }).id, block as Record<string, unknown>);
+    }
+  }
+  return nextSlides.map((slide) => {
+    let changed = false;
+    const blocks = (slide.blocks ?? []).map((block) => {
+      if (!hasNativeAutofitReceipt(block)) return block;
+      const previous = previousById.get(block.id);
+      const stale = themeFontsChanged || (previous !== undefined && autofitLayoutReading(previous) !== autofitLayoutReading(block));
+      if (!stale) return block;
+      const next = { ...block };
+      dropNativeAutofitReceipt(next);
+      changed = true;
+      return next;
+    });
+    return changed ? { ...slide, blocks } : slide;
+  }) as S[];
+}
+
 
 
 

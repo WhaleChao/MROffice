@@ -15,6 +15,7 @@
  * digest binding (save-policy.ts); this is only where the work happens.
  */
 import type { PdfSourceRiskProfile } from "./save-policy";
+import { startResilientWorker } from "@mrnote/core/web/lib/worker-start.ts";
 
 type Response = { ready?: true; id?: number; profile?: PdfSourceRiskProfile; error?: string };
 
@@ -23,6 +24,7 @@ const WORKER_START_MS = 4_000;
 let worker: Worker | null = null;
 let ready: Promise<boolean> | null = null;
 let broken = false;
+const workerStart = startResilientWorker("pdf-source-risk");
 let sequence = 0;
 const pending = new Map<number, (profile: PdfSourceRiskProfile | null) => void>();
 
@@ -32,30 +34,40 @@ function startWorker(): Promise<boolean> {
   // WORKER_START_MS for it held every reader's inspection 4 s and timed the
   
   if (broken || typeof Worker === "undefined" || process.env.NODE_ENV === "test") return Promise.resolve(false);
+  // One more start after a pause when this one fails (lib/worker-start.ts);
+  // none while the pause runs or once given up: the caller works here then.
+  const started = workerStart.create(() => new Worker(new URL("./source-risk.worker.ts", import.meta.url), { type: "module", name: "mrnote-pdf-source-risk" }));
+  if (!started) {
+    if (workerStart.gaveUp) broken = true;
+    return Promise.resolve(false);
+  }
   ready = new Promise<boolean>((resolve) => {
-    let started: Worker;
-    try {
-      started = new Worker(new URL("./source-risk.worker.ts", import.meta.url), { type: "module", name: "mrnote-pdf-source-risk" });
-    } catch {
-      broken = true;
-      resolve(false);
-      return;
-    }
-    const giveUp = () => {
-      broken = true;
+    let startedNow = false;
+    let over = false;
+    const giveUp = (reason: string) => {
+      // Once: an error and the start deadline must not count as two starts.
+      if (over) return;
+      over = true;
+      clearTimeout(timer);
+      // A worker that failed at its work, or a second failed start, is given
+      // up; a first failed start leaves the next call a fresh one.
+      if (workerStart.failed(started, startedNow ? `failed at work: ${reason}` : reason) === "gave_up") broken = true;
+      if (!broken) ready = null;
       started.terminate();
       if (worker === started) worker = null;
       for (const settle of pending.values()) settle(null);
       pending.clear();
       resolve(false);
     };
-    const timer = setTimeout(giveUp, WORKER_START_MS);
-    started.onerror = giveUp;
-    started.onmessageerror = giveUp;
+    const timer = setTimeout(() => giveUp("no word by its start deadline"), WORKER_START_MS);
+    started.onerror = () => giveUp("error");
+    started.onmessageerror = () => giveUp("message error");
     started.onmessage = (event: MessageEvent<Response>) => {
       const data = event.data;
       if (data?.ready) {
         clearTimeout(timer);
+        startedNow = true;
+        workerStart.started(started);
         worker = started;
         resolve(true);
         return;

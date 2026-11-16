@@ -73,6 +73,7 @@ import {
   type NativeGrid,
 } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { rewriteSheetFormulaReferences } from "./sheet-formula-references";
+import { insertedRowsKeepTheirShowing } from "./sheet-extent";
 import {
   deletableLineCount,
   deleteLine,
@@ -182,8 +183,12 @@ export function insertedLinesSheet<S extends StructuralSheet>(
   // `at` still move by `count`, and other sheets' references must follow
   // them (O005).
   const lines = inserted === sheet ? 0 : count;
+  const formatted = inserted === sheet ? inserted : inheritInsertedLineFormats(inserted, axis, at, count);
   return {
-    sheet: inserted === sheet ? inserted : inheritInsertedLineFormats(inserted, axis, at, count),
+    // On a sheet whose rows are hidden by default, the rows moved past the
+    // old extent keep showing; the insert says which rows are hidden itself
+    
+    sheet: formatted === sheet || axis !== "row" ? formatted : insertedRowsKeepTheirShowing(sheet, formatted, at, count),
     followOthers: pivotSourcesFollowLines(sheet, axis, at, lines),
   };
 }

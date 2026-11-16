@@ -1383,6 +1383,15 @@ export const presentationImageBlockSchema = z
       // Its crop is not in this list: the import states it, drawn as PowerPoint
       // draws it and kept the package's (reading `svgGraphicCrop`, API rule); a
       
+      // Nor are its Transparency, Brightness / Contrast and Color where the
+      // import states them as the package's (preserve-only): PowerPoint draws
+      
+      const packageFormat = {
+        opacity: source?.pictureTransparencyDisposition,
+        brightness: source?.pictureCorrectionsDisposition,
+        contrast: source?.pictureCorrectionsDisposition,
+        recolor: source?.pictureColorDisposition,
+      } as const;
       for (const field of [
         "borderColor",
         "borderWidth",
@@ -1395,6 +1404,7 @@ export const presentationImageBlockSchema = z
         "blendMode",
         "shadow",
       ] as const) {
+        if (field in packageFormat && packageFormat[field as keyof typeof packageFormat] === "preserve-only") continue;
         if (block[field] !== undefined) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -1442,10 +1452,13 @@ export const presentationImageBlockSchema = z
         message: "Asset-backed image pixel budget exceeded",
       });
     }
+    // An SVG graphic's own are drawn and stay the package's (row 857, above).
+    const drawnGraphicFormats = block.officeGraphicKind === "svg";
     if (
       block.opacity !== undefined &&
       (block.source as Record<string, unknown> | undefined)
-        ?.pictureTransparencyDisposition === "preserve-only"
+        ?.pictureTransparencyDisposition === "preserve-only" &&
+      !drawnGraphicFormats
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -1455,7 +1468,8 @@ export const presentationImageBlockSchema = z
     }
     if (
       block.recolor !== undefined &&
-      source?.pictureColorDisposition === "preserve-only"
+      source?.pictureColorDisposition === "preserve-only" &&
+      !drawnGraphicFormats
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -1467,7 +1481,8 @@ export const presentationImageBlockSchema = z
       (block.brightness !== undefined || block.contrast !== undefined) &&
       (block.source as Record<string, unknown> | undefined)
         ?.pictureCorrectionsDisposition === "preserve-only" &&
-      !hasAmbiguousLegacyCorrectionsReceipt
+      !hasAmbiguousLegacyCorrectionsReceipt &&
+      !drawnGraphicFormats
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

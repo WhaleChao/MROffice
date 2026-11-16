@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { startResilientWorker } from "@mrnote/core/web/lib/worker-start.ts";
+
 export type PdfNativeTextWorkerChannel = "prepare" | "plan" | "planner";
 
 export class PdfNativeTextWorkerUnavailable extends Error {
@@ -25,6 +27,7 @@ type Pending = Readonly<{
 }>;
 
 const workers = new Map<PdfNativeTextWorkerLane, Worker>();
+const nativeTextWorkerStart = startResilientWorker("pdf-native-text", { attempts: Number.POSITIVE_INFINITY });
 const pending = new Map<string, Pending>();
 /** What a channel does with an answer nobody waits for any more (an
  * aborted request's candidate bytes, cleared). */
@@ -41,10 +44,15 @@ function retire(target: Worker, reason: string): void {
 function current(lane: PdfNativeTextWorkerLane = "interactive"): Worker {
   const held = workers.get(lane);
   if (held) return held;
-  const spawned = new Worker(new URL("./native-text.worker.ts", import.meta.url),
+  // A failed start is reported and the next one waits out a pause
+  // (lib/worker-start.ts); it is never given up: an edit has no other way
+  // to be prepared here, and waits ("later") while the Worker is away.
+  const spawned = nativeTextWorkerStart.create(() => new Worker(new URL("./native-text.worker.ts", import.meta.url),
     { type: "module", name: lane === "background" ? "mrnote-pdf-native-text-background"
-      : lane === "compile" ? "mrnote-pdf-native-text-compile" : "mrnote-pdf-native-text" });
+      : lane === "compile" ? "mrnote-pdf-native-text-compile" : "mrnote-pdf-native-text" }));
+  if (!spawned) throw new PdfNativeTextWorkerUnavailable("worker-starting-again");
   spawned.onmessage = (event: MessageEvent<{ channel?: PdfNativeTextWorkerChannel; payload?: { requestId?: string } }>) => {
+    nativeTextWorkerStart.started(spawned);
     const payload = event.data?.payload;
     const requestId = payload?.requestId ?? "";
     const entry = pending.get(requestId);
@@ -56,7 +64,10 @@ function current(lane: PdfNativeTextWorkerLane = "interactive"): Worker {
     pending.delete(requestId);
     entry.resolve(payload);
   };
-  spawned.onerror = (event) => retire(spawned, event.message || "worker-error");
+  spawned.onerror = (event) => {
+    nativeTextWorkerStart.failed(spawned, event.message || "worker-error");
+    retire(spawned, event.message || "worker-error");
+  };
   spawned.onmessageerror = () => retire(spawned, "invalid-answer");
   workers.set(lane, spawned);
   return spawned;

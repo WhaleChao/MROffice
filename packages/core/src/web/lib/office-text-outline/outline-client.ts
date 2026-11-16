@@ -12,6 +12,7 @@
  */
 import { NO_PATH_UNION, OutlineEngine, type FaceOutlines } from "./outline-engine";
 import { startOutlineWorker } from "./outline-worker-start";
+import { startResilientWorker } from "../worker-start";
 
 export interface GlyphPath {
   readonly d: string;
@@ -126,6 +127,7 @@ type WorkerResponse = { ready?: true; id?: number; outlines?: FaceOutlines; unio
 let worker: Worker | null = null;
 let workerReady: Promise<boolean> | null = null;
 let workerBroken = false;
+const workerStart = startResilientWorker("text-outline");
 let sequence = 0;
 const waiting = new Map<number, { resolve(value: FaceOutlines | string[]): void; reject(error: Error): void }>();
 let pageEngine: OutlineEngine | null = null;
@@ -140,30 +142,38 @@ export function setOutlineEngineForTests(engine: OutlineEngine | null): void {
 function startWorker(): Promise<boolean> {
   if (workerReady) return workerReady;
   if (workerBroken || typeof Worker === "undefined" || typeof window === "undefined") return Promise.resolve(false);
+  // One more start after a pause when this one fails (lib/worker-start.ts):
+  // a classic worker, which loads PathKit with importScripts.
+  const started = workerStart.create(startOutlineWorker);
+  if (!started) {
+    if (workerStart.gaveUp) workerBroken = true;
+    return Promise.resolve(false);
+  }
   workerReady = new Promise<boolean>((resolve) => {
-    let started: Worker;
-    try {
-      started = startOutlineWorker();
-    } catch {
-      workerBroken = true;
-      resolve(false);
-      return;
-    }
-    const giveUp = () => {
-      workerBroken = true;
+    let startedNow = false;
+    let over = false;
+    const giveUp = (reason: string) => {
+      // Once: an error and the start deadline must not count as two starts.
+      if (over) return;
+      over = true;
+      clearTimeout(timer);
+      if (workerStart.failed(started, startedNow ? `failed at work: ${reason}` : reason) === "gave_up") workerBroken = true;
+      if (!workerBroken) workerReady = null;
       started.terminate();
       if (worker === started) worker = null;
       for (const settle of waiting.values()) settle.reject(new Error("text outline worker stopped"));
       waiting.clear();
       resolve(false);
     };
-    const timer = setTimeout(giveUp, 4_000);
-    started.onerror = giveUp;
-    started.onmessageerror = giveUp;
+    const timer = setTimeout(() => giveUp("no word by its start deadline"), 4_000);
+    started.onerror = () => giveUp("error");
+    started.onmessageerror = () => giveUp("message error");
     started.onmessage = (event: MessageEvent<WorkerResponse>) => {
       const data = event.data;
       if (data?.ready) {
         clearTimeout(timer);
+        startedNow = true;
+        workerStart.started(started);
         worker = started;
         resolve(true);
         return;

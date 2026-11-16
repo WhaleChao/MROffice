@@ -1398,10 +1398,16 @@ function pictureRecolorTileSteps(
     // Recolor > More Variations: a tile's duotone around a colour no tile
     // names (`source.pictureRecolorVariation`).
     const variation = record?.pictureRecolorVariation as { variation?: unknown; color?: unknown } | undefined;
+    // Any other duotone in its two colours as the slide's theme read them
+    // (`source.pictureDuotone`, readings row 858: a template's dk2 band,
+    // plain black to white), as PowerPoint draws every duotone.
+    const stated = record?.pictureDuotone;
     const pair =
       variation && (variation.variation === "dark" || variation.variation === "light") && typeof variation.color === "string"
         ? officeRecolorVariationDuotone(variation.variation, variation.color)
-        : null;
+        : Array.isArray(stated) && stated.length === 2 && stated.every((value) => typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value))
+          ? ([stated[0], stated[1]] as const)
+          : null;
     return pair ? officeAdjustFilterSteps({ duotone: pair }) : [];
   }
   if (preset === "grayscale" || preset === "washout") return [];

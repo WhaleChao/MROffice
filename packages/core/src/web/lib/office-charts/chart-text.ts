@@ -8,6 +8,7 @@ import { OFFICE_CHART_TEXT_CAPS, OFFICE_CHART_TEXT_SPACING } from "./chart-lette
 import { ptToPx } from "../office-units";
 import { normalizeOfficeShapeFontFamily } from "../office-shape-text-font";
 import { primaryOfficeFontFace } from "../../components/office-ribbon/officeFontFace";
+import { windowsMissingFaceAdapter, windowsOfficeFace } from "../office-fonts/windows-office-faces";
 
 /**
  * The Font dialog's Underline style list, in its order (ECMA-376
@@ -375,6 +376,15 @@ export function applyOfficeChartTextCommand(
  */
 export const OFFICE_CHART_MISSING_FACE = "Calibri";
 
+
+
+
+
+
+
+
+const CHART_WINDOWS_FACES = windowsMissingFaceAdapter("excel", () => OFFICE_CHART_MISSING_FACE);
+
 /** The ECharts text style the chart text draws with (px, as ECharts sizes). */
 /**
  * The key an ECharts text style carries a text's underline and
@@ -396,7 +406,8 @@ export function officeChartTextEChartsStyle(
   scale = 1,
 ): Record<string, unknown> {
   if (!text) return {};
-  const latin = text.fontFamily ? primaryOfficeFontFace(text.fontFamily) : null;
+  const named = text.fontFamily ? primaryOfficeFontFace(text.fontFamily) : null;
+  const latin = named ? windowsOfficeFace(named, CHART_WINDOWS_FACES)?.face ?? named : null;
   // An Asian face of its own draws the text the Latin face has no glyphs
   // for, as Office draws a run in its `a:ea` face.
   const asian = text.eastAsianFontFamily ? primaryOfficeFontFace(text.eastAsianFontFamily) : null;

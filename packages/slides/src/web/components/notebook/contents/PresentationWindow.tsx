@@ -591,7 +591,7 @@ import {
   presentationObjectBlocksWithFontColor,
   presentationTextPaintAt,
   type RunTextPaintTransform,
-} from "../../../lib/presentation-run-text-paint";
+} from "@mrnote/core/web/lib/presentation-run-text-paint.ts";
 import type { PresentationWordArtStyle } from "@mrnote/core/web/lib/presentation-wordart-gallery.ts";
 // Kept for stylesheet order only (its named imports moved out of this file).
 import "@mrnote/core/web/components/console/editor/DocumentInsertRibbonIcons.tsx";
@@ -2183,7 +2183,9 @@ import {
   type QuarterTurnDirection,
 } from "@mrnote/core/web/lib/presentation-rotate-quarter.ts";
 import {
+  deckThemeFontsDiffer,
   effectiveAutofitMode,
+  slidesWithStaleAutofitReceiptsDropped,
   type AutofitMode,
 } from "@mrnote/core/web/lib/presentation-autofit.ts";
 import {
@@ -12085,6 +12087,14 @@ export default function PresentationWindow({
         slidesRef.current,
         (slide) => slideBounds(slide as unknown as Record<string, unknown>),
         nextMasters,
+      );
+      // Shrink text on overflow refits after every edit that lays the words
+      // out anew -- reformatted, or in other theme fonts -- as PowerPoint's
+      // does; a box nobody touched keeps the step its file stores.
+      nextSlides = slidesWithStaleAutofitReceiptsDropped(
+        nextSlides,
+        slidesRef.current,
+        nextTheme !== undefined && nextTheme !== null && deckThemeFontsDiffer(themeRef.current, nextTheme),
       );
       if (
         typingLetterRef.current &&

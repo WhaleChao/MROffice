@@ -73,8 +73,10 @@ export type PresentationFontDialogUnderline =
 /** The Font page's underline list for a slide's words, in PowerPoint's order. */
 export const PRESENTATION_FONT_DIALOG_UNDERLINES: readonly PresentationFontDialogUnderline[] = [
   "none",
+  // (none), Words only, Single, Double ... as PowerPoint lists them.
+  PRESENTATION_UNDERLINE_FONT_PAGE.words,
   "single",
-  ...PRESENTATION_UNDERLINE_STYLES.map((style) => PRESENTATION_UNDERLINE_FONT_PAGE[style]),
+  ...PRESENTATION_UNDERLINE_STYLES.filter((style) => style !== "words").map((style) => PRESENTATION_UNDERLINE_FONT_PAGE[style]),
 ];
 
 /** The run's line for a Font page name ("single" and "none" carry no style). */

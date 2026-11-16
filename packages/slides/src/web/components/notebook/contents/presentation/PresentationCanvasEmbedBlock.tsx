@@ -16,6 +16,7 @@
  */
 
 import { normalizeEmbedKind, EMBED_KINDS, presentationOnlineVideo, type PresentationMediaPlaybackSettings } from "@mrnote/core/web/lib/presentation-embed.ts";
+import { PresentationEmbedAddressInput } from "./PresentationEmbedAddressInput";
 import { PresentationEmbedContent } from "./PresentationMediaContent";
 import { withVideoStyle } from "../../../../lib/presentation-video-format";
 import { hasLayoutGeometry } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
@@ -59,6 +60,7 @@ export function PresentationCanvasEmbedBlock({ ctl }: { ctl: PresentationCanvasE
     canvasMediaElement,
     block,
   } = ctl;
+  const assetBacked = (block as { sourceKind?: unknown }).sourceKind === "asset";
   return (
                     <div
                       className="presentation-window__embed-block"
@@ -135,6 +137,8 @@ export function PresentationCanvasEmbedBlock({ ctl }: { ctl: PresentationCanvasE
                         <>
                           <select
                             value={normalizeEmbedKind(block.kind)}
+                            // A stored clip is its kind.
+                            disabled={assetBacked}
                             onChange={(event) =>
                               updateEmbedBlock(block.id, {
                                 kind: normalizeEmbedKind(event.target.value),
@@ -149,15 +153,12 @@ export function PresentationCanvasEmbedBlock({ ctl }: { ctl: PresentationCanvasE
                               </option>
                             ))}
                           </select>
-                          <input
-                            value={block.url || ""}
-                            onChange={(event) =>
-                              updateEmbedBlock(block.id, {
-                                url: event.target.value,
-                              })
-                            }
+                          <PresentationEmbedAddressInput
+                            kind={block.kind}
+                            url={block.url}
+                            disabled={assetBacked}
                             placeholder={t("presentation.embedUrlPlaceholder")}
-                            data-testid="presentation-embed-url"
+                            onCommit={(url) => updateEmbedBlock(block.id, { url })}
                           />
                           <input
                             value={block.title || ""}
