@@ -1,23 +1,29 @@
 # MR Office — 简体中文
 
-[English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
+<p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
 <p align="center"><b>MR Office 的开源编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。</b></p>
 
 <p align="center"><a href="https://mroffice.ai/zh"><b>▶ 在线试用，无需安装</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ 从 Releases 下载 MR Office</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
+
+<p align="center"><a href="https://mroffice.ai/zh"><img src="../docs/media/mr-office-demo.webp" alt="MR Office 的开源编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。" width="100%"></a></p>
+
+<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 观看 50 秒介绍视频（有声）</a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/docs.png" alt="文档" width="100%"></a><br><b>文档</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/sheets.png" alt="表格" width="100%"></a><br><b>表格</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/slides.png" alt="演示文稿" width="100%"></a><br><b>演示文稿</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/docs.png" alt="文档" width="100%"></a><br><b>文档</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/sheets.png" alt="表格" width="100%"></a><br><b>表格</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/ink.png" alt="手写" width="100%"></a><br><b>手写</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/code.png" alt="代码" width="100%"></a><br><b>代码</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/slides.png" alt="演示文稿" width="100%"></a><br><b>演示文稿</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+</tr>
+<tr>
+<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/ink.png" alt="手写" width="100%"></a><br><b>手写</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/code.png" alt="代码" width="100%"></a><br><b>代码</b></td>
 </tr>
 </table>
 
@@ -75,6 +81,20 @@ MR Office 桌面版免费，包含这些编辑器和完整服务，在你自己�
 
 打开和保存 Word、Excel、PowerPoint 文件（.docx、.xlsx、.pptx），以及把 PDF 的修改写回文件，由免费的 MR Office 桌面版提供。桌面版包含以上全部编辑器，在你自己的电脑上离线也能用：
 
+## 各部分的关系
+
+```mermaid
+flowchart LR
+  subgraph OSS["开源 · AGPL-3.0"]
+    direction LR
+    core["@mrnote/core"] --> E["六个编辑器<br/>文档 · 表格 · 演示文稿 · PDF · 手写 · 代码"]
+    E --> PG["apps/playground<br/>浏览器"]
+    E --> DS["apps/desktop<br/>桌面外壳"]
+    MCP["apps/mcp<br/>给 AI 应用的 MCP 服务器"]
+  end
+  COMP["MR Office 组件：Word、Excel、PowerPoint 文件 · 免费，不开源"] -.-> DS
+```
+
 ## 许可协议
 
 依据 GNU Affero 通用公共许可证 v3.0（LICENSE）开源，并附加 NOTICE.md 中的条款：保留“MR Office”署名及指向 https://mroffice.ai 的链接，且不授予 MR Office 名称与标志的使用权。如需商业授权，请联系 support@mr-note.com。第三方软件与数据见 THIRD_PARTY_NOTICES.md。贡献代码请先阅读 CONTRIBUTING.md。
@@ -82,3 +102,5 @@ MR Office 桌面版免费，包含这些编辑器和完整服务，在你自己�
 ## 更多
 
 官网与完整产品：**https://mroffice.ai** · 问题与反馈：support@mr-note.com
+
+<p align="center">如果 MR Office 对你有用，在 GitHub 上点个 ⭐，能让更多人发现它。</p>

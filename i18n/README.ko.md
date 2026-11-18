@@ -1,23 +1,29 @@
 # MR Office — 한국어
 
-[English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
+<p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
 <p align="center"><b>MR Office의 오픈 소스 편집기: 문서, 스프레드시트, 프레젠테이션, PDF, 필기, 코드가 브라우저에서 실행됩니다.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/ko"><b>▶ 라이브 데모 체험 (설치 불필요)</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases에서 MR Office 다운로드</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
+
+<p align="center"><a href="https://mroffice.ai/ko"><img src="../docs/media/mr-office-demo.webp" alt="MR Office의 오픈 소스 편집기: 문서, 스프레드시트, 프레젠테이션, PDF, 필기, 코드가 브라우저에서 실행됩니다." width="100%"></a></p>
+
+<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 50초 소개 영상 보기 (소리 포함)</a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/docs.png" alt="문서" width="100%"></a><br><b>문서</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/sheets.png" alt="스프레드시트" width="100%"></a><br><b>스프레드시트</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/slides.png" alt="프레젠테이션" width="100%"></a><br><b>프레젠테이션</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/docs.png" alt="문서" width="100%"></a><br><b>문서</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/sheets.png" alt="스프레드시트" width="100%"></a><br><b>스프레드시트</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/ink.png" alt="필기" width="100%"></a><br><b>필기</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/code.png" alt="코드" width="100%"></a><br><b>코드</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/slides.png" alt="프레젠테이션" width="100%"></a><br><b>프레젠테이션</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+</tr>
+<tr>
+<td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/ink.png" alt="필기" width="100%"></a><br><b>필기</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/ko"><img src="../docs/screenshots/code.png" alt="코드" width="100%"></a><br><b>코드</b></td>
 </tr>
 </table>
 
@@ -75,6 +81,20 @@ MR Office 데스크톱 앱은 무료이며 이 편집기들과 전체 서비스�
 
 Word, Excel, PowerPoint 파일(.docx, .xlsx, .pptx) 열기와 저장, PDF 편집 내용을 파일에 다시 저장하는 기능은 무료 MR Office 데스크톱 앱이 제공합니다. 데스크톱 앱에는 이 편집기들이 모두 들어 있으며 내 컴퓨터에서 오프라인으로도 작동합니다:
 
+## 구성
+
+```mermaid
+flowchart LR
+  subgraph OSS["오픈 소스 · AGPL-3.0"]
+    direction LR
+    core["@mrnote/core"] --> E["여섯 가지 편집기<br/>문서 · 스프레드시트 · 프레젠테이션 · PDF · 필기 · 코드"]
+    E --> PG["apps/playground<br/>브라우저"]
+    E --> DS["apps/desktop<br/>데스크톱 셸"]
+    MCP["apps/mcp<br/>AI 앱용 MCP 서버"]
+  end
+  COMP["MR Office 구성 요소: Word, Excel, PowerPoint 파일 · 무료, 비공개 소스"] -.-> DS
+```
+
 ## 라이선스
 
 GNU Affero General Public License v3.0(LICENSE)과 NOTICE.md의 추가 조건으로 공개합니다. "MR Office" 표시와 https://mroffice.ai 링크를 유지해야 하며, MR Office 이름과 로고에 대한 권리는 부여되지 않습니다. 상업용 라이선스는 support@mr-note.com으로 문의하세요. 서드파티 소프트웨어와 데이터는 THIRD_PARTY_NOTICES.md에 있습니다. 기여 방법은 CONTRIBUTING.md를 보세요.
@@ -82,3 +102,5 @@ GNU Affero General Public License v3.0(LICENSE)과 NOTICE.md의 추가 조건으
 ## 더 보기
 
 웹사이트와 전체 제품: **https://mroffice.ai** · 질문과 의견: support@mr-note.com
+
+<p align="center">MR Office가 유용했다면 GitHub에서 ⭐를 눌러 주세요. 다른 사람들이 찾는 데 도움이 됩니다.</p>

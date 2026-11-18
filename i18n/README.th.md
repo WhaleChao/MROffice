@@ -1,23 +1,29 @@
 # MR Office — ไทย
 
-[English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
+<p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
 <p align="center"><b>ตัวแก้ไขโอเพนซอร์สของ MR Office ได้แก่ เอกสาร สเปรดชีต งานนำเสนอ PDF การเขียนด้วยมือ และโค้ด ที่ทำงานในเบราว์เซอร์</b></p>
 
 <p align="center"><a href="https://mroffice.ai/th"><b>▶ ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ ดาวน์โหลด MR Office จาก Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
+
+<p align="center"><a href="https://mroffice.ai/th"><img src="../docs/media/mr-office-demo.webp" alt="ตัวแก้ไขโอเพนซอร์สของ MR Office ได้แก่ เอกสาร สเปรดชีต งานนำเสนอ PDF การเขียนด้วยมือ และโค้ด ที่ทำงานในเบราว์เซอร์" width="100%"></a></p>
+
+<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 ดูวิดีโอแนะนำ 50 วินาทีพร้อมเสียง</a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/docs.png" alt="เอกสาร" width="100%"></a><br><b>เอกสาร</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/sheets.png" alt="สเปรดชีต" width="100%"></a><br><b>สเปรดชีต</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/slides.png" alt="งานนำเสนอ" width="100%"></a><br><b>งานนำเสนอ</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/docs.png" alt="เอกสาร" width="100%"></a><br><b>เอกสาร</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/sheets.png" alt="สเปรดชีต" width="100%"></a><br><b>สเปรดชีต</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/ink.png" alt="การเขียนด้วยมือ" width="100%"></a><br><b>การเขียนด้วยมือ</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/code.png" alt="โค้ด" width="100%"></a><br><b>โค้ด</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/slides.png" alt="งานนำเสนอ" width="100%"></a><br><b>งานนำเสนอ</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+</tr>
+<tr>
+<td align="center" width="50%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/ink.png" alt="การเขียนด้วยมือ" width="100%"></a><br><b>การเขียนด้วยมือ</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/th"><img src="../docs/screenshots/code.png" alt="โค้ด" width="100%"></a><br><b>โค้ด</b></td>
 </tr>
 </table>
 
@@ -75,6 +81,20 @@ npm run desktop
 
 การเปิดและบันทึกไฟล์ Word, Excel และ PowerPoint (.docx, .xlsx, .pptx) และการบันทึกการแก้ไข PDF กลับลงในไฟล์ มีให้ในแอปเดสก์ท็อป MR Office (ฟรี) ซึ่งมีตัวแก้ไขเหล่านี้ทั้งหมดและใช้งานแบบออฟไลน์บนคอมพิวเตอร์ของคุณได้:
 
+## ส่วนต่างๆ ทำงานร่วมกันอย่างไร
+
+```mermaid
+flowchart LR
+  subgraph OSS["โอเพนซอร์ส · AGPL-3.0"]
+    direction LR
+    core["@mrnote/core"] --> E["เอดิเตอร์ทั้งหก<br/>เอกสาร · สเปรดชีต · งานนำเสนอ · PDF · การเขียนด้วยมือ · โค้ด"]
+    E --> PG["apps/playground<br/>เบราว์เซอร์"]
+    E --> DS["apps/desktop<br/>เชลล์เดสก์ท็อป"]
+    MCP["apps/mcp<br/>เซิร์ฟเวอร์ MCP สำหรับแอป AI"]
+  end
+  COMP["คอมโพเนนต์ MR Office: ไฟล์ Word, Excel และ PowerPoint · ฟรี ไม่ใช่โอเพนซอร์ส"] -.-> DS
+```
+
 ## สัญญาอนุญาต
 
 เป็นโอเพนซอร์สภายใต้ GNU Affero General Public License v3.0 (LICENSE) พร้อมข้อกำหนดเพิ่มเติมใน NOTICE.md: คงการระบุ "MR Office" และลิงก์ไปยัง https://mroffice.ai ไว้ และไม่ได้ให้สิทธิ์ในชื่อหรือโลโก้ MR Office ขอสัญญาอนุญาตเชิงพาณิชย์ได้ที่ support@mr-note.com ซอฟต์แวร์และข้อมูลของบุคคลที่สามระบุไว้ใน THIRD_PARTY_NOTICES.md การมีส่วนร่วม: ดู CONTRIBUTING.md
@@ -82,3 +102,5 @@ npm run desktop
 ## เพิ่มเติม
 
 เว็บไซต์และผลิตภัณฑ์ฉบับเต็ม: **https://mroffice.ai** · คำถามและข้อเสนอแนะ: support@mr-note.com
+
+<p align="center">ถ้า MR Office มีประโยชน์กับคุณ การกด ⭐ บน GitHub จะช่วยให้คนอื่นค้นพบได้</p>

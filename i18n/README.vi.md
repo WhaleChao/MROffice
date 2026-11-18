@@ -1,23 +1,29 @@
 # MR Office — Tiếng Việt
 
-[English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
+<p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
 <p align="center"><b>Các trình soạn thảo mã nguồn mở của MR Office — tài liệu, bảng tính, bản trình bày, PDF, viết tay và mã — chạy trong trình duyệt.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/vi"><b>▶ Dùng thử bản demo trực tuyến — không cần cài đặt</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Tải MR Office từ Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
+
+<p align="center"><a href="https://mroffice.ai/vi"><img src="../docs/media/mr-office-demo.webp" alt="Các trình soạn thảo mã nguồn mở của MR Office — tài liệu, bảng tính, bản trình bày, PDF, viết tay và mã — chạy trong trình duyệt." width="100%"></a></p>
+
+<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 Xem video giới thiệu 50 giây có âm thanh</a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/docs.png" alt="Tài liệu" width="100%"></a><br><b>Tài liệu</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/sheets.png" alt="Bảng tính" width="100%"></a><br><b>Bảng tính</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/slides.png" alt="Bản trình bày" width="100%"></a><br><b>Bản trình bày</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/docs.png" alt="Tài liệu" width="100%"></a><br><b>Tài liệu</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/sheets.png" alt="Bảng tính" width="100%"></a><br><b>Bảng tính</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/ink.png" alt="Viết tay" width="100%"></a><br><b>Viết tay</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/code.png" alt="Mã" width="100%"></a><br><b>Mã</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/slides.png" alt="Bản trình bày" width="100%"></a><br><b>Bản trình bày</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+</tr>
+<tr>
+<td align="center" width="50%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/ink.png" alt="Viết tay" width="100%"></a><br><b>Viết tay</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/vi"><img src="../docs/screenshots/code.png" alt="Mã" width="100%"></a><br><b>Mã</b></td>
 </tr>
 </table>
 
@@ -75,6 +81,20 @@ npm run desktop
 
 Mở và lưu tệp Word, Excel và PowerPoint (.docx, .xlsx, .pptx), cũng như ghi các chỉnh sửa PDF trở lại tệp, do ứng dụng máy tính MR Office (miễn phí) cung cấp; ứng dụng có tất cả các trình soạn thảo này và chạy ngoại tuyến trên máy tính của bạn:
 
+## Các phần kết hợp với nhau thế nào
+
+```mermaid
+flowchart LR
+  subgraph OSS["Mã nguồn mở · AGPL-3.0"]
+    direction LR
+    core["@mrnote/core"] --> E["Sáu trình soạn thảo<br/>Tài liệu · Bảng tính · Bản trình bày · PDF · Viết tay · Mã"]
+    E --> PG["apps/playground<br/>Trình duyệt"]
+    E --> DS["apps/desktop<br/>Vỏ ứng dụng desktop"]
+    MCP["apps/mcp<br/>Máy chủ MCP cho ứng dụng AI"]
+  end
+  COMP["Thành phần MR Office: tệp Word, Excel và PowerPoint · miễn phí, không mã nguồn mở"] -.-> DS
+```
+
 ## Giấy phép
 
 Mã nguồn mở theo GNU Affero General Public License v3.0 (LICENSE), kèm các điều khoản bổ sung trong NOTICE.md: giữ ghi công "MR Office" và liên kết đến https://mroffice.ai, và không cấp quyền đối với tên hay biểu trưng MR Office. Giấy phép thương mại có tại support@mr-note.com. Phần mềm và dữ liệu của bên thứ ba được liệt kê trong THIRD_PARTY_NOTICES.md. Đóng góp: xem CONTRIBUTING.md.
@@ -82,3 +102,5 @@ Mã nguồn mở theo GNU Affero General Public License v3.0 (LICENSE), kèm cá
 ## Thêm
 
 Trang web và sản phẩm đầy đủ: **https://mroffice.ai** · Câu hỏi và góp ý: support@mr-note.com
+
+<p align="center">Nếu MR Office hữu ích với bạn, một ⭐ trên GitHub sẽ giúp người khác tìm thấy nó.</p>

@@ -1,23 +1,29 @@
 # MR Office — Svenska
 
-[English](../README.md) · [English (UK)](../i18n/README.en-GB.md) · [简体中文](../i18n/README.zh.md) · [繁體中文](../i18n/README.zh-TW.md) · [日本語](../i18n/README.ja.md) · [한국어](../i18n/README.ko.md) · [Deutsch](../i18n/README.de.md) · [Français](../i18n/README.fr.md) · [Español](../i18n/README.es.md) · [Español (Latinoamérica)](../i18n/README.es-419.md) · [Português (Brasil)](../i18n/README.pt-BR.md) · [Italiano](../i18n/README.it.md) · [Nederlands](../i18n/README.nl.md) · [Svenska](../i18n/README.sv.md) · [Dansk](../i18n/README.da.md) · [Norsk](../i18n/README.no.md) · [Suomi](../i18n/README.fi.md) · [Bahasa Indonesia](../i18n/README.id.md) · [ไทย](../i18n/README.th.md) · [Tiếng Việt](../i18n/README.vi.md)
+<p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
 <p align="center"><b>MR Offices redigerare med öppen källkod – dokument, kalkylblad, presentationer, PDF, handskrift och kod – i webbläsaren.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/sv"><b>▶ Prova livedemon – ingen installation</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Ladda ned MR Office från Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+<p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
+
+<p align="center"><a href="https://mroffice.ai/sv"><img src="../docs/media/mr-office-demo.webp" alt="MR Offices redigerare med öppen källkod – dokument, kalkylblad, presentationer, PDF, handskrift och kod – i webbläsaren." width="100%"></a></p>
+
+<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 Se den 50 sekunder långa rundturen med ljud</a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/docs.png" alt="Dokument" width="100%"></a><br><b>Dokument</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/sheets.png" alt="Kalkylblad" width="100%"></a><br><b>Kalkylblad</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/slides.png" alt="Presentationer" width="100%"></a><br><b>Presentationer</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/docs.png" alt="Dokument" width="100%"></a><br><b>Dokument</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/sheets.png" alt="Kalkylblad" width="100%"></a><br><b>Kalkylblad</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/ink.png" alt="Handskrift" width="100%"></a><br><b>Handskrift</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/code.png" alt="Kod" width="100%"></a><br><b>Kod</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/slides.png" alt="Presentationer" width="100%"></a><br><b>Presentationer</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+</tr>
+<tr>
+<td align="center" width="50%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/ink.png" alt="Handskrift" width="100%"></a><br><b>Handskrift</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/sv"><img src="../docs/screenshots/code.png" alt="Kod" width="100%"></a><br><b>Kod</b></td>
 </tr>
 </table>
 
@@ -75,6 +81,20 @@ MR Offices skrivbordsapp är kostnadsfri, innehåller de här redigerarna och he
 
 Att öppna och spara Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx), och att spara ändringar i en PDF tillbaka i filen, sköts av MR Offices kostnadsfria skrivbordsapp. Den innehåller alla de här redigerarna och fungerar offline på din egen dator:
 
+## Hur delarna hänger ihop
+
+```mermaid
+flowchart LR
+  subgraph OSS["Öppen källkod · AGPL-3.0"]
+    direction LR
+    core["@mrnote/core"] --> E["De sex redigerarna<br/>Dokument · Kalkylblad · Presentationer · PDF · Handskrift · Kod"]
+    E --> PG["apps/playground<br/>Webbläsare"]
+    E --> DS["apps/desktop<br/>Skrivbordsskal"]
+    MCP["apps/mcp<br/>MCP-server för AI-appar"]
+  end
+  COMP["MR Office-komponenten: Word-, Excel- och PowerPoint-filer · gratis, inte öppen källkod"] -.-> DS
+```
+
 ## Licens
 
 Öppen källkod under GNU Affero General Public License v3.0 (LICENSE), med de ytterligare villkoren i NOTICE.md: behåll angivelsen ”MR Office” och länken till https://mroffice.ai, och inga rättigheter till namnet eller logotypen MR Office. En kommersiell licens finns via support@mr-note.com. Programvara och data från tredje part listas i THIRD_PARTY_NOTICES.md. Bidrag: se CONTRIBUTING.md.
@@ -82,3 +102,5 @@ Att öppna och spara Word-, Excel- och PowerPoint-filer (.docx, .xlsx, .pptx), o
 ## Mer
 
 Webbplats och hela produkten: **https://mroffice.ai** · Frågor och synpunkter: support@mr-note.com
+
+<p align="center">Om MR Office är användbart för dig hjälper en ⭐ på GitHub andra att hitta det.</p>

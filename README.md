@@ -1,23 +1,29 @@
 # MR Office
 
-[English](README.md) · [English (UK)](i18n/README.en-GB.md) · [简体中文](i18n/README.zh.md) · [繁體中文](i18n/README.zh-TW.md) · [日本語](i18n/README.ja.md) · [한국어](i18n/README.ko.md) · [Deutsch](i18n/README.de.md) · [Français](i18n/README.fr.md) · [Español](i18n/README.es.md) · [Español (Latinoamérica)](i18n/README.es-419.md) · [Português (Brasil)](i18n/README.pt-BR.md) · [Italiano](i18n/README.it.md) · [Nederlands](i18n/README.nl.md) · [Svenska](i18n/README.sv.md) · [Dansk](i18n/README.da.md) · [Norsk](i18n/README.no.md) · [Suomi](i18n/README.fi.md) · [Bahasa Indonesia](i18n/README.id.md) · [ไทย](i18n/README.th.md) · [Tiếng Việt](i18n/README.vi.md)
+<p align="center"><sub>🌐 <a href="README.md">English</a> · <a href="i18n/README.en-GB.md">English (UK)</a> · <a href="i18n/README.zh.md">简体中文</a> · <a href="i18n/README.zh-TW.md">繁體中文</a> · <a href="i18n/README.ja.md">日本語</a> · <a href="i18n/README.ko.md">한국어</a> · <a href="i18n/README.de.md">Deutsch</a> · <a href="i18n/README.fr.md">Français</a> · <a href="i18n/README.es.md">Español</a> · <a href="i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="i18n/README.it.md">Italiano</a> · <a href="i18n/README.nl.md">Nederlands</a> · <a href="i18n/README.sv.md">Svenska</a> · <a href="i18n/README.da.md">Dansk</a> · <a href="i18n/README.no.md">Norsk</a> · <a href="i18n/README.fi.md">Suomi</a> · <a href="i18n/README.id.md">Bahasa Indonesia</a> · <a href="i18n/README.th.md">ไทย</a> · <a href="i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
 <p align="center"><b>The open-source editors of MR Office — documents, spreadsheets, presentations, PDF, handwriting and code — running in the browser.</b></p>
 
 <p align="center"><a href="https://mroffice.ai/en"><b>▶ Try the live demo — no install</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Download MR Office from Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
 
-<p align="center"><a href="LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a></p>
+<p align="center"><a href="LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
+
+<p align="center"><a href="https://mroffice.ai/en"><img src="docs/media/mr-office-demo.webp" alt="The open-source editors of MR Office — documents, spreadsheets, presentations, PDF, handwriting and code — running in the browser." width="100%"></a></p>
+
+<p align="center"><a href="docs/media/mr-office-demo.mp4">🔊 Watch the 50-second tour with sound</a></p>
 
 <table>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/docs.png" alt="Documents" width="100%"></a><br><b>Documents</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/sheets.png" alt="Spreadsheets" width="100%"></a><br><b>Spreadsheets</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/slides.png" alt="Presentations" width="100%"></a><br><b>Presentations</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/docs.png" alt="Documents" width="100%"></a><br><b>Documents</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/sheets.png" alt="Spreadsheets" width="100%"></a><br><b>Spreadsheets</b></td>
 </tr>
 <tr>
-<td align="center" width="33%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/ink.png" alt="Handwriting" width="100%"></a><br><b>Handwriting</b></td>
-<td align="center" width="33%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/code.png" alt="Code" width="100%"></a><br><b>Code</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/slides.png" alt="Presentations" width="100%"></a><br><b>Presentations</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+</tr>
+<tr>
+<td align="center" width="50%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/ink.png" alt="Handwriting" width="100%"></a><br><b>Handwriting</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai/en"><img src="docs/screenshots/code.png" alt="Code" width="100%"></a><br><b>Code</b></td>
 </tr>
 </table>
 
@@ -75,6 +81,20 @@ The MR Office desktop app is free, has these editors and the full service, and w
 
 Opening and saving Word, Excel and PowerPoint files (.docx, .xlsx, .pptx), and saving PDF edits back into the file, are provided by the MR Office desktop app (free), which has all of these editors and works offline on your own computer:
 
+## How the pieces fit
+
+```mermaid
+flowchart LR
+  subgraph OSS["Open source · AGPL-3.0"]
+    direction LR
+    core["@mrnote/core"] --> E["The six editors<br/>Documents · Spreadsheets · Presentations · PDF · Handwriting · Code"]
+    E --> PG["apps/playground<br/>Browser"]
+    E --> DS["apps/desktop<br/>Desktop shell"]
+    MCP["apps/mcp<br/>MCP server for AI apps"]
+  end
+  COMP["MR Office component: Word, Excel and PowerPoint files · free, not open source"] -.-> DS
+```
+
 ## License
 
 Open source under the GNU Affero General Public License v3.0 (LICENSE), with the additional terms in NOTICE.md: keep the "MR Office" attribution and link to https://mroffice.ai, and no rights to the MR Office name or logo. A commercial license is available from support@mr-note.com. Third-party software and data are listed in THIRD_PARTY_NOTICES.md. Contributions: see CONTRIBUTING.md.
@@ -82,3 +102,5 @@ Open source under the GNU Affero General Public License v3.0 (LICENSE), with the
 ## More
 
 Website and the full product: **https://mroffice.ai** · Questions and feedback: support@mr-note.com
+
+<p align="center">If MR Office is useful to you, a ⭐ on GitHub helps other people find it.</p>
