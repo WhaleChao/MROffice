@@ -81,6 +81,11 @@ export async function preparePdfNativeTextInBrowser(
     /** A proof nobody waits on (an open editor's line proved again on the
      * head) goes to the background Worker, never ahead of a press. */
     readonly background?: boolean;
+    /** A proof of the line a compile on these bytes has just read: asked of
+     * the compiles' Worker, whose read session keeps that line's shows as
+     * the compile read them (0.4 s for a paragraph of two thousand shows
+     * that the proofs' Worker, reading it first, takes 4 s and more for). */
+    readonly afterCompile?: boolean;
   },
 ): Promise<PdfNativeTextPreparation> {
   if (input.signal.aborted) throw new DOMException("Cancelled", "AbortError");
@@ -105,7 +110,7 @@ export async function preparePdfNativeTextInBrowser(
     // waits behind it (1.4 s on the IPCC report).
     response = await askPdfNativeTextWorker<PdfNativeTextPreparationResponse>("prepare", request,
       { timeoutMs: BROWSER_PREPARE_TIMEOUT_MS, signal: input.signal, transfer: [ownedBytes.buffer],
-        lane: input.compile ? "compile" : input.background ? "background" : "interactive" });
+        lane: input.compile || input.afterCompile ? "compile" : input.background ? "background" : "interactive" });
   } catch (error) {
     if (ownedBytes.byteLength) ownedBytes.fill(0);
     if (error instanceof PdfNativeTextWorkerUnavailable) throw new PdfNativeBrowserPrepareUnavailable(error.message);

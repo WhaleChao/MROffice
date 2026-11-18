@@ -15,7 +15,9 @@ interface IndexedCell {
   readonly value?: string;
   readonly display?: string;
   readonly style?: { readonly wrapText?: boolean; readonly backgroundColor?: string; readonly numberFormat?: unknown; readonly fontSize?: number | false; readonly textRotation?: unknown; readonly verticalText?: boolean;
+    readonly superscript?: boolean; readonly subscript?: boolean;
     readonly borderEdges?: { readonly top?: { readonly style?: unknown }; readonly bottom?: { readonly style?: unknown } } };
+  readonly runs?: readonly { readonly style?: { readonly superscript?: boolean; readonly subscript?: boolean } }[];
   readonly locked?: unknown;
   readonly rowspan?: number;
   readonly colspan?: number;
@@ -58,10 +60,19 @@ export function cellTextTurned(
   const angle = Number(style?.textRotation ?? 0);
   return Number.isFinite(angle) && Math.round(angle) !== 0;
 }
+/** A cell or a run of it in Superscript / Subscript: Windows Excel's
+ * automatic row grows for the script's face (lookwin p109-lw). */
+export function cellTextScripted(
+  cell: { readonly style?: { readonly superscript?: boolean; readonly subscript?: boolean };
+    readonly runs?: readonly { readonly style?: { readonly superscript?: boolean; readonly subscript?: boolean } }[] } | undefined,
+): boolean {
+  if (cell?.style?.superscript === true || cell?.style?.subscript === true) return true;
+  return Array.isArray(cell?.runs) && cell.runs.some((run) => run?.style?.superscript === true || run?.style?.subscript === true);
+}
 function autoHeightCandidate(cell: IndexedCell | undefined): boolean {
   return Boolean(cellTextWraps(cell?.style) || cell?.value?.startsWith("=") ||
     hasManualLineBreak(cell?.value) || hasManualLineBreak(cell?.display) ||
-    cellFontTallerThanDefault(cell?.style) || cellTextTurned(cell?.style));
+    cellFontTallerThanDefault(cell?.style) || cellTextTurned(cell?.style) || cellTextScripted(cell));
 }
 /** Any cell a formula scan may care about; consumers re-check the current cell. */
 const formulaCandidate = (cell: IndexedCell | undefined) =>

@@ -112,6 +112,12 @@ export interface OfficeRailSave {
    */
   failureReason?: string;
   failureTestId?: string;
+  /**
+   * What the save is still doing, in the face's tip and its accessible name
+   * only (the face keeps its status): a deck's slides still being written into
+   * its PowerPoint file (TRIAGE 55).
+   */
+  statusDetail?: string;
 }
 
 export interface OfficeEditorActionRailProps {
@@ -453,6 +459,7 @@ function RailSave({ save }: { save: OfficeRailSave }) {
   const title = [
     save.disabledReason ?? save.actionLabel,
     failureReason,
+    save.statusDetail,
     hint,
   ]
     .filter(Boolean)
@@ -470,7 +477,7 @@ function RailSave({ save }: { save: OfficeRailSave }) {
       data-holding={holding || undefined}
       data-testid={save.actionTestId}
       data-disabled-reason={save.disabled || saving ? save.disabledReason : undefined}
-      aria-label={save.actionAriaLabel ?? `${save.statusLabel} · ${save.actionLabel}`}
+      aria-label={save.actionAriaLabel ?? [save.statusLabel, save.statusDetail, save.actionLabel].filter(Boolean).join(" · ")}
       disabled={save.disabled}
       aria-disabled={!clickable || undefined}
       aria-keyshortcuts={labels ? "Shift+Enter" : undefined}

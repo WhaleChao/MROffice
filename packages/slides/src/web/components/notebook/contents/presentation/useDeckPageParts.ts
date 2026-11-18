@@ -269,6 +269,9 @@ export interface UseDeckPagePartsOptions<S extends DeckSlideLike> {
   readonly ownRoomStep?: (apply: () => void) => void;
   /** A part room refused an input or a save of this member's. */
   readonly onRoomRefused?: (code: string) => void;
+  /** A part's room could not merge a text of this member's without a guess
+   * (TRIAGE 47): the deck goes into conflict. */
+  readonly onTextMergeRefused?: () => void;
 }
 
 export type DeckPartRetryResult = "retrying" | "not-failed" | "unavailable";
@@ -1262,6 +1265,7 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
         onStatus: () => optionsRef.current.onRoomsChanged?.(),
         onAcknowledged: () => optionsRef.current.onRoomsChanged?.(),
         onRefused: (code) => optionsRef.current.onRoomRefused?.(code),
+        onTextMergeRefused: () => optionsRef.current.onTextMergeRefused?.(),
       });
       rooms.set(index, { partId, room });
       session.attachRoom(index, room);

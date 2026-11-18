@@ -43,6 +43,9 @@ import {
   docsLastLineOverhangs,
   engineBreakStrutOff,
   docsLineOpensWithSpace,
+  DOCS_ENGINE_HYPHEN_CLASS,
+  docsHyphenationOff,
+  hyphenPointKind,
   normalizeStarts,
   planDocsLineCorrections,
   readDocsParagraph,
@@ -50,15 +53,17 @@ import {
   type DocsParagraph,
 } from "../../../../lib/text-engine/docs-lines";
 import type { KinsokuList } from "../../../../lib/text-engine/kinsoku";
+import { withDocsAutoHyphenation } from "../../../../lib/text-engine/docs-hyphenation";
+import { normalizeAutoHyphenation, normalizeHyphenationOptions } from "./documentHyphenation";
 import { layoutDocsBlockLines } from "../../../../lib/text-engine/docs-block-layout";
 import { textEngineEnabled } from "../../../../lib/text-engine/flags";
 import { textEngineOn } from "../../../../lib/text-engine/page-adapter";
-import { docsBlockLineRule, noteEngineBlockLines } from "./paged/ledger/ledgerEngineLines";
+import { docsBlockLineRule, noteEngineBlockLines, noteEngineTailLines } from "./paged/ledger/ledgerEngineLines";
 import { normalizeWordCompatibilityMode } from "./documentOverflowPunctuation";
-import { wordSetsIdeographsAsLetters } from "./wordFarEastDefaults";
+import { wordSetsIdeographsAsLetters, wordEastAsianLineRulesApply } from "./wordFarEastDefaults";
 import { touchedTextblockRanges } from "./touchedTextblocks";
 import { isImeCompositionActive, onImeCompositionSettled } from "./imeCompositionGuard";
-import { DOCUMENT_ENGINE_LINES_PENDING, LAYOUT_METRICS_FLUSH_EVENT, writeDocumentLayoutStatus } from "./documentLayoutStatus";
+import { DOCUMENT_ENGINE_FACES_WAITING, DOCUMENT_ENGINE_LINES_PENDING, LAYOUT_METRICS_FLUSH_EVENT, writeDocumentLayoutStatus } from "./documentLayoutStatus";
 import { projectionFontReach, sheetRangesOf } from "./projectionFontNews";
 import { recordProjectedHorizon, sheetsWithinMeasureHorizon } from "./paged/measureHorizon";
 import { createEngineLineCache, familyNews, type EngineLineCache, type EngineLineKey, type FamilyNews } from "./engineLineCache";
@@ -81,6 +86,10 @@ const FACE_HOLD_MS = 4000;
  * are looked at for the engine's answer (the ledger is not held for this). */
 const FACE_WATCH_MS = 60_000;
 const FACE_WATCH_STEP_MS = 250;
+/** How long after a pass (or a flush) the paragraphs' widths are looked at
+ * again, ms, and how many at most a look reads. */
+const WIDTH_WATCH_MS = 300;
+const WIDTH_WATCH_MAX_BLOCKS = 4000;
 
 
 
@@ -115,6 +124,24 @@ export interface Span {
   wordExtra: number;
   /** The run's own word spacing, px. */
   wordBase: number;
+  /** A line the engine ends at an automatic hyphenation point
+   * (docsEngineLineStarts' hyphenCut): `from === to`, after the point's
+   * letter, an optional hyphen there for the browser to break at. */
+  hyphen?: true;
+  /** The paragraph whose content starts at `from` (`from === to`) is
+   * hyphenated by the engine: the browser hyphenates none of its words by
+   * itself (`hyphens: manual` over documentAutoHyphenation's `auto`). */
+  manualHyphens?: true;
+}
+
+/** Marks a paragraph the engine hyphenates (documentHyphenationRules leaves it). */
+export const DOCS_ENGINE_HYPHENATION_ATTR = "data-docs-engine-hyphenation";
+
+function hyphenElement(): HTMLElement {
+  const span = document.createElement("span");
+  span.className = DOCS_ENGINE_HYPHEN_CLASS;
+  span.textContent = "\u00ad";
+  return span;
 }
 
 interface EngineLinesState {
@@ -198,7 +225,18 @@ export function hangingTabBreaks(view: EditorView, element: HTMLElement): Span[]
 }
 
 function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoration[] {
-  return spans.map((span) => {
+  return spans.flatMap((span): Decoration[] => {
+    if (span.manualHyphens) {
+      const block = span.from > 0 ? doc.nodeAt(span.from - 1) : null;
+      if (!block?.isTextblock) return [];
+      return [Decoration.node(span.from - 1, span.from - 1 + block.nodeSize, {
+        [DOCS_ENGINE_HYPHENATION_ATTR]: "true",
+        style: "hyphens:manual !important;-webkit-hyphens:manual !important",
+      }, { engineLine: true })];
+    }
+    if (span.hyphen) {
+      return [Decoration.widget(span.from, hyphenElement, { side: -1, key: DOCS_ENGINE_HYPHEN_CLASS, engineLine: true, ignoreSelection: true })];
+    }
     // The break ends a line and owns no line box of its own: it stands in
     // the paragraph's wrappers, which take no line height where the
     // paragraph's leaves own it (documentAutoLineSafety). Taken for a
@@ -206,17 +244,17 @@ function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoratio
     // of its paragraph: an 8 pt cell under an 11 pt Normal drew 10.5 pt lines
     // for Word's 9.77 (tables/probes/narrow, corpus R417-D03's "ID" column).
     if (span.tabBreak) {
-      return Decoration.widget(span.from, tabBreakElement, {
+      return [Decoration.widget(span.from, tabBreakElement, {
         side: -1, key: DOCS_ENGINE_TAB_BREAK_CLASS, engineLine: true, ignoreSelection: true,
         ...(engineBreakStrutOff() ? {} : { zeroLayoutFormattingMark: true }),
-      });
+      })];
     }
     const total = Number((span.base + span.extra).toFixed(4));
     // The extra alone too: a balanced space's own width on the same text adds it (balancedSpaces.ts).
     const words = span.wordExtra
       ? `;word-spacing:${Number((span.wordBase + span.wordExtra).toFixed(4))}px;${ENGINE_WORD_EXTRA_VAR}:${Number(span.wordExtra.toFixed(4))}px`
       : "";
-    return Decoration.inline(
+    return [Decoration.inline(
       span.from,
       span.to,
       {
@@ -226,14 +264,18 @@ function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoratio
         style: `letter-spacing:${total}px${words}`,
       },
       { engineLine: true, extra: span.extra, base: span.base },
-    );
+    )];
   });
 }
 
 function rulesFor(view: EditorView, node: ProseMirrorNode): DocsLayoutRules {
-  const kinsoku: KinsokuList | null = CJK.test(node.textContent) ? "zh-CN" : null;
   const attrs = view.state.doc.attrs;
-  return { compatibilityMode: normalizeWordCompatibilityMode(attrs.wordCompatibilityMode), kinsoku, ideographsAsLetters: kinsoku !== null && wordSetsIdeographsAsLetters(attrs) };
+  const eastAsian = CJK.test(node.textContent);
+  // A paragraph whose East Asian text is in a Western language takes none of
+  // Word's East Asian line rules (wordEastAsianLineRulesApply, R334-D24).
+  const lineRules = eastAsian && wordEastAsianLineRulesApply(attrs, node);
+  const kinsoku: KinsokuList | null = lineRules ? "zh-CN" : null;
+  return { compatibilityMode: normalizeWordCompatibilityMode(attrs.wordCompatibilityMode), kinsoku, ideographsAsLetters: eastAsian && wordSetsIdeographsAsLetters(attrs), ...(eastAsian && !lineRules ? { eastAsianLineRules: false } : {}) };
 }
 
 /** Pieces' natural drawn widths; a justified paragraph is read left-aligned
@@ -304,7 +346,20 @@ export function blocksWaitingForFaces(doc: ProseMirrorNode, waiting: ReadonlySet
 }
 
 /** Counts for probes (`window.__docsEngineLineCache`). */
-interface EngineLineCacheStats { measured: number; reused: number; kept: number; missed?: Record<string, number>; seeded?: number }
+interface EngineLineCacheStats { measured: number; reused: number; kept: number; missed?: Record<string, number>; seeded?: number; tails?: number; retried?: number; keptRetried?: number; disagreed?: number }
+
+function keepRetriedOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsEngineKeepRetriedOff?: boolean }) | null)?.__docsEngineKeepRetriedOff === true;
+}
+
+function engineTailLinesOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsEngineTailLinesOff?: boolean }) | null)?.__docsEngineTailLinesOff === true;
+}
+
+function cssPx(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 /** What a block's lines depend on besides itself (engineLineCache). */
 function lineKeyOf(view: EditorView, element: HTMLElement, pos: number): EngineLineKey {
@@ -361,6 +416,14 @@ function readBlockLines(
   // A block measured as it is now (moved to another sheet by the page
   // ledger, unchanged) takes its corrections back without a reading.
   const key = cache && round === 0 ? lineKeyOf(view, element, pos) : null;
+  // A paragraph read again after its corrections (round > 0) that now agrees
+  // is kept too, with the corrections it agrees with: kept only from a first
+  // reading, a paragraph the browser broke otherwise until corrected (a code
+  // listing of 530 lines, R461-D71) was read whole again wherever it moved and
+  // after every page cut through it, its tails never cut from its lines.
+  // `window.__docsEngineKeepRetriedOff`: kept from a first reading only.
+  const keepKey = key ?? (cache && round > 0 && !keepRetriedOff(view) ? lineKeyOf(view, element, pos) : null);
+  if (cache?.stats && round > 0) cache.stats.retried = (cache.stats.retried ?? 0) + 1;
   if (drew) {
     drew.read = true;
     drew.width = key?.width ?? null;
@@ -384,23 +447,46 @@ function readBlockLines(
       return { spans: kept, agrees: true };
     }
   }
+  // A page cut's tail, cut where a line of the block it came from starts:
+  // that block's lines from there on, with no reading of the tail. Read
+  // anew, each of a long paragraph's tails was read whole again after every
+  // cut (R461-D71, six code listings of ~3,500 runs over ten pages each:
+  // ~70 s of a print's layout). `window.__docsEngineTailLinesOff`: read.
+  if (cache && key && !engineTailLinesOff(view) && !element.closest("li")) {
+    const fragment = cache.lines.fragmentOf<Span>(node, key, pos, cache.news);
+    const style = fragment ? element.ownerDocument.defaultView?.getComputedStyle(element) : null;
+    if (fragment && style) {
+      const chrome = {
+        top: cssPx(style.paddingTop) + cssPx(style.borderTopWidth),
+        bottom: cssPx(style.paddingBottom) + cssPx(style.borderBottomWidth),
+      };
+      if (noteEngineTailLines(node, fragment.whole, fragment.offset, docsBlockLineRule(node, element), chrome)) {
+        cache.lines.store(node, key, pos, fragment.spans, fragment.families, cache.news, fragment.starts);
+        if (cache.stats) cache.stats.tails = (cache.stats.tails ?? 0) + 1;
+        return { spans: fragment.spans, agrees: true };
+      }
+    }
+  }
   if (cache?.stats) {
     cache.stats.measured += 1;
     const reason = !key ? "retry" : cache.lines.missReason(node, key, cache.news);
     const missed = (cache.stats.missed ??= {});
     missed[reason] = (missed[reason] ?? 0) + 1;
   }
+  // Where the block's lines after its first start (its tails' lines: fragmentOf).
+  let starts: number[] | undefined;
   const keep = (spans: Span[]) => {
-    if (!cache || !key) return;
+    if (!cache || !keepKey) return;
+    if (!key && cache.stats) cache.stats.keptRetried = (cache.stats.keptRetried ?? 0) + 1;
     const families = new Set<string>();
     for (const piece of paragraph.pieces) {
       const stack = (piece as { font?: { stack?: string } }).font?.stack;
       if (stack) for (const family of stack.split(",")) families.add(family);
     }
-    cache.lines.store(node, key, pos, spans, [...families], cache.news);
+    cache.lines.store(node, keepKey, pos, spans, [...families], cache.news, starts);
     if (cache.stats) cache.stats.kept += 1;
   };
-  const paragraph = readDocsParagraph(element);
+  const paragraph = engineHyphenation(view, element, readDocsParagraph(element));
   // undefined: a face is still loading (the ledger may wait for it).
   if (paragraph.pending) return undefined;
   if (paragraph.unsupported || !paragraph.pieces.length) {
@@ -427,6 +513,9 @@ function readBlockLines(
     const layout = layoutDocsBlockLines(paragraph, engine, rule, null);
     const offsets = layout.status === "ok" && layout.lines.length > 1 ? layout.lines.map((line) => lineContentOffset(view, paragraph, line.start, pos)) : [];
     noteEngineBlockLines(node, layout, rule, offsets, paragraph.chrome);
+    // Lines beside a drop cap are narrower than the rest: a tail is not cut
+    // from them.
+    if (!paragraph.leadingLines) starts = offsets.filter((offset): offset is number => offset !== null && offset > 0);
   }
   // Most paragraphs already break where the engine does: shown cheaply.
   const current = paragraph.pieces.some((piece) => piece.correction);
@@ -440,11 +529,20 @@ function readBlockLines(
   // than a letter): the browser reads no space's box at all.
   // And a paragraph whose last line is one letter wider than the measure:
   // that letter is narrowed so the closing widgets stay on its line.
+  // And a paragraph measured narrower than the box the browser lays it out
+  // in (a Word cell's text box from the model) that has a break of ours: its
+  // lines end there only by that break.
   const tabOpened = engine.some((start, line) => line > 0 && paragraph.pieces[start]?.kind === "tab") ||
-    raw.some((_start, line) => docsLineOpensWithSpace(paragraph, raw, line)) || docsLastLineOverhangs(paragraph, raw);
-  if (!current && !tabOpened && docsBrowserAgreesQuickly(element, paragraph, engine)) {
-    keep([]);
-    return { spans: [], agrees: true };
+    raw.some((_start, line) => docsLineOpensWithSpace(paragraph, raw, line)) || docsLastLineOverhangs(paragraph, raw) ||
+    ((paragraph.browserWiderBy ?? 0) > 0 && element.querySelector(`.${DOCS_ENGINE_TAB_BREAK_CLASS}`) !== null);
+  // A paragraph the engine hyphenates: the browser's own hyphens are off and
+  // an optional hyphen stands where each automatic one ends a line. The
+  // first reading saw the browser's hyphens: read again once these stand.
+  const hyphenSpans = paragraph.hyphenation ? engineHyphenSpans(view, paragraph, raw, pos) : [];
+  const hyphenFresh = paragraph.hyphenation !== undefined && element.getAttribute(DOCS_ENGINE_HYPHENATION_ATTR) !== "true";
+  if (!hyphenFresh && !current && !tabOpened && docsBrowserAgreesQuickly(element, paragraph, engine)) {
+    keep(hyphenSpans);
+    return { spans: hyphenSpans, agrees: true };
   }
   const browser = docsBrowserLineStarts(paragraph);
   const agrees = sameStarts(engine, browser);
@@ -458,11 +556,14 @@ function readBlockLines(
     // The line before the first disagreement decides where it starts.
     for (let line = Math.max(0, first - 1); line <= Math.min(raw.length - 1, first + 1); line += 1) force.add(line);
   }
-  if (agrees && !current && !tabOpened) {
-    keep([]);
-    return { spans: [], agrees };
+  if (agrees && !hyphenFresh && !current && !tabOpened) {
+    keep(hyphenSpans);
+    return { spans: hyphenSpans, agrees };
   }
-  const plan = planDocsLineCorrections(paragraph, raw, naturalWidths(view, element, paragraph), force);
+  // `window.__docsCorrectionRoundingOff = true`: a correction leaves 0.02 px
+  // whatever the line's items (before R342-D30).
+  const roundingOff = (view.dom.ownerDocument.defaultView as (Window & { __docsCorrectionRoundingOff?: boolean }) | null)?.__docsCorrectionRoundingOff === true;
+  const plan = planDocsLineCorrections(paragraph, raw, naturalWidths(view, element, paragraph), force, { roundingSlack: !roundingOff });
   const spans: Span[] = [];
   for (const line of plan) {
     // One span per text node stretch of the line.
@@ -504,8 +605,41 @@ function readBlockLines(
       } catch { /* a node outside the editor's content */ }
     }
   }
-  if (agrees) keep(spans);
-  return { spans, agrees };
+  spans.push(...hyphenSpans);
+  if (agrees && !hyphenFresh) keep(spans);
+  else if (cache?.stats) cache.stats.disagreed = (cache.stats.disagreed ?? 0) + 1;
+  return { spans, agrees: agrees && !hyphenFresh };
+}
+
+/**
+ * The paragraph with Word's automatic hyphenation points (docs-hyphenation),
+ * when the document hyphenates automatically and the paragraph does
+ * (documentAutoHyphenation's mark); else as read.
+ */
+function engineHyphenation(view: EditorView, element: HTMLElement, paragraph: DocsParagraph): DocsParagraph {
+  if (docsHyphenationOff() || element.getAttribute("data-auto-hyphenation") !== "true") return paragraph;
+  const attrs = view.state.doc.attrs as Record<string, unknown>;
+  if (!normalizeAutoHyphenation(attrs.autoHyphenation)) return paragraph;
+  const options = normalizeHyphenationOptions(attrs.hyphenationOptions) ?? {};
+  return withDocsAutoHyphenation(paragraph, element, options);
+}
+
+/** The engine's hyphenation drawn: the paragraph's own hyphens off, and an
+ * optional hyphen after each automatic point a line of `starts` ends at. */
+function engineHyphenSpans(view: EditorView, paragraph: DocsParagraph, starts: readonly number[], pos: number): Span[] {
+  const blank = { extra: 0, base: 0, wordExtra: 0, wordBase: 0 };
+  const spans: Span[] = [{ from: pos + 1, to: pos + 1, ...blank, manualHyphens: true }];
+  for (let line = 1; line < starts.length; line += 1) {
+    const at = starts[line]! - 1;
+    if (at < 0 || hyphenPointKind(paragraph, at) !== "auto") continue;
+    const piece = paragraph.pieces[at]!;
+    if (!piece.node || piece.offset === undefined) continue;
+    try {
+      const after = view.posAtDOM(piece.node, piece.offset + piece.text.length);
+      spans.push({ from: after, to: after, ...blank, hyphen: true });
+    } catch { /* a node outside the editor's content */ }
+  }
+  return spans;
 }
 
 export const DocumentEngineLineBreaks = Extension.create({
@@ -556,7 +690,7 @@ export const DocumentEngineLineBreaks = Extension.create({
           (win as unknown as Record<string, unknown>).__mraiDocsLineAudit = (element: HTMLElement) => {
             const pos = view.posAtDOM(element, 0) - 1;
             const node = view.state.doc.nodeAt(pos);
-            return node ? auditDocsParagraph(element, rulesFor(view, node), true) : null;
+            return node ? auditDocsParagraph(element, rulesFor(view, node), true, (paragraph) => engineHyphenation(view, element, paragraph)) : null;
           };
           let frame: number | null = null;
           let idle: number | null = null;
@@ -564,6 +698,20 @@ export const DocumentEngineLineBreaks = Extension.create({
           let full = true;
           /** Sheets a face arrived for (projectionFontNews): read with the dirty ones. */
           const fontSheets = new Set<Element>();
+          // The width each paragraph was read at: its corrections are for
+          // that measure. A layout that narrows a paragraph without an edit
+          // (a sheet's column projection set after the first pass) left the
+          // full-width corrections in place and the browser's lines between
+          // them (R425-D02: the right column's "Thal Limited" paragraph kept
+          // spans of a page-wide reading, its kept "the" went down). Widths
+          // are looked at a moment after each pass and flush, while no hand
+          // is typing; a paragraph drawn at another width is read again.
+          // `window.__docsEngineWidthWatchOff = true`: as before.
+          const readWidth = new WeakMap<ProseMirrorNode, number>();
+          const widthMoved: Array<[number, number]> = [];
+          let widthTimer: number | null = null;
+          const widthWatchOff = () =>
+            (win as Window & { __docsEngineWidthWatchOff?: boolean }).__docsEngineWidthWatchOff === true;
           /** What a pass read a frame at a time took to read (every paragraph,
            * the sheets of an arrived face): given back if it is cut short. */
           let inFlight: (() => void) | null = null;
@@ -691,9 +839,10 @@ export const DocumentEngineLineBreaks = Extension.create({
                 return false;
               });
             const takenSheets = [...fontSheets];
+            const takenMoved = widthMoved.splice(0);
             const fromFonts = takenSheets.length ? sheetRangesOf(view, takenSheets) : [];
             fontSheets.clear();
-            const wanted: Array<[number, number]> = all ? [[0, doc.content.size]] : [...(state.dirty === "all" ? [] : state.dirty), ...fromFonts];
+            const wanted: Array<[number, number]> = all ? [[0, doc.content.size]] : [...(state.dirty === "all" ? [] : state.dirty), ...fromFonts, ...takenMoved];
             if (all) rounds.clear();
             // A long list read sheet by sheet from its merged, ordered form:
             // every range against every sheet was sheets x ranges a round (a
@@ -730,7 +879,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               }
               waitingForFaces.clear();
             }
-            return { doc, blocks, all, later, takenSheets, dirty: state.dirty === "all" || state.dirty.length > 0 || state.retry.length > 0 || fromFonts.length > 0 };
+            return { doc, blocks, all, later, takenSheets, takenMoved, dirty: state.dirty === "all" || state.dirty.length > 0 || state.retry.length > 0 || fromFonts.length > 0 || takenMoved.length > 0 };
           };
           /** Measure; `sync`: every block now, the retry rounds too (the
            * ledger is waiting). Otherwise a slice per frame. */
@@ -754,7 +903,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               const collected = collectBlocks();
               if (!collected) return;
               readAll ||= collected.all;
-              const { doc, blocks, all, dirty, later, takenSheets } = collected;
+              const { doc, blocks, all, dirty, later, takenSheets, takenMoved } = collected;
               if (!blocks.length) {
                 // Nothing within the horizon: dispatch only if that changes
                 // the state (a flush that finds the same ranges left does
@@ -787,6 +936,10 @@ export const DocumentEngineLineBreaks = Extension.create({
                   const { node, pos, retry: again } = blocks[index];
                   const done = again ? (rounds.get(pos) ?? 0) : 0;
                   const result = measureBlock(view, node, pos, done, floats, cache);
+                  if (result !== undefined) {
+                    const element = view.nodeDOM(pos);
+                    if (element instanceof HTMLElement && element.isConnected) readWidth.set(node, element.getBoundingClientRect().width);
+                  }
                   measured.push([pos, pos + node.nodeSize]);
                   if (!result) {
                     if (result === undefined) {
@@ -815,6 +968,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               const giveBack = () => {
                 if (all) full = true;
                 for (const sheet of takenSheets) fontSheets.add(sheet);
+                widthMoved.push(...takenMoved);
               };
               const step = () => {
                 frame = null;
@@ -889,12 +1043,64 @@ export const DocumentEngineLineBreaks = Extension.create({
             if (facesPending) watchFaces();
             const holding = facesPendingSince !== null && performance.now() - facesPendingSince < FACE_HOLD_MS;
             markPending(work || holding);
+            // Past the hold the pages go out on the browser's lines for these
+            // paragraphs; a print waits on (useDocumentSurfaceReadiness).
+            writeDocumentLayoutStatus(view.dom, DOCUMENT_ENGINE_FACES_WAITING, waitingForFaces.size ? "true" : null, view);
             if (holding && !work) win.setTimeout(() => { if (facesPendingSince !== null) settle(true); }, FACE_HOLD_MS);
+            watchWidths();
+          };
+          /** The paragraphs (within the measure horizon) drawn at a width other
+           * than the one they were read at. */
+          const movedWidths = (): Array<[number, number]> => {
+            const doc = view.state.doc;
+            const horizon = sheetsWithinMeasureHorizon(view.dom);
+            const moved: Array<[number, number]> = [];
+            let budget = WIDTH_WATCH_MAX_BLOCKS;
+            doc.forEach((sheet, offset) => {
+              if (budget <= 0) return;
+              if (horizon) {
+                const dom = view.nodeDOM(offset);
+                if (dom && !horizon.has(dom as Element)) return;
+              }
+              doc.nodesBetween(offset, offset + sheet.nodeSize, (node, pos) => {
+                if (budget <= 0) return false;
+                if (!node.isTextblock) return true;
+                const width = readWidth.get(node);
+                if (width === undefined) return false;
+                budget -= 1;
+                const element = view.nodeDOM(pos);
+                if (!(element instanceof HTMLElement) || !element.isConnected) return false;
+                if (Math.abs(element.getBoundingClientRect().width - width) > 0.5) {
+                  readWidth.delete(node);
+                  moved.push([pos, pos + node.nodeSize]);
+                }
+                return false;
+              });
+            });
+            return moved;
+          };
+          const watchWidths = (): void => {
+            if (widthTimer !== null || widthWatchOff()) return;
+            widthTimer = win.setTimeout(() => {
+              widthTimer = null;
+              if (!view.dom.isConnected || widthWatchOff() || isImeCompositionActive(view)) return;
+              if (typingHolds() || frame !== null || idle !== null) {
+                watchWidths();
+                return;
+              }
+              const moved = movedWidths();
+              if (!moved.length) return;
+              widthMoved.push(...moved);
+              schedule();
+            }, WIDTH_WATCH_MS);
           };
           const onFlush = () => {
             const state = documentEngineLineBreaksKey.getState(view.state);
             const dirty = Boolean(state && (state.dirty === "all" || state.dirty.length || state.retry.length));
-            if (!view.dom.hasAttribute(DOCUMENT_ENGINE_LINES_PENDING) && !dirty) return;
+            if (!view.dom.hasAttribute(DOCUMENT_ENGINE_LINES_PENDING) && !dirty && !widthMoved.length) {
+              watchWidths();
+              return;
+            }
             // Ranges a hand is still typing in wait for the pause (afterTyping).
             if (!view.dom.hasAttribute(DOCUMENT_ENGINE_LINES_PENDING) && typingHolds()) return;
             flushes += 1;
@@ -950,6 +1156,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               if (waitTimer !== null) win.clearTimeout(waitTimer);
               if (facesWatch !== null) win.clearTimeout(facesWatch);
               if (typingTimer !== null) win.clearTimeout(typingTimer);
+              if (widthTimer !== null) win.clearTimeout(widthTimer);
               markPending(false);
             },
           };

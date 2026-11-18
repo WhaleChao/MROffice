@@ -85,6 +85,7 @@ import { blockLinePitchPx, COLUMN_REGIONS_ATTR, COLUMN_TABLE_FRAME, columnPagePl
 const TEXT_PITCH_BLOCKS = "p, h1, h2, h3, h4, h5, h6";
 import { SECTION_UNEQUAL_COLUMN_TRACKS_ATTR } from "../../sectionLayouts";
 import { paragraphKeepFlag } from "../../paragraphPagination";
+import { isNonPrintingEmptyTailBlock } from "../../sourceHardBreakTail";
 import { trailingAutoLeadingCreditPx, trailingAutoLeadingCreditUnlaidPx } from "../pageEdgeLeading";
 import { textEngineEnabled } from "../../../../../../lib/text-engine/flags";
 import { HOLLOW_SHEET_ATTR } from "../pageSheetView";
@@ -613,6 +614,16 @@ function readLedgerBlockHeight(part: LedgerPart, sheet: HTMLElement, columned: b
   // A column's width and balance are the projector's, and an over-tall block
   // is charged by its words.
   if (columned || !textEngineEnabled("docs") || isOverTallTextNode(part.node)) return readPage();
+  // A floated paragraph (a Word drop cap frame, note-editor.css) is out of
+  // the flow: the page reads it 0 tall, and the engine, which lays its words
+  // as any paragraph's, charged its whole exact line. In a two-column region
+  // under a one-column title that was the cap's 31.7 pt off the first column
+  // (corpus R441-D01: two lines fewer than Word's there; R363-D01: one).
+  // `window.__docsDropCapFlowOff = true` charges it as before (A/B).
+  if (isOutOfVerticalFlow(part.dom) &&
+      (part.dom.ownerDocument.defaultView as (Window & { __docsDropCapFlowOff?: boolean }) | null)?.__docsDropCapFlowOff !== true) {
+    return 0;
+  }
   return engineBlockHeightPx(part.node, part.dom.ownerDocument.defaultView, sheet.getAttribute("style"), docAttrs, readPage,
     (heightPx, lines) => lineGridChargedEngineHeight(sheet, part.dom, heightPx, lines));
 }
@@ -1967,7 +1978,7 @@ export function buildLedger(
     // (Word 16.86, corpus R13-D09: the break and the section paragraph both
     // on page 1 line 1, "Enclosure 3" on page 2 -- 2 pages, where the break
     // and the section each opened a page and left a blank one between).
-    const absorbedBreak = pageBreakAbsorbedBySection(logical, blockOrdinal);
+    const absorbedBreak = pageBreakAbsorbedBySection(logical, blockOrdinal) || pageBreakEndsDocument(logical, blockOrdinal);
     const absorbedParagraph = blockOrdinal > 0 && pageBreakAbsorbedBySection(logical, blockOrdinal - 1);
     if (absorbedParagraph) heightPx = 0;
     const hidden =
@@ -2221,6 +2232,28 @@ function pageBreakAbsorbedBySection(logical: readonly LogicalBlock[], ordinal: n
   if (!section || section.parts.length !== 1) return false;
   const mark = section.parts[0].node;
   return mark.type.name === "sectionBreak" && mark.attrs?.breakType !== "continuous";
+}
+
+/**
+ * Whether block `ordinal` is the page break of the document's last paragraph:
+ * after it comes nothing but that paragraph's empty, non-printing tail (its
+ * mark). Word opens no page for it: the mark stays on the break's page, and
+ * the document ends there (Windows Word, probes/cjk9: a last paragraph of a
+ * page break alone, or of text and a page break, is one page in
+ * compatibility modes 14 and 15 and with no mode written; an empty paragraph
+ * after it, or text, makes two). Corpus R410-D21: the tail stood alone on a
+ * 13th page, Word 12. `window.__docsDocumentEndBreakPage = true` restores
+ * the page (A/B).
+ */
+export function pageBreakEndsDocument(logical: readonly LogicalBlock[], ordinal: number): boolean {
+  if (ordinal + 2 !== logical.length) return false;
+  const block = logical[ordinal];
+  if (!block || block.kind !== "break" || block.parts.length !== 1) return false;
+  if (block.parts[0].node.type.name !== "pageBreak") return false;
+  const tail = logical[ordinal + 1];
+  if (tail.parts.length !== 1 || !isNonPrintingEmptyTailBlock(tail.parts[0].node)) return false;
+  return typeof window === "undefined" ||
+    (window as Window & { __docsDocumentEndBreakPage?: boolean }).__docsDocumentEndBreakPage !== true;
 }
 
 /** A split paragraph's own source anchor (`…#p[6]` of `…#p[6]/seg[1]`). */

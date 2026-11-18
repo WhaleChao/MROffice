@@ -8,9 +8,10 @@
 import type { Mark, Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { EditorState, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { liftListItem } from "@tiptap/pm/schema-list";
-import { ReplaceStep, canJoin, type Step } from "@tiptap/pm/transform";
+import { RemoveMarkStep, ReplaceStep, canJoin, type Step } from "@tiptap/pm/transform";
 import { FOOTNOTE_MARK_NAME, normalizeFootnotes, removeFootnoteEntry, sanitizeFootnoteId } from "./footnotes";
 import { BOOKMARK_POINT_NODE_NAME } from "./bookmarks";
+import { COMMENT_MARK_NAME, normalizeCommentThreads, removeReplyAt, removeThread, sanitizeThreadId } from "./comments";
 
 /**
  * Track Changes (Word/WPS "suggesting mode") — STAGE 1 pure logic.
@@ -1992,6 +1993,158 @@ function trackMarkTypes(doc: ProseMirrorNode) {
   };
 }
 
+
+/** The doc attribute holding the comment store (commentExtension COMMENT_THREADS_ATTR). */
+const COMMENT_STORE_ATTR = "commentThreads";
+
+/** Thread ids the importer gives a Word comment (projection: `wc-<w:id of its root>`). */
+const IMPORTED_THREAD_ID_RE = /^wc-/;
+
+interface ReviewDecision {
+  decision: "accept" | "reject";
+  /** Accept All / Reject All: every revision is settled, a reference's own among them. */
+  all: boolean;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function droppingCommentsOfReview(tr: Transaction, review: ReviewDecision, run: () => boolean): boolean {
+  const firstStep = tr.steps.length;
+  const done = run();
+  if (done) settleCommentsOfReview(tr, firstStep, review);
+  return done;
+}
+
+function settleCommentsOfReview(tr: Transaction, firstStep: number, review: ReviewDecision): void {
+  const threads = normalizeCommentThreads(tr.doc.attrs[COMMENT_STORE_ATTR]);
+  if (threads.length === 0) return;
+  const settledRevisions = new Set<string>();
+  const unanchored = new Set<string>();
+  const noteRevision = (mark: Mark) => {
+    if (mark.type.name !== INSERTION_MARK_NAME && mark.type.name !== DELETION_MARK_NAME) return;
+    const revisionId = normalizeChangeAttrs(mark.attrs).revisionId;
+    if (revisionId) settledRevisions.add(revisionId);
+  };
+  for (let index = firstStep; index < tr.steps.length; index += 1) {
+    const step = tr.steps[index];
+    if (step instanceof RemoveMarkStep) {
+      noteRevision(step.mark);
+      continue;
+    }
+    // ReplaceAroundStep is not a ReplaceStep: it rewraps blocks, deletes no words.
+    if (!(step instanceof ReplaceStep)) continue;
+    const { from, to } = step as ReplaceStep & { from: number; to: number };
+    if (to <= from) continue;
+    tr.docs[index].nodesBetween(from, to, (node) => {
+      for (const mark of node.marks) {
+        noteRevision(mark);
+        if (mark.type.name !== COMMENT_MARK_NAME) continue;
+        const id = sanitizeThreadId(mark.attrs.threadId);
+        if (id && !IMPORTED_THREAD_ID_RE.test(id)) unanchored.add(id);
+      }
+      return true;
+    });
+  }
+  if (unanchored.size > 0) {
+    tr.doc.descendants((node) => {
+      if (unanchored.size === 0) return false;
+      for (const mark of node.marks) {
+        if (mark.type.name === COMMENT_MARK_NAME) {
+          const id = sanitizeThreadId(mark.attrs.threadId);
+          if (id) unanchored.delete(id);
+        }
+      }
+      return true;
+    });
+  }
+  const goes = review.decision === "accept" ? "deletion" : "insertion";
+  let next = threads;
+  for (const thread of threads) {
+    if (unanchored.has(thread.id)) {
+      next = removeThread(next, thread.id);
+      continue;
+    }
+    const dropped: number[] = [];
+    const cleared: number[] = [];
+    thread.comments.forEach((comment, index) => {
+      const kind = comment.nativeReference;
+      if (!kind) return;
+      const revision = comment.nativeReferenceRevision;
+      if (!review.all && !(revision && settledRevisions.has(revision))) return;
+      (kind === goes ? dropped : cleared).push(index);
+    });
+    if (dropped[0] === 0) {
+      next = removeThread(next, thread.id);
+      continue;
+    }
+    for (const index of [...dropped].reverse()) next = removeReplyAt(next, thread.id, index);
+    if (cleared.length > 0) {
+      // removeReplyAt keeps the other records as they are: found by identity.
+      const settled = new Set(cleared.map((index) => thread.comments[index]));
+      next = next.map((candidate) =>
+        candidate.id !== thread.id
+          ? candidate
+          : {
+              ...candidate,
+              comments: candidate.comments.map((comment) => {
+                if (!settled.has(comment)) return comment;
+                const rest = { ...comment };
+                delete rest.nativeReference;
+                delete rest.nativeReferenceRevision;
+                return rest;
+              }),
+            },
+      );
+    }
+  }
+  if (next === threads) return;
+  const gone = new Set(threads.filter((thread) => !next.some((kept) => kept.id === thread.id)).map((thread) => thread.id));
+  if (gone.size > 0) removeCommentAnchors(tr, gone);
+  tr.setDocAttribute(COMMENT_STORE_ATTR, next);
+}
+
+/**
+ * Take the anchors of deleted threads off the words and paragraphs that keep
+ * them: a comment mark, or a paragraph's own `commentThreadIds` (a comment
+ * Word anchors on the paragraph). Left there, the save's comment plan read
+ * an anchor with no thread ("missing_parent") and refused the export.
+ */
+function removeCommentAnchors(tr: Transaction, gone: ReadonlySet<string>): void {
+  const doc = tr.doc;
+  doc.descendants((node, pos) => {
+    const anchored = node.attrs?.commentThreadIds;
+    if (Array.isArray(anchored) && anchored.some((id) => gone.has(id))) {
+      const left = anchored.filter((id) => !gone.has(id));
+      tr.setNodeAttribute(pos, "commentThreadIds", left.length > 0 ? left : null);
+    }
+    if (node.isInline) {
+      for (const mark of node.marks) {
+        if (mark.type.name === COMMENT_MARK_NAME && gone.has(sanitizeThreadId(mark.attrs.threadId) ?? "")) {
+          tr.removeMark(pos, pos + node.nodeSize, mark);
+        }
+      }
+    }
+    return true;
+  });
+}
+
 /**
  * Accept every tracked change in the doc, mutating the given Transaction in
  * place. Returns true if anything changed.
@@ -2003,7 +2156,7 @@ function trackMarkTypes(doc: ProseMirrorNode) {
  * earlier ranges' positions remain valid as later edits shift the doc — the
  * classic ProseMirror multi-edit ordering rule.
  */
-export function acceptAll(tr: Transaction): boolean {
+function acceptAllRevisions(tr: Transaction): boolean {
   // Table property revisions first: they change attributes only, so every
   // position read below stays valid.
   let rowsChanged = resolveTablePropertyRevisions(
@@ -2105,7 +2258,7 @@ export function acceptAll(tr: Transaction): boolean {
  *
  * Applied right-to-left for the same position-stability reason as acceptAll.
  */
-export function rejectAll(tr: Transaction): boolean {
+function rejectAllRevisions(tr: Transaction): boolean {
   // Table property revisions first: they change attributes only.
   let rowsChanged = resolveTablePropertyRevisions(
     tr,
@@ -2373,7 +2526,7 @@ export function trackedChangeAt(
  * Accept the single tracked change covering `pos`, mutating `tr`. No-op (returns
  * false) when `pos` is not inside a tracked change.
  */
-export function acceptChangeAt(tr: Transaction, pos: number): boolean {
+function acceptOneChangeAt(tr: Transaction, pos: number): boolean {
   const done = acceptChangeAtPosition(tr, pos);
   // No word revision here: a paragraph's own mark may be the change.
   if (!done) return resolveStandaloneParagraphMarkAt(tr, pos, "accept");
@@ -2445,7 +2598,7 @@ function insertedRowTarget(doc: ProseMirrorNode, target: { kind: string; nodePos
  * Reject the single tracked change covering `pos`, mutating `tr`. No-op (returns
  * false) when `pos` is not inside a tracked change.
  */
-export function rejectChangeAt(tr: Transaction, pos: number): boolean {
+function rejectOneChangeAt(tr: Transaction, pos: number): boolean {
   const done = rejectChangeAtPosition(tr, pos);
   if (!done) return resolveStandaloneParagraphMarkAt(tr, pos, "reject");
   if (done) {
@@ -2512,6 +2665,42 @@ function rejectChangeAtPosition(tr: Transaction, pos: number): boolean {
   }
   tr.removeMark(target.from, target.to, deletion);
   return true;
+}
+
+/**
+ * Accept every tracked change in the doc, mutating the given Transaction in
+ * place. Returns true if anything changed. A comment whose words the accepted
+ * deletions took goes with them (droppingCommentsOfReview).
+ */
+export function acceptAll(tr: Transaction): boolean {
+  return droppingCommentsOfReview(tr, { decision: "accept", all: true }, () => acceptAllRevisions(tr));
+}
+
+/**
+ * Reject every tracked change in the doc, mutating the given Transaction in
+ * place. Returns true if anything changed. A comment whose words the rejected
+ * insertions took goes with them (droppingCommentsOfReview).
+ */
+export function rejectAll(tr: Transaction): boolean {
+  return droppingCommentsOfReview(tr, { decision: "reject", all: true }, () => rejectAllRevisions(tr));
+}
+
+/**
+ * Accept the single tracked change covering `pos`, mutating `tr`. No-op
+ * (returns false) when `pos` is not inside a tracked change. A comment whose
+ * words an accepted deletion took goes with it.
+ */
+export function acceptChangeAt(tr: Transaction, pos: number): boolean {
+  return droppingCommentsOfReview(tr, { decision: "accept", all: false }, () => acceptOneChangeAt(tr, pos));
+}
+
+/**
+ * Reject the single tracked change covering `pos`, mutating `tr`. No-op
+ * (returns false) when `pos` is not inside a tracked change. A comment whose
+ * words a rejected insertion took goes with it.
+ */
+export function rejectChangeAt(tr: Transaction, pos: number): boolean {
+  return droppingCommentsOfReview(tr, { decision: "reject", all: false }, () => rejectOneChangeAt(tr, pos));
 }
 
 /** Longest snippet of affected text the review panel shows per change. */

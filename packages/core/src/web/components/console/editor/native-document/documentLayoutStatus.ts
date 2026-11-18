@@ -21,6 +21,12 @@ export const DOCUMENT_EXACT_LINE_PENDING = "data-docs-exact-line-pending";
  * (documentEngineLineBreaks, flag `docs`): the page ledger waits, and asks
  * for them at once with LAYOUT_METRICS_FLUSH_EVENT. */
 export const DOCUMENT_ENGINE_LINES_PENDING = "data-docs-engine-lines-pending";
+/** Paragraphs the text engine read while a face file it needs had not come:
+ * they keep the browser's lines until it comes, past the page ledger's short
+ * hold (documentEngineLineBreaks FACE_HOLD_MS). A print waits for them
+ * (useDocumentSurfaceReadiness): taken before, its pages had the browser's
+ * lines where the screen, moments later, had the engine's. */
+export const DOCUMENT_ENGINE_FACES_WAITING = "data-docs-engine-faces-waiting";
 /** Paragraphs Word's narrowed spaces have not been measured for yet
  * (justifiedSpaceShrink): a page measured before them reads a line too many. */
 export const DOCUMENT_JUSTIFIED_SHRINK_PENDING = "data-docs-justified-shrink-pending";
@@ -62,6 +68,7 @@ const layoutStatusNames = new Set([
   "aria-busy",
   DOCUMENT_WORD_CJK_SPACING_PENDING,
   DOCUMENT_ENGINE_LINES_PENDING,
+  DOCUMENT_ENGINE_FACES_WAITING,
   DOCUMENT_JUSTIFIED_SHRINK_PENDING,
   DOCUMENT_EXACT_LINE_PENDING,
   "data-docs-page-bands-pending",

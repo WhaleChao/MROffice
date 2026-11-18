@@ -34,7 +34,7 @@ import {
   type ConditionalFormatRule,
 } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
 import type { DataTable } from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
-import type { ValidationRule } from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
+import { validationRuleAreas, type ValidationRule } from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
 import { buildSpillOverlay, resolveCellDisplay } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import {
   EXCEL_1900_FICTITIOUS_LEAP_SERIAL,
@@ -740,7 +740,7 @@ export function pivotConfigWithSafeOutput<S extends PivotButtonSheet>(
             conditionalRuleOverlaps(rule, range),
           ) ||
           validations.some((rule) =>
-            conditionalRangesOverlap(rule.range, range),
+            validationRuleAreas(rule).some((area) => conditionalRangesOverlap(area, range)),
           ) ||
           dataTables.some((table) =>
             conditionalRangesOverlap(range, {

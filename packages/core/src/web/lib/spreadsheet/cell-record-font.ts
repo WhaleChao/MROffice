@@ -3,6 +3,17 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { numberFormatRewritesText } from "./number-format";
+
+
+
+
+
+
+
+
+
+
 /** What the record says, drawn: for a cell with no runs left to say otherwise.
  * Text typed over a rich cell takes the cell's font, and so does a new cell that
  * copies the record (R102-X24 E8): it is bold, as the file it is saved to says. */
@@ -63,3 +74,13 @@ export function withRecordFontIfPlain<T extends { runs?: unknown; style?: unknow
   return drawn === cell.style ? cell : { ...cell, style: drawn };
 }
 
+
+/** Whether a rich cell's runs are void as shown: a number format whose text
+ * section writes more than `@` (`_(@_)`) shows the text as one string in the
+ * cell's own font (numberFormatRewritesText; lookwin p166-lw), so the runs do
+ * not draw and the record's switches (recordFontDrawn) are the cell's again. */
+export function cellRunsVoidedByFormat(cell: { runs?: unknown; style?: unknown } | undefined): boolean {
+  if (!cell || !Array.isArray(cell.runs) || cell.runs.length < 2) return false;
+  const style = cell.style;
+  return Boolean(style && typeof style === "object" && numberFormatRewritesText((style as { numberFormat?: unknown }).numberFormat));
+}

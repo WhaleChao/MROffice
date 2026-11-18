@@ -21,12 +21,12 @@
  * two can be compared paragraph by paragraph (`auditDocsParagraph`), and,
  * where they differ, the browser can be told where to break.
  */
-import type { KinsokuList } from "./kinsoku";
+import { KINSOKU_EAST_ASIAN, OFFICE_KINSOKU, type KinsokuList } from "./kinsoku";
 import { lineBreakOpportunities } from "./line-break";
 import { measureText, type EngineFont } from "./measure";
 import { pageEngineFont } from "./page-adapter";
 import { wordKeepsJustifiedWord, wordTrailingPunctuationLength } from "./docs-word-rules";
-import { WORD_DEFAULT_TAB_INTERVAL_TWIPS, wordTabAdvanceAt, type TabStop } from "../document-tabstops";
+import { WORD_DEFAULT_TAB_INTERVAL_TWIPS, wordTabAdvanceAt, wordTabStopAfter, type TabStop } from "../document-tabstops";
 
 export type DocsPieceKind = "text" | "space" | "box" | "tab" | "break";
 
@@ -53,6 +53,9 @@ export interface DocsPiece {
   readonly letterSpacing?: number;
   /** The run's own word spacing, px (text pieces). */
   readonly wordSpacing?: number;
+  /** The hyphen a line ending after this piece draws, px, when not measured
+   * from `font` (hyphenAdvance). */
+  readonly hyphenPx?: number;
   /** Text pieces: the run's computed line-height (px or "normal") and its
    * vertical-align as a length (px, up), for the line's CSS box; absent
    * when an inline around the run aligns it otherwise (super, middle...). */
@@ -65,6 +68,48 @@ export interface DocsPiece {
    * the text boxes of that line, which raise the line it stands on as they
    * would standing on it themselves (its baseline is theirs). */
   readonly lineBoxes?: readonly { readonly font: EngineFont; readonly lineHeight: number | "normal" }[];
+  /** A tab whose next stop lies past the line's right edge in a Word 2010
+   * layout (`docsTabOverMarginLineOff`): the rest of its line runs on past
+   * the edge. Set by the page (bandTabLayout's kept line) or as the engine
+   * fills the line from the paragraph's stops. */
+  readonly overMargin?: boolean;
+}
+
+/** The page's kept line after a Word 2010 tab past the edge (bandTabLayout). */
+const TAB_OVER_MARGIN_SELECTOR = '[data-tab-over-margin="true"]';
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function docsTabOverMarginLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabOverMarginLineOff?: boolean }).__docsTabOverMarginLineOff === true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function docsTabPastIndentOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabPastIndentOff?: boolean }).__docsTabPastIndentOff === true;
 }
 
 /** The block's own font and line-height: the strut every line starts from. */
@@ -92,6 +137,18 @@ export interface DocsParagraph {
   readonly overflowPunctuation?: boolean;
   /** The paragraph stands in a table cell, where only a comma or stop may hang. */
   readonly inTableCell?: boolean;
+  /** false: the cell's column is the stored grid's, not one the page sized to
+   * a word (CELL_FIT_EPSILON's allowance does not apply). Word wraps a word a
+   * fraction of a twip wider than such a cell's text width (Windows Word,
+   * corpus R417-D03 page 36: Tw Cen MT 8 pt "Mechanical harvester", 1349.14
+   * twips in a 1549-twip fixed column with 100-twip margins, two lines). */
+  readonly cellWidened?: boolean;
+  /** How much wider than `firstWidth`/`restWidth` the box the browser lays
+   * the lines out in is, px: a Word cell's text box taken from the model
+   * (cellModelContentWidth). A line the engine ends there with room left in
+   * the browser's box for its next word is broken by a break of its own
+   * (planDocsLineCorrections' tabBreak). */
+  readonly browserWiderBy?: number;
   /** The block's strut, when its font could be read. */
   readonly strut?: DocsStrut;
   /** The block's padding and border above its first line and below its
@@ -110,7 +167,39 @@ export interface DocsParagraph {
    * `width` px wide at most: the room right of the letter and its distance
    * from text. The letter itself is a box of no width in `pieces`. */
   readonly leadingLines?: { readonly count: number; readonly width: number };
+  /** Word's automatic hyphenation of the paragraph (docs-hyphenation.ts):
+   * where its words may end a line in a hyphen, and Word's limits. */
+  readonly hyphenation?: DocsHyphenation;
 }
+
+/** Automatic hyphenation as the engine breaks lines by it. */
+export interface DocsHyphenation {
+  /** Pieces a line may end after with a hyphen: the letter before each of
+   * the language's hyphenation points. */
+  readonly after: ReadonlySet<number>;
+  /** Word's hyphenation zone (`w:hyphenationZone`), px: compatibility mode
+   * 14 and earlier only. */
+  readonly zonePx: number;
+  /** Lines in a row that may end in an automatic hyphen (0: no limit). */
+  readonly consecutiveLimit: number;
+}
+
+/** A soft (optional) hyphen: nothing on the line, a hyphen at its end. */
+export const SOFT_HYPHEN = "\u00ad";
+
+
+
+
+
+
+
+export function docsHyphenationOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsHyphenationOff?: boolean }).__docsHyphenationOff === true;
+}
+
+/** The soft hyphen the engine draws where it ends a line at an automatic
+ * hyphenation point: no piece of the paragraph. */
+export const DOCS_ENGINE_HYPHEN_CLASS = "docs-engine-hyphen";
 
 /** The room line `line` of the paragraph has, CSS px. */
 export function docsLineWidth(paragraph: DocsParagraph, line: number): number {
@@ -156,6 +245,10 @@ export interface DocsTabLayout {
   readonly indentRightPx: number;
   readonly columnPx: number;
   readonly stopsEndAtRightEdge: boolean;
+  /** With `stopsEndAtRightEdge` (Word 2013 and later): a stop past the right
+   * indent but inside the column stays where it is, and its line fills to
+   * the column's edge (`docsTabPastIndentOff`). */
+  readonly stopsReachColumn?: boolean;
 }
 
 /** A formula placeholder's box as the page states it (`--math-placeholder-*`,
@@ -201,6 +294,10 @@ export interface DocsLayoutRules {
   readonly kinsoku: KinsokuList | null;
   /** Ideographs break as Latin letters (wordSetsIdeographsAsLetters). */
   readonly ideographsAsLetters?: boolean;
+  /** False where the East Asian text is in a Western language
+   * (wordEastAsianLineRulesApply): no kinsoku, a full-width mark ("）",
+   * "。") breaks as an ideograph does and does not hang past the edge. */
+  readonly eastAsianLineRules?: boolean;
 }
 
 const OUT_OF_FLOW_POSITIONS = new Set(["absolute", "fixed"]);
@@ -219,10 +316,55 @@ const FIT_EPSILON = 1 / 256;
  */
 const CELL_FIT_EPSILON = 1 / 16;
 function fitEpsilon(paragraph: DocsParagraph): number {
-  return paragraph.inTableCell ? CELL_FIT_EPSILON : FIT_EPSILON;
+  return paragraph.inTableCell && (paragraph.cellWidened !== false || cellFitExactOff()) ? CELL_FIT_EPSILON : FIT_EPSILON;
 }
 /** On the spans the East Asian spacing projection draws (DocumentPageSetup). */
 const WORD_CJK_SPACING_ATTR = "data-docs-word-cjk-spacing";
+/** Harness switch (`window.__docsCellFitExactOff = true`): every cell gets the
+ * widened column's allowance, as before (A/B). */
+function cellFitExactOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCellFitExactOff?: boolean }).__docsCellFitExactOff === true;
+}
+/** A table whose columns the page sized from their contents (Word's AutoFit,
+ * or a stored grid widened to a word it must hold): wordTableAutofitDisplay. */
+const WIDENED_TABLE_SELECTOR = "table[data-word-autofit-display], table[data-word-min-content-floor]";
+/**
+ * On a Word cell: its text box, px, as the model states it (the stored widths
+ * of the grid columns it spans less its left and right margins; tableBorders).
+ * The browser keeps the column, each padding and each border in 1/64 px units
+ * and gives the cell's end padding back 1/32 px, so the text width it lays out
+ * reads up to ~0.05 px wider than Word's. Windows Word wraps a word a fraction
+ * of a twip wider than the model's (corpus R417-D03 page 36: Tw Cen MT 8 pt
+ * "Mechanical harvester", 1349.14 twips, in a 1549-twip fixed column with
+ * 100-twip margins -- 1349 twips of text, read 89.984 px for 89.933 -- is two
+ * lines in Word).
+ */
+export const WORD_CELL_TEXT_PX_ATTR = "data-word-cell-text-px";
+/** The model's width stands in for the browser's only within this of it: a
+ * column the page drew other than at its stored width (shrunk to the text
+ * column, a percentage share) keeps the width the browser laid it out at. */
+const CELL_MODEL_WIDTH_TOLERANCE_PX = 0.25;
+/** Harness switch (`window.__docsCellModelWidthOff = true`): a cell's text
+ * width is the browser's, as before (A/B). */
+function cellModelWidthOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCellModelWidthOff?: boolean }).__docsCellModelWidthOff === true;
+}
+/** A cell paragraph's text width as Word's model states it, when its column is
+ * the stored grid's and the browser's reading is that width rounded. */
+function cellModelContentWidth(element: HTMLElement, style: CSSStyleDeclaration, browserContent: number): number | null {
+  if (cellModelWidthOff()) return null;
+  const cell = element.closest("td, th");
+  const stated = cell?.getAttribute(WORD_CELL_TEXT_PX_ATTR);
+  if (!cell || !stated || element.closest("table")?.matches(WIDENED_TABLE_SELECTOR)) return null;
+  // Only a paragraph standing straight in the cell: a box between them (a
+  // list, a nested block) takes room the model width does not know of.
+  if (element.parentElement !== cell) return null;
+  const textBox = Number(stated);
+  if (!Number.isFinite(textBox) || textBox <= 0) return null;
+  const model = textBox - px(style.marginLeft) - px(style.marginRight) - px(style.paddingLeft) - px(style.paddingRight)
+    - px(style.borderLeftWidth) - px(style.borderRightWidth);
+  return model > 0 && Math.abs(model - browserContent) < CELL_MODEL_WIDTH_TOLERANCE_PX ? model : null;
+}
 /** On the spans the engine's line corrections draw (documentEngineLineBreaks). */
 export const DOCS_ENGINE_LINE_ATTR = "data-docs-engine-line";
 /** The line break the engine draws before a tab that opens a line: no piece
@@ -241,6 +383,15 @@ export const DOCS_ENGINE_BASE_SPACING_ATTR = "data-docs-engine-base-spacing";
 export const DOCS_ENGINE_BASE_WORD_SPACING_ATTR = "data-docs-engine-base-word-spacing";
 /** The marks Word lets hang past the right edge (overflowPunctuationHang.ts). */
 const HANGING = new Set(["，", "。", "、", "．", "﹐", "﹒", "｡", "､", ",", "."]);
+/** A mark kinsoku keeps off a line's start that Word hangs: punctuation
+ * outside ASCII (not "々", "ゝ" or "℃"). */
+const EAST_ASIAN_HANGING_MARK = /^[^\x00-\x7f]$/u;
+const EAST_ASIAN_PUNCTUATION = /^\p{P}$/u;
+function eastAsianHangOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsEastAsianHangOff?: boolean }).__docsEastAsianHangOff === true;
+}
+/** An East Asian (full-width or ideographic) mark. */
+const FULL_WIDTH_MARK = /[\u3000-\u303f\ufe10-\ufe6f\uff00-\uffef]/;
 
 function px(value: string | null | undefined): number {
   const parsed = Number.parseFloat(value ?? "");
@@ -373,6 +524,7 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
   let outer: number;
   let content: number;
   let unscale: number;
+  let browserWiderBy = 0;
   if (unlaid) {
     if (/%|auto/.test(`${style.marginLeft} ${style.marginRight} ${style.paddingLeft} ${style.paddingRight}`)) return empty("box not in px");
     outer = options.columnWidthPx! - px(style.marginLeft) - px(style.marginRight);
@@ -398,11 +550,17 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
     } else {
       if (!(outer > 0) || !(rect.width > 0)) return empty("not drawn");
       unscale = outer / rect.width;
+      const model = cellModelContentWidth(element, style, content);
+      if (model !== null) {
+        browserWiderBy = content - model;
+        content = model;
+      }
     }
   }
   const textIndent = px(style.textIndent);
   const tabIntervalPx = style.tabSize?.endsWith("px") ? px(style.tabSize) : 0;
   const align = style.textAlign;
+  const hyphenationOff = docsHyphenationOff();
   const pieces: DocsPiece[] = [];
   let unsupported: string | undefined;
   let pending = false;
@@ -464,17 +622,29 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
     const flush = (end: number) => {
       if (end <= at) return;
       const chunk = text.slice(at, end);
-      const measured = measureText(chunk, font);
+      // An optional hyphen takes no room on its line (Word and the browser
+      // draw it only where a line ends at it): the letters around it are
+      // measured as one word, and it stands between them with no advance.
+      const softHyphens = !hyphenationOff && chunk.includes(SOFT_HYPHEN);
+      const measured = measureText(softHyphens ? chunk.split(SOFT_HYPHEN).join("") : chunk, font);
       if (measured.status === "pending") { pending = true; at = end; return; }
       if (measured.status === "unsupported") { unsupported ??= measured.reason; at = end; return; }
       if (measured.approximate) flags.add("approximate");
       let offset = at;
+      const pushSoftHyphens = () => {
+        while (softHyphens && offset < end && text[offset] === SOFT_HYPHEN) {
+          pieces.push({ kind: "text", text: SOFT_HYPHEN, advance: 0, node, offset, fontPx, font, spacePx, letterSpacing, wordSpacing, ...(correction ? { correction } : {}), ...box });
+          offset += 1;
+        }
+      };
       for (const grapheme of measured.graphemes) {
+        pushSoftHyphens();
         const isSpace = grapheme.text === " " || grapheme.text === " ";
         const advance = grapheme.advance + (grapheme.advance > 0 || !isZeroWidth(grapheme.text) ? letterSpacing : 0) + (isSpace ? wordSpacing : 0);
         pieces.push({ kind: grapheme.text === " " ? "space" : "text", text: grapheme.text, advance, node, offset, fontPx, font, spacePx, letterSpacing, wordSpacing, ...(correction ? { correction } : {}), ...box });
         offset += grapheme.text.length;
       }
+      pushSoftHyphens();
       at = end;
     };
     for (let index = 0; index < text.length; index += 1) {
@@ -495,7 +665,10 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
           unsupported ??= "tab without layout";
         } else {
           flags.add("tab");
-          pieces.push({ kind: "tab", text: "\t", advance: drawnWidth(node, index, unscale), node, offset: index, fontPx });
+          // A tab on bandTabLayout's kept line is drawn as the character.
+          const kept = node.parentElement?.closest(TAB_OVER_MARGIN_SELECTOR);
+          const overMargin = kept && kept !== element && element.contains(kept) && !docsTabOverMarginLineOff();
+          pieces.push({ kind: "tab", text: "\t", advance: drawnWidth(node, index, unscale), node, offset: index, fontPx, ...(overMargin ? { overMargin: true } : {}) });
         }
         at = index + 1;
       }
@@ -516,6 +689,8 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
       return;
     }
     if (node.tagName === "IMG" && node.classList.contains("ProseMirror-separator")) return;
+    // The engine's own hyphen at a line it ends inside a word.
+    if (node.classList.contains(DOCS_ENGINE_HYPHEN_CLASS)) return;
     // JustifiedLineBreaks' filler moves a manual break onto a line of its
     // own so the line before it is justified: it takes no room of a line.
     if (node.classList.contains("mrnote-justified-break-filler")) return;
@@ -558,11 +733,13 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
         (child): child is Text => child.nodeType === Node.TEXT_NODE && (child as Text).data.includes("\t"),
       );
       flags.add("tab");
+      const kept = node.closest(TAB_OVER_MARGIN_SELECTOR);
       pieces.push({
         kind: "tab",
         text: "\t",
         advance: atomWidthPx(node, nodeStyle, unscale) + px(nodeStyle.marginLeft) + px(nodeStyle.marginRight),
         element: node,
+        ...(kept && kept !== element && element.contains(kept) && !docsTabOverMarginLineOff() ? { overMargin: true } : {}),
         ...(text ? { node: text, offset: text.data.indexOf("\t") } : {}),
         fontPx: px(nodeStyle.fontSize),
         ...runBox(node, nodeStyle),
@@ -682,9 +859,11 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
         indentRightPx: (options.tabStops.aroundRightPx ?? 0) + px(style.marginRight) + padR + borR,
         columnPx: options.columnWidthPx! + (options.tabStops.aroundLeftPx ?? 0) + (options.tabStops.aroundRightPx ?? 0),
         stopsEndAtRightEdge: options.tabStops.overMargin !== true,
+        ...(options.tabStops.overMargin !== true && !docsTabPastIndentOff() ? { stopsReachColumn: true } : {}),
       }
     : undefined;
   const inTableCell = element.closest("td, th") !== null;
+  const cellWidened = inTableCell ? element.closest("table")?.matches(WIDENED_TABLE_SELECTOR) === true : undefined;
   // A drop cap: Word sets the frame's letter beside the paragraph's first
   // lines and fills each of them only as far as the room right of it
   // (Windows Word 16, probes/dropcap: R441-D01's "D", lines 2, the first two
@@ -719,7 +898,7 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
       flags.add("drop-cap");
     }
   }
-  return { pieces, firstWidth, restWidth: content, align, unsupported, pending, flags: [...flags], unscale, overflowPunctuation, inTableCell, ...(strut ? { strut } : {}), chrome, ...(firstLineStrut ? { firstLineStrut } : {}), ...(tabStops ? { tabStops } : {}), ...(leadingLines ? { leadingLines } : {}) };
+  return { pieces, firstWidth, restWidth: content, align, unsupported, pending, flags: [...flags], unscale, overflowPunctuation, inTableCell, ...(cellWidened === false ? { cellWidened } : {}), ...(browserWiderBy > 0 ? { browserWiderBy } : {}), ...(strut ? { strut } : {}), chrome, ...(firstLineStrut ? { firstLineStrut } : {}), ...(tabStops ? { tabStops } : {}), ...(leadingLines ? { leadingLines } : {}) };
 }
 
 /**
@@ -912,6 +1091,7 @@ function docsTabAdvance(paragraph: DocsParagraph, tabs: DocsTabLayout, index: nu
     positional: null,
     line: { widthPx: tabs.columnPx, indentLeftPx: tabs.contentLeftPx, indentRightPx: tabs.indentRightPx },
     stopsEndAtRightEdge: tabs.stopsEndAtRightEdge,
+    stopsReachColumn: tabs.stopsReachColumn === true,
   });
 }
 
@@ -984,9 +1164,10 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
     visible.push(index);
   }
   const visibleOpportunities = lineBreakOpportunities(visible.map((index) => texts[index]), {
-    kinsoku: rules.ideographsAsLetters ? null : rules.kinsoku,
+    kinsoku: rules.ideographsAsLetters || rules.eastAsianLineRules === false ? null : rules.kinsoku,
     word: true,
     ideographsAsLetters: rules.ideographsAsLetters === true,
+    eastAsianMarksAsIdeographs: rules.eastAsianLineRules === false && rules.ideographsAsLetters !== true,
   });
   const opportunity = new Array<boolean>(count).fill(false);
   visible.forEach((index, order) => {
@@ -1003,6 +1184,16 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
     if (order > 0 && piece.kind === "tab") may = true;
     opportunity[index] = may;
   });
+  // An optional hyphen is a hyphenation point (hyphenCut), not a break
+  // opportunity of its own: the line it ends draws a hyphen.
+  const hyphenating = !docsHyphenationOff();
+  if (hyphenating) {
+    for (let index = 0; index + 1 < count; index += 1) {
+      if (pieces[index].kind === "text" && pieces[index].text === SOFT_HYPHEN && pieces[index + 1].kind === "text") opportunity[index + 1] = false;
+    }
+  }
+  /** Lines in a row ended by a hyphen so far. */
+  let hyphenRun = 0;
   const justified = paragraph.align === "justify" && rules.compatibilityMode !== null && rules.compatibilityMode >= 15;
   // Word lets a stop or comma hang past the edge (wordPunctuationMayHang):
   // from mode 15 only in a justified or distributed paragraph.
@@ -1013,16 +1204,26 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
     (rules.compatibilityMode === null || rules.compatibilityMode < 15 || paragraph.align === "justify" || paragraph.align === "distribute");
   const fit = fitEpsilon(paragraph);
   const spaceOpensLine = rules.compatibilityMode === null || rules.compatibilityMode < 15;
+  // `window.__docsEastAsianHangOff = true` asks the older reading (only the
+  // stops and commas hang, and in mode 14 a mark closing a Latin word).
+  const eastAsianNoStart = rules.kinsoku && rules.eastAsianLineRules !== false && !rules.ideographsAsLetters && !eastAsianHangOff()
+    ? OFFICE_KINSOKU[rules.kinsoku].noStart : null;
   let lineStart = 0;
   let lineIndex = 0;
   while (lineStart < count) {
-    const width = docsLineWidth(paragraph, lineIndex);
+    let width = docsLineWidth(paragraph, lineIndex);
     let used = 0;
     let pendingSpace = 0;
     let lastBreak = -1;
     let next = -1;
     let hard = false;
     let lastTab = -1;
+    // Past a Word 2010 tab whose stop lies beyond the edge the line does not
+    // break again (docsTabOverMarginLineOff).
+    let runsOn = false;
+    // Past a Word 2013 stop beyond the right indent the line fills to the
+    // column's edge (docsTabPastIndentOff).
+    let widened = false;
     for (let index = lineStart; index < count; index += 1) {
       const piece = pieces[index];
       if (piece.kind === "break") {
@@ -1039,7 +1240,7 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
         // whose text width is -2, 0 or 2 pt draws A|s|s|e|t|’|s| |I|D, ten
         // lines (R417-D03 page 9's header row, 108.3 pt); with 5 pt "s " hangs
         // as ever, and in mode 15 the space hangs at every width.
-        if (spaceOpensLine && pendingSpace === 0 && index > lineStart && Number.isFinite(used) && used > width + fit && pieces[index - 1]?.kind === "text" && !spaceBreakOff()) {
+        if (!runsOn && spaceOpensLine && pendingSpace === 0 && index > lineStart && Number.isFinite(used) && used > width + fit && pieces[index - 1]?.kind === "text" && !spaceBreakOff()) {
           next = index;
           break;
         }
@@ -1053,11 +1254,28 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
           // The line's text starts at the paragraph's box, the first line at
           // its indent (a hanging one to the left).
           const lineLeft = tabs.contentLeftPx + (lineIndex === 0 ? paragraph.restWidth - paragraph.firstWidth : 0);
-          (piece as { advance: number }).advance = docsTabAdvance(paragraph, tabs, index, lineLeft + used + pendingSpace);
+          const pen = lineLeft + used + pendingSpace;
+          (piece as { advance: number }).advance = docsTabAdvance(paragraph, tabs, index, pen);
+          if (!tabs.stopsEndAtRightEdge && !docsTabOverMarginLineOff()) {
+            const stop = wordTabStopAfter(tabs.stops, pen);
+            if (stop && stop.pos / TWIPS_PER_CSS_PX > tabs.columnPx - tabs.indentRightPx + 1 / TWIPS_PER_CSS_PX) {
+              (piece as { overMargin?: boolean }).overMargin = true;
+            }
+          } else if (tabs.stopsReachColumn && !widened) {
+            // Word 2013 and later: a stop past the right indent but inside the
+            // column takes the line on to the column's edge (docsTabPastIndentOff).
+            const stop = wordTabStopAfter(tabs.stops, pen);
+            const at = stop ? stop.pos / TWIPS_PER_CSS_PX : 0;
+            if (stop && tabs.indentRightPx > 0 && at > tabs.columnPx - tabs.indentRightPx + 1 / TWIPS_PER_CSS_PX && at <= tabs.columnPx + 1 / TWIPS_PER_CSS_PX) {
+              width += tabs.indentRightPx;
+              widened = true;
+            }
+          }
         }
+        if (piece.overMargin) runsOn = true;
       }
       const nextUsed = used + pendingSpace + piece.advance;
-      if (index > lineStart && nextUsed > width + fit && piece.advance > 0) {
+      if (!runsOn && index > lineStart && nextUsed > width + fit && piece.advance > 0) {
         // Mode 14 and earlier: only the word's last character hangs, by its own
         // width, and a straight double quote not at all. Word 16 for Mac, left
         // Times New Roman 12 pt, 0.05 pt steps (fixtures-1110/hang-marks, 1 150
@@ -1071,9 +1289,18 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
           while (after < count && pieces[after].kind === "box" && pieces[after].advance <= 0.01) after += 1;
           return after >= count || pieces[after].kind !== "text";
         })();
-        const hangingMark = everyMarkHangs
+        // An East Asian closing mark (one kinsoku keeps off a line's start)
+        // hangs whatever follows it, in mode 14 and earlier and in a
+        // justified mode-15 paragraph alike: Windows Word, zh-CN SimSun 11 pt,
+        // 41 ideographs a line, each of ）。，、」”：；！？》 the 42nd, one
+        // full width past the margin (docx-look/probes/cjk3 h14l/h14j/h15j;
+        // h15l, left in mode 15, takes the 41st ideograph down with it).
+        const eastAsianClosingMark = eastAsianNoStart !== null && piece.kind === "text" &&
+          eastAsianNoStart.has(piece.text) && EAST_ASIAN_HANGING_MARK.test(piece.text) && EAST_ASIAN_PUNCTUATION.test(piece.text) &&
+          (FULL_WIDTH_MARK.test(piece.text) || (index > 0 && pieces[index - 1].kind === "text" && KINSOKU_EAST_ASIAN.test(pieces[index - 1].text)));
+        const hangingMark = (rules.eastAsianLineRules !== false || !FULL_WIDTH_MARK.test(piece.text)) && (eastAsianClosingMark || (everyMarkHangs
           ? closesWord && piece.kind === "text" && piece.text !== '"' && (HANGING.has(piece.text) || wordTrailingPunctuationLength(piece.text) === piece.text.length)
-          : HANGING.has(piece.text);
+          : HANGING.has(piece.text)));
         if (hangs && hangingMark && (used === Number.POSITIVE_INFINITY || used + pendingSpace <= width + fit)) {
           // The mark hangs; whatever follows it opens the next line.
           used = Number.POSITIVE_INFINITY;
@@ -1102,6 +1329,15 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
           // against the line's natural width (Word narrows once per line).
           continue;
         }
+        // The word that does not fit may end the line at a hyphenation
+        // point (an optional hyphen, or automatic hyphenation's).
+        if (hyphenating && piece.kind === "text" && Number.isFinite(used)) {
+          const cut = hyphenCut(paragraph, rules, lineStart, lastBreak, lastTab, width, opportunity, justified, hyphenRun);
+          if (cut >= 0) {
+            next = cut + 1;
+            break;
+          }
+        }
         next = lastBreak > lineStart ? lastBreak : index;
         break;
       }
@@ -1112,6 +1348,7 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
       if (hard && next === count) starts.push(count);
       break;
     }
+    hyphenRun = hyphenating && hyphenPointKind(paragraph, next - 1) !== null && !hard ? hyphenRun + 1 : 0;
     starts.push(next);
     lineStart = next;
     lineIndex += 1;
@@ -1126,9 +1363,16 @@ function wordEnd(pieces: readonly DocsPiece[], from: number, opportunity: readon
   return end;
 }
 
-function keepsWord(pieces: readonly DocsPiece[], lineStart: number, breakAt: number, lastTab: number, width: number, opportunity: readonly boolean[], inTableCell: boolean): boolean {
-  const end = wordEnd(pieces, breakAt, opportunity);
-  let natural = 0;
+function keepsWord(
+  pieces: readonly DocsPiece[], lineStart: number, breakAt: number, lastTab: number, width: number, opportunity: readonly boolean[], inTableCell: boolean,
+  fragment?: { readonly end: number; readonly hyphenPx: number },
+): boolean {
+  // A fragment: the word's letters up to a hyphenation point, the line
+  // drawing the hyphen after them (judged as a whole word is, its letters
+  // alone counting as the word: Windows Word, brk10/probes/hyph h1, mode 15
+  // justified: "es-" of "establishment" kept 4.13 pt over and not 5.13).
+  const end = fragment ? fragment.end : wordEnd(pieces, breakAt, opportunity);
+  let natural = fragment ? fragment.hyphenPx : 0;
   for (let at = lineStart; at < end; at += 1) natural += pieces[at].advance;
   // The line's trailing spaces before the word count; its own spaces after
   // the word hang.
@@ -1167,6 +1411,111 @@ function keepsWord(pieces: readonly DocsPiece[], lineStart: number, breakAt: num
   }
   // Past a hyphen no space stands before the word (probe t-hy-keep).
   return wordKeepsJustifiedWord(overflow, spaces, pieces[breakAt - 1]?.kind === "space" ? fontPx : 0, spacePx, wordPx, trailingPx);
+}
+
+/** Word's room for automatic hyphenation in compatibility mode 15, px: the
+ * word that does not fit is hyphenated only when moving it whole would leave
+ * at least this much of a left-aligned line empty, whatever the document's
+ * hyphenation zone (Windows Word, brk10/probes/hyph h2/h3: a quarter inch from
+ * the end of the line's text, with zones of 0, 283, 425 and 1440 twips; 17.5
+ * pt left the word whole, 18 pt broke it). A justified line has no such room. */
+const WORD_15_HYPHENATION_ROOM_PX = 24;
+/** The rooms above are met within this, px: Word's 17.98 pt broke a word
+ * (brk11/probes/h5), its widths a hair from the served faces'. */
+const ROOM_TOLERANCE_PX = 0.05;
+
+/** Whether a line may end in a hyphen after piece `at`: "soft" at an
+ * optional hyphen, "auto" at an automatic hyphenation point. */
+export function hyphenPointKind(paragraph: DocsParagraph, at: number): "soft" | "auto" | null {
+  const piece = paragraph.pieces[at];
+  if (!piece || paragraph.pieces[at + 1]?.kind !== "text" || docsHyphenationOff()) return null;
+  if (piece.kind === "text" && piece.text === SOFT_HYPHEN) return "soft";
+  return paragraph.hyphenation?.after.has(at) ? "auto" : null;
+}
+
+/** The hyphen a line ending after `piece` draws, px: its run's hyphen. */
+export function hyphenAdvance(piece: DocsPiece): number {
+  if (piece.hyphenPx !== undefined) return piece.hyphenPx;
+  if (!piece.font) return 0;
+  const measured = measureText("-", piece.font);
+  return measured.status === "ok" ? measured.width + (piece.letterSpacing ?? 0) : 0;
+}
+
+/** The hyphen line `line` of `starts` ends in, px (0: it ends otherwise). */
+export function docsLineHyphenPx(paragraph: DocsParagraph, starts: readonly number[], line: number): number {
+  const next = starts[line + 1];
+  if (next === undefined || next <= 0) return 0;
+  return hyphenPointKind(paragraph, next - 1) ? hyphenAdvance(paragraph.pieces[next - 1]) : 0;
+}
+
+/**
+ * Where a line that a word overflows ends inside that word, by Word's
+ * hyphenation: the piece the line ends after, or -1 (the word goes whole).
+ * The word runs from the line's last break opportunity.
+ *
+ * Windows Word (brk10/probes/hyph h1-h3; brk11/probes/h4, Calibri 11, 0.25
+ * pt steps of the measure):
+ * - Compatibility mode 15: on a justified line the last point whose
+ *   fragment fits, or that narrowing the line's spaces keeps as it would a
+ *   whole word (keepsWord); on any other line the last point whose
+ *   fragment and hyphen fit, and an automatic point only when the line
+ *   would leave at least WORD_15_HYPHENATION_ROOM_PX empty with the word
+ *   moved whole.
+ * - Mode 14 and earlier (12 alike), justified or not: the last point whose
+ *   fragment fits with the wider of the hyphen and the letter after the point
+ *   ("establish-" of "establishment" at 50.98 pt, not 45.49: the "m" after
+ *   it is 8.79 pt to the hyphen's 3.37), and an automatic point only when the
+ *   room after the space before the word is at least the document's
+ *   hyphenation zone (0.25" unless stated: the first point at 20.73 pt, the
+ *   space 2.49; zone 0 at 15.98, zone 0.5" at 38.98).
+ * An optional hyphen (w:softHyphen) is a point in every paragraph: in mode
+ * 15 with the same room on a line that is not justified, in mode 14 with
+ * none and no letter after it to fit (brk11/probes/h5, autoHyphenation off:
+ * "es-" at 17.98 pt in mode 15 left, 15.98 in mode 14; "establish-" at 45.98
+ * in mode 14 where an automatic point needs 50.98).
+ */
+function hyphenCut(
+  paragraph: DocsParagraph, rules: DocsLayoutRules, lineStart: number, lastBreak: number, lastTab: number, width: number,
+  opportunity: readonly boolean[], justified: boolean, run: number,
+): number {
+  const pieces = paragraph.pieces;
+  const wordStart = lastBreak > lineStart ? lastBreak : lineStart;
+  if (pieces[wordStart]?.kind !== "text") return -1;
+  const end = wordEnd(pieces, wordStart, opportunity);
+  const fit = fitEpsilon(paragraph);
+  const modern = rules.compatibilityMode !== null && rules.compatibilityMode >= 15;
+  const hyphenation = paragraph.hyphenation;
+  let content = 0;
+  let all = 0;
+  for (let at = lineStart; at < wordStart; at += 1) {
+    const piece = pieces[at];
+    if (piece.kind === "break") continue;
+    all += piece.advance;
+    if (piece.kind !== "space") content = all;
+  }
+  // Mode 15 asks the room of an optional hyphen as of an automatic one.
+  const roomOf15 = justified || width - content >= WORD_15_HYPHENATION_ROOM_PX - ROOM_TOLERANCE_PX;
+  const softAllowed = !modern || roomOf15;
+  const autoAllowed = hyphenation !== undefined && (hyphenation.consecutiveLimit <= 0 || run < hyphenation.consecutiveLimit) &&
+    (modern ? roomOf15 : width - all >= hyphenation.zonePx - ROOM_TOLERANCE_PX);
+  let natural = 0;
+  const through: number[] = [];
+  for (let at = lineStart; at < end; at += 1) {
+    if (pieces[at].kind !== "break") natural += pieces[at].advance;
+    through.push(natural);
+  }
+  for (let at = end - 2; at >= wordStart && at >= lineStart; at -= 1) {
+    const kind = hyphenPointKind(paragraph, at);
+    if (!kind || (kind === "auto" ? !autoAllowed : !softAllowed)) continue;
+    const hyphenPx = hyphenAdvance(pieces[at]);
+    const tail = modern || kind === "soft" ? hyphenPx : Math.max(hyphenPx, pieces[at + 1].advance);
+    if (through[at - lineStart]! + tail <= width + fit) return at;
+    if (justified && wordStart > lineStart &&
+        keepsWord(pieces, lineStart, wordStart, lastTab, width, opportunity, Boolean(paragraph.inTableCell), { end: at + 1, hyphenPx })) {
+      return at;
+    }
+  }
+  return -1;
 }
 
 /**
@@ -1299,8 +1648,12 @@ function lineInk(paragraph: DocsParagraph, from: number, to: number): { engine: 
 }
 
 /** Engine against browser, one paragraph. */
-export function auditDocsParagraph(element: HTMLElement, rules: DocsLayoutRules, detail = false): DocsParagraphAudit {
-  const paragraph = readDocsParagraph(element);
+export function auditDocsParagraph(
+  element: HTMLElement, rules: DocsLayoutRules, detail = false, prepare?: (paragraph: DocsParagraph) => DocsParagraph,
+): DocsParagraphAudit {
+  const read = readDocsParagraph(element);
+  // As the engine lays it out (its hyphenation points, docs-hyphenation).
+  const paragraph = prepare ? prepare(read) : read;
   const base = { flags: paragraph.flags, engineLines: 0, browserLines: 0 };
   if (paragraph.unsupported) return { ...base, status: "unsupported", reason: paragraph.unsupported };
   if (paragraph.pending) return { ...base, status: "pending" };
@@ -1366,6 +1719,9 @@ function contentEnd(pieces: readonly DocsPiece[], from: number, to: number): num
 export function docsDrawnWidths(paragraph: DocsParagraph): number[] {
   return paragraph.pieces.map((piece) => {
     if (piece.kind !== "text") return piece.advance;
+    // An optional hyphen: nothing mid-line, and at a line's end its hyphen
+    // is the line's (planDocsLineCorrections adds it to both sides).
+    if (piece.text === SOFT_HYPHEN && piece.advance === 0) return 0;
     const r = pieceRect(piece);
     return r ? r.width * paragraph.unscale - (piece.correction ?? 0) : piece.advance;
   });
@@ -1389,7 +1745,9 @@ export interface DocsLineCorrection {
    * white space hangs past the measure, Chromium and WebKit alike), so the
    * line is ended before it by a break the engine draws there. The same
    * break goes before a space that opens the next line (a mode-14 cell
-   * narrower than a letter, docsLineOpensWithSpace). */
+   * narrower than a letter, docsLineOpensWithSpace), and before the next
+   * line's first word where the browser's box is wider than the measure
+   * (`DocsParagraph.browserWiderBy`) and would keep that word. */
   readonly tabBreak: number | null;
 }
 
@@ -1397,6 +1755,42 @@ export interface DocsLineCorrection {
 const SAME_WIDTH = 0.004;
 /** What a correction leaves on the safe side of the edge, px. */
 const CORRECTION_SLACK = 0.02;
+/** Chromium sets each inline item's width up to a whole layout unit (1/64
+ * px) before it fits items on a line, so a line of n items draws up to n/64
+ * px wider than its glyphs add up to. */
+const LAYOUT_UNIT = 1 / 64;
+
+/** A grapheme's script class as the browser's run segmenter splits text
+ * into items: Hangul, Han/Kana, and the rest (Latin, digits, punctuation
+ * take the run they stand in). */
+function scriptClass(text: string): number {
+  const code = text.codePointAt(0) ?? 0;
+  if ((code >= 0xac00 && code <= 0xd7af) || (code >= 0x1100 && code <= 0x11ff) || (code >= 0x3130 && code <= 0x318f)) return 1;
+  if ((code >= 0x3040 && code <= 0x30ff) || (code >= 0x3400 && code <= 0x9fff) || (code >= 0xf900 && code <= 0xfaff) || (code >= 0x20000 && code <= 0x3ffff)) return 2;
+  if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a) || (code >= 0xc0 && code <= 0x24f)) return 3;
+  return 0;
+}
+
+/**
+ * How many inline items the browser fits a line's pieces [from, end) as: a
+ * new one at every text node, every atom or tab, every script change (and
+ * where a correction's narrowed spaces begin, a span of their own).
+ */
+export function docsLineItems(pieces: readonly DocsPiece[], from: number, end: number, spacesFrom = from): number {
+  let items = 0;
+  let node: Text | undefined | null = null;
+  let script = 0;
+  for (let at = from; at < end; at += 1) {
+    const piece = pieces[at];
+    if (piece.kind !== "text" && piece.kind !== "space") { items += 1; node = null; script = 0; continue; }
+    const cls = piece.kind === "text" ? scriptClass(piece.text) : 0;
+    const opens = node === null || piece.node !== node || (at === spacesFrom && at > from) || (cls && script && cls !== script);
+    if (opens) { items += 1; script = cls; }
+    else if (cls && !script) script = cls;
+    node = piece.node;
+  }
+  return items;
+}
 
 /**
  * The corrections that make the browser break where the engine does: for
@@ -1410,6 +1804,7 @@ const CORRECTION_SLACK = 0.02;
  */
 export function planDocsLineCorrections(
   paragraph: DocsParagraph, starts: readonly number[], drawn: readonly number[], force: ReadonlySet<number> = new Set(),
+  { roundingSlack = true }: { roundingSlack?: boolean } = {},
 ): DocsLineCorrection[] {
   const pieces = paragraph.pieces;
   const fit = fitEpsilon(paragraph);
@@ -1423,15 +1818,23 @@ export function planDocsLineCorrections(
     let browser = 0;
     let graphemes = 0;
     let lastTab = from - 1;
+    let runsOn = false;
     for (let at = from; at < end; at += 1) {
       const piece = pieces[at];
       if (piece.kind === "break") continue;
       if (piece.kind === "tab") lastTab = at;
+      if (piece.overMargin) runsOn = true;
       engine += piece.advance;
       browser += drawn[at];
       if (piece.kind === "text" || piece.kind === "space") graphemes += 1;
     }
-    if (!graphemes) continue;
+    // A Word 2010 line run on past the edge by its tab: the page keeps it
+    // whole as it stands, and nothing narrows it.
+    if (!graphemes || runsOn) continue;
+    // A line ended inside a word draws a hyphen there, as wide on both sides.
+    const hyphenPx = docsLineHyphenPx(paragraph, starts, line);
+    engine += hyphenPx;
+    browser += hyphenPx;
     const width = docsLineWidth(paragraph, line);
     // Wider than the measure: a word kept by narrowing, on the paragraph's
     // last line too (corpus R279-D25: left as drawn, the browser sent the
@@ -1459,6 +1862,38 @@ export function planDocsLineCorrections(
     // is ended before it by the same break.
     const spaceOpensNext = !lastLine && line + 1 < starts.length && docsLineOpensWithSpace(paragraph, starts, line + 1);
     let needed = force.has(line) || squeeze > 0 || tabOpensNext || spaceOpensNext;
+    // The browser's box wider than the measure (a Word cell's text box from
+    // the model): a line the engine ends whose next word the browser would
+    // still fit is broken where the engine breaks it (corpus R417-D03 page
+    // 36: "Mechanical harvester" 89.943 px in Word's 89.933 px, the browser's
+    // 89.984 px box kept it on one line).
+    let modelBreak = false;
+    const wider = paragraph.browserWiderBy ?? 0;
+    if (wider > 0 && !lastLine && !tabOpensNext && !spaceOpensNext && pieces[end]?.kind !== "break") {
+      // Taken at the engine's advances as well as the drawn ones: each
+      // grapheme's drawn box is a layout unit rounded, and summed over a word
+      // they ran past the browser's box the word itself stays in (corpus
+      // R417-D03: "Mechanical harvester" drawn 89.891 px whole, its boxes
+      // summed past 89.984 px, so no break was planned).
+      let trailing = 0;
+      let trailingEngine = 0;
+      for (let at = end; at < to; at += 1) {
+        trailing += drawn[at];
+        trailingEngine += pieces[at].advance;
+      }
+      let next = to;
+      let nextWidth = 0;
+      let nextEngine = 0;
+      while (next < pieces.length && pieces[next].kind !== "space" && pieces[next].kind !== "break" && (next === to || !isOpportunityAfterSpace(pieces, next))) {
+        nextWidth += drawn[next];
+        nextEngine += pieces[next].advance;
+        next += 1;
+      }
+      if (Math.min(engine + trailingEngine + nextEngine, browser + trailing + nextWidth) <= width + wider + fit) {
+        modelBreak = true;
+        needed = true;
+      }
+    }
     if (!needed && Math.abs(engine - browser) > SAME_WIDTH) {
       // Does the browser keep this line whole?
       if (browser > width + fit) needed = true;
@@ -1479,17 +1914,24 @@ export function planDocsLineCorrections(
     if (!needed) continue;
     let spaces = 0;
     for (let at = lastTab + 1; at < end; at += 1) if (pieces[at].kind === "space") spaces += 1;
-    const narrow = squeeze > 0 ? squeeze + CORRECTION_SLACK : 0;
+    // The safe side covers the browser's rounding of every item up to a
+    // layout unit (CSS px; a page drawn smaller rounds coarser), less the
+    // room the line already leaves: R342-D30's kept "no" stood 0.02 px
+    // inside the measure over 16 spans and the browser sent it down.
+    // `roundingSlack: false`: 0.02 px, as before.
+    const rounding = docsLineItems(pieces, from, end, lastTab + 1) * LAYOUT_UNIT * Math.max(1, paragraph.unscale || 1);
+    const slack = roundingSlack ? Math.max(CORRECTION_SLACK, rounding - Math.max(0, width - engine)) : CORRECTION_SLACK;
+    const narrow = squeeze > 0 ? squeeze + slack : 0;
     // Word justifies the line a tab left: its spaces take up the room.
     const room = tabOpensNext ? Math.max(0, width - engine) : 0;
     const stretches = room > 0 && spaces > 0 && paragraph.align === "justify";
     out.push({
       from,
       to: end,
-      letterSpacing: (engine - browser - (narrow > 0 && spaces ? 0 : narrow + CORRECTION_SLACK)) / graphemes,
+      letterSpacing: (engine - browser - (narrow > 0 && spaces ? 0 : narrow + slack)) / graphemes,
       wordSpacing: narrow > 0 && spaces ? -narrow / spaces : stretches ? room / spaces : 0,
       spacesFrom: lastTab + 1,
-      tabBreak: tabOpensNext || spaceOpensNext ? to : null,
+      tabBreak: tabOpensNext || spaceOpensNext || modelBreak ? to : null,
     });
   }
   return out;

@@ -10,6 +10,9 @@
  */
 
 /** Cap on members one preserved diagram may draw (mirrors the zod schema). */
+import { readNativeDrawingGeometry } from "@mrnote/core/web/lib/native-drawing-geometry.ts";
+import { presentationCustomPathToSvgPath } from "@mrnote/core/web/lib/presentation-freeform.ts";
+
 export const MAX_NATIVE_SMARTART_MEMBERS = 400;
 
 /** Cap on one member's text, the same bound the patch model enforces. */
@@ -203,5 +206,56 @@ export function readSpreadsheetNativeSmartArt(
     points,
     dataXml: view.dataXml,
     textEditable: view.textEditable === true && points.length > 0,
+  };
+}
+
+const EMU_PER_PX = 9525;
+/** The arguments each SVG path command takes (`presentationCustomPathToSvgPath`). */
+const SVG_COMMAND_ARGUMENTS: Record<string, number> = { M: 2, L: 2, Q: 4, C: 6, A: 7, Z: 0 };
+
+/**
+ * The outline a member draws, as the drawing geometry the sheet renders
+ * (`PresentationNativeShapeGraphic`, `drawingml-paths-v1`). A member whose
+ * own `a:custGeom` the reader admitted -- a hierarchy diagram's elbow
+ * connectors (ink), a freeform -- carries the stored outline (`version: 1`
+ * commands on the 100,000 grid of its box), which the sheet drew as nothing
+ * (xlsx-rounds R439-X11: 24 connectors of two hierarchy diagrams missing).
+ * The commands are drawn in the member's own pixels, as the view geometry is,
+ * so the stroke's arrowheads keep their size; points past the box stay past it.
+ */
+export function spreadsheetNativeSmartArtMemberGeometry(
+  member: Pick<NativeSmartArtMember, "customPath" | "width" | "height">,
+): UnknownRecord | null {
+  const stored = member.customPath;
+  if (!stored) return null;
+  if (readNativeDrawingGeometry(stored)) return stored;
+  const d = presentationCustomPathToSvgPath(stored);
+  if (!d) return null;
+  // The view box is the member's box in pixels (never 0: a flat connector).
+  const width = Math.min(100_000, Math.max(0.01, member.width / EMU_PER_PX));
+  const height = Math.min(100_000, Math.max(0.01, member.height / EMU_PER_PX));
+  // `presentationCustomPathToSvgPath` writes the grid in hundredths of the box.
+  const sx = width / 100;
+  const sy = height / 100;
+  const tokens = d.match(/[MLQCAZ]|[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?/g) ?? [];
+  const out: string[] = [];
+  for (let index = 0; index < tokens.length; ) {
+    const command = tokens[index++];
+    const count = SVG_COMMAND_ARGUMENTS[command];
+    if (count === undefined || index + count > tokens.length) return null;
+    const values = tokens.slice(index, index + count).map(Number);
+    index += count;
+    const scaled = values.map((value, at) => {
+      // An arc: radii, rotation, the two flags, then its end point.
+      if (command === "A" && at >= 2 && at <= 4) return value;
+      const vertical = command === "A" ? at === 1 || at === 6 : at % 2 === 1;
+      return Math.round(value * (vertical ? sy : sx) * 10_000) / 10_000;
+    });
+    out.push([command, ...scaled].join(" "));
+  }
+  return {
+    schemaVersion: "drawingml-paths-v1",
+    paths: [{ d: out.join(" "), fill: "norm", stroke: true }],
+    viewBox: [width, height],
   };
 }

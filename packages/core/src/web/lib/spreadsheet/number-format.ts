@@ -2378,6 +2378,25 @@ function applyTextFormatPadded(text: string, format: string, pad: string): strin
 }
 
 /**
+ * Whether a format's text section ({@link applyTextFormat}'s) writes more than
+ * the text itself (`_(@_)`, `"No. "@`): Windows Excel then shows a text cell as
+ * that section writes it, one string in the cell's own font, its rich text
+ * runs gone (lookwin p166-lw, R361-X03 A131: under Accounting's `_(@_)` a bold
+ * cell's regular run prints bold; under General, regular). PURE.
+ */
+export function numberFormatRewritesText(format: unknown): boolean {
+  if (typeof format !== "string" || !format.includes("@")) return false;
+  const sections = splitSections(format.trim());
+  const textSection =
+    sections.length >= 4
+      ? sections[3]
+      : sections.length === 1 && isTextPlaceholderSection(sections[0])
+        ? sections[0]
+        : null;
+  return textSection !== null && textSection !== undefined && textSection.trim() !== "@";
+}
+
+/**
  * A format that is a text section alone (one section holding `@`) shapes text
  * only. MEASURED in Excel for Mac 16: 12 in a cell formatted `"文字:"@` or
  * `@"x"` reads 12, as General, while its text reads 文字:甲乙. TEXT() keeps

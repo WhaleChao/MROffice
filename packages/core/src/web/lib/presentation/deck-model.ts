@@ -15,6 +15,8 @@
  * used to export so existing import paths keep working.
  */
 
+import { normalizeFontReplacements, type FontReplacement } from "../presentation-replace-font";
+import { blockWithCommandStatedRuns } from "../presentation-command-stated-keys";
 import { randomUUID } from "../random-uuid";
 import { runSlideActionTarget } from "../presentation-runs";
 import {
@@ -391,6 +393,9 @@ export interface DeckSnapshot {
   headerFooter: DeckHeaderFooter | undefined;
   /** Set Up Slide Show's native choices, restored atomically. */
   slideShowSettings: PresentationSlideShowSettings | undefined;
+  /** Home > Replace > Replace Fonts' log (`lib/presentation-replace-font`):
+   * undefined while the deck has none (an older page stays byte-clean). */
+  fontReplacements?: FontReplacement[];
   /** Named custom-show registries and their exact playback order. */
   customSlideShows: PresentationCustomShows;
 }
@@ -644,7 +649,10 @@ export function normalizePresentationBlock(
   fallbackIndex: number,
   options: PresentationBlockReadOptions = {},
 ): PresentationBlock {
-  const rawRecord = asRecord(value) ?? {};
+  // A run a co-editor added while a whole-object command formatted its box
+  // takes the box's value for a key it leaves to its level
+  
+  const rawRecord = blockWithCommandStatedRuns(asRecord(value) ?? {});
   const hoistedRecord =
     rawRecord.type === "text" || rawRecord.type === undefined
       ? hoistImportedTextStyle(rawRecord)
@@ -1803,6 +1811,10 @@ export function buildContent(
   fontFaces?: readonly OfficeFontFace[],
   /** View > Grid Settings (`lib/presentation-grid`), the deck's own. */
   viewSettings?: PresentationViewSettings,
+  /** Home > Replace > Replace Fonts' log: stated once the deck has one, an
+   * empty list included (an Undo leaves the list, so a peer's entry appended
+   * meanwhile stays), absent on a deck that never had one. */
+  fontReplacements?: readonly FontReplacement[],
 ): Record<string, unknown> {
   // Normalize the deck theme at the serialize edge so only valid fields persist;
   // an empty / absent theme is omitted entirely so default decks stay byte-clean
@@ -1890,6 +1902,9 @@ export function buildContent(
       : {}),
     ...(normalizePresentationViewSettings(viewSettings)
       ? { viewSettings: normalizePresentationViewSettings(viewSettings) }
+      : {}),
+    ...(fontReplacements !== undefined
+      ? { fontReplacements: normalizeFontReplacements(fontReplacements) }
       : {}),
   });
 }

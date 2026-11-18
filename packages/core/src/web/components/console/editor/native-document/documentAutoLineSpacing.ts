@@ -22,13 +22,13 @@ import { normalizeOfficeFontFace, officeFontFaceFamily } from "../../../office-r
 import { normalizeEastAsianFontFamilies, wordDocumentEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
 import { documentFontScriptRanges } from "../extensions/TextStyling";
 import { documentFormatPreviewRanges } from "../extensions/InactiveSelectionHighlight";
-import { documentDisplayFontAliasFamilies, documentDisplayFontEastAsianAliasFamilies, documentDisplayFontPluginKey } from "./documentDisplayFonts";
+import { documentDisplayFontAliasFamilies, documentDisplayFontEastAsianAliasFamilies, documentDisplayFontPluginKey, documentMissingFontSubstitutes, missingFontStackFrom } from "./documentDisplayFonts";
 import {guardAutoLineIntermediates} from './documentAutoLineSafety';
-import { wordFileLineMetrics, wordFontFileIsRecorded, wordFontIsEastAsian, wordFontIsRecordedLatin, wordFontLineAscent, wordFontLineMetrics, wordFontShipsRegularOnly } from "./wordFontMetrics";
+import { wordDocumentOwnFontLineMetrics, wordDocumentOwnWindowsLineEm, wordFileLineMetrics, wordFontFileIsRecorded, wordFontIsEastAsian, wordFontIsRecordedLatin, wordFontLineAscent, wordFontShipsRegularOnly } from "./wordFontMetrics";
 import { wordEastAsianMissingGlyphFace, wordMarkerFallbackFace } from "./wordEastAsianCoverage";
 import { resolveFontScriptSlices } from "../../../office-ribbon/officeFontScriptSlots";
 import { readDocumentNumberingMarkerFact, type DocumentNumberingMarkerFact } from "./documentNumberingLayout";
-import { bulletStyleForGlyph, DEFAULT_BULLET_STYLE, LIST_MARKER_HOST_SELECTOR, normalizeBulletStyle } from "./bulletListStyle";
+import { bulletStyleForGlyph, DEFAULT_BULLET_STYLE, isNativeListMarkerHost, LIST_MARKER_HOST_SELECTOR, normalizeBulletStyle } from "./bulletListStyle";
 import { PAGE_BLOCK_NODE, PAGE_LEDGER_CONVERGED_EVENT, SPLIT_CONTINUES_ATTR } from "./paged/paginationProjectionKeys";
 import { REBALANCE_META } from "./paged/pageRebalanceExtension";
 import { DOCUMENT_FIELD_NODE_NAME } from "./documentFieldValues";
@@ -518,6 +518,12 @@ function paragraphFontSizePx(block: ProseMirrorNode): number | null {
  */
 const NOTE_REFERENCE_NODE = "footnoteRef";
 const NOTE_REFERENCE_VIEW = "sup.mrnote-footnote-ref";
+/** `window.__docsNativeMarkerStrutOff = true` (A/B): an imported list's own
+ * marker keeps its zero line height over the marker strut, the older
+ * drawing (the engine still counts the strut). */
+function nativeMarkerStrutOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsNativeMarkerStrutOff?: boolean }).__docsNativeMarkerStrutOff === true;
+}
 function noteRefLineOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsNoteRefLineOff?: boolean}).__docsNoteRefLineOff === true;
 }
@@ -726,6 +732,44 @@ function listMarkerFact(doc: ProseMirrorNode, position: number, block: ProseMirr
 /** A strut belongs to a paragraph whose own line box is neutralized. */
 /** Documents an edit of plain text made: their measurement waits for the hand. */
 const typedDocuments = new WeakSet<ProseMirrorNode>();
+
+/** From this many decorations taken out together the set is built again
+ * rather than searched (removeDecorations). */
+const REBUILD_REMOVALS = 512;
+
+/**
+ * `set` without `removed` (each decoration equal to one of them), as
+ * `set.remove(removed)`. DecorationSet.remove compares every decoration taken
+ * out with every one its block holds: a code listing of 3,500 runs and 530
+ * line breaks holds some 4,000, and a sheet of it laid out again took out a
+ * thousand -- millions of comparisons a pass (R461-D71: 27 s of a print's
+ * layout). Many taken out together, the set is built again from what stays.
+ * `window.__docsAutoLineRebuildOff`: removed one by one, as before.
+ */
+export function removeDecorations(set: DecorationSet, doc: ProseMirrorNode, removed: readonly Decoration[]): DecorationSet {
+  if (!removed.length) return set;
+  const off = typeof window !== "undefined" && (window as Window & { __docsAutoLineRebuildOff?: boolean }).__docsAutoLineRebuildOff === true;
+  if (off || removed.length < REBUILD_REMOVALS) return set.remove(removed.slice());
+  const gone = new Map<string, Decoration[]>();
+  for (const item of removed) {
+    const key = `${item.from}:${item.to}`;
+    const list = gone.get(key);
+    if (list) list.push(item);
+    else gone.set(key, [item]);
+  }
+  let taken = false;
+  const kept = set.find().filter((item) => {
+    const same = gone.get(`${item.from}:${item.to}`);
+    // Decoration.eq (from, to and type equal) is what remove() matches by; it
+    // is not in the declared type.
+    if (same && same.some((other) => (other as Decoration & { eq(other: Decoration): boolean }).eq(item))) {
+      taken = true;
+      return false;
+    }
+    return true;
+  });
+  return taken ? DecorationSet.create(doc, kept) : set;
+}
 
 function withoutOrphanStruts(set: DecorationSet, within?: readonly (readonly [number, number])[]): DecorationSet {
   const isStrut = (spec: {autoLineMarkerStrut?: unknown}) => spec.autoLineMarkerStrut !== undefined;
@@ -1381,7 +1425,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
         ? wordFileLineMetrics(family)
         : stack !== undefined || (face === "normal 400" &&
           (!registeredFamily(doc, family) || wordFontFileIsRecorded(family)))
-          ? wordFontLineMetrics(family) : null;
+          ? wordDocumentOwnFontLineMetrics(family) : null;
       // Word derives the advance from the face's design metrics, in fractional
       // points. Both browser probes quantize a face's ascent/descent to whole
       // pixels at the size they are asked for, so read them once at a large
@@ -1393,11 +1437,18 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       // face advances by that box PLUS lineGap, which is the CSS `normal` box.
       // With the text engine on (flag `docs`), the face's box comes from
       // the served file itself: the same in every browser, unquantized.
-      const fromFile = recorded ? null : engineLineRatios(font);
+      // Windows Word's line where its file of this style differs from the
+      // Mac one the stand-in's overrides state (word-windows-lines.ts): Book
+      // Antiqua 10 pt 12.43 pt a line, its served box 12.06 (R421-D02).
+      const windowsLine = recorded || eastAsianFace ? undefined
+        : wordDocumentOwnWindowsLineEm(family, Number.parseInt(css.fontWeight || "400", 10) || 400, /italic|oblique/.test(css.fontStyle || ""));
+      const fromFile = recorded || windowsLine !== undefined ? null : engineLineRatios(font);
       const boundingBox = eastAsianFace && !recorded && !fromFile
         ? measureOfficeFontBoundingBox(doc, font)
         : undefined;
-      if (recorded) {
+      if (windowsLine !== undefined) {
+        ratio = windowsLine;
+      } else if (recorded) {
         ratio = eastAsianFace
           ? recorded.box * wordDocumentEastAsianSingleLineFactor(family)
           : recorded.box + recorded.lineGap;
@@ -1616,13 +1667,18 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     const lineHeight = ascent + descent - 1 / 64;
     // The empty box inherits the paragraph's face. A paragraph that paints a
     // gallery marker on its first line hangs the box on that marker instead
-    // (note-editor.css), which is laid out in the marker's own face.
+    // (note-editor.css), which is laid out in the marker's own face; so does
+    // an imported list's own marker (docs-native-list-indent), whose zero
+    // line height used to win over the strut: a Symbol bullet over 12pt Times
+    // stood at Times' 13.8pt where Word sets 14.65pt (corpus R371-D01).
+    const native = isNativeListMarkerHost(blockDOM);
     const probe = engineLineBox(elementFont(blockDOM,
-      blockDOM.matches(LIST_MARKER_HOST_SELECTOR) ? "::before" : undefined).shorthand, lineHeight);
+      native || blockDOM.matches(LIST_MARKER_HOST_SELECTOR) ? "::before" : undefined).shorthand, lineHeight);
     if (!probe || probe.heightPx - ascent > descent) return null;
     const shift = ascent - probe.baselinePx;
     return Decoration.node(position, position + block.nodeSize, {
       "data-document-list-marker-strut": "true",
+      ...(native && nativeMarkerStrutOff() ? {"data-document-list-marker-strut-native-off": "true"} : {}),
       style: `--document-list-marker-strut-height:${lineHeight}px;--document-list-marker-strut-shift:${shift}px`,
     }, {autoLineMarkerStrut: `${lineHeight}:${shift}`});
   };
@@ -1693,6 +1749,18 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     const single = engineLineBox(elementFont(tallest.element).shorthand, tallest.pixels / multiplier);
     return single ? single.baselinePx - tallest.box.baselinePx : null;
   };
+  // The paragraph mark's face as the page draws it: a family Windows Word
+  // lacks is Word's pick for it (documentDisplayFonts), as the mark's runs
+  // are. Named alone, the browser measured its own fallback for it (corpus
+  // R379-D02: an empty paragraph marked "INSIGHTSPerpetua", which Word sets
+  // in Cambria, 14.0 pt; 16.8 pt here). `window.__docsMarkLackedFaceOff =
+  // true`: the bare name, as before (A/B).
+  const missingSubstitutes = documentMissingFontSubstitutes(view.state) ?? {};
+  const markStack = (family: string | null): string | undefined => {
+    if (!family) return undefined;
+    if (typeof window !== "undefined" && (window as Window & { __docsMarkLackedFaceOff?: boolean }).__docsMarkLackedFaceOff === true) return `"${family}"`;
+    return missingFontStackFrom(missingSubstitutes, family) ?? `"${family}"`;
+  };
   blocks?.beginPass();
   const measured = new Set<ProseMirrorNode>();
   const visit = (block: ProseMirrorNode, position: number): boolean | void => {
@@ -1717,7 +1785,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       if (size === null) return null;
       const own = Number.parseFloat(fontsOf(element).fontSize);
       const family = paragraphMarkFamily(block);
-      const pixels = height(element, multiplier, family ? `"${family}"` : undefined);
+      const pixels = height(element, multiplier, markStack(family));
       return pixels === null || !(own > 0) ? null : Math.max(pixels * size / own, floorPx);
     };
     const blockDOM = view.nodeDOM(position);
@@ -1789,7 +1857,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     // R52-D20: 52 rows of Arial-marked blank cells under a Calibri style,
     // 13.2 pt a row in Word and 14 pt here, the last two rows on a page 2).
     const markFamily = block.content.size === 0 ? paragraphMarkFamily(block) : null;
-    const base = lineHeightOf(blockDOM, markFamily ? `"${markFamily}"` : undefined);
+    const base = lineHeightOf(blockDOM, markStack(markFamily));
     const baseDecoration = decorations.length;
     if (base !== null) {
       decorations.push(Decoration.node(position, position + block.nodeSize, attrs(base), {autoLinePixels: base}));
@@ -2105,7 +2173,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     const doc = view.state.doc;
     let set: DecorationSet | null = null;
     return finishedRun({
-      get set() { return (set ??= published.remove(removed.slice()).add(doc, decorations.slice())); },
+      get set() { return (set ??= removeDecorations(published, doc, removed).add(doc, decorations.slice())); },
       patch: {removed, added: decorations},
       scoped,
     });

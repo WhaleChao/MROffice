@@ -19,7 +19,11 @@
  * itself stays the document's (`documentHyphenation`) and is exported as is.
  *
  * Not modelled (CSS has no equivalent in Chromium): the hyphenation zone, the
- * limit on consecutive hyphenated lines and "do not hyphenate capitals".
+ * limit on consecutive hyphenated lines and "do not hyphenate capitals"
+ * (documentHyphenationRules withholds what it can). Where the line engine
+ * lays a paragraph out and has patterns for its words' language
+ * (lib/text-engine/docs-hyphenation), it hyphenates by Word's rules itself
+ * and turns these hyphens off (documentEngineLineBreaks).
  */
 
 import { Extension } from "@tiptap/core";

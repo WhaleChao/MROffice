@@ -171,6 +171,8 @@ export interface SmartArtNativeConvertRequest extends SmartArtLayoutDefinitionFi
   customizations?: unknown;
   /** The graphic's own 3-D Rotation (`nativeSmartArtView.graphicScene3d`), checked by the engine. */
   graphicScene3d?: unknown;
+  /** The diagram's own pictures (`nativeSmartArtView.docPictures`, readings row 1005), checked by the engine. */
+  docPictures?: unknown;
 }
 
 export interface SmartArtSheetRebuildRequest extends SmartArtLayoutDefinitionFields {

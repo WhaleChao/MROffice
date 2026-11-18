@@ -11,6 +11,7 @@ import { clearGridCanvasTextMeasures, dropGridCanvasTextMeasuresTouched, gridCan
 import { fontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
 import { dropGridCanvasRunsTouched } from "./gridCanvasCellText";
 import { conditionalIconImage } from "./conditionalIconImages";
+import { DATA_BAR_BOX, dataBarFadedColor } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
 
 /** The canvas texts of the cells on screen, by `row:col`, with a signature of each (equal signature, equal paint). */
 export class SpreadsheetGridCanvasTexts {
@@ -64,8 +65,8 @@ export type GridCanvasCellPaint = {
   tint?: true;
   /**
    * A conditional data bar (spreadsheet-window__data-bar): its start and
-   * width as shares of the cell's padding box, 4 px in from its top and
-   * bottom; a gradient to white, a 1 px border and the dashed axis as drawn.
+   * width as shares of Excel's box in the cell's padding box (DATA_BAR_BOX);
+   * a gradient to its faded colour, a 1 px border and the dashed axis as drawn.
    */
   bar?: { start: number; width: number; color: string; gradient?: "left" | "right"; border?: string; axis?: { at: number; color: string } };
   /** Background error checking's triangle (SpreadsheetErrorIndicatorMark), in the padding box's top corner on the side the sheet starts at. */
@@ -444,13 +445,15 @@ export function paintCanvasCells(
     const bar = paints?.get(cell.key)?.paint.bar;
     if (!bar) continue;
     const { box } = cell;
-    const x = box.left + bar.start * box.width, width = bar.width * box.width;
-    const y = box.top + 4, height = Math.max(0, box.height - 8);
+    // Excel's box (DATA_BAR_BOX): the bar's place and length are shares of it.
+    const span = Math.max(0, box.width - 2 * DATA_BAR_BOX.side);
+    const x = box.left + DATA_BAR_BOX.side + bar.start * span, width = bar.width * span;
+    const y = box.top + DATA_BAR_BOX.top, height = Math.max(0, box.height - DATA_BAR_BOX.top - DATA_BAR_BOX.bottom);
     if (width > 0 && height > 0) {
       if (bar.gradient) {
         const gradient = ctx.createLinearGradient(bar.gradient === "right" ? x : x + width, 0, bar.gradient === "right" ? x + width : x, 0);
         gradient.addColorStop(0, bar.color);
-        gradient.addColorStop(1, "#ffffff");
+        gradient.addColorStop(1, dataBarFadedColor(bar.color));
         ctx.fillStyle = gradient;
       } else ctx.fillStyle = bar.color;
       ctx.fillRect(x, y, width, height);
@@ -462,7 +465,7 @@ export function paintCanvasCells(
       }
     }
     if (bar.axis) {
-      const axisX = crisp(box.left + bar.axis.at * box.width, 1, at.x);
+      const axisX = crisp(box.left + DATA_BAR_BOX.side + bar.axis.at * span, 1, at.x);
       ctx.strokeStyle = bar.axis.color;
       ctx.lineWidth = deviceWidth(1);
       ctx.setLineDash([3, 3]);

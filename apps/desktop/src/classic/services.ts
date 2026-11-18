@@ -20,7 +20,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { app } from "electron";
-import { libreOfficeBinary } from "./libreoffice";
+import { ensureLibreOfficeFonts, libreOfficeBinary } from "./libreoffice";
 
 import { printerEnabled } from "./printer";
 import { checkerSha256, vibeCheckerEnabled } from "./vibe-checker";
@@ -292,6 +292,7 @@ export function apiEnv(
   // The app's own LibreOffice (libreoffice.ts): where its soffice is once
   // downloaded. The API looks there at every conversion, so a copy enabled
   // or removed while it runs is used or dropped without a restart.
+  ensureLibreOfficeFonts();
   env.MRAI_DESKTOP_LIBREOFFICE = libreOfficeBinary();
   // Automated checks of an unpacked build: "nothing installed on this
   // computer" on one that has a LibreOffice (apps/api app/desktop/libreoffice.py).

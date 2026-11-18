@@ -15,6 +15,7 @@ import { renderLazyMathNow } from "@mrnote/core/web/components/console/editor/ex
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { type Transaction } from "@tiptap/pm/state";
 import { documentLifecycleLayoutSettled } from "../documentLifecycleObservation";
+import { DOCUMENT_ENGINE_FACES_WAITING } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
 import { createBackgroundLane } from "@mrnote/core/web/lib/background-work.ts";
 import { createDocumentLayoutKeep, OUTLINE_INCOMPLETE, readDocumentLayoutOutline, readDocumentLayoutSnapshot } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
 import { mutationInsideOverlayBlock, overlayOnlyDocChange } from "@mrnote/core/web/components/console/editor/native-document/paged/overlayOnlyChange.ts";
@@ -83,6 +84,17 @@ export function readinessSlicesOn(win: Window | null | undefined): boolean {
 /** How many times a print reads its sheets past their foot again. */
 const PRINT_OVERRUN_READS = 2;
 
+/** How long a print waits for the face files the text engine still waits
+ * for (DOCUMENT_ENGINE_FACES_WAITING), from the first look that saw it: one
+ * that never comes is printed on the browser's lines after this. */
+const PRINT_ENGINE_FACES_WAIT_MS = 15_000;
+
+/** `window.__docsPrintEngineFacesWaitOff = true`: a print takes the pages
+ * while the engine still waits for faces, as before (A/B of one build). */
+function printEngineFacesWaitOff(win: Window): boolean {
+  return (win as Window & { __docsPrintEngineFacesWaitOff?: boolean }).__docsPrintEngineFacesWaitOff === true;
+}
+
 export function useDocumentSurfaceReadiness({
   editor,
   editorHydrated,
@@ -123,6 +135,7 @@ export function useDocumentSurfaceReadiness({
     // backed-off re-check (1 s, doubling to 8 s) looks again until it is.
     const longestRecheck = forPrint ? 500 : 8_000;
     let printOverrunReads = 0;
+    let printFacesWaitSince: number | null = null;
     let recheck: number | null = null, recheckDelay = forPrint ? 250 : 1_000;
     const recheckLater = () => {
       if (!active || recheck !== null) return;
@@ -218,6 +231,21 @@ export function useDocumentSurfaceReadiness({
         publish(false, null);
         recheckLater();
         return;
+      }
+      // A print waits for the paragraphs the text engine read before a face
+      // file it needs came (past the ledger's hold they stand on the browser's
+      // lines): R454-D91's server PDF came out three ways in three prints of
+      // one build, its paragraphs on the engine's lines or the browser's,
+      // whichever it was when the copy was taken.
+      if (forPrint && !printEngineFacesWaitOff(ownerWindow) && dom.hasAttribute(DOCUMENT_ENGINE_FACES_WAITING)) {
+        printFacesWaitSince ??= ownerWindow.performance.now();
+        if (ownerWindow.performance.now() - printFacesWaitSince < PRINT_ENGINE_FACES_WAIT_MS) {
+          stable = 0;
+          fingerprint = "";
+          publish(false, null);
+          recheckLater();
+          return;
+        }
       }
       let ready = false, count: number | null = null;
       try {
@@ -333,7 +361,8 @@ export function useDocumentSurfaceReadiness({
     mutations.observe(dom, { childList: true, characterData: true, subtree: true, attributes: true,
       attributeFilter: ["style", "data-pagination-initial-settling", "data-pagination-stalled",
         "data-docs-page-bands-pending", "data-docs-word-cjk-spacing-pending", "data-docs-auto-line-spacing-pending",
-        "data-docs-display-fonts-pending", "data-docs-display-fonts-settling", "data-math-pending"] });
+        "data-docs-display-fonts-pending", "data-docs-display-fonts-settling", "data-math-pending",
+        DOCUMENT_ENGINE_FACES_WAITING] });
     mutations.observe(ownerDocument.documentElement, { attributes: true,
       attributeFilter: ["data-font-assets-loading", "data-font-assets-error"] });
     const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { forgetLayout(); restart(); });

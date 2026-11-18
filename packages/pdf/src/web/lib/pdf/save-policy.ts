@@ -17,7 +17,10 @@ import {
   PDFStream,
 } from "pdf-lib";
 
-import { signatureMutationImpact } from "./signature-detect";
+import {
+  opaqueObjectDictionary,
+  signatureMutationImpact,
+} from "./signature-detect";
 import { loadPdfForInspection } from "./encrypted-guard";
 import { readPdfNativeReceiptReplayPolicy, type PdfNativeReceiptReplayPolicy } from "./native-receipt-journal";
 import { PDF_EDITABLE_MAX_BYTES } from "@mrnote/core/web/lib/document-size-limits.ts";
@@ -3190,7 +3193,13 @@ function hasEmbeddedFileRisk(doc: PDFDocument): boolean {
     if (seenObjects.has(current)) continue;
     seenObjects.add(current);
     if (current instanceof PDFInvalidObject) {
-      throw new Error("Opaque PDF object during attachment inspection");
+      // Read as the signature inspection reads it: an object with no bytes
+      // holds no file, an undecoded cross-reference stream is its dictionary
+      // (walked below like any other) over table rows. Any other opaque
+      // object throws there: it may be the file specification itself.
+      const unread = opaqueObjectDictionary(doc, current);
+      if (unread) stack.push(unread);
+      continue;
     }
     if (current instanceof PDFStream) {
       if (

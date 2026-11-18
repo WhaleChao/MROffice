@@ -42,6 +42,11 @@ import {
   ticketedWebsocketProviderFactory,
   type CollabNetworkState,
 } from "./ws-provider";
+import { installYJsonWriteGuard } from "./y-json-values";
+
+// Every session's document takes JSON only: an `undefined` the API would read
+// as null never reaches the room (y-json-values.ts).
+installYJsonWriteGuard();
 
 /** Minimal shape a network provider must satisfy for the editor + presence UI. */
 export interface CollabNetworkProvider {

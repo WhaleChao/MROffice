@@ -1055,6 +1055,49 @@ export function ungroup<T extends GroupableBlock>(
   });
 }
 
+
+
+
+
+
+
+
+
+
+
+export function ungroupSoleMembers<T extends GroupableBlock>(
+  blocks: ReadonlyArray<T>,
+  touched: ReadonlySet<string>,
+): T[] {
+  let out = blocks as T[];
+  for (const group of touched) {
+    const chains = out.map((block) => {
+      const outer = normalizeGroupId(block.groupId);
+      return outer ? [outer, ...blockGroupPath(block)] : [];
+    });
+    const objects = new Set<string>();
+    const members: number[] = [];
+    chains.forEach((chain, index) => {
+      const at = chain.indexOf(group);
+      if (at < 0) return;
+      members.push(index);
+      objects.add(at + 1 < chain.length ? `group:${chain[at + 1]}` : `block:${out[index].id}`);
+    });
+    if (members.length === 0 || objects.size !== 1) continue;
+    out = out.map((block, index) => {
+      if (!members.includes(index)) return block;
+      const chain = chains[index].filter((id) => id !== group);
+      const next = withGroup(block, chain[0], chain.slice(1)) as Record<string, unknown>;
+      if (chains[index][0] === group) {
+        delete next.groupAlt;
+        delete next.groupDecorative;
+      }
+      return next as T;
+    });
+  }
+  return out;
+}
+
 /**
  * The set of distinct (normalized) group ids present across `blocks`, in first-
  * seen order. Useful for diagnostics / "select all groups" affordances and for

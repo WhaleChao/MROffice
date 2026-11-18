@@ -122,6 +122,13 @@ export interface ConvertNativeSmartArtInput {
   colorsId?: string | null;
   colorTheme?: Partial<SmartArtColorTheme> | null;
   /**
+   * The diagram's OWN pictures, by the layout node keyed to its document
+   * point (`docPictures`, readings row 1005: Radial List's centre `visible`),
+   * each resolved against `images` like an item's. Given, every one must land
+   * on its slot with its picture, or the diagram is not converted.
+   */
+  docPictures?: import("./doc-pictures").NativeSmartArtDocPictures | null;
+  /**
    * The author's hand changes on the diagram's shapes, as the projection read
    * them off the data part (`nativeSmartArtView.customizations`): `shapes`
    * keyed `presName|<Office point id>` (`doc`, `<id>:sib`, `<id>:par`),
@@ -239,6 +246,15 @@ export interface NativeSmartArtIdentityOverride {
 
 export const NATIVE_SMARTART_FRAME_BOUND_EMU = 100_000_000;
 const EMU_LIMIT = NATIVE_SMARTART_FRAME_BOUND_EMU;
+
+
+
+
+
+
+
+
+export const SMARTART_ITEM_PICTURE_FILLED_LAYOUTS: ReadonlySet<string> = new Set(["radial-list"]);
 
 /**
  * May this outline become a CATALOG diagram of this layout, picture-wise?

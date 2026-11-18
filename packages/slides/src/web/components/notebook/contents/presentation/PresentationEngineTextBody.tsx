@@ -34,6 +34,7 @@ import {
   type OfficeTextRunInput,
 } from "@mrnote/core/web/lib/text-engine/office-text-body.ts";
 import { pageOfficeTextMeasurer } from "@mrnote/core/web/lib/text-engine/office-text-measurer.ts";
+import { powerPointLineLanguage } from "@mrnote/core/web/lib/text-engine/powerpoint-east-asian.ts";
 import { OFFICE_TEXT_HIT_ATTRIBUTE, registerOfficeTextHitMap } from "@mrnote/core/web/lib/text-engine/office-text-hit.ts";
 import { OFFICE_TEXT_MARKER_ATTRIBUTE } from "@mrnote/core/web/lib/presentation/math-atom.ts";
 import { onTextEngineChange, textEngineEpoch } from "@mrnote/core/web/lib/text-engine/measure.ts";
@@ -194,6 +195,8 @@ export function presentationEngineBodyInput(args: {
   defaultTabPx?: unknown;
   /** `source.nativeKerning`: the size (pt) from which PowerPoint kerns each row's pairs. */
   kerning?: unknown;
+  /** `source.nativeEastAsianLines` (readings row 1001): PowerPoint's own East Asian line rules. */
+  eastAsianLines?: unknown;
   now?: Date;
 }): EngineBodyInput | { unsupported: string } {
   const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale } = args;
@@ -205,6 +208,17 @@ export function presentationEngineBodyInput(args: {
     const kerningOf = (index: number): number | null => {
       const value = Array.isArray(args.kerning) ? args.kerning[index] : args.kerning;
       return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+    };
+    // A body imported under readings row 1001: each run breaks by its own
+    // language (its `lang` / `altLang`, else what its row inherits) and the
+    // row hangs punctuation unless it resolves `hangingPunct` 0.
+    const eastAsianLines =
+      args.eastAsianLines && typeof args.eastAsianLines === "object" && !Array.isArray(args.eastAsianLines)
+        ? (args.eastAsianLines as Record<string, unknown>)
+        : null;
+    const eastAsianRow = (key: string, index: number): unknown => {
+      const value = eastAsianLines?.[key];
+      return Array.isArray(value) ? value[index] : value;
     };
     // A row with no words of its own (an empty paragraph, a marker's face
     // nobody states) takes the face the body's words are in, as its end
@@ -258,6 +272,14 @@ export function presentationEngineBodyInput(args: {
           font,
           ...(spacingPx ? { letterSpacingPt: hundredthPt(spacingPx) } : {}),
           ...(cascade(css, rowStyle, bodyStyle, "textTransform") === "uppercase" ? { allCaps: true } : {}),
+          ...(eastAsianLines
+            ? {
+                lineLanguage: powerPointLineLanguage(
+                  run.style?.proofingLanguage ?? eastAsianRow("lang", row.index),
+                  run.style?.alternateLanguage ?? eastAsianRow("altLang", row.index),
+                ),
+              }
+            : {}),
         };
       });
       rowRuns.push(displayed);
@@ -311,6 +333,9 @@ export function presentationEngineBodyInput(args: {
       paragraphs.push({
         runs,
         endFont,
+        // The mark's Latin face as the file states it (readings row 899).
+        ...(row.endLatinFace ? { markLatinFace: row.endLatinFace } : {}),
+        ...(row.endsInLineBreak ? { endsInLineBreak: true as const } : {}),
         align,
         marginLeftPt: start * PT_PER_PX,
         marginRightPt: end * PT_PER_PX,
@@ -323,6 +348,15 @@ export function presentationEngineBodyInput(args: {
         defaultTabPt:
           typeof args.defaultTabPx === "number" && args.defaultTabPx > 0 ? args.defaultTabPx * PT_PER_PX : 72,
         kinsoku: "zh-CN",
+        ...(eastAsianLines
+          ? {
+              powerPointEastAsian: {
+                hangingPunct: eastAsianRow("hangingPunct", row.index) !== false,
+                ...(eastAsianRow("latinLnBrk", row.index) === true ? { latinLineBreak: true } : {}),
+                ...(eastAsianRow("eaLnBrk", row.index) === false ? { eastAsianRules: false } : {}),
+              },
+            }
+          : {}),
         ...(row.fontAlign ? { fontAlign: row.fontAlign } : {}),
       });
     }
@@ -374,6 +408,8 @@ export function usePresentationEngineBody(args: {
   tabStops: unknown;
   defaultTabPx?: unknown;
   kerning?: unknown;
+  /** `source.nativeEastAsianLines` (readings row 1001). */
+  eastAsianLines?: unknown;
   widthPx: number | null;
   wrap: boolean;
   /** Lay out whatever the surface: the lines a body being typed in should end at. */
@@ -385,19 +421,19 @@ export function usePresentationEngineBody(args: {
   const slideNumber = useContext(PresentationSlideNumberContext);
   const active = args.enabled && surface && args.rows !== null && args.widthPx !== null && textEngineOn("slides");
   const epoch = useTextEngineEpoch(active);
-  const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, widthPx, wrap } = args;
+  const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, eastAsianLines, widthPx, wrap } = args;
   const naturalLines = args.naturalLines === true;
   return useMemo((): PresentationEngineBodyAnswer => {
     void epoch;
     if (!surface) return { status: "off" };
     if (!active || !rows || widthPx === null) return noteEngine("off", !args.enabled ? "not a candidate" : !rows ? "no rows" : widthPx === null ? "no width" : "switched off");
-    const input = presentationEngineBodyInput({ rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning });
+    const input = presentationEngineBodyInput({ rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines });
     if ("unsupported" in input) return noteEngine("off", input.unsupported);
     const layout = layoutOfficeTextBody({ widthPt: widthPx * PT_PER_PX, wrap, paragraphs: input.paragraphs, naturalLines }, pageOfficeTextMeasurer);
     if (layout.status === "pending") return noteEngine("pending", "pending");
     if (layout.status === "unsupported") return noteEngine("off", layout.reason);
     return noteEngine("ok", "laid", { status: "ok", layout, input });
-  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, widthPx, wrap, naturalLines]);
+  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, widthPx, wrap, naturalLines]);
 }
 
 /**
@@ -880,6 +916,7 @@ export function PresentationEngineOrFallback({
   tabStops,
   defaultTabPx,
   kerning,
+  eastAsianLines,
   widthPx,
   wrap,
   colorOverride,
@@ -893,6 +930,8 @@ export function PresentationEngineOrFallback({
   tabStops?: unknown;
   defaultTabPx?: unknown;
   kerning?: unknown;
+  /** `source.nativeEastAsianLines` (readings row 1001). */
+  eastAsianLines?: unknown;
   widthPx: number | null;
   wrap: boolean;
   colorOverride?: string;
@@ -911,6 +950,7 @@ export function PresentationEngineOrFallback({
     tabStops,
     defaultTabPx,
     kerning,
+    eastAsianLines,
     widthPx,
     wrap,
     naturalLines,

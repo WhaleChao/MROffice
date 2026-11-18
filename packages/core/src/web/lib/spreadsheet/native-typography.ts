@@ -208,10 +208,22 @@ export function pixelsToNativeWidth(pixels: number, digitWidth: number, dpi: num
   const device = Math.max(1, Math.round(pixels * dpi / 96));
   return Math.max(0, Math.min(255, Math.ceil((device * 256 / digitWidth) - Math.floor(128 / digitWidth)) / 256));
 }
-export function nativeDefaultWidth(grid: NativeGrid, digitWidth: number, dpi: number) {
-  return grid.defaultWidth === undefined
-    ? columnBaseWidthToPixels(grid.baseColumnWidth, digitWidth, dpi) * 96 / dpi
-    : nativeWidthToPixels(grid.defaultWidth, digitWidth, dpi);
+export function nativeDefaultWidth(grid: NativeGrid, digitWidth: number, dpi: number, sourceDigitWidth?: number) {
+  if (grid.defaultWidth !== undefined) return nativeWidthToPixels(grid.defaultWidth, digitWidth, dpi);
+  // A `<col>` over every column, which no sheetFormatPr states, is the
+  // sheet's default (the reader's page_projection.materialize_columns): its
+  // pixels are not the base width's in the file's own digit. Every column it
+  // covers keeps its width, as Excel draws and prints them (lookwin R211-X05:
+  // `<col min="1" max="16384" width="8.7265625">`, 61 px, drawn 64 past the
+  // used range and the text box over them 24 pt wider than Excel's).
+  if (
+    sourceDigitWidth !== undefined &&
+    sourceDigitWidth > 0 &&
+    columnBaseWidthToPixels(grid.baseColumnWidth, sourceDigitWidth, dpi) * 96 / dpi !== grid.defaultPixels
+  ) {
+    return nativeWidthToPixels(pixelsToNativeWidth(grid.defaultPixels, sourceDigitWidth, dpi), digitWidth, dpi);
+  }
+  return columnBaseWidthToPixels(grid.baseColumnWidth, digitWidth, dpi) * 96 / dpi;
 }
 export function nativeColumnCssClamp(value: unknown, fallback: number): number {
   return finite(value, 0, 4096) ? Math.max(1, value) : fallback;
@@ -410,6 +422,42 @@ function buildSpreadsheetFontStack(family: string | undefined): string {
   return servedStack(`${face ? `"${face}", ${complex}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
 }
 
+/** The system faces a stack's Han and kana fall to when its own faces lack them. */
+const HAN_FALLBACK_FACES = new Set(["simsun", "songti sc", "microsoft yahei", "malgun gothic", "pingfang sc"]);
+
+/**
+ * The stack a sheet SHAPE's words in `family` are drawn in. A Latin face
+ * whose run leaves its East Asian face to the theme (`a:ea typeface=""`) has
+ * its Han and kana drawn in the theme's face for the run's language, which in
+ * a workbook whose Normal font is East Asian is that font (Windows Excel
+ * prints R361-X03's Calibri text boxes' 「６９２，９６８百万円」 in
+ * ＭＳ Ｐゴシック, proportional, not a full-em fallback; the API's print route
+ * `_sheet_drawing_face_resolver`). `eastAsianFace` is that Normal font (none
+ * for a Latin Normal font): its faces stand behind the Latin face's own and
+ * ahead of the system's Han fallback, so the Latin letters keep their face.
+ */
+export function spreadsheetShapeFontStack(family: string | undefined, eastAsianFace?: string | null): string {
+  const stack = spreadsheetFontStack(family);
+  const named = family?.split(",")[0]?.replace(/["']/g, "").trim();
+  if (!eastAsianFace || !named || named === eastAsianFace) return stack;
+  const parts = stack.split(",").map((part) => part.trim()).filter(Boolean);
+  const bare = (part: string) => part.replace(/^["']|["']$/g, "").toLowerCase();
+  const at = parts.findIndex((part, index) => index > 0 && HAN_FALLBACK_FACES.has(bare(part)));
+  if (at < 0) return stack;
+  const head = new Set(parts.slice(0, at).map(bare));
+  const eastAsian: string[] = [];
+  for (const part of spreadsheetFontStack(eastAsianFace).split(",").map((piece) => piece.trim())) {
+    const name = bare(part);
+    // The East Asian face's own faces, up to the shared fallback tail.
+    if (!name || HAN_FALLBACK_FACES.has(name) || GENERIC_FAMILIES.has(name)) break;
+    if (head.has(name) || name.startsWith(OFFICE_COMPLEX_SCALE_PREFIX.toLowerCase()) || name === "calibri") continue;
+    eastAsian.push(part);
+    head.add(name);
+  }
+  if (!eastAsian.length) return stack;
+  return [...parts.slice(0, at), ...eastAsian, ...parts.slice(at)].join(", ");
+}
+
 /**
  * With the text engine on, a cell's stack ends in faces the page serves
  * rather than in whatever the visitor's system has: every Office family in
@@ -599,8 +647,9 @@ export function officePrintedIndentStepPx(family: string | undefined, sizePt: nu
  * px per em, its digit 47 dots, office-print-metrics; lookwin p100c / p102g:
  * a long note runs 0.5% past its design width), not at the screen's whole
  * pixels (Calibri 11's digit 7 px: 5.25 pt where the paper shows 5.64). Lines
- * still break where the screen breaks them ("measure"); only the painted
- * advances follow the printer. The API's sheet PDF writer is the same
+ * break where the screen breaks them ("measure"), but a printed wrapped
+ * paragraph, which the printer re-wraps at these advances (the engine's
+ * layout under NATIVE_PRINTED_ROOM_MARK, R219-X03). The API's sheet PDF writer is the same
  * (notebooks.py FaceMeasure.printed).
  */
 let printerTextDpi = 0;
@@ -722,9 +771,12 @@ function measureNativeTextAdvances(context: CanvasRenderingContext2D, text: stri
       return { text: segment, spacing: 0 };
     }
     const idealWidth = ideals[index] * pixels / 1000;
-    // At the printer: whole pixels per em, whole dots an advance.
+    // At the printer: whole pixels per em at the page's scale, whole dots an
+    // advance (lookwin R223-X13: Arial Narrow 8 at 90 % rounds at 60 px per
+    // em, as Windows Excel and the API print it, 169.2 pt a note line where
+    // 67 px per em scaled to 90 % made 170.5).
     const desired = printer > 0
-      ? Math.round(ideals[index] / 1000 * Math.round(pixels * printer / 96)) * 96 / printer * safeScale
+      ? Math.round(ideals[index] / 1000 * Math.round(pixels * safeScale * printer / 96)) * 96 / printer
       : printer < 0
         ? idealWidth * safeScale
         : Math.round(idealWidth * dpi / 96) * 96 / dpi * safeScale;

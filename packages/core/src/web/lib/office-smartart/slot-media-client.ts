@@ -25,7 +25,8 @@
 import { apiGet } from "../api";
 
 import { officeSmartArtLayout } from "./catalog";
-import { smartArtPictureLayoutConvertible } from "./native-convert-model";
+import type { NativeSmartArtDocPictures } from "./doc-pictures";
+import { SMARTART_ITEM_PICTURE_FILLED_LAYOUTS, smartArtPictureLayoutConvertible } from "./native-convert-model";
 
 /** `r:embed` → inline `data:` URL, exactly what `convertNativeSmartArt` takes. */
 export type SmartArtSlotMedia = Readonly<Record<string, string>>;
@@ -73,6 +74,14 @@ export interface SmartArtSlotMediaRequest {
   readonly dataPart: string;
   /** That part's fingerprint, as the node's `fingerprints.data` records it. */
   readonly dataFingerprint: string;
+  /**
+   * DISPLAY only (TRIAGE S14c): the longest side, in pixels, the diagram's
+   * pictures are drawn at. A picture past the inline cap then comes scaled
+   * down to it instead of refusing the diagram. The open-time layout of a
+   * cache-less diagram sends it; 转换为可编辑 never does, so nothing scaled
+   * down is ever converted or saved.
+   */
+  readonly displaySide?: number;
 }
 
 /**
@@ -121,6 +130,7 @@ export function smartArtSlotMediaPath(request: SmartArtSlotMediaRequest): string
     part: request.dataPart,
     fingerprint: request.dataFingerprint,
   });
+  if (request.displaySide !== undefined) query.set("display", String(request.displaySide));
   return `/api/v1/pages/${encodeURIComponent(request.pageId)}/smartart-slot-media?${query}`;
 }
 
@@ -209,11 +219,48 @@ export async function smartArtConversionMedia(input: {
   /** The catalog layout the author picked, or the one the urn resolved to. */
   readonly layoutId: string;
   readonly outline: readonly { readonly imageRelId?: string; readonly imageOnTransition?: true }[];
+  /**
+   * The diagram's own pictures (`docPictures`, readings row 1005: Radial
+   * List's centre): every one must come too, or nothing converts.
+   */
+  readonly docPictures?: NativeSmartArtDocPictures | null;
+  /** Display only (`SmartArtSlotMediaRequest.displaySide`); a conversion never passes it. */
+  readonly displaySide?: number;
   /** Injectable for tests; the app never passes it. */
   readonly fetchMedia?: (
     request: SmartArtSlotMediaRequest,
   ) => Promise<SmartArtSlotMedia | null>;
 }): Promise<SmartArtConversionMedia> {
+  // A page read under row 1005 draws a Radial List item's own picture in its
+  // circle (`SMARTART_ITEM_PICTURE_FILLED_LAYOUTS`): wanted like the diagram's.
+  const filled = input.docPictures !== undefined && input.docPictures !== null && SMARTART_ITEM_PICTURE_FILLED_LAYOUTS.has(input.layoutId);
+  const items: SmartArtConversionMedia = filled ? { ok: true } : await smartArtItemMedia(input);
+  const wanted = [
+    ...Object.values(input.docPictures ?? {}).map((picture) => picture.imageRelId),
+    ...(filled ? input.outline.flatMap((item) => (item.imageRelId ? [item.imageRelId] : [])) : []),
+  ];
+  if (!items.ok || !wanted.length) return items;
+  // The diagram's own pictures resolve against the same data part, and the
+  // route brings every picture it holds: asked once more only when the items
+  // needed none.
+  let images = items.images;
+  if (!images || wanted.some((relId) => !images![relId])) {
+    if (typeof input.pageId !== "string" || !input.pageId) return { ok: false, reason: "no-page" };
+    const address = smartArtSlotMediaAddress(input.view);
+    if (!address) return { ok: false, reason: "unavailable" };
+    const fetched = await (input.fetchMedia ?? fetchSmartArtSlotMedia)({
+      pageId: input.pageId,
+      ...address,
+      ...(input.displaySide !== undefined ? { displaySide: input.displaySide } : {}),
+    });
+    if (!fetched) return { ok: false, reason: "unavailable" };
+    images = { ...fetched, ...(images ?? {}) };
+  }
+  return wanted.every((relId) => images![relId]) ? { ok: true, images } : { ok: false, reason: "incomplete" };
+}
+
+/** {@link smartArtConversionMedia} for the items' slots alone. */
+async function smartArtItemMedia(input: Parameters<typeof smartArtConversionMedia>[0]): Promise<SmartArtConversionMedia> {
   // Asked WITHOUT media first: a diagram whose layout draws no pictures, or
   // whose points carry none, is already convertible and needs no request.
   if (smartArtPictureLayoutConvertible(input.layoutId, input.outline)) {
@@ -244,6 +291,7 @@ export async function smartArtConversionMedia(input: {
   const images = await (input.fetchMedia ?? fetchSmartArtSlotMedia)({
     pageId: input.pageId,
     ...address,
+    ...(input.displaySide !== undefined ? { displaySide: input.displaySide } : {}),
   });
   if (!images) return { ok: false, reason: "unavailable" };
   // Fail closed for the WHOLE diagram: media that does not in fact fill every
@@ -279,4 +327,55 @@ export function smartArtPictureConversionUnreachable(input: {
   if (!input.outline.some((item) => item.imageRelId)) return null;
   if (typeof input.pageId !== "string" || !input.pageId) return "no-page";
   return smartArtSlotMediaAddress(input.view) === null ? "unavailable" : null;
+}
+
+
+
+
+
+
+
+
+
+
+
+export async function smartArtSceneMedia(input: {
+  readonly pageId: unknown;
+  readonly view: unknown;
+  readonly layoutId: string;
+  readonly outline: readonly { readonly imageRelId?: string; readonly imageOnTransition?: true }[];
+  /**
+   * The diagram's frame (`frameEmu`): its pictures are DRAWN, so one past the
+   * inline cap may come scaled down to the size the frame is drawn at
+   * (`smartArtDisplaySide`, TRIAGE S14c) rather than leave the frame empty.
+   */
+  readonly frameEmu?: { readonly width?: number; readonly height?: number } | null;
+  /** The diagram's own pictures (`docPictures`, readings row 1005). */
+  readonly docPictures?: NativeSmartArtDocPictures | null;
+  /** Injectable for tests; the app never passes it. */
+  readonly fetchMedia?: (request: SmartArtSlotMediaRequest) => Promise<SmartArtSlotMedia | null>;
+}): Promise<{ readonly images?: SmartArtSlotMedia } | null> {
+  if (!input.outline.some((point) => point.imageRelId) && !Object.keys(input.docPictures ?? {}).length) return {};
+  const displaySide = smartArtDisplaySide(input.frameEmu);
+  const media = await smartArtConversionMedia({ ...input, ...(displaySide !== undefined ? { displaySide } : {}) });
+  return media.ok ? (media.images ? { images: media.images } : {}) : null;
+}
+
+/** Device pixels per CSS pixel a displayed slot picture is drawn with (the 859 rule: supersampled). */
+const DISPLAY_SUPERSAMPLE = 2;
+const EMU_PER_PX = 9525;
+
+/**
+ * The longest side, in pixels, a diagram's slot picture is drawn at, at most:
+ * its frame at 96 dpi, supersampled, within the route's 64..4096 -- the size a
+ * picture past the inline cap is scaled down to for display (TRIAGE S14c).
+ * The print asks with the same size (`smartart_print_pictures.smartart_display_side`).
+ */
+export function smartArtDisplaySide(
+  frame: { readonly width?: number; readonly height?: number } | null | undefined,
+): number | undefined {
+  const width = frame?.width;
+  const height = frame?.height;
+  if (typeof width !== "number" || typeof height !== "number" || !(width > 0) || !(height > 0)) return undefined;
+  return Math.max(64, Math.min(4096, Math.round((Math.max(width, height) / EMU_PER_PX) * DISPLAY_SUPERSAMPLE)));
 }

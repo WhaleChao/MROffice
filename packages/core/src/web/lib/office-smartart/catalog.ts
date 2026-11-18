@@ -102,22 +102,26 @@ export interface OfficeSmartArtLayout {
 
 
   officePictureLevel?: number;
-  /**
-   * How many items at {@link OfficeSmartArtLayout.officePictureLevel} get a
-   * picture slot at all, counting from the first; absent means every one of
-   * them does.
-   *
-   * ONE layout in the corpus states a number here and it was measured, not
-   * assumed: Radial List (`radial2`) carries exactly one `blipPhldr`, on
-   * `centerShape`, whose `<dgm:presOf axis="ch" ptType="node" cnt="1"/>` is
-   * the FIRST Level 1 item — every other item is a plain circle Office draws
-   * no picture in. Microsoft says the same in words: "the center shape can
-   * contain a picture" (SMARTART-IMPORT.md §5.51).
-   *
-   * Read by {@link smartArtPictureLayoutConvertible} for the same reason the
-   * level is: a file whose SECOND item carries a blip would convert into a
-   * diagram with that picture quietly gone, so it stays PRESERVED instead.
-   */
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   officePictureItems?: number;
 }
 
@@ -1032,7 +1036,14 @@ const CAPPED_AND_PICTURE_LAYOUTS: readonly OfficeSmartArtLayout[] = [
     seedItems: 4,
     seedLevels: FLAT_FOUR,
     officePictureLevel: 0,
-    officePictureItems: 1,
+    // NO item has a slot: the centre's picture is the DIAGRAM's, kept on the
+    // `visible` presentation point keyed to the document point, and every
+    
+    
+    // An item's own picture fills that item's circle in PowerPoint
+    // (sa36-radial2b), which a page read under readings row 1005 draws so;
+    // anywhere else such a diagram stays as the file drew it.
+    officePictureItems: 0,
   }),
   // Office's ICON layouts (2018; each definition's only `dgm:cat` is `icon`,
   // a tab PowerPoint's Choose a SmartArt Graphic dialog does not have: they

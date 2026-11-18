@@ -23,7 +23,7 @@ import { normalizeOfficeFontFace, officeFontFaceFamily, type OfficeFontFace } fr
 import { isEastAsianFontCodePoint } from "../../../office-ribbon/officeFontScriptSlots";
 import { officePrimaryFontFamily } from "../../../office-ribbon/officeTypographyCatalog";
 import { officeFamilyForFace, officeFontSubstitution } from "../../../../lib/office-fonts/substitutes";
-import { wordLacksFixedOff, wordWindowsLacksFace } from "../../../../lib/office-fonts/word-windows-lacks";
+import { wordLacksFixedOff, wordWindowsHasFamily, wordWindowsLacksFace } from "../../../../lib/office-fonts/word-windows-lacks";
 import { wordFontIsEastAsian, wordFontIsRecordedLatin } from "./wordFontMetrics";
 import { retainOfficeFontAssets, registerLeasedFontAsset, OFFICE_FONT_ASSETS_EVENT } from "../../../office-ribbon/officeFontAssets";
 import { getPageFontBindings } from "../../../../lib/notebook-sdk";
@@ -329,7 +329,35 @@ export function documentFamilyWordLacks(family: string): boolean {
 
 /** The faces the reader's font-table picks end in (document_word_font_context
  * `_word_face_for`): Word's own choice by the entry's charset and family. */
-const WORD_TABLE_ENTRY_PICKS = new Set(["cambria", "calibri", "simsun", "microsoft yahei", "yu gothic", "malgun gothic", "arial", "sakkal majalla"]);
+const WORD_TABLE_ENTRY_PICKS = new Set(["cambria", "calibri", "simsun", "microsoft yahei", "yu gothic", "malgun gothic", "arial", "sakkal majalla", "tahoma", "times new roman"]);
+/** The mark the reader puts first in a family's faces when its font-table
+ * entry names an East Asian charset (80, 81, 86, 88:
+ * document_word_font_context.CHARSET_PICK_MARK): Windows Word sets the name,
+ * its Latin too, in that charset's pick even where it aliases the name ("Arial
+ * Unicode MS" with charset 80 is Yu Gothic, docx-look/probes/cjk14 u1 P09, u2
+ * P00; corpus R455-D65), while an ANSI entry's signature yields to the alias. */
+const CHARSET_PICK_MARK = "@charset";
+/** `window.__docsEastAsianCharsetPicksOff = true` asks the older reading (the
+ * name's alias first, Hangul in Batang behind every pick), for an A/B of one
+ * build. */
+function eastAsianCharsetPicksOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsEastAsianCharsetPicksOff?: boolean}).__docsEastAsianCharsetPicksOff === true;
+}
+/** Windows' own names for its East Asian faces, which a font table's altName
+ * may give: Word has these. */
+const WINDOWS_EAST_ASIAN_LOCAL_NAMES = new Set(["ｍｓ 明朝", "ｍｓ ゴシック", "ｍｓ ｐ明朝", "ｍｓ ｐゴシック", "游明朝", "游ゴシック", "メイリオ",
+  "宋体", "新宋体", "黑体", "楷体", "仿宋", "微软雅黑", "等线", "新細明體", "細明體", "標楷體", "微軟正黑體", "맑은 고딕", "바탕", "바탕체",
+  "굴림", "굴림체", "돋움", "돋움체", "궁서", "궁서체"]);
+function wordHasFace(name: string): boolean {
+  const key = name.trim().toLowerCase();
+  return wordWindowsHasFamily(key) || WINDOWS_EAST_ASIAN_LOCAL_NAMES.has(key);
+}
+/** The faces Windows Word sets Hangul in behind an East Asian gothic pick
+ * that has none (Yu Gothic, Microsoft YaHei, Microsoft JhengHei): Malgun
+ * Gothic, where a serif pick, Cambria or Arial leaves it to Batang (probes
+ * cjk14 u1, u2). */
+const GOTHIC_PICKS_HANGUL = new Set(["yu gothic", "microsoft yahei", "microsoft jhenghei"]);
+
 /** `window.__docsFontTableAltOff = true` asks the older reading (every family
  * Word lacks in its fixed pick or Cambria, the font table unread), for an A/B
  * of one build. */
@@ -353,6 +381,16 @@ function fontTableAltOff(): boolean {
  * reader's picks for the family: [altName?, entry pick].
  */
 function wordTablePicks(faces: readonly string[] | undefined, lacked: string): string[] {
+  if (faces?.[0] === CHARSET_PICK_MARK) {
+    const listed = faces.slice(1);
+    if (!eastAsianCharsetPicksOff() && listed.length && !fontTableAltOff()) {
+      // An East Asian charset's pick wins over Word's alias for the name; the
+      // entry's altName only where Word has that face.
+      const alt = listed.length > 1 ? listed[0] : null;
+      return [alt && wordHasFace(alt) ? alt : listed[listed.length - 1]];
+    }
+    faces = listed;
+  }
   if (fontTableAltOff() || !faces?.length) return [lacked];
   const last = faces[faces.length - 1];
   const alt = faces.length > 1 || !WORD_TABLE_ENTRY_PICKS.has(last.toLowerCase()) ? faces[0] : null;
@@ -378,7 +416,8 @@ function missingFontStackOf(faces: readonly string[] | undefined, family: string
       ? lacked !== "Cambria" || !faces?.length ? [lacked, ...(faces ?? [])] : [...faces]
       : wordTablePicks(faces, lacked);
     const seen = new Set([family.trim().toLowerCase()]);
-    const order = [...picks, ...WORD_LACKED_EAST_ASIAN_FACES, ...(lackedDevanagariOff() ? [] : [WORD_LACKED_DEVANAGARI_FACE])].filter(face => {
+    const hangul = !eastAsianCharsetPicksOff() && GOTHIC_PICKS_HANGUL.has(picks[0]?.toLowerCase() ?? "") ? ["Malgun Gothic"] : [];
+    const order = [...picks, ...hangul, ...WORD_LACKED_EAST_ASIAN_FACES, ...(lackedDevanagariOff() ? [] : [WORD_LACKED_DEVANAGARI_FACE])].filter(face => {
       const key = face.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
@@ -386,6 +425,7 @@ function missingFontStackOf(faces: readonly string[] | undefined, family: string
     });
     return fontFamilyWithCjkRenderFallback(order.map(quotedFontName).join(", "));
   }
+  if (faces?.[0] === CHARSET_PICK_MARK) faces = faces.slice(1);
   if (!faces?.length || officeFontSubstitution(family)?.substitutes.length) return null;
   if (["serif", "sans-serif", "monospace", "system-ui", "ui-monospace"].includes(family.toLowerCase())) return null;
   // A face the page serves only as an Office face's stand-in, that Word does

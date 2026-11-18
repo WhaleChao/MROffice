@@ -217,7 +217,7 @@ export function documentShapeMemberTextStory(
   return value as readonly Readonly<Record<string, unknown>>[];
 }
 
-export const DOCUMENT_SHAPE_MAX_GROUP_MEMBERS = 512;
+export const DOCUMENT_SHAPE_MAX_GROUP_MEMBERS = 2048;
 export const DOCUMENT_SHAPE_MAX_DRAWING_ID = 2_147_483_647;
 /** DrawingML `wp:anchor/@relativeHeight` is an unsigned 32-bit integer. */
 export const DOCUMENT_SHAPE_MAX_RELATIVE_HEIGHT = 0xffff_ffff;
@@ -1710,6 +1710,17 @@ export interface DocumentShapeGroupMember {
    * `UniversalDocumentShapeGroupMember.adjustments`).
    */
   readonly adjustments?: Readonly<Record<string, number>>;
+  /**
+   * The member's own line ends (`a:ln/a:headEnd|a:tailEnd`), as on a lone
+   * shape ({@link DocumentShapeAttrs.headEnd}): a line or connector inside a
+   * Word group keeps its arrowheads through the page.
+   */
+  readonly headEnd?: PresentationConnectorEnd;
+  readonly tailEnd?: PresentationConnectorEnd;
+  readonly headEndWidth?: PresentationConnectorEndSize;
+  readonly headEndLength?: PresentationConnectorEndSize;
+  readonly tailEndWidth?: PresentationConnectorEndSize;
+  readonly tailEndLength?: PresentationConnectorEndSize;
   readonly xEmu: number;
   readonly yEmu: number;
   readonly widthEmu: number;
@@ -3192,6 +3203,14 @@ function normalizeDocumentShapeGroupMembersUncached(
       preset: attrs.preset,
       ...(attrs.customPath ? { customPath: attrs.customPath } : {}),
       ...(attrs.adjustments ? { adjustments: attrs.adjustments } : {}),
+      // A line's arrowheads, read by the leaf normalizer as a lone shape's
+      // (`normalizeDocumentShapeLineEnds`): dropped here, a Word group's
+      // arrows were gone from the page, and a save that wrote the group anew
+      // wrote it without them.
+      ...(normalizeDocumentShapeLineEnds(attrs) as Pick<
+        DocumentShapeGroupMember,
+        "headEnd" | "tailEnd" | "headEndWidth" | "headEndLength" | "tailEndWidth" | "tailEndLength"
+      >),
       ...(kind === "shape" ? groupMemberInkAttrs(attrs) : {}),
       xEmu: attrs.xEmu,
       yEmu: attrs.yEmu,
@@ -3398,7 +3417,6 @@ function anonymousGroupMembers(
           smartArtCustom: _custom,
           smartArtTextBox: _textBox,
           smartArtAssistant: _assistant,
-          textShape3d: _textShape3d,
           ...member
         }) =>
           // Everything above is a DIAGRAM's, and an anonymous shape group
@@ -3407,7 +3425,10 @@ function anonymousGroupMembers(
           // A member's own bevel (`shape3d`) and the camera of the group
           // that turns it (`scene3d`, Format Shape > 3-D Rotation on a Word
           // group; `scene3dFrame` for a nested one's) are the shapes' own,
-          // read by the API for any group and drawn as Word draws them.
+          // read by the API for any group and drawn as Word draws them; so is
+          // a text box's own text 3-D (`textShape3d`, `wps:bodyPr/a:sp3d`,
+          // corpus R439-D15): dropped here, a save that wrote the group anew
+          // wrote its words flat.
           //
           // A `kind: "picture"` member's `src` is not a slot's contents: it is
           // the member's own `pic:blipFill` bytes, and an ordinary Word group

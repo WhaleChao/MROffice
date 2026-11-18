@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { nativeSmartArtDocPictures, type NativeSmartArtDocPictures } from "./office-smartart/doc-pictures";
 import { nativeLayoutToCatalogId } from "./office-smartart/native-layouts";
 import { nativeSmartArtHostTheme } from "./office-smartart/document-native-model";
 import type { PresentationBlock } from "../components/console/editor/native-document/documentCommands";
@@ -29,7 +30,7 @@ import {
   nativeSmartArtFrameInBounds,
   type NativeSmartArtFrame,
 } from "./office-smartart/native-convert-model";
-import type { NativeSmartArtOutlineItem } from "@/lib/office-smartart/native-outline";
+import type { NativeSmartArtOutlineItem, SmartArtTextIndent } from "@/lib/office-smartart/native-outline";
 import {
   readSmartArtIdentityRecord,
   type SmartArtIdentity,
@@ -156,6 +157,13 @@ export interface NativeSmartArtView {
    * over its SmartArt Style's. Null when it states none.
    */
   graphicScene3d?: unknown;
+  /**
+   * The diagram's OWN pictures (`docPictures`, readings row 1005): a picture
+   * Office keeps on a presentation point keyed to the document point, by that
+   * point's `presName` -- Radial List's centre (`visible`) -- with that
+   * point's own line. Null when it has none, or the page was read before.
+   */
+  docPictures?: NativeSmartArtDocPictures | null;
 }
 
 const THEME_COLOR_SLOTS = ["dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
@@ -295,7 +303,7 @@ function viewOutline(value: unknown): NativeSmartArtOutlineItem[] | null {
 function textFormatOf(
   item: Record<string, unknown>,
   text: string,
-): Pick<NativeSmartArtOutlineItem, "textFont" | "textSizePt" | "textColor" | "textRuns" | "textAlign" | "textLineSpacing" | "textCapitals"> {
+): Pick<NativeSmartArtOutlineItem, "textFont" | "textSizePt" | "textColor" | "textRuns" | "textAlign" | "textLineSpacing" | "textCapitals" | "textIndent" | "textRtl"> {
   const font = normalizeOfficeShapeTextFont(item.textFont);
   const size = item.textSizePt;
   const color = hexColour(item.textColor);
@@ -315,7 +323,22 @@ function textFormatOf(
       : {}),
     // The author's capitals (`a:defRPr@cap`).
     ...(item.textCapitals === true ? { textCapitals: true as const } : {}),
+    // The author's margin and first-line indent (row 849), EMU.
+    ...textIndentOf(item.textIndent),
+    // Words right to left (row 840).
+    ...(item.textRtl === true ? { textRtl: true as const } : {}),
   };
+}
+
+function textIndentOf(value: unknown): { textIndent?: SmartArtTextIndent } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const emu = (v: unknown, least: number) =>
+    typeof v === "number" && Number.isInteger(v) && v >= least && v <= 51_206_400 ? v : undefined;
+  const marL = emu(record.marL, 0);
+  const indent = emu(record.indent, -51_206_400);
+  if (marL === undefined && indent === undefined) return {};
+  return { textIndent: { ...(marL !== undefined ? { marL } : {}), ...(indent !== undefined ? { indent } : {}) } };
 }
 
 function authorFormat(value: unknown): { format?: SmartArtAuthorFormat } {
@@ -497,6 +520,7 @@ export function readNativeSmartArtView(
     customizations: first.customizations ?? null,
     graphicFormat: first.graphicFormat ?? null,
     graphicScene3d: first.graphicScene3d ?? null,
+    docPictures: nativeSmartArtDocPictures(first.docPictures),
   };
 }
 

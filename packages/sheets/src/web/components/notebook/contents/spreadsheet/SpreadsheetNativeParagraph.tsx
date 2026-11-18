@@ -6,10 +6,11 @@
  */
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { flushSync } from "react-dom";
-import { layoutNativeText, layoutNativeTextBatch, nativeTextLayoutIsKnown, nativeTextTouchedBy, resolveRelativePartFontSizes, type NativeTextLayoutRequest, nativeTextFontLead, nativeParagraphLineStyle, nativeParagraphLinePitch, measureNativeLineAdvance, nativeTextAlignmentOffset, nativeStrutBaselinePx, type NativeTextAlignmentBox, type NativeTextPart, type NativeTextLine } from "../../../../lib/spreadsheet/native-text-layout";
+import { layoutNativeText, layoutNativeTextBatch, nativeTextLayoutIsKnown, nativeTextTouchedBy, resolveRelativePartFontSizes, type NativeTextLayoutRequest, nativeTextFontLead, nativeParagraphLineStyle, nativeParagraphLinePitch, measureNativeLineAdvance, nativeTextAlignmentOffset, nativeStrutBaselinePx, nativeLinesWithoutHangingSpaces, type NativeTextAlignmentBox, type NativeTextPart, type NativeTextLine } from "../../../../lib/spreadsheet/native-text-layout";
 import { nativeTextLayoutQuantum, nativeTypographyGeneration, resolveSpreadsheetTextStyle, subscribeNativeTypography } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { fontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
-import { distributedLineUnits } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
+import { cellWrappedBottomJustifyContent, cellWrappedMiddleJustifyContent, distributedLineUnits } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
+import { officeKeptWrappedLines, officePrintedBaselineShiftPx } from "../../../../lib/spreadsheet/office-wrapped-bottom";
 import { SpreadsheetNativeTextParts, spreadsheetNativeTextPaint } from "./SpreadsheetNativeText";
 
 /** A paragraph whose lines the commit's batch has yet to lay out. */
@@ -39,7 +40,7 @@ function requestNativeTextLayout(request:NativeTextLayoutRequest,done:()=>void):
 
 const noTypographySubscription=()=>()=>{};
 const noTypographyGeneration=()=>0;
-export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false,spread,distributed=false,officeBaseline}: {
+export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false,spread,distributed=false,officeBaseline,officePrintedPage,officeWrap}: {
   parts:readonly NativeTextPart[];style:CSSProperties;dpi:number;scale?:number;wrap?:boolean;layoutWidth?:number;alignmentBox?:NativeTextAlignmentBox;
   /** Vertical Justify / Distributed: the lines spread over the paragraph's
    * box, which fills the cell (the page's text box; lookwin probe p22). Lines
@@ -61,12 +62,22 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
    * stands it): the paragraph moves so its baseline is there, the browser's
    * own (nativeStrutBaselinePx) read for its font and line height. */
   officeBaseline?:number;
+  /** Printed, the paragraph's top below the paper's top edge and a printer
+   * dot (px): a line placed at Excel's baseline moves from the whole pixel
+   * the browser prints it on to Excel's whole dot (officePrintedBaselineShiftPx). */
+  officePrintedPage?:{top:number;dotPx:number};
+  /** A Windows grid's wrapped lines placed as Excel prints them (the page's
+   * px; office-wrapped-bottom): the lines a row too low keeps (screen px
+   * `linePx` a line, `rowPx` the row), the first line `ascent` below the top,
+   * a block of whole lines in the middle, or the last `rise` above the bottom. */
+  officeWrap?:{align:"top"|"middle"|"bottom";height:number;rise:number;ascent:number;linePx:number;rowPx:number};
 }) {
   const ref=useRef<HTMLSpanElement>(null);
   // A paragraph standing at Excel's baseline reads the browser's again when
   // a font arrives (only those subscribe).
-  const typographyGeneration=useSyncExternalStore(officeBaseline!==undefined?subscribeNativeTypography:noTypographySubscription,
-    officeBaseline!==undefined?nativeTypographyGeneration:noTypographyGeneration,noTypographyGeneration);
+  const placed=officeBaseline!==undefined||officeWrap!==undefined;
+  const typographyGeneration=useSyncExternalStore(placed?subscribeNativeTypography:noTypographySubscription,
+    placed?nativeTypographyGeneration:noTypographyGeneration,noTypographyGeneration);
   // A part sized relative to the paragraph is laid out at its pixels.
   const signature=JSON.stringify([resolveRelativePartFontSizes(parts,style),style,dpi,scale,wrap,layoutWidth,alignmentBox]);
   const stable=useMemo(()=>JSON.parse(signature) as [NativeTextPart[],CSSProperties,number,number,boolean,number|null,NativeTextAlignmentBox|null],[signature]);
@@ -90,7 +101,8 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     // A text not laid out before waits for the commit's batch (below): one
     // layout of the page serves every paragraph that mounted with it.
     if(stable[4]&&!nativeTextLayoutIsKnown(stable[0],stable[1],stable[5]!,stable[2]))return PENDING_LAYOUT;
-    const lines:readonly NativeTextLine[]|undefined=stable[4]?layoutNativeText(stable[0],stable[1],stable[5]!,stable[2]):[{parts:stable[0],hardBreak:""}];
+    const laid=stable[4]?layoutNativeText(stable[0],stable[1],stable[5]!,stable[2]):undefined;
+    const lines:readonly NativeTextLine[]|undefined=stable[4]?laid&&nativeLinesWithoutHangingSpaces(laid):[{parts:stable[0],hardBreak:""}];
     if(!lines)return null;
     const offsets=lines.map(line=>nativeAlignment?nativeTextAlignmentOffset(measureNativeLineAdvance(line.parts,stable[1],stable[2]),stable[1].textAlign,stable[6]??undefined,stable[2],stable[3]):undefined);
     return {lines,offsets};
@@ -108,14 +120,19 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     if(!laidOutInRender)return;
     // Laid out again only for a load that reaches this paragraph's text
     
+    // A paragraph still waiting because some face was loading when it
+    // rendered waits for the set to finish, whatever face that was: held
+    // back for an unrelated face, it never laid out and printed unplaced
+    // (lookwin bench R284-X24 page 2: a bottom-aligned note's last lines
+    // where Excel prints its first).
     const refresh=(event:Event)=>{
       const reach=fontLoadReach(event);
-      if(reach&&!nativeTextTouchedBy(reach,stable[0],stable[1],stable[2]))return;
+      if(reach&&!nativeTextTouchedBy(reach,stable[0],stable[1],stable[2])&&!awaitingBatch)return;
       setFontEpoch(epoch=>epoch+1);
     };
     document.fonts?.addEventListener("loadingdone",refresh);
     return()=>document.fonts?.removeEventListener("loadingdone",refresh);
-  },[laidOutInRender,stable]);
+  },[laidOutInRender,stable,awaitingBatch]);
   useLayoutEffect(()=>{
     if(laidOutInRender)return;
     const node=ref.current;
@@ -131,7 +148,8 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
       const rawWidth=parseFloat(getComputedStyle(node).width);
       const quantum=nativeTextLayoutQuantum();
       const width=quantum?Math.round(rawWidth/quantum)*quantum:rawWidth;
-      const lines=stable[4]?layoutNativeText(stable[0],stable[1],stable[5]??width/stable[3],stable[2]):unwrappedLines;
+      const laid=stable[4]?layoutNativeText(stable[0],stable[1],stable[5]??width/stable[3],stable[2]):undefined;
+      const lines=stable[4]?laid&&nativeLinesWithoutHangingSpaces(laid):unwrappedLines;
       const offsets=lines?.map(line=>nativeAlignment?nativeTextAlignmentOffset(measureNativeLineAdvance(line.parts,stable[1],stable[2]),stable[1].textAlign,stable[6]??undefined,stable[2],stable[3]):undefined)??[];
       if(!cancelled)setLayout(previous=>lines?previous?.signature===signature&&previous.lines===lines&&JSON.stringify(previous.offsets)===JSON.stringify(offsets)?previous:{signature,lines,offsets}:null);
     };
@@ -153,7 +171,12 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     ?<SpreadsheetNativeTextParts parts={lineParts} style={style} dpi={dpi} scale={scale}/>
     :<span style={{lineHeight:0}}><SpreadsheetNativeTextParts parts={lineParts} style={style} dpi={dpi} scale={scale}/></span>;
   const shown=laidOutInRender?(awaitingBatch?null:renderLayout):layout?.signature===signature?layout:null;
-  const lines=shown?.lines;
+  const laidLines=shown?.lines;
+  // A row too low for all the wrapped lines keeps the first ones (lookwin p122b-lw).
+  const wrapLinePx=officeWrap?.linePx;
+  const keptLines=officeWrap&&wrapLinePx!==undefined&&laidLines&&lineHeight!==undefined&&!(Boolean(spread)&&laidLines.length>1)
+    ?Math.max(1,officeKeptWrappedLines(laidLines.map(()=>wrapLinePx),officeWrap.rowPx)):undefined;
+  const lines=keptLines!==undefined&&laidLines?laidLines.slice(0,keptLines):laidLines;
   const base=resolveSpreadsheetTextStyle(style,stable[0][0]?nativeTextFontLead(stable[0][0]):"",dpi);
   const spreading=Boolean(spread)&&lines!==undefined&&lines.length>1;
   const fixedLines=lineHeight!==undefined&&lines!==undefined&&!spreading;
@@ -161,12 +184,32 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
   // font and line height, and the difference taken up above the paragraph.
   // Where nothing lays out a probe, a line box's usual split stands in.
   const strutSize=typeof base.fontSize==="number"?base.fontSize*scale:undefined;
-  const strut=officeBaseline!==undefined&&lineHeight!==undefined&&(lines===undefined||lines.length===1)&&!spreading
+  // Wrapped lines placed as Excel prints them: the first line's baseline.
+  const pitch=lineHeight!==undefined?lineHeight*scale:undefined;
+  const firstBaseline=officeBaseline!==undefined?officeBaseline:officeWrap&&keptLines!==undefined&&pitch!==undefined&&!spreading
+    ?officeWrap.align==="top"?officeWrap.ascent
+      :officeWrap.align==="middle"?(officeWrap.height-keptLines*pitch)/2+officeWrap.ascent
+      :officeWrap.height-officeWrap.rise-(keptLines-1)*pitch
+    :undefined;
+  const strut=firstBaseline!==undefined&&lineHeight!==undefined&&(officeBaseline===undefined||lines===undefined||lines.length===1)&&!spreading
     ?nativeStrutBaselinePx({fontFamily:base.fontFamily,fontSize:strutSize??base.fontSize,fontWeight:base.fontWeight,fontStyle:base.fontStyle},lineHeight*scale,typographyGeneration)
       ??(strutSize!==undefined?(lineHeight*scale-1.12*strutSize)/2+0.9*strutSize:undefined):undefined;
+  // Printed, each placed line moves onto Excel's whole printer dot.
+  const lineShift=(index:number)=>officePrintedPage&&strut!==undefined&&firstBaseline!==undefined&&(index===0||pitch!==undefined)
+    ?officePrintedBaselineShiftPx(officePrintedPage.top+firstBaseline+index*(pitch??0),officePrintedPage.dotPx):undefined;
   const paragraphStyle:CSSProperties={...boxStyle,display:"block",width:"100%",minWidth:0,...(fixedLines?{position:"relative",height:lineHeight*scale*lines.length}:{}),
-    ...(strut!==undefined&&officeBaseline!==undefined?{marginTop:officeBaseline-strut,flex:"none"}:{}),
+    ...(strut!==undefined&&firstBaseline!==undefined?{marginTop:firstBaseline-strut,flex:"none",
+      ...(!fixedLines&&lines?.length===1&&lineShift(0)!==undefined?{transform:`translateY(${lineShift(0)}px)`}:{})}:{}),
     ...(spreading?{display:"flex",flexDirection:"column",justifyContent:spread,height:"100%"}:{}),
+    // Wrapped lines not placed yet (their layout still pending, or no fixed
+    // line pitch to place them by) stand where the cell's vertical alignment
+    // puts them, not at the top the placed box starts from (lookwin bench
+    // R31-X04: middle-aligned wrapped values printed at their cells' tops),
+    // safely: lines more than the row holds keep the first ones, as Excel
+    // keeps them, not the last (lookwin bench R284-X24 page 2: a note of four
+    // lines in a 58 px row printed its last three).
+    ...(officeWrap&&officeBaseline===undefined&&firstBaseline===undefined&&!spreading
+      ?{alignSelf:officeWrap.align==="middle"?cellWrappedMiddleJustifyContent():officeWrap.align==="bottom"?cellWrappedBottomJustifyContent():"flex-start"}:{}),
     lineHeight:lineHeight===undefined?"normal":`${lineHeight*scale}px`,fontFamily:base.fontFamily,fontSize:typeof base.fontSize==="number"?base.fontSize*scale:base.fontSize,fontWeight:base.fontWeight,fontStyle:base.fontStyle,textAlign:base.textAlign};
   // One line that sits where the paragraph does (no fixed line box, no
   // alignment offset, no line break to carry): the paragraph and its line are
@@ -211,7 +254,8 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
     {lines?lines.map((line,index)=>{
       const terminal=resolveSpreadsheetTextStyle({...style,...line.breakStyle},"",dpi);
       const offset=shown?.offsets[index];
-      return <span key={index} data-native-text-line="" style={{...nativeParagraphLineStyle(line,style,scale,dpi,lineHeight),...(fixedLines?{position:"absolute",top:index*lineHeight*scale,left:offset??0,width:"100%",...(offset!==undefined?{textAlign:"left"}:{})}:offset!==undefined?{textAlign:"left",position:"relative",left:offset}:{}),
+      const shift=fixedLines?lineShift(index):undefined;
+      return <span key={index} data-native-text-line="" style={{...(shift!==undefined?{transform:`translateY(${shift}px)`}:{}),...nativeParagraphLineStyle(line,style,scale,dpi,lineHeight),...(fixedLines?{position:"absolute",top:index*lineHeight*scale,left:offset??0,width:"100%",...(offset!==undefined?{textAlign:"left"}:{})}:offset!==undefined?{textAlign:"left",position:"relative",left:offset}:{}),
         ...(spreading?{flex:"none",...(lineHeight!==undefined?{height:lineHeight*scale}:{})}:{}),
         ...(distributedRoom!==undefined?{textAlign:"left"}:{})}}>
         {distributedLine(line)??paintParts(line.parts)}

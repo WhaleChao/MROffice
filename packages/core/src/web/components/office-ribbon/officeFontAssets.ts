@@ -103,9 +103,16 @@ export function setOfficeFontAssetCatalog(
   catalog = [...fonts];
 }
 
-/** A popup has a separate FontFaceSet; copying stylesheets cannot copy fonts
- * registered through new FontFace(ArrayBuffer). Validate each declared source
- * before deduplicating equal rendered families into inert data-URL rules. */
+
+
+
+
+
+
+
+
+
+
 export async function installDocumentFontRules(
   source: ParentNode,
   target: Document,
@@ -118,6 +125,13 @@ export async function installDocumentFontRules(
     ),
   );
   if ((source as Node).nodeType === 1) elements.unshift(source as Element);
+  const perElement =
+    (globalThis as { __docsPrintFontRulesOnceOff?: boolean })
+      .__docsPrintFontRulesOnceOff === true;
+  // A family's rule is written from the last identity naming it, in the
+  // place of the first, as when every element wrote one into the map.
+  const byFamily = new Map<string, OfficeFontFace>();
+  const parsed = new Map<string, OfficeFontFace>();
   for (const element of elements)
     for (const attribute of [
       "data-office-font-face",
@@ -125,10 +139,16 @@ export async function installDocumentFontRules(
     ]) {
       const raw = element.getAttribute(attribute);
       if (raw === null) continue;
-      const face = parseOfficeFontFace(raw);
+      const face = (perElement ? undefined : parsed.get(raw)) ?? parseOfficeFontFace(raw);
       if (!face) throw new Error("document_font_invalid_identity");
-      faces.push(face);
+      if (perElement) {
+        faces.push(face);
+        continue;
+      }
+      parsed.set(raw, face);
+      byFamily.set(officeFontFaceFamily(face), face);
     }
+  if (!perElement) faces.push(...byFamily.values());
   if (!faces.length) return;
   const controller = new AbortController();
   const abort = () => controller.abort();

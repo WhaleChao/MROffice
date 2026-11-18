@@ -691,9 +691,16 @@ export function fittedCellNumberText(
    * page: at the printer's advances); else Excel's digits and the browser's
    * reading of the rest. */
   drawnWidthPx?: (text: string) => number | undefined,
+  /** The printed fit's #### room (the cell less one #) and its 0 for a
+   * General number too small to show (fitNumberText's hashAvailablePx). */
+  hashAvailablePx?: number,
+  /** Tells apart two callers' drawnWidthPx in the cache (the printed General
+   * fit counts every character a digit wide). */
+  drawnKey = "",
 ): string {
   const key = [
-    Math.floor(availablePx), general ? "g" : "f", value, display, gridDigitPx ?? "", drawnWidthPx ? "drawn" : "",
+    Math.floor(availablePx), general ? "g" : "f", value, display, gridDigitPx ?? "", drawnWidthPx ? `drawn${drawnKey}` : "",
+    hashAvailablePx === undefined ? "" : Math.floor(hashAvailablePx),
     effectiveFontStyle?.fontFamily ?? style?.fontFamily ?? "", effectiveFontStyle?.fontSize ?? style?.fontSize ?? "",
     effectiveFontStyle?.fontWeight ?? (style?.bold ? 700 : 400), effectiveFontStyle?.fontStyle ?? (style?.italic ? "i" : ""),
     spreadsheetTextEngineEpoch(),
@@ -717,6 +724,7 @@ export function fittedCellNumberText(
       const rest = candidate.replace(/[0-9]/g, "");
       return digits * digitPx + (rest ? spillTextWidthPx(rest, style, fontAliases, effectiveFontStyle) : 0);
     },
+    ...(hashAvailablePx !== undefined ? { hashAvailablePx } : {}),
   });
   if (numberFitCache.size >= 20_000) numberFitCache.clear();
   numberFitCache.set(key, text);

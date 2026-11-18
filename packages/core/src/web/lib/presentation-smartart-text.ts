@@ -19,6 +19,7 @@
  * keeps it and the layout stops re-fitting it.
  */
 
+import { withCommandStatedKeys } from "./presentation-command-stated-keys";
 import { CSS_PX_PER_POINT } from "./presentation/text-units";
 import { presentationTextUsesPoints } from "./presentation/text-units-block";
 import type { PresentationBlock } from "../components/console/editor/native-document/documentCommands";
@@ -297,14 +298,23 @@ export const PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER: SmartArtTextFormatAdapter
       runs = base ? withThemedFace(base, themed) : undefined;
       paragraphs = paragraphsWithThemedFace(paragraphs?.paragraphs ?? (block as { paragraphs?: unknown }).paragraphs, themed, paragraphs?.changed ?? false);
     }
+    // The level keys this whole-object command stated: every run of the
+    // object takes them, at every level, the ones a co-editor adds while it
+    
+    const statedKeys = (["fontFamily", "fontSize", "bold", "italic", "color"] as const).filter((key) =>
+      key === "fontSize" ? Object.hasOwn(patch, "fontSizePt") : Object.hasOwn(patch, key),
+    );
+    const markedStyle = statedKeys.length
+      ? withCommandStatedKeys(style, { add: statedKeys })
+      : style;
     if (
-      JSON.stringify(style) === JSON.stringify(previousStyle) &&
+      JSON.stringify(markedStyle) === JSON.stringify(previousStyle) &&
       sameRuns(runs, previousRuns) &&
       !paragraphs?.changed
     ) {
       return block;
     }
-    const next = { ...block, style } as PresentationLabelledBlock & Record<string, unknown>;
+    const next = { ...block, style: markedStyle } as PresentationLabelledBlock & Record<string, unknown>;
     if (runs) next.runs = runs;
     else delete next.runs;
     if (paragraphs?.changed) next.paragraphs = paragraphs.paragraphs;

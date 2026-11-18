@@ -75,6 +75,9 @@ export interface ShiftValidationMetadataRange extends ShiftMetadataRange {
   sourceRange?: string;
   source?: { row: number; col: number };
   sourceMode?: "fixed" | "perRow";
+  /** A rule's rectangles, the first its own range (data-validation.ts
+   *  ValidationAreas): each moves with its cells. */
+  areas?: ShiftCellRange[];
 }
 
 export interface ShiftConditionalMetadataRange extends ShiftMetadataRange {
@@ -431,29 +434,33 @@ export function remapCellShiftValidations<T extends ShiftValidationMetadataRange
   if (!rules) return { items: rules, supported: true };
   const items: T[] = [];
   for (const rule of rules) {
+    const ruleAreas = rule.areas && rule.areas.length > 1 ? rule.areas : null;
     if (rule.range.sheet !== undefined) {
-      if (!rangeTouchesShift(rule.range, target, direction)) {
+      if (!(ruleAreas ?? [rule.range]).some((area) => rangeTouchesShift(area, target, direction))) {
         items.push(rule);
         continue;
       }
       return { items: rules, supported: false };
     }
     // A target the band crosses in part becomes one rule per rectangle
-    // (MRAI's validations are single-rectangle; Excel's sqref is the union).
-    // Each one's relative formula is restated for its own top-left, since a
-    // custom/list formula is relative to the rule's first cell (XLS-A009).
-    const pieces = splitCellShiftRange(rule.range, target, direction);
+    // (Excel's sqref is the union). Each one's relative formula is restated
+    // for its own top-left, since a custom/list formula is relative to the
+    // rule's first cell (XLS-A009). A rule over several areas stays one rule
+    
+    const pieces = (ruleAreas ?? [rule.range]).flatMap((area) => splitCellShiftRange(area, target, direction));
     // A per-row cascade reads its own row's control cell; a split would need
     // per-piece control columns this model does not have.
     if (pieces.length > 1 && rule.source && rule.sourceMode === "perRow") {
       return { items: rules, supported: false };
     }
     const anchor = { row: Math.min(rule.range.r1, rule.range.r2), col: Math.min(rule.range.c1, rule.range.c2) };
+    const moved: ShiftValidationMetadataRange[] = [];
     for (const piece of pieces) {
       let next: ShiftValidationMetadataRange = {
         ...rule,
         range: { ...rule.range, ...piece.range },
       };
+      delete next.areas;
       if (typeof rule.formula === "string") {
         const formula = remapEmbeddedFormula(
           rebaseRelativeFormula(rule.formula, anchor, piece.origin),
@@ -489,8 +496,22 @@ export function remapCellShiftValidations<T extends ShiftValidationMetadataRange
         if (!source) return { items: rules, supported: false };
         next = { ...next, source };
       }
-      items.push(next as T);
+      moved.push(next);
     }
+    const head = moved[0];
+    if (ruleAreas && head && moved.length > 1) {
+      const settings = (candidate: ShiftValidationMetadataRange) => {
+        const { range: _range, ...rest } = candidate;
+        void _range;
+        return JSON.stringify(rest);
+      };
+      const key = settings(head);
+      if (moved.every((candidate) => settings(candidate) === key)) {
+        items.push({ ...head, areas: moved.map((candidate) => candidate.range) } as T);
+        continue;
+      }
+    }
+    for (const next of moved) items.push(next as T);
   }
   return { items, supported: true };
 }

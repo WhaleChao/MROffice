@@ -50,7 +50,7 @@ export function useDocumentCausalModel(options: {
  * fresh copy on every publish, so two of them never count as the same. */
 function sameApartFromRevision(a: DocumentCausalModelSnapshot, b: DocumentCausalModelSnapshot): boolean {
   return a.session === b.session && a.epoch === b.epoch && a.active === b.active &&
-    a.ready === b.ready && a.mayWrite === b.mayWrite && a.savedPage === null && b.savedPage === null;
+    a.ready === b.ready && a.failure === b.failure && a.mayWrite === b.mayWrite && a.savedPage === null && b.savedPage === null;
 }
 
 function createCommittedModelStore(enabled: boolean, pageId: string, principalScope: string | null,

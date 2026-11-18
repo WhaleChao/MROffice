@@ -11,7 +11,8 @@
  */
 
 import { lazyFile } from "../document-import/lazy-file";
-import { markDesktopExistingPage, markDesktopLocalFile } from "../desktop-local-files";
+import { lazyFileReader } from "../document-import/lazy-file";
+import { desktopExistingPage, markDesktopExistingPage, markDesktopLocalFile, markedDesktopLocalFileToken } from "../desktop-local-files";
 
 export interface DesktopDefaultAppState {
   /** "direct": the app sets itself, macOS confirming each type; "settings": the system's page opens (Windows). */
@@ -176,6 +177,32 @@ export async function takeDesktopOpenFiles(options: { keep?: boolean } = {}): Pr
 /** MR Office / Classic: hear documents opened from the system while this
  * page is shown (``DesktopBridge.onDocumentsOpened``); the unsubscribe, or
  * null where the app cannot hand them to the page. */
+/**
+ * The documents a launch hands over, as first looked at (``takeDesktopOpenFiles``
+ * with ``keep``, before the API answered) when they are the same files the
+ * notebook then takes: the looked-at copies, given what the take adds (the
+ * API's token for each, the page an unchanged one already became). Work the
+ * import does once per File (its container check) started on them while the
+ * API was starting is then not done again. Any difference -- another count,
+ * name, size, type or date, or a large file read in parts -- keeps the taken
+ * files as they are.
+ */
+export function adoptLookedAtOpenFiles(lookedAt: readonly File[], taken: File[]): File[] {
+  if (lookedAt.length === 0 || lookedAt.length !== taken.length) return taken;
+  for (let index = 0; index < taken.length; index += 1) {
+    const before = lookedAt[index];
+    const after = taken[index];
+    if (before.name !== after.name || before.size !== after.size || before.type !== after.type ||
+        before.lastModified !== after.lastModified || lazyFileReader(before) || lazyFileReader(after)) return taken;
+  }
+  return lookedAt.map((file, index) => {
+    const after = taken[index];
+    markDesktopLocalFile(file, markedDesktopLocalFileToken(after) ?? undefined);
+    markDesktopExistingPage(file, desktopExistingPage(after) ?? undefined);
+    return file;
+  });
+}
+
 export function onDesktopDocumentsOpened(
   listener: (opened?: DesktopDocumentsOpened) => void,
   options?: DesktopDocumentsOpenedOptions,

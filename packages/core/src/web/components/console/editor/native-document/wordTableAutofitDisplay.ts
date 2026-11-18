@@ -14,6 +14,7 @@ import {
   wordAdjacentFloorWidths,
   wordAutofitColumnWidths,
   wordMinContentFloorWidths,
+  wordShareTableGrowth,
   type WordAutofitColumn,
   type WordAutofitTableWidth,
 } from "../../../../lib/document-word-table-autofit";
@@ -38,6 +39,7 @@ import { docsLayoutPerfLegacy } from "./paged/layoutPerfLegacy";
 import { SHEET_STAMPS } from "./paged/sheetMeasureMemo";
 import {
   readWordTableLayout,
+  type WordTableLayout,
   wordCellHorizontalMargins,
   wordTableContentFit,
   wordTableTextOutdentPx,
@@ -100,6 +102,9 @@ interface LogicalTable {
 const geometryByView = new WeakMap<EditorView, Map<string, WordAutofitGeometry>>();
 /** The widths a table keeping its grid is drawn at (`wordMinContentFloorWidths`). */
 const floorByView = new WeakMap<EditorView, Map<string, readonly number[]>>();
+/** The width (CSS px, the grid's rule centres) a table keeping its grid is drawn
+ * at when its narrowest contents need more than it asks (`wordShareTableGrowth`). */
+const grownByView = new WeakMap<EditorView, Map<string, number>>();
 
 function registry(view: EditorView): Map<string, WordAutofitGeometry> {
   let map = geometryByView.get(view);
@@ -896,11 +901,44 @@ function floorWidthsOf(
   return wordMinContentFloorWidths(grid, columnsInGridUnits(held, scale), undefined, growTo);
 }
 
+/** `window.__docsShareTableGrowOff`: a table keeps its share of the text column
+ * (or, of no width of its own, ends where the column does) however much its
+ * narrowest contents need (as before; A/B). */
+function shareTableGrowthOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsShareTableGrowOff?: boolean }).__docsShareTableGrowOff === true;
+}
+
+/**
+ * The room an in-flow table keeping its grid stands in, CSS px, from its own
+ * left edge to the right margin: the text column less its indent (a negative
+ * indent adds to it, `signed`; Word's room, tables/probes/pctmin), and for an
+ * older Word table the cell margin it reaches past the column on each side.
+ * Null for a table that is not in flow by its indent.
+ */
+function tableRoom(head: Fragment, layout: WordTableLayout, signed: boolean): { container: number; outset: number; room: number } | null {
+  const container = drawnWidth(head.wrapper);
+  if (!(container > 0)) return null;
+  const align = normalizeTableAlign(head.node.attrs.tableAlign);
+  const stated = align === null ? normalizeTableIndentPx(head.node.attrs.tableIndentPx) ?? 0 : 0;
+  const indent = signed ? stated : Math.max(0, stated);
+  let outset = 0;
+  if (layout.textAligned && (align === null || align === "center")) {
+    // An older Word table reaches one cell margin past the column on each side.
+    const firstCell = head.node.firstChild?.firstChild;
+    const lastCell = head.node.firstChild?.lastChild;
+    outset = (firstCell ? wordCellHorizontalMargins(head.node, firstCell).left ?? 0 : 0) +
+      (lastCell ? wordCellHorizontalMargins(head.node, lastCell).right ?? 0 : 0);
+  }
+  return { container, outset, room: container - indent + outset };
+}
+
 /**
  * How wide a table keeping its grid may grow when a word widens one of its
  * columns: the room it stands in, for a table that states no width of its own
  * (`w:tblW` auto over cells with widths; `wordMinContentFloorWidths`). Undefined
- * for a table with a stated width or share, which keeps it.
+ * for a table with a stated width or share, which keeps it (or grows by
+ * `shareTableGrowth`).
  */
 function floorGrowRoom(table: LogicalTable): number | undefined {
   const head = table.fragments[0];
@@ -908,19 +946,67 @@ function floorGrowRoom(table: LogicalTable): number | undefined {
   const layout = readWordTableLayout(head.node.attrs);
   if (!layout || layout.contentFit !== null || layout.fixedLayout ||
       layout.preferredWidthPct !== undefined || layout.preferredWidthTwips !== undefined) return undefined;
-  const container = drawnWidth(head.wrapper);
-  if (!(container > 0)) return undefined;
-  const align = normalizeTableAlign(head.node.attrs.tableAlign);
-  const indent = align === null ? Math.max(0, normalizeTableIndentPx(head.node.attrs.tableIndentPx) ?? 0) : 0;
-  let room = container - indent;
-  if (layout.textAligned && (align === null || align === "center")) {
-    // An older Word table reaches one cell margin past the column on each side.
-    const firstCell = head.node.firstChild?.firstChild;
-    const lastCell = head.node.firstChild?.lastChild;
-    room += (firstCell ? wordCellHorizontalMargins(head.node, firstCell).left ?? 0 : 0) +
-      (lastCell ? wordCellHorizontalMargins(head.node, lastCell).right ?? 0 : 0);
+  return tableRoom(head, layout, false)?.room;
+}
+
+/**
+ * The width a table over cells with widths is drawn at because its columns'
+ * narrowest contents need more than it is drawn at (`wordShareTableGrowth`),
+ * CSS px; null when that holds them. The table is a share of the text column,
+ * or of no width of its own over cells wider than the room it stands in (Word
+ * draws both alike, tables/probes/pctmin M07/M08/N05; a table of no width whose
+ * cells fit keeps them and widens a column by `floorGrowRoom`).
+ */
+function shareTableGrowth(table: LogicalTable, columns: readonly WordAutofitColumn[]): number | null {
+  if (shareTableGrowthOff()) return null;
+  const head = table.fragments[0];
+  if (!head || !table.floorGrid) return null;
+  const layout = readWordTableLayout(head.node.attrs);
+  if (!layout || layout.contentFit !== null || layout.fixedLayout || layout.bidiVisual ||
+      layout.preferredWidthTwips !== undefined) return null;
+  // Measured for a left-aligned table in the body; a nested or aligned one keeps its share.
+  if (normalizeTableAlign(head.node.attrs.tableAlign) !== null || head.table.parentElement?.closest("table")) return null;
+  const room = tableRoom(head, layout, true);
+  if (!room) return null;
+  let share: number;
+  if (layout.preferredWidthPct !== undefined) {
+    share = (room.container * layout.preferredWidthPct) / 5000 + room.outset;
+  } else {
+    // Drawn as the view draws it: the grid, or the column from the indent when the grid is wider.
+    const drawn = tableRoom(head, layout, false)?.room ?? 0;
+    const grid = table.floorGrid.reduce((sum, width) => sum + width, 0);
+    if (!(grid > drawn + 0.5)) return null;
+    share = drawn;
   }
-  return room;
+  const sumMin = withFloorFitSlack(columns).reduce((sum, column) => sum + column.minPx, 0);
+  return wordShareTableGrowth(sumMin, share, room.room);
+}
+
+/** The width the table view draws a table at besides its grid's: its outer
+ * rules' halves, which a native border box holds (set by the table view). */
+export const NATIVE_GRID_USED_WIDTH_ATTR = "data-native-grid-used-width";
+/** On a table drawn at the width it grew to (`wordShareTableGrowthFor`). */
+export const WORD_SHARE_GROWN_ATTR = "data-word-share-grown";
+/** Asks the table view to draw a table's width and columns again. */
+export const NATIVE_GRID_RESYNC_EVENT = "mrai-native-grid-resync";
+
+/**
+ * Draws a table at the width it grew to (`wordShareTableGrowthFor`), or hands
+ * one that no longer grows back to its view. Whether it changed.
+ */
+function applyShareGrowth(table: HTMLTableElement, widthPx: number | null): boolean {
+  if (widthPx === null) {
+    if (!table.hasAttribute(WORD_SHARE_GROWN_ATTR)) return false;
+    table.removeAttribute(WORD_SHARE_GROWN_ATTR);
+    table.dispatchEvent(new CustomEvent(NATIVE_GRID_RESYNC_EVENT));
+    return true;
+  }
+  const before = table.style.width;
+  const used = Number.parseFloat(table.getAttribute(NATIVE_GRID_USED_WIDTH_ATTR) ?? "") || 0;
+  table.style.width = `${widthPx + used}px`;
+  table.style.maxWidth = "none";
+  table.setAttribute(WORD_SHARE_GROWN_ATTR, "true");
+  return table.style.width !== before;
 }
 
 /**
@@ -1405,6 +1491,28 @@ export function wordMinContentFloorFor(
   return (headBlockId && map.get(headBlockId)) || null;
 }
 
+/**
+ * The width (CSS px, between the grid's outer rule centres) a table keeping its
+ * grid is drawn at because its columns' narrowest contents need more room than
+ * its share of the text column or its cells give (`wordShareTableGrowth`), or
+ * null when it is drawn as it asks.
+ */
+export function wordShareTableGrowthFor(
+  view: EditorView | null | undefined,
+  node: ProseMirrorNode,
+): number | null {
+  if (!view) return null;
+  const map = grownByView.get(view);
+  if (!map || map.size === 0) return null;
+  const fragmentId = stringAttr(node, TABLE_FRAGMENT_ID_ATTR);
+  const blockId = stringAttr(node, MRNOTE_BLOCK_ID_ATTR);
+  const direct = (fragmentId && map.get(fragmentId)) || (blockId && map.get(blockId));
+  if (direct) return direct;
+  if (!fragmentId) return null;
+  const headBlockId = findFragmentHeadBlockId(view, fragmentId);
+  return (headBlockId && map.get(headBlockId)) || null;
+}
+
 /** The latest projected widths for a rendered table node, if it has any. */
 export function wordAutofitGeometryFor(
   view: EditorView | null | undefined,
@@ -1537,11 +1645,17 @@ export function projectWordAutofitTables(view: EditorView, options: WordAutofitP
     floors = new Map();
     floorByView.set(view, floors);
   }
+  let grown = grownByView.get(view);
+  if (!grown) {
+    grown = new Map();
+    grownByView.set(view, grown);
+  }
   const state = measurementState(view);
   if (state.observer) markDirty(state.dirty, state.observer.takeRecords());
   if (tables.length === 0) {
     map.clear();
     floors.clear();
+    grown.clear();
     state.measured.clear();
     state.dirty.clear();
     state.observer?.disconnect();
@@ -1636,6 +1750,7 @@ export function projectWordAutofitTables(view: EditorView, options: WordAutofitP
   const measuredNext = new Map<string, MeasuredTable>();
   const next = new Map<string, WordAutofitGeometry>();
   const nextFloors = new Map<string, readonly number[]>();
+  const nextGrown = new Map<string, number>();
   let changed = false;
   const remember = (table: LogicalTable, columns: readonly WordAutofitColumn[], projected?: ProjectedFrame, floorScale?: number) => {
     measuredNext.set(table.keys[0], {
@@ -1674,10 +1789,14 @@ export function projectWordAutofitTables(view: EditorView, options: WordAutofitP
         // Still to be measured: the record stays as it was, stale.
         measuredNext.set(table.keys[0], held);
         if (table.floorGrid) {
+          const widened = columns && !sharedFloors.has(table) ? shareTableGrowth(table, columns) : null;
           const floored = sharedFloors.get(table) ?? (columns
-            ? floorWidthsOf(table.floorGrid, columns, held.floorScale ?? 1, floorGrowRoom(table))
+            ? widened !== null
+              ? wordAutofitColumnWidths(withFloorFitSlack(columns), widened)
+              : floorWidthsOf(table.floorGrid, columns, held.floorScale ?? 1, floorGrowRoom(table))
             : null);
           if (floored) for (const key of table.keys) nextFloors.set(key, floored);
+          if (widened !== null) for (const key of table.keys) nextGrown.set(key, widened);
         } else if (held.projected) {
           for (const key of table.keys) next.set(key, held.projected.geometry);
         }
@@ -1689,12 +1808,17 @@ export function projectWordAutofitTables(view: EditorView, options: WordAutofitP
         const floorScale = kept.get(table)?.floorScale ?? floorGridScale(table);
         // Kept once it measured something: a table not laid out yet reads zero.
         if (fonts !== null && columns.some((column) => column.minPx > 0)) remember(table, columns, undefined, floorScale);
-        const floored = sharedFloors.get(table) ?? floorWidthsOf(table.floorGrid, columns, floorScale, floorGrowRoom(table));
+        const widened = sharedFloors.has(table) ? null : shareTableGrowth(table, columns);
+        const floored = sharedFloors.get(table) ?? (widened !== null
+          ? wordAutofitColumnWidths(withFloorFitSlack(columns), widened)
+          : floorWidthsOf(table.floorGrid, columns, floorScale, floorGrowRoom(table)));
         if (floored) for (const key of table.keys) nextFloors.set(key, floored);
+        if (widened !== null) for (const key of table.keys) nextGrown.set(key, widened);
         const shown = floored ?? table.floorGrid;
         const total = shown.reduce((sum, width) => sum + width, 0);
         defer(() => {
           for (const fragment of table.fragments) {
+            if (applyShareGrowth(fragment.table, widened)) changed = true;
             // Drawn by the table view as shares of the grid's total (its
             // native grid display), so only the shares change.
             if (!floored && fragment.table.getAttribute(WORD_MIN_CONTENT_FLOOR_ATTR) !== "true") continue;
@@ -1771,5 +1895,7 @@ export function projectWordAutofitTables(view: EditorView, options: WordAutofitP
   for (const [key, geometry] of next) map.set(key, geometry);
   floors.clear();
   for (const [key, widths] of nextFloors) floors.set(key, widths);
+  grown.clear();
+  for (const [key, width] of nextGrown) grown.set(key, width);
   return changed;
 }

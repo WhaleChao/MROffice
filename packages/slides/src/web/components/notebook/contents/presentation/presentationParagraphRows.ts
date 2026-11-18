@@ -92,7 +92,20 @@ const SYMBOL_SHAPE_CODES: ReadonlyMap<string, ReadonlySet<number>> = new Map(
 
 
 
-function markerSlotCss(indent: number): CSSProperties {
+function markerSlotCss(indent: number, smartArt = false): CSSProperties {
+  // A SmartArt shape's words with a first-line indent (positive): Windows
+  // PowerPoint sets the marker where the first line starts, marL + indent,
+  
+  
+  // at 87.7 pt, its lines at 51.7, the words after the bullet's advance). A
+  // text box keeps the marker at marL (below; sa36-bullet-posindent).
+  if (smartArt && indent > 0) {
+    return {
+      marginInlineStart: indent / AUTOFIT_EMU_PER_PX,
+      width: 0,
+      minWidth: "max-content",
+    } as CSSProperties;
+  }
   return {
     marginInlineStart: Math.min(0, indent) / AUTOFIT_EMU_PER_PX,
     width: Math.abs(indent) / AUTOFIT_EMU_PER_PX,
@@ -207,6 +220,10 @@ export interface PresentationParagraphRowPlan {
   readonly dir?: "rtl";
   /** Text alignment (`a:pPr@fontAlgn`): the row's own, else what its level inherits. */
   readonly fontAlign?: "auto" | "t" | "ctr" | "base" | "b";
+  /** The Latin face its paragraph mark is set in, where the file says it (`SlideParagraph.endLatinFace`). */
+  readonly endLatinFace?: string;
+  /** The row ends at a line break of its paragraph, not its mark (`SlideParagraph.endsInLineBreak`). */
+  readonly endsInLineBreak?: true;
 }
 
 /** Plan every row of a body. */
@@ -455,7 +472,7 @@ export function planPresentationParagraphRows({
       ...ladderStyle,
     };
     const markerBoxCss: CSSProperties = {
-      ...(native ? markerSlotCss(native.indent) : {}),
+      ...(native ? markerSlotCss(native.indent, true) : {}),
       ...(ladder ? markerSlotCss(ladder.indent) : {}),
     };
     return {
@@ -479,6 +496,8 @@ export function planPresentationParagraphRows({
       ...((paragraphs[index]?.fontAlign ?? paragraphs[index]?.fontAlignInherited)
         ? { fontAlign: paragraphs[index]!.fontAlign ?? paragraphs[index]!.fontAlignInherited }
         : {}),
+      ...(paragraphs[index]?.endLatinFace ? { endLatinFace: paragraphs[index]!.endLatinFace } : {}),
+      ...(paragraphs[index]?.endsInLineBreak ? { endsInLineBreak: true as const } : {}),
     };
   });
 }

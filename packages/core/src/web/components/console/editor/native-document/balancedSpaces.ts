@@ -41,6 +41,10 @@ function balancedNbspOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsBalancedNbspOff?: boolean}).__docsBalancedNbspOff === true;
 }
 
+function balancedNbspAfterAtomOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsBalancedNbspAfterAtomOff?: boolean}).__docsBalancedNbspAfterAtomOff === true;
+}
+
 /** The document positions of the spaces Word balances in one textblock: the
  * spaces, and the no-break spaces (corpus R395-D10: an exam's choices "A. 1"
  * to "D. −i" set apart by 33 no-break spaces each, which Word sets at half an
@@ -70,11 +74,19 @@ export function balancedSpaceRanges(block: ProseMirrorNode, start: number): numb
     // that follows East Asian text (Windows Word, docx-look/probes/nbsp
     // k_spaces, w_texts: "x" and 16 no-break spaces 5.25 pt each at 10.5 pt,
     // after "中" 2.37, a lone one between two letters 2.4).
+    // Nor a run that opens the paragraph or follows an inline leaf (an
+    // equation, a picture, a tab, a break): Windows Word, docx-look/brk10/
+    // probes nbspmath (R395-D10's package): 20 after "X" 5.25 pt each, after
+    // an equation, a picture, a tab or at the start 2.38; plain spaces after
+    // an equation 5.25. R395-D10 question 7 keeps its four choices
+    // "A. (\u22122,6)" + 20 no-break spaces \u2026 on one line.
+    // `window.__docsBalancedNbspAfterAtomOff = true`: such runs balanced, as before.
     if (char === "\u00a0") {
       let first = index;
       while (first > 0 && chars[first - 1] === "\u00a0") first -= 1;
       const lead = first > 0 ? chars[first - 1] : null;
       if (lead !== null && EAST_ASIAN.test(lead)) continue;
+      if ((lead === null || lead === "\t") && !balancedNbspAfterAtomOff()) continue;
     }
     const before = index > 0 ? chars[index - 1]! : null;
     const after = index + 1 < chars.length ? chars[index + 1]! : null;

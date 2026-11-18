@@ -10,7 +10,9 @@ import {
   officeTextLayoutLines,
   officeTextLineIndentCss,
 } from "@mrnote/core/web/lib/office-text-layout.ts";
+import { ptToPx } from "@mrnote/core/web/lib/office-units.ts";
 import { exactLineSpacingCss } from "@mrnote/core/web/lib/presentation-line-spacing.ts";
+import type { RunStyle } from "@mrnote/core/web/lib/presentation-runs.ts";
 
 function textOfRuns(value: unknown): string | null {
   if (!value || typeof value !== "object") return null;
@@ -131,3 +133,50 @@ export function presentationTableCellRunParagraphs<R extends { text: string }>(r
   }
   return paragraphs;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationTableCellTrailingParagraphStyle(
+  table: { source?: unknown },
+  cell: { text?: unknown; nativeEndMark?: unknown; fontSize?: unknown; fontFamily?: unknown },
+): RunStyle | null {
+  // Only a table read under readings row 1004 says so: a page stored before
+  
+  const source = table.source && typeof table.source === "object" ? (table.source as Record<string, unknown>) : null;
+  if (source?.cellTrailingParagraphLines !== true) return null;
+  if (typeof cell.text !== "string" || !cell.text.endsWith("\n")) return null;
+  const mark = cell.nativeEndMark;
+  if (!mark || typeof mark !== "object" || Array.isArray(mark)) return {};
+  const record = mark as Record<string, unknown>;
+  const read = record.cell && typeof record.cell === "object" && !Array.isArray(record.cell)
+    ? (record.cell as Record<string, unknown>)
+    : {};
+  const style: RunStyle = {};
+  if (
+    typeof record.fontSize === "number" && Number.isFinite(record.fontSize) && record.fontSize > 0 &&
+    cell.fontSize === read.fontSize
+  ) {
+    style.fontSize = ptToPx(record.fontSize);
+  }
+  if (typeof record.fontFamily === "string" && record.fontFamily.trim() && cell.fontFamily === read.fontFamily) {
+    style.fontFamily = record.fontFamily;
+  }
+  if (typeof record.baseline === "number" && record.baseline > 0) style.superscript = true;
+  else if (typeof record.baseline === "number" && record.baseline < 0) style.subscript = true;
+  return style;
+}
+

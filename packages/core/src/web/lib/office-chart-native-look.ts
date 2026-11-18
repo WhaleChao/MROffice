@@ -14,6 +14,16 @@
  */
 import { PX_PER_PT } from "./office-units";
 import {
+  OFFICE_BEVEL_PRESETS,
+  OFFICE_LIGHT_DIRECTIONS,
+  OFFICE_LIGHT_RIGS,
+  OFFICE_MATERIAL_PRESETS,
+  type OfficeBevelEffect,
+  type OfficeLightDirection,
+  type OfficeLightRig,
+  type OfficeMaterialPreset,
+} from "./office-picture-effects";
+import {
   normalizeOfficeShapeGradient,
   type OfficeShapeGradient,
 } from "./office-shape-paint";
@@ -125,6 +135,18 @@ export interface ChartNativeLookBuiltInStyle {
   };
   line?: { widthPt: number; color?: string; transforms?: ChartNativeLookTransform[] };
   shadow?: { color: string; opacity: number; blur: number; distance: number; direction: number };
+  
+
+
+
+
+
+  effect3d?: {
+    bevel?: OfficeBevelEffect;
+    contour?: { width: number; color?: string; transforms?: ChartNativeLookTransform[] };
+    material?: OfficeMaterialPreset;
+    lighting?: { rig: OfficeLightRig; direction?: OfficeLightDirection; angle?: number };
+  };
   own?: { series: number; fill?: true; line?: true; effect?: true; unfilled?: true; points?: number[] }[];
   /** Each series' colour slot (`c:idx`) by its place, when one differs. */
   slots?: number[];
@@ -143,6 +165,27 @@ export interface ChartNativeLook {
 
 
   labelRoom?: boolean;
+  /** A deck's chart read as Windows PowerPoint reads it (API readings row
+   * 804, `source.windowsValueScale`): a bar chart's automatic value axis is
+   * thinned to its plot before the category names take room, at Windows'
+   * constants (`OFFICE_WINDOWS_SCALE`). Display only. */
+  windowsValueScale?: boolean;
+  /** A deck's chart whose turned category names are set as Windows PowerPoint
+   * sets them (`source.windowsCategoryNames`, `OFFICE_WINDOWS_NAMES`). Display only. */
+  windowsCategoryNames?: boolean;
+  /** A deck's chart whose side legend sets its entries as Windows PowerPoint
+   * sets them (`source.windowsLegendSlots`, `OFFICE_WINDOWS_LEGEND_SLOTS`):
+   * wrapped names in even slots. Display only. */
+  windowsLegendSlots?: boolean;
+  /** A deck's chart whose plot is laid out and drawn as Windows PowerPoint
+   * lays it out (`source.windowsPlotGeometry`): an outlined bar's outline on
+   * its edges (`OFFICE_BAR_EDGE_STROKES`), the automatic plot's top under the
+   * title by the title's line (`windowsPlotTopUnderTitle`). Display only. */
+  windowsPlotGeometry?: boolean;
+  /** A deck's 3-D bar chart whose bars are as deep as they are thick, as
+   * Windows PowerPoint draws them (`source.windowsBarDepth`): Depth % of
+   * base taken along the categories, which run up a bar chart. Display only. */
+  windowsBarDepth?: boolean;
   /** The text insets (pt) the chart's data labels' box states
    * (`c:dLbls/c:txPr/a:bodyPr`, the import's `source.dataLabelInsets`,
    * reading row 821); absent is DrawingML's 7.2 / 3.6pt. Display only. */
@@ -424,6 +467,40 @@ export function normalizeChartNativeLookBuiltInStyle(raw: unknown): ChartNativeL
       direction: shadow.direction,
     };
   }
+  const effect3d = gallery && isRecord(raw.effect3d) ? raw.effect3d : undefined;
+  if (effect3d) {
+    const out: NonNullable<ChartNativeLookBuiltInStyle["effect3d"]> = {};
+    const bevel = isRecord(effect3d.bevel) ? effect3d.bevel : undefined;
+    if (
+      bevel &&
+      (OFFICE_BEVEL_PRESETS as readonly string[]).includes(String(bevel.preset)) &&
+      finite(bevel.width, 0, 20_116_800) &&
+      finite(bevel.height, 0, 20_116_800)
+    ) {
+      out.bevel = { preset: bevel.preset as OfficeBevelEffect["preset"], width: bevel.width as number, height: bevel.height as number };
+    }
+    const contour = isRecord(effect3d.contour) ? effect3d.contour : undefined;
+    if (contour && finite(contour.width, 1, 20_116_800)) {
+      const contourTransforms = transforms(contour.transforms);
+      if (isHex(contour.color)) out.contour = { width: contour.width as number, color: contour.color.toLowerCase() };
+      else if (contourTransforms) out.contour = { width: contour.width as number, transforms: contourTransforms };
+      else out.contour = { width: contour.width as number };
+    }
+    if ((OFFICE_MATERIAL_PRESETS as readonly string[]).includes(String(effect3d.material))) {
+      out.material = effect3d.material as OfficeMaterialPreset;
+    }
+    const lighting = isRecord(effect3d.lighting) ? effect3d.lighting : undefined;
+    if (lighting && (OFFICE_LIGHT_RIGS as readonly string[]).includes(String(lighting.rig))) {
+      out.lighting = {
+        rig: lighting.rig as OfficeLightRig,
+        ...((OFFICE_LIGHT_DIRECTIONS as readonly string[]).includes(String(lighting.direction))
+          ? { direction: lighting.direction as OfficeLightDirection }
+          : {}),
+        ...(finite(lighting.angle, 0, 21_600_000) ? { angle: lighting.angle as number } : {}),
+      };
+    }
+    if (out.bevel || out.contour) result.effect3d = out;
+  }
   if (Array.isArray(raw.own)) {
     const own: NonNullable<ChartNativeLookBuiltInStyle["own"]> = [];
     for (const entry of raw.own.slice(0, 255)) {
@@ -441,7 +518,7 @@ export function normalizeChartNativeLookBuiltInStyle(raw: unknown): ChartNativeL
   if (Array.isArray(raw.slots) && raw.slots.length <= 255 && raw.slots.every((slot) => Number.isInteger(slot) && finite(slot, 0, 254))) {
     result.slots = (raw.slots as number[]).slice();
   }
-  return result.fill || result.line || result.shadow || result.seriesLine ? result : undefined;
+  return result.fill || result.line || result.shadow || result.effect3d || result.seriesLine ? result : undefined;
 }
 
 /** A chart's data labels' text insets (pt, each 0..100), or undefined. */
@@ -457,6 +534,11 @@ export function normalizeChartNativeLook(raw: unknown): ChartNativeLook | undefi
   if (!isRecord(raw)) return undefined;
   const result: ChartNativeLook = {};
   if (raw.labelRoom === true) result.labelRoom = true;
+  if (raw.windowsValueScale === true) result.windowsValueScale = true;
+  if (raw.windowsCategoryNames === true) result.windowsCategoryNames = true;
+  if (raw.windowsLegendSlots === true) result.windowsLegendSlots = true;
+  if (raw.windowsPlotGeometry === true) result.windowsPlotGeometry = true;
+  if (raw.windowsBarDepth === true) result.windowsBarDepth = true;
   const insets = chartLabelInsets(raw.dataLabelInsets);
   if (insets) result.dataLabelInsets = insets;
   const builtInStyle = normalizeChartNativeLookBuiltInStyle(raw.builtInStyle);

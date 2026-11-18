@@ -52,10 +52,39 @@ export const OFFICE_PRINT_IDENTITY: OfficePrintScale = Object.freeze({ x: 1, y: 
 
 type MeasuredEntry = readonly [screenRowPx: number, printedRowDots: number, printedDigitDots: number];
 
+/**
+ * The Japanese MS faces print alike (one table, the server's
+ * _OFFICE_MS_JAPANESE_PRINT_FACES): a face of them the table lacks a size for
+ * reads its siblings' (R102-X10's Normal 明朝, drawn in ＭＳ Ｐ明朝 11: its
+ * 15 px rows print 85 dots), and GDI's ASCII names read the Japanese ones.
+ */
+const MS_JAPANESE_PRINT_FACES = ["ｍｓ 明朝", "ｍｓ ｐ明朝", "ｍｓ ゴシック", "ｍｓ ｐゴシック"] as const;
+const PRINT_FACE_ALIASES: Readonly<Record<string, string>> = {
+  "ms mincho": "ｍｓ 明朝",
+  "ms pmincho": "ｍｓ ｐ明朝",
+  "ms gothic": "ｍｓ ゴシック",
+  "ms pgothic": "ｍｓ ｐゴシック",
+};
+
+function measuredSizes(family: string): Readonly<Record<string, unknown>> | undefined {
+  const table = OFFICE_PRINT_METRICS as unknown as Readonly<Record<string, unknown>>;
+  const at = PRINT_FACE_ALIASES[family] ?? family;
+  const own = table[at];
+  const sizes = own && typeof own === "object" ? (own as Readonly<Record<string, unknown>>) : undefined;
+  if (!(MS_JAPANESE_PRINT_FACES as readonly string[]).includes(at)) return sizes;
+  const merged: Record<string, unknown> = {};
+  for (const face of MS_JAPANESE_PRINT_FACES) {
+    const sibling = table[face];
+    if (face !== at && sibling && typeof sibling === "object") Object.assign(merged, sibling);
+  }
+  if (sizes) Object.assign(merged, sizes);
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 function measured(family: string, sizePt: number): MeasuredEntry | undefined {
-  const sizes = (OFFICE_PRINT_METRICS as unknown as Readonly<Record<string, unknown>>)[family];
-  if (!sizes || typeof sizes !== "object") return undefined;
-  const entry = (sizes as Readonly<Record<string, unknown>>)[String(Math.round(sizePt * 2) / 2)];
+  const sizes = measuredSizes(family);
+  if (!sizes) return undefined;
+  const entry = sizes[String(Math.round(sizePt * 2) / 2)];
   return Array.isArray(entry) && entry.length === 3 && entry.every((value) => typeof value === "number" && value > 0)
     ? (entry as unknown as MeasuredEntry)
     : undefined;
@@ -90,10 +119,58 @@ function estimatedPrintedDigitDots(family: string, sizePt: number): number {
 }
 
 /**
+ * How far Windows Excel sets a left- and a right-aligned printed line in from
+ * its cell's edges, in printer dots on the paper: half the margin its printer
+ * re-wraps in, m = round(digit / 2) + 7 (digit: the face's widest digit at the
+ * printer's pixels per em at the page's `scale`), floor(m / 2) + 1 on the
+ * left and ceil(m / 2) on the right (lookwin p141-lw: 8 faces at 8-48 pt, 100
+ * and 70 %: Calibri 12 17 dots, 48 55, Arial Bold 36 46). The API's
+ * draw_cell_text_upright inset_left / inset_right; `margin` is m itself, the
+ * room a printed line re-wraps in being the printed column less it (the API's
+ * cell_text_lines, lookwin p138-lw).
+ */
+export function officePrintedTextInsetDots(family: string, sizePt: number, scale = 1): { left: number; right: number; margin: number } | undefined {
+  if (!(sizePt > 0) || !(scale > 0)) return undefined;
+  const key = excelWindowsFaceKey(family, null);
+  const em = (sizePt * scale * OFFICE_PRINT_DPI) / 72;
+  const advances = OFFICE_DIGIT_ADVANCES as Readonly<Record<string, number>>;
+  const digit = (OFFICE_DIGIT_WHOLE_EM as readonly string[]).includes(key)
+    ? Math.max(1, Math.floor(Math.floor(em + 0.5) / 2 + 0.5))
+    : Math.max(1, Math.round((advances[key] ?? advances.calibri ?? 0.50684) * em));
+  const margin = Math.floor(digit / 2 + 0.5) + 7;
+  return { left: Math.floor(margin / 2) + 1, right: margin - Math.floor(margin / 2), margin };
+}
+
+/**
  * How Windows Excel's printer scales a workbook's grid: from its Normal font
  * (font 0, the native grid font) and the screen digit width its columns are
  * counted in (officeDigitWidth of that font unless given).
  */
+/** East Asian faces a cell may name in Latin letters (office_cjk_latin_face's). */
+const LATIN_NAMED_EAST_ASIAN_FACES = new Set(["ms gothic", "ms pgothic", "ms mincho", "ms pmincho", "meiryo", "meiryo ui",
+  "yu gothic", "yu mincho", "simsun", "nsimsun", "simhei", "microsoft yahei", "dengxian", "pmingliu", "mingliu",
+  "microsoft jhenghei", "malgun gothic", "gulim", "dotum", "batang", "gungsuh"]);
+
+/**
+ * A printed Western face's size, page px: Windows Excel prints it at a whole
+ * number of printer pixels per em at the page's scale, its advances with it
+ * (lookwin bench: Calibri 11 at 100% 92 dots, 11.04 pt; Times New Roman 18
+ * at 35% 6.36 pt; the API's draw_cell_text_upright). `dotPx` is the page px
+ * of one printer dot. An East Asian face keeps its size: its words keep the
+ * unrounded size's widths (R356-X27).
+ */
+export function officePrintedFontPx(family: string, sizePx: number, dotPx: number): number {
+  if (!(sizePx > 0) || !(dotPx > 0)) return sizePx;
+  if (officeEastAsianFamily(family)) return sizePx;
+  return Math.max(1, Math.floor(sizePx / dotPx + 0.5)) * dotPx;
+}
+
+/** An East Asian Office face, by a name in its own script or in Latin letters. */
+export function officeEastAsianFamily(family: string): boolean {
+  const name = family.trim();
+  return [...name].some((character) => (character.codePointAt(0) ?? 0) >= 0x3000) || LATIN_NAMED_EAST_ASIAN_FACES.has(name.toLowerCase());
+}
+
 export function officePrintScale(
   font: { readonly family?: string; readonly sizePt?: number; readonly record?: ExcelFontRecordClass | null } | undefined,
   screenDigitWidth?: number,
@@ -137,7 +214,7 @@ export function officePrintedRowDots(
     if (!at || at.startsWith("_")) continue;
     const entry = measured(at, size);
     if (entry) return entry[1];
-    const sizes = (OFFICE_PRINT_METRICS as unknown as Readonly<Record<string, unknown>>)[at];
+    const sizes = measuredSizes(at);
     if (!sizes || typeof sizes !== "object") continue;
     const points: [number, number][] = [];
     for (const [key, value] of Object.entries(sizes as Readonly<Record<string, unknown>>)) {

@@ -26,7 +26,7 @@ import {
   normalizeFontFamily,
   normalizeFontSize,
 } from "../extensions/TextStyling";
-import { wordFontLineMetrics } from "./wordFontMetrics";
+import { wordDocumentFontLineMetrics, wordDocumentWindowsLineEm } from "./wordFontMetrics";
 import type { FootnoteParagraphFormat } from "./footnotes";
 import { NOTE_PARAGRAPH_LINE_ATTR, noteRowLineToParagraphs } from "./noteRichText";
 
@@ -196,16 +196,43 @@ function singleLineRatio(
   doc: Document,
   stack: string,
   eastAsian: boolean,
+  weight = 400,
+  italic = false,
 ): number | null {
-  const key = `${eastAsian ? "ea" : "latin"}|${stack}`;
+  const styled = !eastAsian && (weight >= 600 || italic) && !styleLineOff();
+  const key = `${eastAsian ? "ea" : "latin"}|${styled ? `${weight >= 600 ? 700 : 400}/${italic ? 1 : 0}|` : ""}${stack}`;
   const recorded = recordedRatios.get(key);
   if (recorded !== undefined) return recorded;
   // Latin text is set in the stack's first face: a face Word did not record
   // is measured as the browser draws it, never read from the CJK fallbacks
   // at the stack's end (their taller box lifted a Latin footer a line).
   const tokens = stack.split(",");
+  // A bold or italic run is set on its own style's line, each style its own
+  // file in Windows Word: Traditional Arabic Bold's 1.5327 em where its
+  // regular is 1.4946 (docx-look/probes/cjk13 m1, 15.33 pt at 10 pt; corpus
+  // R379-D02's header row, the band 0.4 pt short), Book Antiqua Bold's
+  // 1.2056 where its regular is 1.2427. Windows' own line where it differs
+  // from the recorded one, else (a face Word's files were not recorded for)
+  // the style's face as the page serves it, its overrides Word's box.
+  if (styled) {
+    const own = wordDocumentWindowsLineEm(unquoted(tokens[0] ?? ""), weight, italic);
+    if (own !== undefined) {
+      recordedRatios.set(key, own);
+      return own;
+    }
+    if (!wordDocumentFontLineMetrics(unquoted(tokens[0] ?? ""))) {
+      const line = measureOfficeFontLineBox(doc, {
+        font: `${italic ? "italic" : "normal"} ${weight >= 600 ? 700 : 400} ${REFERENCE_PX}px ${stack}`,
+        lineHeight: "normal",
+        measureHeight: true,
+      });
+      return line?.heightPx && Number.isFinite(line.heightPx) && line.heightPx > 0
+        ? line.heightPx / REFERENCE_PX
+        : null;
+    }
+  }
   for (const token of eastAsian ? tokens : tokens.slice(0, 1)) {
-    const metrics = wordFontLineMetrics(unquoted(token));
+    const metrics = wordDocumentFontLineMetrics(unquoted(token));
     if (!metrics) continue;
     const ratio = eastAsian
       ? metrics.box * wordDocumentEastAsianSingleLineFactor(unquoted(token))
@@ -244,8 +271,16 @@ export function wordSingleLineRatio(
   doc: Document,
   family: string,
   eastAsian: boolean,
+  weight?: number,
+  italic?: boolean,
 ): number | null {
-  return singleLineRatio(doc, renderStack(family), eastAsian);
+  return singleLineRatio(doc, renderStack(family), eastAsian, weight, italic);
+}
+
+/** `window.__docsBandStyleLineOff = true` asks the older reading (a bold or
+ * italic run on its regular face's line), for an A/B of one build. */
+function styleLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBandStyleLineOff?: boolean }).__docsBandStyleLineOff === true;
 }
 
 /** Whether a run of text holds East Asian characters (Word's 1.3x line). */

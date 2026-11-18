@@ -226,6 +226,36 @@ export function wordMinContentFloorWidths(
   return distribute(min, max, sumMin, max.reduce((sum, value) => sum + value, 0), target, columns);
 }
 
+/**
+ * How wide Word draws a table of a percentage preferred width over cells with
+ * widths when its columns' narrowest contents (each its longest unbreakable
+ * piece plus margins and borders) together need more than that share:
+ * null when they do not.
+ *
+ * The table grows to its narrowest contents, as far as the room from its own
+ * left edge to the right margin (`roomPx`; a negative indent adds to it, a
+ * text-aligned table's outer cell margins too); there the narrowest contents
+ * shrink by one factor and the long words break (`wordMinContentFloorWidths`).
+ * A share already wider than that room (a 100% table with a positive indent)
+ * sets no bound: the table takes its narrowest contents whole, past the margin.
+ * Windows Word, compatibility modes 14 and 15 (docx-look tables/probes/pctmin,
+ * a 9360-twip column, narrowest contents 11171 twips): 100% at tblInd -275,
+ * 0, -720 drew 9635, 9360 and 10080, the contents shrunk by 0.847 (any cell
+ * widths, a 50% share and tblW auto alike); at tblInd 100, 500, 1440 it drew
+ * 11174, past the margin; 50% and auto at tblInd 500 drew 8860; contents of
+ * 9481 at tblInd -275 drew 9481. Corpus R305-D06: a 100% table at tblInd
+ * -275 is 9635 wide, "matriculation" broken after "matriculati".
+ */
+export function wordShareTableGrowth(sumMinPx: number, sharePx: number, roomPx: number): number | null {
+  const sumMin = finiteNonNegative(sumMinPx);
+  const share = finiteNonNegative(sharePx);
+  if (!(share > 0) || sumMin <= share + 0.5) return null;
+  const room = finiteNonNegative(roomPx);
+  if (share > room + 0.5) return sumMin;
+  const grown = Math.min(sumMin, room);
+  return grown > share + 0.5 ? grown : null;
+}
+
 
 
 

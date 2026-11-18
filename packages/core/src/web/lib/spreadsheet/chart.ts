@@ -593,6 +593,17 @@ export type SpreadsheetChart = {
    * heading -- written with no `c:tx`. Absent: the first row names them.
    */
   noSeriesNames?: true;
+  
+
+
+
+
+
+
+
+
+
+  nameRowsAbove?: number;
   /** XLS-A081 Edit Alt Text: the chart's description (`cNvPr@descr`). */
   alt?: string;
   /** Older Office's alt-text title (`cNvPr@title`), kept as the file had it. */
@@ -1686,6 +1697,17 @@ export function normalizeChart(raw: unknown): SpreadsheetChart | null {
   if (r.noSeriesNames === true) out.noSeriesNames = true;
   // Outer category levels sit beside a category column under a row of names.
   if (out.noCategories || out.noSeriesNames) delete out.outerCategoryColumns;
+  
+  if (
+    typeof r.nameRowsAbove === "number" &&
+    Number.isInteger(r.nameRowsAbove) &&
+    r.nameRowsAbove >= 1 &&
+    r.nameRowsAbove <= Math.min(range.r1, MAX_CHART_NAME_ROWS_ABOVE) &&
+    r.seriesInColumns !== false &&
+    !out.noSeriesNames
+  ) {
+    out.nameRowsAbove = r.nameRowsAbove;
+  }
   // XLS-A081: alt text and the assigned macro, as written.
   if (typeof r.alt === "string" && r.alt.trim()) out.alt = r.alt.slice(0, 2_000);
   if (typeof r.altTitle === "string" && r.altTitle.trim()) out.altTitle = r.altTitle.slice(0, 255);
@@ -1938,6 +1960,35 @@ export interface NativeChartRangeLayout {
   readonly seriesLines: readonly number[];
 }
 
+
+
+export const MAX_CHART_NAME_ROWS_ABOVE = 32;
+
+
+
+
+
+
+
+
+
+
+export function chartNameOverRows(
+  rows: readonly [number, number],
+  col: number,
+  cells: (row: number, col: number) => string | number | undefined,
+): string | null {
+  const [r1, r2] = rows;
+  if (r2 <= r1) return null;
+  const parts: string[] = [];
+  for (let row = r1; row <= r2; row += 1) {
+    let text = "";
+    for (let at = col; at >= 0 && text.trim() === ""; at -= 1) text = String(cells(row, at) ?? "");
+    if (text.trim() !== "") parts.push(text);
+  }
+  return parts.join(" ");
+}
+
 export function nativeChartRangeLayout(
   chart: Pick<SpreadsheetChart, "range" | "seriesInColumns" | "noCategories" | "noSeriesNames">,
 ): NativeChartRangeLayout {
@@ -1973,7 +2024,7 @@ export function nativeChartStatesLabelLines(chart: Pick<SpreadsheetChart, "noCat
  */
 export function nativeChartRangeSeriesRefs(
   chart: Pick<SpreadsheetChart, "type" | "range" | "seriesInColumns" | "noCategories" | "noSeriesNames"> &
-    Partial<Pick<SpreadsheetChart, "outerCategoryColumns">>,
+    Partial<Pick<SpreadsheetChart, "outerCategoryColumns" | "nameRowsAbove">>,
   prefix?: string,
 ): SpreadsheetChartSeriesRef[] | null {
   if (chart.type === "scatter" || chart.type === "bubble" || chart.type === "camera") return null;
@@ -1997,9 +2048,17 @@ export function nativeChartRangeSeriesRefs(
     layout.categoryLine - outer >= 0
       ? `${sheet}${at(layout.categoryLine - outer, first)}:${at(layout.categoryLine, last)}`
       : null;
+  
+  const above = layout.byColumns && layout.nameLine !== null ? Math.min(chart.nameRowsAbove ?? 0, layout.nameLine) : 0;
   return layout.seriesLines.map((line) => ({
     ...(layout.nameLine !== null
-      ? { title: `${sheet}${layout.byColumns ? `$${columnToLetters(line)}$${layout.nameLine + 1}` : `$${columnToLetters(layout.nameLine)}$${line + 1}`}` }
+      ? {
+          title: `${sheet}${
+            layout.byColumns
+              ? `${above > 0 ? `$${columnToLetters(line)}$${layout.nameLine - above + 1}:` : ""}$${columnToLetters(line)}$${layout.nameLine + 1}`
+              : `$${columnToLetters(layout.nameLine)}$${line + 1}`
+          }`,
+        }
       : {}),
     ...(layout.categoryLine !== null ? { categories: branches ?? span(layout.categoryLine) } : {}),
     values: span(line),
@@ -2008,7 +2067,7 @@ export function nativeChartRangeSeriesRefs(
 
 export function buildChartSeries(
   chart: Pick<SpreadsheetChart, "range" | "seriesInColumns"> &
-    Partial<Pick<SpreadsheetChart, "type" | "sourceRefError" | "noCategories" | "noSeriesNames">>,
+    Partial<Pick<SpreadsheetChart, "type" | "sourceRefError" | "noCategories" | "noSeriesNames" | "nameRowsAbove">>,
   cells: ChartCellLookup,
   // What a VALUE cell reads, when it should differ from what a label reads.
   // Labels want the cell as displayed (a formatted date, a padded code); values
@@ -2024,6 +2083,10 @@ export function buildChartSeries(
   const seriesInColumns = chart.seriesInColumns !== false;
   const out: string[][] = [];
   const str = (v: string | undefined): string => (v == null ? "" : String(v));
+  
+  const above = seriesInColumns && chart.noSeriesNames !== true ? Math.min(chart.nameRowsAbove ?? 0, range.r1) : 0;
+  const nameOverRows = (row: number, col: number): string | null =>
+    above > 0 ? chartNameOverRows([row - above, row], col, cells) : null;
   // XY families have no category column. Keep the first numeric vector both as
   // a stable point label and as the X series so a two-column X/Y selection is
   // executable instead of being misread as category + one value series.
@@ -2077,7 +2140,8 @@ export function buildChartSeries(
       const name = point === layout.nameLine;
       out.push([
         name || layout.categoryLine === null ? "" : cell(layout.categoryLine, point, cells),
-        ...layout.seriesLines.map((line) => cell(line, point, name ? cells : values)),
+        ...layout.seriesLines.map((line) =>
+          (name && layout.byColumns ? nameOverRows(point, line) : null) ?? cell(line, point, name ? cells : values)),
       ]);
     }
     return out;
@@ -2090,7 +2154,7 @@ export function buildChartSeries(
     for (let r = range.r1; r <= range.r2; r += 1) {
       const row: string[] = [str(cells(r, range.c1))];
       for (let c = firstValueCol; c <= range.c2; c += 1) {
-        row.push(str(values(r, c)));
+        row.push((r === range.r1 && !oneColumn ? nameOverRows(r, c) : null) ?? str(values(r, c)));
       }
       out.push(row);
     }
@@ -2119,7 +2183,10 @@ export function parseChartRefRange(value: string | undefined): ParsedChartRefRan
   if (!value) return null;
   const match = CHART_A1_RANGE_RE.exec(value.trim());
   if (!match) return null;
-  const sheetName = (match[1] ? match[1].replace(/''/g, "'") : match[2])?.trim();
+  // A quoted name is the sheet's name as it is, its spaces too: R295-X02's
+  // "' Global IDP'" found no cells as "Global IDP", and its value axis lost
+  // the source's "#,##0" (Linked to source) to General.
+  const sheetName = match[1] ? match[1].replace(/''/g, "'") : match[2]?.trim();
   const c1 = lettersToColumn(match[3]);
   const r1 = Number(match[4]) - 1;
   const c2 = match[5] ? lettersToColumn(match[5]) : c1;
@@ -2473,7 +2540,19 @@ function seriesNameFromChartRef(
 ): string | null {
   const values = valuesForChartRef(ref, sheetName, cells, workbookCells);
   if (!values?.length) return null;
-  return values.length === 1 ? values[0] : values.filter((value) => value !== "").join(" ");
+  if (values.length === 1) return values[0];
+  
+  // filled cell left of it, as Excel shows it (probe/n21-x56 p705c).
+  const areas = chartRefAreaTexts(ref);
+  const parsed = areas && areas.length === 1 ? parseChartRefRange(ref) : null;
+  if (parsed && parsed.range.c1 === parsed.range.c2 && parsed.range.r2 > parsed.range.r1) {
+    const lookup = (row: number, col: number) => workbookCells
+      ? workbookCells(parsed.sheetName ?? sheetName, row, col)
+      : cells(row, col);
+    const joined = chartNameOverRows([parsed.range.r1, parsed.range.r2], parsed.range.c1, lookup);
+    if (joined !== null) return joined;
+  }
+  return values.filter((value) => value !== "").join(" ");
 }
 
 /**

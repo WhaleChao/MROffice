@@ -35,7 +35,7 @@ import {
   wordStyleSetsAvailable,
 } from "@mrnote/core/web/lib/office-word-style-sets.ts";
 
-import { restyleDocumentDesign } from "@mrnote/core/web/components/console/editor/native-document/documentDesignRestyle.ts";
+import { restyleDocumentDesign, type DocumentThemeAxis } from "@mrnote/core/web/components/console/editor/native-document/documentDesignRestyle.ts";
 
 /** The document's design, or Word's new document's for one that has none. */
 export function currentDocumentDesign(editor: Editor): DocumentDesign {
@@ -51,6 +51,7 @@ export function currentDocumentDesign(editor: Editor): DocumentDesign {
 export function applyDocumentDesignChange(
   editor: Editor,
   change: (design: DocumentDesign) => DocumentDesign | null,
+  themeAxes?: readonly DocumentThemeAxis[],
 ): boolean {
   if (editor.isDestroyed || !editor.isEditable) return false;
   // Word's style sets (served Office data) decide every style's formatting:
@@ -64,12 +65,15 @@ export function applyDocumentDesignChange(
   const next = change(stored ?? DEFAULT_DOCUMENT_DESIGN);
   if (!next) return false;
   if (stored && documentDesignEquals(stored, next)) return false;
-  const tr = restyleDocumentDesign(closeHistory(state.tr), stored, next);
+  const tr = restyleDocumentDesign(closeHistory(state.tr), stored, next, themeAxes);
   if (!tr) return false;
   if (editor.isDestroyed || !editor.isEditable || editor.state !== state) return false;
   editor.view.dispatch(tr);
   return true;
 }
+
+/** Themes and Browse for Themes change the theme's three schemes together. */
+const ALL_THEME_AXES: readonly DocumentThemeAxis[] = ["colors", "fonts", "effects"];
 
 const COLOR_IDS = new Set(OFFICE_COLOR_SCHEMES.map((scheme) => scheme.id));
 const FONT_IDS = new Set(OFFICE_FONT_SCHEMES.map((scheme) => scheme.id));
@@ -78,7 +82,7 @@ const EFFECT_IDS = new Set(OFFICE_EFFECT_SCHEMES.map((scheme) => scheme.id));
 /** Design > Themes: an Office theme's colours, fonts and effects together. */
 export function applyDocumentTheme(editor: Editor, themeId: unknown): boolean {
   if (typeof themeId !== "string") return false;
-  return applyDocumentDesignChange(editor, (design) => documentDesignWithTheme(design, themeId));
+  return applyDocumentDesignChange(editor, (design) => documentDesignWithTheme(design, themeId), ALL_THEME_AXES);
 }
 
 /**
@@ -87,7 +91,7 @@ export function applyDocumentTheme(editor: Editor, themeId: unknown): boolean {
  */
 export function applyDocumentThemeFile(editor: Editor, file: OfficeThemeFileTheme | null): boolean {
   if (!file) return false;
-  return applyDocumentDesignChange(editor, (design) => documentDesignWithThemeFile(design, file));
+  return applyDocumentDesignChange(editor, (design) => documentDesignWithThemeFile(design, file), ALL_THEME_AXES);
 }
 
 /** Themes > Reset to the Theme from Template: Word's template theme is the Office theme. */
@@ -98,25 +102,25 @@ export function resetDocumentTheme(editor: Editor): boolean {
 /** Design > Colors: one colour scheme; the theme's fonts and effects stay. */
 export function applyDocumentColors(editor: Editor, colorsId: unknown): boolean {
   if (typeof colorsId !== "string" || !COLOR_IDS.has(colorsId)) return false;
-  return applyDocumentDesignChange(editor, (design) => documentDesignWithScheme(design, "colors", colorsId));
+  return applyDocumentDesignChange(editor, (design) => documentDesignWithScheme(design, "colors", colorsId), ["colors"]);
 }
 
 /** Design > Fonts: one font scheme (heading and body fonts). */
 export function applyDocumentFonts(editor: Editor, fontsId: unknown): boolean {
   if (typeof fontsId !== "string" || !FONT_IDS.has(fontsId)) return false;
-  return applyDocumentDesignChange(editor, (design) => documentDesignWithScheme(design, "fonts", fontsId));
+  return applyDocumentDesignChange(editor, (design) => documentDesignWithScheme(design, "fonts", fontsId), ["fonts"]);
 }
 
 /** Customize Fonts...: the document theme's own named font scheme. */
 export function applyDocumentCustomFonts(editor: Editor, fonts: SpreadsheetNativeThemeFonts | null): boolean {
   if (!fonts) return false;
-  return applyDocumentDesignChange(editor, (design) => documentDesignWithCustomFonts(design, fonts));
+  return applyDocumentDesignChange(editor, (design) => documentDesignWithCustomFonts(design, fonts), ["fonts"]);
 }
 
 /** The theme's effects (shapes and SmartArt draw with them). */
 export function applyDocumentEffects(editor: Editor, effectsId: unknown): boolean {
   if (typeof effectsId !== "string" || !EFFECT_IDS.has(effectsId)) return false;
-  return applyDocumentDesignChange(editor, (design) => documentDesignWithScheme(design, "effects", effectsId));
+  return applyDocumentDesignChange(editor, (design) => documentDesignWithScheme(design, "effects", effectsId), ["effects"]);
 }
 
 /** The style-set gallery: Word's style set replaces the defaults and Quick Styles. */

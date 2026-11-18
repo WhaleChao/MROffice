@@ -292,7 +292,48 @@ function attributeSignature(element: HTMLElement): string[] {
     .map((name) => `${name}=${element.getAttribute(name)}`);
 }
 
-function childPath(root: Node, node: Node): number[] | null {
+/**
+ * A copy of `block` that ends where its text node `source` (at `path` in it)
+ * is cut at `offset`, as a page cut's head ends: what follows dropped, the
+ * wrappers it leaves empty and trailing source page breaks too.
+ *
+ * Only the head is copied (its ancestors split as the cut leaves them): a
+ * whole long paragraph copied for each candidate head, its tail then
+ * deleted, cost a copy of every run per head measured (R461-D71, code
+ * listings of 3,500 runs). `whole` copies it whole, as before
+ * (`window.__docsRenderedHeadWholeCloneOn`).
+ */
+export function copyTextHead(block: HTMLElement, source: Text, offset: number, path: readonly number[], whole = false): HTMLElement | null {
+  const doc = block.ownerDocument;
+  const range = measurementRange(doc, "renderedTextHead");
+  const at = Math.max(0, Math.min(source.length, offset));
+  let copy: HTMLElement;
+  if (whole) {
+    copy = block.cloneNode(true) as HTMLElement;
+  } else {
+    range.setStart(block, 0);
+    range.setEnd(source, at);
+    copy = block.cloneNode(false) as HTMLElement;
+    copy.append(range.cloneContents());
+  }
+  copy.removeAttribute("id");
+  clearPageEdgeMarks(copy);
+  copy.setAttribute("data-page-split-continues", "true");
+  const text = nodeAtPath(copy, path);
+  if (text?.nodeType !== Node.TEXT_NODE) return null;
+  range.setStart(text, Math.min((text as Text).length, at));
+  range.setEnd(copy, copy.childNodes.length);
+  range.deleteContents();
+  pruneEmptyTail(copy, text);
+  dropTrailingSourcePageBreaks(copy);
+  return copy;
+}
+
+function wholeCloneOn(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsRenderedHeadWholeCloneOn?: boolean }) | null)?.__docsRenderedHeadWholeCloneOn === true;
+}
+
+export function childPath(root: Node, node: Node): number[] | null {
   const path: number[] = [];
   let current: Node | null = node;
   while (current && current !== root) {
@@ -379,8 +420,17 @@ export function createRenderedTextHeadProbe(
     if (!element) return null;
     ancestors.unshift(element);
   }
-  const paths = segments.map((segment) => childPath(block, segment.node));
-  if (segments.length === 0 || paths.some((path) => path === null)) return null;
+  if (segments.length === 0) return null;
+  // Where each text node stands, read when a head is cut in it. Read for
+  // every node up front, each an index among its parent's children, it cost
+  // the square of a paragraph's runs per probe (R461-D71's code listings,
+  // 3,500 runs). A node no longer in the block makes no head.
+  const paths = new Map<number, number[] | null>();
+  const pathOf = (index: number): number[] | null => {
+    if (!paths.has(index)) paths.set(index, childPath(block, segments[index].node));
+    return paths.get(index) ?? null;
+  };
+  if (pathOf(0) === null || pathOf(segments.length - 1) === null) return null;
 
   let placed: ContextShell | null = null;
   let contextKey: string | null | undefined;
@@ -401,18 +451,11 @@ export function createRenderedTextHeadProbe(
   // and the next text (an in-line picture's row) goes with the tail.
   const layOut = (task: TaskHost, offset: number, endOfPrevious: boolean): RenderedTextHead | null => {
     const index = segmentIndexAt(endOfPrevious ? offset - 1 : offset);
-    const copy = block.cloneNode(true) as HTMLElement;
-    copy.removeAttribute("id");
-    clearPageEdgeMarks(copy);
-    copy.setAttribute("data-page-split-continues", "true");
-    const text = nodeAtPath(copy, paths[index]!);
-    if (text?.nodeType !== Node.TEXT_NODE) return null;
-    const range = measurementRange(doc, "renderedTextHead");
-    range.setStart(text, Math.min((text as Text).length, offset - segments[index].start));
-    range.setEnd(copy, copy.childNodes.length);
-    range.deleteContents();
-    pruneEmptyTail(copy, text);
-    dropTrailingSourcePageBreaks(copy);
+    const path = pathOf(index);
+    if (!path) return null;
+    const source = segments[index].node;
+    const copy = copyTextHead(block, source, offset - segments[index].start, path, wholeCloneOn(doc));
+    if (!copy) return null;
     const context = contextShell(root, task, ancestors);
     context.slot.replaceChildren(
       ...[context.leading, copy, context.trailing].filter((node): node is HTMLElement => node !== null),

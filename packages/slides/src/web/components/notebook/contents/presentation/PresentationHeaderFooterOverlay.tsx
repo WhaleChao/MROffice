@@ -17,7 +17,11 @@
 import { pointsToCssPx } from "@mrnote/core/web/lib/presentation/text-units.ts";
 import { runStyleCss } from "../../../../lib/presentation/text-layout-css";
 import type { RunStyle } from "@mrnote/core/web/lib/presentation-point-runs.ts";
-import type { CSSProperties } from "react";
+import { useContext, type CSSProperties } from "react";
+import { paragraphBuildRows } from "../../../../lib/presentation/block-play";
+import { PresentationEngineOrFallback } from "./PresentationEngineTextBody";
+import { planPresentationParagraphRows } from "./presentationParagraphRows";
+import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
 import { normalizeSlideLayoutRef } from "@mrnote/core/web/lib/presentation-layouts.ts";
 import type { PresentationHeaderFooterDialogDraft } from "@mrnote/core/web/lib/presentation-slide-buttons.ts";
 import type { DeckTheme } from "@mrnote/core/web/lib/presentation-theme.ts";
@@ -87,6 +91,7 @@ export function PresentationHeaderFooterOverlay({
   /** Where the slide's layout puts each field (`presentationHeaderFooterPlacement`). */
   placement?: HeaderFooterPlacement;
 }) {
+  const fontAliases = useContext(PresentationFontAliasesContext);
   if (!resolved) return null;
   const date = resolved.dateField ? formatDeckDate(resolved.dateField, now) : "";
   const common: CSSProperties = {
@@ -116,11 +121,44 @@ export function PresentationHeaderFooterOverlay({
     fallback: CSSProperties,
   ) => {
     const box = placement?.[kind];
-    return box ? (
-      <div className={className} data-testid={testId} aria-hidden="true" style={headerFooterFieldStyle(box)}>
-        <span style={headerFooterFieldTextStyle(box)}>{text}</span>
-      </div>
-    ) : (
+    if (box) {
+      const textStyle = headerFooterFieldTextStyle(box);
+      const words = <span style={textStyle}>{text}</span>;
+      // The placeholder's words laid by the text engine where the page read
+      // its kerning (as a slide's placeholder text is); the browser's span
+      // stays while the engine is pending, or for a page read before.
+      const rows =
+        box.kerning !== undefined && box.textWidthEmu !== undefined && text
+          ? planPresentationParagraphRows({
+              paragraphs: paragraphBuildRows(text, [{ text, ...(box.runStyle ? { style: box.runStyle } : {}) }], box.endLatinFace),
+              fontSizeUnit: "point",
+              paragraphStyle: textStyle,
+              autofitLineSpacingMultiplier: 1,
+              suppressFirstSpaceBefore: false,
+              fontAliases,
+              autofitScale: 1,
+            })
+          : null;
+      return (
+        <div className={className} data-testid={testId} aria-hidden="true" style={headerFooterFieldStyle(box)}>
+          {rows && rows.length > 0 ? (
+            <PresentationEngineOrFallback
+              rows={rows}
+              bodyStyle={textStyle}
+              fontSizeUnit="point"
+              autofitScale={1}
+              kerning={box.kerning}
+              widthPx={(box.textWidthEmu ?? 0) / EMU_PER_DESIGN_PX}
+              wrap
+              fallback={words}
+            />
+          ) : (
+            words
+          )}
+        </div>
+      );
+    }
+    return (
       <div className={className} data-testid={testId} aria-hidden="true" style={fallback}>
         {text}
       </div>
@@ -213,11 +251,25 @@ export interface HeaderFooterFieldBox {
 
 
   runStyle?: RunStyle;
+  
+
+
+
+
+
+
+
+  textWidthEmu?: number;
+  kerning?: unknown;
+  /** The placeholder's paragraph mark's Latin face (`endLatinFace`, readings row 899). */
+  endLatinFace?: string;
 }
 
 export type HeaderFooterPlacement = Partial<Record<HeaderFooterFieldKind, HeaderFooterFieldBox>>;
 
 const HEADER_FOOTER_FIELD_KINDS: readonly HeaderFooterFieldKind[] = ["ftr", "sldNum", "dt"];
+/** EMU per design-surface pixel (a point is 4/3 of it). */
+const EMU_PER_DESIGN_PX = 9525;
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -249,6 +301,13 @@ function bandFieldBox(
   const runStyle = firstRun?.style && typeof firstRun.style === "object" ? firstRun.style : {};
   const fontSizePt = finiteNumber(runStyle.fontSize);
   const rotation = finiteNumber(block.rotation);
+  const textWidthEmu = width - (finiteNumber(insets.left) ?? 91_440) - (finiteNumber(insets.right) ?? 91_440);
+  const source = block.source && typeof block.source === "object" ? (block.source as Record<string, unknown>) : {};
+  const kerning = source.nativeKerning;
+  const paragraphs = Array.isArray(block.paragraphs) ? block.paragraphs : [];
+  const lastParagraph = paragraphs[paragraphs.length - 1] as { endLatinFace?: unknown } | undefined;
+  const statedFace = block.endLatinFace ?? lastParagraph?.endLatinFace;
+  const endLatinFace = typeof statedFace === "string" && statedFace.trim() ? statedFace.trim() : undefined;
   return {
     left: left / slideWidth,
     top: top / slideHeight,
@@ -271,6 +330,9 @@ function bandFieldBox(
     ...(runStyle.bold === true ? { bold: true } : {}),
     ...(runStyle.italic === true ? { italic: true } : {}),
     ...(Object.keys(runStyle).length > 0 ? { runStyle: runStyle as RunStyle } : {}),
+    ...(textWidthEmu > 0 ? { textWidthEmu } : {}),
+    ...(kerning !== undefined ? { kerning } : {}),
+    ...(endLatinFace ? { endLatinFace } : {}),
   };
 }
 

@@ -6,6 +6,7 @@
 import { editsStayInsideTextblocks } from "./textblockOnlyEdits";
 import { HOLDS_TABLE } from "../../../../lib/editor/sheet-facts";
 import { ptToPx } from "../../../../lib/office-units";
+import { WORD_CELL_TEXT_PX_ATTR } from "../../../../lib/text-engine/docs-lines";
 import type { Editor } from "@tiptap/core";
 import { closeHistory } from "@tiptap/pm/history";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
@@ -828,6 +829,26 @@ function cellTextFitSlackPx(side: "left" | "right", paddingPx: number): number {
   return side === "right" ? Math.min(CELL_TEXT_FIT_SLACK_PX, Math.max(0, paddingPx)) : 0;
 }
 
+/** A Word cell's text box as the model states it (WORD_CELL_TEXT_PX_ATTR):
+ * the stored widths of the grid columns it spans less its two margins. */
+function cellModelTextBoxPx(table: ProseMirrorNode, cell: TableCellGeometry): number | null {
+  const span = Number(cell.node.attrs.colspan) || 1;
+  const widths: unknown = cell.node.attrs.colwidth;
+  if (!Array.isArray(widths) || widths.length !== span) return null;
+  let grid = 0;
+  for (const value of widths) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+    grid += value;
+  }
+  const direct = normalizeCellMargins(cell.node.attrs.cellMargin);
+  const inherited = tableDefaultCellMargins(table.attrs);
+  const left = direct?.left ?? inherited?.left;
+  const right = direct?.right ?? inherited?.right;
+  if (left === undefined || right === undefined) return null;
+  const text = grid - left - right;
+  return text > 0 ? text : null;
+}
+
 function isWordTable(table: ProseMirrorNode): boolean {
   const source: unknown = table.attrs.source;
   return Boolean(source) && typeof source === "object" && !Array.isArray(source)
@@ -1129,6 +1150,11 @@ function cellDecorationAttributes(
     const excess = nativeGrid.usedWidthPx - nativeGrid.authoredWidthPx;
     if (excess > 0.001 && excess < 1) style.push(`--doc-cell-rule-excess:${Number(excess.toFixed(3))}px`);
   }
+  // The cell's text box as Word sets it: its grid columns less its two
+  // margins, in the model's own units, for the line engine to fit words to
+  // (readDocsParagraph): the browser keeps the column, paddings and borders
+  // in 1/64 px units and gives the end padding back CELL_TEXT_FIT_SLACK_PX.
+  const cellTextPx = wordTable || nativeGrid || nestedInWordTable ? cellModelTextBoxPx(table, cell) : null;
   let wordRuleExcess = 0;
   if (!nativeGrid && wordTable) {
     // Off the uniform grid (a floating table, a merged cell, mixed lines) a
@@ -1188,6 +1214,7 @@ function cellDecorationAttributes(
       : {}),
     ...(nativeGrid ? { "data-native-grid-cell-padding": String(nativeGrid.usedWidthPx) } : {}),
     ...(wordRuleExcess > 0 ? { "data-word-rule-excess": String(wordRuleExcess) } : {}),
+    ...(cellTextPx !== null ? { [WORD_CELL_TEXT_PX_ATTR]: String(Number(cellTextPx.toFixed(4))) } : {}),
     ...(style.length > 0 ? { style: style.join(";") } : {}),
   };
 }

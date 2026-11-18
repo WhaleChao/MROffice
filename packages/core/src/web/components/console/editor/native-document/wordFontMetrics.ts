@@ -8,6 +8,7 @@ import substitutionTable from "../../../../lib/office-fonts/substitutes.generate
 import wordLatinFamilies from "../../../../lib/office-fonts/word-latin-families.generated.json";
 import wordLineRatios from "../../../../lib/office-fonts/word-line-ratios.generated.json";
 import table from "./wordFontMetrics.json";
+import { wordWindowsLineEm, wordWindowsLineRatio, wordWindowsLinesOff } from "../../../../lib/office-fonts/word-windows-lines";
 
 /**
  * Design metrics of the fonts Word lays text out with, read from the font
@@ -220,6 +221,95 @@ export function wordFontLineMetrics(
   };
 }
 
+/**
+ * Windows Word's line of a Latin face, per em, where its Windows file differs
+ * from the recorded Mac one (word-windows-lines.ts): `family` by its own name,
+ * or by the recorded face's when the page binds that file under its hash.
+ * [box, line gap, 0, ascender]; undefined where the recorded box stands.
+ */
+function windowsRatio(family: string): readonly number[] | undefined {
+  const name = family.trim().replace(/^["']|["']$/g, "");
+  return wordWindowsLineRatio(name) ?? (recorded(name) ? wordWindowsLineRatio(recorded(name)!.names[0]!) : undefined);
+}
+
+/**
+ * Windows Word's single line of a Latin `family` at this weight and slant,
+ * per em, where its Windows file differs from the Mac one the stand-in's
+ * overrides state (Book Antiqua 1.2427 em upright, its bold 1.2056 as on the
+ * Mac); undefined otherwise. A face the page binds under its file's hash
+ * answers for the recorded face it is.
+ */
+export function wordDocumentWindowsLineEm(family: string, weight: number, italic: boolean): number | undefined {
+  const name = family.trim().replace(/^["']|["']$/g, "");
+  const font = recorded(name);
+  if (font?.eastAsian === true) return undefined;
+  return wordWindowsLineEm(name, weight, italic) ?? (font ? wordWindowsLineEm(font.names[0]!, weight, italic) : undefined);
+}
+
+/**
+ * The regular face's line metrics per em as Windows Word sets a Docs line:
+ * `wordFontLineMetrics`, with Windows' box where its file differs (Book
+ * Antiqua 1.2427 em, its Mac hhea box 1.2056). The Docs editor's own; other
+ * editors keep the recorded box.
+ */
+export function wordDocumentFontLineMetrics(family: string): { box: number; lineGap: number } | null {
+  const metrics = wordFontLineMetrics(family);
+  if (!metrics || recorded(family)?.eastAsian === true) return metrics;
+  const windows = windowsRatio(family);
+  return windows ? { box: windows[0]!, lineGap: windows[1]! } : metrics;
+}
+
+/** `window.__docsClonedOwnLinesOff = true` (A/B): a face with its own metric
+ * clone answers with the line of the recorded face it shares a fallback with,
+ * the older reading. */
+function clonedOwnLinesOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsClonedOwnLinesOff?: boolean }).__docsClonedOwnLinesOff === true;
+}
+
+/**
+ * Whether `family` is a face the page serves through its own metric clone
+ * carrying Word's line (`metric: "cloned"`, `wordLines`) and no recorded file
+ * of its own: its line is its own, never that of another recorded face the
+ * substitute vote reaches through a fallback they share. Palatino Linotype
+ * and Book Antiqua share only TeX Gyre Pagella, and the vote made Palatino
+ * Linotype's 10 pt line Book Antiqua's Windows 12.43 pt where Windows Word
+ * sets 13.49 (corpus R404-D02's affiliations, probes/vsp8 g*: 13.5 pt apart);
+ * so it made Aptos Display Calibri, Gill Sans MT Candara, Lucida Sans
+ * Unicode Verdana. The Docs editor's own; other editors keep the vote.
+ */
+function hasOwnClonedLine(family: string): boolean {
+  if (clonedOwnLinesOff()) return false;
+  const name = family.trim().replace(/^["']|["']$/g, "").toLowerCase();
+  if (byName.has(name)) return false;
+  // A face Windows does not ship (`unlisted`: Helvetica Neue, Lucida Grande)
+  // is set by Word in a fallback face: not its own line either way.
+  const entry = (substitutionTable as Record<string, { office?: string; metric?: string; wordLines?: boolean; weight?: number; unlisted?: boolean }>)[name];
+  return entry?.metric === "cloned" && entry.wordLines === true && entry.weight === undefined &&
+    entry.unlisted !== true && entry.office?.toLowerCase() === name;
+}
+
+/** `wordDocumentFontLineMetrics`, but a face with its own cloned line
+ * (`hasOwnClonedLine`) answers null: the page reads its line from the clone. */
+export function wordDocumentOwnFontLineMetrics(family: string): { box: number; lineGap: number } | null {
+  return hasOwnClonedLine(family) ? null : wordDocumentFontLineMetrics(family);
+}
+
+/** `wordDocumentWindowsLineEm` by the face's own name only when it has its
+ * own cloned line (`hasOwnClonedLine`). */
+export function wordDocumentOwnWindowsLineEm(family: string, weight: number, italic: boolean): number | undefined {
+  if (!hasOwnClonedLine(family)) return wordDocumentWindowsLineEm(family, weight, italic);
+  return wordWindowsLineEm(family.trim().replace(/^["']|["']$/g, ""), weight, italic);
+}
+
+/** `wordGridFontLineMetrics` for the Docs editor: a face with its own cloned
+ * line (`hasOwnClonedLine`) takes the ratio read from Word's file of it. */
+export function wordDocumentGridFontLineMetrics(family: string): { box: number; lineGap: number } | null {
+  if (!hasOwnClonedLine(family)) return wordGridFontLineMetrics(family);
+  const name = family.trim().replace(/^["']|["']$/g, "").toLowerCase();
+  const ratio = wordWindowsLineRatio(name) ?? (wordLineRatios as Readonly<Record<string, readonly number[]>>)[name];
+  return ratio ? { box: ratio[0], lineGap: ratio[1] } : wordGridFontLineMetrics(family);
+}
+
 
 
 
@@ -244,10 +334,10 @@ export function wordGridFontLineMetrics(family: string): { box: number; lineGap:
  * or null when Word's file was never read.
  */
 export function wordFileLineMetrics(family: string): { box: number; lineGap: number } | null {
-  const recordedMetrics = wordFontLineMetrics(family);
+  const recordedMetrics = wordDocumentFontLineMetrics(family);
   if (recordedMetrics) return recordedMetrics;
   const name = family.trim().replace(/^["']|["']$/g, "").toLowerCase();
-  const ratio = (wordLineRatios as Readonly<Record<string, readonly number[]>>)[name] ??
+  const ratio = windowsRatio(name) ?? (wordLineRatios as Readonly<Record<string, readonly number[]>>)[name] ??
     (windowsLinesOff() ? undefined : WORD_WINDOWS_LINE_RATIOS[name]);
   return ratio ? { box: ratio[0], lineGap: ratio[1] } : null;
 }
@@ -309,12 +399,19 @@ const gridVerticals = new Map<string, { ascent: number; descent: number } | null
 export function wordGridFontVerticals(family: string): { ascent: number; descent: number } | null {
   const name = family.trim().replace(/^["']|["']$/g, "");
   const key = name.toLowerCase();
-  const known = gridVerticals.get(key);
+  // The switch decides the answer: it is part of the cache key.
+  const cacheKey = `${wordWindowsLinesOff() ? "mac" : "win"}|${key}`;
+  const known = gridVerticals.get(cacheKey);
   if (known !== undefined) return known;
   const office = (substitutionTable as Record<string, { office?: string }>)[name]?.office;
   const face = recorded(name) ? name : office && recorded(office) ? office : null;
   let verticals: { ascent: number; descent: number } | null = null;
-  if (face) {
+  const windows = face && wordFontIsEastAsian(face) ? undefined : windowsRatio(name) ?? (office ? windowsRatio(office) : undefined);
+  if (windows) {
+    // Windows Word's line where its file differs: the gap above the ascent.
+    const [box, lineGap, , ascender] = windows as readonly [number, number, number, number];
+    verticals = { ascent: ascender + lineGap, descent: box - ascender };
+  } else if (face) {
     const eastAsian = wordFontIsEastAsian(face);
     const ascent = wordFontLineAscent(face, eastAsian);
     const descent = wordFontLineDescent(face, eastAsian);
@@ -327,14 +424,17 @@ export function wordGridFontVerticals(family: string): { ascent: number; descent
     if (ratio && ratio.length >= 4) {
       const [box, lineGap, eastAsianFlag, ascender] = ratio;
       if (eastAsianFlag === 1) {
-        const half = (box * (wordDocumentEastAsianSingleLineFactor(office ?? name) - 1)) / 2;
+        // The factor of the face whose box this is: a name with a box of its
+        // own (华文新魏) is not its stand-in's Office name (STXingkai).
+        const owner = ratios[key] ? name : office ?? name;
+        const half = (box * (wordDocumentEastAsianSingleLineFactor(owner) - 1)) / 2;
         verticals = { ascent: ascender + half, descent: box - ascender + half };
       } else {
         verticals = { ascent: ascender + lineGap, descent: box - ascender };
       }
     }
   }
-  gridVerticals.set(key, verticals);
+  gridVerticals.set(cacheKey, verticals);
   return verticals;
 }
 
@@ -342,7 +442,11 @@ export function wordFontLineAscent(family: string, eastAsian: boolean): number |
   const font = recorded(family);
   if (!font) return null;
   const ascent = font.ascender / font.unitsPerEm;
-  if (!eastAsian) return ascent + font.lineGap / font.unitsPerEm;
+  if (!eastAsian) {
+    // Windows Word's ascent where its file differs (word-windows-lines.ts).
+    const windows = font.eastAsian === true ? undefined : windowsRatio(family);
+    return windows ? windows[3]! + windows[1]! : ascent + font.lineGap / font.unitsPerEm;
+  }
   const box = (font.ascender - font.descender) / font.unitsPerEm;
   return ascent + (box * (wordDocumentEastAsianSingleLineFactor(family) - 1)) / 2;
 }

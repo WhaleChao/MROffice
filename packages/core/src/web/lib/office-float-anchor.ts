@@ -889,15 +889,41 @@ export type FloatFlowMode = "overlay" | "float" | "band";
  * rect at the top of the page, 42 pt tall, square wrap) in the margin and
  * starts the body at the margin, where a float in the flow pushed the first
  * page's text down 62 px.
+ *
+ * So does one wholly in the left or right margin, beside every line, when
+ * the placement and geometry say where it stands across: Word draws it at its
+ * page point and wraps nothing (corpus R400-D05: a 499 pt grey sidebar box,
+ * square-wrapped, 117 pt below the top margin, its paragraph a long abstract;
+ * as a float it could not rise above its place after the abstract and was
+ * drawn 192 pt low). `window.__docsFloatSideMarginOff = true` asks the older
+ * reading (top and bottom margins only) for an A/B of one build.
  */
 export function floatWhollyInPageMargin(
-  placement: Pick<FloatPlacement, "topPx" | "heightPx">,
-  distances: { topPx: number; bottomPx: number },
-  geometry: Pick<FloatPageGeometry, "pageHeightPx" | "marginTopPx" | "marginBottomPx">,
+  placement: Pick<FloatPlacement, "topPx" | "heightPx"> & Partial<Pick<FloatPlacement, "leftPx" | "widthPx">>,
+  distances: { topPx: number; bottomPx: number; leftPx?: number; rightPx?: number },
+  geometry: Pick<FloatPageGeometry, "pageHeightPx" | "marginTopPx" | "marginBottomPx"> &
+    Partial<Pick<FloatPageGeometry, "pageWidthPx" | "marginLeftPx" | "marginRightPx">>,
 ): boolean {
   const top = placement.topPx - distances.topPx;
   const bottom = placement.topPx + placement.heightPx + distances.bottomPx;
-  return bottom <= geometry.marginTopPx + 0.5 || top >= geometry.pageHeightPx - geometry.marginBottomPx - 0.5;
+  if (bottom <= geometry.marginTopPx + 0.5 || top >= geometry.pageHeightPx - geometry.marginBottomPx - 0.5) return true;
+  if (
+    typeof window !== "undefined" &&
+    (window as Window & { __docsFloatSideMarginOff?: boolean }).__docsFloatSideMarginOff === true
+  ) {
+    return false;
+  }
+  const { leftPx, widthPx } = placement;
+  const { pageWidthPx, marginLeftPx, marginRightPx } = geometry;
+  if (
+    leftPx === undefined || widthPx === undefined || pageWidthPx === undefined ||
+    marginLeftPx === undefined || marginRightPx === undefined || !(marginLeftPx > 0 || marginRightPx > 0)
+  ) {
+    return false;
+  }
+  const left = leftPx - (distances.leftPx ?? 0);
+  const right = leftPx + widthPx + (distances.rightPx ?? 0);
+  return (marginLeftPx > 0 && right <= marginLeftPx + 0.5) || (marginRightPx > 0 && left >= pageWidthPx - marginRightPx - 0.5);
 }
 
 export function floatFlowMode(anchor: FloatAnchor): FloatFlowMode {

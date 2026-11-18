@@ -274,10 +274,38 @@ function applyRunCommand(
 }
 
 /**
+ * Words drawn as rich pieces of the named style, every character as typed.
+ * The engine's markup (`{name|words}`, zrender's `/\{([a-zA-Z0-9_]+)\|([^}]*)\}/`)
+ * has no escape: a piece's words may hold `{` and `|` but end at the first
+ * `}`. So a `}` is drawn between pieces, in the text's own style (a piece
+ * never holds it), and the words stay the characters typed -- not their
+ * full-width forms, another glyph of another width than Office draws.
+ */
+export function chartRichPiece(name: string, words: string): string {
+  return words
+    .split("}")
+    .map((part) => (part ? `{${name}|${part}}` : ""))
+    .join("}");
+}
+
+/**
+ * Words drawn outside any piece, in a text that has rich styles, as typed:
+ * only a `{` that would open a piece (`{name|...}`) is drawn as a piece of
+ * no style of its own (`{_|{}`), which the engine draws in the text's style.
+ */
+export function chartRichLiteral(words: string): string {
+  return words.replace(/\{(?=[a-zA-Z0-9_]+\|[^}]*\})/g, "{_|{}");
+}
+
+/** The characters a rich text draws, as the engine reads its markup. */
+export function chartRichPlain(drawn: string): string {
+  return drawn.replace(/\{[a-zA-Z0-9_]+\|([^}]*)\}/g, "$1");
+}
+
+/**
  * The title as ECharts draws rich text: `{rN|words}` pieces and a `rich`
- * map with each run's style over the title's base style. Braces in the
- * words are shown as their full-width forms (ECharts' formatter has no
- * escape). Null when the runs carry no style of their own.
+ * map with each run's style over the title's base style, the words as typed
+ * (`chartRichPiece`). Null when the runs carry no style of their own.
  */
 /** One run's look over the base style, a raised or lowered run at two
  * thirds of its size against the top or the foot of the line. */
@@ -341,7 +369,7 @@ export function chartRunsRichTextOver(
     .map((piece, index) => {
       const name = `r${index}`;
       rich[name] = chartRunLook(fitted[piece.run], base, scale);
-      return `{${name}|${piece.text.replace(/\{/g, "｛").replace(/\}/g, "｝")}}`;
+      return chartRichPiece(name, piece.text);
     })
     .join("");
   return { text, rich };
@@ -371,7 +399,7 @@ export function chartTitleRichText(
         look.lineHeight = size * 1.2;
       }
       rich[name] = look;
-      return `{${name}|${run.text.replace(/\{/g, "｛").replace(/\}/g, "｝")}}`;
+      return chartRichPiece(name, run.text);
     })
     .join("");
   return { text, rich };

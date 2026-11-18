@@ -411,21 +411,27 @@ export function normalizePdfJsNativeParagraphItems(
   return Object.freeze(normalized);
 }
 
-/**
- * pdf.js compares a glyph's origin with the pen after the last glyph in a
- * frame the NEXT glyph's transform picks: the page when that transform is
- * axis-aligned, else each origin taken through its own matrix's inverse
- * (compareWithLastPosition). Word slants a face it has no italic of with a
- * skew in the `c` component and sets the slanted run, after an upright one,
- * with a `Tm` of its own on the same baseline; in the slanted frame the pen
- * after the upright run lies far off that baseline, so the reader ends the
- * line there (hasEOL) and the word space it moved its pen over is read as
- * nothing ("The" then "Knowledge"). On the page the two runs share one
- * baseline, and the reader, comparing there, would have read the gap as the
- * space it is (0.102 em or more, within its in-flow bound). That space is
- * folded into the slanted item as its leading space, the way a split space
- * is: the item then starts where the upright run's last inked glyph ends.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function foldSkewedFrameLineEnds(
   normalized: (PdfNativeListTextSelectionItemEvidence | null)[],
 ): void {
@@ -480,7 +486,7 @@ function foldSkewedFrameLineEnds(
     if (
       Math.abs(by - ay) > previous.height * PDFJS_VERTICAL_SHIFT_RATIO ||
       gap < axis * PDFJS_TRACKING_SPACE_EM ||
-      gap > axis * PDFJS_SPACE_IN_FLOW_MAX_EM
+      gap > axis * PDFJS_SPLIT_SPACE_MAX_EM
     ) {
       continue;
     }
@@ -844,6 +850,17 @@ function lineIsStrayRadical(line: NativeVisualLine): boolean {
   return line.items.length === 1 && STRAY_RADICALS.has(line.items[0]);
 }
 
+/**
+ * Where an item's first glyph stands: after the reader's space folded before
+ * it (normalizePdfJsNativeParagraphItems), which is the gap itself.
+ */
+function inkStart(item: ProjectedNativeItem): number {
+  const lead = (item.evidence as PdfJsNormalizedParagraphItem).foldedLeadWidth ?? 0;
+  return lead > 0 && item.evidence.width > 0
+    ? item.inlineStart + (item.inlineEnd - item.inlineStart) * Math.min(1, lead / item.evidence.width)
+    : item.inlineStart;
+}
+
 
 
 
@@ -859,14 +876,6 @@ function figuresSetApart(
 ): boolean {
   let pair: readonly [ProjectedNativeItem, ProjectedNativeItem] | null = null;
   let nearest = Number.POSITIVE_INFINITY;
-  // Where an item's first glyph stands: after the reader's space folded
-  // before it (normalizePdfJsNativeParagraphItems), which is the gap itself.
-  const inkStart = (item: ProjectedNativeItem) => {
-    const lead = (item.evidence as PdfJsNormalizedParagraphItem).foldedLeadWidth ?? 0;
-    return lead > 0 && item.evidence.width > 0
-      ? item.inlineStart + (item.inlineEnd - item.inlineStart) * Math.min(1, lead / item.evidence.width)
-      : item.inlineStart;
-  };
   for (const a of left) {
     for (const b of right) {
       const gap = Math.max(inkStart(a) - b.inlineEnd, inkStart(b) - a.inlineEnd);
@@ -884,6 +893,127 @@ function figuresSetApart(
     Math.abs(pair[0].baselineBlock - pair[1].baselineBlock) <= size * PDFJS_SPLIT_SPACE_TOLERANCE &&
     Math.abs(pair[0].fontSize - pair[1].fontSize) <= size * 0.05 &&
     pair.every((item) => COMPACT_NUMERIC_CHART_LABEL.test(item.evidence.str.trim()));
+}
+
+/**
+ * Justified to its frame, a line of few words keeps them far apart: a
+ * caption's "EXPRESS EMPLOYMENT" set with `4.713 Tw` across a 229 pt column
+ * stands five ems apart, and the reader, which keeps a word within
+ * SAME_LINE_GAP_FACTOR ems of its line, read "EMPLOYMENT" as a box of its own
+ * beside the paragraph it opens. Bold taken off the paragraph left that word
+ * bold, and the paragraph, its first line no longer reaching the frame, was
+ * set again ragged (walk 0444). Two rows are that one line where the page
+ * says so on every count: they stand on one baseline in one size and one
+ * face, the reader read the right one straight after the left one, neither
+ * holds a word space of its own narrower than the one between them (a
+ * justified line stretches all its spaces alike; a column's or a cell's
+ * line keeps its words a space apart), and the line read next to them, a
+ * line's pitch away, runs across the gap and ends where the right row ends
+ * -- the frame the line was justified to.
+ */
+function joinRowsOfOneJustifiedLine(
+  rows: ProjectedNativeItem[][],
+  page: readonly ProjectedNativeItem[],
+): void {
+  const describe = (row: readonly ProjectedNativeItem[]) => {
+    const byInline = [...row].sort((x, y) => x.inlineStart - y.inlineStart);
+    const size = Math.max(...row.map((entry) => entry.fontSize));
+    let widestInnerSpace = 0;
+    let narrowestInnerSpace = Number.POSITIVE_INFINITY;
+    let reach = byInline[0].inlineEnd;
+    for (const entry of byInline.slice(1)) {
+      const space = inkStart(entry) - reach;
+      // (Closer than a word space: one word in two faces, a kerned pair.)
+      if (space > size * PDFJS_TRACKING_SPACE_EM * 2) {
+        widestInnerSpace = Math.max(widestInnerSpace, space);
+        narrowestInnerSpace = Math.min(narrowestInnerSpace, space);
+      }
+      reach = Math.max(reach, entry.inlineEnd);
+    }
+    const indexes = row.map((entry) => entry.evidence.itemIndex);
+    return {
+      size,
+      uniform: row.every((entry) => !entry.vertical && entry.fontSize >= size * 0.95),
+      baseline: row.reduce((total, entry) => total + entry.baselineBlock, 0) / row.length,
+      start: inkStart(byInline[0]),
+      end: reach,
+      first: Math.min(...indexes),
+      last: Math.max(...indexes),
+      // (A space the reader kept inside an item: a word space in flow.)
+      spaced: row.some((entry) => /\S\s+\S/u.test(entry.evidence.str)),
+      worded: row.some((entry) => /\p{L}/u.test(entry.evidence.str)),
+      widestInnerSpace,
+      narrowestInnerSpace,
+    };
+  };
+  const described = new Map<ProjectedNativeItem[], ReturnType<typeof describe>>();
+  const of = (row: ProjectedNativeItem[]) => {
+    let known = described.get(row);
+    if (!known) described.set(row, (known = describe(row)));
+    return known;
+  };
+  const read = new Set(page.map((entry) => entry.evidence.itemIndex));
+  for (let joined = true; joined;) {
+    joined = false;
+    // The row read straight after an item, or straight before one: no text
+    // of the page in between, and at most the reader's own space item.
+    const opening = new Map<number, ProjectedNativeItem[]>();
+    const closing = new Map<number, ProjectedNativeItem[]>();
+    for (const row of rows) {
+      opening.set(of(row).first, row);
+      closing.set(of(row).last, row);
+    }
+    const readAfter = (index: number) =>
+      opening.get(index + 1) ?? (read.has(index + 1) ? undefined : opening.get(index + 2));
+    const readBefore = (index: number) =>
+      closing.get(index - 1) ?? (read.has(index - 1) ? undefined : closing.get(index - 2));
+    for (const a of rows) {
+      const left = of(a);
+      const b = readAfter(left.last);
+      if (!b || b === a || Math.abs(a[0].angle - b[0].angle) >= UPRIGHT_ANGLE_EPSILON) continue;
+      const right = of(b);
+      const size = Math.min(left.size, right.size);
+      const gap = right.start - left.end;
+      if (
+        !left.uniform || !right.uniform ||
+        // Words, both: a row of leader dots after its entry, a figure in
+        // the next cell of its label's row are no words of a line.
+        !left.worded || !right.worded ||
+        Math.abs(left.size - right.size) > size * 0.05 ||
+        Math.abs(left.baseline - right.baseline) > size * PDFJS_SPLIT_SPACE_TOLERANCE ||
+        gap <= size * SAME_LINE_GAP_FACTOR ||
+        left.spaced || right.spaced ||
+        Math.min(left.narrowestInnerSpace, right.narrowestInnerSpace) < gap * 0.6 ||
+        figuresSetApart(a, b)
+      ) {
+        continue;
+      }
+      const seamLeft = a.find((entry) => entry.evidence.itemIndex === left.last);
+      const seamRight = b.find((entry) => entry.evidence.itemIndex === right.first);
+      if (seamLeft?.evidence.fontName !== seamRight?.evidence.fontName) continue;
+      const framed = [readAfter(right.last), readBefore(left.first)].some((other) => {
+        if (!other || other === a || other === b) return false;
+        if (Math.abs(other[0].angle - a[0].angle) >= UPRIGHT_ANGLE_EPSILON) return false;
+        const line = of(other);
+        const pitch = Math.abs(line.baseline - left.baseline);
+        return line.uniform &&
+          Math.abs(line.size - size) <= size * 0.05 &&
+          pitch >= size * 0.5 && pitch <= size * 2 &&
+          // A line of words a space apart, not a row of the same kind.
+          (line.spaced || line.widestInnerSpace > 0) && line.widestInnerSpace < gap * 0.6 &&
+          Math.abs(line.end - right.end) <= size * 0.1 &&
+          Math.abs(line.start - left.start) <= size * 0.1;
+      });
+      if (!framed) continue;
+      a.push(...b);
+      a.sort((x, y) => x.baselineInline - y.baselineInline || x.evidence.itemIndex - y.evidence.itemIndex);
+      rows.splice(rows.indexOf(b), 1);
+      described.delete(a);
+      described.delete(b);
+      joined = true;
+      break;
+    }
+  }
 }
 
 function visualLines(
@@ -983,6 +1113,7 @@ function visualLines(
       }
     }
   }
+  joinRowsOfOneJustifiedLine(rows, ordered);
   // A radical sign read onto another row than the glyph it stands before.
   // Its origin is nearer the line above its own than its own (radicandOf),
   // and rows are told by their baselines: the sign joined the line above,
@@ -1225,14 +1356,20 @@ function singleRunLine(
     return null;
   }
   const first = line.items[0].evidence;
-  const yScale = Math.hypot(first.transform[2], first.transform[3]);
+  // How far an item's origin stands off the first item's baseline: across
+  // the direction the line is written in. Measured along the glyphs' up axis
+  // it is the same on an upright line and on a turned one, and on a leaned
+  // line (an italic drawn by its text matrix, `1 0 .21 1`) it grows with the
+  // distance ALONG the line: every later piece of the one show read as off
+  // its baseline, and the line kept its items.
+  const xScale = Math.hypot(first.transform[0], first.transform[1]);
   const onRun = (item: PdfNativeListTextSelectionItemEvidence) =>
     item.fontName === first.fontName &&
-    yScale > 0 &&
+    xScale > 0 &&
     Math.abs(
-      ((item.transform[4] - first.transform[4]) * first.transform[2] +
-        (item.transform[5] - first.transform[5]) * first.transform[3]) /
-        yScale,
+      ((item.transform[5] - first.transform[5]) * first.transform[0] -
+        (item.transform[4] - first.transform[4]) * first.transform[1]) /
+        xScale,
     ) <= PDFJS_SPLIT_SPACE_TOLERANCE;
   if (
     !line.items.every(

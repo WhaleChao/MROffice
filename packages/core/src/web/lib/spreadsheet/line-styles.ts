@@ -553,6 +553,9 @@ export function materializeWorkbookLineStyles<S extends LineStyledSheet>(
   workbookBudget = MAX_LINE_STYLE_MATERIALIZED_CELLS_PER_WORKBOOK,
   /** Opening on this sheet: a large workbook's other sheets wait to be shown. */
   openingOn?: string,
+  /** Only these sheets write their blanks (the rest are kept as stored); each
+   *  keeps the budget it has among all of them. */
+  writes?: (sheet: S) => boolean,
 ): S[] {
   const limit = openingOn === undefined ? null : askedLineBlankBudget() ?? LINE_BLANKS_WRITTEN_UP_TO;
   const demands = sheets.map((sheet) => {
@@ -576,6 +579,7 @@ export function materializeWorkbookLineStyles<S extends LineStyledSheet>(
     (sheet as { id?: unknown }).id !== openingOn && sheets.some((candidate) => (candidate as { id?: unknown }).id === openingOn);
   return sheets.map((sheet, index) => {
     if (demands[index] === 0) return sheet;
+    if (writes && !writes(sheet)) return sheet;
     if (defers(sheet)) {
       deferredLineStyleBlanks.set(sheet.cells, budgets[index]);
       return sheet;

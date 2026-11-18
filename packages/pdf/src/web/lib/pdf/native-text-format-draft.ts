@@ -16,7 +16,7 @@
  * (planMraiNativeListTextPropertyReplacement).
  */
 
-import { pdfNativeFontFamilyKey, pdfNativeFontNameKey } from "./native-font-identity";
+import { pdfNativeFontFamilyKey, pdfNativeFontNameKey, pdfNativeFontNameReadsStyle } from "./native-font-identity";
 import type {
   PdfNativeDeviceColor,
   PdfNativeTextFontOption,
@@ -25,11 +25,12 @@ import type {
 } from "./engine/native/list-text-fidelity";
 import { pdfTextVerticalScale } from "./engine/native/text-point-size";
 import {
+  pdfNativeDrawnRunIsSlanted,
   pdfNativeSlantedTextMatrixLinear,
   pdfNativeSyntheticBoldDrawable,
   pdfNativeTextMatrixIsSlanted,
 } from "./native-synthetic-style";
-import { isPdfNativeEmbeddedFontKey, pdfNativeEmbeddedFontKey } from "./native-embedded-font-key";
+import { isPdfNativeEmbeddedFontKey, pdfNativeEmbeddedFontKey, readPdfNativeEmbeddedFontKey } from "./native-embedded-font-key";
 import { classifyFontName } from "./font-resolve";
 import { embeddableFontFamily } from "@mrnote/core/web/lib/office-fonts/embeddable-faces.ts";
 import type { PdfNativeTextPaintFormat } from "./native-text-format-painter";
@@ -58,8 +59,13 @@ export type NativeTextFace = Pick<PdfNativeTextFontOption, "resourceName" | "bas
 
 
 export function nativeTextServedRegularFamily(face: Pick<NativeTextFace, "family" | "baseFont">): string {
-  const served = embeddableFontFamily(face.family)?.office ?? embeddableFontFamily(face.baseFont)?.office;
-  if (served) return served;
+  return embeddableFontFamily(face.family)?.office ?? embeddableFontFamily(face.baseFont)?.office ??
+    nativeTextServedClassFamily(face);
+}
+
+/** The served family nearest a face's class: Times New Roman for a serif,
+ * Courier New for a fixed pitch, else Arial. */
+function nativeTextServedClassFamily(face: Pick<NativeTextFace, "family" | "baseFont">): string {
   const fontClass = classifyFontName(face.baseFont || face.family);
   return fontClass === "serif" ? "Times New Roman" : fontClass === "mono" ? "Courier New" : "Arial";
 }
@@ -83,6 +89,134 @@ export function nativeTextSameFamily(
     pdfNativeFontFamilyKey(left.baseFont || left.family) === pdfNativeFontFamilyKey(right.baseFont || right.family);
 }
 
+/** A face as its own weight and slant are read: one of the PDF's fonts, or a
+ * font option's fields. */
+type NativeTextStyledFace = Pick<NativeTextFace, "family" | "baseFont" | "bold"> & Partial<Pick<NativeTextFace, "italic">>;
+
+/**
+ * A face's own weight and slant, as the editor reads them: what its font
+ * option says (a style named after a separator, the replay's reading) and
+ * what its name says run on with the family or in a TeX family's code
+ * ("Univers-CondensedBold", CMTI12). The buttons and the drafts read a face
+ * here alike. Read apart -- the buttons by the name, the drafts by the
+ * option alone -- 倾斜 stood pressed on a CMTI12 line, a press asked the
+ * draft for an upright run of a face it took for upright already, and the
+ * line was left with nothing written and nothing said (pdf-walk-1000 0686).
+ */
+export function nativeTextFaceStyle(
+  face: Readonly<{ bold?: boolean; italic?: boolean; baseFont?: string }> | null | undefined,
+): Readonly<{ bold: boolean; italic: boolean }> {
+  const named = face?.baseFont ? pdfNativeFontNameReadsStyle(face.baseFont) : null;
+  return { bold: Boolean(face?.bold) || Boolean(named?.bold), italic: Boolean(face?.italic) || Boolean(named?.italic) };
+}
+
+/** A run of a box as the page draws it, as far as its weight and slant go
+ * (PdfNativeSourceTextAppearanceRun). */
+type NativeTextDrawnRun = Readonly<{
+  text: string;
+  font: Readonly<{ bold?: boolean; italic?: boolean; baseFont?: string }>;
+  syntheticBold?: true;
+  textMatrix: readonly number[];
+  graphicsMatrix: readonly number[];
+}>;
+
+/**
+ * A run's weight and slant as the page draws it: its face's own
+ * (nativeTextFaceStyle), or drawn in place -- a bold by stroking the glyphs
+ * in their fill colour, an italic by leaning the text matrix
+ * (native-synthetic-style), as this writer sets a style the PDF holds no
+ * face for.
+ */
+export function nativeTextDrawnRunStyle(run: NativeTextDrawnRun): Readonly<{ bold: boolean; italic: boolean }> {
+  const face = nativeTextFaceStyle(run.font);
+  return { bold: face.bold || run.syntheticBold === true, italic: face.italic || pdfNativeDrawnRunIsSlanted(run) };
+}
+
+/**
+ * What a box no one run states (several shows, several lines) reads of its
+ * weight and slant, off the runs the page draws it in: bold where every
+ * inked run is, italic where every inked run is. The editor's buttons read
+ * it so, and a press takes off what it reads: a box this writer leaned or
+ * stroked where it stands opens again as leaned or bold, and the same press
+ * again sets it back as it was. Neither with no inked run.
+ */
+export function nativeTextDrawnRunsStyle(runs: readonly NativeTextDrawnRun[] | null | undefined):
+  Readonly<{ bold: boolean; italic: boolean }> {
+  const inked = (runs ?? []).filter((run) => run.text.trim()).map(nativeTextDrawnRunStyle);
+  return { bold: inked.length > 0 && inked.every((style) => style.bold),
+    italic: inked.length > 0 && inked.every((style) => style.italic) };
+}
+
+/** TeX's italic and slanted text faces by their family's code, each with the
+ * upright face of its own weight (the size follows the code: CMTI12, CMR12). */
+const TEX_UPRIGHT_OF: Readonly<Record<string, string>> = Object.freeze({
+  cmti: "CMR", cmsl: "CMR", cmsltt: "CMTT", cmbxti: "CMBX", cmmi: "CMR", cmmib: "CMBX",
+});
+/** The design sizes the TeX faces are cut in. */
+const TEX_DESIGN_SIZES: readonly number[] = Object.freeze([5, 6, 7, 8, 9, 10, 12, 17]);
+
+/**
+ * The upright face of a TeX italic's own family that MRAI serves, at its
+ * design size or the one nearest it: CMTI12's is CMR12, the roman the same
+ * page sets its upright lines in. Null for a face that is no TeX italic, or
+ * whose upright sibling is not served.
+ */
+function nativeTextTexUprightFamily(face: Pick<NativeTextFace, "family" | "baseFont">): string | null {
+  for (const name of [face.baseFont, face.family]) {
+    const plain = (name ?? "").replace(/^[A-Z]{6}\+/u, "").replace(/-Identity-[HV]$/u, "").replace(/\s+/gu, "");
+    for (const code of [embeddableFontFamily(plain)?.office, plain]) {
+      const tex = /^(cm[a-z]+)(\d+)$/iu.exec(code ?? "");
+      const upright = tex ? TEX_UPRIGHT_OF[tex[1].toLowerCase()] : undefined;
+      if (!tex || !upright) continue;
+      const size = Number(tex[2]);
+      for (const candidate of [...TEX_DESIGN_SIZES].sort((left, right) => Math.abs(left - size) - Math.abs(right - size))) {
+        const served = embeddableFontFamily(`${upright}${candidate}`);
+        if (served) return served.office;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * A style of a face's own taken off -- its bold, its italic or both -- when
+ * the PDF holds no face of its family without it: the key of the served
+ * face the run is set in, installed (a stroke cannot un-bold a face, a
+ * slant cannot stand an italic up). An italic of a TeX family comes off
+ * into that family's own upright face (CMTI12 into CMR12); any other style
+ * into the face's own family where MRAI serves it, else into the served
+ * family nearest its class (nativeTextServedRegularFamily), in the weight
+ * and slant asked. Undefined when the face has no style to take off, or
+ * the family has a face of its own without it, which the caller sets
+ * instead. One rule for the box's format and a part's, for a bold and for
+ * an italic.
+ */
+export function nativeTextStyleOffServedFaceKey(
+  face: NativeTextStyledFace,
+  fonts: Iterable<NativeTextStyledFace>,
+  want: Readonly<{ bold: boolean; italic: boolean }>,
+): string | undefined {
+  const own = nativeTextFaceStyle(face);
+  const boldOff = own.bold && !want.bold;
+  const italicOff = own.italic && !want.italic;
+  if (!boldOff && !italicOff) return undefined;
+  for (const font of fonts) {
+    if (!nativeTextSameFamily(font, face)) continue;
+    const style = nativeTextFaceStyle(font);
+    if ((want.bold || !style.bold) && (want.italic || !style.italic)) return undefined;
+  }
+  const served = (italicOff ? nativeTextTexUprightFamily(face) : null) ?? nativeTextServedRegularFamily(face);
+  // A served family that is itself a face cut in the style to take off (a
+  // TeX italic MRAI serves under its own name, with no upright of its code
+  // served) would write that style again: the family of the face's class.
+  const still = pdfNativeFontNameReadsStyle(served);
+  const family = (boldOff && still.bold) || (italicOff && still.italic) ? nativeTextServedClassFamily(face) : served;
+  // A family that is a styled face itself (CMBXTI10's upright is CMBX10,
+  // bold as cut) carries that style: it is not asked of it again.
+  const carried = pdfNativeFontNameReadsStyle(family);
+  return pdfNativeEmbeddedFontKey({ family, bold: want.bold && !carried.bold, italic: want.italic && !carried.italic });
+}
+
 
 
 
@@ -93,13 +227,117 @@ export function nativeTextSameFamily(
 
 
 export function nativeTextUnboldServedFaceKey(
-  face: Pick<NativeTextFace, "family" | "baseFont" | "bold">,
-  fonts: Iterable<Pick<NativeTextFace, "family" | "baseFont" | "bold">>,
+  face: NativeTextStyledFace,
+  fonts: Iterable<NativeTextStyledFace>,
   italic: boolean,
 ): string | undefined {
   if (!face.bold) return undefined;
-  for (const font of fonts) if (nativeTextSameFamily(font, face) && !font.bold) return undefined;
-  return pdfNativeEmbeddedFontKey({ family: nativeTextServedRegularFamily(face), bold: false, italic });
+  return nativeTextStyleOffServedFaceKey(face, fonts, { bold: false, italic });
+}
+
+/**
+ * The face of a run's family a weight and slant asked of it are set in, and
+ * what that face lacks of them. The PDF's own faces first, and of those
+ * only the ones that carry no style the run is not to have (a style of a
+ * face's own is not drawn off it): the one with both as asked, else the
+ * weight as asked in the run's own slant, else the slant as asked in the
+ * run's own weight, else the run's own face; what the face chosen lacks is
+ * drawn in place, a bold as a stroke, an italic as a slant. With no such
+ * face in the PDF, the served face a style comes off into (`served`,
+ * nativeTextStyleOffServedFaceKey).
+ */
+export function nativeTextStyledFace(
+  fonts: readonly NativeTextFace[],
+  face: NativeTextFace,
+  want: Readonly<{ bold: boolean; italic: boolean }>,
+): Readonly<{ face: NativeTextFace; syntheticBold: boolean; slanted: boolean }> | Readonly<{ served: string }> {
+  const own = nativeTextFaceStyle(face);
+  const fits = (font: NativeTextFace) => {
+    const style = nativeTextFaceStyle(font);
+    return (want.bold || !style.bold) && (want.italic || !style.italic);
+  };
+  // Its own face first (a family the page holds in two bold faces).
+  const family = fonts.filter((font) => nativeTextSameFamily(font, face) && fits(font))
+    .sort((left, right) => Number(right.resourceName === face.resourceName) - Number(left.resourceName === face.resourceName));
+  const styled = (bold: boolean, italic: boolean) => family.find((font) => {
+    const style = nativeTextFaceStyle(font);
+    return style.bold === bold && style.italic === italic;
+  });
+  const match = styled(want.bold, want.italic) ?? styled(want.bold, own.italic) ?? styled(own.bold, want.italic) ??
+    (fits(face) ? face : family[0]);
+  if (!match) {
+    const served = nativeTextStyleOffServedFaceKey(face, fonts, want);
+    // (Always a key here: the face has a style to take off, and no face of
+    // its family is without it.)
+    if (served) return { served };
+    return { face, syntheticBold: false, slanted: false };
+  }
+  const style = nativeTextFaceStyle(match);
+  return { face: match, syntheticBold: want.bold && !style.bold, slanted: want.italic && !style.italic };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function nativeTextNamedStyleOffFace(
+  face: NativeTextFace,
+  fonts: readonly NativeTextFace[],
+  asked: Readonly<{ bold?: boolean; italic?: boolean }>,
+): Readonly<{ fontResourceName: string; syntheticBold?: true; slanted?: true }> | undefined {
+  const own = nativeTextFaceStyle(face);
+  const italicOff = asked.italic === false && own.italic && !face.italic;
+  const boldOff = asked.bold === false && own.bold && !face.bold;
+  if (!italicOff && !boldOff) return undefined;
+  const styled = nativeTextStyledFace(fonts, face, { bold: asked.bold ?? own.bold, italic: asked.italic ?? own.italic });
+  if ("served" in styled) return Object.freeze({ fontResourceName: styled.served });
+  if (styled.face.resourceName === face.resourceName) return undefined;
+  return Object.freeze({ fontResourceName: styled.face.resourceName,
+    ...(styled.syntheticBold ? { syntheticBold: true as const } : {}),
+    ...(styled.slanted ? { slanted: true as const } : {}) });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function nativeTextBoxFormatDrawnStyle(input: Readonly<{
+  asked: Readonly<{ bold?: boolean; italic?: boolean }>;
+  /** A face is named for the format: one of the PDF's own, or a served one. */
+  faceNamed: boolean;
+  italicFaceStrokesBold: boolean;
+  namedOff?: Readonly<{ syntheticBold?: true; slanted?: true }>;
+}>): Readonly<{ syntheticBold?: boolean; slanted?: boolean }> {
+  const { asked, faceNamed, italicFaceStrokesBold, namedOff } = input;
+  return Object.freeze({
+    ...(italicFaceStrokesBold ? { syntheticBold: true }
+      : asked.bold === false || (asked.bold !== undefined && !faceNamed) ? { syntheticBold: asked.bold }
+        : namedOff?.syntheticBold ? { syntheticBold: true } : {}),
+    ...(asked.italic !== undefined && !faceNamed ? { slanted: asked.italic } : namedOff?.slanted ? { slanted: true } : {}),
+  });
 }
 
 /** Whether a PDF font is the editor's default text face, the bundled Noto
@@ -192,6 +430,26 @@ export function nativeTextOriginalSyntheticBold(
   return proof.original.renderingMode === 2 && Boolean(selectedFont) && !selectedFont!.bold;
 }
 
+/** The run set whole in a served face named by its key: the stroke and
+ * slant the run had in place of a style give way to the face's own (or to
+ * the planner's, where it has none). */
+function nativeTextWithServedRunFace(
+  proof: PdfNativeTextPropertyProof | null | undefined,
+  draft: PdfNativeTextPropertyDraft,
+  key: string,
+  originalSyntheticBold: boolean,
+): PdfNativeTextPropertyDraft {
+  const linear = draft.textMatrixLinear ?? proof?.original.textMatrixLinear;
+  return {
+    ...draft,
+    fontResourceName: key,
+    syntheticBold: originalSyntheticBold ? false : undefined,
+    ...(linear && pdfNativeTextMatrixIsSlanted(linear)
+      ? { textMatrixLinear: pdfNativeSlantedTextMatrixLinear(linear, false) }
+      : {}),
+  };
+}
+
 /** The run set whole in a family the PDF holds no face of, in a style: the
  * stroke and slant the run had in place of a style give way to the family's
  * own (or to the planner's, where it has none). */
@@ -203,23 +461,44 @@ export function nativeTextWithEmbeddedRunFont(
   italic: boolean,
   originalSyntheticBold: boolean,
 ): PdfNativeTextPropertyDraft {
-  const linear = draft.textMatrixLinear ?? proof?.original.textMatrixLinear;
-  return {
-    ...draft,
-    fontResourceName: pdfNativeEmbeddedFontKey({ family, bold, italic }),
-    syntheticBold: originalSyntheticBold ? false : undefined,
-    ...(linear && pdfNativeTextMatrixIsSlanted(linear)
-      ? { textMatrixLinear: pdfNativeSlantedTextMatrixLinear(linear, false) }
-      : {}),
-  };
+  return nativeTextWithServedRunFace(proof, draft, pdfNativeEmbeddedFontKey({ family, bold, italic }), originalSyntheticBold);
+}
+
+/**
+ * The run's own face again, as the PDF draws it: when the weight and slant
+ * asked are the ones it has there, and the served face the draft stands in
+ * is the upright face of its own TeX family an italic taken off set it in.
+ * Italic off and on again on a CMTI12 line is that line as it was, nothing
+ * to write -- not the served roman leaned. Null otherwise: a served family
+ * of the face's class (Arial for a black title) may be the reader's own
+ * choice from the font list, and keeps its own bold and italic.
+ */
+function nativeTextOwnFaceAgain(
+  proof: PdfNativeTextPropertyProof,
+  draft: PdfNativeTextPropertyDraft,
+  editableFont: NativeTextFace,
+  want: Readonly<{ bold: boolean; italic: boolean }>,
+): PdfNativeTextPropertyDraft | null {
+  const original = proof.original.font;
+  if (isPdfNativeEmbeddedFontKey(original.resourceName)) return null;
+  const own = nativeTextFaceStyle(original);
+  const linear = proof.original.textMatrixLinear;
+  if (want.bold !== (own.bold || nativeTextOriginalSyntheticBold(proof, original)) ||
+    want.italic !== (own.italic || pdfNativeTextMatrixIsSlanted(linear))) return null;
+  const upright = nativeTextTexUprightFamily(original);
+  if (!upright || readPdfNativeEmbeddedFontKey(editableFont.resourceName)?.family !== upright ||
+    nativeTextStyleOffServedFaceKey(original, proof.fonts, nativeTextFaceStyle(editableFont)) !== editableFont.resourceName) return null;
+  return { ...draft, fontResourceName: original.resourceName, syntheticBold: undefined, textMatrixLinear: linear };
 }
 
 /**
  * Bold and Italic on the whole run: the face of its family that draws as
  * much of the style as the PDF has faces for; what it lacks is drawn in
  * place, a bold as a stroke, an italic as a slant
- * (lib/pdf/native-synthetic-style.ts). Null when the bold would need a
- * stroke and the stroke width in force is unknown.
+ * (lib/pdf/native-synthetic-style.ts). A style of the face's own that no
+ * face of its family in the PDF is without comes off into a served face
+ * (nativeTextStyledFace). Null when the bold would need a stroke and the
+ * stroke width in force is unknown.
  */
 export function nativeTextStyledDraft(
   input: Readonly<{
@@ -233,27 +512,19 @@ export function nativeTextStyledDraft(
 ): PdfNativeTextPropertyDraft | null {
   const { proof, draft, editableFont, originalSyntheticBold, bold, italic } = input;
   if (isPdfNativeEmbeddedFontKey(editableFont.resourceName)) {
-    return nativeTextWithEmbeddedRunFont(proof, draft, editableFont.family, bold, italic, originalSyntheticBold);
+    return nativeTextOwnFaceAgain(proof, draft, editableFont, { bold, italic }) ??
+      nativeTextWithEmbeddedRunFont(proof, draft, editableFont.family, bold, italic, originalSyntheticBold);
   }
-  // Its own face first (a family the page holds in two bold faces).
-  const family = proof.fonts.filter((font) => nativeTextSameFamily(font, editableFont))
-    .sort((left, right) => Number(right.resourceName === editableFont.resourceName) -
-      Number(left.resourceName === editableFont.resourceName));
-  const match =
-    family.find((font) => font.bold === bold && font.italic === italic) ??
-    family.find((font) => font.bold === bold && font.italic === editableFont.italic) ??
-    family.find((font) => font.bold === editableFont.bold && font.italic === italic) ??
-    editableFont;
-  const wantSyntheticBold = bold && !match.bold;
-  if (wantSyntheticBold && !pdfNativeSyntheticBoldDrawable(proof.original)) return null;
+  const styled = nativeTextStyledFace(proof.fonts, editableFont, { bold, italic });
+  if ("served" in styled) return nativeTextWithServedRunFace(proof, draft, styled.served, originalSyntheticBold);
+  if (styled.syntheticBold && !pdfNativeSyntheticBoldDrawable(proof.original)) return null;
   const linear = draft.textMatrixLinear ?? proof.original.textMatrixLinear;
-  const wantSlant = italic && !match.italic;
   return {
     ...draft,
-    fontResourceName: match.resourceName,
-    syntheticBold: wantSyntheticBold === originalSyntheticBold ? undefined : wantSyntheticBold,
-    ...(wantSlant !== pdfNativeTextMatrixIsSlanted(linear)
-      ? { textMatrixLinear: pdfNativeSlantedTextMatrixLinear(linear, wantSlant) }
+    fontResourceName: styled.face.resourceName,
+    syntheticBold: styled.syntheticBold === originalSyntheticBold ? undefined : styled.syntheticBold,
+    ...(styled.slanted !== pdfNativeTextMatrixIsSlanted(linear)
+      ? { textMatrixLinear: pdfNativeSlantedTextMatrixLinear(linear, styled.slanted) }
       : {}),
   };
 }

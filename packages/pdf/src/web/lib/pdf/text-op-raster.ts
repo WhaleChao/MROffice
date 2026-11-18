@@ -18,6 +18,7 @@ import {
 } from "./browser-text-layout";
 import { createPdfPortableTextLayout, type PdfPortableTextLayout } from "./portable-text-layout";
 import { markPdfTextLatency } from "./text-edit-latency";
+import { pdfTextFacesReady } from "./text-faces-ready";
 import { justifyPdfTextLine, pdfTextLineParagraphEnds } from "./text-justify";
 import { pdfTextBoxColumnRows, pdfTextBoxColumnWidth, pdfTextBoxVerticalOffset } from "@mrnote/core/web/lib/pdf/text-box-typography.ts";
 import {
@@ -193,7 +194,11 @@ export async function renderPdfTextOpToImage(
   if (needsEastAsianFace(op.text)) await ensurePdfEastAsianFace();
   stage("eastAsian");
   if (browserLayout) {
-    await Promise.all(layoutRuns.map(run => document.fonts?.load(fontForRun(run), run.text)));
+    // Every load answered, a face that cannot load included: one face of a
+    // stack this machine lacks is no reason not to draw the box in the
+    // faces the browser draws it with (text-faces-ready.ts).
+    const refused = await pdfTextFacesReady(document.fonts, layoutRuns.map(run => [fontForRun(run), run.text] as const));
+    if (refused) stages.facesRefused = refused;
   }
   stage("fonts");
   // Word's 竖排: the box in columns (text-box-vertical.ts), as the server

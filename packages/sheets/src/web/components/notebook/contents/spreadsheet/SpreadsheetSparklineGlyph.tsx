@@ -6,7 +6,12 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { type ReactElement } from "react";
-import { sparklinePoints, sparklineStrokeWidthPx, type Sparkline } from "@mrnote/core/web/lib/spreadsheet/sparkline.ts";
+import {
+  sparklineMarkerDiagonalPx,
+  sparklinePoints,
+  sparklineStrokeWidthPx,
+  type Sparkline,
+} from "@mrnote/core/web/lib/spreadsheet/sparkline.ts";
 
 // Conditional-format icon glyphs: components/notebook/contents/spreadsheet/
 // ConditionalIconGlyph (Excel's icon look, XLS-A044/A045/A046).
@@ -15,8 +20,17 @@ import { sparklinePoints, sparklineStrokeWidthPx, type Sparkline } from "@mrnote
 // color is the accent; negatives/losses use a muted red.
 export const SPARKLINE_DEFAULT_COLOR = "#0d9488";
 export const SPARKLINE_DEFAULT_NEGATIVE = "#dc2626";
-/** A line sparkline's data marker, in the glyph's 80 x 18 viewBox. */
-const MARKER_RADIUS = 1.7;
+/**
+ * Where a sparkline's picture stands in its cell, as a CSS `inset`. Excel
+ * plots a line sparkline 2 px in from the cell's sides and 4 px from its top
+ * and foot whatever the cell's size (lookwin p152: 1.5 pt / 3 pt printed);
+ * its markers may stand out over that band. Columns keep 2 px all round.
+ * `scale`: the surface's own magnification (Page Layout's page scale).
+ */
+export function sparklineLayerInset(sparkline: Pick<Sparkline, "type">, scale = 1): string {
+  const s = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  return sparkline.type === "line" ? `${4 * s}px ${2 * s}px` : `${2 * s}px`;
+}
 
 /**
  * Render an in-cell sparkline (Excel/WPS parity) as a small inline SVG from the
@@ -41,13 +55,12 @@ export function SparklineGlyph({
   // gives the line/bars room without re-deriving geometry per cell size.
   const W = 80;
   const H = 18;
-  // A line's points sit inside the box by a marker's radius, so a marker on
-  // the first, last, highest or lowest point shows whole instead of a
-  // quarter of it at the box's edge (live audit S-048).
-  const INSET = sparkline.type === "line" ? MARKER_RADIUS + 0.3 : 0;
+  // A line's points reach the picture's edges (its plot area); a marker on
+  // the first, last, highest or lowest point shows whole over the cell's
+  // inset band around it (sparklineLayerInset; live audit S-048).
   const color = sparkline.color || SPARKLINE_DEFAULT_COLOR;
   const negColor = sparkline.negativeColor || SPARKLINE_DEFAULT_NEGATIVE;
-  const model = sparklinePoints(values, sparkline.type, W - 2 * INSET, H - 2 * INSET, {
+  const model = sparklinePoints(values, sparkline.type, W, H, {
     displayEmptyCellsAs: sparkline.displayEmptyCellsAs,
     includeZero: sparkline.displayXAxis,
     minimum: axisBounds?.minimum,
@@ -76,24 +89,65 @@ export function SparklineGlyph({
     if (sparkline.markers) return sparkline.markerColor || color;
     return null;
   };
+  // The line and bars live in the stretched 80 x 18 view box; a marker is a
+  // diamond of its own CSS size drawn in the cell's own px (the outer
+  // picture has no view box), so it keeps its shape however the cell
+  // stretches the view box (Excel: a diamond, lookwin p151).
+  const strokePx = sparklineStrokeWidthPx(sparkline, scale);
+  const halfDiagonal = sparklineMarkerDiagonalPx(sparkline, scale) / 2;
+  const percent = (value: number, of: number) => `${Number(((value / of) * 100).toFixed(4))}%`;
+  const markers =
+    model.type === "line"
+      ? model.points.map((point, index) => {
+          const markerColor = pointColor(model.pointValues[index], index);
+          if (!markerColor && model.points.length !== 1) return null;
+          const r = Number((markerColor ? halfDiagonal : strokePx).toFixed(3));
+          return (
+            <svg
+              key={`point-${model.pointIndexes[index]}`}
+              x={percent(point.x, W)}
+              y={percent(point.y, H)}
+              overflow="visible"
+            >
+              {markerColor ? (
+                <path
+                  d={`M0 ${-r}L${r} 0L0 ${r}L${-r} 0Z`}
+                  fill={markerColor}
+                  data-testid="spreadsheet-sparkline-marker"
+                />
+              ) : (
+                // A lone point with no marker: a dot of twice the line.
+                <circle cx="0" cy="0" r={r} fill={color} />
+              )}
+            </svg>
+          );
+        })
+      : [];
   return (
     <svg
       className="spreadsheet-window__sparkline"
       width="100%"
       height="100%"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
+      overflow="visible"
+      style={{ overflow: "visible" }}
       aria-hidden="true"
       focusable="false"
       data-testid="spreadsheet-sparkline-svg"
       data-sparkline-type={sparkline.type}
     >
+      <svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        overflow="visible"
+      >
       {sparkline.displayXAxis && model.zeroY !== null ? (
         <line
           x1="0"
-          y1={model.zeroY + INSET}
+          y1={model.zeroY}
           x2={W}
-          y2={model.zeroY + INSET}
+          y2={model.zeroY}
           stroke={sparkline.axisColor || "#94a3b8"}
           strokeWidth="0.8"
           vectorEffect="non-scaling-stroke"
@@ -101,7 +155,7 @@ export function SparklineGlyph({
         />
       ) : null}
       {model.type === "line" ? (
-        <g transform={INSET ? `translate(${INSET} ${INSET})` : undefined}>
+        <g>
           {model.segments.map((segment, index) =>
             segment.length > 1 ? (
               <polyline
@@ -111,39 +165,13 @@ export function SparklineGlyph({
                 stroke={color}
                 // The group's lineWeight (points), drawn at its size in CSS
                 // px whatever the cell's box stretches the viewBox to.
-                strokeWidth={sparklineStrokeWidthPx(sparkline, scale)}
+                strokeWidth={strokePx}
                 strokeLinejoin="round"
                 strokeLinecap="round"
                 vectorEffect="non-scaling-stroke"
               />
             ) : null,
           )}
-          {model.points.map((point, index) => {
-            const markerColor = pointColor(model.pointValues[index], index);
-            if (!markerColor && model.points.length !== 1) return null;
-            // A marker is a dot of its own CSS size, about three line
-            // weights across as Excel draws it (S21_Sparklines, X-198: a
-            // 1 pt line takes ~3.5 pt markers): a zero-length round-capped
-            // stroke that keeps its width and stays round however the cell
-            // stretches the view box (a circle in view-box units became a
-            // tall oval as large as the cell was high).
-            return (
-              <line
-                key={`point-${model.pointIndexes[index]}`}
-                x1={point.x}
-                y1={point.y}
-                x2={point.x}
-                y2={point.y}
-                stroke={markerColor || color}
-                strokeWidth={sparklineStrokeWidthPx(sparkline, scale) * (markerColor ? 3 : 2)}
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-                data-testid={
-                  markerColor ? "spreadsheet-sparkline-marker" : undefined
-                }
-              />
-            );
-          })}
         </g>
       ) : (
         model.bars.map((bar, i) => (
@@ -160,6 +188,8 @@ export function SparklineGlyph({
           />
         ))
       )}
+      </svg>
+      {markers}
     </svg>
   );
 }

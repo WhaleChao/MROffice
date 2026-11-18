@@ -45,7 +45,7 @@ import {
   resolveRichPageBands,
   resolveSectionSheetBands,
 } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
-import { buildBandRichDom, keepBandObjectsOnPaper, wrapBandTextAroundObjects } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
+import { buildBandRichDom, keepBandObjectsOnPaper, paintBandTextWarps, wrapBandTextAroundObjects } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 import { stripFormattingMarks } from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
 import {
   buildFootnoteZoneDom,
@@ -98,6 +98,37 @@ function measuredLineNumberError(detail?: unknown): PrintReadinessError {
 function printColumnsHostOff(): boolean {
   return typeof window !== "undefined" &&
     (window as Window & { __docsPrintColumnsHostOff?: boolean }).__docsPrintColumnsHostOff === true;
+}
+
+/** `window.__docsPrintCoverFirstOff = true`: a handwriting cover goes in
+ * front of the first sheet's blocks, as before (A/B of one build). */
+function printCoverFirstOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsPrintCoverFirstOff?: boolean }).__docsPrintCoverFirstOff === true;
+}
+
+/** `window.__docsPrintBandBodyRulesOff = true`: the body's table and picture
+ * rules reach the copy's headers and footers again, as before (A/B of one
+ * build; styles/note-editor.css `data-docs-print-band-body-rules`). */
+function printBandBodyRulesOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsPrintBandBodyRulesOff?: boolean }).__docsPrintBandBodyRulesOff === true;
+}
+
+/** `window.__docsPrintScreenPageFieldsOff = true`: the copy numbers its
+ * pages by itself, as before (A/B of one build). */
+function screenPageFieldsOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsPrintScreenPageFieldsOff?: boolean }).__docsPrintScreenPageFieldsOff === true;
+}
+
+/** A sheet's page fields as the screen shows them, for a band context. */
+function withPageFields(fields: { pageLabel: string; pageNumberValue?: number; totalPages: number }) {
+  return {
+    pageLabel: fields.pageLabel,
+    totalPages: fields.totalPages,
+    ...(typeof fields.pageNumberValue === "number" ? { pageNumberValue: fields.pageNumberValue } : {}),
+  };
 }
 
 function strictCoordinate(value: string | null): number | null {
@@ -342,6 +373,14 @@ export interface StructuralPrintOptions {
   pageNumberFormat?: PageNumberFormat | null;
   pageNumberStart?: number | null;
   pageNumberStartSection?: number | null;
+  /** The page fields the screen's header and footer show on each of its
+   * `sheets` sheets (useDocumentPagedSurface `sheetBandContext`: the sections'
+   * own Start at, format and chapter numbers). A whole copy of those sheets
+   * prints the same fields and picks odd / even bands by the same numbers. */
+  sheetPageFields?: {
+    sheets: number;
+    at: (index: number, kind: "header" | "footer") => { pageLabel: string; pageNumberValue?: number; totalPages: number };
+  } | null;
   /** Localized failure copied into the popup when an asset cannot be printed. */
   readinessErrorMessage?: string;
   preparingMessage?: string;
@@ -888,6 +927,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
   flushInkLightLayers(options.root);
   const doc = printWindow.document;
   doc.title = options.title ?? "";
+  doc.documentElement.toggleAttribute("data-docs-print-band-body-rules", printBandBodyRulesOff());
   const sheets = Array.from(options.root.querySelectorAll<HTMLElement>(":scope > article[data-page-sheet]"));
   if (!sheets.length) return Promise.resolve({status:"failed", error:new PrintReadinessError("aborted", "The source pages are unavailable.")});
   const revisionMarkup = options.revisionMarkup ?? null;
@@ -1102,6 +1142,18 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
           },
         )
       : null;
+  // The screen's own page fields, for a copy of the very sheets it draws
+  // (not a part of a longer print, which numbers itself): R308-D01's pages
+  // are 135, 136... on screen and in Word (w:pgNumType w:start="135"), and
+  // the copy, counting by itself, printed 1, 2, 3.
+  const screenFields =
+    options.sheetPageFields &&
+    !screenPageFieldsOff() &&
+    pageOffset === 0 &&
+    options.totalPages === undefined &&
+    options.sheetPageFields.sheets === sheets.length
+      ? options.sheetPageFields
+      : null;
   const printLinks = printLinkPlan(sheets, options.printLinks);
   for (const [index, sheet] of sheets.entries()) {
     const clone = doc.importNode(sheet, true);
@@ -1125,7 +1177,13 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       underlay.setAttribute(SHEET_PRINT_PART_ATTR, "");
       underlay.style.cssText = `position:absolute;inset:0;z-index:${PRINT_BAND_Z_INDEX - 1};pointer-events:none;overflow:hidden`;
       underlay.appendChild(doc.importNode(options.firstSheetUnderlay, true));
-      clone.insertBefore(underlay, clone.firstChild);
+      // After the blocks, as the copy's other parts: its z-index puts it
+      // under them. First, it moved every block one child on, so a page of
+      // newspaper columns took each block's place from the block before it
+      // (the projector's `:nth-child` slots), and the first block was no
+      // longer the sheet's first child.
+      if (printCoverFirstOff()) clone.insertBefore(underlay, clone.firstChild);
+      else clone.appendChild(underlay);
     }
     // The live canvas reserves parity paper with a margin on the following
     // editable sheet. Print has already materialized that paper as a separate
@@ -1185,26 +1243,32 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       );
     }
     const firstValue = labels ? labels.firstNumber : numbering.starts[index];
+    const headerFields = screenFields?.at(index, "header") ?? null;
+    const footerFields = screenFields?.at(index, "footer") ?? null;
     const headerContext = {
       pageLabel: labels
         ? (labels.first ?? "")
         : String(numbering.starts[index]),
-      ...(typeof firstValue === "number" ? { pageNumberValue: firstValue } : {}),
+      ...(!headerFields && typeof firstValue === "number" ? { pageNumberValue: firstValue } : {}),
       totalPages: numbering.total,
       styleDefinitions: options.bandStyleDefinitions,
       wordCompatibilityMode: options.bandWordCompatibilityMode ?? null,
       missingFontSubstitutes: options.bandMissingFontSubstitutes ?? null,
+      ...(headerFields ? withPageFields(headerFields) : {}),
     };
     const footerContext = {
       pageLabel: labels
         ? (labels.last ?? "")
         : String(numbering.starts[index] + spans[index] - 1),
-      ...(typeof firstValue === "number" ? { pageNumberValue: firstValue + spans[index] - 1 } : {}),
+      ...(!footerFields && typeof firstValue === "number" ? { pageNumberValue: firstValue + spans[index] - 1 } : {}),
       totalPages: numbering.total,
       styleDefinitions: options.bandStyleDefinitions,
       wordCompatibilityMode: options.bandWordCompatibilityMode ?? null,
       missingFontSubstitutes: options.bandMissingFontSubstitutes ?? null,
+      ...(footerFields ? withPageFields(footerFields) : {}),
     };
+    // Odd and even headers go by the page's number, as on screen.
+    const parityIndex = (headerFields ? headerFields.pageNumberValue ?? numbering.starts[index] : numbering.starts[index]) - 1;
     // Bands live in an overlay on screen (outside the ProseMirror DOM), so
     // the clone re-injects them per sheet with the same builders.
     const sectionCursor = sectionIndexes[index] ?? 0;
@@ -1216,7 +1280,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
     let footerBandText: string | null = null;
     if (options.sectionBands) {
       const resolved = resolveSectionSheetBands(
-        numbering.starts[index] - 1,
+        parityIndex,
         sectionCursor,
         options.sectionBands,
         {
@@ -1234,7 +1298,7 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       footerBandText = footerRich ? null : resolved.footerText;
     } else if (options.richBands) {
       const bands = resolveRichPageBands(
-        numbering.starts[index] - 1,
+        parityIndex,
         options.richBands,
       );
       headerRich = bands.header;
@@ -1350,6 +1414,8 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       // Laid out with its fonts: the bands' objects Word keeps on the paper.
       keepBandObjectsOnPaper(surfaceClone);
       wrapBandTextAroundObjects(surfaceClone);
+      // A band WordArt box's words, bent (laid out with its fonts first).
+      paintBandTextWarps(surfaceClone);
       // A table of contents' leaders are measured in the editor when a row
       // first shows; on a sheet the browser skipped (a print's far sheets, never
       // scrolled to) that is never, and a page of the table printed none. Here

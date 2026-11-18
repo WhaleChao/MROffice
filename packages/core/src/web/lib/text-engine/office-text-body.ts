@@ -8,6 +8,12 @@ import { hangingMarginTabTarget } from "../document-tabstops";
 import { eastAsianMarkLine, eastAsianMeasuredFirstBaselineEm } from "./east-asian-lines";
 import { splitFamilyList } from "./face-index";
 import { KINSOKU_EAST_ASIAN, type KinsokuList } from "./kinsoku";
+import {
+  powerPointHangs,
+  powerPointHoldsAtLineStart,
+  powerPointLineBreakOpportunities,
+  type PowerPointLineLanguage,
+} from "./powerpoint-east-asian";
 import { lineBreakOpportunities } from "./line-break";
 import { symbolAdvanceEm } from "./symbol-advances";
 
@@ -24,6 +30,15 @@ export const OFFICE_SINGLE_LINE = 1.2;
 export const OFFICE_BASELINE_SHARE = 0.75;
 /** The least share of a single line an East Asian face's ideographs keep under the baseline ({@link lineVerticals}). */
 const EAST_ASIAN_DESCENT_SHARE = 0.2;
+
+
+
+
+
+
+
+
+const NATURAL_EAST_ASIAN_LINE = 1.3;
 /** A table cell's spaced line ({@link OfficeTextBodyInput.cellLines}). */
 const CELL_BASELINE_SHARE = 0.7547;
 /** Where PowerPoint's baseline stands in an exactly spaced line. */
@@ -78,6 +93,12 @@ export interface OfficeTextRunInput {
   readonly letterSpacingPt?: number;
   /** All capitals: measured and drawn upper-cased. */
   readonly allCaps?: boolean;
+  /**
+   * The rules PowerPoint breaks the run's words by (its `lang` / `altLang`,
+   * `powerPointLineLanguage`), read only in a paragraph with
+   * `powerPointEastAsian`; null or unstated: the old rules (readings row 1001).
+   */
+  readonly lineLanguage?: PowerPointLineLanguage | null;
 }
 
 export interface OfficeMarkerInput {
@@ -116,6 +137,19 @@ export interface OfficeParagraphInput {
   readonly runs: readonly OfficeTextRunInput[];
   /** The face and size of the paragraph's end mark (an empty row's line). */
   readonly endFont: OfficeTextFont;
+  /**
+   * The Latin face the paragraph's mark is set in, where the file says it
+   * (readings row 899, `endLatinFace`): what the line holding the mark is laid
+   * by beside East Asian words (`eastAsianMarkLine`). Unstated, the mark's
+   * face is `endFont`'s leading family, as before.
+   */
+  readonly markLatinFace?: string;
+  /**
+   * The paragraph's last line ends at a line break, not at the mark (a row a
+   * one-paragraph body is drawn in, split at its breaks): no line of it holds
+   * the mark (`eastAsianMarkLine`).
+   */
+  readonly endsInLineBreak?: boolean;
   readonly align: OfficeTextAlign;
   readonly marginLeftPt: number;
   readonly marginRightPt: number;
@@ -128,6 +162,16 @@ export interface OfficeParagraphInput {
   /** Default tab interval (`a:pPr@defTabSz`), pt. */
   readonly defaultTabPt?: number;
   readonly kinsoku?: KinsokuList | null;
+  /**
+   * PowerPoint's own East Asian line rules (readings row 1001, a slide body
+   * whose page carries `source.nativeEastAsianLines`): each grapheme breaks by
+   * its run's `lineLanguage` and PowerPoint's own lists, in place of
+   * `kinsoku`. `hangingPunct`: the row's `a:pPr@hangingPunct` as resolved
+   * (unstated is on); `latinLineBreak`: its `a:pPr@latinLnBrk` (a run of no
+   * East Asian language then breaks its East Asian letters one by one);
+   * `eastAsianRules`: false under `a:pPr@eaLnBrk="0"` -- no list, no hanging.
+   */
+  readonly powerPointEastAsian?: { readonly hangingPunct: boolean; readonly latinLineBreak?: boolean; readonly eastAsianRules?: boolean };
   readonly latinLineBreak?: boolean;
   
 
@@ -375,6 +419,8 @@ interface LineRange {
   readonly available: number;
   /** Laid advances of glyphs [start, inkEnd) with tabs resolved. */
   readonly advances: readonly number[];
+  /** The line's last ink glyph is a mark PowerPoint hangs past the line's end (readings row 1001). */
+  readonly hung?: boolean;
 }
 
 /** The line's tabs resolved from `left`, and the ink width up to each glyph. */
@@ -400,7 +446,13 @@ function fillLines(
   keepLongWords = false,
 ): LineRange[] {
   const texts = glyphs.map((glyph) => glyph.text);
-  const opportunities = lineBreakOpportunities(texts, { kinsoku: paragraph.kinsoku ?? null, powerpoint: true });
+  const languages = paragraph.powerPointEastAsian ? glyphs.map((glyph) => paragraph.runs[glyph.run]?.lineLanguage ?? null) : null;
+  const opportunities = languages
+    ? powerPointLineBreakOpportunities(texts, languages, {
+        latinLineBreak: paragraph.powerPointEastAsian?.latinLineBreak === true,
+        eastAsianRules: paragraph.powerPointEastAsian?.eastAsianRules !== false,
+      })
+    : lineBreakOpportunities(texts, { kinsoku: paragraph.kinsoku ?? null, powerpoint: true });
   if (paragraph.latinLineBreak) {
     for (let index = 1; index < glyphs.length; index += 1) {
       if (glyphs[index].kind === "ink" && glyphs[index - 1].kind === "ink") opportunities[index] = true;
@@ -410,6 +462,21 @@ function fillLines(
   for (let index = 1; index < glyphs.length; index += 1) {
     if (glyphs[index - 1].kind === "tab" && glyphs[index].kind !== "space") opportunities[index] = true;
   }
+  // PowerPoint's hanging punctuation (readings row 1001; PowerPoint for
+  // Windows, look-fit hang13): a mark of its run language's hang set that does
+  // not fit, right after a character, hangs whole past the line's end -- into
+  // a right indent, past the box where there is none -- and the line ends
+  // after it, unless `hangingPunct` is 0 or the character after it is another
+  // mark that may not start a line ("。」": neither hangs, and the character
+  // before goes down with both).
+  const hangsAt = (index: number, start: number): boolean => {
+    if (!languages || !paragraph.powerPointEastAsian?.hangingPunct || paragraph.powerPointEastAsian.eastAsianRules === false) return false;
+    const glyph = glyphs[index];
+    if (glyph.kind !== "ink" || index <= start || glyphs[index - 1].kind !== "ink") return false;
+    if (!powerPointHangs(glyph.text, languages[index])) return false;
+    const next = glyphs[index + 1];
+    return !(next && next.kind === "ink" && powerPointHoldsAtLineStart(next.text, languages[index + 1]));
+  };
   const right = widthPt - paragraph.marginRightPt;
   const lines: LineRange[] = [];
   let start = 0;
@@ -450,6 +517,19 @@ function fillLines(
         break;
       }
       x += advance;
+    }
+    let hung = false;
+    if (overflow >= 0 && hangsAt(overflow, start)) {
+      // The hung mark is the line's last ink: spaces after it hang with it, and
+      // a line break after it ends the line as it would have.
+      end = overflow + 1;
+      while (end < glyphs.length && glyphs[end].kind === "space") end += 1;
+      if (end < glyphs.length && glyphs[end].kind === "break") {
+        end += 1;
+        hardEnd = true;
+      }
+      overflow = -1;
+      hung = true;
     }
     if (overflow >= 0) {
       if (lastBreak > start) {
@@ -499,7 +579,10 @@ function fillLines(
     }
     let inkEnd = end;
     while (inkEnd > start && (glyphs[inkEnd - 1].kind === "space" || glyphs[inkEnd - 1].kind === "break")) inkEnd -= 1;
-    lines.push({ start, end, inkEnd, hardEnd: hardEnd && overflow < 0, left, available, advances: resolveTabs(glyphs, start, inkEnd, left, paragraph, hang) });
+    lines.push({
+      start, end, inkEnd, hardEnd: hardEnd && overflow < 0, left, available, advances: resolveTabs(glyphs, start, inkEnd, left, paragraph, hang),
+      ...(hung ? { hung: true } : {}),
+    });
     if (end >= glyphs.length) {
       // A paragraph that ends on a break opens one more (empty) line.
       if (hardEnd && overflow < 0 && end === glyphs.length) {
@@ -530,6 +613,7 @@ function lineVerticals(
   natural = false,
   eastAsian: readonly boolean[] = [],
   mark?: OfficeTextFont,
+  markLatinFace?: string,
 ): LineVerticals | { status: "pending" } {
   let size = 0;
   // The single line's height (pt): Office's 1.2 em of the largest size, or
@@ -539,10 +623,17 @@ function lineVerticals(
   let descent = 0;
   // The part of the single line under the baseline (its descent share).
   let singleBelow = 0;
+  // Whether East Asian words in an East Asian face set the line.
+  let ideographicLine = false;
   let pending = false;
   // The paragraph mark this line holds (its last line): its Latin face
   // (`eastAsianMarkLine`).
-  const markFace = mark && !natural && !cell ? primaryFamily(mark.stack) : undefined;
+  // (`markLatinFace`, the file's own word for it, over the mark's leading
+  // family: a Japanese row's mark under a Calibri theme is Calibri, though
+  
+  const markFace = mark && !natural && !cell
+    ? (markLatinFace?.trim() ? markLatinFace.trim().toLowerCase() : primaryFamily(mark.stack))
+    : undefined;
   for (const [index, font] of fonts.entries()) {
     const answer = measurer.verticals(font);
     if (answer.status === "pending") {
@@ -559,7 +650,11 @@ function lineVerticals(
     // Calibri, Times New Roman and Verdana, against 1138 with the face's ink
     // box centred in the line (Arial 16 pt: 16 pt under the top, not 15.14;
     // Calibri 40 pt: 37, not 37.66; Times 12 pt: 12, not 11.23).
-    const line = natural ? a + d + Math.max(0, answer.value.lineGap ?? 0) : OFFICE_SINGLE_LINE;
+    // East Asian words in a diagram (`NATURAL_EAST_ASIAN_LINE`): their face's line, longer by 1.3.
+    const naturalEastAsian = natural && !cell && eastAsian[index] === true;
+    const line = natural
+      ? (a + d + Math.max(0, answer.value.lineGap ?? 0)) * (naturalEastAsian ? NATURAL_EAST_ASIAN_LINE : 1)
+      : OFFICE_SINGLE_LINE;
     // East Asian characters in an East Asian face keep at least a fifth of
     // the single line under the baseline -- above it at most 0.8 of it --
     // whatever the face's own descent share. Measured on PowerPoint for
@@ -574,11 +669,14 @@ function lineVerticals(
     // run's Latin face alike). Latin letters in those faces share it as any
     // face's (P3-faces: "Hxg" in Meiryo UI 1.00 em). The share was 1.031 em
     
-    const ideographic = eastAsian[index] === true && !natural && !cell;
+    // (A diagram's East Asian words keep the fifth under their baseline too, not their measured first baseline nor a
+    
+    // face's own share of the longer line.)
+    const ideographic = eastAsian[index] === true && !cell && (!natural || naturalEastAsian);
     const ascentShare = a + d > 0 ? a / (a + d) : 1;
     // A face PowerPoint for Windows sets apart from the rule: its measured
     // first baseline (`EAST_ASIAN_FIRST_BASELINE_EM`).
-    const measured = ideographic ? eastAsianFirstBaselineEm(font.stack) : undefined;
+    const measured = ideographic && !natural ? eastAsianFirstBaselineEm(font.stack) : undefined;
     // The line that holds the paragraph mark (PowerPoint for Windows,
     // `eastAsianMarkLine`): a mark in this face (or one of its win box) lays
     // the line as its Latin text, no floor and no measured place; a measured
@@ -600,8 +698,17 @@ function lineVerticals(
     // MS PGothic 0.25 em, Yu Gothic 0.28, Meiryo 0.33, where its win descent
     // is 0.44).
     descent = Math.max(descent, (ideographic ? line - share : d) * font.sizePt);
+    if (ideographic) ideographicLine = true;
   }
   if (pending) return { status: "pending" };
+  // A line of East Asian words beside Latin ones keeps only what the single
+  // line leaves under its baseline, not the Latin face's own descent:
+  
+  // (Calibri and MS PGothic, a Calibri mark) as a 1.2 em line, its baseline
+  // 0.356 em under the box's middle like the Japanese-only labels around it
+  // (eight boxes 0.352-0.360), where Calibri's 0.269 em put it 0.016-0.033 em
+  // high (look-fit 13th, lookfit ea13/center.py).
+  if (ideographicLine) descent = Math.max(0, Math.min(descent, singleHeight - single));
   if (spacing.kind === "points") {
     const pitch = spacing.value;
     const above = OFFICE_EXACT_BASELINE_SHARE * pitch;
@@ -730,8 +837,8 @@ function layoutBody(input: OfficeTextBodyInput, measurer: OfficeTextMeasurer): O
       // A cell's row that states its Text alignment is laid as a text box's (P7c).
       const cellRule = input.cellLines === true && paragraph.fontAlign === undefined;
       // The paragraph's last line holds its mark, set in the mark's face.
-      const holdsMark = lineIndex === lineRanges.length - 1;
-      const verticals = lineVerticals(fonts, paragraph.lineSpacing, reduction, measurer, cellRule, input.naturalLines === true, eastAsian, holdsMark ? paragraph.endFont : undefined);
+      const holdsMark = lineIndex === lineRanges.length - 1 && paragraph.endsInLineBreak !== true;
+      const verticals = lineVerticals(fonts, paragraph.lineSpacing, reduction, measurer, cellRule, input.naturalLines === true, eastAsian, holdsMark ? paragraph.endFont : undefined, holdsMark ? paragraph.markLatinFace : undefined);
       if ("status" in verticals) {
         pending = true;
         return;
@@ -850,7 +957,13 @@ function placeLine(
     return { segments: [], baseline, top, bottom, inkLeft: left, inkRight: left, wordSpacing: 0, letterSpacing: 0, sizePt };
   }
   const inkWidth = range.advances.reduce((sum, advance) => sum + advance, 0);
-  const extra = range.available - inkWidth;
+  // A hung mark (readings row 1001) is not in the width a right or justified
+  // line is aligned by: the words before it end at the edge, the mark past it.
+  // A centred line centres all of it, the mark too, past both edges
+  // (hang-full-probe's alignment rows).
+  const hungAdvance = range.hung && paragraph.align !== "ctr" ? (range.advances[range.advances.length - 1] ?? 0) : 0;
+  const extra = range.available - (inkWidth - hungAdvance);
+  const spacedEnd = range.inkEnd - (range.hung ? 2 : 1);
   let offset = 0;
   let wordSpacing = 0;
   let letterSpacing = 0;
@@ -859,7 +972,7 @@ function placeLine(
   let firstInk = range.start;
   while (firstInk < range.inkEnd && glyphs[firstInk].kind === "space") firstInk += 1;
   for (let index = firstInk; index < range.inkEnd; index += 1) if (glyphs[index].kind === "space") innerSpaces += 1;
-  const gaps = Math.max(0, range.inkEnd - range.start - 1);
+  const gaps = Math.max(0, spacedEnd - range.start);
   const justify = paragraph.align === "just" && !lastOfParagraph && !range.hardEnd && extra > 0;
   if (paragraph.align === "dist" && extra > 0) {
     if (gaps > 0) letterSpacing = extra / gaps;
@@ -897,7 +1010,7 @@ function placeLine(
     let advance = inside ? range.advances[index - range.start] : glyph.advance;
     if (inside) {
       if (glyph.kind === "space" && index >= firstInk) advance += wordSpacing;
-      if (index < range.inkEnd - 1) advance += letterSpacing;
+      if (index < spacedEnd) advance += letterSpacing;
     }
     if (!current || current.run !== glyph.run || tab || current.tab) {
       flush();

@@ -968,21 +968,42 @@ export async function sendPageClosingEdits(pageId: string, body: PageClosingEdit
   return typeof version === "number" ? version : null;
 }
 
+/** The server took a newer request of this window instead of this one
+ * (`custody_gate`): nothing of it was kept on its own. */
+export const CUSTODY_SUPERSEDED = "superseded" as const;
+
 /** A deck window's edits its room has not confirmed, handed to the room's
  * durable custody while the window is open (services/page_room_durable
  * `take_edits_into_custody`): the closing edits' causal form. Resolves with
- * the custody's sequence; rejects with the request's error. `keepalive` for a
+ * the custody's sequence, or CUSTODY_SUPERSEDED (not kept: a newer request of
+ * this window was taken instead); rejects with the request's error. `keepalive` for a
  * body small enough to outlive the page. */
+// A server from before custody_gate refuses the window's client id (its
+// payload forbids unknown fields): from then on the requests go without it.
+let custodyClientIdRefused = false;
+
 export async function sendPageCustodyEdits(
   pageId: string,
-  body: { epoch: number; model: string; update_base64: string },
+  body: { epoch: number; model: string; update_base64: string; client_id?: number },
   signal?: AbortSignal,
-): Promise<number | null> {
+): Promise<number | null | typeof CUSTODY_SUPERSEDED> {
   const keepalive = body.update_base64.length < 60 * 1024;
   // High priority: waiting for a connection, it goes before the window's
   // other requests (HTTP/1.1 dispatches the queue by priority).
-  const wire = await apiPost<unknown>(`${base(pageId)}/custody-edits`, body,
+  const post = (payload: typeof body) => apiPost<unknown>(`${base(pageId)}/custody-edits`, payload,
     { ...(keepalive ? { keepalive: true } : {}), ...(signal ? { signal } : {}), priority: "high" });
+  const { client_id: clientId, ...anonymous } = body;
+  const withId = clientId !== undefined && !custodyClientIdRefused;
+  let wire: unknown;
+  try {
+    wire = await post(withId ? body : anonymous);
+  } catch (error) {
+    if (!withId || !isApiRequestError(error) || error.status !== 422 || error.code !== "validation_error"
+      || !JSON.stringify(error.details ?? {}).includes("client_id")) throw error;
+    custodyClientIdRefused = true;
+    wire = await post(anonymous);
+  }
+  if (isRecord(wire) && wire.outcome === CUSTODY_SUPERSEDED) return CUSTODY_SUPERSEDED;
   const sequence = isRecord(wire) ? wire.sequence : null;
   return typeof sequence === "number" ? sequence : null;
 }

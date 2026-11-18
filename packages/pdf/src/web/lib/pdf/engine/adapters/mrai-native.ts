@@ -117,6 +117,7 @@ import {
   planMraiNativeListTextParagraphFormat,
   pdfNativeParagraphPlanClearOfOtherText,
   planMraiNativeListTextSelectionReplacement,
+  pdfNativeListTextSelectionAsOneShow,
   type PdfNativeListTextFidelityEvidence,
   type PdfNativeListTextSelectionEvidence,
   type PdfNativeTextPropertyDraft,
@@ -1077,6 +1078,31 @@ function selectionsEqual(
   );
 }
 
+/**
+ * Whether a plan made on the bytes is the plan of the selection its command
+ * names: that selection as it stands, or -- a box the reader cut one show
+ * into (a line this product leaned, read a word an item) -- the box's own
+ * item alone, which is what the planners prove such a box as
+ * (pdfNativeListTextSelectionAsOneShow) and so what their evidence carries.
+ * Held to the selection as it stands only, every format or move of such a
+ * line was refused as a conflict when it was left, after a preview that had
+ * planned it (pdf-walk-1000 0143: Bold on a line just set italic, 「这次修改
+ * 没有保存上」 however often it was tried). The one item is read from the
+ * command's own selection and from nothing else -- its digest, revision,
+ * page, offsets and item, the items left out only where they lay end to end
+ * along it -- so a plan of any other run, or of other bytes, is refused as
+ * before.
+ */
+function planAnswersSelection(
+  planned: PdfNativeListTextSelectionEvidence,
+  asked: PdfNativeListTextSelectionEvidence,
+): boolean {
+  if (selectionsEqual(planned, asked)) return true;
+  if (planned.items !== undefined || asked.items === undefined) return false;
+  const oneShow = pdfNativeListTextSelectionAsOneShow(asked);
+  return oneShow !== null && selectionsEqual(planned, oneShow);
+}
+
 function conflict(
   command: PdfEngineCommand,
   context: Readonly<{ source: PdfEngineSourceIdentity }>,
@@ -1906,7 +1932,7 @@ export async function planMraiNativeCommand(
             selection: payloadOfList.selection,
             move: payloadOfList.move,
           });
-          if (!selectionsEqual(textMovePlan.evidence.sourceFidelity.selection!, payloadOfList.selection)) {
+          if (!planAnswersSelection(textMovePlan.evidence.sourceFidelity.selection!, payloadOfList.selection)) {
             textMovePlan.prepared.candidateBytes.fill(0);
             throw new PdfNativeTransactionError(
               "precondition-mismatch",
@@ -1930,7 +1956,7 @@ export async function planMraiNativeCommand(
                 ? { frameRight: options.textGroupMoveFrameRight } : {}),
             });
             textGroupMovePlan = planned;
-            if (!selectionsEqual(planned.proofSelection, payloadOfList.selection)) {
+            if (!planAnswersSelection(planned.proofSelection, payloadOfList.selection)) {
               planned.prepared.candidateBytes.fill(0);
               throw new PdfNativeTransactionError(
                 "precondition-mismatch",
@@ -2101,10 +2127,9 @@ export async function planMraiNativeCommand(
             : undefined;
         if (
           (history || property) &&
-          (!selectionsEqual(
-            history?.selection ?? property!.evidence.selection!,
-            listPayload!.selection,
-          ) ||
+          (!(history
+            ? selectionsEqual(history.selection, listPayload!.selection)
+            : planAnswersSelection(property!.evidence.selection!, listPayload!.selection)) ||
             (listPayload!.replacementText !==
               (history?.plan.evidence.replacementDisplayText ??
                 property!.evidence.replacementDisplayText) &&

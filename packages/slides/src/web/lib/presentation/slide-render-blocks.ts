@@ -18,6 +18,7 @@ import {
 import { presentationBlockWithGroupPaint } from "../presentation-group-fill";
 import { isBlockNotDrawn } from "@mrnote/core/web/lib/presentation-selection-pane.ts";
 import { isImportedInheritedSlideGraphic, isReplacedNativeMasterGraphic } from "@mrnote/core/web/lib/presentation-slide-bg.ts";
+import { withNativeSmartArtGraphicPlates } from "./smartart-graphic-plate";
 import type { DeckTheme } from "@mrnote/core/web/lib/presentation-theme.ts";
 import type { SlideModel } from "@mrnote/core/web/lib/presentation/deck-model.ts";
 
@@ -35,7 +36,9 @@ export function presentationSlideRenderBlocks(
 ): Array<{ block: PresentationBlock; index: number }> {
   const context = resolveSlideContext(slide, masters, theme);
   const ordered = presentationInPaintOrder(
-    resolveSlideRenderBlocks(
+    // A file's SmartArt drawn from its cached drawing wears its graphic's own
+    // fill, line and effect across its frame (`smartart-graphic-plate`).
+    withNativeSmartArtGraphicPlates(resolveSlideRenderBlocks(
       slide.hideBackgroundGraphics
         ? undefined
         : (masterBlocksInheritedBySlides(context.master) as PresentationBlock[] | undefined),
@@ -48,7 +51,7 @@ export function presentationSlideRenderBlocks(
         !isBlockNotDrawn(block) &&
         !(slide.hideBackgroundGraphics && isImportedInheritedSlideGraphic(block)) &&
         !isReplacedNativeMasterGraphic(block, theme),
-    ),
+    )),
     { reordered: presentationSlideReordersNativeObjects(slide) },
   );
   // A member wearing its group's gradient, picture or pattern draws its part

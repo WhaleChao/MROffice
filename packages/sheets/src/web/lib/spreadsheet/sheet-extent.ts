@@ -189,3 +189,31 @@ export function insertedRowsKeepTheirShowing<S extends { rowCount: number }>(
   if (hidden.size > MAX_GRID_ROW_SIZE_OVERRIDES) return after;
   return { ...after, manuallyHiddenRows: [...hidden].sort((a, b) => a - b) };
 }
+
+
+
+
+
+
+
+
+export function rowsShownPastEndOf(sheet: { rowCount: number; rowsHiddenByDefault?: unknown; rowsShownPastEnd?: unknown }): number[] {
+  if (sheet.rowsHiddenByDefault !== true || !Array.isArray(sheet.rowsShownPastEnd)) return [];
+  const rows = new Set<number>();
+  for (const row of sheet.rowsShownPastEnd) {
+    if (Number.isInteger(row) && (row as number) >= sheet.rowCount && (row as number) < MAX_GRID_ROWS) rows.add(row as number);
+  }
+  return [...rows].sort((left, right) => left - right);
+}
+
+/** The rows from `rowCount` to the last of `shown` that its hidden default
+ * hides, as inclusive [first, last] runs (never listed one by one). */
+export function hiddenRowSpansPastEnd(rowCount: number, shown: readonly number[]): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  let from = rowCount;
+  for (const row of shown) {
+    if (row > from) spans.push([from, row - 1]);
+    from = Math.max(from, row + 1);
+  }
+  return spans;
+}

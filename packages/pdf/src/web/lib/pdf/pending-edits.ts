@@ -345,12 +345,15 @@ export function pdfPendingRowAttemptOfError(error: unknown): PdfPendingRowAttemp
 
 
 
+
+
 export async function stagePdfPendingRowWords(input: Readonly<{
   compile: () => Promise<void>;
   /** The copy holds the edit although the compile threw. */
   taken: () => boolean;
-  byEngine: () => Promise<PdfPendingRowAttempt>;
+  byEngine: (compileRefusal: unknown) => Promise<PdfPendingRowAttempt>;
 }>): Promise<PdfPendingRowAttempt> {
+  let compileRefusal: unknown;
   try {
     await input.compile();
     return "staged";
@@ -359,8 +362,9 @@ export async function stagePdfPendingRowWords(input: Readonly<{
     if (pdfPendingRowAttemptOfError(error) === "later") throw error;
     markPdfTextLatency("working.server-pending-engine", {
       why: String((error as { message?: unknown } | null)?.message ?? error).slice(0, 80) });
+    compileRefusal = error;
   }
-  return input.byEngine();
+  return input.byEngine(compileRefusal);
 }
 
 /** What a window remembers of the rows it tried, across its tries. */

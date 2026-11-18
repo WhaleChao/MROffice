@@ -163,10 +163,25 @@ export interface UnequalColumnFlowOptions {
    * before it that the sheet paints there (its computed margin; zero unless
    * the page preserves its leading space, as Word's first page does). */
   pageTop?: boolean;
+  /** The space the region's first block stands below the region's top in
+   * the first column (px): its space before, which Word sets in its own
+   * column only, the other columns starting at the region's top. */
+  leadPx?: number;
   /** A column's own foot above the page's (px from the flow's top): a
    * top-and-bottom box drawn at the column's foot leaves the column only the
    * room above it (`ColumnBandExclusion`). */
   columnCapacitiesPx?: readonly (number | undefined)[];
+  /** Word compatibility mode 15 or later: a keep-with-next paragraph that
+   * fits but whose follower cannot start below it is cut where it stands,
+   * its last lines (its widow floor) going on with the follower, rather
+   * than opening the next column whole (`keptLastLinesCut`). */
+  keepNextCutsLastLines?: boolean;
+}
+
+/** Options of a sheet's projection taken from the document. */
+export interface UnequalColumnSheetOptions {
+  /** Word compatibility mode 15 or later (`keepNextCutsLastLines`). */
+  keepNextCutsLastLines?: boolean;
 }
 
 /** A page-placed top-and-bottom box drawn out of the flow on a page of
@@ -455,10 +470,20 @@ function followerStartsPast(
   const block = blocks[index];
   let nextIndex = index + 1;
   while (nextIndex < blocks.length && blocks[nextIndex].flowless) nextIndex += 1;
-  const next = blocks[nextIndex] as (UnequalColumnBlockMetric & { splittable?: boolean; lineHeightPx?: number }) | undefined;
+  const next = blocks[nextIndex] as (UnequalColumnBlockMetric & { splittable?: boolean; lineHeightPx?: number; minSplitLines?: number }) | undefined;
   if (!next) return false;
   const height = heightAt(next, columnIndex);
-  const line = next.splittable && !next.keepLines && next.lineHeightPx && next.lineHeightPx > 0 ? Math.min(height, next.lineHeightPx) : height;
+  // What of the follower must stand below: its first line, or under widow
+  // control the two Word's orphan floor keeps together (its whole box when
+  // it is too short to leave two on each side). Word moved "Introduction"
+  // to the next column where only one line of the paragraph after it would
+  // have fit (corpus R432-D07).
+  const pitch = next.lineHeightPx && next.lineHeightPx > 0 ? next.lineHeightPx : 0;
+  const floor = keepNextFloorOff() ? 1 : Math.max(1, next.minSplitLines ?? 1);
+  const lines = pitch > 0 ? Math.round(height / pitch) : 0;
+  const line = next.splittable && !next.keepLines && pitch > 0
+    ? (lines >= floor * 2 ? Math.min(height, pitch * floor) : height)
+    : height;
   return endPx + collapseUnequalColumnMargins(block.marginBottomPx, next.marginTopPx) + line > capacityPx + 1e-6;
 }
 
@@ -478,15 +503,58 @@ function followerStartsPast(
 /** Harness switch (`window.__docsColumnKeepNextOff = true`): a page of
  * newspaper columns lays its blocks into the columns without their Keep
  * with next, as it did before (an A/B of one build). */
+/** `window.__docsKeepNextFloorOff = true` (A/B): a kept block only needs its
+ * follower's first line below it, and a column region filled to the page's
+ * foot drops keep-with-next, the older readings. */
+/** `window.__dqc2RegionTopMarginOff = true`: the page's first column region
+ * starts all its columns below its first block's space before, as before
+ * (A/B of one build). */
+function regionTopMarginOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __dqc2RegionTopMarginOff?: boolean }).__dqc2RegionTopMarginOff === true;
+}
+
+function keepNextFloorOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKeepNextFloorOff?: boolean }).__docsKeepNextFloorOff === true;
+}
+
 function columnKeepNextOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsColumnKeepNextOff?: boolean }).__docsColumnKeepNextOff === true;
 }
 
 /** What `followerStartsPast` reads of the block after a kept one: whether it
  * may break after its first line, and that line's pitch. */
-function followerFacts(block: HTMLElement | undefined): { splittable?: boolean; lineHeightPx?: number } {
+function followerFacts(block: HTMLElement | undefined): { splittable?: boolean; lineHeightPx?: number; minSplitLines?: number } {
   if (!block || !block.matches(SPLITTABLE_TEXT_SELECTOR)) return {};
-  return { splittable: true, lineHeightPx: blockLinePitchPx(block) };
+  return { splittable: true, lineHeightPx: blockLinePitchPx(block), minSplitLines: block.getAttribute("data-widow-control") === "false" ? 1 : 2 };
+}
+
+/** `window.__docsColumnKeepBackUpOff = true` (A/B): in a compatibility mode
+ * 15 document a keep-with-next paragraph whose follower cannot start below
+ * it opens the next column whole, as in earlier modes. */
+function columnKeepBackUpOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsColumnKeepBackUpOff?: boolean }).__docsColumnKeepBackUpOff === true;
+}
+
+/** Word 2013+ (compatibility mode 15) keeps a kept paragraph's LAST line
+ * with the next paragraph's first: one that fits at a column's foot but
+ * whose follower cannot start there is cut where it stands, its widow floor
+ * going on with the follower, when it holds lines enough for both floors.
+ * The room the head is planned in: a little less than the whole paragraph
+ * (the cut's widow floor leaves the last lines), or null when it cannot be
+ * cut so (one too short, held whole, or itself the head of a cut). Windows
+ * Word, docx-look/probes/vsp7 (mode 15): a 20-line paragraph above an
+ * orphaned follower parts 18 | 2 across the columns (vsp5 E20), as does an
+ * 11-line one below a single-column title (vsp6 G4: 9 | 2); mode 14 and
+ * earlier move it whole. */
+function keptLastLinesCut(block: UnequalColumnBlockMetric, heightPx: number, roomPx: number): number | null {
+  const own = block as UnequalColumnBlockMetric & { splittable?: boolean; lineHeightPx?: number; minSplitLines?: number; continuesNext?: boolean; heldWhole?: boolean };
+  if (!own.splittable || own.keepLines || own.heldWhole || own.continuesNext) return null;
+  const pitch = own.lineHeightPx && own.lineHeightPx > 0 ? own.lineHeightPx : 0;
+  if (!(pitch > 0)) return null;
+  const floor = Math.max(1, own.minSplitLines ?? 2);
+  if (Math.round(heightPx / pitch) < floor * 2) return null;
+  const availablePx = Math.min(roomPx, heightPx - Math.min(0.5, pitch / 2));
+  return availablePx >= pitch * floor - 0.5 ? availablePx : null;
 }
 
 function lastColumnHolds(): boolean {
@@ -550,7 +618,9 @@ export function planUnequalColumnFlow(
     let heightPx = heightFor(Math.min(columnIndex, tracks.length - 1));
     let gapBeforePx =
       cursorPx <= 0
-        ? options.pageTop && blockIndex === 0 && columnIndex === 0
+        ? blockIndex === 0 && columnIndex === 0 && options.leadPx !== undefined
+          ? Math.max(0, Number.isFinite(options.leadPx) ? options.leadPx : 0)
+          : options.pageTop && blockIndex === 0 && columnIndex === 0
           ? Math.max(0, Number.isFinite(block.marginTopPx) ? block.marginTopPx : 0)
           : 0
         : collapseUnequalColumnMargins(
@@ -566,6 +636,24 @@ export function planUnequalColumnFlow(
     if (block.keepNext && cursorPx > 0 && columnIndex < tracks.length - 1 &&
         topPx + heightPx - creditPx <= footOf(columnIndex) &&
         followerStartsPast(blocks, blockIndex, columnIndex, topPx + heightPx, footOf(columnIndex))) {
+      const lastLinesRoom = options.keepNextCutsLastLines && !columnKeepBackUpOff()
+        ? keptLastLinesCut(block, heightPx, footOf(columnIndex) - topPx)
+        : null;
+      if (lastLinesRoom !== null) {
+        const sourceTrack = tracks[columnIndex] ?? tracks[tracks.length - 1];
+        splitCandidates.push({
+          blockIndex,
+          columnIndex,
+          availablePx: lastLinesRoom,
+          measurementWidthPx: Math.max(
+            1,
+            sourceTrack.widthPx -
+              (Number.isFinite(block.marginLeftPx) ? block.marginLeftPx : 0) -
+              (Number.isFinite(block.marginRightPx) ? block.marginRightPx : 0),
+          ),
+          opensColumn: false,
+        });
+      }
       columnIndex += 1;
       cursorPx = 0;
       previousBottomMarginPx = 0;
@@ -722,6 +810,10 @@ export interface ColumnRegionSpec {
   /** Balance the columns (the section ends on this page and the next one
    * follows it here); otherwise they fill to the foot of the page. */
   balance: boolean;
+  /** Compatibility mode 15 or later, columns filled to the foot: a kept
+   * paragraph's last lines go on with a follower that cannot start below it
+   * (`UnequalColumnFlowOptions.keepNextCutsLastLines`). */
+  keepNextCutsLastLines?: boolean;
 }
 
 export interface ColumnRegionBlockMetric extends UnequalColumnBlockMetric {
@@ -1083,12 +1175,27 @@ export function planColumnRegionFlow(
     // the flow (below), not as the region's.
     const opensWithFloat = region.tracks.length === 1 && members[0].block.outOfFlow === true && !members[0].block.flowless;
     const firstMargin = opensWithFloat ? 0 : members[0].block.marginTopPx;
+    // Columns of a region: the first block's space before is its own
+    // column's, not the region's. Word sets the first column's paragraph
+    // that far down and the next column's from the top of the region (corpus
+    // R460-D16 p1: "Received" 48 pt down the narrow title column, the title
+    // at the top of the wide one; "Introduction" 20 pt down the body's first
+    // column, the second column's text from the body's top). Taken as the
+    // region's, the title, the abstract and the two-column body stood 64 px
+    // low and the body's second column 23 px more; it ran over its foot by
+    // what Word fits there, and the page planner, planning Word's cut,
+    // alternated with the repair that undid it on every open.
+    const columnsLead = region.tracks.length > 1 && !regionTopMarginOff();
+    const atPageTop = pageCursor <= 0;
     // The page's first block keeps the space before it the sheet paints
     // (its computed margin, zero unless the page preserves leading space).
-    const regionTop =
-      pageCursor > 0
+    const sharedTop = atPageTop ? 0 : pageCursor + previousBottomMargin;
+    const firstTop =
+      !atPageTop
         ? pageCursor + collapseUnequalColumnMargins(previousBottomMargin, firstMargin)
         : members[0].index === 0 ? Math.max(0, Number.isFinite(firstMargin) ? firstMargin : 0) : 0;
+    const regionTop = columnsLead ? Math.min(sharedTop, firstTop) : firstTop;
+    const pageTopMarginPx = columnsLead ? Math.max(0, firstTop - regionTop) : 0;
     if (region.tracks.length === 1) {
       const track = region.tracks[0];
       let cursor = regionTop;
@@ -1284,16 +1391,35 @@ export function planColumnRegionFlow(
     // Keep with next / keep lines together shape a balanced section's seams
     // (the balance and the page planner's own balance read them alike). A
     // section filling its columns to the page's foot is cut by the page
-    // planner, whose column ends already keep a heading with what follows.
+    // planner at the page's foot only: a seam between two of its columns is
+    // this plan's, so keep with next stays (Word: "Introduction" of corpus
+    // R432-D07, under a single-column title, opens column 2 with its
+    // paragraph; here it stood alone at column 1's foot while the planner
+    // had charged it to column 2).
     const regionBlocks = members.map((entry) =>
-      region.balance ? entry.block : { ...entry.block, keepNext: false, keepLines: false });
+      region.balance ? entry.block : {
+        ...entry.block,
+        keepNext: keepNextFloorOff() ? false : entry.block.keepNext,
+        keepLines: false,
+        // Still never cut for its last lines to go with its follower.
+        ...(entry.block.keepLines ? { heldWhole: true } : {}),
+      });
+    // The balance charges the first block its space before in the column it
+    // opens (the first): as tall there as it stands.
+    const balanceBlocks = pageTopMarginPx > 0
+      ? regionBlocks.map((block, position) => position === 0
+        ? { ...block, heightsPx: block.heightsPx.map((height, column) => column === 0 ? height + pageTopMarginPx : height) }
+        : block)
+      : regionBlocks;
     let height = region.balance
-      ? Math.min(room, Math.max(1, balancedColumnHeightPx(region.tracks.length, regionBlocks)))
+      ? Math.min(room, Math.max(1, balancedColumnHeightPx(region.tracks.length, balanceBlocks)))
       : room;
     // Columns filled to the page's foot take Word's page-bottom credit; a
     // balanced section ends above the next one, not at the foot.
     const flowOptions: UnequalColumnFlowOptions = {
+      ...(columnsLead ? { leadPx: pageTopMarginPx } : {}),
       footCredit: !region.balance,
+      ...(region.keepNextCutsLastLines && !region.balance ? { keepNextCutsLastLines: true } : {}),
       ...(region.balance ? {} : { columnCapacitiesPx: bandedColumnFeet(region.tracks, regionTop, height, bands) }),
     };
     const footOf = (column: number) => {
@@ -1882,7 +2008,7 @@ function blockInkSpanPx(block: HTMLElement, scale: number): readonly [number, nu
  * stacked column regions (`planColumnRegionFlow`), with the same editable
  * DOM projection, split candidates and block placements as a column page.
  */
-function projectColumnRegionSheet(sheet: HTMLElement): UnequalColumnProjection | null {
+function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColumnSheetOptions): UnequalColumnProjection | null {
   const blocks = Array.from(sheet.children).filter(
     (child): child is HTMLElement => child instanceof HTMLElement,
   );
@@ -1926,6 +2052,7 @@ function projectColumnRegionSheet(sheet: HTMLElement): UnequalColumnProjection |
   const regions: ColumnRegionSpec[] = regionTracks.map((tracks, index) => ({
     tracks,
     balance: index < regionTracks.length - 1 || endsHere,
+    ...(sheetOptions.keepNextCutsLastLines ? { keepNextCutsLastLines: true } : {}),
   }));
 
   sheet.setAttribute(UNEQUAL_COLUMN_FLOW_ATTR, "true");
@@ -2057,8 +2184,9 @@ export function projectUnequalColumnSheet(
    * column ends above it, as body text and table rows never run under the
    * note area (WUA 015). */
   footZonePx = 0,
+  sheetOptions: UnequalColumnSheetOptions = {},
 ): UnequalColumnProjection | null {
-  if (sheet.hasAttribute(COLUMN_REGIONS_ATTR)) return projectColumnRegionSheet(sheet);
+  if (sheet.hasAttribute(COLUMN_REGIONS_ATTR)) return projectColumnRegionSheet(sheet, sheetOptions);
   const token = sheet.getAttribute(SECTION_UNEQUAL_COLUMN_TRACKS_ATTR);
   if (!parseUnequalColumnTracks(token)) {
     clearUnequalColumnProjection(sheet);
@@ -2148,6 +2276,11 @@ export function projectUnequalColumnSheet(
       ...(!columnKeepNextOff() && blockIndex > 0 && domKeepFlag(blocks[blockIndex - 1], "keepNext")
         ? followerFacts(block)
         : {}),
+      // A kept paragraph's own lines, for its last lines to go on with its
+      // follower (compatibility mode 15, `keptLastLinesCut`).
+      ...(sheetOptions.keepNextCutsLastLines && !columnKeepNextOff() && domKeepFlag(block, "keepNext")
+        ? { ...followerFacts(block), ...(block.getAttribute("data-page-split-continues") === "true" ? { continuesNext: true } : {}) }
+        : {}),
     };
   });
   // The page's columns run from its top edge to its bottom margin: the first
@@ -2162,6 +2295,7 @@ export function projectUnequalColumnSheet(
   const plan = planUnequalColumnFlow(tracks, capacityPx, metrics, {
     footCredit: true,
     pageTop: true,
+    ...(sheetOptions.keepNextCutsLastLines ? { keepNextCutsLastLines: true } : {}),
     ...(columnCapacitiesPx?.some((foot) => foot !== undefined) ? { columnCapacitiesPx } : {}),
   });
   const rtl = sheetStyle.direction === "rtl";

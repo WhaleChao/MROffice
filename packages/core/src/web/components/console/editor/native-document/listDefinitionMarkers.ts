@@ -907,10 +907,36 @@ function visitListsBelow(
   });
 }
 
+/**
+ * A heading Word numbers (imported, its number drawn by headingListNumbers)
+ * that a body list of the same numbering continues: "4.1" clauses under
+ * Heading 1 "4" are counted on from the heading, as Word counts one
+ * numbering instance whatever the paragraphs' styles (ECMA-376 17.9.16). The
+ * import states the chain and the heading's counts (`listNumbering.listChain`
+ * / `levelValues`); the chain's counters take them here, nothing is drawn.
+ */
+function visitImportedHeadingCount(ctx: WalkContext, heading: PmNode): void {
+  const source = heading.attrs.source as { listNumbering?: unknown } | null | undefined;
+  const numbering = source?.listNumbering as
+    | { listChain?: unknown; levelValues?: unknown; level?: unknown }
+    | null
+    | undefined;
+  const chain = normalizeListChain(numbering?.listChain);
+  const values = numbering?.levelValues;
+  if (!chain || !Array.isArray(values) || values.length < 1 || values.length > 9) return;
+  if (!values.every((value) => Number.isInteger(value))) return;
+  const entry = ctx.byChain.get(chain) ?? { state: new ListCounterState(), definition: null };
+  values.forEach((value: number, level: number) => entry.state.seedLevel(level, value + 1));
+  ctx.byChain.set(chain, entry);
+}
+
 function visitHeading(ctx: WalkContext, heading: PmNode, pos: number): void {
   const kind = normalizeHeadingListKind(heading.attrs.listKind);
   const definition = headingListDefinition(heading.attrs);
-  if (!kind || !definition) return;
+  if (!kind || !definition) {
+    visitImportedHeadingCount(ctx, heading);
+    return;
+  }
   const level = normalizeListLevel(heading.attrs.listLevel);
   const entryLevel = definition.levels[level];
   const chain = normalizeListChain(heading.attrs.listChain);

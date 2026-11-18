@@ -49,7 +49,13 @@ export interface MergeSpan {
 
 
 
-  coveredLinks?: Readonly<Record<string, Readonly<{ hyperlink: string; hyperlinkTooltip?: string; hyperlinkDisplay?: string }>>>;
+  coveredLinks?: Readonly<Record<string, Readonly<{ hyperlink: string; hyperlinkTooltip?: string; hyperlinkDisplay?: string; hyperlinkInArea?: boolean }>>>;
+  /** The link over the area the file lists after the anchor's own one-cell
+   *  link (reading row 941: A11, then A11:M11 the merge): unmerged, the anchor
+   *  keeps it beneath its own (`hyperlinkArea`), as the file reads once Excel
+   *  unmerges (xlsx-rounds R447-X08 E16, Windows Excel probe n30/x08). With
+   *  the links' places in the file (`hyperlinkRank`, `ownRank`). */
+  coveredAnchorArea?: Readonly<{ hyperlink: string; hyperlinkTooltip?: string; hyperlinkDisplay?: string; hyperlinkRank?: number; ownRank?: number }>;
   
 
 
@@ -161,6 +167,11 @@ export function normalizeSpan(raw: unknown): MergeSpan | null {
       : {}),
     ...(r.coveredValues && typeof r.coveredValues === "object" && !Array.isArray(r.coveredValues)
       ? { coveredValues: r.coveredValues as NonNullable<MergeSpan["coveredValues"]> }
+      : {}),
+    ...(r.coveredAnchorArea && typeof r.coveredAnchorArea === "object" && !Array.isArray(r.coveredAnchorArea)
+      && typeof (r.coveredAnchorArea as Record<string, unknown>).hyperlink === "string"
+      && (r.coveredAnchorArea as Record<string, unknown>).hyperlink
+      ? { coveredAnchorArea: r.coveredAnchorArea as NonNullable<MergeSpan["coveredAnchorArea"]> }
       : {}),
   };
 }

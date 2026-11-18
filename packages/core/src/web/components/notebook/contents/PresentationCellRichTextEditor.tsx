@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { textSpliceIsGuess } from "../../../lib/collab/json-crdt";
 import { mapCaretThroughTextChange } from "../../../lib/presentation-collab-text";
 import { PX_PER_PT } from "../../../lib/office-units";
 import {
@@ -230,6 +231,14 @@ type Props = Omit<
 
 
   nativeTyping?: boolean;
+  /**
+   * The style of the line an empty LAST paragraph stands on (the words end
+   * on a paragraph break): a slide table's cell, whose row grows to that
+   * line as PowerPoint's does, at its end mark's size
+   * (`presentationTableCellTrailingParagraphStyle`). Absent or null: a final
+   * paragraph break draws no line, as before (the worksheet and Docs hosts).
+   */
+  trailingParagraph?: RunStyle | null;
   onChange(event: { target: { value: string; runs: TextRun[]; edit?: PresentationCellTextEdit } }): void;
   onSelectionUpdate?(): void;
 };
@@ -247,27 +256,32 @@ export interface PresentationCellTextEdit {
   readonly insert: string;
 }
 
-/** The one splice turning `before` into `after`, placed by the caret it left
- * when the characters around it repeat ("aa" -> "aaa"). */
+/** The one splice turning `before` into `after`, placed by the caret it left.
+ * The caret stands where the edit's new words end, so what follows it is the
+ * words' unchanged end: a key typed in a run of repeats ("aa" -> "aaa") and
+ * words typed over a selection ("Hello" with its "o" selected, typed "lo")
+ * are placed where they were typed. A change the caret does not explain is
+ * placed by comparing the two texts only where that comparison is not a
+ * guess (TRIAGE 49): among repeated letters it would pick which letter the
+ * change follows, and a collaborator's concurrent key could then land inside
+ * the word (TRIAGE 47). The host writes such a change without a place, and
+ * the room refuses a guess rather than make one. */
 function cellTextEditBetween(before: string, after: string, caret: number): PresentationCellTextEdit | null {
   if (before === after) return null;
+  const tail = after.length - caret;
+  if (caret >= 0 && tail >= 0 && tail <= before.length && after.slice(caret) === before.slice(before.length - tail)) {
+    const end = before.length - tail;
+    const most = Math.min(caret, end);
+    let start = 0;
+    while (start < most && before[start] === after[start]) start++;
+    return { base: before, start, end, insert: after.slice(start, caret) };
+  }
+  if (textSpliceIsGuess(before, after)) return null;
   let start = 0;
   while (start < before.length && start < after.length && before[start] === after[start]) start++;
   let suffix = 0;
   while (suffix < before.length - start && suffix < after.length - start &&
     before[before.length - 1 - suffix] === after[after.length - 1 - suffix]) suffix++;
-  const grown = after.length - before.length;
-  if (grown > 0 && suffix + start === before.length) {
-    const at = caret - grown;
-    if (at >= 0 && at <= start && after.slice(0, at) === before.slice(0, at) && after.slice(caret) === before.slice(at)) {
-      return { base: before, start: at, end: at, insert: after.slice(at, caret) };
-    }
-  } else if (grown < 0 && suffix + start === after.length) {
-    const end = caret - grown;
-    if (caret <= start && end <= before.length && after.slice(0, caret) === before.slice(0, caret) && after.slice(caret) === before.slice(end)) {
-      return { base: before, start: caret, end, insert: "" };
-    }
-  }
   return { base: before, start, end: before.length - suffix, insert: after.slice(start, after.length - suffix) };
 }
 
@@ -636,14 +650,14 @@ const PresentationCellRichTextEditor = forwardRef<
       latest.current.onSelectionUpdate?.();
     }
   };
-  const commit = (edited: TextRun[], caret: CellTextRange) => {
+  const commit = (edited: TextRun[], caret: CellTextRange, placed = true) => {
     // Words beside a display equation make it in-line (Word, PowerPoint).
     const next = inlineEquationsBesideWords(edited);
     const text = next.map((run) => run.text).join("");
     // Measured from the words this field showed (its last edit, or the
     // value it was last given), not from the value prop, which a host
     // drawing a typing burst late has not moved on yet.
-    const edit = cellTextEditBetween(expectedText.current, text, caret.end);
+    const edit = placed ? cellTextEditBetween(expectedText.current, text, caret.end) : null;
     selection.current = caret;
     expectedText.current = text;
     unpainted.current = text;
@@ -1158,6 +1172,7 @@ const PresentationCellRichTextEditor = forwardRef<
       props.inheritedStyle,
       paragraphStyles,
       scriptScale,
+      latest.current.trailingParagraph,
     ]);
     if (paintSignature.current === signature) return;
     paintSignature.current = signature;
@@ -1363,6 +1378,24 @@ const PresentationCellRichTextEditor = forwardRef<
       tail.dataset.cellSoftBreakTail = "true";
       target.appendChild(tail);
     }
+    // An empty last paragraph (the words end on a paragraph break) is a line
+    
+    
+    // line at all; a block of the mark's own type holding a break the
+    // readers skip does, at exactly that line's height: a block's line box
+    // stands on its own type, not on the field's (a superscript mark's line
+    // is two thirds of the field's).
+    const trailing = latest.current.trailingParagraph;
+    if (!paragraphs && trailing && value.endsWith("\n")) {
+      const css = runCss(trailing);
+      const line = document.createElement("span");
+      paintCss(line, { display: "block", fontSize: css.fontSize, fontFamily: css.fontFamily });
+      line.dataset.cellParagraphTail = "true";
+      const tail = document.createElement("br");
+      tail.dataset.cellSoftBreakTail = "true";
+      line.appendChild(tail);
+      target.appendChild(line);
+    }
     // The words already drawn as this paint draws them (a character the
     // browser typed itself, `nativeTyping`): the nodes, and the caret in
     // them, are left as they are.
@@ -1413,7 +1446,17 @@ const PresentationCellRichTextEditor = forwardRef<
     const removed = oldEnd - from,
       added = newEnd - from,
       caret = domCaret();
-    if (caret !== null && (removed === 0) !== (added === 0)) {
+    // The caret ends the browser's own edit: what follows it is the words'
+    // unchanged end, so words typed over a selection in a run of repeats are
+    // read where they were typed too (TRIAGE 49).
+    const tail = caret === null ? -1 : text.length - caret;
+    if (caret !== null && tail >= 0 && tail <= old.length && text.slice(caret) === old.slice(old.length - tail)) {
+      oldEnd = old.length - tail;
+      newEnd = caret;
+      const most = Math.min(oldEnd, newEnd);
+      from = 0;
+      while (from < most && old[from] === text[from]) from++;
+    } else if (caret !== null && (removed === 0) !== (added === 0)) {
       let suffix = 0;
       while (
         suffix < old.length &&
@@ -1445,7 +1488,10 @@ const PresentationCellRichTextEditor = forwardRef<
       pending.current ?? undefined,
     );
     paintSignature.current = "";
-    commit(next, { start: newEnd, end: newEnd });
+    // A change the caret did not place, read among repeated letters, is a
+    // guess at which letter it follows: it is handed over without a place.
+    const placed = (caret !== null && caret === newEnd) || !textSpliceIsGuess(old, text);
+    commit(next, { start: newEnd, end: newEnd }, placed);
   };
   return (
     <div

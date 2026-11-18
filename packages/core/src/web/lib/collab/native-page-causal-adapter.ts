@@ -798,6 +798,9 @@ export function createNativePageCausalAdapter(host: NativePageCausalHost, codec:
   return {
     active: () => active,
     ready: () => active && status === "ready",
+    /** Why the model failed (a content-free code), while it has: nothing
+     * opens the page until a new read of it prepares the model again. */
+    failure: () => active && status === "failed" ? failure ?? "failed" : null,
     saved: () => saved,
     // A durable original-state witness, not an invocation ACK. New local
     // operations immediately make it unavailable until a receipt covers them.

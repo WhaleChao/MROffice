@@ -17,6 +17,7 @@
  * typeset) and report the page point a double click lands on.
  */
 
+import type { PdfReadOnlyDrawTurn } from "@/lib/pdf/preview-draw-turns";
 import {
   useEffect,
   useLayoutEffect,
@@ -178,6 +179,7 @@ export function PdfReadOnlyPage({
   highlight = null,
   onPointDoubleClick,
   appearance = "sheet",
+  drawTurn,
 }: {
   descriptor: PdfReadOnlyPageDescriptor;
   /**
@@ -213,6 +215,14 @@ export function PdfReadOnlyPage({
   highlight?: PdfPageHighlight | null;
   /** A double click on the page, at its page point (SyncTeX inverse search). */
   onPointDoubleClick?: (point: PdfPagePoint) => void;
+  /**
+   * When the page may draw, for pages that take turns (a file's local
+   * preview, LocalFilePreviewLayer): asked before each drawing, which starts
+   * once `ready` says true and gives the turn back with `settle`. `yieldNow`
+   * is called when the drawing should stop and ask again (the canvas keeps
+   * its size; the next turn draws it).
+   */
+  drawTurn?: PdfReadOnlyDrawTurn;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
@@ -307,31 +317,68 @@ export function PdfReadOnlyPage({
     canvas.style.width = `${cssViewport.width}px`;
     canvas.style.height = `${cssViewport.height}px`;
     let disposed = false;
-    let task: RenderTask | null = descriptor.page.render({
-      canvas: target,
-      canvasContext: context,
-      viewport: renderViewport,
-      // The document's own storage: password widgets flagged noView.
-      annotationMode: PDFJS_ANNOTATION_MODE_ENABLE_STORAGE,
-    });
-    task.promise.then(
-      () => {
-        if (disposed || !behind) return;
-        canvas.width = target.width;
-        canvas.height = target.height;
-        canvas.getContext("2d")?.drawImage(target, 0, 0);
-        target.width = 0;
-        target.height = 0;
-      },
-      () => {
-        // Cleanup marks this render disposed BEFORE cancellation, so only a
-        // real post-parse render failure reaches the owner. Close,
-        // replacement, and unmount cannot revive an already-retired document.
-        if (!disposed) onRenderError(descriptor.sessionGeneration);
-      },
-    );
+    let task: RenderTask | null = null;
+    let turn: ReturnType<PdfReadOnlyDrawTurn> | null = null;
+    const draw = () => {
+      let yielded = false;
+      const attempt = drawTurn?.(descriptor.pageNumber, () => {
+        // Asked to give the thread up: this drawing stops, and asks again.
+        if (disposed || yielded) return;
+        yielded = true;
+        const stopped = task;
+        task = null;
+        try {
+          stopped?.cancel();
+        } catch {
+          // A settled task: the next turn draws again regardless.
+        }
+        attempt?.settle();
+        draw();
+      }) ?? null;
+      turn = attempt;
+      const start = () => {
+        if (disposed || yielded) return;
+        const drawing = descriptor.page.render({
+          canvas: target,
+          canvasContext: context,
+          viewport: renderViewport,
+          // The document's own storage: password widgets flagged noView.
+          annotationMode: PDFJS_ANNOTATION_MODE_ENABLE_STORAGE,
+        });
+        task = drawing;
+        drawing.promise.then(
+          () => {
+            attempt?.settle(true);
+            if (disposed || !behind) return;
+            canvas.width = target.width;
+            canvas.height = target.height;
+            canvas.getContext("2d")?.drawImage(target, 0, 0);
+            target.width = 0;
+            target.height = 0;
+          },
+          () => {
+            attempt?.settle();
+            // Cleanup marks this render disposed BEFORE cancellation, so only a
+            // real post-parse render failure reaches the owner. Close,
+            // replacement, and unmount cannot revive an already-retired document.
+            // A drawing stopped to yield its turn draws again (above).
+            if (!disposed && !yielded) onRenderError(descriptor.sessionGeneration);
+          },
+        );
+      };
+      if (!attempt) {
+        start();
+        return;
+      }
+      void attempt.ready.then((go) => {
+        if (go) start();
+        else attempt.settle();
+      });
+    };
+    draw();
     return () => {
       disposed = true;
+      turn?.settle();
       try {
         task?.cancel();
       } catch {
@@ -348,7 +395,7 @@ export function PdfReadOnlyPage({
       canvas.width = 0;
       canvas.height = 0;
     };
-  }, [descriptor, keepDrawingUntilRedrawn, onRenderError, visible, width]);
+  }, [descriptor, drawTurn, keepDrawingUntilRedrawn, onRenderError, visible, width]);
 
   // The paper frame is the page at the one scale the canvas is drawn at, so
   // a small label gets no white margin it does not have and a large drawing

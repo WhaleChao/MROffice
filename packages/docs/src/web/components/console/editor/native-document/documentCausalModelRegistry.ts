@@ -32,6 +32,8 @@ export interface DocumentCausalModelSnapshot {
   epoch: number | null;
   active: boolean;
   ready: boolean;
+  /** Why the model failed (content-free), while it has; null otherwise. */
+  failure: string | null;
   savedPage: PageItem | null;
   mayWrite: boolean;
   revision: number;
@@ -67,7 +69,7 @@ export function createDocumentCausalModelRegistry() {
   function publish(entry: Entry) {
     entry.snapshot = {
       session: entry.session, epoch: entry.epoch, active: entry.engine.active(),
-      ready: entry.engine.ready(), savedPage: entry.engine.savedPage(), mayWrite: entry.engine.mayWrite(), revision: ++entry.revision,
+      ready: entry.engine.ready(), failure: entry.engine.failure(), savedPage: entry.engine.savedPage(), mayWrite: entry.engine.mayWrite(), revision: ++entry.revision,
     };
     for (const listener of entry.listeners) listener();
   }

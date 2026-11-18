@@ -10,6 +10,7 @@
 import { inertClass, inertComponent, inertFunction, inertHook, inertValue } from "@mrnote/core/host/inert.ts";
 
 export type AutosavedPageLoadSource = any;
+export type DiscardedChangesKeep = any;
 export type PageAuthorOperationHandle = any;
 export type PageAuthorOperationInput = any;
 export type PageAuthorOperationSessionHandle = any;

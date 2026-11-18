@@ -236,6 +236,43 @@ const RULE_BLOCK =
   String.raw`(${RULE_NUMBER}) (${RULE_NUMBER}) l h f Q\n`;
 const RULE_BLOCK_ENDING = new RegExp(`${RULE_BLOCK}$`);
 const RULE_BLOCK_STARTING = new RegExp(`^${RULE_BLOCK}`);
+const RULE_BLOCK_WHOLE = new RegExp(`^${RULE_BLOCK}$`);
+const RULE_BLOCK_ANYWHERE = new RegExp(RULE_BLOCK);
+/** How every rule block ends (pdfNativeTextRuleBlock). */
+const RULE_BLOCK_END = [0x20, 0x6c, 0x20, 0x68, 0x20, 0x66, 0x20, 0x51, 0x0a] as const; // " l h f Q\n"
+
+/**
+ * Whether a content stream holds any rule block of this writer's form: what
+ * a reader of a box's rules asks first, so that a page this writer drew no
+ * rule on (nearly every page) costs it one scan of the stream's bytes.
+ */
+export function pdfNativeStreamHoldsTextRule(streamBytes: Uint8Array): boolean {
+  const last = RULE_BLOCK_END.length - 1;
+  for (let at = streamBytes.indexOf(RULE_BLOCK_END[last], last); at >= 0; at = streamBytes.indexOf(RULE_BLOCK_END[last], at + 1)) {
+    if (streamBytes[at - 1] !== RULE_BLOCK_END[last - 1] || RULE_BLOCK_END.some((byte, index) => streamBytes[at - last + index] !== byte)) continue;
+    const from = Math.max(0, at + 1 - MAX_RULE_BLOCK_LENGTH);
+    if (RULE_BLOCK_ANYWHERE.test(String.fromCharCode(...streamBytes.subarray(from, at + 1)))) return true;
+  }
+  return false;
+}
+
+/**
+ * Where one rule block of this writer's form starts and ends along its run,
+ * in the space it is drawn in: its first two corners (the rule's near edge,
+ * from its start to its end). Null when the bytes are not one such block.
+ */
+export function pdfNativeTextRuleBlockEnds(
+  bytes: Uint8Array,
+): Readonly<{ from: readonly [number, number]; to: readonly [number, number] }> | null {
+  if (bytes.length > MAX_RULE_BLOCK_LENGTH) return null;
+  let text = "";
+  for (const byte of bytes) text += String.fromCharCode(byte);
+  const match = RULE_BLOCK_WHOLE.exec(text);
+  if (!match) return null;
+  const [x0, y0, x1, y1] = match.slice(3, 7).map(Number);
+  if (![x0, y0, x1, y1].every(Number.isFinite)) return null;
+  return Object.freeze({ from: Object.freeze([x0, y0] as const), to: Object.freeze([x1, y1] as const) });
+}
 /** Longer than any block pdfNativeTextRuleBlock writes (twelve numbers of at
  * most fourteen characters, the colour and the operators). */
 const MAX_RULE_BLOCK_LENGTH = 512;

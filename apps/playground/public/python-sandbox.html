@@ -700,9 +700,42 @@
           delete byId[id];
         }
 
-        function post(message) {
+        function post(message, transfer) {
           if (disposed || (privateBootstrap && appOrigin === null)) return;
-          parent.postMessage(message, appOrigin || "*");
+          if (transfer) parent.postMessage(message, appOrigin || "*", transfer);
+          else parent.postMessage(message, appOrigin || "*");
+        }
+
+        // A game's frame (python-worker.js runGame): raw RGBA of a bounded
+        // size, moved on as it came. It is not the run's output, so it neither
+        // spends nor clears the run's relay budget.
+        var GAME_MAX_SIDE = 2048;
+        function boundGameFrame(data) {
+          var width = data.width;
+          var height = data.height;
+          var pixels = data.pixels;
+          if (
+            typeof data.id !== "number" ||
+            !Number.isSafeInteger(width) ||
+            !Number.isSafeInteger(height) ||
+            width < 1 ||
+            height < 1 ||
+            width > GAME_MAX_SIDE ||
+            height > GAME_MAX_SIDE ||
+            !(pixels instanceof ArrayBuffer) ||
+            pixels.byteLength !== width * height * 4
+          ) {
+            return null;
+          }
+          return {
+            id: data.id,
+            type: "game-frame",
+            width: width,
+            height: height,
+            caption:
+              typeof data.caption === "string" ? data.caption.slice(0, 200) : "",
+            pixels: pixels,
+          };
         }
 
         function terminateNamespace(namespace) {
@@ -758,6 +791,14 @@
                   stream: retained.stream,
                   chunk: retained.text,
                 });
+              }
+              return;
+            }
+            if (data.type === "game-frame") {
+              var frame = boundGameFrame(data);
+              if (frame) {
+                frame.namespace = namespace;
+                post(frame, [frame.pixels]);
               }
               return;
             }

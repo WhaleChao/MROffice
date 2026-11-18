@@ -44,6 +44,73 @@ const LIST_MARKER = "__mrn_list__";
 const LIST_ORDER = "__mrn_order__";
 const LIST_ITEMS = "__mrn_items__";
 
+/**
+ * A shape's label as one Y.Text from the shape's creation on (TRIAGE 51).
+ *
+ * An empty label is no `text` at all in the JSON (`normalizeShapeText`). Its
+ * Y.Text was created by the label's first key and deleted with its last
+ * character, so two windows typing a first letter into one empty shape each
+ * created one and the room kept one window's (only "B" stayed of "A" and
+ * "B"), and a window deleting the last character while another typed after
+ * it deleted the label with the other's letter in it. A shape's label is
+ * therefore created with the shape, empty, by whoever creates the shape (the
+ * server for every shape of a room that has none yet), and an emptied label
+ * keeps its Y.Text, emptied.
+ *
+ * The JSON does not change: the keyed list says which of its entries hold
+ * such a label (`ABSENT_TEXT_FLAG` + the entry's id, a key of the list map
+ * beside its order and items, which no reader of the older model reads), and
+ * an entry so flagged reads an empty Y.Text as no text. A label written as
+ * "" (an older room's) is not flagged and still reads as "". The server
+ * adapter (page_causal_crdt.py) applies the same rule.
+ */
+const ABSENT_TEXT_FLAG = "__mrn_absent_text__:";
+/**
+ * The room's labels exist from each shape's creation: a key of the room's
+ * `slides` list map the server sets when it seeds or fills the room (behind
+ * its switch: a window of the older model reads a flagged empty label as ""
+ * and its save of such a deck is refused). Only then does this window create
+ * a new shape with its label; it never fills an older shape itself -- two
+ * windows doing it at once would race as the first letters did.
+ */
+const ROOM_LABELS_FROM_CREATION = "__mrn_absent_text__";
+/** Set while writing a room whose labels exist from creation. */
+let labelsFromCreation = false;
+
+function roomLabelsFromCreation(root: Y.Map<unknown>): boolean {
+  const slides = root.get("slides");
+  return isListMap(slides) && slides.get(ROOM_LABELS_FROM_CREATION) === true;
+}
+
+/** A slide object created with a label that is no text when empty. */
+function holdsAbsentText(entry: unknown, itemOf: string | undefined): boolean {
+  return labelsFromCreation && itemOf === "blocks" && isPlainObject(entry) && entry.type === "shape" &&
+    typeof entry.id === "string" && entry.id.length > 0 &&
+    (entry.text === undefined || (typeof entry.text === "string" && entry.text !== ""));
+}
+
+/** The keyed list `block` is an entry of says its label is no text when empty. */
+function absentTextFlagged(block: Y.Map<unknown>): boolean {
+  const items = block.parent;
+  const list = items instanceof Y.Map ? items.parent : null;
+  const id = block.get("id");
+  return isListMap(list) && list.get(LIST_ITEMS) === items && typeof id === "string" &&
+    list.get(ABSENT_TEXT_FLAG + id) === true;
+}
+
+/** The entry `id` of `list`, read as `json`: an empty flagged label is no text. */
+function withAbsentTextHidden(list: Y.Map<unknown>, id: string, entry: unknown, json: JsonValue): JsonValue {
+  if (list.get(ABSENT_TEXT_FLAG + id) !== true || !(entry instanceof Y.Map) || !isPlainObject(json)) return json;
+  const text = entry.get(COLLABORATIVE_TEXT_KEY);
+  if (!(text instanceof Y.Text) || text.length > 0) return json;
+  const out: Record<string, JsonValue> = { ...json };
+  delete out[COLLABORATIVE_TEXT_KEY];
+  // Formatting read back from the empty text is nothing either.
+  const kind = formatKindOf(entry);
+  if (kind && !entry.has(ownedKey(kind))) delete out[ownedKey(kind)];
+  return out;
+}
+
 function isPlainObject(value: unknown): value is Record<string, JsonValue> {
   return (
     typeof value === "object" &&
@@ -236,21 +303,86 @@ function applySplices(base: string, splices: readonly TextSplice[]): string {
 }
 
 /**
- * Three-way merge of two concurrent edits of one string, each reduced to its
- * single splice against `base`. Nothing either side typed is lost:
- *
- * - disjoint edits are both applied;
- * - two insertions at one point are ordered deterministically (by text);
- * - an edit of one range that extends the other side's edit of the same range
- *   (an identical edit included) is applied once, as the longer edit: a
- *   rebase whose "theirs" already holds the start of this author's own typing
- *   (a keystroke committed but not yet rendered) must not type it twice;
- * - an insertion strictly inside the other side's deleted range survives:
- *   the deletion is split around it (the deleter's replacement text first);
- * - overlapping deletions delete their union, and both replacement texts are
- *   kept, in position order.
+ * Whether `splice`'s place in `base` is a guess: its inserted letters include
+ * a letter of `base` right around it, so the common prefix or suffix that
+ * placed it could have matched that letter instead of one it inserted (the
+ * letter Q of four words typed at one place, TRIAGE 47).
  */
-export function mergeText3(base: string, mine: string, theirs: string): string {
+function spliceAnchorAmbiguous(base: string, splice: TextSplice): boolean {
+  if (!splice.insert) return false;
+  const reach = Math.max(1, splice.insert.length);
+  const around = base.slice(Math.max(0, splice.start - reach), splice.start) +
+    base.slice(splice.end, Math.min(base.length, splice.end + reach));
+  for (const letter of splice.insert) if (around.includes(letter)) return true;
+  return false;
+}
+
+/**
+ * Whether the one splice between `from` and `to` could stand at another place
+ * and give the same text: read with the longest common prefix first
+ * (`textSplice`) and with the longest common suffix first, it starts at
+ * different places -- its letters meet the same letters at its edge ("Q"
+ * typed before a "Q"), and which of them it follows is a guess (TRIAGE 47).
+ */
+function spliceSlides(from: string, to: string): boolean {
+  if (from === to) return false;
+  const byPrefix = textSplice(from, to);
+  let suffix = 0;
+  const most = Math.min(from.length, to.length);
+  while (suffix < most && from.charCodeAt(from.length - 1 - suffix) === to.charCodeAt(to.length - 1 - suffix)) suffix += 1;
+  let prefix = 0;
+  while (prefix < most - suffix && from.charCodeAt(prefix) === to.charCodeAt(prefix)) prefix += 1;
+  if (prefix === byPrefix.start) return false;
+  // Only a letter or digit it could follow instead is a word it could cut;
+  // sliding over a space or a mark ("brave " before or after the space)
+  // changes nothing anyone typed.
+  const slid = from.slice(Math.min(prefix, byPrefix.start), Math.max(prefix, byPrefix.start));
+  return /[\p{L}\p{N}]/u.test(slid);
+}
+
+/** Whether the one splice from `from` to `to` (another member's change, read
+ *  off the two texts) is a guess (`spliceSlides`) near `edit`, a splice of `from`. */
+export function textSpliceIsGuessNear(from: string, to: string, edit: TextSplice): boolean {
+  if (!spliceSlides(from, to)) return false;
+  const peer = textSplice(from, to);
+  const reach = peer.insert.length + edit.insert.length + 1;
+  return edit.end >= peer.start - reach && edit.start <= peer.end + reach;
+}
+
+/** Whether writing `to` over `from` as the one splice between them puts a
+ *  letter where a comparison guessed it (`spliceSlides`). */
+function spliceIsGuess(from: string, to: string): boolean {
+  return spliceSlides(from, to);
+}
+
+/** Whether the one splice between `from` and `to` is placed by a guess: a key
+ *  read that way, with no caret to say where it went, is not written as typed
+ *  at that place (TRIAGE 47). */
+export function textSpliceIsGuess(from: string, to: string): boolean {
+  return spliceSlides(from, to);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function mergeText3(base: string, mine: string, theirs: string): string | null {
   if (mine === theirs) return mine;
   if (theirs === base) return mine;
   if (mine === base) return theirs;
@@ -265,6 +397,7 @@ export function mergeText3(base: string, mine: string, theirs: string): string {
   const [first, second] = [a, b].sort((left, right) =>
     left.start - right.start || left.end - right.end ||
     (left.insert < right.insert ? -1 : left.insert > right.insert ? 1 : 0));
+  if (first.end >= second.start && (spliceAnchorAmbiguous(base, a) || spliceAnchorAmbiguous(base, b))) return null;
   // Sorting puts an insertion at a range's start before that range, so these
   // touch without overlapping and are applied as two splices.
   if (first.end <= second.start) return applySplices(base, [first, second]);
@@ -319,12 +452,75 @@ export function upgradeCollaborativeText(target: Y.Map<unknown>): boolean {
 }
 
 /** Apply the splice turning the Y.Text's current string into `next`. */
+/** Where each of `splices` (of one text, in order, disjoint) puts its
+ *  letters in the text they make. */
+function spliceTargets(splices: readonly TextSplice[]): number[] {
+  const out: number[] = [];
+  let shift = 0;
+  for (const splice of splices) {
+    out.push(splice.start + shift);
+    shift += splice.insert.length - (splice.end - splice.start);
+  }
+  return out;
+}
+
+
+
+
+
+
+
+
+
+
+let insertFormatting: Formatting | null = null;
+
+/**
+ * `words` inserted at `at` of `text`, with the formatting they have at
+ * `target` of the words being written (`insertFormatting`): run by run, each
+ * with its own, left to right -- so each letter follows the one before it and
+ * no formatting mark comes between them (a paste of words in two formats
+ * too). Plain when no formatting is being written or `target` is unknown.
+ */
+function insertFormatted(text: Y.Text, at: number, words: string, target: number | null): void {
+  const units = insertFormatting?.units;
+  if (!units || target === null || target < 0 || target + words.length > units.length) {
+    text.insert(at, words);
+    return;
+  }
+  let from = 0;
+  while (from < words.length) {
+    const key = stableJson((units[target + from] ?? {}) as JsonValue);
+    let to = from + 1;
+    while (to < words.length && stableJson((units[target + to] ?? {}) as JsonValue) === key) to += 1;
+    text.insert(at + from, words.slice(from, to), { ...(units[target + from] ?? {}) });
+    from = to;
+  }
+}
+
+/** `splices` (of the text's current words, in order, disjoint) written at
+ *  their places, the last first so each index still holds; `targets`: where
+ *  each one's letters stand in the words being written (their formatting). */
+function writeSplices(text: Y.Text, splices: readonly TextSplice[], targets?: readonly number[]): boolean {
+  let touched = false;
+  for (let index = splices.length - 1; index >= 0; index -= 1) {
+    const splice = splices[index];
+    if (splice.end > splice.start) { text.delete(splice.start, splice.end - splice.start); touched = true; }
+    if (splice.insert) {
+      insertFormatted(text, splice.start, splice.insert, targets ? targets[index]! : null);
+      touched = true;
+    }
+  }
+  return touched;
+}
+
 export function spliceYText(text: Y.Text, next: string): boolean {
   const current = text.toString();
   if (current === next) return false;
   const { start, end, insert } = textSplice(current, next);
   if (end > start) text.delete(start, end - start);
-  if (insert) text.insert(start, insert);
+  // Its letters stand at `start` of `next` too (the common prefix).
+  if (insert) insertFormatted(text, start, insert, start);
   return true;
 }
 
@@ -360,6 +556,60 @@ export interface CollaborativeTextEdit {
   start: number;
   end: number;
   insert: string;
+  /** Keys typed at more than one place of `base` before one publication: each
+   * place's change exactly (base coordinates, in order, disjoint), of which
+   * [start, end) / `insert` is the covering one. Written place by place, not
+   * as the covering splice, so the letters between keep their identity. */
+  splices?: readonly TextSplice[];
+}
+
+/**
+ * The changes a chain of edits made to `base`, each edit of the text the one
+ * before left (`edits`' positions are in that text), as splices of `base`:
+ * each run of characters the chain inserted and of base characters it
+ * deleted, at its place. Exact, from the positions the edits were typed at:
+ * no string comparison guesses where a letter went (TRIAGE 47: chained keys
+ * collapsed by `textSplice` put "QW" typed before "QZ" after its Q, and a
+ * collaborator's late Z came out between them). Null when an edit is not of
+ * the text the one before left.
+ */
+export function composeTextEditChain(
+  base: string,
+  edits: ReadonlyArray<{ start: number; end: number; insert: string }>,
+): TextSplice[] | null {
+  // Each character of the text as the chain leaves it: its index in `base`,
+  // or -1 with the character when the chain inserted it.
+  // UTF-16 units, as the edits' positions count them.
+  let units: Array<{ from: number; char: string }> = base.split("").map((char, from) => ({ from, char }));
+  for (const edit of edits) {
+    if (edit.start < 0 || edit.start > edit.end || edit.end > units.length) return null;
+    const inserted = edit.insert.split("").map((char) => ({ from: -1, char }));
+    units = [...units.slice(0, edit.start), ...inserted, ...units.slice(edit.end)];
+  }
+  const out: TextSplice[] = [];
+  let at = 0;
+  let pending: TextSplice | null = null;
+  for (const unit of units) {
+    if (unit.from < 0) {
+      pending ??= { start: at, end: at, insert: "" };
+      pending.insert += unit.char;
+      continue;
+    }
+    if (unit.from < at) return null;
+    if (unit.from > at) {
+      pending ??= { start: at, end: at, insert: "" };
+      pending.end = unit.from;
+    }
+    if (pending) out.push(pending);
+    pending = null;
+    at = unit.from + 1;
+  }
+  if (at < base.length) {
+    pending ??= { start: at, end: at, insert: "" };
+    pending.end = base.length;
+  }
+  if (pending) out.push(pending);
+  return out;
 }
 
 /** `edit` applied to its base. */
@@ -398,6 +648,9 @@ function staleEditBase(edit: CollaborativeTextEdit | undefined, previous: unknow
 function rebaseTextEdit(edit: CollaborativeTextEdit, room: string): TextSplice | null {
   const peer = textSplice(edit.base, room);
   if (isNoopSplice(peer)) return { start: edit.start, end: edit.end, insert: edit.insert };
+  // Where the peer's change is was read off the two texts: near this edit,
+  // with the peer's letters around it, that is a guess (TRIAGE 47).
+  if (textSpliceIsGuessNear(edit.base, room, edit)) return null;
   if (edit.end <= peer.start) return { start: edit.start, end: edit.end, insert: edit.insert };
   if (edit.start >= peer.end && !(edit.start === peer.start)) {
     const shift = peer.insert.length - (peer.end - peer.start);
@@ -416,22 +669,29 @@ export function collaborativeTextEditsFor(
   root: Y.Map<unknown>,
   noted: ReadonlyArray<CollaborativeTextEdit & { path: readonly string[] }>,
 ): Map<Y.Text, CollaborativeTextEdit> | undefined {
-  const chains = new Map<Y.Text, { base: string; text: string } | null>();
+  const chains = new Map<Y.Text, { base: string; text: string; edits: TextSplice[] } | null>();
   for (const { path, ...edit } of noted) {
     const text = collaborativeTextAt(root, path);
     if (!text) continue;
     if (!ownTextEdit(edit, applyCollaborativeTextEdit(edit))) continue;
     const chain = chains.get(text);
     if (chain === null) continue;
-    if (chain === undefined) chains.set(text, { base: edit.base, text: applyCollaborativeTextEdit(edit) });
-    else if (chain.text === edit.base) chain.text = applyCollaborativeTextEdit(edit);
+    const step = { start: edit.start, end: edit.end, insert: edit.insert };
+    if (chain === undefined) chains.set(text, { base: edit.base, text: applyCollaborativeTextEdit(edit), edits: [step] });
+    else if (chain.text === edit.base) { chain.text = applyCollaborativeTextEdit(edit); chain.edits.push(step); }
     else chains.set(text, null);
   }
   let out: Map<Y.Text, CollaborativeTextEdit> | undefined;
   for (const [text, chain] of chains) {
     if (!chain) continue;
-    const { start, end, insert } = textSplice(chain.base, chain.text);
-    (out ??= new Map()).set(text, { base: chain.base, start, end, insert });
+    // Where each key was typed, not where a comparison of the two texts
+    // would put them (TRIAGE 47).
+    const splices = composeTextEditChain(chain.base, chain.edits);
+    if (!splices || splices.length === 0) continue;
+    const first = splices[0], last = splices[splices.length - 1];
+    const start = first.start, end = last.end;
+    const insert = chain.text.slice(start, chain.text.length - (chain.base.length - end));
+    (out ??= new Map()).set(text, { base: chain.base, start, end, insert, ...(splices.length > 1 ? { splices } : {}) });
   }
   return out;
 }
@@ -1145,6 +1405,21 @@ export function resolveCollaborativeTextAnchor(text: Y.Text, anchor: Y.RelativeP
 
 /** The edits `applyJsonDelta` writes exactly, by the room text they edit. */
 let exactTextEdits: ReadonlyMap<Y.Text, CollaborativeTextEdit> | null = null;
+/** A text `applyTextDelta` could not merge (`mergeText3` null), told to the writer. */
+export interface AmbiguousTextWrite {
+  /** The text as the room holds it (kept as it is). */
+  readonly room: string;
+  /** The text the writer has. */
+  readonly mine: string;
+  /** The text the writer changed it from. */
+  readonly base: string;
+}
+/** What the writer does with a text it could not merge: "mine" writes the
+ * writer's text whole over the room's (a merge into a scratch document that
+ * becomes what this window shows: its own words stay whole); otherwise the
+ * room's is kept. */
+export type AmbiguousTextChoice = "mine" | void;
+let ambiguousTextHandler: ((write: AmbiguousTextWrite) => AmbiguousTextChoice) | null = null;
 /** The characters a comparison of strings must not delete; set for one `applyJsonDelta`. */
 let undrawnTextItems: UndrawnTextItems | null = null;
 
@@ -1215,6 +1490,7 @@ function spliceYTextKeepingUndrawn(text: Y.Text, next: string): boolean {
     index += item.length;
   }
   const plain = textSplice(current, next);
+  const writeTarget = plain.start;
   // Nothing undrawn, or nothing deleted: the comparison takes no one's characters.
   if (undrawnCount === 0 || plain.end <= plain.start) return spliceYText(text, next);
   // The window to align: equal ends of drawn characters only (an undrawn
@@ -1307,7 +1583,8 @@ function spliceYTextKeepingUndrawn(text: Y.Text, next: string): boolean {
       text.delete(at, step.remove);
       touched = true;
     } else {
-      text.insert(at, step.write);
+      // The editor's letters stand at `plain.start` of `next`.
+      insertFormatted(text, at, step.write, writeTarget);
       at += step.write.length;
       touched = true;
     }
@@ -1372,7 +1649,9 @@ function toYValue(value: JsonValue, field?: string, itemOf?: string): unknown {
       value as Record<string, JsonValue>[]
     ).entries()) {
       const id = listIds?.[index];
-      if (id) items.set(id, toYValue(item, undefined, field));
+      if (!id) continue;
+      items.set(id, toYValue(item, undefined, field));
+      if (holdsAbsentText(item, field)) list.set(ABSENT_TEXT_FLAG + id, true);
     }
     list.set(LIST_ITEMS, items);
     return list;
@@ -1412,6 +1691,8 @@ function toYValue(value: JsonValue, field?: string, itemOf?: string): unknown {
       map.set(FORMAT_MARKER, formatting.kind);
       if (formatting.tail) map.set(FORMAT_TAIL, new Y.Map<unknown>(Object.entries(formatting.tail)));
     }
+    // A shape's label exists, empty, from the shape's creation on (TRIAGE 51).
+    if (holdsAbsentText(value, itemOf) && value[COLLABORATIVE_TEXT_KEY] === undefined) map.set(COLLABORATIVE_TEXT_KEY, new Y.Text());
     return map;
   }
   return value;
@@ -1534,12 +1815,12 @@ function readYJson(value: unknown, child: (value: unknown) => JsonValue): JsonVa
     for (const id of order.toArray() as string[]) {
       if (seen.has(id)) continue;
       seen.add(id);
-      if (items.has(id)) out.push(child(items.get(id)));
+      if (items.has(id)) out.push(withAbsentTextHidden(value, id, items.get(id), child(items.get(id))));
     }
     // Entries added concurrently by a peer whose order write lost the race
     // must still appear — appended rather than dropped.
     for (const id of items.keys()) {
-      if (!seen.has(id)) out.push(child(items.get(id)));
+      if (!seen.has(id)) out.push(withAbsentTextHidden(value, id, items.get(id), child(items.get(id))));
     }
     return out;
   }
@@ -2117,8 +2398,22 @@ export function applyJsonDelta(
     /** Collaborators' characters the editor may not have drawn: a text's
      *  comparison with the room never deletes them (`UndrawnTextItems`). */
     undrawn?: UndrawnTextItems;
+    /** A text this write could not merge with the room's without guessing
+     *  where a change goes (`mergeText3` null): the room's text is kept as it
+     *  is, nothing of the writer's is written into it, and this is told --
+     *  the writer keeps its text and treats it as a conflict (TRIAGE 47). */
+    onAmbiguousText?: (write: AmbiguousTextWrite) => AmbiguousTextChoice;
   },
 ): boolean {
+  if (options?.onAmbiguousText) {
+    const outer = ambiguousTextHandler;
+    ambiguousTextHandler = options.onAmbiguousText;
+    try {
+      return applyJsonDelta(target, next, previous, { ...options, onAmbiguousText: undefined });
+    } finally {
+      ambiguousTextHandler = outer;
+    }
+  }
   if (options?.undrawn) {
     const outer = undrawnTextItems;
     undrawnTextItems = options.undrawn;
@@ -2140,19 +2435,25 @@ export function applyJsonDelta(
       rebaseStaleTextEdits = outerRebase;
     }
   }
-  let touched = false;
-  for (const key of Object.keys(previous)) {
-    if (hasJsonProperty(previous, key) && !hasJsonProperty(next, key) && target.has(key)) {
-      target.delete(key);
-      touched = true;
+  const outerLabels = labelsFromCreation;
+  labelsFromCreation = outerLabels || roomLabelsFromCreation(target);
+  try {
+    let touched = false;
+    for (const key of Object.keys(previous)) {
+      if (hasJsonProperty(previous, key) && !hasJsonProperty(next, key) && target.has(key)) {
+        target.delete(key);
+        touched = true;
+      }
     }
+    for (const [key, value] of Object.entries(next)) {
+      if (value === undefined) continue;
+      if (key in previous && jsonEquals(value, previous[key])) continue;
+      if (applyJsonDeltaEntry(target, key, value, previous[key])) touched = true;
+    }
+    return touched;
+  } finally {
+    labelsFromCreation = outerLabels;
   }
-  for (const [key, value] of Object.entries(next)) {
-    if (value === undefined) continue;
-    if (key in previous && jsonEquals(value, previous[key])) continue;
-    if (applyJsonDeltaEntry(target, key, value, previous[key])) touched = true;
-  }
-  return touched;
 }
 
 
@@ -2557,7 +2858,14 @@ function applyFormattedText(
   // written; on this write it moves into the text.
   const valueFormatting = block.has(owned);
   if (previousText !== null) {
-    if (applyTextDelta(block, COLLABORATIVE_TEXT_KEY, text, nextText, previousText)) touched = true;
+    // Keys are inserted with the formatting they are to have (see insertFormatting).
+    const outerFormatting = insertFormatting;
+    insertFormatting = wanted;
+    try {
+      if (applyTextDelta(block, COLLABORATIVE_TEXT_KEY, text, nextText, previousText)) touched = true;
+    } finally {
+      insertFormatting = outerFormatting;
+    }
     // An edit typed on a text the room had moved past (see applyTextDelta):
     // the formatting is measured from that text, and the author's earlier
     // formatting is not known of it -- the author's characters are written
@@ -2566,7 +2874,13 @@ function applyFormattedText(
     const before = typedOn === null && kind === wanted.kind && !valueFormatting && previous ? encodeFormatting(previous) : null;
     if (applyFormattingDelta(block, text, typedOn ?? previousText, before?.kind === wanted.kind ? before : null, nextText, wanted)) touched = true;
   } else {
-    if (spliceYTextKeepingUndrawn(text, nextText)) touched = true;
+    const outerFormatting = insertFormatting;
+    insertFormatting = wanted;
+    try {
+      if (spliceYTextKeepingUndrawn(text, nextText)) touched = true;
+    } finally {
+      insertFormatting = outerFormatting;
+    }
     if (syncFormatting(block, text, wanted)) touched = true;
   }
   if (valueFormatting) {
@@ -2630,6 +2944,35 @@ interface KeyedCreationWatch {
   localOrigin: unknown;
   ttlMs: number;
   creations: KeyedCreation[];
+  /** Keyed lists this member created where none was (`noteKeyedListCreation`). */
+  lists: KeyedListCreation[];
+}
+
+/**
+ * A keyed list this member created at a key that held none -- a deck's
+ * first Replace Fonts entry, say. A peer that created the same key at once
+ * wrote a list of its own there, and of two concurrent writes of one key Yjs
+ * keeps one whole: the entries this member put in its list were gone with it.
+ * The member writes them again into the list kept (by id, after the kept
+ * list's own), so both members' entries are there, each once.
+ */
+interface KeyedListCreation {
+  parent: Y.Map<unknown>;
+  key: string;
+  /** The list as the room holds it for this member now. */
+  value: Y.Map<unknown>;
+  at: number;
+  /** Its entries as they last stood. */
+  last: JsonValue[];
+}
+
+function noteKeyedListCreation(parent: Y.Map<unknown>, key: string): void {
+  const doc = parent.doc;
+  const watch = doc ? keyedCreationWatches.get(doc) : undefined;
+  if (!doc || !watch || doc._transaction?.origin !== watch.localOrigin) return;
+  const value = parent.get(key);
+  if (!(value instanceof Y.Map) || !isListMap(value)) return;
+  watch.lists.push({ parent, key, value, at: Date.now(), last: yToJson(value) as JsonValue[] });
 }
 
 const keyedCreationWatches = new WeakMap<Y.Doc, KeyedCreationWatch>();
@@ -2764,11 +3107,20 @@ export function watchConcurrentKeyedCreations(
 ): () => void {
   const doc = root.doc;
   if (!doc) throw new Error("watchConcurrentKeyedCreations requires an attached document.");
-  const watch: KeyedCreationWatch = { localOrigin: options.localOrigin, ttlMs: options.ttlMs ?? 120_000, creations: [] };
+  const watch: KeyedCreationWatch = {
+    localOrigin: options.localOrigin, ttlMs: options.ttlMs ?? 120_000, creations: [], lists: [],
+  };
   keyedCreationWatches.set(doc, watch);
   let repairing = false;
   const afterTransaction = (transaction: Y.Transaction) => {
     for (const entry of watch.creations) if (entry.transaction === transaction) entry.transaction = null;
+    if (watch.lists.length > 0 && !repairing) {
+      const now = Date.now();
+      watch.lists = watch.lists.filter((list) => now - list.at <= watch.ttlMs);
+      for (const list of watch.lists) {
+        if (list.parent.get(list.key) === list.value) list.last = yToJson(list.value) as JsonValue[];
+      }
+    }
     if (watch.creations.length === 0 || repairing) return;
     const now = Date.now();
     watch.creations = watch.creations.filter((entry) => now - entry.at <= watch.ttlMs);
@@ -2782,8 +3134,52 @@ export function watchConcurrentKeyedCreations(
       entry.last = after;
     }
   };
+  const repairLists = () => {
+    const writes: Array<{ list: KeyedListCreation; kept: Y.Map<unknown>; missing: JsonValue[] }> = [];
+    for (const list of watch.lists) {
+      const kept = list.parent.get(list.key);
+      if (kept === list.value) continue;
+      if (!(kept instanceof Y.Map) || !isListMap(kept)) {
+        // Deleted, or no list any more: nothing to write into.
+        watch.lists = watch.lists.filter((other) => other !== list);
+        continue;
+      }
+      const items = kept.get(LIST_ITEMS) as Y.Map<unknown>;
+      const missing = list.last.filter((entry) => {
+        const id = isPlainObject(entry) ? entry.id : undefined;
+        return typeof id === "string" && id.length > 0 && !items.has(id);
+      });
+      list.value = kept;
+      if (missing.length) writes.push({ list, kept, missing });
+      else list.last = yToJson(kept) as JsonValue[];
+    }
+    if (writes.length === 0) return;
+    repairing = true;
+    const outerLabels = labelsFromCreation;
+    labelsFromCreation = roomLabelsFromCreation(root);
+    try {
+      doc.transact(() => {
+        for (const { list, kept, missing } of writes) {
+          const items = kept.get(LIST_ITEMS) as Y.Map<unknown>;
+          const order = kept.get(LIST_ORDER) as Y.Array<string>;
+          for (const entry of missing) {
+            const id = (entry as Record<string, JsonValue>).id as string;
+            items.set(id, toYValue(entry, undefined, list.key));
+            if (holdsAbsentText(entry, list.key)) kept.set(ABSENT_TEXT_FLAG + id, true);
+            order.push([id]);
+          }
+        }
+      }, watch.localOrigin);
+    } finally {
+      repairing = false;
+      labelsFromCreation = outerLabels;
+    }
+    for (const { list } of writes) list.last = yToJson(list.value) as JsonValue[];
+  };
   const beforeObserverCalls = (transaction: Y.Transaction) => {
-    if (watch.creations.length === 0 || transaction.local) return;
+    if (transaction.local) return;
+    if (watch.lists.length > 0) repairLists();
+    if (watch.creations.length === 0) return;
     const dropped = watch.creations.filter((entry) => entry.items.get(entry.id) !== entry.value);
     if (dropped.length === 0) return;
     const writes: KeyedCreation[] = [];
@@ -2818,6 +3214,7 @@ export function watchConcurrentKeyedCreations(
     doc.off("beforeObserverCalls", beforeObserverCalls);
     if (keyedCreationWatches.get(doc) === watch) keyedCreationWatches.delete(doc);
     watch.creations = [];
+    watch.lists = [];
   };
 }
 
@@ -2863,6 +3260,7 @@ function applyJsonDeltaEntry(
       if (before && jsonEquals(item, before)) continue;
       const created = before === undefined && !items.has(id);
       if (applyJsonDeltaEntry(items, id, item, before, key)) touched = true;
+      if (created && holdsAbsentText(item, key) && items.get(id) instanceof Y.Map) current.set(ABSENT_TEXT_FLAG + id, true);
       if (created) noteKeyedCreation(items, id, item, key);
     }
     const currentOrder = order.toArray();
@@ -2905,6 +3303,7 @@ function applyJsonDeltaEntry(
   const existing = yToJson(current);
   if (current !== undefined && jsonEquals(existing, next)) return false;
   parent.set(key, toYValue(next, key, itemOf ?? arrayContext));
+  if (current === undefined && Array.isArray(next)) noteKeyedListCreation(parent, key);
   return true;
 }
 
@@ -2920,6 +3319,13 @@ function applyMapDelta(
   itemOf: string | undefined,
 ): boolean {
   let touched = false;
+  // A flagged label is one text from the shape's creation on: no label is
+  // its empty text, written and emptied by splices (TRIAGE 51). Its Y.Text
+  // gone (a writer of the older model deleted it), it is written as before.
+  if (itemOf === "blocks" && childMap.get(COLLABORATIVE_TEXT_KEY) instanceof Y.Text && absentTextFlagged(childMap)) {
+    if (next[COLLABORATIVE_TEXT_KEY] === undefined) next = { ...next, [COLLABORATIVE_TEXT_KEY]: "" };
+    if (prevObject[COLLABORATIVE_TEXT_KEY] === undefined) prevObject = { ...prevObject, [COLLABORATIVE_TEXT_KEY]: "" };
+  }
   // A slide object's words and their formatting are written together.
   const collaborative = itemOf !== undefined && COLLABORATIVE_TEXT_LISTS.has(itemOf);
   const formattedChanged =
@@ -3067,9 +3473,8 @@ function applyTextDelta(
     if (edit && room === previous && validTextEdit(edit, previous, next)) {
       // Typed on the room's very text: the editor had drawn all of it.
       undrawnTextItems?.drawn(current);
-      if (edit.end > edit.start) current.delete(edit.start, edit.end - edit.start);
-      if (edit.insert) current.insert(edit.start, edit.insert);
-      return edit.end > edit.start || edit.insert.length > 0;
+      const splices = edit.splices ?? [edit];
+      return writeSplices(current, splices, spliceTargets(splices));
     }
     // The author typed on a text a peer's characters had not reached yet
     // (the room's base moved on to them first): only the author's own edit
@@ -3079,19 +3484,34 @@ function applyTextDelta(
     
     const typedOn = staleEditBase(edit, previous, next);
     if (edit && typedOn !== null) {
-      const moved = rebaseTextEdit(edit, room);
-      if (moved) {
-        if (moved.end > moved.start) current.delete(moved.start, moved.end - moved.start);
-        if (moved.insert) current.insert(moved.start, moved.insert);
-        return moved.end > moved.start || moved.insert.length > 0;
+      // Each place the keys went, moved over the peer's change.
+      const typed = edit.splices ?? [edit];
+      const moved = typed.map((splice) => rebaseTextEdit({ base: edit.base, ...splice }, room));
+      if (moved.every((splice): splice is TextSplice => splice !== null)) return writeSplices(current, moved, spliceTargets(typed));
+      const rebased = mergeText3(typedOn, next, room);
+      if (rebased === null || spliceIsGuess(room, rebased)) {
+        if (ambiguousTextHandler?.({ room, mine: next, base: typedOn }) === "mine") return spliceYText(current, next);
+        return false;
       }
-      return spliceYTextKeepingUndrawn(current, mergeText3(typedOn, next, room));
+      return spliceYTextKeepingUndrawn(current, rebased);
     }
     // Without a text base (the author added the field) there is no splice
     // to rebase: the author's value is written, as for any other leaf.
     const merged = typeof previous !== "string" || room === previous
       ? next
       : mergeText3(previous, next, room);
+    // Merged with a collaborator's change and written as the one splice
+    // between the room's words and these, with no place known for it: where
+    // its letters meet the same letters around them, the comparison guesses
+    // which they follow (TRIAGE 47). Over the room's very words (nobody
+    // changed them since) the splice puts this member's own letters among
+    // their own: written, as a key would be ("Hel" -> "Hell").
+    if (merged === null || (room !== previous && spliceIsGuess(room, merged))) {
+      // Placed by a guess, a word could be cut in two (TRIAGE 47): the room's
+      // text stays as it is, and the writer is told.
+      if (ambiguousTextHandler?.({ room, mine: next, base: previous as string }) === "mine") return spliceYText(current, next);
+      return false;
+    }
     return spliceYTextKeepingUndrawn(current, merged);
   }
   // A legacy room still holds the string as a scalar: upgrade it in place on
@@ -3102,6 +3522,12 @@ function applyTextDelta(
   const merged = typeof current === "string" && typeof previous === "string" && current !== previous
     ? mergeText3(previous, next, current)
     : next;
+  if (merged === null) {
+    // Upgraded with the room's words; the writer's change is told, not guessed.
+    const choice = ambiguousTextHandler?.({ room: current as string, mine: next, base: previous as string });
+    parent.set(key, new Y.Text(choice === "mine" ? next : current as string));
+    return true;
+  }
   parent.set(key, new Y.Text(merged));
   return true;
 }

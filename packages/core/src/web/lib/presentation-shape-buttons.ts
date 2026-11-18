@@ -61,10 +61,16 @@ import {
   normalizedSpacingFallbackBlocked,
   normalizeParagraphsWithRuns,
   ownsParagraphRichLayout,
-  PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PT,
-  PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PX,
   type SlideParagraphWithRuns,
 } from "./presentation-text-buttons";
+// Not from presentation-text-buttons: this module is evaluated inside that
+// one's import cycle, and its module-level `NEW_TEXT_BOX_FONT_SIZE_*` read the
+// constant before it existed when the deck print route reached that module
+
+import {
+  PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PT,
+  PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PX,
+} from "./presentation/text-units";
 import type { PresentationShapeBlock as ShapeBlock } from "../components/console/editor/native-document/documentCommands";
 import { normalizePresentationClickAction, type PresentationClickAction } from "./presentation-block-fx";
 import { normalizeEmbedKind, resolveEmbed } from "./presentation-embed";

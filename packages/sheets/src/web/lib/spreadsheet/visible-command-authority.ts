@@ -8424,14 +8424,31 @@ export function spreadsheetDataValidationPatchbackSelectionSupported(input: {
     right.r1 <= left.r2 &&
     left.c1 <= right.c2 &&
     right.c1 <= left.c2;
-  const intersecting = input.rules
-    .map(boundsOf)
-    .filter(
-      (bounds): bounds is Bounds => bounds !== null && overlaps(bounds, selection),
-    );
+  // A rule over several areas (data-validation.ts ValidationAreas) is each
+  // of its areas; its own areas are one rule, never two over a cell.
+  const intersecting: Array<{ bounds: Bounds; rule: number }> = [];
+  input.rules.forEach((rule, position) => {
+    const areas =
+      rule && typeof rule === "object" && Array.isArray((rule as { areas?: unknown }).areas)
+        ? ((rule as { areas: unknown[] }).areas.map((area) => boundsOf({ range: area })))
+        : [boundsOf(rule)];
+    for (const bounds of areas) {
+      if (bounds !== null && overlaps(bounds, selection)) intersecting.push({ bounds, rule: position });
+    }
+  });
+  // By first row: a rectangle is asked only of those starting within its rows
+  // (thousands of areas, R443-X20, are not asked of each other pairwise).
+  intersecting.sort((left, right) => left.bounds.r1 - right.bounds.r1);
   for (let index = 0; index < intersecting.length; index += 1) {
-    for (let other = index + 1; other < intersecting.length; other += 1) {
-      if (overlaps(intersecting[index], intersecting[other])) return false;
+    const current = intersecting[index]!;
+    for (
+      let other = index + 1;
+      other < intersecting.length && intersecting[other]!.bounds.r1 <= current.bounds.r2;
+      other += 1
+    ) {
+      if (current.rule !== intersecting[other]!.rule && overlaps(current.bounds, intersecting[other]!.bounds)) {
+        return false;
+      }
     }
   }
   return true;

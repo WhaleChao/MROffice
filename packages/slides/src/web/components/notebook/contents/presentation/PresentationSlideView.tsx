@@ -106,6 +106,7 @@ import {
   type RecipeColorLayer,
 } from "../../../../lib/presentation/block-play";
 import { PresentationBlockView } from "./PresentationBlockView";
+import { smartArtGraphicPlateMemberId } from "../../../../lib/presentation/smartart-graphic-plate";
 import { PresentationChartThemeAccentsContext, PresentationChartThemeFontContext } from "./PresentationChartCanvas";
 import { chartThemeAccents } from "@mrnote/core/web/lib/office-charts/chart-color-palettes.ts";
 import { presentationSlideInk } from "../../../../lib/presentation/slide-ink";
@@ -1027,7 +1028,7 @@ export function PresentationSlideView({
                 play={
                   animatedBackground?.blockId === block.id
                     ? { ...(blockPlay.get(block.id) ?? { timelineControlled: false, visible: true, animate: false }), backgroundLoop: animatedBackground }
-                    : blockPlay.get(block.id)
+                    : blockPlay.get(smartArtGraphicPlateMemberId(block) ?? block.id)
                 }
                 slideIds={slideIds}
                 onNavigateToSlide={onNavigateToSlide}

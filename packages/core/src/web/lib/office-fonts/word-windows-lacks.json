@@ -495,6 +495,22 @@
   "YS Text": "Cambria",
   "Zapf Dingbats": "Cambria"
  },
+ "aliases": {
+  "source": "Windows 11, Microsoft 365 Word 16.0.20527, 2026-11-18, docx-look/probes/cjk13 l1 (76 legacy and printer names with no font-table entry, Word's PDF): Word's own aliases (Tms Rmn and CG Times are Times New Roman, though Windows' FontSubstitutes names MS Serif for Tms Rmn, which Word draws in Cambria; CG Omega is Candara) and Windows' FontSubstitutes (Arabic Transparent, Tahoma Armenian, MS Shell Dlg, MS Shell Dlg 2). A name beginning with one is its face too (CG Times Bold is Times New Roman).",
+  "faces": {
+   "Tms Rmn": "Times New Roman",
+   "CG Times": "Times New Roman",
+   "CG Omega": "Candara",
+   "Arabic Transparent": "Arial",
+   "Tahoma Armenian": "Tahoma",
+   "MS Shell Dlg": "Microsoft Sans Serif",
+   "MS Shell Dlg 2": "Tahoma"
+  },
+  "exact": {
+   "System": "Calibri"
+  },
+  "exactSource": "Windows 11, Microsoft 365 Word 16.0.20527, 2026-11-18, docx-look/probes/cjk14 s1-s4: \"System\" is Calibri whatever the document's default (docDefaults Georgia, Normal Verdana, theme minor Garamond, a character style's Courier New), and only the whole name: \"System Bold\", Fixedsys and Terminal are Cambria, as cjk13 l1 had them."
+ },
  "has": [
   "ADLaM Display",
   "Abadi",
@@ -1134,5 +1150,39 @@
   "roboto",
   "tahoma",
   "verdana"
- ]
+ ],
+ "hasAdded": [
+  "Urdu Typesetting",
+  "Shonar Bangla",
+  "Vijaya",
+  "Lao UI",
+  "Khmer UI",
+  "Lucida Sans Typewriter",
+  "Lucida Fax",
+  "Tw Cen MT Condensed Extra Bold",
+  "Eras Light ITC",
+  "Eras Demi ITC",
+  "Curlz MT",
+  "Gigi",
+  "Ravie",
+  "Playbill",
+  "Parchment",
+  "Juice ITC",
+  "Harrington",
+  "Informal Roman",
+  "Kunstler Script",
+  "Vladimir Script",
+  "Viner Hand ITC",
+  "French Script MT",
+  "Colonna MT",
+  "Imprint MT Shadow",
+  "Niagara Engraved",
+  "Utsaah",
+  "Narkisim",
+  "Rod",
+  "Rockwell Nova",
+  "Gill Sans Nova Cond",
+  "Verdana Pro Cond"
+ ],
+ "hasAddedSource": "Windows 11, Microsoft 365 Word 16.0.20527, 2026-11-18, docx-look/probes/cjk14 h1 (Word's PDF of \"Hamburg Quixotic 0123\" and an Arabic word in each name, no font-table entry): families the catalog serves that Word draws in their own face, missing from `has` (rig round R462-D05: its Urdu Typesetting read as lacked and drawn in the font table's altName, Courier New). Simplified Arabic, which Word also draws itself, stays read as lacked for now: its stand-in (Noto Naskh Arabic at 1/1.115) sets rig round R472-D78's text 1.7 % wide, 51 -> 54 pages for Word's 49, where the font table's Sakkal Majalla pick runs nearer (docx-look cjk10 ab5). The same probe has Estrangelo Edessa drawn in Comic Sans MS, MS LineDraw, Lucida Blackletter, Eras ITC and OCR A Extended in Cambria, Andalus in Arial, Majalla UI in Sakkal Majalla, as the tables already say."
 }

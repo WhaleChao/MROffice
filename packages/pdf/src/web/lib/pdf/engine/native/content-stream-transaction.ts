@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { completePdfLengthBeforeTrailingBytes } from "./complete-pdf-before-trailing-bytes";
 import { LATIN1_EXACT } from "./latin1";
 import { pdfNativeTextObjectEdgesAt, type PdfNativeTextRuleSpan } from "./text-rule-block";
 import { pageInterfaceLocale } from "@mrnote/core/web/lib/i18n/content-locale.ts";
@@ -56,7 +57,7 @@ import {
   mraiNativeBoxMarkIssue,
   type PdfNativeBoxMark,
 } from "./box-mark";
-import { inflateSync, Unzlib, zlibSync } from "fflate";
+import { Inflate, inflateSync, Unzlib, zlibSync } from "fflate";
 
 import {
   PDF_BLEND_MODE_BY_PDF_NAME,
@@ -1663,6 +1664,8 @@ function decodeFlateStreamUncached(encoded: Uint8Array): Uint8Array {
       }
       if (raw && raw.length === 0) return new Uint8Array(0);
     }
+    const whole = decodeFlateStreamWithShortChecksum(encoded);
+    if (whole) return whole;
     fail("unsupported-document", "Flate stream is malformed or too large.");
   }
   if (!complete) {
@@ -1698,6 +1701,47 @@ function decodeFlateStreamUncached(encoded: Uint8Array): Uint8Array {
     fail("unsupported-document", "Flate stream checksum is invalid.");
   }
   return decoded;
+}
+
+
+
+
+
+
+
+
+
+
+
+function decodeFlateStreamWithShortChecksum(encoded: Uint8Array): Uint8Array | null {
+  const inflated = (end: number): Uint8Array | null => {
+    if (end <= 2) return null;
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      const inflater = new Inflate((chunk) => {
+        length += chunk.length;
+        if (length > MAX_DECODED_STREAM_BYTES) throw new Error("decoded stream exceeds limit");
+        if (chunk.length) chunks.push(Uint8Array.from(chunk));
+      });
+      inflater.push(Uint8Array.from(encoded.subarray(2, end)), true);
+    } catch {
+      return null;
+    }
+    return concatBytes(chunks);
+  };
+  for (let present = 3; present >= 1; present -= 1) {
+    const end = encoded.length - present;
+    const decoded = inflated(end);
+    if (!decoded) continue;
+    // The data's last byte is the one before the checksum: with a byte
+    // fewer it is no whole stream.
+    if (inflated(end - 1)) return null;
+    const checksum = adler32(decoded);
+    const expected = [checksum >>> 24, (checksum >>> 16) & 0xff, (checksum >>> 8) & 0xff];
+    return encoded.subarray(end).every((byte, index) => byte === expected[index]) ? decoded : null;
+  }
+  return null;
 }
 
 function adler32(bytes: Uint8Array): number {
@@ -2289,8 +2333,9 @@ function assertSourceEnvelope(bytes: Uint8Array): string {
     fail("unsupported-document", "PDF header is missing or unsupported.");
   }
 
+  // Encryption is not decided here: a file is encrypted by a trailer on its
+  // chain, not by the word (refuseEncryptionNamedAnywhere).
   const blocked: readonly [RegExp, string][] = [
-    [/\/Encrypt\b/, "Encrypted PDFs are preserve-only."],
     // A certification signature carries a rule about what may still change,
     // and text is never part of it. An ordinary approval signature carries
     // no such rule: it signs the revision it was made over, and a native
@@ -2312,6 +2357,26 @@ function assertSourceEnvelope(bytes: Uint8Array): string {
     if (pattern.test(source)) fail("unsupported-document", message);
   }
   return source;
+}
+
+/**
+ * A file is encrypted when the trailer or the cross-reference stream
+ * dictionary of a section on its chain -- the newest and every one its /Prev
+ * leads to -- names /Encrypt; each section refuses its own (parseClassicXref,
+ * parseXrefStream). The word elsewhere in the file encrypts nothing: a file
+ * decrypted by a tool that wrote a new table may still hold the superseded
+ * one that names the key (walk 0454), and a page may print the word.
+ *
+ * That holds only for the chain the file records. Where it is not the one
+ * read -- a section had to be recovered, or the file is a complete PDF
+ * followed by other bytes -- readers rebuild the file each their own way and
+ * one may come upon a section this parser passed over, so there the word
+ * anywhere still refuses (mirror of replay's `_refuse_encryption_named_anywhere`).
+ */
+function refuseEncryptionNamedAnywhere(source: string): void {
+  if (/\/Encrypt\b/.test(source)) {
+    fail("unsupported-document", "Encrypted PDFs are preserve-only.");
+  }
 }
 
 function isPdfWhitespace(character: string | undefined): boolean {
@@ -2437,13 +2502,12 @@ function oneInteger(
   return Number(matches[0][1]);
 }
 
-function finalStartXref(source: string): number {
-  // NUL is PDF whitespace; a writer may pad the file after `%%EOF` with it.
+/** Where the file says its newest cross-reference section is, or null when
+ * it does not end as a PDF does. NUL is PDF whitespace; a writer may pad the
+ * file after `%%EOF` with it. */
+function finalStartXref(source: string): number | null {
   const match = /startxref\s+(\d+)\s+%%EOF[\s\x00]*$/.exec(source);
-  if (!match) {
-    fail("unsupported-document", "PDF startxref/EOF boundary is malformed.");
-  }
-  return Number(match[1]);
+  return match ? Number(match[1]) : null;
 }
 
 function findTokenAfter(source: string, token: string, start: number): number {
@@ -2782,7 +2846,7 @@ function parseClassicXref(
     );
   }
   if (/\/Encrypt\b/.test(trailerRaw)) {
-    fail("unsupported-document", "Encrypted PDFs are unsupported.");
+    fail("unsupported-document", "Encrypted PDFs are preserve-only.");
   }
   const size = oneInteger(trailerRaw, /\/Size\s+(\d+)\b/g, "trailer Size");
   const previousOffset = oneInteger(
@@ -3171,6 +3235,9 @@ function parseXrefSection(
     // Readers find the table anyway, and so does this, only when the recorded
     // offset leads nowhere (mirror of replay).
     if (!(error instanceof PdfNativeTransactionError)) throw error;
+    // The section refused may be the encrypted one, and the search passes
+    // over every section it cannot read.
+    refuseEncryptionNamedAnywhere(source);
     const recovered = recoveredXrefSection(bytes, source, chainOffsets, fallbackRoot);
     if (recovered === null || recovered.offset === start) throw error;
     return recovered;
@@ -3358,10 +3425,27 @@ function parsePdfUncached(
   allowCandidateRevision: boolean,
 ): ParsedPdf {
   const source = assertSourceEnvelope(bytes);
+  let offset: number | null = finalStartXref(source);
+  if (offset === null) {
+    // A complete PDF followed by bytes that are not PDF is read as that
+    // complete file is, the whole of it: its chain, the repairs of its
+    // entries and the proof that each entry owns its object never look at
+    // the bytes after it. Every offset is the same offset in `bytes`, so the
+    // sections are the caller's to read `bytes` by, and a revision is
+    // appended after the last byte of `bytes`, where a file has to end. Any
+    // other file without an end keeps the refusal, and so does a candidate:
+    // a file this engine wrote ends with its own revision (mirror of
+    // replay's `_parse_pdf`).
+    const complete = allowCandidateRevision ? null : completePdfLengthBeforeTrailingBytes(source);
+    if (complete === null) {
+      fail("unsupported-document", "PDF startxref/EOF boundary is malformed.");
+    }
+    refuseEncryptionNamedAnywhere(source);
+    return parsePdfUncached(bytes.subarray(0, complete), false);
+  }
   const sections: PdfXrefSection[] = [];
   const seenOffsets = new Set<number>();
   const chainOffsets = new Set<number>();
-  let offset: number | null = finalStartXref(source);
   // Keep cumulative native edits bounded while admitting the current source
   // produced by an earlier verified append-only transaction.  One base xref
   // section plus at most 31 incremental sections keeps ownership validation
@@ -6710,8 +6794,31 @@ export function hasMraiNativeSafeContentBoundary(
     PDF_PAGE_CONTENT_WHITESPACE.has(leftToken) ||
     PDF_PAGE_CONTENT_WHITESPACE.has(rightToken) ||
     PDF_PAGE_CONTENT_DELIMITERS.has(leftToken) ||
-    PDF_PAGE_CONTENT_DELIMITERS.has(rightToken)
+    PDF_PAGE_CONTENT_DELIMITERS.has(rightToken) ||
+    endsWithGraphicsStateBracket(left)
   );
+}
+
+/**
+ * Whether a stream's last token is `q` or `Q` standing alone. A stamping
+ * tool wraps the page it stamps in a `q` stream before it and a `Q…` stream
+ * after it, and the page's own stream often ends in a bare `Q` with no line
+ * end (iText's header on a court filing: `…/Im1 Do\nQ` then `Q\nq\nBT…`).
+ * A division between streams is a division between tokens (ISO 32000-1
+ * 7.8.2), and the readers that join the streams with white space read it so.
+ * pdf.js joins them with nothing and ends a token where the next character
+ * would make a known operator into no operator; no operator but `q` and `Q`
+ * themselves starts with either letter, so it too ends the token at the
+ * division, whatever the next stream starts with. Only this reading is
+ * widened: streams written out as one (consolidatedVirtualTarget) are joined
+ * byte to byte and keep the strict rule.
+ */
+function endsWithGraphicsStateBracket(left: Uint8Array): boolean {
+  if (left.length < 2) return false;
+  const last = left[left.length - 1];
+  if (last !== 0x51 && last !== 0x71) return false;
+  const before = String.fromCharCode(left[left.length - 2]);
+  return PDF_PAGE_CONTENT_WHITESPACE.has(before) || PDF_PAGE_CONTENT_DELIMITERS.has(before);
 }
 
 export interface PdfNativePageContentStreamInspection {

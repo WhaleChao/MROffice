@@ -32,6 +32,8 @@ import {
   freeBytes,
   install,
   InstallError,
+  missingRequiredFonts,
+  placeWindowsFonts,
   type InstalledRecord,
   LIBREOFFICE_VERSION,
   packageFor,
@@ -43,6 +45,7 @@ import {
 } from "./libreoffice-installer";
 import { loadBundledPage } from "../bundled-page";
 import { productDisplayName } from "./product";
+import { layout } from "./services";
 
 const zh = () => app.getLocale().toLowerCase().startsWith("zh");
 const say = (zhText: string, enText: string) => (zh() ? zhText : enText);
@@ -66,6 +69,29 @@ export function libreOfficePaths(): RuntimePaths {
 /** The soffice the API is told about (there or not yet). */
 export function libreOfficeBinary(): string {
   return libreOfficePaths().binary;
+}
+
+/**
+ * Windows, when the API starts: the app's LibreOffice still carries the
+ * packaged faces as pinned (libreoffice-installer placeWindowsFonts); any
+ * that went missing or changed are put back from the app's own copy. One
+ * that cannot be is logged, and the Word render check then says
+ * "writer_fonts_missing_desktop_libreoffice" instead of drawing the page in
+ * another face.
+ */
+export function ensureLibreOfficeFonts(): void {
+  if (process.platform !== "win32") return;
+  const paths = libreOfficePaths();
+  if (!readRecord(paths)) return;
+  const missing = missingRequiredFonts(paths.install);
+  if (!missing.length) return;
+  console.warn(`[libreoffice] packaged fonts missing or altered: ${missing.join(", ")}; putting them back`);
+  try {
+    placeWindowsFonts(paths.install, layout().fontsDir);
+    console.log("[libreoffice] packaged fonts in place again");
+  } catch (error) {
+    console.warn(`[libreoffice] packaged fonts could not be put back: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 function thisPackage() {
@@ -217,6 +243,11 @@ function describe(error: unknown): string {
         return say(`下载没有完成（${error.message}）。检查网络连接后重试，已下载的部分会接着下载。`, `The download did not finish (${error.message}). Check the connection and try again; it resumes where it stopped.`);
       case "checksum":
         return say("下载的文件和 LibreOffice 官方发布的校验值不符，已删除。请重试。", "The download does not match LibreOffice's published checksum and was deleted. Try again.");
+      case "locked":
+        return say(
+          "新的 LibreOffice 装好了，但它的文件一直被别的程序占用（常见是杀毒软件在扫描），没能放到位。稍等片刻再试一次。",
+          "The new LibreOffice was ready but another program kept one of its files open (often an antivirus scan), so it could not be put in place. Wait a moment and try again.",
+        );
       case "busy":
         return say("正在使用的 LibreOffice 无法替换：请等转换完成后重试。", "The LibreOffice in use could not be replaced: try again once conversions finish.");
       default:
@@ -241,6 +272,7 @@ async function installOnce(context: LibreOfficeContext, quiet = false): Promise<
     const record = await install(pkg, paths, {
       fetch: (input, init) => net.fetch(String(input), init as RequestInit),
       signal: controller.signal,
+      fontsDir: layout().fontsDir,
       log: (line) => console.log(`[libreoffice] ${line}`),
       onProgress: (phase, received, total) => {
         progressState = { phase, received, total };

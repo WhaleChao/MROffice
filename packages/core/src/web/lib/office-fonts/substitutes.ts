@@ -18,6 +18,7 @@
 // mapping (the faces and their descriptors), to a guest's.
 import generated from "./substitutes.generated.json";
 import cjkLatinFaces from "./cjk-latin-faces.json";
+import { HANGUL_EM_PREFIX, hangulEmFamilyOf, stackPrimaryFamily } from "./hangul-em";
 import powerPointTable from "./powerpoint-substitutes.json";
 import { notedFontFaces, noteFamilyRegistration, noteFontFaceSource, type DeclaredFontFace } from "../font-face-declarations";
 import { loadOfficeDataParts, officeDataObtainable, officeDataPartKnown } from "../office-data/store";
@@ -865,8 +866,8 @@ export function fontMetricOverridesHonored(): boolean {
  */
 export function officeNormalLineHeightPx(fontFamily: string | null | undefined, fontSizePx: number): number | null {
   if (fontMetricOverridesHonored() || !fontFamily || !(fontSizePx > 0)) return null;
-  const first = fontFamily.split(",")[0] ?? "";
-  const em = WORD_LINE_EM.get(normalize(first));
+  // The family asked for: a Hangul clone in front of it (hangul-em.ts) has no line of its own.
+  const em = WORD_LINE_EM.get(normalize(stackPrimaryFamily(fontFamily)));
   return em === undefined ? null : em * fontSizePx;
 }
 
@@ -1014,6 +1015,24 @@ export function ensureOfficeFontFaces(
             declared.add(id);
             const localSources = locals.map((local) => `local("${local.replace(/["\\]/g, "\\$&")}")`);
             addFace(doc, name, weight, italic, [...localSources, `url(${CJK_LATIN_PREFIX}${file}) format("woff2")`], CJK_LATIN.ranges?.[slug] ?? CJK_LATIN_RANGE, undefined, overrides ?? undefined);
+          }
+        }
+      }
+      // A Korean family's Hangul at its own full em (hangul-em.ts): the clone's
+      // family, declared with this family's local() names and line overrides,
+      // at the weights the Office family has (a bold of one without is
+      // emboldened from the regular, as Word does).
+      const hangul = hangulEmFamilyOf(key) ?? hangulEmFamilyOf(name);
+      if (hangul) {
+        const declared = new Set<number>();
+        for (const { faces } of registry.families[name] ?? []) {
+          for (const [weight, italic, , , locals, overrides] of faces) {
+            if (italic || !hangul.weights.includes(weight) || declared.has(weight)) continue;
+            declared.add(weight);
+            const localSources = locals.map((local) => `local("${local.replace(/["\\]/g, "\\$&")}")`);
+            for (const [file, range] of hangul.slices(weight)) {
+              addFace(doc, hangul.alias, weight, 0, [...localSources, `url(${HANGUL_EM_PREFIX}${file}) format("woff2")`], range, undefined, overrides ?? undefined);
+            }
           }
         }
       }

@@ -618,6 +618,21 @@ export type OfficeSmartArtTextNode = OfficeSmartArtNodeBase & {
   smartArtLinePitch?: number;
   /** The label's colour as the theme colour its point states (`a:schemeClr`), authenticated by `rgb`. */
   smartArtTextColorScheme?: { scheme: string; mods: readonly (readonly [string, number])[]; rgb: string };
+  
+
+
+
+
+
+
+  smartArtFirstLineIndent?: number;
+  
+
+
+
+
+
+  smartArtTextRtl?: true;
 };
 
 /** A picture member of a Picture layout; `src` starts as the placeholder. */
@@ -641,6 +656,26 @@ export type OfficeSmartArtImageNode = OfficeSmartArtNodeBase & {
    * Cluster's slots are hexagons, Picture Caption List's rounded. Drawn only.
    */
   smartArtSlotShape?: "hexagon" | "roundRect";
+  /**
+   * The slot holds the DIAGRAM's own picture, not an item's: its layout node
+   * (`presName`) is keyed to the document point -- Radial List's centre
+   * `visible` (readings row 1005). The file keeps that picture, and its line,
+   * on that presentation point.
+   */
+  smartArtDocSlot?: string;
+  /**
+   * The line that slot's presentation point states of its own (the author's
+   * Shape Outline on it): `#rrggbb` or `"none"`, or a theme colour (`scheme`
+   * and its modifiers, drawn as `rgb`), and its width. Written back on that
+   * point as stated; absent, the point states none.
+   */
+  smartArtDocSlotLine?: {
+    color?: string;
+    scheme?: string;
+    mods?: readonly (readonly [string, number])[];
+    rgb?: string;
+    widthPt?: number;
+  };
 };
 
 /**
@@ -712,6 +747,29 @@ export function smartArtPictureDisplaySrc(src: string | undefined, slotFill?: un
   const [r, g, b] = [1, 3, 5].map((at) => parseInt(slotFill.slice(at, at + 2), 16));
   const light = 0.299 * r + 0.587 * g + 0.114 * b > 150;
   return placeholderSvg(true, slotFill.toLowerCase(), light ? "#475569" : "#f8fafc");
+}
+
+/**
+ * What a picture's `src` is drawn with OUTSIDE the editing canvas -- the show,
+ * the slide rail and every printed or exported page: an empty slot is the
+ * colour Office paints it (`smartArtSlotFill`) and nothing else. PowerPoint
+ * shows its "insert picture" icon only while editing; its show, its pictures
+ * and its PDF draw the bare slot, under every style (truth office-truth/probes/
+ * sa36-s22slot: Picture Strips and Picture Caption List under simple1/2/4/5,
+ * sa36-3dcam under 3d1-3d9; TRIAGE S22). A slot with no fill of its own is
+ * drawn as on the canvas.
+ */
+export function smartArtPictureOutputSrc(src: string, slotFill?: unknown): string;
+export function smartArtPictureOutputSrc(src: string | undefined, slotFill?: unknown): string | undefined;
+export function smartArtPictureOutputSrc(src: string | undefined, slotFill?: unknown): string | undefined {
+  if (src !== SMARTART_PICTURE_PLACEHOLDER_SRC) return src;
+  if (typeof slotFill !== "string" || !/^#[0-9a-f]{6}$/i.test(slotFill)) return smartArtPictureDisplaySrc(src, slotFill);
+  return (
+    "data:image/svg+xml;charset=utf-8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%"><rect width="100%" height="100%" fill="${slotFill.toLowerCase()}"/></svg>`,
+    )
+  );
 }
 
 /**

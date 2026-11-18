@@ -371,14 +371,26 @@ export interface ValidationMessages {
   errorStyle?: ErrorStyle;
 }
 
+
+
+
+
+
+
+
+
+export interface ValidationAreas {
+  areas?: ValidationRange[];
+}
+
 /** Excel's type="none": no restriction, but input guidance remains editable. */
-export interface AnyRule extends ValidationMessages {
+export interface AnyRule extends ValidationMessages, ValidationAreas {
   kind: "any";
   range: ValidationRange;
 }
 
 /** A "pick from a fixed set" rule. Typing anything not in `values` is rejected. */
-export interface ListRule extends ValidationMessages {
+export interface ListRule extends ValidationMessages, ValidationAreas {
   kind: "list";
   range: ValidationRange;
   /**
@@ -402,7 +414,7 @@ export interface ListRule extends ValidationMessages {
 }
 
 /** A numeric rule: finite number, optional [min, max], optional integer-only. */
-export interface NumberRule extends ValidationMessages {
+export interface NumberRule extends ValidationMessages, ValidationAreas {
   kind: "number";
   range: ValidationRange;
   min?: number;
@@ -422,7 +434,7 @@ export interface NumberRule extends ValidationMessages {
 }
 
 /** A text-length rule: the entered string's length within [minLength, maxLength]. */
-export interface TextRule extends ValidationMessages {
+export interface TextRule extends ValidationMessages, ValidationAreas {
   kind: "text";
   range: ValidationRange;
   minLength?: number;
@@ -437,7 +449,7 @@ export interface TextRule extends ValidationMessages {
  * and reuses its formula engine; this module only carries the formula text and
  * interprets the engine's result via `isFormulaResultTruthy`.
  */
-export interface FormulaRule extends ValidationMessages {
+export interface FormulaRule extends ValidationMessages, ValidationAreas {
   kind: "formula";
   range: ValidationRange;
   /** A spreadsheet formula (with or without a leading "="); truthy ⇒ valid. */
@@ -457,7 +469,7 @@ export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
  * `notAfter` set to "today" require the value to be on-or-after / on-or-before
  * the current date (evaluated at validation time). All constraints are ANDed.
  */
-export interface DateRule extends ValidationMessages {
+export interface DateRule extends ValidationMessages, ValidationAreas {
   kind: "date";
   range: ValidationRange;
   /** Inclusive lower bound, ISO date "YYYY-MM-DD". */
@@ -474,7 +486,7 @@ export interface DateRule extends ValidationMessages {
 }
 
 /** A 24-hour time rule. Bounds are normalized HH:MM or HH:MM:SS strings. */
-export interface TimeRule extends ValidationMessages {
+export interface TimeRule extends ValidationMessages, ValidationAreas {
   kind: "time";
   range: ValidationRange;
   min?: string;
@@ -494,7 +506,7 @@ export interface TimeRule extends ValidationMessages {
  * options derived for that cell. With no usable derived options every non-blank
  * value is rejected (nothing is allowed for that controlling value).
  */
-export interface DependentRule extends ValidationMessages {
+export interface DependentRule extends ValidationMessages, ValidationAreas {
   kind: "dependent";
   range: ValidationRange;
   /** The controlling cell (absolute grid coords). */
@@ -611,6 +623,9 @@ export const MAX_LIST_MEMBERSHIP_SCAN = MAX_GRID_ROWS;
  *  R422-X46), so the bound is 10,000; `ruleForCell` finds a cell's rule by a
  *  row index, not by walking them all. */
 export const MAX_VALIDATION_RULES = 10_000;
+/** Most rectangles a sheet's rules cover together, a rule over several areas
+ *  counting each (Excel sets no limit; a bound on the page's size). */
+export const MAX_VALIDATION_AREAS = 65_536;
 /** Upper bound for a text-length constraint (Excel caps cell text far higher). */
 export const MAX_TEXT_LENGTH = 32_767;
 /** Upper bound for a formula/custom rule's source length (DoS bound on parse). */
@@ -1035,13 +1050,60 @@ export function rangeContains(
 }
 
 /**
+ * Which rule over several areas a planner's one-rectangle piece came from
+ * (expandRuleAreas / regroupRuleAreas). A symbol key: a spread copies it and
+ * normalizeRule carries it, JSON and Object.keys never see it, so it is never
+ * stored or compared.
+ */
+const AREA_GROUP: unique symbol = Symbol("validationAreaGroup");
+type AreaTagged = ValidationRule & { [AREA_GROUP]?: object };
+
+function sameValidationRange(a: ValidationRange, b: ValidationRange): boolean {
+  return a.r1 === b.r1 && a.c1 === b.c1 && a.r2 === b.r2 && a.c2 === b.c2;
+}
+
+/** The rectangles a rule covers: its areas, or just its range. */
+export function validationRuleAreas(rule: { range: ValidationRange; areas?: ValidationRange[] }): ValidationRange[] {
+  return rule.areas && rule.areas.length > 1 ? rule.areas : [rule.range];
+}
+
+/** How many rectangles the rules cover together (a rule's areas each count). */
+export function validationAreaCount(rules: readonly { range: ValidationRange; areas?: ValidationRange[] }[]): number {
+  let count = 0;
+  for (const rule of rules) count += rule.areas && rule.areas.length > 1 ? rule.areas.length : 1;
+  return count;
+}
+
+/**
  * Coerce a single raw entry into a normalized ValidationRule, or null when it
  * is malformed (unknown kind, bad range, or a list with no usable values).
  * Numeric params that are non-finite are dropped (treated as "no bound"); a
  * min/max pair where min>max is swapped so the rule still makes sense. List
- * values are trimmed-deduplicated and capped at MAX_LIST_VALUES.
+ * values are trimmed-deduplicated and capped at MAX_LIST_VALUES. A rule over
+ * several areas keeps them (ValidationAreas) when they are rectangles of the
+ * grid led by its own range; otherwise it keeps its range alone, as a
+ * conditional format does.
  */
 export function normalizeRule(raw: unknown): ValidationRule | null {
+  const rule = normalizeRuleSettings(raw);
+  if (!rule) return null;
+  const record = raw as Record<string | symbol, unknown>;
+  const group = record[AREA_GROUP];
+  if (group && typeof group === "object") (rule as AreaTagged)[AREA_GROUP] = group;
+  const rawAreas = record.areas;
+  if (Array.isArray(rawAreas) && rawAreas.length >= 2 && rawAreas.length <= MAX_VALIDATION_AREAS) {
+    const areas: ValidationRange[] = [];
+    for (const area of rawAreas) {
+      const normalized = normalizeRange(area);
+      if (!normalized) return rule;
+      areas.push(normalized);
+    }
+    if (sameValidationRange(areas[0], rule.range)) rule.areas = areas;
+  }
+  return rule;
+}
+
+function normalizeRuleSettings(raw: unknown): ValidationRule | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const range = normalizeRange(r.range);
@@ -1349,9 +1411,12 @@ function normalizeOptionList(raw: unknown): string[] {
 export function normalizeRules(raw: unknown): ValidationRule[] {
   if (!Array.isArray(raw)) return [];
   const out: ValidationRule[] = [];
+  let areaCount = 0;
   for (const item of raw) {
     const rule = normalizeRule(item);
     if (!rule) continue;
+    areaCount += rule.areas ? rule.areas.length : 1;
+    if (areaCount > MAX_VALIDATION_AREAS) break;
     out.push(rule);
     if (out.length >= MAX_VALIDATION_RULES) break;
   }
@@ -1392,14 +1457,14 @@ export function ruleForCell(
   row: number,
   col: number,
 ): ValidationRule | null {
-  if (rules.length <= RULE_INDEX_MIN) {
+  if (rules.length <= RULE_INDEX_MIN && !rules.some((rule) => rule.areas)) {
     for (const rule of rules) {
       if (rangeContains(rule.range, row, col)) return rule;
     }
     return null;
   }
-  // Asked for each cell drawn: up to MAX_VALIDATION_RULES rules are found by
-  // the band of rows they reach, in array order (first match wins).
+  // Asked for each cell drawn: up to MAX_VALIDATION_AREAS rectangles are found
+  // by the band of rows they reach, in rule order (first match wins).
   let index = RULE_INDEXES.get(rules);
   if (!index) {
     index = ruleIndex(rules);
@@ -1407,6 +1472,7 @@ export function ruleForCell(
   }
   const band = index.bands.get(Math.floor(row / RULE_BAND_ROWS));
   const tall = index.tall;
+  const { boxes, owner } = index;
   let b = 0;
   let t = 0;
   while ((band && b < band.length) || t < tall.length) {
@@ -1414,44 +1480,63 @@ export function ruleForCell(
       band && b < band.length && (t >= tall.length || band[b] < tall[t])
         ? band[b++]
         : tall[t++];
-    if (rangeContains(rules[next].range, row, col)) return rules[next];
+    const at = next * 4;
+    if (row >= boxes[at] && row <= boxes[at + 2] && col >= boxes[at + 1] && col <= boxes[at + 3]) {
+      return rules[owner[next]];
+    }
   }
   return null;
 }
 
-/** Below this many rules a cell's rule is found by walking them. */
+/** Below this many rules (none over several areas) a cell's rule is found by walking them. */
 const RULE_INDEX_MIN = 64;
 /** Rows of one band of the rule index. */
 const RULE_BAND_ROWS = 256;
-/** A rule reaching more bands than this is asked of every row. */
+/** A rectangle reaching more bands than this is asked of every row. */
 const RULE_MAX_BANDS = 64;
 
 interface RuleIndex {
-  /** The rules reaching each band of rows, by their order. */
+  /** Every rule's rectangles in rule order, four numbers each (r1, c1, r2, c2). */
+  boxes: Int32Array;
+  /** The rule (its position) each rectangle belongs to. */
+  owner: Int32Array;
+  /** The rectangles reaching each band of rows, by their order. */
   bands: Map<number, number[]>;
-  /** The rules too tall to list by band, by their order. */
+  /** The rectangles too tall to list by band, by their order. */
   tall: number[];
 }
 
 const RULE_INDEXES = new WeakMap<readonly ValidationRule[], RuleIndex>();
 
 function ruleIndex(rules: readonly ValidationRule[]): RuleIndex {
+  const total = validationAreaCount(rules);
+  const boxes = new Int32Array(total * 4);
+  const owner = new Int32Array(total);
   const bands = new Map<number, number[]>();
   const tall: number[] = [];
+  let id = 0;
   rules.forEach((rule, position) => {
-    const first = Math.floor(rule.range.r1 / RULE_BAND_ROWS);
-    const last = Math.floor(rule.range.r2 / RULE_BAND_ROWS);
-    if (last - first + 1 > RULE_MAX_BANDS) {
-      tall.push(position);
-      return;
-    }
-    for (let band = first; band <= last; band += 1) {
-      const listed = bands.get(band);
-      if (listed) listed.push(position);
-      else bands.set(band, [position]);
+    for (const area of validationRuleAreas(rule)) {
+      boxes[id * 4] = area.r1;
+      boxes[id * 4 + 1] = area.c1;
+      boxes[id * 4 + 2] = area.r2;
+      boxes[id * 4 + 3] = area.c2;
+      owner[id] = position;
+      const first = Math.floor(area.r1 / RULE_BAND_ROWS);
+      const last = Math.floor(area.r2 / RULE_BAND_ROWS);
+      if (last - first + 1 > RULE_MAX_BANDS) {
+        tall.push(id);
+      } else {
+        for (let band = first; band <= last; band += 1) {
+          const listed = bands.get(band);
+          if (listed) listed.push(id);
+          else bands.set(band, [id]);
+        }
+      }
+      id += 1;
     }
   });
-  return { bands, tall };
+  return { boxes, owner, bands, tall };
 }
 
 /**
@@ -1736,17 +1821,19 @@ export function scanInvalidCells(
   const seen = new Set<string>();
   const out: InvalidCellCoord[] = [];
   for (const rule of rules) {
-    const { r1, c1, r2, c2 } = rule.range;
-    for (let row = r1; row <= r2; row += 1) {
-      for (let col = c1; col <= c2; col += 1) {
-        const key = `${row}:${col}`;
-        if (seen.has(key)) continue; // already flagged by an earlier rule
-        const value = readCellValue(row, col);
-        const result = validateValue(rule, value, contextAt?.(row, col));
-        if (result.ok) continue;
-        seen.add(key);
-        out.push({ row, col });
-        if (out.length >= MAX_INVALID_CIRCLES) return out;
+    for (const area of validationRuleAreas(rule)) {
+      const { r1, c1, r2, c2 } = area;
+      for (let row = r1; row <= r2; row += 1) {
+        for (let col = c1; col <= c2; col += 1) {
+          const key = `${row}:${col}`;
+          if (seen.has(key)) continue; // already flagged by an earlier rule
+          const value = readCellValue(row, col);
+          const result = validateValue(rule, value, contextAt?.(row, col));
+          if (result.ok) continue;
+          seen.add(key);
+          out.push({ row, col });
+          if (out.length >= MAX_INVALID_CIRCLES) return out;
+        }
       }
     }
   }
@@ -1845,7 +1932,7 @@ export function rangeHasRule(
   rules: readonly ValidationRule[],
   range: ValidationRange,
 ): boolean {
-  return rules.some((rule) => rangesOverlap(rule.range, range));
+  return rules.some((rule) => validationRuleAreas(rule).some((area) => rangesOverlap(area, range)));
 }
 
 /** Formula/reference shifter supplied by the host to keep this module engine-free. */
@@ -2059,6 +2146,7 @@ function validationSettingsSignatures(rule: ValidationRule): string[] {
   const normalized = normalizeRule(rule);
   const settings: Record<string, unknown> = { ...(normalized ?? rule) };
   delete settings.range;
+  delete settings.areas;
   if (!normalized) return [sortedJson(settings)];
   const anchor = { row: normalized.range.r1, col: normalized.range.c1 };
   if (normalized.kind === "list" && normalized.sourceRange) {
@@ -2098,7 +2186,7 @@ export function sameValidationSettingsAs(
     validationSettingsSignatures(candidate).some((key) => keys.has(key));
 }
 
-export function clearRulesForClearAll(
+function clearRulesForClearAllOnPieces(
   rules: readonly ValidationRule[],
   range: ValidationRange,
   shift: ValidationFormulaShifter,
@@ -2142,7 +2230,7 @@ export function clearRulesForClearAll(
       next.push(kept);
     }
   }
-  if (next.length > MAX_VALIDATION_RULES) return null;
+  if (overRuleBound(next)) return null;
   return { rules: changed ? next : [...rules], changed };
 }
 
@@ -2152,7 +2240,7 @@ export function clearRulesForClearAll(
  * from the original rule anchor to the clipped top-left. `null` means the
  * snapshot cannot be represented faithfully and must never authorize a paste.
  */
-export function snapshotRulesForValidationPaste(
+function snapshotRulesForValidationPasteOnPieces(
   rules: readonly ValidationRule[],
   sourceRange: ValidationRange,
   shift: ValidationFormulaShifter,
@@ -2230,7 +2318,7 @@ export function snapshotRulesForKeptRowsPaste(
     if (!placed) return null;
     out.push(...placed.rules);
   }
-  return out.length > MAX_VALIDATION_RULES ? null : out;
+  return overRuleBound(out) ? null : out;
 }
 
 /**
@@ -2254,7 +2342,7 @@ export function validationPasteOverRuleLimit(
   return copiedRules.length > 0 && destinationRules.length + copiedRules.length > MAX_VALIDATION_RULES;
 }
 
-export function planRulesForValidationPaste(
+function planRulesForValidationPasteOnPieces(
   destinationRules: readonly ValidationRule[],
   copiedRules: readonly ValidationRule[],
   sourceRange: ValidationRange,
@@ -2319,10 +2407,10 @@ export function planRulesForValidationPaste(
   // need not come along: a list of 1,000 areas of type="none" refused the whole
   
   const pasted =
-    translated.length + retained.length > MAX_VALIDATION_RULES
+    overRuleBound([...translated, ...retained])
       ? translated.filter((rule) => rule.kind !== "any" || resolveInputMessage(rule) !== null)
       : translated;
-  if (pasted.length + retained.length > MAX_VALIDATION_RULES) return null;
+  if (overRuleBound([...pasted, ...retained])) return null;
   const rules = [...pasted, ...retained];
   return {
     rules,
@@ -2337,7 +2425,7 @@ export function planRulesForValidationPaste(
  * against its own corner, so a validated cell pasted down a column is one
  * rule, not one per cell. The selection's own rules lose its cells.
  */
-export function planRulesForTiledValidationPaste(
+function planRulesForTiledValidationPasteOnPieces(
   destinationRules: readonly ValidationRule[],
   copiedRules: readonly ValidationRule[],
   sourceRange: ValidationRange,
@@ -2400,7 +2488,7 @@ export function planRulesForTiledValidationPaste(
   }
   const retained = clearRulesInRange(destinationRules, target, shift);
   if (!retained) return null;
-  if (carried.length + retained.length > MAX_VALIDATION_RULES) return null;
+  if (overRuleBound([...carried, ...retained])) return null;
   const rules = [...carried, ...retained];
   return {
     rules,
@@ -2417,7 +2505,7 @@ export function planRulesForTiledValidationPaste(
  * source without a rule loses its own, one rule per cell, as a paste does.
  * `null` when `filled` is not a fill of `source` or a rule cannot be carried.
  */
-export function planRulesForValidationFill(
+function planRulesForValidationFillOnPieces(
   rules: readonly ValidationRule[],
   source: ValidationRange,
   filled: ValidationRange,
@@ -2475,7 +2563,7 @@ export function planRulesForValidationFill(
     }
     out.push(...remainder, ...carried);
   }
-  if (out.length > MAX_VALIDATION_RULES) return null;
+  if (overRuleBound(out)) return null;
   return {
     rules: out,
     changed: JSON.stringify(out) !== JSON.stringify(rules),
@@ -2489,7 +2577,7 @@ export function planRulesForValidationFill(
  * source-range and dependent-source references remain relative to the rule's
  * clipped top-left and therefore move by that anchor's exact mapped delta.
  */
-export function planRulesForTransposedValidationPaste(
+function planRulesForTransposedValidationPasteOnPieces(
   destinationRules: readonly ValidationRule[],
   copiedRules: readonly ValidationRule[],
   sourceRange: ValidationRange,
@@ -2548,12 +2636,241 @@ export function planRulesForTransposedValidationPaste(
 
   const retained = clearRulesInRange(destinationRules, destination, shift);
   if (!retained) return null;
-  if (translated.length + retained.length > MAX_VALIDATION_RULES) return null;
+  if (overRuleBound([...translated, ...retained])) return null;
   const rules = [...translated, ...retained];
   return {
     rules,
     changed: JSON.stringify(rules) !== JSON.stringify(destinationRules),
   };
+}
+
+// --- Rules over several areas (ValidationAreas) under the one-rectangle planners.
+// Each planner above works on rules of one rectangle. A rule over several areas
+// goes in as one rule per area, each read from its own top-left and tagged with
+// the rule it came from (AREA_GROUP), and the pieces that still read as that
+// rule come back out as one rule again, its areas in their order: an edit that
+// touches a few cells of a rule over 17,878 areas gives back one rule, not
+
+
+/** Whether a rule's settings name cells, read from its top-left. */
+function ruleNamesCells(rule: ValidationRule): boolean {
+  return (
+    rule.kind === "formula" ||
+    (rule.kind === "number" && (rule.minFormula !== undefined || rule.maxFormula !== undefined)) ||
+    (rule.kind === "list" && rule.sourceRange !== undefined)
+  );
+}
+
+function hasAreaRules(rules: readonly ValidationRule[]): boolean {
+  return rules.some((rule) => rule.areas !== undefined && rule.areas.length > 1);
+}
+
+/** Whether the rules pass the sheet's bounds: MAX_VALIDATION_RULES rules (the
+ *  pieces of one rule over several areas counting once) or MAX_VALIDATION_AREAS
+ *  rectangles. */
+function overRuleBound(rules: readonly ValidationRule[]): boolean {
+  let count = 0;
+  let areas = 0;
+  const groups = new Set<object>();
+  for (const rule of rules) {
+    const group = (rule as AreaTagged)[AREA_GROUP];
+    if (!group) count += 1;
+    else if (!groups.has(group)) {
+      groups.add(group);
+      count += 1;
+    }
+    areas += rule.areas && rule.areas.length > 1 ? rule.areas.length : 1;
+  }
+  return count > MAX_VALIDATION_RULES || areas > MAX_VALIDATION_AREAS;
+}
+
+/** Each rule over several areas as one tagged rule per area, read from that
+ *  area's top-left; null when a piece's references cannot be represented. */
+function expandRuleAreas(
+  rules: readonly ValidationRule[],
+  shift: ValidationFormulaShifter,
+): ValidationRule[] | null {
+  const out: ValidationRule[] = [];
+  for (const rule of rules) {
+    if (!rule.areas || rule.areas.length < 2) {
+      out.push(rule);
+      continue;
+    }
+    const group = {};
+    const { areas, ...single } = rule;
+    const base = single as ValidationRule;
+    const names = ruleNamesCells(base);
+    for (const area of areas) {
+      const piece =
+        !names || sameValidationRange(area, base.range)
+          ? ({ ...base, range: { r1: area.r1, c1: area.c1, r2: area.r2, c2: area.c2 } } as ValidationRule)
+          : translatedRule(base, area, area.r1 - base.range.r1, area.c1 - base.range.c1, shift, false);
+      if (!piece) return null;
+      (piece as AreaTagged)[AREA_GROUP] = group;
+      out.push(piece);
+    }
+  }
+  return out;
+}
+
+function settingsKey(rule: ValidationRule): string {
+  const { range: _range, areas: _areas, ...settings } = rule;
+  void _range;
+  void _areas;
+  return sortedJson(settings);
+}
+
+/** The planner's pieces of each rule over several areas joined into one rule
+ *  again where each still reads as the first (its settings, rebased to the
+ *  piece's top-left); a piece that does not stays a rule of its own. */
+function regroupRuleAreas(
+  rules: readonly ValidationRule[],
+  shift: ValidationFormulaShifter,
+): ValidationRule[] {
+  const out: ValidationRule[] = [];
+  const heads = new Map<object, { rule: ValidationRule; key: string; areas: ValidationRange[] }>();
+  for (const rule of rules) {
+    const group = (rule as AreaTagged)[AREA_GROUP];
+    if (!group) {
+      out.push(rule);
+      continue;
+    }
+    const plain = { ...rule } as AreaTagged;
+    delete plain[AREA_GROUP];
+    delete plain.areas;
+    const head = heads.get(group);
+    if (!head) {
+      const entry = { rule: plain as ValidationRule, key: settingsKey(plain), areas: [plain.range] };
+      heads.set(group, entry);
+      out.push(entry.rule);
+      continue;
+    }
+    let joins: boolean;
+    if (!ruleNamesCells(head.rule)) {
+      joins = settingsKey(plain) === head.key;
+    } else {
+      const rebased = translatedRule(
+        head.rule,
+        plain.range,
+        plain.range.r1 - head.rule.range.r1,
+        plain.range.c1 - head.rule.range.c1,
+        shift,
+        false,
+      );
+      joins = rebased !== null && settingsKey(rebased) === settingsKey(plain);
+    }
+    if (joins) head.areas.push(plain.range);
+    else out.push(plain);
+  }
+  for (const head of heads.values()) {
+    if (head.areas.length > 1) head.rule.areas = head.areas;
+  }
+  return out;
+}
+
+/** Run a one-rectangle planner over rules that may cover several areas. */
+function planOverAreas(
+  lists: readonly (readonly ValidationRule[])[],
+  original: readonly ValidationRule[],
+  shift: ValidationFormulaShifter,
+  plan: (pieces: ValidationRule[][]) => { rules: ValidationRule[]; changed: boolean } | null,
+): { rules: ValidationRule[]; changed: boolean } | null {
+  if (!lists.some(hasAreaRules)) return plan(lists as ValidationRule[][]);
+  const pieces: ValidationRule[][] = [];
+  for (const list of lists) {
+    const expanded = expandRuleAreas(list, shift);
+    if (!expanded) return null;
+    pieces.push(expanded);
+  }
+  const planned = plan(pieces);
+  if (!planned) return null;
+  const rules = regroupRuleAreas(planned.rules, shift);
+  if (overRuleBound(rules)) return null;
+  const changed = JSON.stringify(rules) !== JSON.stringify(original);
+  return { rules: changed ? rules : [...original], changed };
+}
+
+/**
+ * Plan the data-validation half of Home > Clear > Clear All (see
+ * clearRulesForClearAllOnPieces); a rule over several areas keeps the areas
+ * the selection leaves it, as one rule.
+ */
+export function clearRulesForClearAll(
+  rules: readonly ValidationRule[],
+  range: ValidationRange,
+  shift: ValidationFormulaShifter,
+): { rules: ValidationRule[]; changed: boolean } | null {
+  return planOverAreas([rules], rules, shift, ([pieces]) => clearRulesForClearAllOnPieces(pieces, range, shift));
+}
+
+/** The rules a Copy of `sourceRange` takes along (see
+ *  snapshotRulesForValidationPasteOnPieces); the copied areas of one rule
+ *  stay one rule. */
+export function snapshotRulesForValidationPaste(
+  rules: readonly ValidationRule[],
+  sourceRange: ValidationRange,
+  shift: ValidationFormulaShifter,
+): ValidationRule[] | null {
+  if (!hasAreaRules(rules)) return snapshotRulesForValidationPasteOnPieces(rules, sourceRange, shift);
+  const pieces = expandRuleAreas(rules, shift);
+  if (!pieces) return null;
+  const snapshot = snapshotRulesForValidationPasteOnPieces(pieces, sourceRange, shift);
+  return snapshot ? regroupRuleAreas(snapshot, shift) : null;
+}
+
+/** Paste Special > Validation (see planRulesForValidationPasteOnPieces). */
+export function planRulesForValidationPaste(
+  destinationRules: readonly ValidationRule[],
+  copiedRules: readonly ValidationRule[],
+  sourceRange: ValidationRange,
+  destinationRange: ValidationRange,
+  shift: ValidationFormulaShifter,
+  bounds?: { maxRow?: number; maxCol?: number },
+): { rules: ValidationRule[]; changed: boolean } | null {
+  return planOverAreas([destinationRules, copiedRules], destinationRules, shift, ([destination, copied]) =>
+    planRulesForValidationPasteOnPieces(destination, copied, sourceRange, destinationRange, shift, bounds),
+  );
+}
+
+/** A paste repeated over whole copies (see planRulesForTiledValidationPasteOnPieces). */
+export function planRulesForTiledValidationPaste(
+  destinationRules: readonly ValidationRule[],
+  copiedRules: readonly ValidationRule[],
+  sourceRange: ValidationRange,
+  selection: ValidationRange,
+  shift: ValidationFormulaShifter,
+  bounds?: { maxRow?: number; maxCol?: number },
+): { rules: ValidationRule[]; changed: boolean } | null {
+  return planOverAreas([destinationRules, copiedRules], destinationRules, shift, ([destination, copied]) =>
+    planRulesForTiledValidationPasteOnPieces(destination, copied, sourceRange, selection, shift, bounds),
+  );
+}
+
+/** A fill (see planRulesForValidationFillOnPieces). */
+export function planRulesForValidationFill(
+  rules: readonly ValidationRule[],
+  source: ValidationRange,
+  filled: ValidationRange,
+  shift: ValidationFormulaShifter,
+  bounds?: { maxRow?: number; maxCol?: number },
+): { rules: ValidationRule[]; changed: boolean } | null {
+  return planOverAreas([rules], rules, shift, ([pieces]) =>
+    planRulesForValidationFillOnPieces(pieces, source, filled, shift, bounds),
+  );
+}
+
+/** Paste > Transpose (see planRulesForTransposedValidationPasteOnPieces). */
+export function planRulesForTransposedValidationPaste(
+  destinationRules: readonly ValidationRule[],
+  copiedRules: readonly ValidationRule[],
+  sourceRange: ValidationRange,
+  destinationRange: ValidationRange,
+  shift: ValidationFormulaShifter,
+  bounds?: { maxRow?: number; maxCol?: number },
+): { rules: ValidationRule[]; changed: boolean } | null {
+  return planOverAreas([destinationRules, copiedRules], destinationRules, shift, ([destination, copied]) =>
+    planRulesForTransposedValidationPasteOnPieces(destination, copied, sourceRange, destinationRange, shift, bounds),
+  );
 }
 
 /**

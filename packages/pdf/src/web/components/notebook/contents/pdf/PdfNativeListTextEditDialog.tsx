@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { sayPdfSavedAsTextBox } from "../../../../lib/pdf/saved-as-text-box-notice";
 import { OFFICE_FONT_SIZE_PRESETS } from "@mrnote/core/web/components/office-ribbon/officeFontSizeCatalog.ts";
 import { holdPdfJsFontFaces } from "@mrnote/core/web/lib/pdf/pdfjs-font-document.ts";
 import { readPdfCandidateTextInk, type PdfCandidateTextInk } from "../../../../lib/pdf/native-candidate-text-geometry";
@@ -19,6 +20,7 @@ import { sampleTextBoxBackgroundColor } from "../../../../lib/pdf/text-box-backg
 import { officeFaceName } from "@mrnote/core/web/lib/office-fonts/face-names.ts";
 import { pdfReaderRefusalText } from "../../../../lib/pdf/reader-refusal-text";
 import {
+  pdfNativeDrawnRunIsSlanted,
   pdfNativeSyntheticBoldDrawable,
   pdfNativeTextMatrixIsSlanted,
   PDF_NATIVE_SYNTHETIC_BOLD_STROKE_EM,
@@ -39,9 +41,13 @@ import {
   nativeTextPaintedDraft,
   nativeTextSameFamily,
   nativeTextServedFaceDrawsAny,
+  nativeTextDrawnRunStyle,
+  nativeTextDrawnRunsStyle,
+  nativeTextFaceStyle,
   nativeTextServedRegularFamily,
-  nativeTextUnboldServedFaceKey,
+  nativeTextStyleOffServedFaceKey,
   nativeTextStyledDraft,
+  nativeTextStyledFace,
   nativeTextWithEmbeddedRunFont,
   type NativeTextFace,
   nextNativeIndentStop,
@@ -668,16 +674,33 @@ export type PdfNativeTextLayoutDraft = Readonly<{
   formulaLatex?: string;
 }>;
 
+/** The finish the window asked for words it carried back into the line
+ * (controller.finish({ inEditor: true })): the words, and its verdict's slot. */
+type PdfNativeTextInEditorFinish = Readonly<{ words: string; settle: (accepted: boolean) => void }>;
+/** Whether that finish is the one still asked for `words`: no press of the
+ * reader's has taken its slot since, and the draft is those words. */
+function pdfNativeTextInEditorFinishPending(own: PdfNativeTextInEditorFinish | null,
+  pending: ((accepted: boolean) => void) | null, words: string): boolean {
+  return own !== null && pending === own.settle && own.words === words;
+}
+
 export type PdfNativeListTextEditorController = Readonly<{
   readDraft: () => PdfNativeListTextDraftState;
   readCaret: () => Readonly<{ start: number; end: number }>;
   commit: () => Promise<boolean>;
-  /**
-   * Finish the draft the way a click outside does: wait for its exact
-   * preview, then commit once. Resolves with whether the write was accepted;
-   * false when the draft cannot be written (the reason stays in the dialog).
-   */
-  finish: () => Promise<boolean>;
+  
+
+
+
+
+
+
+
+
+
+
+
+  finish: (options?: Readonly<{ inEditor?: boolean }>) => Promise<boolean>;
   /** The reader has asked this draft to finish (clicked away) and that
    * intent is still pending -- readable after the input left the DOM. */
   readFinishing?: () => boolean;
@@ -1026,6 +1049,28 @@ export function queueNativeTextRibbonAction(
     return a.type === "fontSize" || a.type === "fontColor" || a.type === "alignment";
   };
   return [...queue.filter((entry) => !sameSlot(entry)), next];
+}
+
+/** A character format a text box carries for its whole text or a part of it
+ * (a face, a size the box's writer takes, a colour, a weight, a slant, a
+ * rule, a script): what a scanned line takes as the box written over it.
+ * Not Clear Formatting (nothing of such a line is formatted yet), a size
+ * still being typed, or a paragraph's settings. */
+export function pdfTextBoxCharacterFormatPress(action: PdfTextEditingContextRibbonAction, maxPoints: number): boolean {
+  switch (action.type) {
+    case "fontFamily":
+    case "fontSizeStep":
+      return true;
+    case "fontSize":
+      return !action.draft && Number.isFinite(action.value) && action.value >= 1 && action.value <= maxPoints;
+    case "fontColor":
+      return /^#[0-9a-f]{6}$/i.test(action.value);
+    case "toggle":
+      return action.control === "bold" || action.control === "italic" || action.control === "underline" ||
+        action.control === "strikethrough" || action.control === "superscript" || action.control === "subscript";
+    default:
+      return false;
+  }
 }
 
 /** Measure local layout, not the old frame or rotated viewport. Restore before paint. */
@@ -2029,7 +2074,25 @@ function PdfNativeListTextInlineEditor({
   
   // PDF 中准确读出」 with 加粗 and 增大字号 both grey).
   
-  const unprovenTextBoxFormat = false;
+  
+  // by the first character format pressed on it: coverBoxStyle is then the
+  // weight and slant its buttons showed before that press, which the box
+  // starts in (so the press taken back leaves nothing to write).
+  const [coverBoxStyle, setCoverBoxStyle] = useState<Readonly<{ bold: boolean; italic: boolean }> | null>(null);
+  const unprovenTextBoxFormat = coverBoxStyle !== null;
+  // A line every piece of which paints nothing: an OCR layer set invisible
+  // (3 Tr, a glyphless face) under the picture of a scanned page. The window
+  // states the fill its box covers the scan in only for such a line
+  // (sourceInkCover: every piece in rendering mode 3 or 7). No run of it can
+  // be set bold, slanted, larger or in a colour in the page's own text --
+  // nothing of it is drawn -- and what is typed into it is already written
+  // as a text box over the scanned words. A character format pressed on it
+  // is written the same way, the box carrying the format (pdf-walk-1000:
+  // 28 scanned files, every such press ended 「这次格式未能应用到所选文字」
+  // with nothing written). Never a line the page draws: that one keeps its
+  
+  const coverLaneLine = Boolean(!propertyProof && initialLayout?.fallbackText && !initialLayout.promoted &&
+    /^#[0-9a-f]{6}$/i.test(initialLayout.sourceInkCover ?? ""));
   const managedLayoutTypography = Boolean(!propertyProof && initialLayout && (
     (initialLayout.promoted &&
       initialLayout.sourceText?.boxId === initialLayout.box.id &&
@@ -2087,8 +2150,10 @@ function PdfNativeListTextInlineEditor({
     ? pdfTextBoxRunCssFamily({ font: classifyFontName(chosenOfficeFamily), officeFamily: chosenOfficeFamily })
     : managedFontOption?.stack ?? initialLayout?.box.fontFamily;
   const managedSourceFontName = chosenOfficeFamily ?? managedFontOption?.sourceFontName ?? initialLayout?.box.sourceFontName;
-  const managedBold = layoutTypographyOverride.bold ?? Boolean(initialLayout?.box.bold);
-  const managedItalic = layoutTypographyOverride.italic ?? Boolean(initialLayout?.box.italic);
+  const managedBoldBaseline = coverBoxStyle?.bold ?? Boolean(initialLayout?.box.bold);
+  const managedItalicBaseline = coverBoxStyle?.italic ?? Boolean(initialLayout?.box.italic);
+  const managedBold = layoutTypographyOverride.bold ?? managedBoldBaseline;
+  const managedItalic = layoutTypographyOverride.italic ?? managedItalicBaseline;
   
   // as its own formats (the managed writer draws them), not as page rules.
   const managedUnderline = layoutTypographyOverride.underline ?? Boolean(initialLayout?.box.underline);
@@ -2130,14 +2195,14 @@ function PdfNativeListTextInlineEditor({
     (managedFontFamily !== initialLayout?.box.fontFamily || managedSourceFontName !== initialLayout?.box.sourceFontName ||
       managedOfficeFamily !== initialManagedOfficeFamily);
   const managedStyleChanged = managedLayoutTypography &&
-    (managedBold !== Boolean(initialLayout?.box.bold) || managedItalic !== Boolean(initialLayout?.box.italic));
+    (managedBold !== managedBoldBaseline || managedItalic !== managedItalicBaseline);
   const managedSpacingDirty = managedLayoutTypography && (
     layoutTypographyOverride.characterSpacing !== undefined ||
     layoutTypographyOverride.wordSpacing !== undefined ||
     layoutTypographyOverride.horizontalScale !== undefined);
   const managedTypographyDirty = managedLayoutTypography &&
     (managedSpacingDirty || managedFontSize !== managedSizeBaseline || managedAlignment !== managedAlignmentBaseline || managedFontChanged ||
-      managedBold !== Boolean(initialLayout?.box.bold) || managedItalic !== Boolean(initialLayout?.box.italic) ||
+      managedBold !== managedBoldBaseline || managedItalic !== managedItalicBaseline ||
       managedDecorationDirty || managedRunsDirty ||
       (layoutTypographyOverride.color !== undefined && layoutTypographyOverride.color !== initialLayout?.box.color?.toLowerCase()));
   const [paragraphColor, setParagraphColor] = useState<PdfNativeDeviceColor | null>(null);
@@ -2157,10 +2222,12 @@ function PdfNativeListTextInlineEditor({
   // bold (italic) with no property proof, as WPS shows it.
   // A face named bold run on with its family ("Univers-CondensedBold") is
   // bold as the reader reads it: 加粗 read unpressed on the USGS heading.
+  // (One reading for the buttons and for the drafts their presses make:
+  // nativeTextFaceStyle.)
   const faceReadsBold = (font: Readonly<{ bold?: boolean; baseFont?: string }> | null | undefined) =>
-    Boolean(font?.bold) || Boolean(font?.baseFont && pdfNativeFontNameReadsStyle(font.baseFont).bold);
+    nativeTextFaceStyle(font).bold;
   const faceReadsItalic = (font: Readonly<{ italic?: boolean; baseFont?: string }> | null | undefined) =>
-    Boolean(font?.italic) || Boolean(font?.baseFont && pdfNativeFontNameReadsStyle(font.baseFont).italic);
+    nativeTextFaceStyle(font).italic;
   // A weight drawn by stroking the glyphs in their fill colour (a synthetic
   // bold, as a paragraph's write sets a bold word the PDF has no bold face
   // of) reads bold as a bold face does.
@@ -2169,7 +2236,16 @@ function PdfNativeListTextInlineEditor({
   const sourceInkFaces = (sourceAppearance ?? []).filter((run) => run.text.trim()).map((run) => run.font);
   const sourceFacesBold = sourceInkFaces.length > 0 &&
     (sourceAppearance ?? []).filter((run) => run.text.trim()).every(runReadsBold);
-  const sourceFacesItalic = sourceInkFaces.length > 0 && sourceInkFaces.every(faceReadsItalic);
+  // A slant drawn by leaning the text matrix (a synthetic italic, as a
+  // paragraph's write leans a box where it stands in a face the PDF has no
+  // italic of) reads italic as an italic face does: read by the face alone,
+  // 倾斜 stood unpressed on a line this writer had leaned, and a press meant
+  
+  const runReadsItalic = (run: Parameters<typeof nativeTextDrawnRunStyle>[0]) => nativeTextDrawnRunStyle(run).italic;
+  const sourceRunsItalic = nativeTextDrawnRunsStyle(sourceAppearance).italic;
+  // (Leaned, in a face that is no italic: the draft leans it too.)
+  const sourceRunsLeaned = sourceRunsItalic &&
+    (sourceAppearance ?? []).filter((run) => run.text.trim()).every((run) => !faceReadsItalic(run.font));
   // A paragraph proved line by line states no one run's format; a family
   // every line of it is drawn in is still its family, named in the font
   // field as a single line's is (two Helvetica lines read 「字体」, user
@@ -2213,7 +2289,7 @@ function PdfNativeListTextInlineEditor({
     for (const [index, run] of sourceAppearance.entries()) {
       const { start, end } = sourceRunRanges[index];
       if (end <= range.start || start >= range.end || !run.text.trim()) continue;
-      const own = { bold: runReadsBold(run), italic: faceReadsItalic(run.font) };
+      const own = { bold: runReadsBold(run), italic: runReadsItalic(run) };
       if (face && (face.bold !== own.bold || face.italic !== own.italic)) return null;
       face = own;
     }
@@ -5623,7 +5699,7 @@ function PdfNativeListTextInlineEditor({
   const strokeBold = !managedLayoutTypography && !useStoredLayoutTypography && Boolean(selectedFont) &&
     syntheticBold && !faceReadsBold(selectedFont);
   const currentItalic = managedLayoutTypography ? managedItalic : useStoredLayoutTypography ? Boolean(initialLayout?.box.italic) : faceReadsItalic(selectedFont) || syntheticItalic ||
-    (!propertyProof && Boolean(readerFontIdentity?.italic));
+    (!propertyProof && (sourceRunsItalic || Boolean(readerFontIdentity?.italic)));
   const originalFontSize = propertyProof?.original.fontSize ?? 0;
   const sourceFontSizePixels = Number.parseFloat(metrics?.fontSize ?? "");
   // Soft wrapping happens in PDF points, then the whole input is scaled. This
@@ -5720,7 +5796,8 @@ function PdfNativeListTextInlineEditor({
         ? currentItalic
           ? "italic"
           : "normal"
-        : metrics?.fontStyle,
+        // (A box of several shows this writer leaned where it stands.)
+        : !propertyProof && sourceRunsLeaned ? "italic" : metrics?.fontStyle,
     fontWeight: scrambledFaceWeight && !managedLayoutTypography && !fontDraftChanged && !propertyDraftChanged
       ? scrambledFaceWeight
       : managedLayoutTypography ? managedBold ? "700" : "400" : useStoredLayoutTypography
@@ -6376,6 +6453,8 @@ function PdfNativeListTextInlineEditor({
 
 
 
+
+
   /** The face the draft's own text is drawn in, as the PDF names it. */
   const draftOwnFace = useCallback((): NativeTextFace | null => {
     const runName = initialLayout?.runFaces?.[0]?.sourceFontName ?? initialLayout?.box.sourceFontName ?? "";
@@ -6392,19 +6471,23 @@ function PdfNativeListTextInlineEditor({
    * the part's words ran past the box until the page painted them. */
   const partBoldStrokes = useCallback((): boolean => {
     const face = draftOwnFace();
-    if (!face || face.bold || isPdfNativeEmbeddedFontKey(editableFont?.resourceName ?? "")) return false;
-    return !propertyProof?.fonts.some((font) => nativeTextSameFamily(font, face) && font.bold) &&
+    if (!face || nativeTextFaceStyle(face).bold || isPdfNativeEmbeddedFontKey(editableFont?.resourceName ?? "")) return false;
+    return !propertyProof?.fonts.some((font) => nativeTextSameFamily(font, face) && nativeTextFaceStyle(font).bold) &&
       Boolean(propertyProof && pdfNativeSyntheticBoldDrawable(propertyProof.original));
   }, [draftOwnFace, editableFont?.resourceName, propertyProof]);
   const toggledFaceFamilyCss = useCallback((bold: boolean | undefined, italic: boolean | undefined): string | undefined => {
     if (bold === undefined && italic === undefined) return undefined;
     const face = draftOwnFace();
     if (!face) return undefined;
-    const wantBold = bold ?? face.bold;
-    const wantItalic = italic ?? face.italic;
-    if (wantBold === face.bold && wantItalic === face.italic) return undefined;
-    const sibling = propertyProof?.fonts.find((font) =>
-      nativeTextSameFamily(font, face) && font.bold === wantBold && font.italic === wantItalic);
+    // (The face's own style as the buttons read it: nativeTextFaceStyle.)
+    const own = nativeTextFaceStyle(face);
+    const wantBold = bold ?? own.bold;
+    const wantItalic = italic ?? own.italic;
+    if (wantBold === own.bold && wantItalic === own.italic) return undefined;
+    const sibling = propertyProof?.fonts.find((font) => {
+      const style = nativeTextFaceStyle(font);
+      return nativeTextSameFamily(font, face) && style.bold === wantBold && style.italic === wantItalic;
+    });
     if (sibling) {
       // The face as the page loaded it when this line draws it; else by
       // name, then a served face of its width: the PDF name alone is no
@@ -6416,10 +6499,9 @@ function PdfNativeListTextInlineEditor({
       const narrow = /cn\b|cond|narrow|compress/iu.test(sibling.baseFont || sibling.family);
       return servedFaceWhereLacking(sibling, `${ownFontDraftCss(sibling)}, ${withOfficeFontSubstitutes(narrow ? '"Arial Narrow"' : '"Arial"')}`);
     }
-    if (face.bold && !wantBold) {
-      const served = readPdfNativeEmbeddedFontKey(nativeTextUnboldServedFaceKey(face, propertyProof?.fonts ?? [], wantItalic) ?? "");
-      if (served) return withOfficeFontSubstitutes(`"${served.family.replace(/["\\]/g, "")}"`);
-    }
+    const served = readPdfNativeEmbeddedFontKey(
+      nativeTextStyleOffServedFaceKey(face, propertyProof?.fonts ?? [], { bold: wantBold, italic: wantItalic }) ?? "");
+    if (served) return withOfficeFontSubstitutes(`"${served.family.replace(/["\\]/g, "")}"`);
     return undefined;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- draftFamilyCss is a plain helper of this render
   }, [draftOwnFace, initialLayout?.runFaces, propertyProof, replacementText, originalText, draftFontSizePixels]);
@@ -6554,10 +6636,7 @@ function PdfNativeListTextInlineEditor({
     // matrix are the run's look too: a part this writer set bold and italic
     // in the line's own face was drafted regular and upright, its words
     
-    const slantedRun = (run: PdfNativeSourceTextAppearanceRun) => {
-      const [ta, tb, tc, td] = run.textMatrix, [ga, gb, gc, gd] = run.graphicsMatrix;
-      return pdfNativeTextMatrixIsSlanted([ta * ga + tb * gc, ta * gb + tb * gd, tc * ga + td * gc, tc * gb + td * gd]);
-    };
+    const slantedRun = pdfNativeDrawnRunIsSlanted;
     // Its own weight and slant as its font, its program or its name says
     // (pdfFaceNameStyle, as its draft copy is registered: a "BoldCnIt" part
     // the font option called regular was drafted regular).
@@ -7272,6 +7351,23 @@ function PdfNativeListTextInlineEditor({
     layoutAngle,
   ]);
   const nextTextTargetRef = useRef<((accepted: boolean) => void) | null>(null);
+  // Words the window's finish behind the reader refused, typed in again by
+  // the window and finished here (controller.finish({ inEditor: true })):
+  // this editor's own to write. Handed to the window once more they were
+  // refused once more, and the reader was told 「文件没有被改动」 over a line
+  // that the next press anywhere wrote as a text box -- by then this
+  
+  // (Read where it is asked, never at render: it is set between renders.)
+  const inEditorFinishRef = useRef<PdfNativeTextInEditorFinish | null>(null);
+  // An editor made anew under that finish (the page's next revision) takes
+  // its verdict with it: answered "not written", so the window asks the
+  // editor now open on the line instead of waiting for good.
+  useEffect(() => () => {
+    const own = inEditorFinishRef.current;
+    if (!own || nextTextTargetRef.current !== own.settle) return;
+    nextTextTargetRef.current = null;
+    own.settle(false);
+  }, []);
   /** The delete an emptied line is being left by, while it runs. */
   const leaveDeletionRef = useRef<object | null>(null);
   useEffect(() => () => { leaveDeletionRef.current = null; }, []);
@@ -7390,7 +7486,10 @@ function PdfNativeListTextInlineEditor({
     // a draft that cannot be written stops it. Sending an empty replacement
     // to the preview instead refused it with font and layout diagnostics
     
-    if (!deletesOnLeave && preparationFailed && !layoutOnlyDraft && failedFinishKey === finishDraftKey) {
+    // (Asked by the window for words it carried back, there is no click to
+    // let through: the box stays, its reason beside it.)
+    if (!deletesOnLeave && preparationFailed && !layoutOnlyDraft && failedFinishKey === finishDraftKey &&
+      !pdfNativeTextInEditorFinishPending(inEditorFinishRef.current, nextTextTargetRef.current, replacementText)) {
       // The proof failed for good and this finish was already refused once
       // (the reader saw why): close, and keep the typed text for this line.
       onRetainUnsavedDraft?.(replacementText);
@@ -7399,7 +7498,8 @@ function PdfNativeListTextInlineEditor({
       return;
     }
     if (!deletesOnLeave && finishActionUnavailable && !refusalFallbackEligible && !layoutOnlyDraft &&
-      failedFinishKey === finishDraftKey) {
+      failedFinishKey === finishDraftKey &&
+      !pdfNativeTextInEditorFinishPending(inEditorFinishRef.current, nextTextTargetRef.current, replacementText)) {
       // This draft cannot be written and the reader has been told why once:
       // a second click away is not swallowed too. The text is kept for this
       // line and the click goes where it was aimed.
@@ -7463,7 +7563,9 @@ function PdfNativeListTextInlineEditor({
     
     // the line's look up until the staged page is drawn, and opens the line
     // again with its words should the stage fail.
-    if ((detachableFinishRef.current || detachableUnprovenRef.current || detachableMoveRef.current) &&
+    // (Words that finish refused already stay here: inEditorFinishRef.)
+    if (inEditorFinishRef.current?.words !== replacementText &&
+      (detachableFinishRef.current || detachableUnprovenRef.current || detachableMoveRef.current) &&
       onDetachFinishRef.current?.(replacementText, makeFinishGhost,
         detachableFinishRef.current || detachableMoveRef.current ? detachPropertiesRef.current : null,
         // The last format the writer took: what the line goes back to if
@@ -8013,7 +8115,8 @@ function PdfNativeListTextInlineEditor({
       return;
     }
     if (finishActionUnavailable || preparationFailed) {
-      if (nextTextTargetRef.current && contentDraftDirty && !layoutOnlyDraft) {
+      if (nextTextTargetRef.current && contentDraftDirty && !layoutOnlyDraft &&
+        !pdfNativeTextInEditorFinishPending(inEditorFinishRef.current, nextTextTargetRef.current, replacementText)) {
         // The reader is leaving for another line: they are not held in a
         // box whose draft cannot be written. The text is kept for this line
         // (it comes back, with the reason, when the line is opened again)
@@ -8042,6 +8145,10 @@ function PdfNativeListTextInlineEditor({
     
     const savedAsTextBox = refusalFallbackActive || (openedInFallbackLane && contentDraftDirty) ||
       (manualLayoutChanged && !initialLayout?.promoted) || (unprovenTextBoxFormat && !initialLayout?.promoted);
+    // (Its window, read while the editor still stands in it: the notice is
+    // said once the write behind the editor is taken -- saved-as-text-box-
+    // notice.)
+    const noticeFrom = inputRef.current?.closest(".pdf-viewer") ?? returnFocusRef.current?.closest(".pdf-viewer") ?? null;
     void requestApplyRef.current().then((accepted) => {
       markPdfTextLatency("finish.settled", { accepted });
       settleNextTextTarget(accepted);
@@ -8049,8 +8156,10 @@ function PdfNativeListTextInlineEditor({
         setFailedFinishKey(finishDraftKey);
         inputRef.current?.focus({ preventScroll: true });
       } else if (savedAsTextBox) {
-        toast({
-          description: translate("pdf.nativeTextEdit.savedAsTextBox"),
+        sayPdfSavedAsTextBox(noticeFrom, () => {
+          toast({
+            description: translate("pdf.nativeTextEdit.savedAsTextBox"),
+          });
         });
       }
     });
@@ -8112,7 +8221,7 @@ function PdfNativeListTextInlineEditor({
             return;
           }
         }
-        if (!applyingRef.current && !composingRef.current &&
+        if (!applyingRef.current && !composingRef.current && inEditorFinishRef.current?.words !== replacementText &&
           (detachableFinishRef.current || detachableUnprovenRef.current || detachableMoveRef.current) &&
           onDetachFinishRef.current?.(replacementText, makeFinishGhost,
             detachableFinishRef.current || detachableMoveRef.current ? detachPropertiesRef.current : null,
@@ -8230,11 +8339,15 @@ function PdfNativeListTextInlineEditor({
         end: sourceInputLayoutRef.current ? pdfNativeTextInputCanonicalOffset(sourceInputLayoutRef.current, inputRef.current?.selectionEnd ?? 0) : inputRef.current?.selectionEnd ?? 0,
       }),
       commit: () => requestApplyRef.current(),
-      finish: () =>
+      finish: (options) =>
         new Promise<boolean>((resolve) => {
           // The finish effect settles the pending target with its verdict;
           // a caller that only wants the verdict takes that slot.
           nextTextTargetRef.current = resolve;
+          if (options?.inEditor) {
+            inEditorFinishRef.current = Object.freeze({ words: draftStateRef.current.replacementText, settle: resolve });
+            markPdfTextLatency("finish.in-editor");
+          }
           requestFinishRef.current();
         }),
       applyRibbonAction: (action) => ribbonActionRef.current(action),
@@ -10061,14 +10174,10 @@ function PdfNativeListTextInlineEditor({
   /** The served family a bold-only face's run is set in when its bold comes
    * off (lib/pdf/native-text-format-draft.ts). */
   const servedRegularFamilyFor = (face: NativeTextFace): string => nativeTextServedRegularFamily(face);
-  /** Whether the PDF holds a regular-weight face of the family (in any
-   * slant: an upright one takes the slant drawn in place). */
-  const familyHasRegularFace = (face: NativeTextFace) =>
-    Boolean(propertyProof?.fonts.some((font) => nativeTextSameFamily(font, face) && !font.bold));
   const partialBold = (range: { start: number; end: number }) =>
-    Boolean(partialFace(range)?.bold) || partialFormatOf(range)?.syntheticBold === true;
+    faceReadsBold(partialFace(range)) || partialFormatOf(range)?.syntheticBold === true;
   const partialItalic = (range: { start: number; end: number }) =>
-    Boolean(partialFace(range)?.italic) || partialFormatOf(range)?.slanted === true;
+    faceReadsItalic(partialFace(range)) || partialFormatOf(range)?.slanted === true;
   const selectStyle = (bold: boolean, italic: boolean) => {
     if (!propertyProof || !properties || !editableFont) return;
     const range = partialTextRange();
@@ -10088,26 +10197,18 @@ function PdfNativeListTextInlineEditor({
         });
         return;
       }
-      // A bold face with no regular sibling: the part is set in a served
-      // regular face of the family (or of its class).
-      if (!wantBold && face.bold && !familyHasRegularFace(face)) {
-        applyPartialFormat(range, {
-          fontResourceName: pdfNativeEmbeddedFontKey({ family: servedRegularFamilyFor(face), bold: false, italic: wantItalic }),
-          syntheticBold: false,
-          slanted: false,
-        });
+      // The face of the part's family that draws the style asked: one of
+      // the PDF's own that has no style the part is not to have, else (a
+      // bold or an italic of the face's own, with no face of its family
+      // without it) a served face, installed (nativeTextStyledFace). The
+      // part's own face first: a family the page holds in two bold faces
+      // (BlackCn, BoldCn) kept its black one when only the slant changed,
+      
+      const styled = nativeTextStyledFace(propertyProof.fonts, face, { bold: wantBold, italic: wantItalic });
+      if ("served" in styled) {
+        applyPartialFormat(range, { fontResourceName: styled.served, syntheticBold: false, slanted: false });
         return;
       }
-      // The part's own face first: a family the page holds in two bold
-      // faces (BlackCn, BoldCn) kept its black one when only the slant
-      
-      const family = propertyProof.fonts.filter((font) => nativeTextSameFamily(font, face))
-        .sort((left, right) => Number(right.resourceName === face.resourceName) - Number(left.resourceName === face.resourceName));
-      const match =
-        family.find((font) => font.bold === wantBold && font.italic === wantItalic) ??
-        family.find((font) => font.bold === wantBold && font.italic === face.italic) ??
-        family.find((font) => font.bold === face.bold && font.italic === wantItalic) ??
-        face;
       // Leaned after text of its line, a part reads back to pdf.js as a new
       // line and the space before it is lost (「CLIMATECHANGE」): with no
       // italic face of its family, it is set in a served italic one.
@@ -10116,7 +10217,7 @@ function PdfNativeListTextInlineEditor({
       // nothing, and the edit was refused ("sets no text in an installed
       
       const lineStart = replacementText.lastIndexOf("\n", Math.max(0, range.start - 1)) + 1;
-      if (wantItalic && !match.italic && /\S/u.test(replacementText.slice(lineStart, range.start)) &&
+      if (styled.slanted && /\S/u.test(replacementText.slice(lineStart, range.start)) &&
         nativeTextServedFaceDrawsAny(replacementText.slice(range.start, range.end))) {
         applyPartialFormat(range, {
           fontResourceName: pdfNativeEmbeddedFontKey({ family: servedRegularFamilyFor(face), bold: wantBold, italic: true }),
@@ -10125,36 +10226,35 @@ function PdfNativeListTextInlineEditor({
         });
         return;
       }
-      const syntheticBold = wantBold && !match.bold;
-      if (syntheticBold && !pdfNativeSyntheticBoldDrawable(propertyProof.original)) {
+      if (styled.syntheticBold && !pdfNativeSyntheticBoldDrawable(propertyProof.original)) {
         if (!propertyPressAskedRef.current) toast({ description: translate("pdf.nativeTextEdit.boldStrokeUnknown") });
         return;
       }
       applyPartialFormat(range, {
-        fontResourceName: match.resourceName,
-        syntheticBold,
-        slanted: wantItalic && !match.italic,
+        fontResourceName: styled.face.resourceName,
+        syntheticBold: styled.syntheticBold,
+        slanted: styled.slanted,
       });
-      return;
-    }
-    if (isPdfNativeEmbeddedFontKey(editableFont.resourceName)) {
-      setProperties(withEmbeddedRunFont(properties, editableFont.family, bold, italic));
-      return;
-    }
-    // A bold face with no regular sibling in the PDF: the run is set in a
-    // served regular face of its family (or of its class), as WPS sets it
-    // in a system face when the bold comes off.
-    if (!bold && editableFont.bold && !familyHasRegularFace(editableFont)) {
-      setProperties(withEmbeddedRunFont(properties, servedRegularFamilyFor(editableFont), false, italic));
       return;
     }
     // The face that draws as much of the style as the PDF has faces for;
     // what it lacks is drawn in place: a bold as a stroke, an italic as a
-    // slant (lib/pdf/native-text-format-draft.ts).
+    // slant. A bold or an italic of the face's own that no face of its
+    // family in the PDF is without comes off into a served face, as WPS
+    // sets the run in a system face (lib/pdf/native-text-format-draft.ts).
     const styled = nativeTextStyledDraft({
       proof: propertyProof, draft: properties, editableFont, originalSyntheticBold, bold, italic,
     });
-    if (styled) setProperties(styled);
+    // A press that leaves the run as it stands has no way to be written:
+    // said, and the buttons and the draft go back (refusePartPress). The
+    // press was recorded on the draft meanwhile (partFormats), so the button
+    // came up and the words stood upright with nothing to write, and the
+    // line was left as it was without a word (pdf-walk-1000 0686).
+    if (!styled || samePropertyDraftValues(styled, properties)) {
+      if (!propertyPressAskedRef.current) refusePartPress();
+      return;
+    }
+    setProperties(styled);
   };
 
   const propertyControlsBusy = busy || submitting;
@@ -10252,31 +10352,36 @@ function PdfNativeListTextInlineEditor({
   // A face of the family in the other weight or posture, else the style
   // drawn in place: a bold as a stroke (when the stroke width in force is
   // known, so the run after it is stroked as it was), an italic as a slant.
-  // A face's own bold or italic is taken off only through the face that has
-  // it off; a synthetic one is taken off by filling or standing the run up.
+  // A face's own bold or italic is taken off through the face that has it
+  // off (one of the PDF's, else a served one); a synthetic one is taken off
+  // by filling or standing the run up.
+  // (A scanned line's box in one style, coverLaneLine: written whatever its
+  // characters, drawn by its rendered appearance where no bundled face has
+  // them, so its weight and slant are never greyed -- an Urdu OCR line.)
+  const coverBoxOneStyle = unprovenTextBoxFormat && coverLaneLine && managedRuns === null;
   const boldVariantAvailable = Boolean(
-    managedTypographyEditable ? managedBold || isPortableNativeTextBoxTypography(replacementText, managedFontClass, true, managedItalic) : editableFont &&
+    managedTypographyEditable ? managedBold || coverBoxOneStyle || isPortableNativeTextBoxTypography(replacementText, managedFontClass, true, managedItalic) : editableFont &&
     // A family the PDF holds no face of takes either weight (its served
     // bold, or a bold drawn in place).
     // A bold face with no regular sibling in the PDF still comes off: the
     // run is set in the family's served regular face, or in the served
     // family nearest its class (WPS substitutes a system face the same way;
     
-    (isPdfNativeEmbeddedFontKey(editableFont.resourceName) || editableFont.bold || propertyProof?.fonts.some(
+    (isPdfNativeEmbeddedFontKey(editableFont.resourceName) || faceReadsBold(editableFont) || propertyProof?.fonts.some(
       (font) =>
         nativeTextSameFamily(font, editableFont) &&
-        font.bold !== editableFont.bold &&
-        font.italic === editableFont.italic,
-    ) || (editableFont.bold || !propertyProof ? false : pdfNativeSyntheticBoldDrawable(propertyProof.original))),
+        faceReadsBold(font) !== faceReadsBold(editableFont) &&
+        faceReadsItalic(font) === faceReadsItalic(editableFont),
+    ) || (!propertyProof ? false : pdfNativeSyntheticBoldDrawable(propertyProof.original))),
   );
+  // An italic always goes on (a face of the family, else a slant) and
+  // always comes off: into the family's upright face, else, as a bold face's
+  // bold does, into a served upright one (nativeTextStyleOffServedFaceKey).
+  // It used to stay grey on an italic face with no upright sibling, and on
+  // an italic the face's name says only in a TeX code (CMTI12) it was
+  // offered, pressed, and wrote nothing (pdf-walk-1000 0686).
   const italicVariantAvailable = Boolean(
-    managedTypographyEditable ? managedItalic || isPortableNativeTextBoxTypography(replacementText, managedFontClass, managedBold, true) : editableFont &&
-    (isPdfNativeEmbeddedFontKey(editableFont.resourceName) || propertyProof?.fonts.some(
-      (font) =>
-        nativeTextSameFamily(font, editableFont) &&
-        font.bold === editableFont.bold &&
-        font.italic !== editableFont.italic,
-    ) || !editableFont.italic),
+    managedTypographyEditable ? managedItalic || coverBoxOneStyle || isPortableNativeTextBoxTypography(replacementText, managedFontClass, managedBold, true) : editableFont,
   );
   // Superscript and subscript ride on the run's `Ts` rise: a positive rise
   // lifts, a negative one drops. Turning either off returns the run to its
@@ -10518,11 +10623,11 @@ function PdfNativeListTextInlineEditor({
                     ? translate("pdf.nativeTextEdit.lineSpacingNoLeading")
                     : control === "indentDecrease"
                       ? translate("pdf.nativeTextEdit.indentAtFrameLeft")
-                      // A run whose face has no italic sibling keeps its
-                      // own italic; one that has no bold is drawn bold by
+                      // A run whose face has no bold is drawn bold by
                       // stroking, which needs the stroke width and colour
                       // in force known (a bold face always comes off, into
-                      // a served regular face).
+                      // a served regular face, and an italic one into a
+                      // served upright face).
                       : control === "bold"
                         ? editableFont
                           ? translate("pdf.nativeTextEdit.boldStrokeUnknown")
@@ -10549,8 +10654,19 @@ function PdfNativeListTextInlineEditor({
   const groupBold = groupBoldBaseline !== undefined && paragraphChanges === null
     ? groupBoldFaces || (propertyOverride?.syntheticBold ?? groupBoldBaseline) : null;
   const groupBoldEditable = groupBold !== null && !groupBoldFaces;
+  // Bold taken off a group the page strokes, some of whose shows are set in
+  // bold faces: the strokes come off and those shows stay bold. The press
+  // wrote a version, said nothing, and the box still read bold but for the
+  // one comma that had been stroked (pdf-walk 0444, a caption in Times New
+  // Roman Bold with a regular comma: Bold on stroked the comma, Bold off
+  
+  // the bold words in a regular face, or it is refused and said. (A stroke
+  // only pressed in this draft is still the group's to take back.)
+  const groupBoldOffLeavesBoldFaces = groupBold === true && groupBoldBaseline === true &&
+    groupInkRuns.some((run) => run.font.bold);
+  const groupBoldTakesPress = groupBoldEditable && !groupBoldOffLeavesBoldFaces;
   const toggleGroupBold = () => {
-    if (!groupBoldEditable || !nativeGroupMoveProof) return;
+    if (!groupBoldTakesPress || !nativeGroupMoveProof) return;
     setProperties({ ...(propertyOverride ?? nativeGroupMoveProof.baseline), syntheticBold: !groupBold });
   };
   const groupFontScalable = !propertyProof && groupScaleSupported && !managedLayoutTypography &&
@@ -10600,6 +10716,9 @@ function PdfNativeListTextInlineEditor({
   /** The run most of the line is drawn in: the box's own style. */
   const lineLeadRun = lineStyleRuns?.reduce((best, run) => (run.text.length > best.text.length ? run : best));
   
+
+
+
 
 
 
@@ -11167,7 +11286,8 @@ function PdfNativeListTextInlineEditor({
 
   const recordPartFormat = (action: PdfTextEditingContextRibbonAction): PdfTextPartFormats | null => {
     // A text box keeps its own runs (managedRuns): drawn and read from them.
-    if (managedLayoutTypography) return null;
+    // So does a scanned line, whose press makes it one (coverLaneLine).
+    if (managedLayoutTypography || coverLaneLine) return null;
     const fields = partFieldsOfPress(action);
     if (!fields) return null;
     const range = partialTextRange() ?? { start: 0, end: replacementText.length };
@@ -11618,6 +11738,61 @@ function PdfNativeListTextInlineEditor({
       setProperties(withPartRules(properties, partFormatsRef.current));
       return;
     }
+    // A scanned line (coverLaneLine: nothing of it is drawn, so no row of it
+    // can take a format in the page's text) takes a character format where
+    // its typing is written: as the text box over the scanned words, which
+    
+    // and run there as a saved box's press is run (its part as runs, the
+    // whole box as the box's own format, one step of the box's undo), so the
+    // button reads pressed, Cmd+Z takes it back and a second press takes it
+    // off. A rule under it is the box's too: the page's own rule is written
+    // beside a run its proof states, and an invisible run has none.
+    if (coverLaneLine && textBoxTakeoverEligible &&
+      pdfTextBoxCharacterFormatPress(action, Math.min(512, managedPointHeight))) {
+      const officeFamily = action.type === "fontFamily" && !managedFontOptions.some((option) => option.id === action.value)
+        ? pdfTextBoxOfficeFamily(action.value) : null;
+      if (action.type === "fontFamily" && !officeFamily && !managedFontOptions.some((option) => option.id === action.value)) {
+        // No face the box's writer holds: said, the line left as it is.
+        sayLocalFontNotWritable(action.value);
+        return;
+      }
+      // A part in its own format, a raised or lowered script and an Office
+      // family are written run by run, in faces that hold only some
+      // characters (lib/pdf/text-box-runs.ts). Text those faces cannot draw
+      // (an Urdu line) is one style or nothing: refused here and said, the
+      // line left as it is, instead of a draft its box could then not save.
+      const part = partialTextRange();
+      const script = action.type === "toggle" && (action.control === "superscript" || action.control === "subscript");
+      if ((part || script || officeFamily) && !pdfTextBoxDrawnRunsPortable([{
+        text: replacementText, font: "sans", bold: false, italic: false, underline: false, strikethrough: false,
+        fontSize: 0, color: "#000000", ...(officeFamily && !part && !script ? { officeFamily } : {}),
+      }])) {
+        if (part) toast({ description: translate("pdf.nativeTextEdit.characterFormatWholeRun") });
+        else refusePartPress();
+        return;
+      }
+      markPdfTextLatency("lane.text-box", { action: action.type, cover: true, part: Boolean(part) });
+      if (propertyOverride && !propertyProof) setProperties(null);
+      // What the line's rows were asked before (rowFormat, which no row of
+      // an invisible line can take): its alignment is the box's from here;
+      // anything else is said as not applied now, as leaving would say it.
+      if (rowFormat) {
+        const { alignment, ...rest } = rowFormat;
+        if (alignment === "left" || alignment === "center" || alignment === "right") {
+          setLayoutTypographyOverride((current) => ({ alignment, ...current }));
+        } else if (alignment === "justify") {
+          setLayoutTypographyOverride((current) => ({ justify: true, ...current }));
+        }
+        if (Object.keys(rest).length > 0 || alignment === "distribute") {
+          toast({ description: translate("pdf.nativeTextEdit.formatNotApplied") });
+        }
+        setRowFormat(null);
+      }
+      // The box starts in the weight and slant the buttons show for the line.
+      setCoverBoxStyle({ bold: Boolean(currentBold), italic: Boolean(currentItalic) });
+      queueRibbonCommand(action, pressedArg === undefined ? undefined : { pressed: pressedArg });
+      return;
+    }
     // A line that states no one run's format (textBoxTakeoverEligible): what
     
     // as its group's, its colour as the paragraph's, rules beside its runs);
@@ -11663,7 +11838,7 @@ function PdfNativeListTextInlineEditor({
       // on each run, the words of a line drawn word by word grew into each
       // other.
       const groupTakes = !range && ((groupPoints !== null && (action.type === "fontSize" || action.type === "fontSizeStep")) ||
-        (groupBoldEditable && action.type === "toggle" && action.control === "bold"));
+        (groupBoldTakesPress && action.type === "toggle" && action.control === "bold"));
       if (onApplyRowFormat && !groupTakes && (!range || rowPieces.length > 0)) {
         // What the press asks of each row (or of the part): null when the
         // rows cannot take it in place.
@@ -11733,7 +11908,7 @@ function PdfNativeListTextInlineEditor({
             ? !range && Boolean(paragraphColors && paragraphColors.length >= 2)
             : action.type === "toggle"
               ? action.control === "bold"
-                ? !range && groupBoldEditable
+                ? !range && groupBoldTakesPress
                 : action.control === "underline" || action.control === "strikethrough"
                   ? Boolean(onApplyRowFormat)
                   : !["italic", "superscript", "subscript", "clearFormatting"].includes(action.control)
@@ -11886,7 +12061,9 @@ function PdfNativeListTextInlineEditor({
           return;
         }
         if (action.control === "bold" && groupBold !== null) {
-          toggleGroupBold();
+          
+          if (groupBoldOffLeavesBoldFaces) refusePartPress();
+          else toggleGroupBold();
         } else if (action.control === "bold") {
           selectStyle(
             !currentBold,

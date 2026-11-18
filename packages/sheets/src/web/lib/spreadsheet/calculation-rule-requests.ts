@@ -30,7 +30,7 @@ export function conditionalRuleFormulas(rule: ConditionalFormatRule): string[] {
 }
 
 /** The rectangle spanning every area a conditional format applies to. */
-function ruleExtent(rule: ConditionalFormatRule): CalculationRuleRequest["range"] {
+function ruleExtent(rule: { range: CalculationRuleRequest["range"]; areas?: CalculationRuleRequest["range"][] }): CalculationRuleRequest["range"] {
   const areas = rule.areas && rule.areas.length > 1 ? rule.areas : null;
   if (!areas) return rule.range;
   return areas.reduce(
@@ -110,7 +110,14 @@ export function calculationRuleRequests(
       if (!add(formula, extent, rule.range.r1, rule.range.c1) && extent !== rule.range) add(formula, rule.range);
     }
   }
-  for (const rule of validations) for (const formula of validationRuleFormulas(rule)) add(formula, rule.range);
+  for (const rule of validations) {
+    
+    const extent = ruleExtent(rule);
+    for (const formula of validationRuleFormulas(rule)) {
+      if (extent === rule.range) add(formula, rule.range);
+      else if (!add(formula, extent, rule.range.r1, rule.range.c1)) add(formula, rule.range);
+    }
+  }
   for (const cell of cellFormulas) add(cell.formula, { r1: cell.row, c1: cell.col, r2: cell.row, c2: cell.col });
   return requests;
 }

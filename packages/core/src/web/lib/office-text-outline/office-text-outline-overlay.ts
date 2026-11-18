@@ -308,7 +308,7 @@ function clear(element: HTMLElement): void {
 
 /** Whether making the element `position: relative` moves nothing: no box
  * inside it is placed against an ancestor (absolutely or fixed). */
-function positionable(element: HTMLElement): boolean {
+export function positionable(element: HTMLElement): boolean {
   for (const inner of element.querySelectorAll("*")) {
     const position = getComputedStyle(inner).position;
     if (position === "absolute" || position === "fixed") return false;
@@ -319,7 +319,7 @@ function positionable(element: HTMLElement): boolean {
 // --- geometry -----------------------------------------------------------------
 
 /** The element's linear map to the viewport (2-D), or null under a 3-D one. */
-function linearChain(element: Element, memo: Map<Element, readonly number[] | null>): readonly number[] | null {
+export function linearChain(element: Element, memo: Map<Element, readonly number[] | null>): readonly number[] | null {
   const known = memo.get(element);
   if (known !== undefined) return known;
   const parent = element.parentElement;
@@ -383,7 +383,7 @@ function parseAngle(value: string): number | null {
   return match[2] === "deg" ? (n * Math.PI) / 180 : match[2] === "rad" ? n : match[2] === "turn" ? n * 2 * Math.PI : (n * Math.PI) / 200;
 }
 
-interface FontBox {
+export interface FontBox {
   /** The text box's height (the primary face's content area), px. */
   height: number;
   /** Its baseline below its top, px. */
@@ -392,7 +392,7 @@ interface FontBox {
 const fontBoxes = new Map<string, FontBox>();
 
 /** A text box's height and baseline in a font, as this browser lays it. */
-function fontBox(style: CSSStyleDeclaration, doc: Document): FontBox | null {
+export function fontBox(style: CSSStyleDeclaration, doc: Document): FontBox | null {
   const font = `${style.fontStyle} ${style.fontWeight} ${style.fontStretch} ${style.fontSize} ${style.fontFamily}`;
   const known = fontBoxes.get(font);
   if (known) return known;
@@ -426,7 +426,7 @@ function fontBox(style: CSSStyleDeclaration, doc: Document): FontBox | null {
 
 // --- drawing ------------------------------------------------------------------
 
-interface Glyph {
+export interface Glyph {
   readonly path: GlyphPath;
   readonly id: string;
   /** Font units (y up) to the element's px: a b c d e f, as SVG's matrix(). */
@@ -482,16 +482,16 @@ interface Fallback {
   readonly fill?: string | null;
 }
 
-const svgEscape = (value: string) =>
+export const svgEscape = (value: string) =>
   value.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[ch]!);
-const p6 = (value: number) => String(Number(value.toPrecision(6)));
-const n2 = (value: number) => {
+export const p6 = (value: number) => String(Number(value.toPrecision(6)));
+export const n2 = (value: number) => {
   const rounded = Math.round(value * 100) / 100;
   return Object.is(rounded, -0) ? "0" : String(rounded);
 };
 
 let segmenter: Intl.Segmenter | null = null;
-function graphemes(text: string): { segment: string; index: number }[] {
+export function graphemes(text: string): { segment: string; index: number }[] {
   segmenter ??= typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
   if (!segmenter) return Array.from(text, (segment, index) => ({ segment, index }));
   return Array.from(segmenter.segment(text), ({ segment, index }) => ({ segment, index }));
@@ -515,7 +515,7 @@ export function drawsServedFile(resolved: { face: { localNames: readonly string[
   return local === "pending" ? "pending" : local === "missing";
 }
 
-const SHAPED = /[֐-ࣿऀ-෿ༀ-࿿က-႟ក-៿יִ-﷿ﹰ-﻿]/u;
+export const SHAPED = /[֐-ࣿऀ-෿ༀ-࿿က-႟ក-៿יִ-﷿ﹰ-﻿]/u;
 
 
 
@@ -729,6 +729,140 @@ function drawFlat(element: HTMLElement): void {
   }
 }
 
+/** Whether an element's linear map only scales it, up and across. */
+export function isAxisAligned(L: readonly number[]): boolean {
+  return Math.abs(L[1]) < 1e-6 && Math.abs(L[2]) < 1e-6 && L[0] > 0 && L[3] > 0;
+}
+
+/**
+ * The map from the viewport to an element's own px: its padding box's top
+ * left (its first fragment's, for an inline element) the origin, its linear
+ * map `L` undone. Null for a turned inline element broken across lines (no
+ * one box to stand in).
+ */
+export function localPoint(
+  element: HTMLElement, style: CSSStyleDeclaration, L: readonly number[], rects: DOMRectList,
+): ((x: number, y: number) => [number, number]) | null {
+  const det = L[0] * L[3] - L[1] * L[2];
+  const inverse = [L[3] / det, -L[1] / det, -L[2] / det, L[0] / det];
+  const inline = style.display === "inline";
+  const borderLeft = Number.parseFloat(style.borderLeftWidth) || 0;
+  const borderTop = Number.parseFloat(style.borderTopWidth) || 0;
+  let originX: number, originY: number;
+  if (isAxisAligned(L)) {
+    const box = inline ? rects[0] : element.getBoundingClientRect();
+    originX = box.left + borderLeft * L[0];
+    originY = box.top + borderTop * L[3];
+  } else {
+    if (inline && rects.length > 1) return null;
+    const box = element.getBoundingClientRect();
+    const cx = element.offsetWidth / 2 - borderLeft, cy = element.offsetHeight / 2 - borderTop;
+    originX = (box.left + box.right) / 2 - (L[0] * cx + L[2] * cy);
+    originY = (box.top + box.bottom) / 2 - (L[1] * cx + L[3] * cy);
+  }
+  return (x: number, y: number): [number, number] => {
+    const dx = x - originX, dy = y - originY;
+    return [inverse[0] * dx + inverse[2] * dy, inverse[1] * dx + inverse[3] * dy];
+  };
+}
+
+/** Where the browser laid one character, in its element's own px (`toLocal`
+ * from the viewport, `L` the element's linear map): its box's left and top,
+ * its advance, its baseline. Null for a character vertical text draws with a
+ * vertical alternate (not the glyph the horizontal map names). */
+export interface CharacterPlace {
+  readonly left: number;
+  readonly top: number;
+  readonly w: number;
+  readonly baseline: number;
+  readonly vertical: boolean;
+  readonly upright: boolean;
+}
+
+export function characterPlace(
+  r: DOMRect, own: CSSStyleDeclaration, box: FontBox, L: readonly number[], axisAligned: boolean,
+  toLocal: (x: number, y: number) => [number, number], codePoint: number,
+): CharacterPlace | null {
+  const vertical = own.writingMode !== "horizontal-tb";
+  let left: number, top: number, w: number;
+  if (axisAligned) {
+    [left, top] = toLocal(r.left, r.top);
+    w = r.width / L[0];
+  } else {
+    // The character's box turned: its bounding box's centre is its
+    // centre; its advance from that box and its known thickness (the
+    // line's: the face's content area).
+    const [cx, cy] = toLocal((r.left + r.right) / 2, (r.top + r.bottom) / 2);
+    const a = Math.abs(L[0]), b = Math.abs(L[1]), c = Math.abs(L[2]), d = Math.abs(L[3]);
+    const thick = box.height;
+    let h: number;
+    if (vertical) {
+      w = thick;
+      h = c >= d ? (r.width - a * w) / c : (r.height - b * w) / d;
+    } else {
+      h = thick;
+      w = a >= b ? (r.width - c * h) / a : (r.height - d * h) / b;
+    }
+    left = cx - w / 2;
+    top = cy - h / 2;
+  }
+  const baseline = top + box.baseline;
+  const upright = vertical && uprightIn(own.textOrientation, codePoint);
+  if (vertical && upright && verticalAlternate(codePoint)) return null;
+  return { left, top, w, baseline, vertical, upright };
+}
+
+/** The glyph a served face draws at a character's place: its outline mapped
+ * into the element's px, and the width a synthesized bold adds. */
+export function placedGlyph(
+  place: CharacterPlace, path: GlyphPath,
+  resolved: {
+    readonly glyph: number;
+    readonly syntheticBold?: boolean;
+    readonly face: { readonly sizeAdjust: number; readonly style: string };
+    readonly metrics: {
+      readonly unitsPerEm: number;
+      readonly hhea: { readonly ascender: number; readonly descender: number };
+      readonly os2?: { readonly useTypoMetrics?: boolean; readonly typoAscender: number; readonly typoDescender: number } | null;
+    };
+  },
+  url: string, sizePx: number, italic: boolean, own: CSSStyleDeclaration, box: FontBox,
+): Omit<Glyph, "fill"> {
+  const { left, top, w, baseline, vertical, upright } = place;
+  const scale = (sizePx * resolved.face.sizeAdjust) / path.unitsPerEm;
+  const synthesizedItalic = italic && resolved.face.style === "normal" && !own.getPropertyValue("font-synthesis-style").includes("none");
+  // Skia's synthetic bold widens each glyph by its size over 24 (at 9 px)
+  // to over 32 (at 36 px and up), half on each side.
+  const ratio = sizePx <= 9 ? 1 / 24 : sizePx >= 36 ? 1 / 32 : 1 / 24 + ((sizePx - 9) / 27) * (1 / 32 - 1 / 24);
+  const skew = synthesizedItalic ? SYNTHETIC_SKEW * scale : 0;
+  let m: Glyph["m"];
+  if (!vertical) {
+    m = [scale, 0, skew, -scale, left, baseline];
+  } else if (upright) {
+    // Upright: its advance centred on its own face's central baseline
+    // (the shared alphabetic baseline, moved by half its ascent less its
+    // descent, as the browser rounds them), its vertical origin at the
+    // top of its box.
+    const alphabetic = left + w / 2 - (box.baseline - (box.height - box.baseline)) / 2;
+    const unit = (sizePx * resolved.face.sizeAdjust) / resolved.metrics.unitsPerEm;
+    const typo = resolved.metrics.os2?.useTypoMetrics ? resolved.metrics.os2 : null;
+    const ascent = Math.round((typo ? typo.typoAscender : resolved.metrics.hhea.ascender) * unit);
+    const descent = Math.round(-(typo ? typo.typoDescender : resolved.metrics.hhea.descender) * unit);
+    m = [scale, 0, skew, -scale, alphabetic + (ascent - descent) / 2 - (path.advance * scale) / 2, top + path.vOrigin * scale];
+  } else {
+    // Sideways: turned a quarter clockwise, its em box centred on the line.
+    const centre = left + w / 2;
+    m = [0, scale, scale, skew, centre - (box.baseline - (box.height - box.baseline)) / 2, top];
+  }
+  return {
+    path,
+    id: `${resolved.glyph}@${url}`,
+    m,
+    scale,
+    bold: resolved.syntheticBold && !own.getPropertyValue("font-synthesis-weight").includes("none") ? sizePx * ratio : 0,
+  };
+}
+
 function drawElement(element: HTMLElement): boolean {
   if (!element.isConnected || !marked(element)) {
     clear(element);
@@ -760,11 +894,9 @@ function drawElement(element: HTMLElement): boolean {
     clear(element);
     return false;
   }
-  const inverse = [L[3] / det, -L[1] / det, -L[2] / det, L[0] / det];
-  const axisAligned = Math.abs(L[1]) < 1e-6 && Math.abs(L[2]) < 1e-6 && L[0] > 0 && L[3] > 0;
+  const axisAligned = isAxisAligned(L);
   // The ::after's containing block: the element's padding box (the first
   // fragment's, for an inline element), its top left the local origin.
-  const inline = style.display === "inline";
   const rects = element.getClientRects();
   if (!rects.length) {
     clear(element);
@@ -783,27 +915,11 @@ function drawElement(element: HTMLElement): boolean {
     wrote(element);
     positioned = true;
   }
-  const borderLeft = Number.parseFloat(style.borderLeftWidth) || 0;
-  const borderTop = Number.parseFloat(style.borderTopWidth) || 0;
-  let originX: number, originY: number;
-  if (axisAligned) {
-    const box = inline ? rects[0] : element.getBoundingClientRect();
-    originX = box.left + borderLeft * L[0];
-    originY = box.top + borderTop * L[3];
-  } else {
-    if (inline && rects.length > 1) {
-      clear(element);
-      return false;
-    }
-    const box = element.getBoundingClientRect();
-    const cx = element.offsetWidth / 2 - borderLeft, cy = element.offsetHeight / 2 - borderTop;
-    originX = (box.left + box.right) / 2 - (L[0] * cx + L[2] * cy);
-    originY = (box.top + box.bottom) / 2 - (L[1] * cx + L[3] * cy);
+  const toLocal = localPoint(element, style, L, rects);
+  if (!toLocal) {
+    clear(element);
+    return false;
   }
-  const toLocal = (x: number, y: number): [number, number] => {
-    const dx = x - originX, dy = y - originY;
-    return [inverse[0] * dx + inverse[2] * dy, inverse[1] * dx + inverse[3] * dy];
-  };
 
   const glyphs: Glyph[] = [];
   const fallbacks: Fallback[] = [];
@@ -886,33 +1002,9 @@ function drawElement(element: HTMLElement): boolean {
       range.setEnd(node, index + segment.length);
       const charRects = range.getClientRects();
       if (!charRects.length) continue;
-      const r = charRects[0];
-      const vertical = own.writingMode !== "horizontal-tb";
-      let left: number, top: number, w: number;
-      if (axisAligned) {
-        [left, top] = toLocal(r.left, r.top);
-        w = r.width / L[0];
-      } else {
-        // The character's box turned: its bounding box's centre is its
-        // centre; its advance from that box and its known thickness (the
-        // line's: the face's content area).
-        const [cx, cy] = toLocal((r.left + r.right) / 2, (r.top + r.bottom) / 2);
-        const a = Math.abs(L[0]), b = Math.abs(L[1]), c = Math.abs(L[2]), d = Math.abs(L[3]);
-        const thick = box.height;
-        let h: number;
-        if (vertical) {
-          w = thick;
-          h = c >= d ? (r.width - a * w) / c : (r.height - b * w) / d;
-        } else {
-          h = thick;
-          w = a >= b ? (r.width - c * h) / a : (r.height - d * h) / b;
-        }
-        left = cx - w / 2;
-        top = cy - h / 2;
-      }
-      const baseline = top + box.baseline;
-      const upright = vertical && uprightIn(own.textOrientation, codePoint);
-      if (vertical && upright && verticalAlternate(codePoint)) continue;
+      const place = characterPlace(charRects[0], own, box, L, axisAligned, toLocal, codePoint);
+      if (!place) continue;
+      const { left, baseline } = place;
       const resolved = resolveFace(families, weight, italic, codePoint === 0xa0 ? 0x20 : codePoint, true, false);
       if (resolved === "pending") {
         waiting = true;
@@ -946,39 +1038,7 @@ function drawElement(element: HTMLElement): boolean {
         continue;
       }
       if (!path.d) continue;
-      const scale = (sizePx * resolved.face.sizeAdjust) / path.unitsPerEm;
-      const synthesizedItalic = italic && resolved.face.style === "normal" && !own.getPropertyValue("font-synthesis-style").includes("none");
-      // Skia's synthetic bold widens each glyph by its size over 24 (at 9 px)
-      // to over 32 (at 36 px and up), half on each side.
-      const ratio = sizePx <= 9 ? 1 / 24 : sizePx >= 36 ? 1 / 32 : 1 / 24 + ((sizePx - 9) / 27) * (1 / 32 - 1 / 24);
-      const skew = synthesizedItalic ? SYNTHETIC_SKEW * scale : 0;
-      let m: Glyph["m"];
-      if (!vertical) {
-        m = [scale, 0, skew, -scale, left, baseline];
-      } else if (upright) {
-        // Upright: its advance centred on its own face's central baseline
-        // (the shared alphabetic baseline, moved by half its ascent less its
-        // descent, as the browser rounds them), its vertical origin at the
-        // top of its box.
-        const alphabetic = left + w / 2 - (box.baseline - (box.height - box.baseline)) / 2;
-        const unit = (sizePx * resolved.face.sizeAdjust) / resolved.metrics.unitsPerEm;
-        const typo = resolved.metrics.os2?.useTypoMetrics ? resolved.metrics.os2 : null;
-        const ascent = Math.round((typo ? typo.typoAscender : resolved.metrics.hhea.ascender) * unit);
-        const descent = Math.round(-(typo ? typo.typoDescender : resolved.metrics.hhea.descender) * unit);
-        m = [scale, 0, skew, -scale, alphabetic + (ascent - descent) / 2 - (path.advance * scale) / 2, top + path.vOrigin * scale];
-      } else {
-        // Sideways: turned a quarter clockwise, its em box centred on the line.
-        const centre = left + w / 2;
-        m = [0, scale, scale, skew, centre - (box.baseline - (box.height - box.baseline)) / 2, top];
-      }
-      glyphs.push({
-        path,
-        id: `${resolved.glyph}@${url}`,
-        m,
-        scale,
-        bold: resolved.syntheticBold && !own.getPropertyValue("font-synthesis-weight").includes("none") ? sizePx * ratio : 0,
-        fill: fillOf(parent, own),
-      });
+      glyphs.push({ ...placedGlyph(place, path, resolved, url, sizePx, italic, own, box), fill: fillOf(parent, own) });
     }
     if (unsupported) break;
   }

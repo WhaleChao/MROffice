@@ -163,6 +163,14 @@ function presentationTextBaselineRequest(
   return first;
 }
 
+/** A converted SmartArt label's first-line indent (`smartArtFirstLineIndent`, EMU) as the rows' CSS. */
+function smartArtFirstLineIndentCss(block: unknown): CSSProperties {
+  // A length on the slide, as the label's margins are: not scaled with the text.
+  const value = (block as { smartArtFirstLineIndent?: unknown }).smartArtFirstLineIndent;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > 51_206_400) return {};
+  return { textIndent: value / AUTOFIT_EMU_PER_PX };
+}
+
 /**
  * The line a SmartArt label the Office scene drew (its sizes in design px,
  * its spacing PowerPoint's 90%) stands its Chinese lines at, as PowerPoint
@@ -171,6 +179,7 @@ function presentationTextBaselineRequest(
  * any other block: its lines keep the 1.2 em of the slide's text. Shared by
  * the label's textarea and its preview, so editing does not move its lines.
  */
+
 export function presentationSmartArtLabelLineHeight(
   block: PresentationBlock,
   theme: DeckTheme | undefined,
@@ -386,6 +395,10 @@ export function PresentationTextVisualContents({
       ),
       layout.autofitScale || 1,
     ),
+    // A converted diagram's bulleted item whose words state a first-line
+    // indent (readings row 849): each paragraph's first line starts after its
+    
+    ...smartArtFirstLineIndentCss(block),
   };
   const visibleParagraphStyle: CSSProperties = fontPolicyReady ? kernedParagraphStyle
     : { ...kernedParagraphStyle, visibility: "hidden" };
@@ -445,7 +458,13 @@ export function PresentationTextVisualContents({
   
   const blockStyle = block.style as { align?: unknown; textAlign?: unknown } | undefined;
   const bodyAlignStated = (blockStyle?.align ?? blockStyle?.textAlign) !== undefined;
-  const rowDirection = columnRowDirection ?? ((block as { dir?: unknown }).dir === "rtl" ? "rtl" : undefined);
+  // A converted SmartArt label whose point's words run right to left
+  // (`smartArtTextRtl`, readings row 840) is such a box.
+  const rowDirection =
+    columnRowDirection ??
+    ((block as { dir?: unknown }).dir === "rtl" || (block as { smartArtTextRtl?: unknown }).smartArtTextRtl === true
+      ? "rtl"
+      : undefined);
   // A By Paragraph build plays row by row, so its body is drawn as rows even
   // when a flat body would do.
   const paragraphPlay = useContext(PresentationParagraphPlayContext);
@@ -472,7 +491,7 @@ export function PresentationTextVisualContents({
   // Planned on every drawing, as the browser-flowed rows are: the body's
   // layout above is too, and the engine's measurements are cached by text.
   const engineRows = (() => {
-    const rows = buildParagraphs ?? (block.text ? paragraphBuildRows(block.text, flatRuns) : null);
+    const rows = buildParagraphs ?? (block.text ? paragraphBuildRows(block.text, flatRuns, (block as { endLatinFace?: unknown }).endLatinFace) : null);
     if (!rows || !rows.length) return null;
     return planPresentationParagraphRows({
       paragraphs: rows,
@@ -533,6 +552,7 @@ export function PresentationTextVisualContents({
     tabStops: (block.style as { tabStops?: unknown } | undefined)?.tabStops,
     defaultTabPx: (block.style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx,
     kerning: asRecord(block.source)?.nativeKerning,
+    eastAsianLines: asRecord(block.source)?.nativeEastAsianLines,
     widthPx: engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX,
     wrap: textBlockWraps(block),
     naturalLines: Boolean(asRecord(block.source)?.nativeSmartArtView),
@@ -550,6 +570,7 @@ export function PresentationTextVisualContents({
     tabStops: (block.style as { tabStops?: unknown } | undefined)?.tabStops,
     defaultTabPx: (block.style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx,
     kerning: asRecord(block.source)?.nativeKerning,
+    eastAsianLines: asRecord(block.source)?.nativeEastAsianLines,
     widthPx: engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX,
     wrap: textBlockWraps(block),
     naturalLines: Boolean(asRecord(block.source)?.nativeSmartArtView),
@@ -596,6 +617,7 @@ export function PresentationTextVisualContents({
         tabStops={(block.style as { tabStops?: unknown } | undefined)?.tabStops}
         defaultTabPx={(block.style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx}
         kerning={asRecord(block.source)?.nativeKerning}
+        eastAsianLines={asRecord(block.source)?.nativeEastAsianLines}
         widthPx={engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX}
         wrap={textBlockWraps(block)}
         colorOverride={colorOverride}

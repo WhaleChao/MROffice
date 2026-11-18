@@ -213,8 +213,16 @@ function metalLightAt(u: number, v: number): number {
 
 
 
+
+
+
+
+
+
+
+
 function balancedLightAt(u: number, v: number): number {
-  return (52.2 + 100 * Math.max(0, Math.min(1, v))) * Math.max(0, Math.min(1, u) - 0.195) ** 2.55;
+  return (5.4654 + 14.7079 * Math.max(0, Math.min(1, v))) * (Math.max(0, Math.min(1, u)) + 0.3099) ** 4.1151;
 }
 
 /** Where a member stands in its diagram, as fractions of the diagram's frame. */
@@ -223,6 +231,18 @@ export type SmartArtFaceSpan = {
   readonly bottom: number;
   readonly left?: number;
   readonly right?: number;
+  /**
+   * The member's own turn (degrees, clockwise) and mirror, which the face
+   * filter is drawn under: the light is the diagram's, so it is read back
+   * through them. Picture Strips' strips are `round2SameRect` turned 180°:
+   * read as if upright, each strip was lit from its left where Windows lights
+   * it from its right (truth office-truth/probes/sa36-3dcam pList2-3d6).
+   */
+  readonly rotation?: number;
+  readonly flipH?: boolean;
+  readonly flipV?: boolean;
+  /** The diagram frame's width over its height, for a turn that is not a half turn. */
+  readonly aspect?: number;
 };
 
 
@@ -237,15 +257,32 @@ function lightImage(span: SmartArtFaceSpan, lightAt: (u: number, v: number) => n
   if (left === undefined || right === undefined || !(right > left) || !(bottom > top)) return null;
   const width = right - left;
   const height = bottom - top;
-  const v0 = top - 0.1 * height;
-  const v1 = bottom + 0.1 * height;
+  // A point of the member's own (upright, unmirrored) box, x and y from 0 to
+  // 1, where it stands in the diagram once the member is mirrored and turned
+  // about its centre -- the place the diagram's light is read at.
+  const turn = (((span.rotation ?? 0) % 360) + 360) % 360;
+  const aspect = span.aspect && span.aspect > 0 ? span.aspect : 1;
+  const radians = (turn * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const centreU = (left + right) / 2;
+  const centreV = (top + bottom) / 2;
+  const at = (x: number, y: number): [number, number] => {
+    const dx = (x - 0.5) * (span.flipH ? -1 : 1);
+    const dy = (y - 0.5) * (span.flipV ? -1 : 1);
+    if (!turn) return [centreU + dx * width, centreV + dy * height];
+    return [
+      centreU + dx * width * cos - (dy * height * sin) / aspect,
+      centreV + dx * width * sin * aspect + dy * height * cos,
+    ];
+  };
   const strips = 32;
   let lit = false;
   const rects: string[] = [];
   for (let index = 0; index < strips; index += 1) {
-    const u = left + width * (-0.1 + (1.2 * (index + 0.5)) / strips);
-    const a = Math.round(Math.max(0, Math.min(255, lightAt(u, v0))));
-    const b = Math.round(Math.max(0, Math.min(255, lightAt(u, v1))));
+    const x = -0.1 + (1.2 * (index + 0.5)) / strips;
+    const a = Math.round(Math.max(0, Math.min(255, lightAt(...at(x, -0.1)))));
+    const b = Math.round(Math.max(0, Math.min(255, lightAt(...at(x, 1.1)))));
     if (a || b) lit = true;
     rects.push(
       `<linearGradient id="g${index}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgb(${a},${a},${a})"/><stop offset="1" stop-color="rgb(${b},${b},${b})"/></linearGradient>` +
@@ -274,9 +311,15 @@ export function smartArtFaceTintPrimitives(
   // Metal's light, across the member as well as down it, where the host says
   // where the member stands in its diagram.
   const metalLit = metal && span ? lightImage(span, metalLightAt) : null;
+  // The light is added to the face's own colour, and the member's alpha put
+  // back once: the face is taken OPAQUE for the sum (its alpha row x255), or a
+  
+  // closing `in SourceAlpha` with its colour multiplied by its alpha twice,
+  // dark where Windows draws it light. An opaque face is as it was.
+  const opaque = matrix.replace(/0 0 0 1 0$/, "0 0 0 255 0");
   if (balanced || metalLit) {
     return [
-      { tag: "feColorMatrix", attrs: { in: "SourceGraphic", type: "matrix", values: matrix, result: "faceColour" } },
+      { tag: "feColorMatrix", attrs: { in: "SourceGraphic", type: "matrix", values: opaque, result: "faceColour" } },
       { tag: "feImage", attrs: { href: (balanced || metalLit) as string, preserveAspectRatio: "none", result: "faceLight" } },
       { tag: "feComposite", attrs: { in: "faceColour", in2: "faceLight", operator: "arithmetic", k1: 0, k2: 1, k3: 1, k4: 0, result: "faceLit" } },
       { tag: "feComposite", attrs: { in: "faceLit", in2: "SourceAlpha", operator: "in", result: "tinted" } },
@@ -311,7 +354,7 @@ export function smartArtFaceTintPrimitives(
         `<rect width="1" height="1" fill="url(#r)"/></svg>`,
     );
   return [
-    { tag: "feColorMatrix", attrs: { in: "SourceGraphic", type: "matrix", values: matrix, result: "faceColour" } },
+    { tag: "feColorMatrix", attrs: { in: "SourceGraphic", type: "matrix", values: opaque, result: "faceColour" } },
     { tag: "feImage", attrs: { href: ramp, preserveAspectRatio: "none", result: "faceLight" } },
     { tag: "feComposite", attrs: { in: "faceColour", in2: "faceLight", operator: "arithmetic", k1: 0, k2: 1, k3: 1, k4: 0, result: "faceLit" } },
     { tag: "feComposite", attrs: { in: "faceLit", in2: "SourceAlpha", operator: "in", result: "tinted" } },

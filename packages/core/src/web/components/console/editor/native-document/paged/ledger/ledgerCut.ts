@@ -171,6 +171,26 @@ function columnIndexOf(page: OpenPage, pos: number): number {
   return Math.min(page.columns - 1, Math.floor((Math.max(0, pos) + EPSILON_PX) / page.columnPx));
 }
 
+/** `window.__docsKeepChainSplitOff = true` (A/B): a keep-with-next chain that
+ * does not fit is moved as one unit unless a head of its LAST member fits,
+ * the older reading, instead of breaking inside the first member that does
+ * not fit whole. */
+function keepChainSplitOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKeepChainSplitOff?: boolean }).__docsKeepChainSplitOff === true;
+}
+
+/** `window.__docsKeepChainBackUpOff = true` (A/B): in a compatibility mode
+ * 15 document a keep-with-next chain whose unfitting member cannot be cut
+ * moves whole, as in earlier modes, instead of cutting an earlier member so
+ * that its last lines go on with it. */
+function keepChainBackUpOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKeepChainBackUpOff?: boolean }).__docsKeepChainBackUpOff === true;
+}
+
+/** A head planned in less than a member's whole height is a cut that leaves
+ * its last lines (its widow floor under widow control) for the next page. */
+const BACK_UP_SLACK_PX = 0.5;
+
 export function planLedgerPages(
   atoms: readonly LedgerAtom[],
   options: LedgerCutOptions,
@@ -390,6 +410,11 @@ export function planLedgerPages(
   // The last atom of the keepNext chain that opened the current page or
   // column: up to it, no member is moved for its chain again.
   let keepReleasedThrough = -1;
+  // Compatibility mode 15: a member of a keepNext chain cut where it stands
+  // so that its last lines go on with a follower that cannot start here
+  // (`keepChainBacksUp`): the atom and the room its head is planned in.
+  let keepBackCut: { atom: number; availablePx: number } | null = null;
+  const backsUp = options.keepChainBacksUp === true && !keepChainBackUpOff();
   while (index < atoms.length && !stop) {
     if (guard-- <= 0) {
       throw new Error("ledger cut did not make progress");
@@ -526,7 +551,71 @@ export function planLedgerPages(
       if (!chainFits) {
         const tail = atoms[chain.end];
         let headFits = false;
-        if (tail.splittable && chain.end > index) {
+        // Word forbids a break BETWEEN kept paragraphs, not inside one: the
+        // first member that does not fit whole may be cut where it stands
+        // (a legal head of it here, its last lines with the next member on
+        // the next page), and the members before it stay (Windows Word,
+        // corpus R432-D07: ten keep-with-next body paragraphs after a list
+        // in the second column -- Word fills the column and breaks inside
+        // the one at its foot; moved as one unit, a whole column was left
+        // empty). Only when that member cannot be cut does the run before it
+        // go on with it.
+        if (!keepChainSplitOff()) {
+          let at = page.usedPx + gap;
+          const starts: number[] = [];
+          for (let member = index; member <= chain.end; member += 1) {
+            if (member > index) at += options.gapPx(atoms[member - 1], atoms[member]);
+            starts.push(at);
+            const memberHeight = member === index ? height : atoms[member].heightPx;
+            if (at + memberHeight <= columnEnd + EPSILON_PX) {
+              at += memberHeight;
+              continue;
+            }
+            const cut = atoms[member];
+            headFits = cut.splittable && !cut.hidden && columnEnd - at > EPSILON_PX &&
+              options.oracle.planHead({
+                atom: cut,
+                from: null,
+                availablePx: columnEnd - at,
+                fullCapacityPx: fragmentCapacityPx,
+                pageEmpty: false,
+              }) !== null;
+            // Word 2013+ (compatibility mode 15) keeps a kept paragraph's
+            // LAST line with the next one's first: when the member that does
+            // not fit cannot be cut, the nearest member before it that can
+            // be is cut where it stands, its last lines (its widow floor)
+            // going on with the follower; only a chain no member of which
+            // can be cut so moves whole. Windows Word, probes/vsp7 (vsp2,
+            // vsp4-6 re-run in mode 15): three kept 4-line paragraphs with
+            // five lines left part 2|2 inside the first; a 20-line one
+            // before an orphaned follower leaves 18; a keep-lines second
+            // member takes 2 lines of the first; in mode 14 and earlier
+            // every one of them moves whole (corpus R432-D07: nine lines
+            // of "Another non-chemical method" at column 2's foot).
+            if (!headFits && backsUp) {
+              for (let back = member - 1; back >= index; back -= 1) {
+                const candidate = atoms[back];
+                const candidateHeight = back === index ? height : candidate.heightPx;
+                if (!candidate.splittable || candidate.hidden || candidate.anchored) continue;
+                const availablePx = Math.min(columnEnd - starts[back - index], candidateHeight - BACK_UP_SLACK_PX);
+                if (!(availablePx > EPSILON_PX)) continue;
+                const head = options.oracle.planHead({
+                  atom: candidate,
+                  from: null,
+                  availablePx,
+                  fullCapacityPx: fragmentCapacityPx,
+                  pageEmpty: false,
+                });
+                if (!head) continue;
+                keepBackCut = { atom: back, availablePx };
+                keepReleasedThrough = Math.max(keepReleasedThrough, back);
+                headFits = true;
+                break;
+              }
+            }
+            break;
+          }
+        } else if (tail.splittable && chain.end > index) {
           const availableForTail =
             columnEnd - page.usedPx - gap - chain.heightBeforeTailPx;
           headFits =
@@ -581,8 +670,10 @@ export function planLedgerPages(
     // belongs to the block before it, even a last line whose hanging leading
     // ran past the margin: moved on, its break left a blank page (corpus
     // R281-D08: a double-spaced line 7 px over the foot, then a page break).
+    const backCut = keepBackCut !== null && keepBackCut.atom === index && !continuing ? keepBackCut : null;
+    if (keepBackCut !== null && (keepBackCut.atom < index || backCut)) keepBackCut = null;
     if (
-      !forcedCut &&
+      !forcedCut && !backCut &&
       (isZeroBreakMarker(atom) || page.usedPx + gap + height - credit <= columnEnd + EPSILON_PX)
     ) {
       const placement: LedgerPlacement = { atom: index, from: entry, to: null };
@@ -617,7 +708,9 @@ export function planLedgerPages(
       continue;
     }
     if (forcedCut || (atom.splittable && !atom.hidden)) {
-      const availablePx: number = columnEnd - page.usedPx - gap;
+      const availablePx: number = backCut
+        ? Math.min(columnEnd - page.usedPx - gap, backCut.availablePx)
+        : columnEnd - page.usedPx - gap;
       const cut: LedgerCut | null = forcedCut ??
         (availablePx > EPSILON_PX
           ? options.oracle.planHead({

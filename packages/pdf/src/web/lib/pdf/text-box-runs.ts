@@ -570,12 +570,17 @@ export function pdfTextBoxRunRowGeometry(
 
 /** Why the PDF writer refused a box set in runs, read from the save's
  * patchback reason (`pdf_text_box_*` details of native_edit_primitives.py
- * and pdf_text_box_office_fonts.py); null for any other refusal. */
+ * and pdf_text_box_office_fonts.py), or a box whose words its own face
+ * cannot draw; null for any other refusal. */
 export type PdfTextBoxRunsRefusal =
   | { readonly kind: "glyph"; readonly family: string; readonly character: string }
   | { readonly kind: "font"; readonly family: string }
   | { readonly kind: "rows" }
-  | { readonly kind: "plan" };
+  | { readonly kind: "plan" }
+  /** A box of one format whose words the writer's own face cannot draw (a
+   * script it holds no glyphs for: Arabic, Urdu, Thai...): the writer names
+   * no character and no family (`managed text-box font lacks ... glyphs`). */
+  | { readonly kind: "script" };
 
 export function pdfTextBoxRunsRefusal(reason: unknown): PdfTextBoxRunsRefusal | null {
   if (typeof reason !== "string") return null;
@@ -588,5 +593,6 @@ export function pdfTextBoxRunsRefusal(reason: unknown): PdfTextBoxRunsRefusal | 
   if (font) return { kind: "font", family: font[1].trim() };
   if (reason.includes("pdf_text_box_rows_disagree")) return { kind: "rows" };
   if (reason.includes("pdf_text_box_runs_need_row_plan")) return { kind: "plan" };
+  if (reason.includes("managed text-box font lacks one or more requested Unicode glyphs")) return { kind: "script" };
   return null;
 }

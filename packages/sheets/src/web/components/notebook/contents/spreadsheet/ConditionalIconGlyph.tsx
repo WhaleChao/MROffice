@@ -3,7 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import type { ReactElement, ReactNode } from "react";
+import { cloneElement, type ReactElement, type ReactNode } from "react";
 
 /**
  * Conditional-format icon-set glyphs, drawn as inline SVG in Excel's look
@@ -23,6 +23,12 @@ const GREEN = { fill: "#63b04f", stroke: "#2f7a22" };
 const YELLOW = { fill: "#fcc12d", stroke: "#c68a00" };
 const RED = { fill: "#e8564d", stroke: "#a3201a" };
 const GRAY = { fill: "#8c8c8c", stroke: "#4d4d4d" };
+// The Arrows families in Windows Excel's own prints (R12-X02's 5 Arrows,
+// R121-X05's 3 Arrows): a muted teal green, a sand yellow and a brick red,
+// not the traffic lights' colours.
+const ARROW_GREEN = { fill: "#68a490", stroke: "#3d7a66" };
+const ARROW_YELLOW = { fill: "#eac282", stroke: "#ac8735" };
+const ARROW_RED = { fill: "#d65532", stroke: "#a93e20" };
 const BLACK = "#111111";
 
 type Paint = { fill: string; stroke: string };
@@ -30,11 +36,25 @@ type Paint = { fill: string; stroke: string };
 /** Excel's colours, lowest bucket first, for the coloured families. */
 function familyPaints(family: string, count: number): Paint[] {
   if (family === "arrows") {
-    if (count === 4) return [RED, YELLOW, YELLOW, GREEN];
-    if (count === 5) return [RED, YELLOW, YELLOW, YELLOW, GREEN];
-    return [RED, YELLOW, GREEN];
+    if (count === 4) return [ARROW_RED, ARROW_YELLOW, ARROW_YELLOW, ARROW_GREEN];
+    if (count === 5) return [ARROW_RED, ARROW_YELLOW, ARROW_YELLOW, ARROW_YELLOW, ARROW_GREEN];
+    return [ARROW_RED, ARROW_YELLOW, ARROW_GREEN];
   }
   return count === 4 ? [{ fill: BLACK, stroke: BLACK }, RED, YELLOW, GREEN] : [RED, YELLOW, GREEN];
+}
+
+/** Windows Excel's arrow (its 24 px icon traced, R12-X02's 5 Arrows): a
+ * head as wide as the icon whose barbs hang straight down at its sides and
+ * sweep back into a stem a quarter of the icon wide, not a block arrow's
+ * flat-backed head. Drawn up; a heading turns it. */
+const ARROW_PATH = "M8 0.6 14.1 6.7V11.5H13L10.4 7.8 9.9 8.1V15.4H6.1V8.1L5.6 7.8 3 11.5H1.9V6.7Z";
+
+/** Excel's diagonal arrows stand their head in the icon's corner: the turned
+ * arrow moved half a unit out toward it. */
+function arrowNudge(heading: number): string {
+  if (heading === 45) return "translate(0.4 -0.5) ";
+  if (heading === 135) return "translate(0.4 0.5) ";
+  return "";
 }
 
 /** Arrow headings, lowest bucket first: 0 = up, 90 = right, 180 = down. */
@@ -44,9 +64,9 @@ function arrowHeadings(count: number): number[] {
   return [180, 90, 0];
 }
 
-function Svg({ children }: { children: ReactNode }): ReactElement {
+function Svg({ children, size = ICON_SIZE }: { children: ReactNode; size?: number }): ReactElement {
   return (
-    <svg width={ICON_SIZE} height={ICON_SIZE} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+    <svg width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" focusable="false">
       {children}
     </svg>
   );
@@ -78,11 +98,20 @@ export function ConditionalIconGlyph({
   iconSet,
   index,
   count = 3,
+  size,
 }: {
   iconSet: string;
   index: number;
   count?: number;
+  /** The icon's side in px (the grid's 15 px when unstated): a printed page
+   * at a scale draws it at that scale. */
+  size?: number;
 }): ReactElement {
+  const glyph = conditionalIconGlyph(iconSet, index, count);
+  return size !== undefined && Number.isFinite(size) && size > 0 ? cloneElement(glyph as ReactElement<{ size?: number }>, { size }) : glyph;
+}
+
+function conditionalIconGlyph(iconSet: string, index: number, count: number): ReactElement {
   const slots = Math.max(2, count);
   const slot = Math.max(0, Math.min(slots - 1, index));
   const family = iconSet.replace(/^[0-9]+-/, "");
@@ -94,12 +123,12 @@ export function ConditionalIconGlyph({
     return (
       <Svg>
         <path
-          d="M8 1.2 14.3 7.6H10.4V14.6H5.6V7.6H1.7Z"
+          d={ARROW_PATH}
           fill={paint.fill}
           stroke={paint.stroke}
-          strokeWidth="0.9"
-          strokeLinejoin="round"
-          transform={`rotate(${heading} 8 8)`}
+          strokeWidth="0.7"
+          strokeLinejoin="miter"
+          transform={`${arrowNudge(heading)}rotate(${heading} 8 8)`}
         />
       </Svg>
     );

@@ -41,6 +41,8 @@ import type {
   ParagraphBullet,
 } from "./presentation-paragraphs";
 import type { OfficeShapeShadow } from "./office-shape-paint";
+import type { PresentationLevelStyle } from "./presentation-level-styles";
+import { PRESENTATION_LEVEL_STYLE_KEYS, type PresentationLevelStyleKey } from "./presentation-runs";
 
 /** Shape Format > Shape Effects preset a shape can carry beside its shadow. */
 type ShapeEffectPreset = "reflection" | "glow" | "softEdge" | "bevel" | "threeD";
@@ -142,6 +144,77 @@ export interface FormatPainterSnapshot {
   runStyle?: FormatPainterRunStylePatch;
   /** Paragraph-local formatting, absent for partial text selections. */
   paragraph?: FormatPainterParagraphStylePatch;
+  /**
+   * The source's text frame (`a:bodyPr`), a whole-object paint only: Format
+   * Painter replaces the target's whole frame with the source's (truth
+   * c62bodypr / c62bodypr2: anchor, wrap, margins, direction, columns,
+   * autofit, WordArt Transform -- what the source does not state is taken off
+   * the target too). See {@link FormatPainterBodySnapshot}.
+   */
+  body?: FormatPainterBodySnapshot;
+}
+
+/**
+ * A text frame's settings as the page states them, block-level and on its
+ * style, and which imported shape they came from (`from`, its slide and shape
+ * ids): the save then copies that shape's whole `a:bodyPr` -- with what the
+ * page does not model, its rotation, column gap and order, overflow -- when
+ * the original still holds it as `block` / `style` say (readings row 829,
+ * `source.paintedBodyFrom`).
+ */
+export interface FormatPainterBodySnapshot {
+  block: Record<string, unknown>;
+  style: Record<string, unknown>;
+  from?: { slideId: string; shapeId: string };
+}
+
+/** A text frame's block-level fields (`a:bodyPr`): margins, autofit, columns, WordArt Transform, keep text flat. */
+export const FORMAT_PAINTER_BODY_BLOCK_KEYS = [
+  "textInsets",
+  "autofit",
+  "columnCount",
+  "columnSpacing",
+  "textWarp",
+  "keepTextFlat",
+] as const;
+
+/** A text frame's fields on the block's style (`a:bodyPr`): anchor, direction, wrap, overflow, 3-D text. */
+export const FORMAT_PAINTER_BODY_STYLE_KEYS = [
+  "verticalAlign",
+  "anchorCenter",
+  "writingMode",
+  "textWrap",
+  "verticalOverflow",
+  "spaceFirstLastPara",
+  "textWarp",
+  "textShape3d",
+  "autofit",
+] as const;
+
+function hasTextFrame(block: PaintableBlock): boolean {
+  return block.type === "text" || (block.type === "shape" && typeof (block as { text?: unknown }).text === "string");
+}
+
+function captureBody(block: PaintableBlock): FormatPainterBodySnapshot | undefined {
+  if (!hasTextFrame(block)) return undefined;
+  const record = block as Record<string, unknown>;
+  const style = record.style && typeof record.style === "object" && !Array.isArray(record.style)
+    ? (record.style as Record<string, unknown>)
+    : {};
+  const pick = (from: Record<string, unknown>, keys: readonly string[]) =>
+    Object.fromEntries(
+      keys.filter((key) => from[key] !== undefined).map((key) => [key, JSON.parse(JSON.stringify(from[key]))]),
+    );
+  const source = record.source && typeof record.source === "object" ? (record.source as Record<string, unknown>) : null;
+  const from =
+    source && typeof source.slideId === "string" && typeof source.shapeId === "string"
+      ? { slideId: source.slideId, shapeId: source.shapeId }
+      : undefined;
+  return {
+    block: pick(record, FORMAT_PAINTER_BODY_BLOCK_KEYS),
+    style: pick(style, FORMAT_PAINTER_BODY_STYLE_KEYS),
+    ...(from ? { from } : {}),
+  };
 }
 
 /** Keys of {@link FormatPainterSnapshot.shape}, used to copy only present fields. */
@@ -615,13 +688,19 @@ export function captureFormatSnapshot(
   const runStyle = captureRunStyle(block);
   if (runStyle) snapshot.runStyle = runStyle;
 
+  const body = captureBody(block);
+  if (body) snapshot.body = body;
+
   // An entirely-empty snapshot means there was nothing to copy: decline to arm.
   if (
     !snapshot.shape &&
     !snapshot.image &&
     !snapshot.table &&
     !snapshot.text &&
-    !snapshot.runStyle
+    !snapshot.runStyle &&
+    // A frame the source states nothing of, on a box the page made, is no
+    // format to arm with (an imported one names the frame to copy).
+    !(snapshot.body && (snapshot.body.from || Object.keys(snapshot.body.block).length || Object.keys(snapshot.body.style).length))
   ) {
     return null;
   }
@@ -668,6 +747,15 @@ export interface FormatPaintPlan {
   runStylePatch?: FormatPainterRunStylePatch;
   /** Paragraph patch for a complete-paragraph text selection. */
   paragraphPatch?: FormatPainterParagraphStylePatch;
+  /**
+   * A text box painted whole: its own first list level's run defaults
+   * (`a:lstStyle/a:lvl1pPr/a:defRPr`, truth c64painter P2) -- what its words
+   * now leave to their level (`inheritedKeys`) -- by level key, `null`
+   * taking one off. The block's `source.nativeLevelStyles[0]` takes it.
+   */
+  levelOnePatch?: { [K in PresentationLevelStyleKey | "themeFontRole"]?: PresentationLevelStyle[K] | null };
+  /** The source's whole text frame, onto a text box's or a shape's (whole-object paints only). */
+  bodyPatch?: FormatPainterBodySnapshot;
 }
 
 function cloneRecord<T extends object>(value: T): T {
@@ -757,14 +845,50 @@ export function planFormatPaint(
         else if (value !== undefined) box[key] = value;
       }
       plan.textPatch = Object.keys(box).length > 0 ? (box as TextStyleSnapshot) : undefined;
-      // The runs wear the same format themselves: the save reads a run that
-      // states no flag as the flag it stated before (a run's `b="0"` stayed
-      // under a bold box, census64 replay), so the box alone is not what the
-      // file then draws.
-      plan.runStylePatch = effective;
+      // The runs leave the painted format to the box's first level, which
+      // states it (`levelOnePatch`), as PowerPoint empties every run's
+      // `a:rPr` (P2): they wear its values and say they are the level's
+      // (`inheritedKeys`), so the save writes the level and hands the runs'
+      // own back -- keeping them only where the file's chain would draw
+      
+      const level = levelOneOf(effective);
+      const inherited = PRESENTATION_LEVEL_STYLE_KEYS.filter((key) => Object.hasOwn(level, key));
+      plan.runStylePatch = {
+        ...effective,
+        ...(inherited.length > 0 ? { inheritedKeys: inherited } : {}),
+        ...(inherited.includes("color") && typeof effective.color === "string" ? { colorFromList: true } : {}),
+      };
+      if (inherited.length > 0) plan.levelOnePatch = level;
     }
   }
+  // The whole text frame (`a:bodyPr`), a whole-object paint onto a text box
+  // or a shape that has one: PowerPoint replaces the target's frame with the
+  // source's whole (truth c62bodypr: anchor, wrap, margins, direction,
+  // columns and autofit; c62bodypr2: WordArt Transform -- a frame the source
+  // does not warp loses its own warp).
+  if (snapshot.body && snapshot.scope !== "text-selection" && hasTextFrame(target)) {
+    plan.bodyPatch = JSON.parse(JSON.stringify(snapshot.body)) as FormatPainterBodySnapshot;
+  }
   return plan;
+}
+
+/**
+ * The first list level a text box painted whole takes (`levelOnePatch`): the
+ * painted size, colour and face where the format states them, and bold and
+ * italic always (a flag the source does not wear is off, P2's `b="0"`).
+ */
+function levelOneOf(effective: FormatPainterRunStylePatch): NonNullable<FormatPaintPlan["levelOnePatch"]> {
+  const level: NonNullable<FormatPaintPlan["levelOnePatch"]> = {};
+  if (typeof effective.fontSize === "number") level.fontSize = effective.fontSize;
+  level.bold = effective.bold === true ? true : null;
+  level.italic = effective.italic === true ? true : null;
+  if (typeof effective.color === "string" && /^#[0-9a-f]{6}$/i.test(effective.color)) level.color = effective.color.toLowerCase();
+  if (typeof effective.fontFamily === "string" && effective.fontFamily.trim()) {
+    level.fontFamily = effective.fontFamily;
+    level.themeFontRole =
+      effective.themeFontRole === "heading" || effective.themeFontRole === "body" ? effective.themeFontRole : null;
+  }
+  return level;
 }
 
 /** The character format keys Format Painter carries whole. */
@@ -822,7 +946,8 @@ export function isEmptyPlan(plan: FormatPaintPlan): boolean {
     !plan.tablePatch &&
     !plan.textPatch &&
     !plan.runStylePatch &&
-    !plan.paragraphPatch
+    !plan.paragraphPatch &&
+    !plan.bodyPatch
   );
 }
 

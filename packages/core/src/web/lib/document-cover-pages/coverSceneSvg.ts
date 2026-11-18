@@ -153,7 +153,10 @@ export function coverSceneSvgMarkup(
     if (!text) return;
     const [left, top, right, bottom] = text.inset.map((value) => value / EMU_PER_PX);
     const innerWidth = Math.max(0, w - left - right);
-    const lines: Array<{ text: string; sizePx: number; color: string; weight: string; style: string; anchor: string; x: number; gap: number }> = [];
+    const lines: Array<{
+      text: string; sizePx: number; color: string; weight: string; style: string; anchor: string; x: number; gap: number;
+      rule?: { widthPx: number; spacePx: number; color: string };
+    }> = [];
     for (const paragraph of text.paragraphs) {
       const first = paragraph.runs[0];
       const sizePx = (first?.sizePt ?? 11) * PX_PER_PT;
@@ -180,10 +183,22 @@ export function coverSceneSvgMarkup(
           gap:
             (lineIndex === 0 ? (paragraph.beforePt ?? 0) * PX_PER_PT : 0) +
             (lineIndex === wrapped.length - 1 ? (paragraph.afterPt ?? 0) * PX_PER_PT : 0),
+          ...(lineIndex === wrapped.length - 1 && paragraph.borderBottom
+            ? {
+                rule: {
+                  widthPx: paragraph.borderBottom.widthPt * PX_PER_PT,
+                  spacePx: paragraph.borderBottom.spacePt * PX_PER_PT,
+                  color: paragraph.borderBottom.color,
+                },
+              }
+            : {}),
         });
       });
     }
-    const totalHeight = lines.reduce((sum, line) => sum + line.sizePx * 1.2 + line.gap, 0);
+    const totalHeight = lines.reduce(
+      (sum, line) => sum + line.sizePx * 1.2 + line.gap + (line.rule ? line.rule.spacePx + line.rule.widthPx : 0),
+      0,
+    );
     let cursor =
       text.anchor === "b"
         ? y + h - bottom - totalHeight
@@ -195,6 +210,15 @@ export function coverSceneSvgMarkup(
       body.push(
         `<text x="${line.x}" y="${cursor}" font-size="${line.sizePx}" fill="${line.color}" font-weight="${line.weight}" font-style="${line.style}" text-anchor="${line.anchor}">${escapeSvg(line.text)}</text>`,
       );
+      if (line.rule) {
+        // The paragraph's bottom border, `w:space` under its last line and
+        // across the frame, above its space after (R467-D04).
+        const ruleY = cursor + line.sizePx * 0.2 + line.rule.spacePx + line.rule.widthPx / 2;
+        body.push(
+          `<line x1="${x + left}" y1="${ruleY}" x2="${x + w - right}" y2="${ruleY}" stroke="${line.rule.color}" stroke-width="${line.rule.widthPx}"/>`,
+        );
+        cursor += line.rule.spacePx + line.rule.widthPx;
+      }
       cursor += line.sizePx * 0.2 + line.gap;
     }
   });

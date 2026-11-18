@@ -144,6 +144,37 @@ export function presentationSmartArtGroupBox(
  * of a diagram carrying a scene camera (styles 3d5-3d9), which is every other
  * block on every other slide.
  */
+
+
+
+
+
+
+
+
+
+
+function memberPictureCamera(
+  blocks: readonly PresentationBlock[],
+  block: PresentationBlock,
+): SmartArtScene3d | undefined {
+  if ((block as { type?: unknown }).type !== "image") return undefined;
+  const groupId = blockGroupId(block);
+  if (!groupId) return undefined;
+  let camera: SmartArtScene3d | undefined;
+  let key: string | undefined;
+  for (const member of blocks) {
+    if (member === block || blockGroupId(member) !== groupId) continue;
+    const own = (member as { scene3d?: SmartArtScene3d }).scene3d;
+    if (!own) continue;
+    const ownKey = JSON.stringify(own);
+    if (key !== undefined && ownKey !== key) return undefined;
+    camera = own;
+    key = ownKey;
+  }
+  return camera;
+}
+
 export function presentationSmartArtCameraStyle(
   blocks: readonly PresentationBlock[],
   block: PresentationBlock,
@@ -155,7 +186,7 @@ export function presentationSmartArtCameraStyle(
   // The camera is the diagram's own field: a diagram converted to shapes
   // keeps its members' `scene3d` and their group, and its view with them
   // (PPT-B258); a shape that never was a diagram carries none.
-  const scene3d = (block as { scene3d?: SmartArtScene3d }).scene3d;
+  const scene3d = (block as { scene3d?: SmartArtScene3d }).scene3d ?? memberPictureCamera(blocks, block);
   if (!scene3d) return null;
   const geom = blockGeometry(block);
   if (
@@ -186,10 +217,39 @@ export function presentationSmartArtCameraStyle(
 
 
 
+function ownTurn(
+  block: PresentationBlock,
+  group: { width: number; height: number },
+): { rotation?: number; flipH?: boolean; flipV?: boolean; aspect?: number } {
+  const record = block as { rotation?: unknown; flipH?: unknown; flipV?: unknown };
+  const rotation =
+    typeof record.rotation === "number" && Number.isFinite(record.rotation) && record.rotation % 360 !== 0
+      ? record.rotation
+      : undefined;
+  const flipH = record.flipH === true;
+  const flipV = record.flipV === true;
+  if (rotation === undefined && !flipH && !flipV) return {};
+  return {
+    ...(rotation !== undefined ? { rotation } : {}),
+    ...(flipH ? { flipH } : {}),
+    ...(flipV ? { flipV } : {}),
+    ...(group.width > 0 && group.height > 0 ? { aspect: group.width / group.height } : {}),
+  };
+}
+
 export function presentationSmartArtFaceSpan(
   blocks: readonly PresentationBlock[] | undefined,
   block: PresentationBlock,
-): { top: number; bottom: number; left?: number; right?: number } | null {
+): {
+  top: number;
+  bottom: number;
+  left?: number;
+  right?: number;
+  rotation?: number;
+  flipH?: boolean;
+  flipV?: boolean;
+  aspect?: number;
+} | null {
   if (!blocks) return null;
   const group = presentationSmartArtGroupBox(blocks, blockGroupId(block) ?? null);
   const geom = blockGeometry(block);
@@ -204,6 +264,10 @@ export function presentationSmartArtFaceSpan(
           right: (geom.left + geom.width - group.left) / group.width,
         }
       : {}),
+    // The member's own turn and mirror, which its face is drawn under
+    // (`SmartArtFaceSpan`): only where it has one, so an upright member's
+    // span is what it was.
+    ...ownTurn(block, group),
   };
 }
 

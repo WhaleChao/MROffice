@@ -99,7 +99,12 @@ export function excelBuiltInChartTextLook(
         title?.fontSizePt ??
         (title && Object.keys(title).length > 0
           ? base
-          : chart?.fontSizePt !== undefined ? Math.floor(base * 1.2) : EXCEL_BUILT_IN_TITLE_PT),
+          : chart?.fontSizePt !== undefined
+            ? // 1.2 times the chart's text, to the hundredth of a point Excel
+              // keeps sizes in (Windows Excel's PDFs, lookwin p159b: 9.6 pt
+              // over 8 pt text, 16.8 pt over 14 pt; it stood 9 / 16).
+              Math.round(base * 120) / 100
+            : EXCEL_BUILT_IN_TITLE_PT),
       bold: title?.bold ?? strong,
       color: title?.color ?? ink,
     },

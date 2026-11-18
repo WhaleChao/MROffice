@@ -41,6 +41,22 @@ export function pdfNativeTextMatrixIsSlanted(linear: Linear): boolean {
   return Math.abs(pdfNativeTextMatrixSkew(linear) - PDF_NATIVE_SYNTHETIC_ITALIC_SKEW) <= 0.02;
 }
 
+
+
+
+
+
+
+
+
+export function pdfNativeDrawnRunIsSlanted(
+  run: Readonly<{ textMatrix: readonly number[]; graphicsMatrix: readonly number[] }>,
+): boolean {
+  const [ta, tb, tc, td] = run.textMatrix, [ga, gb, gc, gd] = run.graphicsMatrix;
+  if (![ta, tb, tc, td, ga, gb, gc, gd].every(Number.isFinite)) return false;
+  return pdfNativeTextMatrixIsSlanted([ta * ga + tb * gc, ta * gb + tb * gd, tc * ga + td * gc, tc * gb + td * gd]);
+}
+
 /** The run's matrix with the synthetic slant put on or taken off: the
  * second axis leans along the first by the skew, the first axis and the
  * origin stay, so the baseline and the run's start do not move. */

@@ -553,6 +553,10 @@ export interface StructuralSheet {
    * grouping): each absolute index shifts with a row op; an index ON the deleted
    * row drops, later indices move up. Untouched by a column op. */
   manuallyHiddenRows?: number[];
+  /** Reading 944: rows past rowCount a sheet hidden by default still shows. */
+  rowsShownPastEnd?: number[];
+  /** Reading 945: hidden by the file's run, not by zeroHeight. */
+  rowsHiddenByFileRun?: true;
   /** The rows the sheet's filters hid when last applied (filter-result). */
   filterResult?: unknown;
   /** Advanced Filter's in-place result: its list and criteria ranges follow
@@ -2901,6 +2905,27 @@ function remapOverlays<T extends StructuralSheet>(
       at,
       delta,
     );
+  // A row still shown past the hidden default (reading 944, row 1,048,576)
+  // moves with the rows; one an insert pushes off the grid's end goes, as
+  // Excel's last row does.
+  // A delete also brings fresh rows in at the grid's end, which such a sheet
+  // shows: its file states no hidden default (Windows Excel 16, xlsx-rounds
+  
+  // 1,048,574 and rows 1,048,575-1,048,576 came in shown).
+  // A sheet hidden by its file's run to the grid's end (reading 945, no
+  // zeroHeight) shows them likewise (probe: rows 2-3 deleted from a run to
+  // 1,048,576, rows 1,048,575-1,048,576 came in shown). An insert keeps the
+  // run hidden to the end there too.
+  if (
+    axis === "row" &&
+    ((sheet.rowsShownPastEnd && sheet.rowsShownPastEnd.length > 0) ||
+      (sheet.rowsHiddenByFileRun === true && delta < 0))
+  ) {
+    const moved = (remapHiddenIndices(sheet.rowsShownPastEnd ?? [], true, at, delta) ?? []).filter((row) => row < MAX_ROWS);
+    for (let row = Math.max(0, MAX_ROWS + delta); delta < 0 && row < MAX_ROWS; row += 1) moved.push(row);
+    const shown = [...new Set(moved)].sort((left, right) => left - right);
+    patch.rowsShownPastEnd = shown.length > 0 ? shown : undefined;
+  }
   if (opened.size > 0) {
     const stayHidden = new Set<number>(axis === "row" ? patch.manuallyHiddenRows ?? [] : patch.manuallyHiddenCols ?? []);
     for (const index of opened) {
@@ -3273,17 +3298,29 @@ function withAreaLinksAcrossInsertedLines<T extends StructuralSheet>(
   count: number,
 ): T {
   if (at < 1) return sheet;
-  type Linked = StructuralCell & { hyperlink?: unknown; hyperlinkInArea?: boolean; hyperlinkTooltip?: unknown };
+  type Layer = { hyperlink?: unknown; hyperlinkTooltip?: unknown };
+  type Linked = StructuralCell & Layer & { hyperlinkInArea?: boolean; hyperlinkArea?: Layer };
   const cells = sheet.cells as Record<string, Linked>;
+  // The area's link a cell holds: its own (hyperlinkInArea), or the one
+  // beneath a link of the cell's own (hyperlinkArea). The area's element
+  // grows over the inserted lines either way -- Excel moves its ref -- so a
+  // cell above or below linked on its own does not stop it (xlsx-rounds
+  // R450-X65 E4: B6 linked on its own inside B3:B11, a row inserted at 7).
+  const areaLink = (cell: Linked | undefined): Layer | null =>
+    cell?.hyperlinkInArea === true
+      ? cell
+      : cell?.hyperlinkArea && typeof cell.hyperlinkArea.hyperlink === "string"
+        ? cell.hyperlinkArea
+        : null;
   let grown: Record<string, Linked> | null = null;
   for (const key of Object.keys(cells)) {
-    const before = cells[key];
-    if (before?.hyperlinkInArea !== true) continue;
+    const before = areaLink(cells[key]);
+    if (!before) continue;
     const parsed = parseCellKey(key);
     if (!parsed || (axis === "row" ? parsed.row : parsed.col) !== at - 1) continue;
     const place = (line: number) => (axis === "row" ? `${line}:${parsed.col}` : `${parsed.row}:${line}`);
-    const after = cells[place(at + count)];
-    if (after?.hyperlinkInArea !== true || after.hyperlink !== before.hyperlink) continue;
+    const after = areaLink(cells[place(at + count)]);
+    if (!after || after.hyperlink !== before.hyperlink) continue;
     for (let line = at; line < at + count; line += 1) {
       const target = place(line);
       (grown ??= { ...cells })[target] = {

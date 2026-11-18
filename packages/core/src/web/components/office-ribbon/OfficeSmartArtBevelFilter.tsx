@@ -25,6 +25,7 @@ import {
   smartArtBevelLightPrimitives,
   smartArtFaceTintPrimitives,
   smartArtLightRigMatrix,
+  type SmartArtFaceSpan,
   type SmartArtFilterPrimitive,
 } from "../../lib/office-smartart/canvas-3d";
 import type {
@@ -106,7 +107,7 @@ export function OfficeSmartArtBevelFilter({
    
   scene3d?: SmartArtScene3d;
   /** Where the member stands in its diagram (metal's light is the diagram's). */
-  faceSpan?: { readonly top: number; readonly bottom: number; readonly left?: number; readonly right?: number } | null;
+  faceSpan?: SmartArtFaceSpan | null;
   
 
 

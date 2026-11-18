@@ -13,8 +13,13 @@
  * commit what these return.
  */
 
+import { withCommandStatedKeys } from "./presentation-command-stated-keys";
 import { presentationTextUsesPoints } from "./presentation/text-units-block";
-import { CSS_PX_PER_POINT } from "./presentation/text-units";
+import {
+  CSS_PX_PER_POINT,
+  PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PT,
+  PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PX,
+} from "./presentation/text-units";
 import {
   blockHoldsEquationRun,
   withEquationFormatMaterialized,
@@ -1223,8 +1228,11 @@ export function materializeBlockFontInheritance(
   const next = { ...textBlock } as PresentationTextBlock & {
     style?: PresentationTextStyle & Record<string, unknown>;
   };
-  const nextStyle = { ...blockStyle };
+  let nextStyle = { ...blockStyle };
   for (const key of ownedKeys) delete nextStyle[key];
+  // Moved onto the runs, the keys are no box's any more, and no whole-object
+  // command's either (`style.commandStatedKeys`).
+  nextStyle = withCommandStatedKeys(nextStyle, { remove: ownedKeys });
   if (Object.keys(nextStyle).length > 0) {
     next.style = nextStyle as PresentationTextStyle & Record<string, unknown>;
   } else {
@@ -1614,16 +1622,15 @@ export function textBlockWithParagraphFormat(
   return applyParagraphFormatSelection(block, selection, paragraphPatch);
 }
 
-/**
- * A free text box's default size: PowerPoint's 18 pt (the presentation's
- * default text style), in the editor's design px (pt x 4/3). A new text box
- * states it (`NEW_TEXT_BOX_FONT_SIZE_PX`, PPT-G011); a box that states no
- * size is drawn at the canvas's 17 px fallback while the PDF, the PPTX and
- * PowerPoint draw 18 pt.
- */
-export const PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PX = 24;
-/** The same 18 pt, as a box marked `textFontSizeUnit: "point"` states it. */
-export const PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PT = 18;
+// A free text box's default size (`PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PT`/
+// `_PX`) is stated in text-units.ts, a module with no imports of its own:
+// presentation-shape-buttons.ts derives its module-level
+// `NEW_TEXT_BOX_FONT_SIZE_*` from it and is evaluated inside this module's
+// import cycle (this -> run-text-paint -> shape-buttons -> this), so a read
+// of this module's own constant there was a ReferenceError whenever this
+// module was reached first -- the deck print route, every deck's PDF
+
+export { PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PT, PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PX };
 
 /** A text box the author drew: no layout placeholder, no role. */
 function isFreeTextBoxBlock(block: PresentationTextBlock): boolean {

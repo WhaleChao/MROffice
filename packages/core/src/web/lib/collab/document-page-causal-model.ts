@@ -17,6 +17,7 @@ import { PAGINATION_RUNTIME_ATTRIBUTES } from "./paged-document-projection";
 import nullDefaults from "./document-canonical-null-attributes.json";
 import { yDocRevision, yTypeRevision } from "./y-doc-revision";
 import { holdsForeignCanonicalXmlAttributes } from "./canonical-xml-attributes";
+import { writeUndefinedAsNull } from "./y-json-values";
 
 const PRIVATE_LAYOUT = new Set(["pageBlockSizes", "pageBlockLayoutKey", "pageRegionLayoutReceipt"]);
 const ROOTS = new Set(["default", COLLABORATIVE_DOCUMENT_ATTRS_MAP]);
@@ -325,6 +326,27 @@ export function readDocumentCausalProjection(doc: Y.Doc): Record<string, JsonVal
   // gets its own.
   if (record(root.attrs)) root.attrs = structuredClone(root.attrs);
   return root;
+}
+
+
+
+
+
+
+
+
+
+
+
+export function readDocumentCausalProjectionAsApiReads(update: Uint8Array): Record<string, JsonValue> | null {
+  const doc = new Y.Doc();
+  try {
+    Y.applyUpdate(doc, update);
+    const roots = [doc.getXmlFragment("default"), doc.getMap(COLLABORATIVE_DOCUMENT_ATTRS_MAP)] as Y.AbstractType<unknown>[];
+    return writeUndefinedAsNull(roots) ? readDocumentCausalProjection(doc) : null;
+  } finally {
+    doc.destroy();
+  }
 }
 
 /**

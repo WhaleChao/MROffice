@@ -22,6 +22,7 @@ import {
   presentationTableCellParagraphBreakStyles,
   presentationTableCellParagraphStyles,
   presentationTableCellRunParagraphs,
+  presentationTableCellTrailingParagraphStyle,
 } from "../../../../lib/presentation/table-cell-paragraphs";
 import { Fragment, memo, useContext, useId, useMemo, useRef, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { useTranslations } from "@mrnote/core/host/next-intl.tsx";
@@ -102,6 +103,7 @@ import {
   type BlockPlayState,
 } from "../../../../lib/presentation/block-play";
 import { ShapeTextOverlay } from "./PresentationShapeTextOverlay";
+import { isSmartArtGraphicPlate, smartArtGraphicPlateStyle } from "../../../../lib/presentation/smartart-graphic-plate";
 import {
   tableCellStatedHeightPx,
   tableCellVisualTextStyle,
@@ -259,6 +261,7 @@ function PresentationBlockViewDrawing({
   showAnimations = true,
   smartArtCamera,
   decorativeGroup = false,
+  editingSlots = false,
 }: {
   block: PresentationBlock;
   bounds: { width: number; height: number };
@@ -316,6 +319,13 @@ function PresentationBlockViewDrawing({
   /** A member of a group or SmartArt graphic marked decorative as a whole
    * (`presentationDecorativeGroupIds`): skipped by assistive readers. */
   decorativeGroup?: boolean;
+  /**
+   * Drawn on the EDITING canvas (a cache-less diagram's laid-out shapes): an
+   * empty SmartArt picture slot keeps its "insert picture" icon, as PowerPoint
+   * shows it while editing. Everywhere else this view draws -- the show, the
+   * rail, print and export -- the slot is its bare colour (TRIAGE S22).
+   */
+  editingSlots?: boolean;
 }) {
   const fontAliases = useContext(PresentationFontAliasesContext);
   // Shrink text on overflow measured on the slide's drawing: draw again when it lands.
@@ -677,6 +687,7 @@ function PresentationBlockViewDrawing({
           block={block}
           themeColors={presentationThemeGridColors(theme, resolveSlideMaster(slide, masters))}
           fillParent={geometry}
+          emptySlot={editingSlots ? "icon" : "fill"}
           imgStyle={{
             ...(importedPptxPictureFrameStyle(block, geometry) ?? {
               maxWidth: geometry
@@ -773,7 +784,19 @@ function PresentationBlockViewDrawing({
                           // The paragraphs' bullets and indents (`textLayout`, look
                           
                           const paragraphs = presentationTableCellParagraphStyles(cell, cell.text);
-                          if (!paragraphs) return runs.map(drawRun);
+                          if (!paragraphs) {
+                            // An empty last paragraph is a line of its end mark's size, the row
+                            
+                            // block of the mark's own type (its line box stands on it, not on the
+                            // cell's), as the canvas's field draws it.
+                            const trailing = presentationTableCellTrailingParagraphStyle(displayedTable, cell);
+                            if (!trailing) return runs.map(drawRun);
+                            const mark = presentationCellTextRunCss(trailing, tableCellVisualTextStyle(displayedTable, { ...cellStyle, superscript: false, subscript: false }, block.headerRow === true && rowIndex === 0, false, cell), { superscript: cellStyle.superscript, subscript: cellStyle.subscript });
+                            return [
+                              ...runs.map(drawRun),
+                              <span key="trailing-paragraph" data-cell-paragraph-tail="" style={{ display: "block", fontSize: mark.fontSize, fontFamily: mark.fontFamily }}>{"\u200b"}</span>,
+                            ];
+                          }
                           const breakStyles = presentationTableCellParagraphBreakStyles(runs);
                           return presentationTableCellRunParagraphs(runs).map((paragraph, paragraphIndex) => {
                             const drawn = paragraphs[Math.min(paragraphIndex, paragraphs.length - 1)];
@@ -1320,7 +1343,19 @@ function PresentationBlockViewDrawing({
 
 
 
-export const PresentationBlockView = memo(PresentationBlockViewDrawing, sameBlockViewProps);
+/**
+ * A file's SmartArt graphic's own fill, line and effect across its frame
+ * (`smartart-graphic-plate`): a display object, painted and hidden with its
+ * diagram, never taking a press; anything else is drawn as a block.
+ */
+function PresentationBlockViewOrPlate(props: Parameters<typeof PresentationBlockViewDrawing>[0]) {
+  if (!isSmartArtGraphicPlate(props.block)) return <PresentationBlockViewDrawing {...props} />;
+  if (props.play && !props.play.visible) return null;
+  const style = smartArtGraphicPlateStyle(props.block, props.bounds);
+  return style ? <div aria-hidden="true" data-testid="presentation-smartart-graphic-plate" style={style} /> : null;
+}
+
+export const PresentationBlockView = memo(PresentationBlockViewOrPlate, sameBlockViewProps);
 PresentationBlockView.displayName = "PresentationBlockView";
 
 /** The same props, the slide's bounds by their size: hosts compute them

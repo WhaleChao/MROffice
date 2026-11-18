@@ -1657,9 +1657,16 @@ function mergeTableGroup(tables: TableJsonNode[]): TableJsonNode {
     sourceRow: number | null;
     fragments: TableJsonNode[];
   }> = [];
+  // Each physical row's logical row (null: a repeated header clone).
+  const logicalOf: Array<Array<number | null>> = [];
   tables.forEach((table) => {
+    const physical: Array<number | null> = [];
+    logicalOf.push(physical);
     tableRows(table).forEach((row) => {
-      if (row.attrs?.[TABLE_REPEATED_HEADER_ATTR] === true) return;
+      if (row.attrs?.[TABLE_REPEATED_HEADER_ATTR] === true) {
+        physical.push(null);
+        return;
+      }
       const sourceRow = Number(row.attrs?.[TABLE_SOURCE_ROW_ATTR]);
       const normalizedSource =
         Number.isInteger(sourceRow) && sourceRow >= 0 ? sourceRow : null;
@@ -1679,13 +1686,96 @@ function mergeTableGroup(tables: TableJsonNode[]): TableJsonNode {
           fragments: [row],
         });
       }
+      physical.push(logicalRows.length - 1);
     });
   });
+  const spans = mergedSpansByRows(tables, logicalOf);
   return {
     ...first,
     attrs: stripAttrsKept(first.attrs, TABLE_RUNTIME_ATTRS),
-    content: logicalRows.map(({ fragments }) => mergeRowFragments(fragments)),
+    content: logicalRows.map(({ fragments }) =>
+      mergeRowFragments(
+        spans.size === 0
+          ? fragments
+          : fragments.map((row) =>
+              rowCells(row).some((cell) => spans.has(cell))
+                ? {
+                    ...row,
+                    content: (row.content ?? []).map((cell) =>
+                      spans.has(cell)
+                        ? { ...cell, attrs: { ...attrsOf(cell), [TABLE_ORIGINAL_ROWSPAN_ATTR]: spans.get(cell) } }
+                        : cell,
+                    ),
+                  }
+                : row,
+            ),
+      ),
+    ),
   };
+}
+
+/**
+ * The whole span of a merged cell the pages cut, read off the rows it covers
+ * now: from its own row to the last row of its last stand-in on a later page.
+ * The cut stamps the span the cell had then; a row inserted inside the merge
+ * on one page grows that page's piece, not the stamp, and the stored merge
+ * covered one row fewer than the table had: the grid was no grid, the save
+ * declined the table and the full writer refused it (corpus R473-D04 LIVE: a
+ * row added under a header beside a 34-row merged column). Only a cell whose
+ * row is whole on its page and whose merge goes on as stand-ins is read this
+ * way; any other shape keeps the stamp. `window.__docsMergedSpanByRowsOff =
+ * true` keeps every stamp, as before.
+ */
+function mergedSpansByRows(
+  tables: TableJsonNode[],
+  logicalOf: Array<Array<number | null>>,
+): Map<TableJsonNode, number> {
+  const spans = new Map<TableJsonNode, number>();
+  if (
+    tables.length < 2 ||
+    (typeof window !== "undefined" &&
+      (window as Window & { __docsMergedSpanByRowsOff?: boolean }).__docsMergedSpanByRowsOff === true)
+  )
+    return spans;
+  const rowsOf = tables.map(tableRows);
+  const rowIsWhole = (row: TableJsonNode) =>
+    row.attrs?.[TABLE_ROW_CONTINUES_ATTR] !== true && row.attrs?.[TABLE_ROW_CONTINUATION_ATTR] !== true;
+  rowsOf.forEach((rows, fragment) => {
+    rows.forEach((row, rowIndex) => {
+      const start = logicalOf[fragment]?.[rowIndex];
+      if (start == null || !rowIsWhole(row)) return;
+      rowCells(row).forEach((cell) => {
+        const stamp = cell.attrs?.[TABLE_ORIGINAL_ROWSPAN_ATTR];
+        if (stamp == null || Number(stamp) <= 1 || cell.attrs?.[TABLE_VERTICAL_CONTINUATION_ATTR] === true) return;
+        const col = cell.attrs?.[TABLE_SOURCE_CELL_COL_ATTR];
+        if (!Number.isInteger(col)) return;
+        let at = fragment;
+        let last = rowIndex + integerSpan(cell.attrs?.rowspan ?? 1) - 1;
+        let pieces = 0;
+        while (last === rowsOf[at]!.length - 1 && at + 1 < rowsOf.length) {
+          const next = rowsOf[at + 1]!;
+          const first = next.findIndex((candidate) => candidate.attrs?.[TABLE_REPEATED_HEADER_ATTR] !== true);
+          const piece =
+            first < 0
+              ? undefined
+              : rowCells(next[first]!).find(
+                  (candidate) =>
+                    candidate.attrs?.[TABLE_VERTICAL_CONTINUATION_ATTR] === true &&
+                    candidate.attrs?.[TABLE_SOURCE_CELL_COL_ATTR] === col,
+                );
+          if (!piece) break;
+          at += 1;
+          last = first + integerSpan(piece.attrs?.rowspan ?? 1) - 1;
+          pieces += 1;
+        }
+        const end = logicalOf[at]?.[last];
+        if (pieces === 0 || last >= rowsOf[at]!.length || end == null || end < start) return;
+        const span = end - start + 1;
+        if (span !== integerSpan(stamp)) spans.set(cell, span);
+      });
+    });
+  });
+  return spans;
 }
 
 function hasTableRuntimeProjection(

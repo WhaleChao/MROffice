@@ -344,6 +344,14 @@ function TextFrame({
               marginTop: (paragraph.beforePt ?? 0) * PX_PER_PT * scale * EMU_PER_PX,
               marginBottom: (paragraph.afterPt ?? 0) * PX_PER_PT * scale * EMU_PER_PX,
               lineHeight: paragraph.lineHeight ?? 1.15,
+              ...(paragraph.borderBottom
+                ? {
+                    // Word draws the rule `w:space` under the last line,
+                    // above the space after (R467-D04's cover title).
+                    paddingBottom: paragraph.borderBottom.spacePt * PX_PER_PT * scale * EMU_PER_PX,
+                    borderBottom: `${paragraph.borderBottom.widthPt * PX_PER_PT * scale * EMU_PER_PX}px solid ${paragraph.borderBottom.color}`,
+                  }
+                : {}),
             }}
           >
             {paragraph.runs.map((run, runIndex) => {

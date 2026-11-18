@@ -441,6 +441,7 @@ function tableToPm(table: BandRichTable): PmJson {
       columnWidthsPct: table.columnWidthsPct,
       tableAlign: table.tableAlign,
       bidiVisual: table.bidiVisual,
+      tableIndentTwips: table.tableIndentTwips,
       floatPosition: table.floatPosition,
       // The table's own borders and rows' heights, and each cell's borders by
       // its place in the grid: the band editor draws the grid, the save
@@ -815,6 +816,7 @@ function tableFromPm(node: PmJson, unsupported?: string[]): BandRichTable | null
     if (extras.tableAlign) table.tableAlign = extras.tableAlign;
     if (extras.floatPosition) table.floatPosition = extras.floatPosition;
     if (extras.bidiVisual === true) table.bidiVisual = true;
+    if (typeof extras.tableIndentTwips === "number" && extras.tableIndentTwips) table.tableIndentTwips = extras.tableIndentTwips;
     if (extras.borders) table.borders = extras.borders;
     // Heights are the rows'; a row added or removed in the band leaves them
     // to the rows the table now has.

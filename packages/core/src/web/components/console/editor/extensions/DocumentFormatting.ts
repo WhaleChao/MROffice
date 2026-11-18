@@ -6,10 +6,12 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { normalizeWordDocumentSettings } from "../native-document/wordDocumentSettings";
+import { wordEastAsianTextInEastAsianLanguage, wordSetsIdeographsAsLetters } from "../native-document/wordFarEastDefaults";
 import { readDocumentNumberingMarkerFact } from "../native-document/documentNumberingLayout";
 import { officePrimaryFontFamily } from "../../../office-ribbon/officeTypographyCatalog";
 import { isWordLineMultiple, pxToPtRounded } from "../../../../lib/office-units";
 import { cssAbsoluteLengthPt } from "../../../../lib/css-absolute-length";
+import { lineBreakOpportunities } from "../../../../lib/text-engine/line-break";
 import { BULK_FILL_CHUNK_META, mappedThroughBulkFill, rebuildsAfterFill } from "../native-document/bulkFillTransaction";
 import { Extension, type CommandProps } from "@tiptap/core";
 import { normalizeWordHorizontalRule } from "../../../../lib/document-word-horizontal-rule";
@@ -783,10 +785,115 @@ function kinsokuNoEndRanges(
   return ranges;
 }
 
+/** Harness switch (`window.__docsKoreanWholeWordsHangOff = true`): a Korean
+ * paragraph under w:wordWrap 0 charges its line-end space to the line (A/B). */
+function koreanWholeWordsHangOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKoreanWholeWordsHangOff?: boolean }).__docsKoreanWholeWordsHangOff === true;
+}
+
 /** Harness switch (`window.__docsKoreanWordWrapOff = true`): Latin words in
  * Korean text under w:wordWrap 0 are cut as in any other text (A/B). */
 function koreanWordWrapOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsKoreanWordWrapOff?: boolean }).__docsKoreanWordWrapOff === true;
+}
+
+/** Kanji and kana that `word-break: keep-all` keeps together: not the
+ * small kana, iteration marks and the prolonged sound mark (UAX #14 CJ/NS),
+ * which Chromium may still break beside. */
+const KEEP_ALL_LETTER = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+const KEEP_ALL_LOOSE = /[ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶㇰ-ㇿ々〻ゝゞヽヾ・]/u;
+const ASCII_ALPHANUMERIC = /^[0-9A-Za-z]$/;
+/** Text Word sets as letters there (line-break.ts LATIN_SET_IDEOGRAPH), and Hangul. */
+const SET_AS_LETTER_TEXT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\u3001-\u303f\uff00-\uffef]/u;
+const HANGUL_TEXT = /\p{Script=Hangul}/u;
+
+/**
+ * The stretches of a paragraph whose ideographs Word sets as letters
+ * (wordSetsIdeographsAsLetters) where the browser could break and Word does
+ * not: every pair of characters with no break between them in the engine's
+ * Latin rules (lineBreakOpportunities' ideographsAsLetters, the lines the
+ * engine and the page ledger lay out) but past what `keep-all` already keeps
+ * (two kanji or kana, two ASCII letters or digits) or a space. Chromium's
+ * keep-all still broke after "〜", before "(" and after ":" in R398-D14's
+ * "肥料(N-P-K):生産される大豆1kgあたり約0.12〜0.18ドル", which Word sets as one
+ * word and breaks only after its hyphens. Consecutive pairs are one stretch;
+ * a word wider than the line is still cut between the stretches
+ * (overflow-wrap), where Word cuts it as it overflows.
+ */
+export function ideographWordKeepRanges(block: PmNode, contentFrom: number): { ranges: Array<{ from: number; to: number }>; joins: number[] } {
+  const ranges: Array<{ from: number; to: number }> = [];
+  const joins: number[] = [];
+  let characters: Array<{ character: string; from: number; to: number; run: number }> = [];
+  const flush = () => {
+    if (characters.length > 1) {
+      const opportunities = lineBreakOpportunities(characters.map((entry) => entry.character), { kinsoku: null, word: true, ideographsAsLetters: true });
+      let open = -1;
+      for (let index = 1; index <= characters.length; index += 1) {
+        const before = characters[index - 1]!.character;
+        const after = characters[index]?.character;
+        const whole = after !== undefined && !opportunities[index] && !/\s/u.test(before) && !/\s/u.test(after);
+        // Two ASCII letters or digits continue a stretch ("0.12") but open none.
+        const alphanumeric = whole && ASCII_ALPHANUMERIC.test(before) && ASCII_ALPHANUMERIC.test(after!);
+        const keep = whole && !alphanumeric &&
+          !(KEEP_ALL_LETTER.test(before) && !KEEP_ALL_LOOSE.test(before) && KEEP_ALL_LETTER.test(after!) && !KEEP_ALL_LOOSE.test(after!));
+        if (alphanumeric && open >= 0) continue;
+        if (keep && open < 0) open = index - 1;
+        // A nowrap stretch keeps a break out only inside one element: where
+        // the pair crosses a run or the page's East Asian / Latin face
+        // boxes (documentAutoLineSpacing), each side is a span of its own
+        // and the browser broke between them all the same (R398-D14 "〜|0",
+        // ":|窒"). A word joiner there keeps them together.
+        if (keep && (characters[index - 1]!.run !== characters[index]!.run || EAST_ASIAN_CHARACTER.test(before) !== EAST_ASIAN_CHARACTER.test(after!))) {
+          joins.push(characters[index]!.from);
+        }
+        if (!keep && open >= 0) {
+          ranges.push({ from: characters[open]!.from, to: characters[index - 1]!.to });
+          open = -1;
+        }
+      }
+    }
+    characters = [];
+  };
+  block.forEach((child, childOffset) => {
+    if (!child.isText || !child.text) {
+      flush();
+      return;
+    }
+    let offset = 0;
+    for (const character of child.text) {
+      const from = contentFrom + childOffset + offset;
+      characters.push({ character, from, to: from + character.length, run: childOffset });
+      offset += character.length;
+    }
+  });
+  flush();
+  return { ranges, joins };
+}
+
+/** The word joiner a set-as-letter word is kept together by across two
+ * spans (ideographWordKeepRanges' joins): no width, no break on either side
+ * (UAX #14 WJ), which the engine's lines read the same way. It is the page's,
+ * not the text's: a widget (contenteditable=false, ProseMirror-widget), which
+ * the document's text, its copy, find and spelling (all read from the
+ * document) and the page's DOM text walks (domTextCursor, the Copilot region
+ * snapshot, the CJK spacing pass skip such hosts) never count, and hidden
+ * from assistive technology as the line struts are. */
+function ideographWordJoiner(): HTMLElement {
+  const joiner = document.createElement("span");
+  joiner.className = "docs-ideograph-word-joiner";
+  joiner.setAttribute("aria-hidden", "true");
+  // ProseMirror marks a widget so by property; stated here, every DOM (and
+  // every text walk that skips such hosts) reads it alike.
+  joiner.setAttribute("contenteditable", "false");
+  joiner.textContent = "\u2060";
+  return joiner;
+}
+
+/** Harness switch (`window.__docsIdeographWordsCssOff = true`): ideographs a
+ * mode-13 document sets as letters break between characters in the browser,
+ * as before (A/B). */
+function ideographWordsCssOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsIdeographWordsCssOff?: boolean }).__docsIdeographWordsCssOff === true;
 }
 
 /** Inherited Word punctuation defaults are independent of list layout gates. */
@@ -836,8 +943,13 @@ function documentOverflowPunctuationDecorations(
     // transliterated name, an opening curly quote, a currency sign): the
     // character and the one after it are kept on one line, in East Asian
     // text, while the paragraph's line breaking rules are on (WUA 115).
+    // East Asian text in a Western language takes none of Word's East Asian
+    // line rules, as with them turned off (wordEastAsianTextInEastAsianLanguage,
+    // R334-D24: "东西向（" ends a line).
+    const kinsokuOn = (displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku) !== false &&
+      (!EAST_ASIAN_TEXT.test(block.textContent) || wordEastAsianTextInEastAsianLanguage(doc.attrs, block));
     if (
-      (displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku) !== false &&
+      kinsokuOn &&
       WORD_ZH_CN_NO_END_EXTRA_TEST.test(block.textContent)
     ) {
       for (const range of kinsokuNoEndRanges(block, pos + 1, doc.attrs.eastAsianLanguage)) {
@@ -848,7 +960,7 @@ function documentOverflowPunctuationDecorations(
       }
     }
     if (
-      (displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku) !== false &&
+      kinsokuOn &&
       WORD_ZH_CN_NO_START_EXTRA_TEST.test(block.textContent)
     ) {
       for (const range of kinsokuNoStartRanges(block, pos + 1, doc.attrs.eastAsianLanguage)) {
@@ -866,7 +978,36 @@ function documentOverflowPunctuationDecorations(
     // Latin words mid-word at every line end (corpus R324-D01, a Norwegian
     // template's body style with kinsoku off: "quant|um", "Alumin|ium";
     // 37 of 44 corpus documents with kinsoku off hold no East Asian text).
-    if ((displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku) === false && EAST_ASIAN_TEXT.test(block.textContent)) {
+    // Ideographs set as letters of a word (wordSetsIdeographsAsLetters: mode
+    // 13 and earlier, defaults with no East Asian face): Word breaks such
+    // text only where it breaks Latin text, and cuts a word wider than the
+    // line where it overflows (docx-look probes/cjk1). The engine's lines
+    // say so, but a correction cannot keep the browser from breaking between
+    // kana: its lines broke there all the same (corpus R398-D14, "大豆1kgあたり
+    // …(N-P-" / "K):生産される…" in Word). `window.__docsIdeographWordsCssOff
+    // = true`: as before (A/B).
+    // Hangul keeps its own class there (the engine breaks between its
+    // syllables), which keep-all would not: such a paragraph is left as it was.
+    const ideographWords = SET_AS_LETTER_TEXT.test(block.textContent) && !HANGUL_TEXT.test(block.textContent) &&
+      wordSetsIdeographsAsLetters(doc.attrs) && !ideographWordsCssOff();
+    if (ideographWords) {
+      result.push(Decoration.node(pos, pos + block.nodeSize, {
+        "data-document-ideograph-words": "true",
+        style: "word-break:keep-all;overflow-wrap:break-word",
+      }));
+      // Two adjacent stretches are two spans (a break may lie between them).
+      const keep = ideographWordKeepRanges(block, pos + 1);
+      keep.ranges.forEach((range, index) => {
+        result.push(Decoration.inline(range.from, range.to, {
+          "data-document-ideograph-word-keep": index % 2 ? "b" : "a",
+          style: "white-space:nowrap",
+        }, { inclusiveStart: false, inclusiveEnd: false }));
+      });
+      for (const at of keep.joins) {
+        result.push(Decoration.widget(at, ideographWordJoiner, { side: -1, key: "docs-ideograph-word-joiner", ignoreSelection: true, marks: [] }));
+      }
+    }
+    if (!kinsokuOn && !ideographWords && EAST_ASIAN_TEXT.test(block.textContent)) {
       for (const range of eastAsianRunRanges(block, pos + 1)) {
         result.push(Decoration.inline(range.from, range.to, {
           "data-document-kinsoku-off": "true",
@@ -876,7 +1017,7 @@ function documentOverflowPunctuationDecorations(
     }
     // The marks Word's list for the text's language lets start or end a line
     // where Chromium's line breaking does not (R14-D15's ladder).
-    if (sourceAdapter === "docx" && (displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku) !== false) {
+    if (sourceAdapter === "docx" && kinsokuOn && !ideographWords) {
       for (const range of documentKinsokuAllowedBreaks(block, pos + 1, doc.attrs.eastAsianLanguage)) {
         result.push(Decoration.inline(range.from, range.to, {
           "data-document-kinsoku-allowed-break": "true",
@@ -912,8 +1053,24 @@ function documentOverflowPunctuationDecorations(
     if (sourceAdapter === "docx" && normalizeParagraphOnOff(block.attrs.wordWrap) === false && !koreanWordWrapOff()) {
       const korean = documentKoreanWholeWordRanges(block, pos + 1, doc.attrs.eastAsianLanguage);
       const attrs = { "data-document-korean-whole-words": "true", style: "word-break:normal;overflow-wrap:break-word" };
-      if (korean === "paragraph") result.push(Decoration.node(pos, pos + block.nodeSize, attrs));
-      else for (const range of korean) result.push(Decoration.inline(range.from, range.to, attrs, { inclusiveStart: false, inclusiveEnd: false }));
+      if (korean === "paragraph") {
+        result.push(Decoration.node(pos, pos + block.nodeSize, attrs));
+        // Its Latin words kept whole, its line-end space hangs as anywhere
+        // else in Word (the preserve-hang rule above, which "Allow Latin
+        // text to wrap" kept such a paragraph out of): under break-spaces the
+        // space was charged to the line and the word before it went down
+        // (corpus R287-D30, Table A2: "of own tax burden relative" fits
+        // Word's 129 pt cell with its space hanging; ours took a fourth line
+        // and the table's last row went to page 2). Paragraphs holding East
+        // Asian text keep break-spaces, as there.
+        // `window.__docsKoreanWholeWordsHangOff = true`: as before (A/B).
+        if (!EAST_ASIAN_TEXT.test(block.textContent) && !koreanWholeWordsHangOff()) {
+          result.push(Decoration.node(pos, pos + block.nodeSize, {
+            "data-document-native-whitespace": "preserve-hang",
+            style: "white-space:pre-wrap",
+          }));
+        }
+      } else for (const range of korean) result.push(Decoration.inline(range.from, range.to, attrs, { inclusiveStart: false, inclusiveEnd: false }));
     }
     if (sourceAdapter === "docx" && !wordsMayBreak) {
       for (const boundary of documentSlashLetterBoundaries(block, pos + 1)) {
@@ -991,8 +1148,7 @@ function documentOverflowPunctuationDecorations(
         // Word never starts a line with a zh-CN no-start character, even after
         // a space. The stylesheet keeps that single space unbreakable, so no
         // source text, glyph advance or line box changes.
-        const kinsoku = displayAttrs.kinsoku ?? doc.attrs.defaultKinsoku;
-        if (kinsoku == null || kinsoku === true) {
+        if (kinsokuOn) {
           for (const boundary of documentKinsokuNoStartBoundaries(block, pos + 1)) {
             result.push(Decoration.inline(boundary.from, boundary.to, {
               "data-document-kinsoku-no-start": "eastAsia-zh-CN",

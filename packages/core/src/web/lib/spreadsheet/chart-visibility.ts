@@ -44,7 +44,10 @@ export function chartVisiblePointIndices(chart: { chartVisibility?: unknown; cha
     for (const formula of [ref.categories, ref.values, ref.xValues, ref.bubbleSizes]) {
       if (!formula) continue;
       const areas = parseChartRefAreas(formula);
-      const ownerOf = (area: { sheetName?: string }) => sheets.filter(sheet => sheet.name.toLowerCase() === area.sheetName?.toLowerCase());
+      // A sheet's name may start or end with a space (R295-X02's " Global IDP"),
+      // which the reference parser trims off: compare both trimmed. Two sheets
+      // that then share a name still stay unresolved.
+      const ownerOf = (area: { sheetName?: string }) => sheets.filter(sheet => sheet.name.trim().toLowerCase() === area.sheetName?.trim().toLowerCase());
       if (!areas || areas.some(area => ownerOf(area).length !== 1)) return { state: "unavailable", reason: "chart_visibility_reference_unavailable" };
       // A union of areas (a chart over a non-contiguous selection) plots each
       // area's cells in turn. Like a block, it only has to prove that no cell

@@ -174,7 +174,8 @@ import { createPdfWorkingLimitSave, PDF_WORKING_REVISION_CEILING, PDF_WORKING_RE
 import { planPdfNativeEngineCommand, type PdfNativeEnginePlan } from "../../../lib/pdf/remote/pdf-native-plan";
 import { pdfNativeBrowserPlanEnabled, planPdfNativeEngineCommandInBrowser, PdfNativeBrowserPlanUnavailable, prewarmPdfNativeEnginePlanWorker, prewarmPdfNativeParagraphPlans } from "../../../lib/pdf/native-engine-browser-plan";
 import { PDF_TEXT_BOX_HANDOFF_FIELD_ATTR, pdfNativeLineCentredOnPage, pdfNativeLineRightFlushOnPage } from "../../../lib/pdf/native-line-centring";
-import { pdfNativeDetachFinishesAgain } from "../../../lib/pdf/native-detach-refusals";
+import { pdfNativeCarriedWordsRefused, pdfNativeDetachFinishesAgain, pdfNativeLeaveRefusalNotice,
+  pdfNativePlanAnswerOfCompileRefusal, pdfNativePlanRefusalIsForGood } from "../../../lib/pdf/native-detach-refusals";
 import { pdfTextEditCommonEnds } from "@mrnote/core/web/lib/pdf/text-edit-common-ends.ts";
 import { captureSavedPageHotCacheScope, isSavedPageHotCacheScopeCurrent } from "@mrnote/core/web/lib/saved-page-hot-cache.ts";
 import type { PdfHeldPageGeometries, PdfHeldPageGeometry } from "../../../lib/pdf/held-page-frame";
@@ -190,7 +191,7 @@ import { clearPdfRedo, enqueuePdfMarkupHistoryStep, notePdfHistoryUndone,
   withdrawQueuedPdfMarkup } from "../../../lib/pdf/markup-write-queue";
 import { usePdfMarkupMarksPending } from "../../../lib/pdf/use-markup-write-queue";
 import { pdfKeptObjectKey } from "../../../lib/pdf/kept-object-change";
-import { askPdfReaderWorkNow, pdfReaderHeldWork, pdfReaderHoldsWork, pdfReaderRetryPauseMs, pdfWindowShownSaveStatus, type PdfReaderHeldState } from "../../../lib/pdf/reader-held-work";
+import { askPdfReaderWorkNow, pdfHeldStatesTogether, pdfReaderHeldWork, pdfReaderHoldsWork, pdfReaderRetryPauseMs, pdfWindowShownSaveStatus, type PdfReaderHeldState } from "../../../lib/pdf/reader-held-work";
 import { PDF_SAVE_PRESS_POLL_MS, pdfSavePressStep } from "../../../lib/pdf/save-press";
 import { usePdfReaderHeldWork } from "../../../lib/pdf/use-reader-held-work";
 import { createPdfPendingRowsLedger, forgetPdfPendingEditsSavedHere, isPdfPendingEditDurable, isPdfPendingEditSaved, listPdfPendingEditRows, notePdfPendingEditSaving, onPdfPendingEditSaved, PDF_PENDING_ROW_PAGE_CHANGED, pdfNativeChainSaveTaken, pdfNativeJournalTakesKeptTextBlocks, pdfPendingEditRowHasTypedWords, resavePdfPendingEdit, savePdfPendingEdit, stagePdfPendingRowWords, withdrawPdfPendingEdit, writePdfPendingEditRows, type PdfPendingEditRow, type PdfPendingRowAttempt } from "../../../lib/pdf/pending-edits";
@@ -216,8 +217,9 @@ import { pdfNativeBoxRowStarts } from "../../../lib/pdf/text-edit/box-rows";
 import { pdfNativeTextEditPath } from "../../../lib/pdf/text-edit/intent";
 import { readLatestPdfNativeTextSourceGeometry, rememberPdfNativeTextSourceGeometry, type PdfTextSourceAppearance } from "../../../lib/pdf/source-text-appearance";
 import { afterPdfTextInteractionPaint } from "../../../lib/pdf/text-edit-interaction";
-import { cachedPdfSourceTextBoxAppearanceSeals, pdfSourceTextBindingIsPortable, pdfSourceTextBindingNamesItem, pdfSourceTextBindingSealedForSave, pdfSourceTextBoxCoversInk, readPdfSourceTextBoxBinding,
-  readPdfSourceTextBoxAppearanceSeals, warmPdfSourceTextBoxAppearanceSeals } from "../../../lib/pdf/source-text-box";
+import { pdfSourceTextBindingIsPortable, pdfSourceTextBindingNamesItem, pdfSourceTextBindingSealedForSave, pdfSourceTextBoxCoversInk, readPdfSourceTextBoxBinding,
+  warmPdfSourceTextBoxAppearanceSeals } from "../../../lib/pdf/source-text-box";
+import { pdfSourceTextBindingsWrittenBySave, readPdfSourceTextSealsForSave, sealPdfSourceTextRowsForSave } from "../../../lib/pdf/source-text-save-seal";
 import { pdfNativeKeptTextBlockOfRecord, pdfNativeKeptTextBlocks, pdfNativeWrittenBoxBlockOfRecord, type PdfNativeKeptTextBlock } from "../../../lib/pdf/native-kept-text-blocks";
 import { pdfNativePageBoxMap } from "../../../lib/pdf/native-page-box-map";
 import { readPdfTextContentWithHardGroups } from "../../../lib/pdf/native-text-hard-groups";
@@ -274,6 +276,7 @@ import { buildPdfNativeVectorStyleCommand, createPdfNativeVectorStyleOwnershipMa
 import { turnedQuarterTurns } from "../../../lib/pdf/native-embedded-image-transform";
 import { type PdfNativeTextDecorationGeometry, type PdfNativeTextDecorationHistory } from "../../../lib/pdf/native-text-decoration";
 import {
+  PDF_NATIVE_TEXT_RULE_WHOLE,
   pdfNativeTextRuleDecorations,
   pdfNativeTextRuleRangeOf,
   type PdfNativeTextRuleRange,
@@ -416,7 +419,7 @@ import { PdfPageFontsProvider } from "./pdf/window/usePdfPageFonts";
 import { isPdfNativeEmbeddedFontKey, pdfNativeEmbeddedFontKey, pdfNativeTextDraftEmbedsFonts, readPdfNativeEmbeddedFontRefusal } from "../../../lib/pdf/native-embedded-font-key";
 import { embeddableFontFamily } from "@mrnote/core/web/lib/office-fonts/embeddable-faces.ts";
 import { readPdfPageFontFamilyToken } from "../../../lib/pdf/page-fonts";
-import { nativeTextColorFromHex, nativeTextMatrixScale, nativeTextSameFamily, nativeTextServedRegularFamily, nativeTextUnboldServedFaceKey } from "../../../lib/pdf/native-text-format-draft";
+import { nativeTextBoxFormatDrawnStyle, nativeTextColorFromHex, nativeTextMatrixScale, nativeTextNamedStyleOffFace, nativeTextSameFamily, nativeTextServedRegularFamily, nativeTextUnboldServedFaceKey } from "../../../lib/pdf/native-text-format-draft";
 import { PDF_NATIVE_SCRIPT_SIZE, nativeTextRiseToggle, pdfNativeScriptRiseEm, pdfNativeScriptSizeFactor } from "../../../lib/pdf/native-text-rise";
 import { pdfNativeSlantedTextMatrixLinear } from "../../../lib/pdf/native-synthetic-style";
 import {
@@ -631,7 +634,7 @@ import { nativeTextBoxAppearanceRefusals, renderManagedNativeTextBoxAppearance }
 import { refitManagedNativeTextBoxRecords } from "./pdf/window/textBoxRecordRefit";
 import { ensurePdfEastAsianFace, PDF_EAST_ASIAN_CSS_FAMILY } from "../../../lib/pdf/east-asian-face";
 import { presentationMeasurementUnit } from "@mrnote/core/web/lib/presentation-measurement.ts";
-import { wrapPdfContentAppendTextByMeasure } from "../../../lib/pdf/engine/native/content-append-lines";
+import { pdfContentAppendLastLineAdvance, wrapPdfContentAppendTextByMeasure } from "../../../lib/pdf/engine/native/content-append-lines";
 import { pdfTextBoxRunsRefusal } from "../../../lib/pdf/text-box-runs";
 import { pdfCreatedTextBoxNeedsTextBoxWriter, type PdfTextBoxTabStop } from "@mrnote/core/web/lib/pdf/text-box-typography.ts";
 import { insertTextHandoffAnchor, planInsertTextHandoff } from "../../../lib/pdf/insert-text-handoff";
@@ -656,6 +659,8 @@ import {
 import {
   PDF_NATIVE_DECORATION_ID_PREFIX,
   hasExactPdfDecorationNativeStampCoverage,
+  MAX_NATIVE_DECORATION_PAGES,
+  pdfDecorationNativeStampBudget,
   reconcilePdfDecorationNativeStamps,
   type PdfDecorationImageResolver,
 } from "../../../lib/pdf/native-decoration-roundtrip";
@@ -1321,6 +1326,9 @@ import {
   type UnwrittenPdfTextBoxRecord,
   type UnwrittenPdfTextBoxes,
 } from "./pdf/window/unwrittenTextBoxes";
+import { pdfTextBoxRowsHeldByPdf, pdfTextBoxRowsOnlyInRecord } from "../../../lib/pdf/text-boxes-held-by-pdf";
+import { notePdfSourcePolicyRefusal, pdfSourcePolicyRefusalShown } from "../../../lib/pdf/source-policy-refusal";
+import { answerForPdfSavedAsTextBoxNotice, pdfSavedAsTextBoxNoticeWhenWritten } from "../../../lib/pdf/saved-as-text-box-notice";
 import {
   applyPdfTextBoxListChanges,
   NO_SHOWN_PDF_TEXT_BOX_CHANGES,
@@ -1816,6 +1824,13 @@ function PDFViewer(props: ComponentProps<typeof LazyPDFViewer>) {
   return <Viewer {...props} />;
 }
 
+/** The errors of plans the planner refused as "unsupported-document": its
+ * answer about the file and the edit, the same however often it is asked. */
+const pdfPlansRefusedAsUnsupported = new WeakSet<Error>();
+/** The errors of plans the planner refused for good (pdfNativePlanRefusalIsForGood):
+ * its answer about the edit on those bytes, not a planner out of reach. */
+const pdfPlansRefusedForGood = new WeakSet<Error>();
+
 /** Save-policy refusals that last as long as the source does (its risk
  * profile, a read-only page): waiting for the command to rebind cannot help.
  * Anything else -- a stale or initialising authority, a document reloading
@@ -2106,6 +2121,18 @@ function pdfTextBoxDraftOnlyChange(
       draftEligible(edit) && (drafts.has(edit.id) || !previousByKey.has(`${edit.page}:${edit.id}`))) &&
     removed.every((edit) => drafts.has(edit.id))
     ? { changed, removed } : null;
+}
+
+/** The bytes of one saved version of the page's PDF, for a save to read
+ * from them the seals of the boxes it writes (bounded, as every source the
+ * window loads to write on). */
+async function downloadPdfSourceVersionBytes(
+  source: Readonly<{ resourceId: string; resourceVersionId: string }>,
+): Promise<{ bytes: Uint8Array }> {
+  const url = await apiGet<{ download_url?: string }>(
+    `/api/v1/resources/${source.resourceId}/versions/${source.resourceVersionId}/download`,
+  );
+  return loadBoundedPdfForPageWindowMutation(url.download_url ?? "", fetchPdfSource);
 }
 
 /** The same box edit, but for the appearance seal a save stamps on its
@@ -4192,6 +4219,9 @@ export default function PdfPageWindow({
   /** The working copy's last command was refused by the writer (not only
    * declined for a moment): Leave goes on to the words without retrying it. */
   const nativeWorkingCommandRefusedRef = useRef(false);
+  /** ...and refused for good: the planner's own answer about the edit on
+   * those bytes (pdfPlansRefusedForGood), which asking again does not change. */
+  const nativeWorkingCommandRefusedForGoodRef = useRef(false);
   /** The frame a commit in flight resized its paragraph to (WPS: a text
    * block dragged narrower re-wraps): set again by the paragraph rewrite. */
   const nativeTextParagraphFrameRef = useRef<PdfNativeParagraphFrameRequest | null>(null);
@@ -5836,7 +5866,8 @@ export default function PdfPageWindow({
    * has taken yet standing in them (bound below, where those are kept).
    * `keeps` false: a load asked for in place of what the window holds takes
    * them, as it takes the drafts. */
-  const carryUnwrittenTextBoxesRef = useRef<(loaded: readonly PdfTextBoxEdit[], keeps: boolean) => readonly PdfTextBoxEdit[]>(
+  const carryUnwrittenTextBoxesRef = useRef<(loaded: readonly PdfTextBoxEdit[], keeps: boolean,
+    onlyInRecord: (row: PdfTextBoxEdit) => boolean) => readonly PdfTextBoxEdit[]>(
     (loaded) => loaded);
   /** The page version the server stood on, ahead of this window, when the
    * window's own write of its unwritten text boxes came due: the write
@@ -6040,7 +6071,11 @@ export default function PdfPageWindow({
     // of the list carries it. Replaced by the page's, the change was gone
     // with nothing said -- and it was this very load its write waited for
     
-    const carriedTextBoxEdits = carryUnwrittenTextBoxesRef.current(loadedTextBoxEdits, keepsWindowDrafts);
+    // (A row of the page read in that its PDF holds no row of is not a
+    // write that landed: the box keeps its mark.)
+    const loadedOnlyInRecord = pdfTextBoxRowsOnlyInRecord(content);
+    const carriedTextBoxEdits = carryUnwrittenTextBoxesRef.current(loadedTextBoxEdits, keepsWindowDrafts,
+      (row) => loadedOnlyInRecord.has(`${row.page}:${row.id}`));
     if (carriedTextBoxEdits !== loadedTextBoxEdits) {
       loadedTextBoxEdits.splice(0, loadedTextBoxEdits.length, ...carriedTextBoxEdits);
     }
@@ -6765,16 +6800,6 @@ export default function PdfPageWindow({
     () => unsavedCreatedPdfTextBoxEdits(textBoxEdits, savedTextBoxRows), [savedTextBoxRows, textBoxEdits]);
   const madeUnsavedTextBoxesRef = useRef(madeUnsavedTextBoxes);
   madeUnsavedTextBoxesRef.current = madeUnsavedTextBoxes;
-  const unsavedCreatedTextBoxes = useMemo(() => {
-    const unsaved = madeUnsavedTextBoxes;
-    if (unverifiedCreatedBoxIds.size === 0) return unsaved;
-    const listed = new Set(unsaved.map((edit) => `${edit.page}:${edit.id}`));
-    return [
-      ...unsaved,
-      ...textBoxEdits.filter((edit) =>
-        !edit.deleted && unverifiedCreatedBoxIds.has(edit.id) && !listed.has(`${edit.page}:${edit.id}`)),
-    ];
-  }, [madeUnsavedTextBoxes, textBoxEdits, unverifiedCreatedBoxIds]);
   /** Saved text boxes changed with AutoSave off: on the page, not written,
    * until Save (or AutoSave turned on) writes them, as every other edit of
    * the page waits (Office). Each with what it drew over (released once
@@ -6842,12 +6867,13 @@ export default function PdfPageWindow({
     unwrittenTextBoxesRef.current = next;
     setUnwrittenTextBoxes(next);
   }, []);
-  carryUnwrittenTextBoxesRef.current = (loaded, keeps) => {
+  carryUnwrittenTextBoxesRef.current = (loaded, keeps, onlyInRecord) => {
     if (!keeps) {
       publishUnwrittenTextBoxes(NO_UNWRITTEN_PDF_TEXT_BOXES);
       return loaded;
     }
-    const carried = carryUnwrittenPdfTextBoxesOverLoad(unwrittenTextBoxesRef.current, textBoxEditsRef.current, loaded);
+    const carried = carryUnwrittenPdfTextBoxesOverLoad(unwrittenTextBoxesRef.current, textBoxEditsRef.current, loaded,
+      onlyInRecord);
     publishUnwrittenTextBoxes(carried.marks);
     return carried.boxes;
   };
@@ -6890,6 +6916,8 @@ export default function PdfPageWindow({
    * run (the command was not the window's in that moment), or it was
    * refused. */
   const unwrittenTextBoxOutcomeRef = useRef<"unanswered" | "unrun" | "refused">("unrun");
+  /** When a write of the page's text boxes was last not taken (0: never). */
+  const nativeTextBoxWriteRefusedAtRef = useRef(0);
   /** The window asks again by itself: not after a refusal (Save asks, and
    * says what the server said). */
   const [unwrittenTextBoxOwnTry, setUnwrittenTextBoxOwnTry] = useState(false);
@@ -6899,7 +6927,7 @@ export default function PdfPageWindow({
    * the reader made once a verified save wrote it. */
   const pdfHoldsTextBoxTest = useCallback(() => {
     const saved = new Set(
-      getTextBoxEdits((nativeListPageSnapshotRef.current ?? livePageRef.current)?.content_json)
+      pdfTextBoxRowsHeldByPdf((nativeListPageSnapshotRef.current ?? livePageRef.current)?.content_json)
         .filter((edit) => !edit.deleted).map(unwrittenPdfTextBoxKey));
     return (was: PdfTextBoxEdit) => !was.created || (saved.has(unwrittenPdfTextBoxKey(was)) &&
       !unverifiedCreatedBoxIdsRef.current.has(was.id) && !nativeTextDraftIdsRef.current.has(was.id));
@@ -6945,6 +6973,31 @@ export default function PdfPageWindow({
     setUnwrittenTextBoxOwnTry(false);
     unwrittenBoxesAwaitPageRef.current = null;
   }, [pageId, publishUnwrittenTextBoxes]);
+  // (Declared here, after the marks it reads.) So does a box the reader
+  // made that a write of this window, or of one before it, did not put into
+  // the PDF (its mark says the PDF holds none of it): the record can list
+  // it all the same -- every save of the page stores the window's list, a
+  // line typed meanwhile as much as the box's own write -- and read from
+  // the record alone it was saved, its write never asked for again, the
+  
+  // the write failed under load, the window was reloaded, the next line
+  // typed stored the page).
+  /** The boxes the page's record lists and its PDF holds no row of
+   * (lib/pdf/text-boxes-held-by-pdf), by `${page}:${id}`. */
+  const recordOnlyTextBoxKeys = useMemo(() => pdfTextBoxRowsOnlyInRecord(page?.content_json), [page?.content_json]);
+  const unsavedCreatedTextBoxes = useMemo(() => {
+    const unsaved = madeUnsavedTextBoxes;
+    const unwritten = recordOnlyTextBoxKeys.size > 0 && unwrittenTextBoxes.size > 0;
+    if (unverifiedCreatedBoxIds.size === 0 && !unwritten) return unsaved;
+    const listed = new Set(unsaved.map((edit) => `${edit.page}:${edit.id}`));
+    const more = textBoxEdits.filter((edit) => {
+      const key = `${edit.page}:${edit.id}`;
+      if (edit.deleted || listed.has(key)) return false;
+      if (unverifiedCreatedBoxIds.has(edit.id)) return true;
+      return unwritten && edit.created === true && recordOnlyTextBoxKeys.has(key) && unwrittenTextBoxes.get(key) === null;
+    });
+    return more.length === 0 ? unsaved : [...unsaved, ...more];
+  }, [madeUnsavedTextBoxes, recordOnlyTextBoxKeys, textBoxEdits, unverifiedCreatedBoxIds, unwrittenTextBoxes]);
   const hasUnsavedCreatedTextBoxes = unsavedCreatedTextBoxes.length > 0 || heldTextBoxLayoutCount > 0 ||
     unwrittenTextBoxWork.changes > 0;
   const unsavedCreatedTextBoxesRef = useRef(unsavedCreatedTextBoxes);
@@ -6957,6 +7010,25 @@ export default function PdfPageWindow({
   
   // a new Arabic box on a cold engine host).
   const [createdBoxCommitsRunning, setCreatedBoxCommitsRunning] = useState(0);
+  // How many edits of the page's rows, and Undo and Redo presses, are on
+  // their way to the working copy: waiting their turn, or being planned
+  // (the server plans the revision before anything is staged on the copy:
+  // a second or two, and half a minute on a busy host). Neither the page
+  // nor the copy holds the edit meanwhile: the window read "已保存", showed
+  // nothing of it, and a reload in those seconds dropped it without a word
+  
+  // 29 s, the tab reloaded at 27 s and the page was still there; an
+  // inserted page whose plan was held 25 s read 已保存 from the press on).
+  const [copyWritesOnTheirWay, setCopyWritesOnTheirWay] = useState(0);
+  /** The window reads 保存中, and asks before it is left, until `work` has
+   * answered: staged on the copy (whose own save reads 保存中 from there),
+   * refused, or nothing to do. */
+  const holdCopyWriteOnItsWay = useCallback(<T,>(work: Promise<T>): Promise<T> => {
+    setCopyWritesOnTheirWay((running) => running + 1);
+    return work.finally(() => {
+      if (mountedRef.current) setCopyWritesOnTheirWay((running) => Math.max(0, running - 1));
+    });
+  }, []);
   /** Saves of a text box running behind the reader (text-background-save)
    * whose page save is not sent yet: the editor has closed, nothing is on
    * its way. Once sent, the page's own save status says the rest. */
@@ -7200,9 +7272,14 @@ export default function PdfPageWindow({
   const carriedWordsHere = nativeTextCarriedWords.filter((held) => held.pageId === pageId);
   const carriedWordsHeld: PdfReaderHeldState | null = !carriedWordsHere.length ? null
     : officeAutosaveOn && carriedWordsHere.every((held) => held.state === "saving") ? "saving" : "unsaved";
+  // And so does an edit of the page's rows, an Undo or a Redo that is not
+  // staged yet (copyWritesOnTheirWay): 保存中 from the press until the copy
+  // holds it, whose own save reads 保存中 from there (未保存 with AutoSave
+  // off, where the copy holds it for Save).
+  const copyWriteHeld: PdfReaderHeldState | null = copyWritesOnTheirWay === 0 ? null
+    : officeAutosaveOn ? "saving" : "unsaved";
   const windowShownSaveStatus: PageSaveStatus = pdfWindowShownSaveStatus(windowSaveStatus, {
-    reader: readerHeldWork === "unsaved" || textBoxChangesHeld === "unsaved" || carriedWordsHeld === "unsaved" ? "unsaved"
-      : readerHeldWork ?? textBoxChangesHeld ?? carriedWordsHeld,
+    reader: pdfHeldStatesTogether([readerHeldWork, textBoxChangesHeld, carriedWordsHeld, copyWriteHeld]),
     quarantinedRows: quarantinedRowCount,
   });
   const windowSaveStatusLabel = windowSyncedToServer
@@ -10260,11 +10337,19 @@ export default function PdfPageWindow({
         command: planCommand, options: planOptions });
     }
     if (planned.status !== "planned" || !planned.candidateBytes) {
+      // (Its answer for good is kept with the error, whichever it is thrown
+      // as: the editor's Leave says such a format as not applied, not as one
+      // to try again -- pdfNativeLeaveRefusalNotice.)
+      const forGood = planned.status !== "planned" && pdfNativePlanRefusalIsForGood(planned.result);
+      const answered = <Refusal extends Error>(refusal: Refusal): Refusal => {
+        if (forGood) pdfPlansRefusedForGood.add(refusal);
+        return refusal;
+      };
       // (The object is not, in these bytes, what the edit was planned on:
       // the planner's own answer, which the queue lets an edit go for.)
       if (planned.status !== "planned" && planned.result.status === "conflict" &&
         planned.result.reason === "object-precondition-mismatch") {
-        throw new PdfWorkingUnplannableError(pdfEnginePlanFailureDetail(planned));
+        throw answered(new PdfWorkingUnplannableError(pdfEnginePlanFailureDetail(planned)));
       }
       // Its object was found again on these bytes and the planner read them:
       // what it answers of the edit there -- a conflict, a command it does
@@ -10278,9 +10363,14 @@ export default function PdfPageWindow({
           planned.result.reason === "verification-failed" ||
           (stoodOnOtherBytes === "object" && planned.result.reason === "adapter-rejected" &&
             !/checkpoint/i.test(planned.result.detail)))))) {
-        throw new PdfWorkingUnplannableError(pdfEnginePlanFailureDetail(planned));
+        throw answered(new PdfWorkingUnplannableError(pdfEnginePlanFailureDetail(planned)));
       }
-      throw new Error(pdfEnginePlanFailureDetail(planned));
+      // (The planner's answer that the file cannot take this edit at all
+      // is kept with the error: asked again, it answers the same.)
+      const failure = answered(new Error(pdfEnginePlanFailureDetail(planned)));
+      if (planned.status !== "planned" && planned.result.status === "refused" &&
+        planned.result.reason === "unsupported-document") pdfPlansRefusedAsUnsupported.add(failure);
+      throw failure;
     }
     // Where it moves a run of the page's own text: its published record
     // carries it (the indent a later Decrease Indent reads back).
@@ -19445,7 +19535,8 @@ export default function PdfPageWindow({
       const content = (nativeListPageSnapshotRef.current ?? livePageRef.current)?.content_json;
       const cached = savedBoxRowsReadRef.current;
       if (cached && cached.content === content) return cached.rows;
-      const rows = new Map(getTextBoxEdits(content).filter((row) => !row.deleted)
+      // (As the PDF holds them: a box only the record lists stays kept.)
+      const rows = new Map(pdfTextBoxRowsHeldByPdf(content).filter((row) => !row.deleted)
         .map((row) => [unwrittenPdfTextBoxKey(row), row] as const));
       savedBoxRowsReadRef.current = { content, rows };
       return rows;
@@ -20262,6 +20353,9 @@ export default function PdfPageWindow({
   }, [armNativeTextQueuedExpiry]);
   carryNativeTextDraftRef.current = (carry, input, options) => {
     const finish = carry.finish;
+    // Words the window's own finish refused (finishInEditor): the line's
+    // editor writes them, never that finish again.
+    const finishOptions = carry.finish && carry.finishInEditor ? Object.freeze({ inEditor: true }) : undefined;
     const stops = nativeTextQueuedDraftStopsRef.current;
     // The words it holds are nowhere else until a line takes them: said by
     // the window's status from now (nativeTextCarriedWords) -- being written
@@ -20303,7 +20397,8 @@ export default function PdfPageWindow({
           await new Promise(resolve => requestAnimationFrame(resolve));
         }
         if (nativeListTextEditorControllerRef.current !== editor) { carried(); return; }
-        const finishing = editor.finish();
+        const words = editor.readDraft().replacementText;
+        const finishing = editor.finish(finishOptions);
         // A line pressed after this one opens once this editor has let go
         // (its write sealed and handed to the background save), not when
         // that save lands: it used to wait out the server's save of this
@@ -20327,9 +20422,30 @@ export default function PdfPageWindow({
         // finish itself still runs (and owns that click as its next
         // target): only a finish that really ended without a write retries.
         const stillFinishing = Boolean(document.querySelector('[data-pdf-native-text-finishing="true"]'));
-        markPdfTextLatency("open.queued-finish-retry", { same: again === editor, dirty: Boolean(draft?.dirty), stillFinishing });
-        if (again === editor && draft?.dirty && !draft.composing && !stillFinishing) await again.finish();
+        // (The editor finishing words of its own is known by those words:
+        // its controller is made again when its proof arrives under it.)
+        const same = finishOptions ? draft?.replacementText === words : again === editor;
+        markPdfTextLatency("open.queued-finish-retry", { same, dirty: Boolean(draft?.dirty), stillFinishing });
+        const written = again && same && draft?.dirty && !draft.composing && !stillFinishing
+          ? await again.finish(finishOptions) : null;
         carried();
+        
+        // face, a text box): said once, here, with the editor's own reason,
+        // the words still in the open box. Nothing was said when the
+        // window's finish refused them: 「文件没有被改动」 then stood over a
+        // line the reader's next press wrote as a text box (walk 0981,
+        
+        const open = nativeListTextEditorControllerRef.current;
+        const left = open?.readDraft();
+        if (open && pdfNativeCarriedWordsRefused({ inEditor: Boolean(finishOptions), written, words,
+          open: left ? { dirty: left.dirty, replacementText: left.replacementText,
+            finishing: open.readFinishing?.() === true } : null })) {
+          const why = open.readRefusal?.() ?? null;
+          markPdfTextLatency("open.queued-finish-refused", { reason: Boolean(why) });
+          // (With no reason to give, only what is known: the words are kept.)
+          toast(why ? { title: pdfReaderRefusalText(why, t), description: t("pdf.nativeTextEdit.draftRetained"),
+            variant: "destructive" } : { title: t("pdf.nativeTextEdit.draftRetained") });
+        }
       })().catch(() => carried());
     }, document, input, () => {
       // The saved revision's line did not reopen on its own: the typing
@@ -21405,6 +21521,9 @@ export default function PdfPageWindow({
     keepTextRules: readonly ("underline" | "strikethrough")[];
     paragraphChanges?: PdfNativeParagraphPropertyChanges; paragraphFrame?: PdfNativeParagraphFrameRequest | null;
     lane: string;
+    /** What the compile of these very words on this head threw, when it is
+     * why the engine is asked (a Leave whose compile refused them). */
+    compileRefusal?: unknown;
   }>): Promise<PdfWorkingEngineOperationInput> => {
     const { pageId, snapshot, headBytes, id, replacementText, format, proof } = input;
     const head = { resourceId: snapshot.savedSource.resourceId,
@@ -21429,6 +21548,27 @@ export default function PdfPageWindow({
         if (!(error instanceof Error)) throw error;
         markPdfTextLatency("substitute-face.known-refused", { lane: input.lane });
       }
+    }
+    // Words alone the compile has just refused on these bytes: the line's
+    // own write below is the same planner asked the same thing, and answers
+    // as the compile did (pdfNativePlanAnswerOfCompileRefusal). It is not
+    // planned to hear it again: the substitute face is planned at once where
+    // the answer was a glyph the line's fonts lack (as the catch below would
+    // after it), and any other refusal of the document's structure stands
+    // as the compile gave it. On a paragraph of some two thousand glyphs,
+    // each its own show, that plan was 12.5 s between the compile's refusal
+    // and the plan that follows it (`browser.plan {label: text-engine,
+    
+    const compiled = !format && !input.paragraphChanges && !input.paragraphFrame &&
+      input.selection.sourceSha256 === head.sourceSha256 ? pdfNativePlanAnswerOfCompileRefusal(input.compileRefusal) : null;
+    if (compiled) markPdfTextLatency("engine.compile-answered", { lane: input.lane, answer: compiled });
+    if (compiled === "refused") throw input.compileRefusal;
+    if (compiled === "missing-glyph") {
+      const substituted = await prepareNativeSubstituteFaceOperation({ boundPage: pageId, id, sourceBytes: headBytes,
+        sourceSha256: head.sourceSha256, savedSource: snapshot.savedSource, commandInput, format, proof,
+        replacementText, embedsFonts, lane: input.lane, paragraphFrame: null });
+      if (!substituted) throw input.compileRefusal;
+      return substituted;
     }
     try {
       return await prepareNativeWorkingEngineRecipe(pageId, { recipe, id, sourceBytes: headBytes,
@@ -21948,12 +22088,45 @@ export default function PdfPageWindow({
         // The engine's own plan of the edit on the working copy (a format;
         // or words its embedded font cannot draw, which the engine sets in
         // the bundled fallback face), as the format staging plans it.
-        const stageByEngine = async (format: PdfNativeTextPropertyDraft | null) => {
+        const stageByEngine = async (format: PdfNativeTextPropertyDraft | null,
+          /** What the compile of these words threw (words alone). */
+          compileRefusal?: unknown) => {
           const snapshot = document!.getSnapshot();
           const headBytes = document!.copyBytes();
           try {
+            // A line left before its proof came (`detach.unproven`), its
+            // words holding a character its fonts lack: the face they are
+            // set in is read off the line's own runs (a served face like the
+            // run's, pdfNativeTypedWordsInSimilarFace), which only its proof
+            // names. Without one the words went to the one substitute face,
+            // which the line's own editor would not have chosen -- and which
+            // refused them on a paragraph the similar face writes, after
+            // 10.7 s, the editor then writing them in a second (pdf-walk-1000
+            
+            // compiles' Worker, which has just read every show of it for the
+            // compile that refused (0.4 s there, where a Worker that has not
+            // read the line takes 4 s and more), and the words are written
+            // as the editor's own Leave writes them, to the byte.
+            // No proof, or none in ten seconds (a Worker gone, the engine
+            // host busy): the one substitute face, as before.
+            let headProof = stageProof ?? null;
+            if (!format && !headProof && snapshot.workingSha256 === stageSelection.sourceSha256 &&
+              pdfNativePlanAnswerOfCompileRefusal(compileRefusal) === "missing-glyph") {
+              const provedAt = performance.now();
+              const proving = new AbortController();
+              const patience = window.setTimeout(() => proving.abort(), 10_000);
+              headProof = await preparePdfNativeTextOffThread({ sourceBytes: headBytes, selection: stageSelection,
+                managedBoxId: null, sourceText: null, signal: proving.signal, afterCompile: true,
+                engineSource: { pageId: snapshot.pageId, resourceId: snapshot.savedSource.resourceId,
+                  resourceVersionId: snapshot.savedSource.resourceVersionId } }).then((prepared) => {
+                prepared.blankedSource?.fill(0);
+                return prepared.proof.fallbackText ? null : prepared.proof;
+              }, () => null).finally(() => window.clearTimeout(patience));
+              markPdfTextLatency("detach.proved-for-face", { ms: Math.round(performance.now() - provedAt), proved: headProof !== null });
+            }
             const operation = await prepareNativeTextOnHead({ pageId, pageContentVersion, selection: stageSelection, snapshot,
-              headBytes, id, replacementText, format, proof: stageProof ?? null, keepTextRules, lane: "detach" });
+              headBytes, id, replacementText, format, proof: headProof, keepTextRules, lane: "detach",
+              ...(compileRefusal !== undefined ? { compileRefusal } : {}) });
             if (document!.getSnapshot().workingSha256 !== snapshot.workingSha256) {
               operation.candidateBytes.fill(0);
               throw new Error("The PDF working copy moved on while the edit was planned.");
@@ -22007,7 +22180,7 @@ export default function PdfPageWindow({
           catch (compileError) {
             if (document.getSnapshot().pendingOperationIds.includes(id)) throw compileError;
             markPdfTextLatency("detach.engine-fallback", { error: String((compileError as Error)?.message ?? compileError).slice(0, 120) });
-            await stageByEngine(null);
+            await stageByEngine(null, compileError);
           }
           // Words alone: a step back or on of this operation is the line's.
           lineEdit.isOperation(id);
@@ -22115,21 +22288,35 @@ export default function PdfPageWindow({
           // line was opened with. Named by those, the words typed never went
           // in: the file was short of them while the page said saved, until a
           
-          // Once more at most (native-detach-refusals.ts): refused again, or
-          // refused as unsupported, the words stay in the open box as a
-          // draft and the reader is told the file was not changed.
+          // By this finish once more at most (native-detach-refusals.ts).
+          // Refused again, or refused as unsupported, the words are not this
+          // finish's to write: the line's own editor finishes them, on its
+          // proof and its preview -- in place where they say it can be, as
+          // a text box where the native writer declines (said then, 「已按
+          
+          // once, the words in the open box (carryNativeTextDraftRef).
+          // Nothing is said here: 「文件没有被改动」 was, with the words left
+          // in the open box as a draft -- which the reader's next press
+          // anywhere wrote as a text box, the editor's proof having sent
+          
           const now = Date.now();
-          const refused = !pdfNativeDetachFinishesAgain(nativeDetachRefusedRef.current, {
+          const inEditor = !pdfNativeDetachFinishesAgain(nativeDetachRefusedRef.current, {
             pageNumber: selection.pageNumber, wordsBefore: wordsBeforeThisEdit, words: replacementText, now,
-            unsupported: error instanceof PdfNativeTransactionError && error.code === "unsupported-document" });
-          if (refused) toast({ description: t("pdf.editRefusedGeneric") });
+            // (Also the planner's own "unsupported document", which comes
+            // as a plain error: taken for a passing failure, the finish was
+            // run a second time -- two more plans of some twenty-five
+            // seconds each on a long paragraph -- before the line's editor
+            
+            unsupported: (error instanceof PdfNativeTransactionError && error.code === "unsupported-document") ||
+              (error instanceof Error && pdfPlansRefusedAsUnsupported.has(error)) });
+          markPdfTextLatency("detach.carried", { inEditor });
           // The typing draft goes on as the line's that opens for the carry
           // (keepNativeListTextTypingDraft); a carry that never goes in
           // leaves it kept for the next load.
           const carryGivenUp = settleLeftTyping("carried", wordsBeforeThisEdit);
           carryNativeTextDraftRef.current(Object.freeze({ originalText: wordsBeforeThisEdit, value: replacementText,
-            selectionStart: replacementText.length, selectionEnd: replacementText.length, finish: !refused,
-            until: now + 120_000, pageNumber: selection.pageNumber }), null,
+            selectionStart: replacementText.length, selectionEnd: replacementText.length, finish: true,
+            finishInEditor: inEditor, until: now + 120_000, pageNumber: selection.pageNumber }), null,
           carryGivenUp ? { onDone: (applied) => { if (!applied) carryGivenUp(); } } : undefined);
           reopenNativeTextLineAtRef.current(selection.pageNumber, lineAt);
         } else if (retainPdfNativeTextDraft({ pageId, lineKey, sourceSha256: selection.sourceSha256, text: replacementText,
@@ -22221,6 +22408,7 @@ export default function PdfPageWindow({
     keepEditor?: boolean;
   }): Promise<boolean | null> => {
     nativeWorkingCommandRefusedRef.current = false;
+    nativeWorkingCommandRefusedForGoodRef.current = false;
     if ((await awaitNativePdfFilePageMap()) === false) return null;
     if (nativeWorkingStagingRef.current || !nativeListTextDialogWriteAuthorityIsCurrent()) return null;
     const layout = nativeListTextInitialLayoutRef.current;
@@ -22327,6 +22515,7 @@ export default function PdfPageWindow({
       if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] command not staged", pdfDevErrorText(error));
       const staged = document?.getSnapshot().pendingOperationIds.includes(id) ?? false;
       nativeWorkingCommandRefusedRef.current = !staged;
+      nativeWorkingCommandRefusedForGoodRef.current = !staged && error instanceof Error && pdfPlansRefusedForGood.has(error);
       if (staged && nativeWorkingDisplayHeldRef.current) {
         nativeWorkingDisplayHeldRef.current = false;
         try { setNativeWorkingDisplay(document!.displaySource()); } catch { /* its host is closing */ }
@@ -25836,10 +26025,18 @@ export default function PdfPageWindow({
   }>): Promise<string | null> => {
     // Backstop: the engine addresses the file's pages, which a structured
     // display numbers as the upload's (PDF_ACTIONS_ON_FILE_PAGES).
-    if (nativeWriteBlockedByShownStructure(input.invocation.action)) return null;
+    // (Development: why the copy did not take it -- a refusal here left no
+    
+    const notStaged = (why: string): null => {
+      if (process.env.NODE_ENV !== "production") console.warn("[pdf-working] edit not staged", input.label, why);
+      return null;
+    };
+    if (nativeWriteBlockedByShownStructure(input.invocation.action)) return notStaged("shown-structure");
     const group = nativeWorkingEditGroups.forLease(input.lease);
     const document = nativeWorkingDocumentRef.current;
-    if (!group || group.closed || !document?.canWrite()) return null;
+    if (!group || group.closed || !document?.canWrite()) {
+      return notStaged(!group ? "no-group" : group.closed ? "group-closed" : !document ? "no-copy" : "copy-cannot-write");
+    }
     const snapshot = document.getSnapshot();
     const head = Object.freeze({ resourceId: snapshot.savedSource.resourceId,
       resourceVersionId: snapshot.savedSource.resourceVersionId, sourceSha256: snapshot.workingSha256 });
@@ -25868,10 +26065,12 @@ export default function PdfPageWindow({
         operation = await prepareNativeWorkingEngineRecipe(boundPage, { recipe, id: transactionId,
           sourceBytes: headBytes, sourceSha256: head.sourceSha256, savedSource: snapshot.savedSource });
       }
-      if (input.verify && !(await input.verify(headBytes, operation.candidateBytes))) return null;
+      if (input.verify && !(await input.verify(headBytes, operation.candidateBytes))) return notStaged("not-verified");
       const current = document.getSnapshot();
       if (group.closed || !document.canWrite() || current.workingRevision !== snapshot.workingRevision ||
-        current.workingSha256 !== snapshot.workingSha256) return null;
+        current.workingSha256 !== snapshot.workingSha256) {
+        return notStaged(group.closed ? "group-closed" : !document.canWrite() ? "copy-cannot-write" : "head-moved");
+      }
       await awaitNativeWorkingAuthorSession();
       document.stageEngine(operation, { start: false });
       nativeWorkingEditGroups.addOp(group, transactionId, input.invocation,
@@ -25888,6 +26087,8 @@ export default function PdfPageWindow({
       operation?.candidateBytes.fill(0);
     }
   }, [awaitNativeWorkingAuthorSession, nativeWorkingEditGroups]);
+  /** Why the last content append was declined (null: it was not). */
+  const nativeContentAppendDeclinedRef = useRef<string | null>(null);
   const persistNativeContentAppend = useCallback(
     async (input: {
       ownerLease: PdfNativeReceiptMutationLease;
@@ -25906,8 +26107,10 @@ export default function PdfPageWindow({
         if (process.env.NODE_ENV !== "production") {
           console.warn("[pdf-content-append] declined", { reason });
         }
+        nativeContentAppendDeclinedRef.current = reason;
         return null;
       };
+      nativeContentAppendDeclinedRef.current = null;
       // The page transforms name the upload's pages.
       const uploadPageNumber = nativeTextShownPageOf(input.pageNumber) ?? input.pageNumber;
       // Under a working lease: planned on the copy's head and staged there.
@@ -29975,16 +30178,17 @@ export default function PdfPageWindow({
     ),
     [managedNativeStamps],
   );
-  const nativeDecorationPageSizes = Array.from(
-    { length: pdfPageCount },
-    (_, index) => {
-      const size = nativePageSizes[index + 1];
-      return {
-        width: size?.width ?? 0,
-        height: size?.height ?? 0,
-        rotation: normalizeRotation(size?.rotation),
-      };
-    },
+  const nativeDecorationPageSizes = useMemo(
+    () =>
+      Array.from({ length: pdfPageCount }, (_, index) => {
+        const size = nativePageSizes[index + 1];
+        return {
+          width: size?.width ?? 0,
+          height: size?.height ?? 0,
+          rotation: normalizeRotation(size?.rotation),
+        };
+      }),
+    [nativePageSizes, pdfPageCount],
   );
   // Read once per saved content, not per render: the copy is of the whole
   // page content, journal included (20 ms a render, and growing with it).
@@ -30019,22 +30223,31 @@ export default function PdfPageWindow({
       matchedSourceRiskSnapshot.identity.sha256 ===
         decorationPatchbackAuthority.outputSha256,
   );
+  // Compared once per change of the decorations, their records or the page
+  // sizes, not per render: each comparison reads every page of the document
+  // and every decoration record (a watermark on a long file is one a page).
+  const decorationRecordsState = useMemo(() => {
+    if (!hasPdfDocumentDecorations(pdfDecorations)) return null;
+    return {
+      samePersisted: JSON.stringify(pdfDecorations) === JSON.stringify(persistedDecorations),
+      sameStamps: managedDecorationRecordFingerprint(nativeStamps) ===
+        managedDecorationRecordFingerprint(persistedDecorationStamps),
+      liveCoverage: hasExactPdfDecorationNativeStampCoverage({
+        decorations: pdfDecorations,
+        pageSizes: nativeDecorationPageSizes,
+        records: nativeStamps,
+      }),
+      persistedCoverage: hasExactPdfDecorationNativeStampCoverage({
+        decorations: persistedDecorations,
+        pageSizes: nativeDecorationPageSizes,
+        records: persistedDecorationStamps,
+      }),
+    };
+  }, [nativeDecorationPageSizes, nativeStamps, pdfDecorations, persistedDecorationStamps, persistedDecorations]);
   const documentDecorationsNative =
-    hasPdfDocumentDecorations(pdfDecorations) &&
     hasLosslessDecorationReceipt &&
-    JSON.stringify(pdfDecorations) === JSON.stringify(persistedDecorations) &&
-    managedDecorationRecordFingerprint(nativeStamps) ===
-      managedDecorationRecordFingerprint(persistedDecorationStamps) &&
-    hasExactPdfDecorationNativeStampCoverage({
-      decorations: pdfDecorations,
-      pageSizes: nativeDecorationPageSizes,
-      records: nativeStamps,
-    }) &&
-    hasExactPdfDecorationNativeStampCoverage({
-      decorations: persistedDecorations,
-      pageSizes: nativeDecorationPageSizes,
-      records: persistedDecorationStamps,
-    });
+    Boolean(decorationRecordsState?.samePersisted && decorationRecordsState.sameStamps &&
+      decorationRecordsState.liveCoverage && decorationRecordsState.persistedCoverage);
   // Dev only: which clause keeps a saved decoration's native appearance from
   
   const decorationNativeDiagnosticRef = useRef<string | null>(null);
@@ -30053,13 +30266,10 @@ export default function PdfPageWindow({
             expectedRevision: pageContentVersionForSnapshot,
           } : null,
           previewUrlTail: previewUrl ? previewUrl.slice(-16) : null,
-          samePersisted: JSON.stringify(pdfDecorations) === JSON.stringify(persistedDecorations),
-          sameStamps: managedDecorationRecordFingerprint(nativeStamps) ===
-            managedDecorationRecordFingerprint(persistedDecorationStamps),
-          liveCoverage: hasExactPdfDecorationNativeStampCoverage({
-            decorations: pdfDecorations, pageSizes: nativeDecorationPageSizes, records: nativeStamps }),
-          persistedCoverage: hasExactPdfDecorationNativeStampCoverage({
-            decorations: persistedDecorations, pageSizes: nativeDecorationPageSizes, records: persistedDecorationStamps }),
+          samePersisted: decorationRecordsState?.samePersisted ?? false,
+          sameStamps: decorationRecordsState?.sameStamps ?? false,
+          liveCoverage: decorationRecordsState?.liveCoverage ?? false,
+          persistedCoverage: decorationRecordsState?.persistedCoverage ?? false,
           stamps: nativeStamps.length, persistedStamps: persistedDecorationStamps.length, pages: pdfPageCount,
           previewRequired: nativePdfPatchbackPreviewRequired, previewReady: Boolean(nativePdfVersionPreviewReady?.url),
         })
@@ -31443,7 +31653,7 @@ export default function PdfPageWindow({
   /** The page's annotation rows staged on the working copy as the revision
    * the server writes for them (stage 4): the staged edit's id, or null when
    * the copy does not take them. Nothing is published here. */
-  const stageAnnotationsOnCopy = useCallback(async (rows: JsonValue[], previousRows: JsonValue[],
+  const stageAnnotationsOnCopyNow = useCallback(async (rows: JsonValue[], previousRows: JsonValue[],
     ownLease?: PdfNativeReceiptMutationLease,
     companions?: Readonly<{ before: PdfRowCompanions; after: PdfRowCompanions }>): Promise<string | null> => {
     nativeRowPlanRefusalRef.current = null;
@@ -31500,6 +31710,10 @@ export default function PdfPageWindow({
     // planNativeRowOperation reads refs only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [awaitNativeWorkingAuthorSession, openNativeWorkingCopy]);
+  /** (The window reads 保存中 while the rows are on their way to the copy:
+   * copyWritesOnTheirWay.) */
+  const stageAnnotationsOnCopy = useCallback((...staged: Parameters<typeof stageAnnotationsOnCopyNow>) =>
+    holdCopyWriteOnItsWay(stageAnnotationsOnCopyNow(...staged)), [holdCopyWriteOnItsWay, stageAnnotationsOnCopyNow]);
   const stageAnnotationsOnCopyRef = useRef(stageAnnotationsOnCopy);
   stageAnnotationsOnCopyRef.current = stageAnnotationsOnCopy;
   const writeHeldAnnotationsOnCopy = useCallback(async (rows: JsonValue[], previousRows: JsonValue[],
@@ -31795,6 +32009,57 @@ export default function PdfPageWindow({
   useEffect(() => { keptQueueAwayLooksRef.current = 0; }, [pageId]);
   const keptQueueAwayRef = useRef(keptQueueAway);
   keptQueueAwayRef.current = keptQueueAway;
+  // A box the page's record lists and its PDF holds no row of
+  // (lib/pdf/text-boxes-held-by-pdf) that is nobody's work in this window:
+  // it was read in with the page -- left by a window whose write of it
+  // failed and that is gone, what that window kept of it dropped, or kept
+  // on another device. It is marked as a box whose write nobody answered
+  // is, once for each box: the window reads unsaved, writes it by itself
+  // with AutoSave on (refused, it waits for Save, which says why), and
+  // Save writes it. Before, such a page read
+  // 已保存 with the box on it, and no download ever held the box
+  
+  const recordOnlyTextBoxesAskedRef = useRef(new Set<string>());
+  useEffect(() => { recordOnlyTextBoxesAskedRef.current = new Set(); }, [pageId]);
+  useEffect(() => {
+    if (recordOnlyTextBoxKeys.size === 0 || guestMode || !page || page.id !== pageId) return;
+    if (!pageWritable.known || !pageWritable.writable || !workspaceWritable) return;
+    if (autosave.loading || autosave.isCachedPreview || autosave.isLocalAuthorityPending) return;
+    // After what this browser kept for the page is put back: a kept box is
+    // the later one, and comes back with its own mark.
+    const hand = unwrittenBoxRecordsHandRef.current();
+    const read = unwrittenBoxRecordsReadRef.current;
+    if (hand && (read?.hand !== hand || !read.done)) return;
+    // Nor while a write of the window is on its way: the record it leaves
+    // may hold the box's row (looked at again when the page it saved is in).
+    if (nativeReceiptJournal.getSnapshot().busy || textBoxHistoryCommitQueueRef.current.running ||
+      createdTextBoxCommitsInFlightRef.current.size > 0 || nativeTextCommittingIdsRef.current.size > 0 ||
+      nativeWorkingDocumentRef.current?.getSnapshot().pendingOperationIds.length) return;
+    const marks = unwrittenTextBoxesRef.current;
+    const asked = recordOnlyTextBoxesAskedRef.current;
+    let next: Map<string, PdfTextBoxEdit | null> | null = null;
+    for (const edit of textBoxEdits) {
+      const key = unwrittenPdfTextBoxKey(edit);
+      if (!edit.created || edit.deleted || !recordOnlyTextBoxKeys.has(key) || marks.has(key) || asked.has(key)) continue;
+      // The window's own work on a box goes its own way (a draft being
+      // typed, a write on its way or refused, a line's box and its delete).
+      if (nativeTextDraftIdsRef.current.has(edit.id) || nativeTextCommittingIdsRef.current.has(edit.id) ||
+        createdTextBoxCommitsInFlightRef.current.has(edit.id) || unverifiedCreatedBoxIdsRef.current.has(edit.id) ||
+        heldConvertedBoxStepsRef.current.has(edit.id) || nativeRefusedConversionLinesRef.current.has(edit.id) ||
+        conversionBoxDeleteOpsRef.current.has(edit.id)) continue;
+      asked.add(key);
+      (next ??= new Map(marks)).set(key, null);
+    }
+    if (!next) return;
+    publishUnwrittenTextBoxes(next);
+    unwrittenTextBoxOutcomeRef.current = "unrun";
+    setUnwrittenTextBoxOwnTry(true);
+  // The refs and setters read are stable; nativeReceiptJournal is the
+  // window's one journal (a ref's value).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autosave.isCachedPreview, autosave.isLocalAuthorityPending, autosave.loading, guestMode,
+    nativeReceiptJournalSnapshot, page, pageId, pageWritable.known, pageWritable.writable, recordOnlyTextBoxKeys,
+    textBoxEdits, unwrittenBoxRecordsRead, unwrittenTextBoxes, workspaceWritable]);
   const unwrittenTextBoxesPending = officeAutosaveOn && unwrittenTextBoxOwnTry && (
     unwrittenTextBoxWork.changes > 0 ||
     unwrittenTextBoxWork.created.some((key) =>
@@ -34227,6 +34492,11 @@ export default function PdfPageWindow({
     }
     return nativeReceiptJournal.invalidate(lease);
   };
+  /** The writes this window has said its file's policy refuses, by action:
+   * each is said once (the reader's own retries of an object it keeps as
+   * unsaved come back here every few seconds). */
+  const sourcePolicyRefusalsSaidRef = useRef(new Set<string>());
+  useEffect(() => { sourcePolicyRefusalsSaidRef.current = new Set(); }, [pageId]);
   const executeNativeCrossTabMutation = useCallback(
     async (
       invocation: (typeof PDF_EDITOR_NATIVE_CROSS_TAB_COMMANDS)[number],
@@ -34377,6 +34647,38 @@ export default function PdfPageWindow({
         }
         if (authority.decision.reasonKey === "pdf.capability.registryStale") {
           requestNativeCrossTabAuthorityRecovery();
+        }
+        // A file the save policy keeps read-only (encrypted, signed): the
+        // write will never be taken, and the reason is the file's, in the
+        
+        // it, or 「保存失败，请重试」 -- a link added to an encrypted PDF was
+        // simply not there, a note 「failed, try again」 for a retry that
+        
+        
+        // each kind of write; a caller that answers the refusal itself
+        // (onRefused) says its own.
+        const refusedByPolicy = !onRefused && !ownerLease && Boolean(authority.decision.reasonLabel) &&
+          !invocation.action.endsWith(".activate") &&
+          (authority.decision.reasonKey === "pdf.savePolicy.riskySourceReadOnly" ||
+            authority.decision.reasonKey === "pdf.savePolicy.riskyReplacementReadOnly");
+        // The reader's own notices about this write (a note's 「保存失败，
+        // 请重试」, a stroke's "saving is tried again") read the file's reason
+        // from here and say it instead (lib/pdf/source-policy-refusal).
+        const refusedAt = Date.now();
+        const refusedItem = liveDataItemIdRef.current ?? "";
+        if (refusedByPolicy) notePdfSourcePolicyRefusal(refusedItem, authority.decision.reasonLabel ?? "", refusedAt);
+        if (refusedByPolicy && !sourcePolicyRefusalsSaidRef.current.has(invocation.action) && mountedRef.current) {
+          sourcePolicyRefusalsSaidRef.current.add(invocation.action);
+          
+          // 「保存失败，请重试」, said as this returns, took its place (a link
+          // on an encrypted PDF still read "failed, try again"). Not when a
+          // notice of the reader's has shown the reason meanwhile.
+          const reason = authority.decision.reasonLabel ?? "";
+          window.setTimeout(() => {
+            if (mountedRef.current && !pdfSourcePolicyRefusalShown(refusedItem, refusedAt)) {
+              toast({ title: reason, variant: "destructive" });
+            }
+          }, 250);
         }
         onRefused?.(authority.decision);
         return false;
@@ -36300,7 +36602,7 @@ export default function PdfPageWindow({
               { start: false });
           },
           taken: () => document.getSnapshot().pendingOperationIds.includes(row.editId),
-          byEngine: async () => {
+          byEngine: async (compileRefusal) => {
             const snapshot = document.getSnapshot();
             if (snapshot.workingSha256 !== head) return "later";
             const headBytes = document.copyBytes();
@@ -36308,7 +36610,7 @@ export default function PdfPageWindow({
               const operation = await prepareNativeTextOnHead({ pageId,
                 pageContentVersion: nativeListTextRuntimeRef.current.pageContentVersion, selection, snapshot, headBytes,
                 id: row.editId, replacementText: payload.replacementText, format: null, proof: null, keepTextRules: [],
-                lane: "pending-row" });
+                lane: "pending-row", compileRefusal });
               try {
                 // (The copy moved under the plan: planned again on the next try.)
                 if (document.getSnapshot().workingSha256 !== head) return "later";
@@ -36585,7 +36887,11 @@ export default function PdfPageWindow({
       // in a version written since.
       if (reads(box.textContent) === reads(draft.value)) { drafts.drop(draft.id); return "placed"; }
       // Another line stands there now: not opened in the reader's face.
-      if (reads(box.textContent) !== reads(draft.lineText)) return tell();
+      // (The same line where only its blanks read otherwise: its box shows
+      // one at each gap between words the line's own text holds none at --
+      // spacedPdfNativeTextQueuedDraft.)
+      const worded = (text: string | null | undefined) => (text ?? "").replace(/\s+/gu, "");
+      if (reads(box.textContent) !== reads(draft.lineText) && worded(box.textContent) !== worded(draft.lineText)) return tell();
       box.scrollIntoView({ block: "nearest" });
       typingDraftRestoringRef.current.push(entry);
       let pending = carry(draft.lineText, Date.now() + 45_000);
@@ -37292,7 +37598,16 @@ export default function PdfPageWindow({
         // Still declined: the draft stays on the page with its words, and
         // the next finish (or Save) stages it; nothing is sent to the
         
-        setNativeListTextError(t("pdf.pageWindow.editNotSavedTryAgain"));
+        // A format of the line's own words the planner refused for good is
+        // said as that: 「请再试一次」 was said of it, and tried again it was
+        
+        // (The last command asked: with the words as they were, the format's.)
+        setNativeListTextError(t(pdfNativeLeaveRefusalNotice({
+          refusedForGood: nativeWorkingCommandRefusedRef.current && nativeWorkingCommandRefusedForGoodRef.current,
+          formatChanged: Boolean(propertyDraft) && !propertiesUnchanged && !paragraphChanges &&
+            !nativeTextParagraphFrameRef.current,
+          wordsChanged: !nativeHistoryDisplayTextMatches(originalDisplay, replacementText, originalDisplay),
+        }) === "format-not-applied" ? "pdf.nativeTextEdit.formatNotApplied" : "pdf.pageWindow.editNotSavedTryAgain"));
         return false;
       }
       // Which lines the working copy still leaves to the direct write (stage
@@ -39474,8 +39789,24 @@ export default function PdfPageWindow({
     const lease = nativeListTextDialogLease;
     const proof = nativeListTextDialogProofRef.current;
     const geometry = pdfNativeTextDecorationGeometryFromProof(proof);
-    if (!geometry || !nativeTextDecorationKey) return;
+    // A box of several shows or lines states no one run's rule: the rules
+    // its paragraph's write reads under all of its text (the proof's
+    // textRules). Unread, 下划线 stood unpressed on an underlined cell or
+    // title opened again, and a press meant to take the rule off asked for
+    
+    const boxRules = proof && !proof.properties ? proof.textRules ?? null : null;
+    const boxRule = (style: "underline" | "strikethrough") => boxRules?.[style] ? PDF_NATIVE_TEXT_RULE_WHOLE : null;
+    if ((!geometry && !boxRules) || !nativeTextDecorationKey) return;
     const key = nativeTextDecorationKey;
+    if (!geometry) {
+      let stale = false;
+      void Promise.resolve().then(() => {
+        if (stale) return;
+        setNativeTextDecorationHint(null);
+        setNativeTextDecorationState({ key, underline: boxRule("underline"), strikethrough: boxRule("strikethrough") });
+      });
+      return () => { stale = true; };
+    }
     const contentStream = proof?.sourceRun?.contentStream ?? proof?.target ?? null;
     let read: (style: "underline" | "strikethrough") => Promise<Readonly<{ range: PdfNativeTextRuleRange }> | null>;
     if (lease) {
@@ -39499,8 +39830,8 @@ export default function PdfPageWindow({
         setNativeTextDecorationHint(null);
         setNativeTextDecorationState({
           key,
-          underline: underline?.range ?? null,
-          strikethrough: strikethrough?.range ?? null,
+          underline: underline?.range ?? boxRule("underline"),
+          strikethrough: strikethrough?.range ?? boxRule("strikethrough"),
         });
       }
     });
@@ -39877,6 +40208,10 @@ export default function PdfPageWindow({
       Readonly<{ fontResourceName?: string; syntheticBold?: boolean; slanted?: boolean }> | null => {
       const current = row.original.font;
       if (fields.family === undefined && fields.italic === undefined && fields.bold === undefined) return {};
+      // A style the face has by its name alone (CMTI12's italic), asked off:
+      // the face a run's own format takes it off into.
+      const namedOff = fields.family === undefined ? nativeTextNamedStyleOffFace(current, row.fonts, fields) : undefined;
+      if (namedOff) return namedOff;
       const family = fields.family ?? current.family;
       const bold = fields.bold ?? current.bold;
       const italic = fields.italic ?? current.italic;
@@ -40431,8 +40766,14 @@ export default function PdfPageWindow({
           (fields.bold === false && runProof
             ? nativeTextUnboldServedFaceKey(runProof.original.font, fontOptions.values(), italic) : undefined)
         : undefined;
+      // A style the run's face has by its name alone (CMTI12's italic: its
+      // option says upright), asked off: the face a run's own format takes it
+      // off into (nativeTextNamedStyleOffFace). Read by the option alone, the
+      // paragraph was set again as it was -- a write that changed nothing.
+      const namedOff = fields.family === undefined && !italicFace && !weightFace && runProof
+        ? nativeTextNamedStyleOffFace(runProof.original.font, [...fontOptions.values()], fields) : undefined;
       const fontResourceName = fields.family !== undefined ? fontFor(fields.family, bold, italic)
-        : italicFace?.name ?? weightFace;
+        : italicFace?.name ?? weightFace ?? namedOff?.fontResourceName;
       if (fields.family !== undefined && !fontResourceName) return null;
       // The script the press leaves: the one asked, off again when the
       // run already has it (a toggle), the size back to its own.
@@ -40458,10 +40799,11 @@ export default function PdfPageWindow({
         ...(color ? { color } : {}),
         ...(script === "superscript" || script === "subscript" ? { riseEm: pdfNativeScriptRiseEm(script) }
           : script === "none" ? { riseEm: 0 } : {}),
-        // A weight or slant the face named does not carry is drawn so.
-        ...(fields.bold !== undefined && (!fontResourceName || italicFace?.strokeBold)
-          ? { syntheticBold: fields.bold } : {}),
-        ...(fields.italic !== undefined && !fontResourceName ? { slanted: fields.italic } : {}),
+        // A weight or slant the face named does not carry is drawn so (the
+        // family's regular italic taken for a bold run stroked, whatever the
+        // press asked: nativeTextBoxFormatDrawnStyle).
+        ...nativeTextBoxFormatDrawnStyle({ asked: fields, faceNamed: Boolean(fontResourceName),
+          italicFaceStrokesBold: italicFace?.strokeBold === true, namedOff }),
         ...(fields.characterSpacingEm !== undefined ? { characterSpacingEm: fields.characterSpacingEm } : {}),
       });
     };
@@ -46485,7 +46827,7 @@ export default function PdfPageWindow({
         markPdfTextLatency("history.markup-withdrawn", { direction: "undo" });
         return Promise.resolve(true);
       }
-      if (!dataItemId) return queueNativeHistory("undo", runNativeUndoNow);
+      if (!dataItemId) return holdCopyWriteOnItsWay(queueNativeHistory("undo", runNativeUndoNow));
       // Its turn after the marks pressed before it (a mark pressed after it
       // waits for it). The rows it takes back are shown at once: now, when
       // it waits behind other Undos (from the rows they leave), else when
@@ -46493,7 +46835,7 @@ export default function PdfPageWindow({
       const ahead = nativeRowsAheadChainRef.current.length
         ? showRowsUndoAheadRef.current.showRowsAhead("undo", true) : null;
       nativeHistoryBarriersRef.current.undo += 1;
-      return enqueuePdfMarkupHistoryStep(dataItemId, async () => {
+      return holdCopyWriteOnItsWay(enqueuePdfMarkupHistoryStep(dataItemId, async () => {
         let entry = ahead;
         if (entry && !showRowsUndoAheadRef.current.rowsAheadStillHolds(entry)) {
           showRowsUndoAheadRef.current.settleRowsAhead(entry, false);
@@ -46515,9 +46857,9 @@ export default function PdfPageWindow({
           nativeHistoryBarriersRef.current.undo -= 1;
           showRowsUndoAheadRef.current.settleRowsAhead(entry, taken);
         }
-      });
+      }));
     },
-    [awaitConversionBoxOnCopy, dataItemId, queueNativeHistory, runNativeUndoNow],
+    [awaitConversionBoxOnCopy, dataItemId, holdCopyWriteOnItsWay, queueNativeHistory, runNativeUndoNow],
   );
   const runNativeRedoNow = useCallback(
     async () => {
@@ -46596,9 +46938,9 @@ export default function PdfPageWindow({
   const executeNativeRedo = useCallback(
     () => {
       markPdfTextLatency("history.press", { direction: "redo" });
-      if (!dataItemId) return queueNativeHistory("redo", runNativeRedoNow);
+      if (!dataItemId) return holdCopyWriteOnItsWay(queueNativeHistory("redo", runNativeRedoNow));
       nativeHistoryBarriersRef.current.redo += 1;
-      return enqueuePdfMarkupHistoryStep(dataItemId, async () => {
+      return holdCopyWriteOnItsWay(enqueuePdfMarkupHistoryStep(dataItemId, async () => {
         let entry: NativeRowsAhead | null = null;
         let taken = false;
         try {
@@ -46617,9 +46959,9 @@ export default function PdfPageWindow({
           nativeHistoryBarriersRef.current.redo -= 1;
           showRowsUndoAheadRef.current.settleRowsAhead(entry, taken);
         }
-      });
+      }));
     },
-    [dataItemId, queueNativeHistory, runNativeRedoNow],
+    [dataItemId, holdCopyWriteOnItsWay, queueNativeHistory, runNativeRedoNow],
   );
   const saveAuthorityOwner = useMemo(
     () =>
@@ -49071,6 +49413,43 @@ export default function PdfPageWindow({
         }
         return Object.freeze({ kind: "rejected", savedPage: null });
       }
+      // A box that stands for a line of the page's own text is written only
+      // by a row that states the seal the file written on holds for it
+      // (lib/pdf/source-text-save-seal.ts). The box's own save reads it;
+      // every other write through here that changes such a row -- a page
+      // turned (its boxes are drawn again for the turn), the turn's Undo and
+      // Redo, a page step put back -- sent the seal the row was last written
+      // with, and the server refused the whole page's write for it
+      // (`source_text_box_identity_not_proven`): the page's JSON stored, its
+      // PDF not, the history cleared, no Undo for the turn (walks w1024,
+      
+      // seal of the source it is written on, read here; after a refused
+      // write the page's rows may all be ahead of the file, so all do.
+      if (!options?.ordinaryNoteIntent) {
+        const sourceRows = {
+          written: previousPage?.content_json as Record<string, unknown> | undefined,
+          every: previousPage ? readPdfPatchbackReceiptSnapshot(previousPage)?.status === "failed" : false,
+        };
+        const sourceBindings = pdfSourceTextBindingsWrittenBySave(content, sourceRows);
+        if (sourceBindings.length) {
+          const seals = await readPdfSourceTextSealsForSave({
+            sourceSha256: expectedSource.sourceSha256,
+            bindings: sourceBindings,
+            download: () => downloadPdfSourceVersionBytes(expectedSource),
+          }).catch((error: unknown) => {
+            // Seals that cannot be read leave the rows as they are: the
+            // server judges them, as before.
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("[pdf-history] source box seals not read " + pdfDevErrorText(error));
+            }
+            return null;
+          });
+          if (!nativeReceiptMutationLeaseIsCurrent(ownerLease)) {
+            return Object.freeze({ kind: "rejected", savedPage: null });
+          }
+          if (seals) content = sealPdfSourceTextRowsForSave(content, sourceRows, seals);
+        }
+      }
       // Ordinary notes carry an ID/property intent captured before the source
       // await. Rebuild only that slice over the current author view; the shared
       // save then merges any not-yet-rendered peer deltas before dispatch.
@@ -50345,45 +50724,27 @@ export default function PdfPageWindow({
         if (bindings.length) {
           if (options?.sourceTextDiagnostic) options.sourceTextDiagnostic.stage = "source-seal";
           // The reader remembers the bytes it shows by digest (as the native
-          // writers' pinned sources do); they are hashed below like a
-          // download, so only bytes of exactly this source are sealed. The
-          // download cost two round trips before every wrapped-line save.
-          const download = async () => {
-            const url = await apiGet<{download_url?:string}>(
-              `/api/v1/resources/${expectedSource.resourceId}/versions/${expectedSource.resourceVersionId}/download`,
-            );
-            return loadBoundedPdfForPageWindowMutation(url.download_url ?? "", fetchPdfSource);
-          };
-          // Read off the main thread while the editor was open (the source's
-          // seal index): nothing is loaded or hashed here.
+          // writers' pinned sources do); they are hashed like a download, so
+          // only bytes of exactly this source are sealed. The download cost
+          // two round trips before every wrapped-line save. Where the editor
+          // was open, the seals were read off the main thread already (the
+          // source's seal index): nothing is loaded or hashed then
+          // (readPdfSourceTextSealsForSave).
           const sealStarted = performance.now();
-          const cachedSeals = await cachedPdfSourceTextBoxAppearanceSeals(expectedSource.sourceSha256, bindings);
-          if (process.env.NODE_ENV !== "production") markPdfTextLatency("save.seal-source", {
-            cached: Boolean(cachedSeals), ms: Math.round(performance.now() - sealStarted) });
-          if (cachedSeals) {
-            if (!nativeReceiptMutationLeaseIsCurrent(ownerLease)) throw new Error("The PDF source changed before saving.");
-            proposedTextBoxEdits = proposedTextBoxEdits.map(edit => edit.sourceText
-              ? {...edit, sourceText: pdfSourceTextBindingSealedForSave(edit.sourceText, cachedSeals.get(edit.id) ?? null)} : edit);
-            sourceTextBaseRecords = previousNativeTextBoxes.map(edit => edit.sourceText
-              ? {...edit, sourceText: pdfSourceTextBindingSealedForSave(edit.sourceText, cachedSeals.get(edit.id) ?? null)} : edit);
-          } else {
-          const remembered = copyRememberedPdfSourceBytes(expectedSource.sourceSha256);
-          let loaded = remembered ? { bytes: remembered } : await download();
-          if (remembered && await sha256PdfBytes(remembered) !== expectedSource.sourceSha256) {
-            // Not the bytes it claims to be: fetch the real ones as before.
-            remembered.fill(0);
-            loaded = await download();
-          }
-          try {
-            if (await sha256PdfBytes(loaded.bytes) !== expectedSource.sourceSha256 ||
-              !nativeReceiptMutationLeaseIsCurrent(ownerLease)) throw new Error("The PDF source changed before saving.");
-            const seals = await readPdfSourceTextBoxAppearanceSeals(loaded.bytes, bindings);
-            proposedTextBoxEdits = proposedTextBoxEdits.map(edit => edit.sourceText
-              ? {...edit, sourceText: pdfSourceTextBindingSealedForSave(edit.sourceText, seals.get(edit.id) ?? null)} : edit);
-            sourceTextBaseRecords = previousNativeTextBoxes.map(edit => edit.sourceText
-              ? {...edit, sourceText: pdfSourceTextBindingSealedForSave(edit.sourceText, seals.get(edit.id) ?? null)} : edit);
-          } finally { loaded.bytes.fill(0); }
-          }
+          const seals = await readPdfSourceTextSealsForSave({
+            sourceSha256: expectedSource.sourceSha256,
+            bindings,
+            download: () => downloadPdfSourceVersionBytes(expectedSource),
+            onIndexRead: (cached) => {
+              if (process.env.NODE_ENV !== "production") markPdfTextLatency("save.seal-source", {
+                cached, ms: Math.round(performance.now() - sealStarted) });
+            },
+          });
+          if (!nativeReceiptMutationLeaseIsCurrent(ownerLease)) throw new Error("The PDF source changed before saving.");
+          proposedTextBoxEdits = proposedTextBoxEdits.map(edit => edit.sourceText
+            ? {...edit, sourceText: pdfSourceTextBindingSealedForSave(edit.sourceText, seals.get(edit.id) ?? null)} : edit);
+          sourceTextBaseRecords = previousNativeTextBoxes.map(edit => edit.sourceText
+            ? {...edit, sourceText: pdfSourceTextBindingSealedForSave(edit.sourceText, seals.get(edit.id) ?? null)} : edit);
         }
         const preserveNewerDraft = options?.preserveNewerDraft === true;
         const publishSavedDraft =
@@ -50759,6 +51120,10 @@ export default function PdfPageWindow({
           patchAnswered = Boolean(savedPage);
           endPatch(savedPage ? "saved" : "none");
           // The PDF writer refused a box set in runs: say why, in words.
+          // So for a box whose words its face cannot draw (a line of Urdu
+          // left with a word typed in it was written as a text box, 「已按
+          // 文本框保存」 said, the writer refused it, and the window read
+          
           const savedReceipt = savedPage ? readPdfPatchbackReceiptSnapshot(savedPage) : null;
           const runsRefusal = savedReceipt?.status === "failed" ? pdfTextBoxRunsRefusal(savedReceipt.reason) : null;
           if (runsRefusal && !options?.quiet) {
@@ -50768,7 +51133,9 @@ export default function PdfPageWindow({
                 ? t("pdf.textBoxRuns.glyphMissing", { family: runsRefusal.family, character: runsRefusal.character })
                 : runsRefusal.kind === "font"
                   ? t("pdf.textBoxRuns.fontUnavailable", { family: runsRefusal.family })
-                  : t("pdf.textBoxRuns.rowsDisagree"),
+                  : runsRefusal.kind === "script"
+                    ? t("pdf.textBoxRuns.scriptNotWritten")
+                    : t("pdf.textBoxRuns.rowsDisagree"),
             });
           }
           if (savedPage) {
@@ -51129,14 +51496,20 @@ export default function PdfPageWindow({
           for (const edit of draftChange.changed) drafts.add(edit.id);
           for (const edit of draftChange.removed) drafts.delete(edit.id);
           textBoxEditsRef.current = proposedTextBoxEdits;
-          // Publish the draft after the input event settles, like the saved
-          // path does; a synchronous re-render inside the keystroke steals the
-          // caret from the box being typed into.
-          window.setTimeout(() => {
-            if (textBoxEditsRef.current === proposedTextBoxEdits) {
-              setTextBoxEdits(proposedTextBoxEdits);
-            }
-          }, 0);
+          // Published with the change itself, in the render the key already
+          
+          // the keystroke took the caret from the box; the box layer has not
+          // rebuilt a focused box since). Since a change is drawn before its
+          // write has put it on the list (shownTextBoxChanges), that left a
+          // gap: the key's render showed the box with the key, the write --
+          // done in the same turn, a draft is no write -- took the change
+          // off the shown ones, and until the timer ran the page drew the
+          // box from the list of before the key. The box layer, given the
+          // box back and then the older one, typed the next key onto the
+          // older: a word typed within ~100 ms of Bold lost the bold on its
+          // second letter and was written as plain page text (walk 237,
+          
+          setTextBoxEdits(proposedTextBoxEdits);
           return;
         }
       }
@@ -51180,6 +51553,7 @@ export default function PdfPageWindow({
           // list already: taken, with nothing written and no step to undo.
           const unchanged = result?.kind === "unchanged";
           if (result?.kind !== "saved" && !staged && !unchanged) {
+            nativeTextBoxWriteRefusedAtRef.current = Date.now();
             // Whatever the page JSON now holds (a write the PDF did not take
             // may have advanced it), a created box this write carried is not
             // saved until a verified receipt holds it.
@@ -51567,8 +51941,11 @@ export default function PdfPageWindow({
       // line's delete (executeNativeFreeTextCommit).
       // ownTry: the window's own try of a box whose write was not taken
       // (writeCreatedTextBoxes): nothing is said when it is not taken again.
+      // afterWritten: the words go after ones already written as page text
+      
+      // cannot take them for the moment.
       options?: { fromSave?: boolean; keepBox?: boolean; edit?: PdfTextBoxEdit; ownTry?: boolean;
-        actionLease?: PdfNativeReceiptMutationLease; joinsStepOf?: string },
+        actionLease?: PdfNativeReceiptMutationLease; joinsStepOf?: string; afterWritten?: boolean },
     ): Promise<boolean> => {
       if (process.env.NODE_ENV !== "production") {
         console.info("[pdf-content-append] created box commit", {
@@ -51831,16 +52208,35 @@ export default function PdfPageWindow({
         // action could not stage in time: it follows that edit all the same,
         // one step with it once saved, as the text-box writer's rows do.)
         const follows = options?.joinsStepOf;
-        const staged = appendsText
-          ? await runNativeWorkingEdit("pdf.content.append.commit",
-            PDF_CROSS_TAB_COMMANDS.contentAppendTextCommit, follows ? async (lease) => {
-              const appended = await appendText(lease);
-              for (const op of nativeWorkingEditGroups.forLease(lease)?.opIds ?? []) {
-                nativeLinkCarriesRef.current.set(op, follows);
-              }
-              return appended;
-            } : appendText)
-          : null;
+        const stageAppend = () => runNativeWorkingEdit("pdf.content.append.commit",
+          PDF_CROSS_TAB_COMMANDS.contentAppendTextCommit, follows ? async (lease) => {
+            const appended = await appendText(lease);
+            for (const op of nativeWorkingEditGroups.forLease(lease)?.opIds ?? []) {
+              nativeLinkCarriesRef.current.set(op, follows);
+            }
+            return appended;
+          } : appendText);
+        let staged = appendsText ? await stageAppend() : null;
+        
+        // (writeRest) are page text after them. While the copy cannot take
+        // an edit for the moment (the words before still being put on it,
+        // a server slow to answer), they wait for it: written at once by the
+        // box writer instead, one word typed in one box stood in the file as
+        // page text 「w」 and a text box 「400xmnl76」 beside it, and moving
+        // the box left its first letter behind (pdf-walk-1000 0400,
+        
+        // the box writer has them, as before.
+        if (options?.afterWritten && staged === false && nativeContentAppendDeclinedRef.current === "not-staged") {
+          for (const until = Date.now() + 30_000; staged === false && Date.now() < until && mountedRef.current;) {
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
+            // Changed or taken away by the reader meanwhile: theirs to finish.
+            const now = textBoxEditsRef.current.find((entry) => entry.id === id && entry.page === pageIndex);
+            if (!now || now.deleted || now.text !== edit.text || !nativeTextDraftIdsRef.current.has(id)) break;
+            staged = await stageAppend();
+            if (staged === false && nativeContentAppendDeclinedRef.current !== "not-staged") break;
+          }
+          markPdfTextLatency("append.rest-waited", { staged: staged === true });
+        }
         
         // queue as AutoSave says): nothing written, the box stays a draft.
         if (options?.keepBox) return staged === true;
@@ -51985,7 +52381,12 @@ export default function PdfPageWindow({
               t("pdf.editNotReady");
           toast({
             title: t("pdf.pageWindow.newTextNotSavedYet"),
-            description: t("pdf.pageWindow.textStaysPageUseSave", {
+            // A file its policy keeps read-only never takes the text: said
+            // so, not "Save now to retry" (an encrypted PDF read 「可稍后点
+            // "立即保存"重试」 for a retry that can never pass -- pdf-walk-1000
+            
+            description: t(PDF_FINAL_SOURCE_POLICY_REFUSALS.has(fallback.reasonKey ?? "")
+              ? "pdf.pageWindow.textStaysPageFileReadOnly" : "pdf.pageWindow.textStaysPageUseSave", {
               refusalReason,
             }),
             variant: "destructive",
@@ -52047,8 +52448,18 @@ export default function PdfPageWindow({
     
     const typedSoFar = edit ? (rootRef.current?.querySelector<HTMLElement>(`.pdf-textbox-edit[data-box-id="${
       typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id}"]`)?.textContent ?? edit.text ?? "") : "";
+    // A change of this box that waits for a write, or is in the one that
+    // runs, is not on the list yet: the list's box is older than the one
+    // being typed in, and a format given to it since (Bold pressed before
+    // the first word) is not on it. Judged plain from that box, its words
+    // went to the page as plain text. It stays a box, written as it is when
+    // it is left.
+    const changeQueue = textBoxHistoryCommitQueueRef.current;
+    const changeOnItsWay = Boolean(edit) && [...changeQueue.writing, ...changeQueue.waiting].some(
+      (change) => change.id === id && change.page === edit!.page);
     const declined = !edit ? "no-box" : edit.kind === "formula" ? "formula" : edit.writingMode ? "vertical"
       : pdfTextNeedsShaping(typedSoFar) ? "complex-script"
+      : changeOnItsWay ? "change-on-its-way"
       : pdfCreatedTextBoxNeedsTextBoxWriter(edit) ? "formatted" : textEditorPaintsUploadRef.current ? "paints-upload"
         : !pdfNativeTextOpenerRef.current ? "no-opener" : !nativeListWritableRef.current() ? "not-writable"
           : !executeNativeCrossTabMutationRef.current ? "no-executor" : readNativeVectorGeometryDisabledReason() ?? null;
@@ -52075,6 +52486,9 @@ export default function PdfPageWindow({
     // written are painted under it a moment later), its own caret and IME.
     const frame = node.getBoundingClientRect();
     const look = window.getComputedStyle(node);
+    // The box's face, read now: `look` is live, and reads empty once the box
+    // has left the document (it goes a few lines below).
+    const boxFace = { fontFamily: look.fontFamily, fontWeight: look.fontWeight, fontStyle: look.fontStyle };
     const field = document.createElement("textarea");
     field.value = typedFirst;
     field.rows = 1;
@@ -52169,15 +52583,45 @@ export default function PdfPageWindow({
     // as a new box left is written (a box of their own, its draft kept for
     // Save if the write is refused or AutoSave is off).
     const writeRest = async (): Promise<boolean> => {
+      // (Asked before the stand-in is read: a key typed while the face
+      // loads is among the words written.)
+      const pageFace = await ensurePdfEastAsianFace();
       const typed = normalize(field.value);
       const rest = typed.startsWith(written) ? typed.slice(written.length) : "";
-      const measure = document.createElement("span");
-      Object.assign(measure.style, { position: "fixed", visibility: "hidden", whiteSpace: "pre",
-        font: look.font, letterSpacing: look.letterSpacing });
-      measure.textContent = written;
-      document.body.appendChild(measure);
-      const advance = pageFrame && pageFrame.width > 0 ? measure.getBoundingClientRect().width / pageFrame.width : 0;
-      measure.remove();
+      // Where the words written end, the rest begins: the two are one word
+      // as often as not ("w23" and "8xvcteb"). The written ones are page
+      // text now, set in the bundled face glyph after glyph at the box's
+      // size (appendText), so their end is measured in that face, at that
+      // size, the same way. It was measured in the box's own type read from
+      // `look` after the box had gone: that reads empty, the measure fell
+      // back to the document's 16px, and the rest was written 16 / (the
+      // box's size) too far along -- 1.7 pt after "w23" at 15.1 pt, which a
+      // reader of the file takes for a space ("w23 8xvcteb", walk 237,
+      
+      const advance = ((): number => {
+        if (!pageFrame || !(pageFrame.width > 0)) return 0;
+        // In ems, at a size no rounding of a small type's advances shows in.
+        const size = 100;
+        const context = pageFace ? document.createElement("canvas").getContext("2d") : null;
+        const ems = context && typeof context.measureText === "function"
+          ? (() => {
+              context.font = `${size}px ${PDF_EAST_ASIAN_CSS_FAMILY}`;
+              return pdfContentAppendLastLineAdvance(written, (character) => context.measureText(character).width) / size;
+            })()
+          : (() => {
+              // The face could not be loaded: the face the box was drawn in.
+              const measure = document.createElement("span");
+              Object.assign(measure.style, { position: "fixed", visibility: "hidden", whiteSpace: "pre",
+                ...boxFace, fontSize: `${size}px` });
+              measure.textContent = written.slice(Math.max(written.lastIndexOf("\n"), written.lastIndexOf("\r")) + 1);
+              document.body.appendChild(measure);
+              const width = measure.getBoundingClientRect().width;
+              measure.remove();
+              return width / size;
+            })();
+        // The size the append sets them at: this share of the page's height.
+        return (ems * (edit.fontSize ?? DEFAULT_NEW_BOX_FONT_SIZE) * pageFrame.height) / pageFrame.width;
+      })();
       field.remove();
       document.removeEventListener("pointerdown", onPressElsewhere, true);
       if (!rest.trim()) return true;
@@ -52187,7 +52631,7 @@ export default function PdfPageWindow({
       textBoxEditsRef.current = next;
       setTextBoxEdits(next);
       nativeTextDraftIdsRef.current.add(restId);
-      return handleCreatedTextBoxCommit(restId, rest, { fromSave: true });
+      return handleCreatedTextBoxCommit(restId, rest, { fromSave: true, afterWritten: true });
     };
     void (async () => {
       try {
@@ -52860,6 +53304,29 @@ export default function PdfPageWindow({
     if (!converted && !nativeLineConversionRefusedRef.current) toast({ description: t("pdf.pageWindow.editNotSavedTryAgain") });
     return converted;
   }, [readNativeLineLayoutBase, t]);
+  // 「已按文本框保存」 of this window's editors is said once every write
+  // behind the editor is taken -- its background save, the box's own write
+  // (a line that became a box is written after its editor let go), the
+  // working copy's queue -- and not when one of them was refused
+  // (saved-as-text-box-notice).
+  useEffect(() => {
+    const whenWritten = pdfSavedAsTextBoxNoticeWhenWritten({
+      busy: () => (nativeTextBackgroundSaveRef.current?.pending ?? 0) > 0 ||
+        createdTextBoxCommitsInFlightRef.current.size > 0 || nativeTextCommittingIdsRef.current.size > 0 ||
+        textBoxHistoryCommitQueueRef.current.running || nativeReceiptJournal.getSnapshot().busy ||
+        (nativeWorkingDocumentRef.current?.getSnapshot().pendingOperationIds.length ?? 0) > 0,
+      refusedSince: (at) => nativeTextBoxWriteRefusedAtRef.current >= at,
+      alive: () => mountedRef.current,
+    });
+    return answerForPdfSavedAsTextBoxNotice((from, say) => {
+      const root = rootRef.current;
+      if (!root || !from || !root.contains(from)) return false;
+      void whenWritten(say);
+      return true;
+    });
+  // nativeReceiptJournal is the window's one journal (a ref's value).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const persistNativeTextLayout = useCallback(
     async (
       replacementText: string,
@@ -53000,6 +53467,7 @@ export default function PdfPageWindow({
       }, t);
       const settle = (ok: boolean, published: boolean) => {
         markPdfTextLatency("layout.saved", { ok, published });
+        if (!ok) nativeTextBoxWriteRefusedAtRef.current = Date.now();
         if (!published || !saved) return;
         const record = saved;
         const failedKey = `${record.nextEdit.page}:${record.nextEdit.id}`;
@@ -57055,6 +57523,23 @@ export default function PdfPageWindow({
             : PDF_CROSS_TAB_COMMANDS.headerFooterCommit;
       const previousStamps = [...(accepted?.stamps ?? nativeStampsRef.current)];
       let refusal: string | null = null;
+      // What one write does not carry is said with its reason, and at once:
+      // before this write waits its turn behind another, and before a page
+      // is laid out. (A watermark on a file past 64 pages was refused here
+      // as 「未能保存水印」, the reason -- a page bound -- never said.)
+      const tooManyPages = (pageSizes: ReturnType<typeof resolveNativeDecorationPageSizes>): string | null => {
+        if (pageSizes.length > MAX_NATIVE_DECORATION_PAGES) {
+          return t("pdf.decoration.refusedTooManyPages", { pages: pageSizes.length, max: MAX_NATIVE_DECORATION_PAGES });
+        }
+        const budget = pdfDecorationNativeStampBudget({ decorations: nextDecorations, pageSizes,
+          currentRecords: previousStamps });
+        return budget && !budget.within
+          ? t("pdf.decoration.refusedTooManyPages", { pages: budget.pages, max: budget.max }) : null;
+      };
+      const contentBeforeWrite = buildCurrentContent();
+      const refusedBeforeWrite = contentBeforeWrite
+        ? tooManyPages(resolveNativeDecorationPageSizes(contentBeforeWrite)) : null;
+      if (refusedBeforeWrite) throw new PdfWriteRefusedError(refusedBeforeWrite);
       const executed = await executeNativeCrossTabMutation(
         invocation,
         workspaceWritable && dataItemId && pdfPageCount > 0
@@ -57063,16 +57548,24 @@ export default function PdfPageWindow({
         async (mutationLease) => {
           const currentContent = buildCurrentContent();
           if (!currentContent) return false;
+          const pageSizes = resolveNativeDecorationPageSizes(currentContent);
           const reconciliation = await reconcilePdfDecorationNativeStamps({
             decorations: nextDecorations,
-            pageSizes: resolveNativeDecorationPageSizes(currentContent),
+            pageSizes,
             currentRecords: previousStamps,
             resolveImage: resolveNativeDecorationImage,
           });
-          if (
-            !reconciliation.supported ||
-            !nativeReceiptMutationLeaseIsCurrent(mutationLease)
-          ) {
+          if (!reconciliation.supported) {
+            refusal = reconciliation.reason === "total_size_limit"
+              ? t("pdf.decoration.refusedTooLarge")
+              : reconciliation.reason === "stamp_limit" || reconciliation.reason === "page_limit"
+                ? tooManyPages(pageSizes) : null;
+            if (process.env.NODE_ENV !== "production") {
+              console.debug("[pdf-decoration] not written: " + reconciliation.reason);
+            }
+            return false;
+          }
+          if (!nativeReceiptMutationLeaseIsCurrent(mutationLease)) {
             return false;
           }
           const nextStamps = [...reconciliation.records];
@@ -63397,7 +63890,8 @@ export default function PdfPageWindow({
         }
         onReload={() =>
           runAfterPdfFormulaSourceFlush(() => {
-            void loadDiscardingWindowDrafts(() => autosave.discardLocalAndReload());
+            // What Reload discards is kept aside first (TRIAGE 38).
+            void loadDiscardingWindowDrafts(() => autosave.discardLocalAndReload({ keepAside: { reason: "discarded-for-remote" } }));
           })
         }
         onOverwrite={() =>

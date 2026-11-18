@@ -87,6 +87,11 @@ const PAGE_EXPORT_LOSS_MESSAGE_KEYS: Readonly<Record<string, string>> =
     // records, named for the reader after a download it did not ask about.
     pptx_slides_written_from_page:
       "toolbar.exportLossCode.pptx_slides_written_from_page",
+    // A slide whose contents the import could not read went out as the
+    // imported file has it, without boxes added there that no save has
+    // written yet (readings row 820).
+    pptx_unread_slide_additions_not_downloaded:
+      "toolbar.exportLossCode.pptx_unread_slide_additions_not_downloaded",
     // Not a loss: a deck holding macros downloads as a .pptm with them kept.
     pptx_saved_as_pptm_with_macros:
       "toolbar.exportLossCode.pptx_saved_as_pptm_with_macros",
@@ -94,6 +99,14 @@ const PAGE_EXPORT_LOSS_MESSAGE_KEYS: Readonly<Record<string, string>> =
     pptx_macros_not_kept: "toolbar.exportLossCode.pptx_macros_not_kept",
     presentation_notes_preserve_only_not_exported:
       "toolbar.exportLossCode.presentation_notes_preserve_only_not_exported",
+    // Notes the page changed, written from its plain text over a notes page
+    
+    presentation_notes_formatting_not_kept:
+      "toolbar.exportLossCode.presentation_notes_formatting_not_kept",
+    // A part of the original package the written deck dropped, named by kind
+    // and owner (`presentation_part_not_exported:<kind>[:slide<N>...]`).
+    "presentation_part_not_exported:":
+      "toolbar.exportLossCode.presentation_part_not_exported",
     presentation_comments_preserve_only_not_exported:
       "toolbar.exportLossCode.presentation_comments_preserve_only_not_exported",
     presentation_historical_comments_not_exported:

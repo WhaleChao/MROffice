@@ -2570,7 +2570,15 @@ function applyPlacement(
     placement.topPx - originPx.topPx > BAND_AT_PAGE_PLACE_MIN_DROP_PX &&
     Boolean(wrapper.closest("article[data-page-sheet]")?.hasAttribute(COLUMN_REGIONS_ATTR));
   const mode = pageBandInRegions ||
-    (floatFlowMode(anchor) !== "overlay" && floatWhollyInPageMargin(placement, distances, geometry))
+    (floatFlowMode(anchor) !== "overlay" &&
+      floatWhollyInPageMargin(
+        placement,
+        distances,
+        // A cell's own side paddings are no page margin.
+        wrapper.closest("td, th")
+          ? { pageHeightPx: geometry.pageHeightPx, marginTopPx: geometry.marginTopPx, marginBottomPx: geometry.marginBottomPx }
+          : geometry,
+      ))
     ? "overlay"
     : floatFlowMode(anchor);
   // Drawn out of the flow, the band still keeps text off the column it

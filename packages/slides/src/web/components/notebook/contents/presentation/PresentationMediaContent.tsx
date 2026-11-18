@@ -15,8 +15,9 @@
  * (structural split, no behaviour change).
  */
 
+import { PresentationMetafileTextLayer, metafileTextRuns } from "./PresentationMetafileTextLayer";
 import { getApiHttpBaseUrl } from "@mrnote/core/web/lib/env.ts";
-import { smartArtPictureDisplaySrc } from "@mrnote/core/web/lib/office-smartart/model.ts";
+import { smartArtPictureDisplaySrc, smartArtPictureOutputSrc } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import {
   normalizeOfficeArtisticEffect,
   officeArtisticEffectCss,
@@ -1496,10 +1497,17 @@ function CroppedImageDrawing({
   cropOverride,
   fillParent,
   themeColors,
+  emptySlot = "icon",
 }: {
   block: PresentationImageBlock;
   /** The deck's theme: a Recolor tile's colours (Accent 1 Light ...). */
   themeColors?: OfficeThemeGridColors | null;
+  /**
+   * How a SmartArt picture slot that holds no picture is drawn: with the
+   * "insert picture" icon while editing, as its bare slot colour everywhere
+   * else (`smartArtPictureOutputSrc`, TRIAGE S22).
+   */
+  emptySlot?: "icon" | "fill";
   imgStyle?: CSSProperties;
   // Live crop preview (drag in progress). When provided it overrides the
   // persisted `block.cropRect` so the image tracks the drag before commit.
@@ -1578,11 +1586,13 @@ function CroppedImageDrawing({
     cropOverride ??
     block.cropRect ??
     (frameApart || recolorApart || fillApart ? { x: 0, y: 0, w: 1, h: 1 } : undefined);
+  // An EMF's words over its render, drawn by nobody (readings row 864).
+  const textRuns = metafileTextRuns(block.source);
   if (!effectiveCrop || (isIdentityCrop(effectiveCrop) && !frameApart && !recolorApart && !fillApart)) {
-    return (
+    const whole = (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={smartArtPictureDisplaySrc(block.src, (block as { smartArtSlotFill?: unknown }).smartArtSlotFill)}
+        src={(emptySlot === "fill" ? smartArtPictureOutputSrc : smartArtPictureDisplaySrc)(block.src, (block as { smartArtSlotFill?: unknown }).smartArtSlotFill)}
         alt={alt}
         draggable={false}
         // An uncropped picture fills its frame as a cropped one does: the
@@ -1600,6 +1610,13 @@ function CroppedImageDrawing({
         data-testid="presentation-image-el"
         data-artistic-effect={normalizeOfficeArtisticEffect(block.artisticEffect) ?? undefined}
       />
+    );
+    if (!textRuns.length || !fillParent) return whole;
+    return (
+      <span style={{ position: "relative", display: "block", width: "100%", height: "100%" }}>
+        {whole}
+        <PresentationMetafileTextLayer runs={textRuns} orientation={presentationPictureOrientationCss(block)} />
+      </span>
     );
   }
   const css = cropToCss(effectiveCrop);
@@ -1652,7 +1669,7 @@ function CroppedImageDrawing({
       <OfficeAdjustSvgFilter id={recolorFilterId} steps={recolorSteps} />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={smartArtPictureDisplaySrc(block.src, (block as { smartArtSlotFill?: unknown }).smartArtSlotFill)}
+        src={(emptySlot === "fill" ? smartArtPictureOutputSrc : smartArtPictureDisplaySrc)(block.src, (block as { smartArtSlotFill?: unknown }).smartArtSlotFill)}
         alt={alt}
         draggable={false}
         // `maxWidth: none` defeats the stylesheet's `.presentation-present__image
@@ -1669,6 +1686,11 @@ function CroppedImageDrawing({
           ...(contentOpacity !== undefined ? { opacity: contentOpacity } : {}),
         }}
         data-artistic-effect={normalizeOfficeArtisticEffect(block.artisticEffect) ?? undefined}
+      />
+      <PresentationMetafileTextLayer
+        runs={textRuns}
+        box={css as CSSProperties}
+        orientation={presentationPictureOrientationCss(block)}
       />
     </span>
   );

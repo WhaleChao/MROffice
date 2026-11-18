@@ -449,11 +449,22 @@ export function markAutoRecoverCopiesClosing(): void {
   const marks = readStaleMarks();
   for (const [pageId, change] of lastChanges) marks[markKey(change.principal, pageId, AUTORECOVER_CURRENT_SLOT)] = change.at;
   writeStaleMarks(marks);
-  // The change the copy has not caught up with, written now while the tab
-  // still can: the page as it is, synchronously. The edits a closing tab had
-  // queued behind a save still on its way were otherwise only in this tab's
-  // session storage, gone with it -- an Undo 100 ms before closing came back
-  // undone (the save before it landed, the Undo's never left; a45c sac24).
+  writeClosingCopies();
+}
+
+/**
+ * The change each page's copy has not caught up with, written now while the
+ * tab still can: the page as it is, synchronously, to local storage (a
+ * closing copy, read back by the next opening). The edits a closing tab had
+ * queued behind a save still on its way were otherwise only in this tab's
+ * session storage, gone with it -- an Undo 100 ms before closing came back
+ * undone (the save before it landed, the Undo's never left; a45c sac24).
+ * Also as the tab is hidden (TRIAGE 44): a tab the system ends in the
+ * background gets no pagehide, and the last keys before it was hidden --
+ * the copy writes 600 ms after a change -- were in no copy. No stale mark
+ * then: the tab may come back, and its later copies are newer than this one.
+ */
+function writeClosingCopies(): void {
   for (const [pageId, pending] of pendingWrites) {
     let entry: AutoRecoverEntry | null = null;
     try {
@@ -625,7 +636,9 @@ function installLifecycle(): void {
     flush();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flush();
+    if (document.visibilityState !== "hidden") return;
+    writeClosingCopies();
+    flush();
   });
 }
 
@@ -771,14 +784,21 @@ export async function listAutoRecoverCopies(pageId: string): Promise<AutoRecover
     const copy = await open(record);
     if (!copy) continue;
     const closedAt = marks[markKey(principal, pageId, record.slot)];
+    const closing = record.slot.startsWith("current:")
+      ? readClosingCopy(principal, pageId, record.slot) : null;
     if (typeof closedAt === "number" && closedAt > record.savedAt) {
       // The closing tab's last state, written as it went: the copy is that.
-      const closing = readClosingCopy(principal, pageId, record.slot);
       if (closing && closing.savedAt >= closedAt) {
         copy.payload = closing.entry.payload;
         copy.baseContentVersion = closing.entry.baseContentVersion;
         copy.savedAt = closing.savedAt;
       } else copy.stale = true;
+    } else if (closing && closing.savedAt > record.savedAt) {
+      // Written as its tab was hidden, after this copy (the tab then ended
+      // without a pagehide): the tab's later state (TRIAGE 44).
+      copy.payload = closing.entry.payload;
+      copy.baseContentVersion = closing.entry.baseContentVersion;
+      copy.savedAt = closing.savedAt;
     }
     copies.push(copy);
   }

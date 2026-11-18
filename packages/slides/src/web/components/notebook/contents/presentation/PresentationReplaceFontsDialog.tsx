@@ -17,7 +17,7 @@ import { useRef, useState, type ReactElement } from "react";
 import { OfficeDialogShell } from "@mrnote/core/web/components/office-ribbon/OfficeDialogShell.tsx";
 import { officeDialogParts as dialogParts } from "@mrnote/core/web/components/office-ribbon/officeDialogChrome.tsx";
 import { RUN_FONT_FAMILIES } from "@mrnote/core/web/lib/presentation-point-runs.ts";
-import type { MasterFontEntry } from "../../../../lib/presentation-replace-font";
+import type { MasterFontEntry } from "@mrnote/core/web/lib/presentation-replace-font.ts";
 
 /**
  * Slide Size dialog (PowerPoint / WPS "Slide Size"): pick a preset aspect ratio
@@ -44,9 +44,9 @@ export function ReplaceFontsDialog({
   usedFonts: readonly string[];
   /**
    * The fonts the masters provide (§73): a face a master's own `p:txStyles`
-   * names is replaced on the master too; a THEME font is listed because the
-   * deck uses it, but PowerPoint changes it under Slide Master ▸ Fonts, not
-   * here, so choosing it explains that instead of applying.
+   * names, or one only the theme gives. Either is replaced where words draw
+   * in it (`replaceFontsInDeck`); the text styles and the theme's font scheme
+   * keep it, as PowerPoint's Replace Fonts leaves them.
    */
   masterFonts?: readonly MasterFontEntry[];
   onApply: (fromCss: string, toCss: string) => void;
@@ -56,8 +56,8 @@ export function ReplaceFontsDialog({
   const fontLabel = (css: string) =>
     RUN_FONT_FAMILIES.find((option) => option.css === css)?.label ?? css;
   // One list, slides' fonts first, then what only the masters provide.
-  const fromOptions: Array<{ css: string; label: string; themeOnly: boolean }> = [
-    ...usedFonts.map((css) => ({ css, label: fontLabel(css), themeOnly: false })),
+  const fromOptions: Array<{ css: string; label: string }> = [
+    ...usedFonts.map((css) => ({ css, label: fontLabel(css) })),
     // The slides' fonts are listed by primary face (PPT-B301); a master
     // face the slides already name is not listed twice.
     ...masterFonts
@@ -67,15 +67,12 @@ export function ReplaceFontsDialog({
         label: entry.editable
           ? t("presentation.replaceFonts.masterFont", { font: fontLabel(entry.face) })
           : t("presentation.replaceFonts.themeFont", { font: fontLabel(entry.face) }),
-        themeOnly: !entry.editable,
       })),
   ];
   const [fromCss, setFromCss] = useState<string>(fromOptions[0]?.css ?? "");
   const [toId, setToId] = useState<string>(RUN_FONT_FAMILIES[0]?.id ?? "");
   const toCss =
     RUN_FONT_FAMILIES.find((option) => option.id === toId)?.css ?? "";
-  const fromIsThemeOnly =
-    fromOptions.find((option) => option.css === fromCss)?.themeOnly === true;
   const fromRef = useRef<HTMLSelectElement | null>(null);
   return (
     <OfficeDialogShell
@@ -86,9 +83,11 @@ export function ReplaceFontsDialog({
       description=""
       defaultActionLabel={t("presentation.replaceFonts.apply")}
       cancelActionLabel={t("presentation.replaceFonts.cancel")}
-      defaultActionDisabled={
-        fromOptions.length === 0 || !toCss || fromIsThemeOnly
-      }
+      // A face only the theme gives (the masters' and layouts' words that
+      // follow it) is replaced too, as PowerPoint's Fonts.Replace replaces
+      // it (truth replacefont rf1 / c65fontref): those words take the new
+      // face of their own, the theme's font scheme stays.
+      defaultActionDisabled={fromOptions.length === 0 || !toCss}
       onDefaultAction={() => onApply(fromCss, toCss)}
       onCancel={onClose}
       initialFocusRef={fromRef}
@@ -122,14 +121,6 @@ export function ReplaceFontsDialog({
               ))}
             </select>
           </label>
-          {fromIsThemeOnly ? (
-            <p
-              data-testid="presentation-replace-fonts-theme-note"
-              className={dialogParts.hint}
-            >
-              {t("presentation.replaceFonts.themeNote")}
-            </p>
-          ) : null}
           <label className={dialogParts.field}>
             <span className={dialogParts.label}>
               {t("presentation.replaceFonts.to")}

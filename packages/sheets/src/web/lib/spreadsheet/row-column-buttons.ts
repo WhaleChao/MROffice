@@ -689,7 +689,11 @@ export function resolveSpreadsheetNativeGrid(
     : { x: officePrintScale({ family: columnFamily, sizePt: measurementFont?.sizePt, ...recordOf(columnFamily) }, digitWidth).x, y: rowPrint.y };
   return { grid, dpi, digitWidth, fontRowHeight, fontReplaced, automaticDefaultRow, indentStepPx: officeIndentStepPx(font),
     rowFont: { family: rowFamily, sizePt: measurementFont?.sizePt ?? 11, ...recordOf(rowFamily) }, widths: resolved, printScale,
-    defaultWidth: defaultWidth === grid.defaultPixels ? nativeDefaultWidth(grid, digitWidth, dpi) : defaultWidth };
+    defaultWidth: defaultWidth === grid.defaultPixels
+      ? nativeDefaultWidth(grid, digitWidth, dpi, measurementFont
+        ? officeDigitWidth({ family: measurementFont.family, sizePt: measurementFont.sizePt, ...recordOf(measurementFont.family) })
+        : undefined)
+      : defaultWidth };
 }
 
 export interface LineSizeSheet extends CellButtonsSheet {

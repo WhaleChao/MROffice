@@ -14,6 +14,9 @@
   "dengxian-light": {
    "400": "dengxian-light-400.woff2"
   },
+  "dfkai-sb": {
+   "400": "dfkai-sb-400.woff2"
+  },
   "dotum": {
    "400": "dotum-400.woff2"
   },
@@ -133,6 +136,21 @@
   "yu-gothic": {
    "400": "yu-gothic-400.woff2",
    "700": "yu-gothic-700.woff2"
+  },
+  "yu-gothic-light": {
+   "400": "yu-gothic-light-400.woff2"
+  },
+  "yu-gothic-medium": {
+   "400": "yu-gothic-medium-400.woff2"
+  },
+  "yu-mincho": {
+   "400": "yu-mincho-400.woff2"
+  },
+  "yu-mincho-demibold": {
+   "400": "yu-mincho-demibold-400.woff2"
+  },
+  "yu-mincho-light": {
+   "400": "yu-mincho-light-400.woff2"
   }
  },
  "names": {
@@ -141,6 +159,7 @@
   "batang": "batang",
   "dengxian": "dengxian",
   "dengxian light": "dengxian-light",
+  "dfkai-sb": "dfkai-sb",
   "dotum": "dotum",
   "fangsong": "fangsong",
   "fangsong_gb2312": "fangsong",
@@ -201,6 +220,11 @@
   "songti sc": "songti-sc",
   "songti tc": "songti-sc",
   "yu gothic": "yu-gothic",
+  "yu gothic light": "yu-gothic-light",
+  "yu gothic medium": "yu-gothic-medium",
+  "yu mincho": "yu-mincho",
+  "yu mincho demibold": "yu-mincho-demibold",
+  "yu mincho light": "yu-mincho-light",
   "ヒラギノ明朝 pro w3": "hiragino-mincho",
   "ヒラギノ明朝 pron w3": "hiragino-mincho",
   "ヒラギノ角ゴ pro w3": "hiragino-sans",
@@ -218,7 +242,13 @@
   "新細明體": "pmingliu",
   "楷体": "kaiti",
   "楷体_gb2312": "kaiti",
+  "標楷體": "dfkai-sb",
   "游ゴシック": "yu-gothic",
+  "游ゴシック light": "yu-gothic-light",
+  "游ゴシック medium": "yu-gothic-medium",
+  "游明朝": "yu-mincho",
+  "游明朝 demibold": "yu-mincho-demibold",
+  "游明朝 light": "yu-mincho-light",
   "等线": "dengxian",
   "等线 light": "dengxian-light",
   "細明體": "mingliu",
@@ -240,6 +270,7 @@
   "batang": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "dengxian": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401,U+040D-040E,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "dengxian-light": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401,U+040D-040E,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "dfkai-sb": "U+0020-007E,U+00A0,U+00B7,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "dotum": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "fangsong": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+0391-03A1,U+03A3-03A9,U+03B1-03C1,U+03C3-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
   "gulim": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
@@ -275,7 +306,12 @@
   "simhei": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+0391-03A1,U+03A3-03A9,U+03B1-03C1,U+03C3-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
   "simsun": "U+0020-007E,U+00A0-00FF,U+0391-03A1,U+03A3-03A9,U+03B1-03C1,U+03C3-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "songti-sc": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
-  "yu-gothic": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026"
+  "yu-gothic": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "yu-gothic-light": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "yu-gothic-medium": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "yu-mincho": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "yu-mincho-demibold": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "yu-mincho-light": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026"
  },
  "server": {
   "apple-sd-gothic-neo": {
@@ -307,6 +343,13 @@
     "400": "metric-clones/ttf/cjk-latin/dengxian-light-400.ttf.gz"
    },
    "source": "noto-sans-sc"
+  },
+  "dfkai-sb": {
+   "family": "MRAI-Metric-DFKai-SB",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/dfkai-sb-400.ttf.gz"
+   },
+   "source": "lxgw-wenkai-tc"
   },
   "dotum": {
    "family": "MRAI-Metric-Dotum",
@@ -571,6 +614,41 @@
     "700": "metric-clones/ttf/cjk-latin/yu-gothic-700.ttf.gz"
    },
    "source": "noto-sans-jp"
+  },
+  "yu-gothic-light": {
+   "family": "MRAI-Metric-YuGothicLight",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/yu-gothic-light-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "yu-gothic-medium": {
+   "family": "MRAI-Metric-YuGothicMedium",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/yu-gothic-medium-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "yu-mincho": {
+   "family": "MRAI-Metric-YuMincho",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/yu-mincho-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "yu-mincho-demibold": {
+   "family": "MRAI-Metric-YuMinchoDemibold",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/yu-mincho-demibold-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
+  },
+  "yu-mincho-light": {
+   "family": "MRAI-Metric-YuMinchoLight",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/yu-mincho-light-400.ttf.gz"
+   },
+   "source": "noto-serif-jp"
   }
  }
 }

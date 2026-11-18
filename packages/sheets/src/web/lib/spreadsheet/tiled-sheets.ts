@@ -58,9 +58,11 @@ const OTHER_SHEET_READERS = 4;
 /** How often what those reads brought is handed to the window. */
 const OTHER_SHEETS_APPLY_MS = 800;
 
-/** The editor fields a tile cell holds (the server's `CORE_FIELDS`). */
+/** The editor fields a tile cell holds (the server's `CORE_FIELDS`). Rich
+ * text is a tile's: the server keeps each run list once for the workbook and a
+ * cell names it, as the file's string table does (reading 924). */
 const CORE_FIELDS = new Set([
-  "value", "kind", "stringValue", "formula", "style", "locked", "formulaHidden", "display", "chartValueCache",
+  "value", "kind", "stringValue", "formula", "style", "locked", "formulaHidden", "display", "chartValueCache", "runs",
 ]);
 /** Fields a tile cell is read with that say nothing a save must keep. */
 const CACHE_FIELDS = new Set(["display", "chartValueCache"]);
@@ -177,7 +179,25 @@ export interface EditorTilesAnswer {
   revision: number;
   sheet: string;
   styles: Record<string, unknown>[];
+  /** The rich texts the answer's cells name (`runsRef`), each spelt once. */
+  runs?: unknown[][];
   tiles: { tile: number; revision: number; cells: Record<string, Record<string, unknown>> }[];
+}
+
+/** A cell of an editor-format tile answer as the model holds it: its style
+ * (`styleRef`) and its runs (`runsRef`) the answer's own objects, shared by
+ * every cell naming them. */
+export function answerCell(
+  raw: Record<string, unknown>,
+  styles: readonly unknown[],
+  runs: readonly unknown[] | undefined,
+): SpreadsheetCell {
+  if (typeof raw.styleRef !== "number" && typeof raw.runsRef !== "number") return raw as unknown as SpreadsheetCell;
+  const { styleRef, runsRef, ...rest } = raw;
+  const cell: Record<string, unknown> = rest;
+  if (typeof styleRef === "number") cell.style = styles[styleRef];
+  if (typeof runsRef === "number" && runs && runs[runsRef] !== undefined) cell.runs = runs[runsRef];
+  return cell as unknown as SpreadsheetCell;
 }
 
 interface SaveAnswer {
@@ -321,12 +341,16 @@ function sameCell(a: SpreadsheetCell | undefined, b: SpreadsheetCell | undefined
   return a === b || comparable(a) === comparable(b);
 }
 
-/** Whether a cell can be a tile's: only fields a tile holds, and any rule
- * list (ignoredErrors) still the one it was read with. */
+/** Whether a cell can be a tile's: only fields a tile holds, any rule list
+ * (ignoredErrors) still the one it was read with, and a phonetic field still
+ * the one its file string was read with, over the same text (the server makes
+ * it from the string as it reads the tile, reading 927). */
 function tileOwnable(cell: SpreadsheetCell, read: SpreadsheetCell | undefined): boolean {
   for (const field of Object.keys(cell)) {
     if (CORE_FIELDS.has(field)) continue;
     if (field === "ignoredErrors" && read && JSON.stringify(cell.ignoredErrors) === JSON.stringify(read.ignoredErrors)) continue;
+    if (field === "phonetic" && read && read.phonetic !== undefined && cell.value === read.value &&
+        JSON.stringify(cell.phonetic) === JSON.stringify(read.phonetic)) continue;
     return false;
   }
   return true;
@@ -831,12 +855,7 @@ export class TiledSheets {
       const shown = held ? (held.applied ? held.baseline : held.shown) : undefined;
       const baseline = new Map<string, SpreadsheetCell>();
       for (const [key, raw] of Object.entries(tile.cells)) {
-        let cell = raw;
-        if (typeof raw.styleRef === "number") {
-          const { styleRef, ...rest } = raw;
-          cell = { ...rest, style: styles[styleRef as number] };
-        }
-        baseline.set(key, cell as unknown as SpreadsheetCell);
+        baseline.set(key, answerCell(raw, styles, answer.runs));
       }
       state.tiles.set(tile.tile, {
         index: tile.tile,
@@ -889,12 +908,7 @@ export class TiledSheets {
         for (const tile of answer.tiles) {
           const baseline = new Map<string, SpreadsheetCell>();
           for (const [key, raw] of Object.entries(tile.cells)) {
-            let cell = raw;
-            if (typeof raw.styleRef === "number") {
-              const { styleRef, ...rest } = raw;
-              cell = { ...rest, style: styles[styleRef as number] };
-            }
-            baseline.set(key, cell as unknown as SpreadsheetCell);
+            baseline.set(key, answerCell(raw, styles, answer.runs));
           }
           next.get(sheetId)!.set(tile.tile, {
             index: tile.tile,
@@ -956,12 +970,7 @@ export class TiledSheets {
       for (const tile of answer.tiles) {
         for (const [key, raw] of Object.entries(tile.cells)) {
           if (!expected.has(key)) continue;
-          let cell = raw;
-          if (typeof raw.styleRef === "number") {
-            const { styleRef, ...rest } = raw;
-            cell = { ...rest, style: answer.styles[styleRef as number] };
-          }
-          stored.set(key, cell as unknown as SpreadsheetCell);
+          stored.set(key, answerCell(raw, answer.styles, answer.runs));
         }
       }
     }

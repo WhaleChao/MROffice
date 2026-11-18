@@ -426,7 +426,7 @@ export function readSpreadsheetNativeObjectCopyPlan(
       if (
         original.object.type === "camera" ||
         original.object.pivotSource !== undefined ||
-        ["type", "range", "sourceSheetId", "seriesInColumns", "noCategories", "noSeriesNames"].some(
+        ["type", "range", "sourceSheetId", "seriesInColumns", "noCategories", "noSeriesNames", "nameRowsAbove"].some(
           (key) => !equal(original.object[key], reviewed.object[key]),
         ) ||
         copied.object.chartType !== reviewed.object.type ||
@@ -442,6 +442,7 @@ export function readSpreadsheetNativeObjectCopyPlan(
         "seriesInColumns",
         "noCategories",
         "noSeriesNames",
+        "nameRowsAbove",
         "anchor",
         "width",
         "height",

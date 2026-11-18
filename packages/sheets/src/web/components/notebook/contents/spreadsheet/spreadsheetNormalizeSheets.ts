@@ -1026,6 +1026,15 @@ export function normalizeSheets(
       ...(sheet.rowsHiddenByDefault === true
         ? { rowsHiddenByDefault: true as const }
         : {}),
+      ...(sheet.rowsHiddenByDefault === true && sheet.rowsHiddenByFileRun === true
+        ? { rowsHiddenByFileRun: true as const }
+        : {}),
+      ...(sheet.rowsHiddenByDefault === true && Array.isArray(sheet.rowsShownPastEnd)
+        ? {
+            rowsShownPastEnd: sheet.rowsShownPastEnd
+              .filter((row: unknown): row is number => Number.isInteger(row) && (row as number) >= 0 && (row as number) < MAX_SHEET_ROWS),
+          }
+        : {}),
       ...(namedRanges.length > 0 ? { namedRanges } : {}),
       ...(macros.length > 0 ? { macros } : {}),
       ...(validations.length > 0 ? { validations } : {}),

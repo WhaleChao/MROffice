@@ -14,7 +14,22 @@ export interface KeptSpan {
   readonly wordExtra: number;
   readonly wordBase: number;
   readonly tabBreak?: true;
+  /** An optional hyphen where the engine ends a line inside a word. */
+  readonly hyphen?: true;
+  /** The engine hyphenates the paragraph (`from === to` at its content). */
+  readonly manualHyphens?: true;
 }
+
+/** A span's kind as a row keeps it (its seventh number). */
+const KIND_TAB_BREAK = 1;
+const KIND_HYPHEN = 2;
+const KIND_MANUAL_HYPHENS = 3;
+const kindOf = (span: KeptSpan): number =>
+  span.tabBreak ? KIND_TAB_BREAK : span.hyphen ? KIND_HYPHEN : span.manualHyphens ? KIND_MANUAL_HYPHENS : 0;
+const kindFields = (kind: number | undefined) =>
+  kind === KIND_TAB_BREAK ? { tabBreak: true as const }
+    : kind === KIND_HYPHEN ? { hyphen: true as const }
+      : kind === KIND_MANUAL_HYPHENS ? { manualHyphens: true as const } : {};
 
 export interface KeptLines {
   readonly width: number;
@@ -51,7 +66,7 @@ export function engineLinesKeptOn(win: Window | null | undefined = typeof window
 /** What the pass drew for `node` at `pos`, measured at `width`. */
 export function noteDrawnLines(
   node: ProseMirrorNode, pos: number, width: number | null,
-  spans: readonly { from: number; to: number; extra: number; base: number; wordExtra: number; wordBase: number; tabBreak?: true }[],
+  spans: readonly KeptSpan[],
   declined = false,
 ): void {
   if (width === null || !Number.isFinite(width)) {
@@ -64,7 +79,7 @@ export function noteDrawnLines(
     declined,
     spans: spans.map((span) => ({
       from: span.from - at, to: span.to - at, extra: span.extra, base: span.base, wordExtra: span.wordExtra, wordBase: span.wordBase,
-      ...(span.tabBreak ? { tabBreak: true as const } : {}),
+      ...kindFields(kindOf(span)),
     })),
   });
 }
@@ -121,7 +136,7 @@ export function encodedBlockLines(block: ProseMirrorNode): number[] | null {
     any = true;
     out.push(round4(kept.width), kept.declined ? 1 : 0, kept.spans.length);
     for (const span of kept.spans) {
-      out.push(span.from, span.to, round4(span.extra), round4(span.base), round4(span.wordExtra), round4(span.wordBase), span.tabBreak ? 1 : 0);
+      out.push(span.from, span.to, round4(span.extra), round4(span.base), round4(span.wordExtra), round4(span.wordBase), kindOf(span));
     }
   }
   return any ? out : null;
@@ -150,7 +165,7 @@ export function seedBlockLines(block: ProseMirrorNode, encoded: readonly number[
       if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > node.content.size) return false;
       spans.push({
         from, to, extra: encoded[at + 2]!, base: encoded[at + 3]!, wordExtra: encoded[at + 4]!, wordBase: encoded[at + 5]!,
-        ...(encoded[at + 6] === 1 ? { tabBreak: true as const } : {}),
+        ...kindFields(encoded[at + 6]),
       });
     }
     parsed.push([node, { width, declined, spans, generation }]);

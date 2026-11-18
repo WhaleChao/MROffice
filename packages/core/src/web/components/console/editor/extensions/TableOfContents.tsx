@@ -650,7 +650,8 @@ function nativeRunCss(node: Record<string, unknown> | undefined): CSSProperties 
         if (typeof attrs.color === "string" && /^#[0-9a-f]{3,8}$/i.test(attrs.color)) css.color = attrs.color;
         break;
       case "bold":
-        css.fontWeight = 700;
+        // A run's direct "not bold" (`value: false`) is no bold.
+        css.fontWeight = attrs.value === false ? 400 : 700;
         break;
       case "italic":
         css.fontStyle = "italic";
@@ -847,8 +848,13 @@ function nativeTocLook(
       // The title is set on Word's single line times its multiple by
       // layoutTocWordLines, as the rows are (corpus R12-D12: "Contents" in
       // Calibri Light 16 pt at 1.08 is 20.95 pt in Word; CSS drew 17.3 pt).
+      // Its weight is its words' as the import resolved them (a bold run
+      // states it): the editor's own title rule is Heading 1's bold, which
+      // Word's TOC Heading need not be (corpus R455-D85 / R360-D25: Word
+      // draws "Table of contents" in its regular weight; the title read into
+      // the table drew bold).
       const paragraph = nativeParagraphCss(attrs);
-      title = { ...paragraph, ...nativeRunCss(node) };
+      title = { fontWeight: 400, ...paragraph, ...nativeRunCss(node) };
     }
   }
   const fieldEnd = nativeFieldEndCss(native);

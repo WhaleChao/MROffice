@@ -18,8 +18,12 @@ import { fillHollowPagesAt } from "@mrnote/core/web/components/console/editor/na
 export const LOCATE_FLASH_CLASS = "mrn-locate-flash";
 const FLASH_MS = 1800;
 
+/** Text as a reader quotes it: runs of white space one space, and none of
+ * the zero-width characters the page draws between letters (a set-as-letter
+ * word's joiner, the empty-line struts: U+2060, U+200B, U+FEFF), which a text
+ * node's parent may hold beside the letters it shows. */
 function normalize(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
+  return text.replace(/[\u200b\u2060\ufeff]/g, "").replace(/\s+/g, " ").trim();
 }
 
 function prefersReducedMotion(): boolean {

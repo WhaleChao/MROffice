@@ -27,6 +27,8 @@ import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 
 import { wordPunctuationMayHang } from "./documentOverflowPunctuation";
+import { wordEastAsianLineRulesApply, wordSetsIdeographsAsLetters } from "./wordFarEastDefaults";
+import { KINSOKU_EAST_ASIAN, OFFICE_KINSOKU } from "../../../../lib/text-engine/kinsoku";
 import { BULK_FILL_CHUNK_META } from "./bulkFillTransaction";
 import { INLINE_FORMULA_TYPESET_EVENT, PAGED_BULK_FILL_ATTR } from "./documentLayoutStatus";
 import { releaseFreshRange } from "./paged/measurementRange";
@@ -44,6 +46,17 @@ const HANG_ATTR = "data-docs-hanging-punctuation";
 
 /** The marks Word lets hang at a line's end: stops and commas, full and half width. */
 const HANGING = new Set(["，", "。", "、", "．", "﹐", "﹒", "，", "｡", "､", ",", "."]);
+/** East Asian closing marks (kinsoku's "not at a line's start", outside
+ * ASCII), which Word hangs too in Chinese, Japanese or Korean text, in mode 14
+ * and in a justified mode-15 paragraph (docs-lines `eastAsianClosingMark`;
+ * docx-look/probes/cjk3 h14l/h14j/h15j: ）。，、」”：；！？》 each one full
+ * width past the margin). */
+const EAST_ASIAN_HANGING = new Set([...OFFICE_KINSOKU["zh-CN"].noStart].filter((character) => /^[^\x00-\x7f]$/u.test(character) && /^\p{P}$/u.test(character)));
+/** A full-width or ideographic mark; another ("”") hangs after East Asian text only. */
+const FULL_WIDTH = /^[\u3000-\u303f\ufe10-\ufe6f\uff00-\uffef]$/u;
+function eastAsianHangOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsEastAsianHangOff?: boolean }).__docsEastAsianHangOff === true;
+}
 
 /** Paragraphs per frame, so a long document does not stall on first measure. */
 const BLOCKS_PER_SLICE = 60;
@@ -105,7 +118,7 @@ function hasHangingCandidate(node: ProseMirrorNode): boolean {
   if (known !== undefined) return known;
   let holds = false;
   for (const character of node.textContent) {
-    if (HANGING.has(character)) {
+    if (HANGING.has(character) || EAST_ASIAN_HANGING.has(character)) {
       holds = true;
       break;
     }
@@ -211,9 +224,12 @@ function measureBlock(
   const texts: string[] = [];
   const chars = characterPositions(node, pos, atoms, texts);
   const out: Hang[] = [];
+  const eastAsianMarks = !eastAsianHangOff() && wordEastAsianLineRulesApply(view.state.doc.attrs, node) &&
+    !wordSetsIdeographsAsLetters(view.state.doc.attrs);
   for (let index = 1; index < chars.length; index += 1) {
     const at = chars[index];
-    if (at < 0 || !HANGING.has(texts[index]!)) continue;
+    if (at < 0 || !(HANGING.has(texts[index]!) || (eastAsianMarks && EAST_ASIAN_HANGING.has(texts[index]!) &&
+      (FULL_WIDTH.test(texts[index]!) || KINSOKU_EAST_ASIAN.test(texts[index - 1] ?? ""))))) continue;
     const mark = charBox(view, at);
     if (!mark) continue;
     const width = mark.right - mark.left;

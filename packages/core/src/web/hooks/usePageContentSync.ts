@@ -48,6 +48,7 @@ import {
 } from "../lib/collab/collab-provider";
 import {
   applyJsonDelta,
+  type AmbiguousTextWrite,
   collaborativeTextAnchor,
   collaborativeTextAt,
   collaborativeTextChanges,
@@ -270,6 +271,12 @@ export interface PageContentSyncOptions {
    * caller reads the page whole again at once; a new durable page sets the
    * model up again. */
   onCausalSourceRefused?: (code: string) => void;
+  /** A text this member changed could not be written over a collaborator's
+   * change of it without guessing where the change goes (json-crdt
+   * `mergeText3` null): the room kept its text, this member's stays in the
+   * editor, and the owner treats it as a conflict (TRIAGE 47: merged by a
+   * guess, words typed at one place came out cut in two). */
+  onTextMergeRefused?: (writes: readonly AmbiguousTextWrite[]) => void;
   /** Only the original restored generation, not every subsequent draft. */
   recoveredCausalDraft?: { recovery: PageCausalRecovery; content: PageContentDocument } | null;
 }
@@ -469,7 +476,10 @@ export function mergePageDocumentDelta(
   const root = doc.getMap<unknown>(ROOT_KEY);
   try {
     doc.transact(() => applyJsonDelta(root, current, {}));
-    doc.transact(() => applyJsonDelta(root, next, previous));
+    // A text whose two changes cannot be merged without a guess keeps this
+    // side's words whole (TRIAGE 47): the merge is what a window shows or
+    // sends; the room it is written into later refuses it as a conflict.
+    doc.transact(() => applyJsonDelta(root, next, previous, { onAmbiguousText: () => "mine" }));
     return yToJson(root) as PageContentDocument;
   } finally {
     doc.destroy();
@@ -507,6 +517,7 @@ function useLegacyPageContentSync({
   activateCausal,
   onCausalReconnect,
   onCausalSourceRefused,
+  onTextMergeRefused,
   sourceScopeKey = "",
 }: PageContentSyncOptions): LegacyContentController {
   const [localOrigin] = useState(() => Symbol("mrn-page-json-local"));
@@ -668,6 +679,8 @@ function useLegacyPageContentSync({
   const activateCausalRef = useRef(activateCausal);
   const causalReconnectRef = useRef(onCausalReconnect);
   const causalSourceRefusedRef = useRef(onCausalSourceRefused);
+  const textMergeRefusedRef = useRef(onTextMergeRefused);
+  textMergeRefusedRef.current = onTextMergeRefused;
   useLayoutEffect(() => {
     durablePageRef.current = durablePage;
     recoveredCausalDraftRef.current = recoveredCausalDraft;
@@ -785,15 +798,22 @@ function useLegacyPageContentSync({
       const undrawn = undrawnGuardRef.current ?? undefined;
       if (undrawn) undrawn.keptCount = 0;
       const ownFrom = Y.getState(session.ydoc.store, session.ydoc.clientID);
+      const ambiguous: AmbiguousTextWrite[] = [];
       session.ydoc.transact(() => {
         applyJsonDelta(root, nextShared, prevShared, {
           ...(textEdits ? { textEdits, rebaseStaleEdits: true } : {}),
           ...(undrawn ? { undrawn } : {}),
+          onAmbiguousText: (write) => { ambiguous.push(write); },
         });
         // Keys of words this publication creates (a diagram's first key,
         // which converts it) are this member's change of what it created.
         if (notedEdits.length > 0) noteKeyedCreationEdits(root, notedEdits);
       }, localOrigin);
+      if (ambiguous.length > 0) {
+        if (coeditTraceOn()) coeditTrace("text-merge-refused", { count: ambiguous.length,
+          room: ambiguous[0].room.slice(0, 24), mine: ambiguous[0].mine.slice(0, 24) });
+        textMergeRefusedRef.current?.(ambiguous);
+      }
       // Keys whose words this publication did not bring into the room wait
       // for a peer's words (`orphanTextEditsRef`).
       if (notedEdits.length > 0) {
@@ -1677,7 +1697,8 @@ function useLegacyPageContentSync({
           return { live, settled: live && durable ? durable.settled || !durable.active : false };
         },
         send: (edits, signal) => sendPageCustodyEdits(pageId, {
-          epoch: edits.epoch, model: edits.model, update_base64: closingBytesBase64(edits.update) }, signal),
+          epoch: edits.epoch, model: edits.model, update_base64: closingBytesBase64(edits.update),
+          client_id: session.ydoc.clientID }, signal),
       })
       : null;
     // This member's own changes (typing, Undo, a command), not the room's.

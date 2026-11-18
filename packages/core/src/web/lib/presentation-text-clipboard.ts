@@ -43,6 +43,7 @@ const PASTED_CHARACTER_KEYS = [
   "superscript",
   "subscript",
   "proofingLanguage",
+  "alternateLanguage",
   "noProof",
   "color",
   "highlight",

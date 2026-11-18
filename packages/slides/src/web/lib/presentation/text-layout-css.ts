@@ -163,16 +163,25 @@ export function runTextPaintCss(style: { textPaint?: unknown } | undefined): CSS
  * (imported as `style.textWrap: false`) runs the text on past the edge and
  * keeps only its hard breaks (PPT-B360).
  */
-/**
- * The tab width a box with custom tab stops draws: the first stop's
- * position, so a TAB before a page number lands in one column, as the
- * source's `a:tabLst` laid it (PPT-B366). A box stating none keeps the
- * browser's own width; a TAB in a box that states stops is PowerPoint's
- * default inch otherwise.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function textBlockTabSizeCss(block: { style?: unknown }): CSSProperties {
   const stops = (block.style as { tabStops?: unknown } | undefined)?.tabStops;
-  if (!Array.isArray(stops)) return {};
+  if (!Array.isArray(stops)) {
+    const interval = (block.style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx;
+    return typeof interval === "number" && Number.isFinite(interval) && interval > 0 ? { tabSize: `${interval}px` } : {};
+  }
   // A left stop is its bare position; another alignment is `{ pos, align }`
   // (laid out by `presentation-tab-stops`, which draws each tab measured).
   const first = stops

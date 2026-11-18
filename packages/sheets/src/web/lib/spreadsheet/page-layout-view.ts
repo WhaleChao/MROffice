@@ -447,6 +447,48 @@ export interface SpreadsheetPageLayoutGeometry {
    * colSizes and the headings already carry it; a drawing's frame is mapped
    * by its anchor (officePrintedDrawingFrame). Absent: the identity. */
   printScale?: OfficePrintScale;
+  /** The rows' and columns' sizes at the content scale before the printer's
+   * whole dots (rowSizes / colSizes round them) and quarter pixels: what a
+   * drawing's frame is measured in, mapped onto the printed lines by
+   * pageLayoutPrintedAxisPoint. */
+  sourceRowPoints?: readonly number[];
+  sourceColPoints?: readonly number[];
+}
+
+const axisPrefixes = new WeakMap<readonly number[], Float64Array>();
+function axisPrefix(sizes: readonly number[]): Float64Array {
+  let prefix = axisPrefixes.get(sizes);
+  if (!prefix) {
+    prefix = new Float64Array(sizes.length + 1);
+    for (let index = 0; index < sizes.length; index += 1) prefix[index + 1] = prefix[index]! + (sizes[index] ?? 0);
+    axisPrefixes.set(sizes, prefix);
+  }
+  return prefix;
+}
+
+/**
+ * A point of a drawing's frame on the printed lines: Windows Excel prints a
+ * drawing by its markers in the printed grid, the line it starts in and its
+ * offset there (never past the line's printed size), so the frame stays on
+ * its cells however the lines above round to the printer's whole dots (the
+ * API's spreadsheet_drawing_geometry; R361-X03's page 6 text boxes, anchored
+ * 120 rows down, printed 7.6 pt low where the frame was scaled whole).
+ * `source` are the lines' sizes the frame is measured in, `printed` the
+ * lines' printed sizes, both indexed by line.
+ */
+export function pageLayoutPrintedAxisPoint(point: number, source: readonly number[], printed: readonly number[]): number {
+  if (!Number.isFinite(point) || source.length === 0 || source.length !== printed.length) return point;
+  const from = axisPrefix(source);
+  const to = axisPrefix(printed);
+  // The last line starting at or before the point.
+  let low = 0, high = source.length - 1;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if (from[middle]! <= point) low = middle;
+    else high = middle - 1;
+  }
+  const offset = Math.max(0, point - from[low]!);
+  return to[low]! + (low === source.length - 1 ? offset : Math.min(offset, printed[low] ?? offset));
 }
 
 export interface SpreadsheetPageLayoutPage {
@@ -853,10 +895,17 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
   const sourceMargins = resolveMargins(settings.margins);
   // Native Mac worksheet origins use whole point pixels. Keep authored
   // precision separately so merely viewing or grabbing a ruler cannot edit it.
+  // An imported Windows grid's are whole printer dots (600 dpi), truncated,
+  // for where the page prints and the room Fit To fits in (lookwin probes
+  // p162-lw/p162b-lw: 259.82 + 260.82 dots fit as 259 + 260; R13-X27's
+  // 448.82-dot margins made Table 4 fit 57% where Excel prints 58%).
+  const dots = (value: number) => Math.floor((value * 600) / 72 + 1e-6) * 72 / 600;
   const margins = input.nativeGridDpi === 72
     ? { left: Math.floor(sourceMargins.left), right: Math.floor(sourceMargins.right),
         top: Math.floor(sourceMargins.top), bottom: Math.floor(sourceMargins.bottom) }
-    : sourceMargins;
+    : input.nativeGridDpi === 96
+      ? { left: dots(sourceMargins.left), right: dots(sourceMargins.right), top: dots(sourceMargins.top), bottom: dots(sourceMargins.bottom) }
+      : sourceMargins;
   const dataAreaWidth = Math.max(1, paperWidth - margins.left - margins.right);
   const dataAreaHeight = Math.max(
     1,
@@ -940,8 +989,12 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
       ? { repeatStart: repeatCols.c1, repeatEnd: repeatCols.c2 }
       : {}),
   });
+  // Windows Excel prints a row of a fractional pixel height at its nearest
+  // quarter pixel (lookwin p139-lw: 17.1 pt rows, 22.8 px, 137 dots apart,
+  // not 138; p173-lw: 31.05 pt, 41.4 px, 251 dots as 41.5 px; the API's
+  // axis_sizes).
   const sourceRowSizes = Array.from({ length: totalRows }, (_, index) =>
-    input.hiddenRows?.has(index) ? 0 : finitePositive(input.rowHeights?.[String(index)], baseRowHeight / rowPx) * rowPx,
+    input.hiddenRows?.has(index) ? 0 : Math.floor(finitePositive(input.rowHeights?.[String(index)], baseRowHeight / rowPx) * 4 + 0.5) / 4 * rowPx,
   );
   const sourceColSizes = Array.from({ length: totalCols }, (_, index) =>
     input.hiddenCols?.has(index) ? 0 : finitePositive(input.columnWidths?.[String(index)], baseColWidth / colPx) * colPx,
@@ -1030,7 +1083,7 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     paperWidth,
     paperHeight,
     margins,
-    ...(input.nativeGridDpi === 72 ? { sourceMargins } : {}),
+    ...(input.nativeGridDpi === 72 || input.nativeGridDpi === 96 ? { sourceMargins } : {}),
     headerMargin: finiteNonNegative(settings.headerMargin, 21.6),
     footerMargin: finiteNonNegative(settings.footerMargin, 21.6),
     dataAreaWidth,
@@ -1039,6 +1092,11 @@ export function resolveSpreadsheetPageLayoutGeometry(input: {
     colWidth,
     rowSizes: sourceRowSizes.map((size) => printedRowPoints(size, contentScale)),
     colSizes: sourceColSizes.map((size) => printedColumnPoints(size, contentScale)),
+    // A drawing's frame is measured on the screen's own heights, before the
+    // printer's quarter pixels (sourceRowSizes floors them).
+    sourceRowPoints: Array.from({ length: totalRows }, (_, index) => input.hiddenRows?.has(index) ? 0
+      : finitePositive(input.rowHeights?.[String(index)], baseRowHeight / rowPx) * rowPx * contentScale),
+    sourceColPoints: sourceColSizes.map((size) => size * contentScale),
     contentScale,
     headingHeight: unscaledHeadingHeight * contentScale,
     headingWidth: unscaledHeadingWidth * contentScale,

@@ -594,14 +594,15 @@ function dropTableCellEdge(css: CSSProperties, side: "top" | "left"): void {
 
 /**
  * The cells across a cell's top (the row above it) and across its start side
- * (the logical column before it), on the table's grid.
+ * (the logical column before it), on the table's grid; and across its bottom
+ * (the row under its last row), which share its bottom edge.
  */
 function cellsBeforeEdges(
   block: PresentationTableBlock,
   facts: TableTdFacts,
   rowIndex: number,
   colIndex: number,
-): { above: PresentationTableCell[]; before: PresentationTableCell[] } {
+): { above: PresentationTableCell[]; before: PresentationTableCell[]; below: PresentationTableCell[] } {
   const cell = block.rows[rowIndex]?.[colIndex];
   const col = facts.logicalCol(rowIndex, colIndex);
   const colspan = Math.max(1, cell?.colspan ?? 1);
@@ -611,6 +612,7 @@ function cellsBeforeEdges(
   return {
     above: rowIndex > 0 ? collect(Array.from({ length: colspan }, (_v, at) => facts.cellAt(rowIndex - 1, col + at))) : [],
     before: col > 0 ? collect(Array.from({ length: rowspan }, (_v, at) => facts.cellAt(rowIndex + at, col - 1))) : [],
+    below: collect(Array.from({ length: colspan }, (_v, at) => facts.cellAt(rowIndex + rowspan, col + at))),
   };
 }
 
@@ -652,22 +654,38 @@ function borderOf(css: CSSProperties, side: "Top" | "Bottom" | "Left" | "Right")
   return cssBorderWidthPx(record[`border${side}Width`] ?? record[`border${side}`] ?? css.borderWidth ?? css.border);
 }
 
-/**
- * The `<td>` styles (without their halves) of the cells sharing this cell's
- * edges, as drawn: left / right physically (a right-to-left table's columns
- * run the other way). Only in a table with no merged cells, where an array
- * index is the cell's place on the grid; elsewhere none.
- */
+
+
+
+
+
+
+
+
+
+
+
+
 function cellEdgeNeighbours(
   block: PresentationTableBlock,
   rowIndex: number,
   colIndex: number,
-): { above?: CSSProperties; below?: CSSProperties; left?: CSSProperties; right?: CSSProperties } | null {
-  if (tableTdEntry(block).facts.hasMerge) return null;
-  const at = (r: number, c: number) => {
-    const neighbour = block.rows[r]?.[c];
-    return neighbour ? tableCellTdStyle(block, neighbour, r, c, false) : undefined;
+): { above: CSSProperties[]; below: CSSProperties[]; left: CSSProperties[]; right: CSSProperties[] } {
+  const facts = tableTdEntry(block).facts;
+  const styleOf = (neighbour: PresentationTableCell | undefined, r: number, c: number): CSSProperties[] => {
+    const css = neighbour ? tableCellTdStyle(block, neighbour, r, c, false) : undefined;
+    return css ? [css] : [];
   };
+  if (facts.hasMerge) {
+    const across = cellsBeforeEdges(block, facts, rowIndex, colIndex);
+    const styles = (cells: readonly PresentationTableCell[]) =>
+      cells.flatMap((neighbour) => {
+        const place = facts.placeOf(neighbour);
+        return place ? styleOf(neighbour, place.row, place.col) : [];
+      });
+    return { above: styles(across.above), below: styles(across.below), left: [], right: [] };
+  }
+  const at = (r: number, c: number) => styleOf(block.rows[r]?.[c], r, c);
   const rtl = block.rightToLeft === true;
   return {
     above: at(rowIndex - 1, colIndex),
@@ -705,6 +723,8 @@ type TableTdFacts = {
   logicalCol: (rowIndex: number, colIndex: number) => number;
   /** The cell covering a place on the table's grid (row, logical column). */
   cellAt: (rowIndex: number, logicalCol: number) => PresentationTableCell | undefined;
+  /** A cell's place in the table's rows (row, index in its row). */
+  placeOf: (cell: PresentationTableCell) => { row: number; col: number } | undefined;
   sourceThemeColors: ReturnType<typeof nativeTableThemeColorAuthority>;
   blockStyleLook: ReturnType<typeof normalizeTableStyleLook>;
 };
@@ -788,6 +808,7 @@ function tableTdEntry(block: PresentationTableBlock): TableTdEntry {
     );
   }
   const sourceThemeColors = nativeTableThemeColorAuthority(block.source);
+  let places: Map<PresentationTableCell, { row: number; col: number }> | null = null;
   const facts: TableTdFacts = {
     hasMerge,
     // Column count mirrors the `<colgroup>` derivation (widest row → logical
@@ -798,6 +819,13 @@ function tableTdEntry(block: PresentationTableBlock): TableTdEntry {
     logicalCol: (rowIndex, colIndex) => positions?.[rowIndex]?.[colIndex]?.col ?? colIndex,
     cellAt: (rowIndex, logicalCol) =>
       covering ? covering.get(`${rowIndex}:${logicalCol}`) : block.rows[rowIndex]?.[logicalCol],
+    placeOf: (cell) => {
+      if (!places) {
+        places = new Map();
+        block.rows.forEach((row, r) => row.forEach((each, c) => places!.set(each, { row: r, col: c })));
+      }
+      return places.get(cell);
+    },
     sourceThemeColors,
     blockStyleLook:
       normalizeTableStyleLook(block.tableStyleLook, block.tableStyleId) ??
@@ -853,10 +881,14 @@ export function tableCellTdStyle(
   if (entry.styles.has(key)) return entry.styles.get(key);
   const slot = withBorderHalves ? 1 : 0;
   const logicalCol = entry.facts.logicalCol(rowIndex, colIndex);
-  // The halves of a cell's lines read its neighbours only in a table with no
-  // merged cells (`cellEdgeNeighbours`).
-  const neighbours = withBorderHalves && !entry.facts.hasMerge ? cellNeighbourIdentities(block, rowIndex, colIndex) : null;
+  // The halves of a cell's lines read its neighbours (`cellEdgeNeighbours`):
+  // in a table with merged cells, the cells across its top and bottom on the grid.
   const across = cellsBeforeEdges(block, entry.facts, rowIndex, colIndex);
+  const neighbours = !withBorderHalves
+    ? null
+    : entry.facts.hasMerge
+      ? [...across.above, null, ...across.below]
+      : cellNeighbourIdentities(block, rowIndex, colIndex);
   const deciders = [...across.above, null, ...across.before];
   const strokes = withBorderHalves ? tableEdgeStrokeIdentity(block, rowIndex, colIndex) : null;
   const memo = cellTdMemos.get(own)?.[slot];
@@ -1034,11 +1066,11 @@ function tableCellTdStyleOf(
     const edge = withBorderHalves ? cellEdgeNeighbours(block, rowIndex, colIndex) : null;
     const top = Math.max(
       cssBorderWidthPx(css.borderTopWidth ?? css.borderTop ?? css.borderWidth ?? css.border),
-      edge?.above ? borderOf(edge.above, "Bottom") : 0,
+      ...(edge?.above ?? []).map((neighbour) => borderOf(neighbour, "Bottom")),
     );
     const bottom = Math.max(
       cssBorderWidthPx(css.borderBottomWidth ?? css.borderBottom ?? css.borderWidth ?? css.border),
-      edge?.below ? borderOf(edge.below, "Top") : 0,
+      ...(edge?.below ?? []).map((neighbour) => borderOf(neighbour, "Top")),
     );
     const halves = css as Record<string, unknown>;
     if (top > 0) halves[CELL_BORDER_TOP_HALF_VAR] = `${Math.round(drawnBorderWidthPx(top) * 50) / 100}px`;
@@ -1072,11 +1104,11 @@ function tableCellTdStyleOf(
     const edge = withBorderHalves ? cellEdgeNeighbours(block, rowIndex, colIndex) : null;
     const left = Math.max(
       cssBorderWidthPx(css.borderLeftWidth ?? css.borderLeft ?? css.borderWidth ?? css.border),
-      edge?.left ? borderOf(edge.left, "Right") : 0,
+      ...(edge?.left ?? []).map((neighbour) => borderOf(neighbour, "Right")),
     );
     const right = Math.max(
       cssBorderWidthPx(css.borderRightWidth ?? css.borderRight ?? css.borderWidth ?? css.border),
-      edge?.right ? borderOf(edge.right, "Left") : 0,
+      ...(edge?.right ?? []).map((neighbour) => borderOf(neighbour, "Left")),
     );
     const halves = css as Record<string, unknown>;
     if (left > 0) halves[CELL_BORDER_LEFT_HALF_VAR] = `${Math.round(drawnBorderWidthPx(left) * 50) / 100}px`;

@@ -6,6 +6,7 @@
 import { editsStayInsideTextblocks } from "../native-document/textblockOnlyEdits";
 import { SheetFact } from "../../../../lib/editor/sheet-facts";
 import { PX_PER_PT } from "../../../../lib/office-units";
+import officeLatinAverages from "../../../../lib/office-fonts/office-latin-averages.json";
 import { createBackgroundLane, requestLaneFrame } from "../../../../lib/background-work";
 import { normalizeWordCompatibilityMode, wordPunctuationCompresses } from "../native-document/documentOverflowPunctuation";
 import { wordOmitsEastAsianAutoSpace } from "../native-document/wordFarEastDefaults";
@@ -46,7 +47,7 @@ import {
 import {
   wordFontIsEastAsian,
   wordFontIsRecordedLatin,
-  wordGridFontLineMetrics,
+  wordDocumentGridFontLineMetrics,
 } from "../native-document/wordFontMetrics";
 import { normalizeOfficeWordThemeColors } from "../../../../lib/office-table-style-word";
 import { normalizeDocumentDesign } from "../../../../lib/document-design";
@@ -2102,6 +2103,41 @@ export function isWordCjkSpacingProjectionTransaction(transaction: { getMeta(key
  * Word's space and let lines take a character Word wraps. */
 const WORD_CJK_AUTO_SPACE_EM = 0.25;
 const CSS_PX_PER_PT = PX_PER_PT;
+/**
+ * The automatic space Windows Word opens after the character before the
+ * boundary is that character's: its size times half its face's average
+ * advance (OS/2 xAvgCharWidth). After an ideograph in SimSun or MS Mincho
+ * (average half an em) a quarter em; after a Latin letter or digit, half
+ * its own face's average: Times New Roman 0.20 em, Arial and Georgia 0.22,
+ * Verdana 0.25, Calibri 0.26, Segoe UI 0.27, Courier New 0.30, Cambria 0.31
+ * (docx-look/probes/cjk6, Windows Word 16, 10.5 and 21 pt; "H"42 before
+ * 中21 opens 4.2 pt, "H"21 before 中42 2.16, 中 then "H" 0.25 em of 中's
+ * size either way). A face the table does not hold keeps the quarter em.
+ * `window.__docsLatinAutoSpaceWidthOff = true` asks the older reading (a
+ * quarter of the smaller size, either way), for an A/B of one build.
+ */
+function wordCjkAutoSpaceWidthOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsLatinAutoSpaceWidthOff?: boolean }).__docsLatinAutoSpaceWidthOff === true;
+}
+const latinAutoSpaceEms = new Map<string, number>();
+export function wordAutoSpaceAfterLatinEm(font: string): number {
+  let em = latinAutoSpaceEms.get(font);
+  if (em !== undefined) return em;
+  em = WORD_CJK_AUTO_SPACE_EM;
+  // The families of a canvas font shorthand stand after its size.
+  const families = /\d(?:\.\d+)?px(?:\s*\/\s*\S+)?\s+(.+)$/u.exec(font)?.[1] ?? "";
+  for (const token of families.split(",")) {
+    const family = token.trim().replace(/^["']|["']$/gu, "");
+    // A letter set in an East Asian face (SimSun's average is half an em)
+    // keeps the quarter em; the faces after it are not its own.
+    if (wordFontIsEastAsian(family)) break;
+    const average = (officeLatinAverages.faces as Record<string, number | undefined>)[family.toLowerCase()];
+    if (average) { em = average / 2; break; }
+  }
+  if (latinAutoSpaceEms.size >= 500) latinAutoSpaceEms.clear();
+  latinAutoSpaceEms.set(font, em);
+  return em;
+}
 /** The characters of one paragraph this reads. */
 const MAX_WORD_CJK_SPACING_GLYPHS = 50_000;
 /** The spacing marks of a document: what its passes carry and the editor draws.
@@ -2372,7 +2408,7 @@ function wordGridRunFaces(doc: ProseMirrorNode): {
     const known = ratios.get(key);
     if (known !== undefined) return known;
     const eastAsian = isEastAsian(family);
-    const metrics = wordGridFontLineMetrics(family);
+    const metrics = wordDocumentGridFontLineMetrics(family);
     const ratio = metrics
       ? eastAsian
         ? metrics.box * wordDocumentEastAsianSingleLineFactor(family)
@@ -2412,15 +2448,31 @@ function wordGridRunFaces(doc: ProseMirrorNode): {
         // STXinwei on one 16.3pt slot; Songti SC would take two -- the book's
         // 184 华文新魏 paragraphs, each line two slots here). The Latin face
         // stands in only for a run that names no East Asian face.
+        // A run naming only a Latin face inherits the defaults' eastAsia
+        // slot (documentFontScriptRanges draws it there), not the first East
+        // Asian face of the defaults' stack: under a theme whose Latin face is
+        // itself East Asian (themeFontLang en-JP: 等线, then the eastAsia
+        // slot's 游明朝) corpus R315-D15's Times New Roman runs of Japanese
+        // stood one 17.4 pt pitch a line on DengXian's line where Word sets
+        // two on Yu Mincho's. `window.__docsGridEastAsianSlotOff = true` asks
+        // the older reading, for an A/B of one build.
         const eastAsian =
           markFamily(node, "fontCjkFamily") ??
           (defaultSlot && !markFamily(node, "fontFamily") ? defaultSlot : null) ??
-          (latin && isEastAsian(latin) ? latin : defaultEastAsian);
+          (latin && isEastAsian(latin) ? latin : (gridEastAsianSlotOff() ? null : defaultSlot) ?? defaultEastAsian);
         ratio = Math.max(ratio, faceRatio(eastAsian, true));
       }
       return ratio;
     },
   };
+}
+
+function gridCellLinesOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsGridCellLinesOff?: boolean }).__docsGridCellLinesOff === true;
+}
+
+function gridEastAsianSlotOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsGridEastAsianSlotOff?: boolean }).__docsGridEastAsianSlotOff === true;
 }
 
 /** Inline nodes that leave a grid paragraph's line to its words. */
@@ -2596,16 +2648,19 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
   const atLeastSlots = !(typeof window !== "undefined" &&
     (window as Window & { __docsGridAtLeastSlotsOff?: boolean }).__docsGridAtLeastSlotsOff === true);
   const cellsOnGrid = atLeastSlots && view.state.doc.attrs.wordTableLinesOnGrid === true;
-  const atLeastSpecOfBlock = (block: ProseMirrorNode): GridBlockSpec | null => {
+  // `wholeLine`: a cell's paragraph, which the stylesheet's "at least" grid
+  // rule does not reach, takes its one-slot line here too.
+  const atLeastSpecOfBlock = (block: ProseMirrorNode, wholeLine = false): GridBlockSpec | null => {
     const floorPt = Number(block.attrs.lineHeightPt);
     const floorPx = Number.isFinite(floorPt) && floorPt > 0 ? floorPt * 4 / 3 : 0;
     const spec = gridSpecOfBlock(block, 1);
     const line = (slots: number) => Math.round(Math.max(floorPx, slots * pitchPx) * 1_000) / 1_000;
     if (spec.block) return { block: { lineHeightPx: line(spec.block.slots), slots: spec.block.slots }, runs: [] };
+    const base = wholeLine ? { lineHeightPx: line(1), slots: 1 } : null;
     if (spec.runs.some((run) => run.slots > 1)) {
-      return { block: null, runs: spec.runs.filter((run) => run.slots > 1).map((run) => ({ ...run, lineHeightPx: line(run.slots) })) };
+      return { block: base, runs: spec.runs.filter((run) => run.slots > 1).map((run) => ({ ...run, lineHeightPx: line(run.slots) })) };
     }
-    return null;
+    return base ? { block: base, runs: [] } : null;
   };
   // A block's specs stand while it, the grid and the document's faces do:
   // each pass of a long book read every block's runs again.
@@ -2621,17 +2676,31 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
     if (!block.isTextblock) return true;
     const inCell = parent?.type.name === "tableCell" || parent?.type.name === "tableHeader";
     const atLeast = atLeastSlots && block.attrs.lineHeightRule === "atLeast";
+    // An Auto line in a cell stands on the grid too where the document puts
+    // table lines on it (w:adjustLineHeightInTable): Windows Word sets
+    // corpus R470-D77's 12 pt Times New Roman cells at 1.5 lines 23.4 pt a
+    // row on a 15.6 pt grid, 1.5 pitches, and its 10.5 pt single cells 15.6
+    // pt; left to the stylesheet they stood at 1.5 x and 1 x their own
+    // single line (20.7 / 12.1 pt), the document a page short (an "at
+    // least" cell line likewise, below). `window.__docsGridCellLinesOff
+    // = true` asks the older reading, for an A/B of one build.
+    const cellAuto = inCell && !atLeast && cellsOnGrid && !gridCellLinesOff() &&
+      (block.attrs.lineHeightRule === null || block.attrs.lineHeightRule === undefined);
     if (
       block.attrs.snapToGrid === false ||
       (offGrid.length > 0 && offLineGridAt(offGrid, blockPos)) ||
-      (inCell && !atLeast) ||
+      (inCell && !atLeast && !cellAuto) ||
       (!atLeast && block.attrs.lineHeightRule !== null &&
         block.attrs.lineHeightRule !== undefined)
     ) {
       return false;
     }
     if (atLeast) {
-      const spec = atLeastSpecOfBlock(block);
+      // A cell's "at least" line on the grid is the larger of its floor and
+      // one pitch even where its text takes one slot (R468-D62: Normal at
+      // least 13 pt, 10 pt Times New Roman cells 15.6 pt a line in Word,
+      // 13 pt here; 29 pages for 33).
+      const spec = atLeastSpecOfBlock(block, inCell && !gridCellLinesOff());
       if (spec?.block) blocks.push({ pos: blockPos, lineHeightPx: spec.block.lineHeightPx, slots: spec.block.slots });
       for (const run of spec?.runs ?? []) runs.push({ from: blockPos + run.from, to: blockPos + run.to, lineHeightPx: run.lineHeightPx, slots: run.slots });
       return false;
@@ -2642,6 +2711,11 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       gridBlockSpecs.set(block, known);
     }
     const { spec } = known;
+    if (cellAuto && !spec.block) {
+      // The paragraph's own line, the pitch times its multiple (a body
+      // paragraph's comes from the stylesheet, which a cell's does not take).
+      blocks.push({ pos: blockPos, lineHeightPx: quantized(1, factorOf(block)), slots: 1 });
+    }
     if (spec.block) blocks.push({ pos: blockPos, lineHeightPx: spec.block.lineHeightPx, slots: spec.block.slots, ...(spec.block.naturalPx !== undefined ? { naturalPx: spec.block.naturalPx } : {}) });
     for (const run of spec.runs) runs.push({ from: blockPos + run.from, to: blockPos + run.to, lineHeightPx: run.lineHeightPx, slots: run.slots });
     return false;
@@ -3152,8 +3226,9 @@ function applyWordCjkAutoSpacing(
       (boundary === "latin" && autoSpaceLatin) ||
       (boundary === "number" && autoSpaceNumber);
     if (!enabled) continue;
-    const spacingPx =
-      Math.min(left.fontSizePx, right.fontSizePx) * WORD_CJK_AUTO_SPACE_EM;
+    const spacingPx = wordCjkAutoSpaceWidthOff()
+      ? Math.min(left.fontSizePx, right.fontSizePx) * WORD_CJK_AUTO_SPACE_EM
+      : left.fontSizePx * (leftScript === "eastAsian" ? WORD_CJK_AUTO_SPACE_EM : wordAutoSpaceAfterLatinEm(left.font));
     if (leftScript === "eastAsian") {
       right.autoSpaceBeforePx += spacingPx;
     } else {

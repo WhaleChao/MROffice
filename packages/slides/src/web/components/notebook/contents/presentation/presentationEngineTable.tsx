@@ -51,6 +51,7 @@ import {
   presentationTableCellParagraphBreakStyles,
   presentationTableCellParagraphSpacing,
   presentationTableCellRunParagraphs,
+  presentationTableCellTrailingParagraphStyle,
 } from "../../../../lib/presentation/table-cell-paragraphs";
 import {
   TABLE_CELL_NORMAL_MARGIN_PX,
@@ -150,6 +151,12 @@ function cellInput(
     };
   };
   const endFont = fontOf({});
+  // The empty last paragraph's line is its end mark's size, two thirds of it
+  // raised or lowered (`presentationTableCellTrailingParagraphStyle`).
+  const trailing = presentationTableCellTrailingParagraphStyle(table, cell);
+  const trailingFont = trailing
+    ? fontOf({ ...base, ...presentationCellTextRunCss(trailing, base, { superscript: style.superscript, subscript: style.subscript }) })
+    : null;
   const drawn: TextRun[][] = [];
   const cssRows: CSSProperties[][] = [];
   const fontRows: OfficeTextFont[][] = [];
@@ -183,6 +190,7 @@ function cellInput(
       // break carries (readings row 807); else the cell's.
       endFont:
         fonts[fonts.length - 1] ??
+        (trailingFont && paragraphIndex === split.length - 1 ? trailingFont : null) ??
         (breakStyles[paragraphIndex]
           ? fontOf({ ...base, ...presentationCellTextRunCss(breakStyles[paragraphIndex], base, { superscript: style.superscript, subscript: style.subscript }) })
           : endFont),

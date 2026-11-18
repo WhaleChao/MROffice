@@ -21,6 +21,7 @@
 import { EditorLoadingState } from "@mrnote/core/web/components/ui/editor-loading-state.tsx";
 import { useState, type ReactNode } from "react";
 
+import { Loader2 } from "lucide-react";
 import { PointerContextMenu } from "@mrnote/core/web/components/ui/PointerContextMenu.tsx";
 import { Check, ChevronLeft, Square } from "@mrnote/core/web/components/office-ribbon/icons/houseIcons.tsx";
 
@@ -56,6 +57,9 @@ export interface PresentationReuseSlidesPaneProps {
   readonly onKeepSourceFormatting: (keep: boolean) => void;
   /** MRAI's own row (ask the AI about the selection); absent hides it. */
   readonly extraActions?: ReactNode;
+  /** Inserted slides still being written into the PowerPoint file (TRIAGE 55):
+   * a status line at the pane's foot while it lasts. */
+  readonly writingStatus?: string | null;
 }
 
 
@@ -93,6 +97,7 @@ export function PresentationReuseSlidesPane({
   onInsertAll,
   onKeepSourceFormatting,
   extraActions,
+  writingStatus = null,
 }: PresentationReuseSlidesPaneProps) {
   const [menu, setMenu] = useState<{ x: number; y: number; slideId: string } | null>(null);
   return (
@@ -238,6 +243,19 @@ export function PresentationReuseSlidesPane({
           </label>
         </>
       )}
+      {writingStatus ? (
+        // As PDF's Insert Page dialog says its own long write (PdfInsertPageDialog).
+        <div
+          className="flex items-start gap-2"
+          role="status"
+          aria-live="polite"
+          data-testid="presentation-reuse-slides-writing"
+          style={{ margin: 0 }}
+        >
+          <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />
+          <span>{writingStatus}</span>
+        </div>
+      ) : null}
       {menu ? (
         <PointerContextMenu
           x={menu.x}

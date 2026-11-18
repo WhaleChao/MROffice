@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { omitUndefinedCanonicalXmlAttributes } from "./canonical-xml-attributes";
+import { omitUndefinedMapValues } from "./y-json-values";
 import { COLLABORATIVE_DOCUMENT_ATTRS_MAP } from "../../components/console/editor/native-document/collaborationDocumentAttrs";
 import {
   documentCausalContentMirrored,
@@ -39,7 +40,11 @@ export function createDocumentPageCausalAdapter(host: NativePageCausalHost) {
     // mirror() has already checked exact body equivalence and the live writer.
     // Repair legacy pending XML at that existing non-history save boundary;
     // never rebuild the body from JSON or alter already-sent update identities.
-    apply: doc => omitUndefinedCanonicalXmlAttributes(doc.getXmlFragment("default")),
+    apply: doc => {
+      const xml = omitUndefinedCanonicalXmlAttributes(doc.getXmlFragment("default"));
+      // The document's own attributes are JSON values in a map: the same rule.
+      return omitUndefinedMapValues(doc.getMap(COLLABORATIVE_DOCUMENT_ATTRS_MAP)) || xml;
+    },
     contentForSave(projection, requested) {
       try {
         // The mirror check has just compared exactly this body with exactly

@@ -303,6 +303,19 @@ export interface PositionalTabLine {
  */
 export const TAB_STOP_REACH_PX = 0.75;
 
+/**
+ * How far past the column's edge a stop must stand before Word 2013 and
+ * later moves its centre, right or decimal text back to the right indent
+ * (`stopsReachColumn`): half the step Windows Word separates (tables/probes/
+ * tabind15: a right stop AT the 9026-twip column, Ta04, ends its text at the
+ * stop; one 14 twips past it, Ta05, at the indent). The column is read off
+ * the page, a fraction of a pixel either way: with `TAB_STOP_REACH_PX` (11
+ * twips) a page that read it 0.2 px wide left Ta05's stop in place, its text
+ * past the column, and the browser wrapped the tab and the text onto two more
+ * lines (build t12, nd11/ti-15-new.png).
+ */
+export const TAB_STOP_COLUMN_REACH_PX = 7 / 15;
+
 /** The custom stops a tab character can move to, left to right. */
 function reachableStops(stops: readonly TabStop[] | null | undefined): TabStop[] {
   // A bar tab draws a line; it is never a position a tab character moves to.
@@ -330,6 +343,10 @@ export function wordTabAdvanceAt(input: {
   /** Word 2013 and later: a centre or right stop past the paragraph's right
    * edge ends its text at that edge (see `tabAdvance`). */
   stopsEndAtRightEdge?: boolean;
+  /** With `stopsEndAtRightEdge`: only a stop past the column (`line.widthPx`)
+   * is moved in; one past the right indent but inside the column stays where
+   * it is (see `tabAdvance`). */
+  stopsReachColumn?: boolean;
 }): number {
   return tabAdvance(
     input.penPx,
@@ -339,6 +356,7 @@ export function wordTabAdvanceAt(input: {
     input.line ? (input.positional ?? null) : null,
     input.line,
     input.stopsEndAtRightEdge === true,
+    input.stopsReachColumn === true,
   );
 }
 
@@ -350,6 +368,7 @@ function tabAdvance(
   positional: PositionalTab | null,
   line: PositionalTabLine | undefined,
   stopsEndAtRightEdge = false,
+  stopsReachColumn = false,
 ): number {
   const width = Math.max(0, segment.widthPx);
   const stop = positional
@@ -367,14 +386,23 @@ function tabAdvance(
     stopsEndAtRightEdge &&
     line &&
     (stop.align === "center" || stop.align === "right" || stop.align === "decimal") &&
-    stop.pos / TWIPS_PER_PX > line.widthPx - Math.max(0, line.indentRightPx ?? 0) + TAB_STOP_REACH_PX
+    (stopsReachColumn
+      ? stop.pos / TWIPS_PER_PX > line.widthPx + TAB_STOP_COLUMN_REACH_PX
+      : stop.pos / TWIPS_PER_PX > line.widthPx - Math.max(0, line.indentRightPx ?? 0) + TAB_STOP_REACH_PX)
   ) {
     // Word 16.86 (compatibility mode 15): a centre, right or decimal stop
-    // past the paragraph's right edge is a right stop AT that edge -- its
-    // text ends there, on the line (corpus R49-D14 TA12i/TA12j: stops at 9500
-    // twips with a 1000-twip right indent end "centred" / "right" at the
+    // past the column's right edge (the margin, or a cell's text edge) is a
+    // right stop AT the paragraph's right edge -- its text ends there, on the
+    // line (corpus R49-D14 TA12i/TA12j: stops at 9500 twips in a 9026-twip
+    // column with a 1000-twip right indent end "centred" / "right" at the
     // indent; R83-D10 TP2: "12.5" at a decimal stop at 9800 twips ends at the
-    // 9026-twip margin, on its line).
+    // 9026-twip margin, on its line). One past the right indent but inside
+    // the column is not moved: its text ends (centres, has its point) at the
+    // stop itself, past the indent (Windows Word, tables/probes/tabedge
+    // te-body-15 Kb03-Kb05: stops at 5000 twips, a right edge at 4000; a
+    // contents line's page number at 9622 twips with a 502-twip right indent
+    // in a 9632-twip column, corpus R281-D02). `stopsReachColumn` false: as
+    
     target = line.widthPx - Math.max(0, line.indentRightPx ?? 0) - width;
   } else if (stop) {
     const at = stop.pos / TWIPS_PER_PX;
@@ -386,6 +414,18 @@ function tabAdvance(
           : stop.align === "decimal"
             ? at - Math.max(0, Math.min(width, segment.decimalPx ?? width))
             : at;
+    if (
+      stop.align === "decimal" &&
+      stopsEndAtRightEdge &&
+      stopsReachColumn &&
+      line &&
+      at > line.widthPx - Math.max(0, line.indentRightPx ?? 0) + TAB_STOP_REACH_PX
+    ) {
+      // ... and a decimal stop's text there ends at the column's edge at the
+      // latest (tables/probes/tabind15 Ta09: "12.50" at a stop at 8800
+      // twips, 500 twips of right indent, ends at the 9026-twip margin).
+      target = Math.min(target, line.widthPx - width);
+    }
   } else {
     target = (Math.floor((pen + TAB_STOP_REACH_PX) / interval) + 1) * interval;
   }
@@ -435,6 +475,7 @@ export function wordTabAdvances(input: {
   positional?: readonly (PositionalTab | null | undefined)[];
   line?: PositionalTabLine;
   stopsEndAtRightEdge?: boolean;
+  stopsReachColumn?: boolean;
 }): number[] {
   const { segments, line } = input;
   const stops = reachableStops(input.stops);
@@ -445,7 +486,7 @@ export function wordTabAdvances(input: {
   for (let index = 1; index < segments.length; index += 1) {
     const segment = segments[index];
     const positional = line ? (input.positional?.[index - 1] ?? null) : null;
-    const advance = tabAdvance(pen, segment, stops, interval, positional, line, input.stopsEndAtRightEdge === true);
+    const advance = tabAdvance(pen, segment, stops, interval, positional, line, input.stopsEndAtRightEdge === true, input.stopsReachColumn === true);
     advances.push(advance);
     pen += advance + Math.max(0, segment.widthPx);
   }

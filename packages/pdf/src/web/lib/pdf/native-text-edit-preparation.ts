@@ -146,6 +146,9 @@ export async function preparePdfNativeTextOffThread(
     readonly serverOnly?: boolean;
     /** Nobody waits on it: the browser's background Worker. */
     readonly background?: boolean;
+    /** A proof of the line a compile on these bytes has just read: the
+     * compiles' Worker, which keeps what that compile read of it. */
+    readonly afterCompile?: boolean;
   },
 ): Promise<PdfNativeTextPreparation> {
   if (input.signal.aborted) throw new DOMException("Cancelled", "AbortError");
@@ -172,6 +175,7 @@ export async function preparePdfNativeTextOffThread(
           selection: input.selection, managedBoxId: input.managedBoxId, sourceText: input.sourceText,
           ...(input.compile ? { compile: input.compile } : {}),
           sourceBytes: ownedBytes, signal: input.signal, ...(input.background ? { background: true } : {}),
+          ...(input.afterCompile ? { afterCompile: true } : {}),
         });
         markPdfTextLatency("browser.prepare", { ms: Math.round(performance.now() - browserStartedAt),
           compile: Boolean(input.compile), bytes: ownedBytes.byteLength });

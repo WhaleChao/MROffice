@@ -13,10 +13,10 @@ import { PresentationRunsText } from "@mrnote/slides/web/components/notebook/con
 import { OFFICE_HIT_TEXT_ATTRIBUTE } from "@mrnote/core/web/components/office-ribbon/OfficeDrawingSelection.tsx";
 import { officeShapeTextFontCss } from "@mrnote/core/web/lib/office-shape-text-font.ts";
 import { officeTextPaintCss } from "@mrnote/core/web/lib/office-text-paint.ts";
-import { spreadsheetFontStack } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { spreadsheetShapeFontStack } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { cellTextRunCss, cellTextRunsInRange } from "@mrnote/core/web/lib/presentation-cell-rich-text.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-runs.ts";
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { wordEastAsianSingleLineFactor } from "@mrnote/core/web/lib/document-word-line-metrics.ts";
 import { wordFontLineMetrics, wordGridFontLineMetrics } from "@mrnote/core/web/components/console/editor/native-document/wordFontMetrics.ts";
 
@@ -49,6 +49,14 @@ export const SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT = 1.2;
 const EAST_ASIAN_TEXT = /[\u3000-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/u;
 /** The East Asian faces of a font stack (the face a CJK character falls to). */
 const EAST_ASIAN_FACE = /yahei|simsun|nsimsun|dengxian|simhei|kaiti|fangsong|mingliu|jhenghei|mincho|ms (?:p|ui )?gothic|yu gothic|meiryo|malgun|gulim|dotum|batang|gungsuh|[\u3400-\u9fff\uac00-\ud7af\u3040-\u30ff]/i;
+
+/**
+ * The workbook's Normal font where it is an East Asian face, else null: the
+ * face a shape's Han and kana are drawn in when their run leaves its East
+ * Asian face to the theme (`spreadsheetShapeFontStack`). Provided by the
+ * sheet around its drawings.
+ */
+export const SpreadsheetShapeEastAsianFaceContext = createContext<string | null>(null);
 
 /**
  * Office's single line for East Asian text in a text box, per em: Word's
@@ -250,7 +258,12 @@ export interface ShapeTextInset {
  * face in the sheet's font stack, and a run's own WordArt drawn over the
  * label's (the shared run CSS a slide table cell and a Docs shape draw with).
  */
-function spreadsheetShapeRunSpans(runs: readonly TextRun[], base: CSSProperties, key: string): ReactNode {
+function spreadsheetShapeRunSpans(
+  runs: readonly TextRun[],
+  base: CSSProperties,
+  key: string,
+  eastAsianFace: string | null,
+): ReactNode {
   const text = runs.map((run) => run.text).join("");
   return (
     <span key={key} data-spreadsheet-shape-run="">
@@ -259,7 +272,7 @@ function spreadsheetShapeRunSpans(runs: readonly TextRun[], base: CSSProperties,
         runs={runs}
         runCss={(style) => {
           const css = cellTextRunCss(style, base);
-          if (style?.fontFamily) css.fontFamily = spreadsheetFontStack(style.fontFamily);
+          if (style?.fontFamily) css.fontFamily = spreadsheetShapeFontStack(style.fontFamily, eastAsianFace);
           return css;
         }}
       />
@@ -326,13 +339,14 @@ export function SpreadsheetShapeTextBody({
   // East Asian text takes Office's East Asian line, read off the face the
   // body is drawn in (inherited from the drawing's own stack).
   const bodyRef = useRef<HTMLSpanElement | null>(null);
+  const eastAsianFace = useContext(SpreadsheetShapeEastAsianFaceContext);
   const eastAsian = EAST_ASIAN_TEXT.test(text);
   const [eastAsianLine, setEastAsianLine] = useState<number | null>(null);
   useLayoutEffect(() => {
     const node = bodyRef.current;
     const next = eastAsian && node ? spreadsheetShapeEastAsianLine(getComputedStyle(node).fontFamily) : null;
     setEastAsianLine((current) => (current === next ? current : next));
-  }, [eastAsian, text, shape.textFontFamily, shape.textRuns]);
+  }, [eastAsian, text, shape.textFontFamily, shape.textRuns, eastAsianFace]);
   // A clipped body (`a:bodyPr@vertOverflow` clip / ellipsis) as Windows
   // Excel draws it: the lines whose foot falls inside the text area, the
   // next one left out whole rather than cut (lookwin p101-lw), anchored as
@@ -398,7 +412,7 @@ export function SpreadsheetShapeTextBody({
   const fontSize = shapeTextSize(shape);
   const single = spreadsheetShapeSingleLine(shape, framed);
   const font = officeShapeTextFontCss(shape, {
-    familyStack: (family) => spreadsheetFontStack(family),
+    familyStack: (family) => spreadsheetShapeFontStack(family, eastAsianFace),
     boldByDefault: Boolean(shape.textArt),
   });
   // A label of runs draws each run's underline / strikethrough on the run: a
@@ -440,14 +454,14 @@ export function SpreadsheetShapeTextBody({
             single={single}
             words={
               lineRuns?.[index]?.length
-                ? spreadsheetShapeRunSpans(lineRuns[index]!, font, `line${index}`)
+                ? spreadsheetShapeRunSpans(lineRuns[index]!, font, `line${index}`, eastAsianFace)
                 : undefined
             }
           />
         ))}
       </span>
     ) : runs ? (
-      <span data-spreadsheet-shape-text="runs">{spreadsheetShapeRunSpans(runs, font, "runs")}</span>
+      <span data-spreadsheet-shape-text="runs">{spreadsheetShapeRunSpans(runs, font, "runs", eastAsianFace)}</span>
     ) : wordsHit ? (
       // Hit where the words are (the shared geometry-hit rule passes the
       // body's own box through): bare text needs an element to be hit.

@@ -16,6 +16,8 @@
 // not to synthesize gets a text stroke in its place, set once on the root as
 // --office-faux-bold-stroke (0 until measured, and everywhere synthesis works).
 
+import { stackPrimaryFamily } from "./hangul-em";
+
 const NO_BOLD_FAMILIES: ReadonlySet<string> = new Set([
   "Abadi MT Condensed Extra Bold", "Arial Rounded MT Bold", "Avenir Next LT Pro Demi", "Baskerville Old Face", "Batang",
   "BatangChe", "Bauhaus 93", "Bernard MT Condensed", "Bookshelf Symbol 7", "Braggadocio",
@@ -54,8 +56,8 @@ const FAUX_BOLD_STROKE = "0.06em";
 
 /** The first family of a CSS font-family list, unquoted. */
 function primaryFamily(fontFamily: string): string {
-  const first = fontFamily.split(",")[0] ?? "";
-  return first.trim().replace(/^["']|["']$/g, "").trim();
+  // A Hangul clone in front of the family (hangul-em.ts) is not the family asked for.
+  return stackPrimaryFamily(fontFamily);
 }
 
 /**

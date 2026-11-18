@@ -649,6 +649,9 @@ export interface CoverSceneParagraph {
   beforePt?: number;
   afterPt?: number;
   lineHeight?: number;
+  /** The paragraph's bottom border (`w:pBdr/w:bottom`): a rule `spacePt`
+   * under its last line, above its space after (R467-D04 cover title). */
+  borderBottom?: { widthPt: number; spacePt: number; color: string };
   runs: readonly CoverSceneRun[];
 }
 
@@ -967,8 +970,21 @@ function normalizeSceneText(value: unknown): CoverSceneTextBody | null {
           : {}),
       });
     }
+    const border =
+      paragraph.borderBottom && typeof paragraph.borderBottom === "object"
+        ? (paragraph.borderBottom as Record<string, unknown>)
+        : null;
+    const borderWidth = border ? finiteIn(border.widthPt, 0.25, 12) : null;
+    const borderSpace = border ? (finiteIn(border.spacePt, 0, 31) ?? 0) : 0;
+    const borderColor =
+      border && typeof border.color === "string" && HEX_RE.test(border.color.toLowerCase())
+        ? border.color.toLowerCase()
+        : "#000000";
     paragraphs.push({
       align,
+      ...(borderWidth !== null
+        ? { borderBottom: { widthPt: borderWidth, spacePt: borderSpace, color: borderColor } }
+        : {}),
       ...(finiteIn(paragraph.beforePt, 0, 1_584) ? { beforePt: paragraph.beforePt as number } : {}),
       ...(finiteIn(paragraph.afterPt, 0, 1_584) ? { afterPt: paragraph.afterPt as number } : {}),
       ...(finiteIn(paragraph.lineHeight, 0.5, 5) ? { lineHeight: paragraph.lineHeight as number } : {}),

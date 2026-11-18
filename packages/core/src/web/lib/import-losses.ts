@@ -57,10 +57,18 @@ const IMPORT_LOSS_MESSAGE_KEY: Readonly<Record<string, string>> = {
   // the page past its size: on the slide and editable; the file and every
   // export keep the original.
   pptx_picture_display_copy: "pptxPictureDisplayCopy",
+  // An EMF's text layer (its words, invisible, over its render) left off a
+  // page past its size: the picture still shows its words; search and the
+  // PDF's text do not find them.
+  pptx_metafile_text_not_projected: "pptxMetafileTextLayer",
   
   
   // export keep the original.
   pptx_picture_src_refused: "pptxPictureSrcRefused",
+  
+  // TRIAGE 25): the slide stands empty here; saving and every download keep
+  // its shapes as they are in the file (reading 820).
+  pptx_slide_unreadable: "pptxSlideUnreadable",
   pptx_shape_not_projected: "pptxShape",
   // Distinct from `pptxShape` on purpose: that one is the BROWSER preview's
   // gap, and its message says the saved page reads those shapes in full. This
@@ -107,6 +115,11 @@ const IMPORT_LOSS_MESSAGE_KEY: Readonly<Record<string, string>> = {
   // linked, floating, or an embedding too large or of a kind the page cannot
   // carry (`document_docx_ole_object`). The source file keeps the object.
   docx_ole_object_not_carried: "docxOleObject",
+  // An embedded object kept whole only because of its size (past the
+  // one-object limit or the page's share for objects): its picture on the
+  // page, read-only, and every save writes the source file's object back
+  // untouched. A preserved object, not a lost one.
+  docx_ole_object_preserved_read_only: "docxOleObjectReadOnly",
   // A picture whose media is an EMF/WMF vector metafile. These three come from
   // the BROWSER importers (`officeCompiler.ts`), which cannot rasterise: the
   // server renders one to a PNG stand-in at the metafile's own frame and so

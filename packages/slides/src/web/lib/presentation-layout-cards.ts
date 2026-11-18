@@ -16,6 +16,7 @@ import {
   type SlideMaster,
   type SlideMasterLayout,
 } from "@mrnote/core/web/lib/presentation-master.ts";
+import { cardBlocksWithFontReplacements, type FontReplacement } from "@mrnote/core/web/lib/presentation-replace-font.ts";
 
 
 
@@ -188,19 +189,41 @@ export function useLayoutCards(pageId: string): PageCards {
   );
 }
 
-function withCard<T extends SlideMaster | SlideMasterLayout>(target: T, card: DrawnCard | undefined): T {
+function withCard<T extends SlideMaster | SlideMasterLayout>(
+  target: T,
+  card: DrawnCard | undefined,
+  fontReplacements: readonly FontReplacement[],
+): T {
   if (!card || target.catalogCard !== "pending") return target;
   const { catalogCard, ...drawn } = card;
-  return { ...target, ...drawn, catalogCard } as T;
+  // A card is the package's drawing, read before the deck's Replace Fonts:
+  // drawn through the log, as the file the save writes reads
+  // (`pptx/replace_fonts`), so a slide given this layout takes its graphics
+  // in the new face.
+  const replaced = fontReplacements.length
+    ? {
+        ...(drawn.blocks ? { blocks: [...cardBlocksWithFontReplacements(drawn.blocks, fontReplacements)] } : {}),
+        ...(drawn.masterGraphics
+          ? { masterGraphics: [...cardBlocksWithFontReplacements(drawn.masterGraphics, fontReplacements)] }
+          : {}),
+      }
+    : {};
+  return { ...target, ...drawn, ...replaced, catalogCard } as T;
 }
 
 /** `masters` with the cards held for them drawn in, for the master view only. */
-export function withLayoutCards(masters: readonly SlideMaster[], cards: PageCards): SlideMaster[] {
+export function withLayoutCards(
+  masters: readonly SlideMaster[],
+  cards: PageCards,
+  fontReplacements: readonly FontReplacement[] = [],
+): SlideMaster[] {
   if (cards.layouts.size === 0 && cards.masters.size === 0) return masters as SlideMaster[];
   return masters.map((master) => {
-    const layouts = master.layouts?.map((layout) => withCard(layout, cards.layouts.get(layout.sourcePart ?? layout.id)));
+    const layouts = master.layouts?.map((layout) =>
+      withCard(layout, cards.layouts.get(layout.sourcePart ?? layout.id), fontReplacements),
+    );
     const changed = layouts?.some((layout, index) => layout !== master.layouts![index]);
-    const drawn = withCard(master, cards.masters.get(master.sourcePart ?? master.id));
+    const drawn = withCard(master, cards.masters.get(master.sourcePart ?? master.id), fontReplacements);
     return changed ? { ...drawn, layouts } : drawn;
   });
 }
@@ -213,6 +236,7 @@ export function useMastersWithLayoutCards(
   pageId: string | null | undefined,
   masters: readonly SlideMaster[],
   enabled: boolean,
+  fontReplacements?: readonly FontReplacement[],
 ): SlideMaster[] {
   const cards = useLayoutCards(pageId ?? "");
   const pending = useMemo(
@@ -224,7 +248,7 @@ export function useMastersWithLayoutCards(
     const parts = pending.split("\n");
     void requestLayoutCards(pageId, parts);
   }, [pageId, pending]);
-  return useMemo(() => withLayoutCards(masters, cards), [cards, masters]);
+  return useMemo(() => withLayoutCards(masters, cards, fontReplacements), [cards, fontReplacements, masters]);
 }
 
 /** Tests: forget every card and request. */

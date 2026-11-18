@@ -2197,15 +2197,16 @@
   .spreadsheet-window__chart-pending { animation: none; }
 }
 
+/* Its place in Excel's box (DATA_BAR_BOX) comes with the bar's own style. */
 .spreadsheet-window__data-bar {
   border-radius: 0;
-  bottom: 4px;
+  bottom: 3.2px;
   box-sizing: border-box;
   left: 2px;
   opacity: 1;
   pointer-events: none;
   position: absolute;
-  top: 4px;
+  top: 2px;
   z-index: 0;
 }
 

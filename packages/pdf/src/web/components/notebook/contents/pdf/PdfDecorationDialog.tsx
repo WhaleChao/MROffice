@@ -80,6 +80,10 @@ type HeaderFooterSlot = Readonly<{
   horizontal: PdfDecorationHorizontal;
 }>;
 
+/** From this many pages on, a save in progress says it is writing a long
+ * document (below it the write is over before the line could be read). */
+const PDF_DECORATION_LONG_DOCUMENT_PAGES = 50;
+
 interface PdfDecorationDialogProps {
   open: boolean;
   kind: PdfDecorationKind;
@@ -1390,6 +1394,19 @@ export default function PdfDecorationDialog({
               data-testid={`pdf-decoration-${kind}-error`}
             >
               {operationError}
+            </p>
+          ) : null}
+
+          {busy && pageCount >= PDF_DECORATION_LONG_DOCUMENT_PAGES ? (
+            // A decoration is written on every page it names in one save:
+            // on a long document that is seconds, and the dialog says what
+            // it is doing meanwhile.
+            <p
+              className={styles.operationProgress}
+              role="status"
+              data-testid={`pdf-decoration-${kind}-progress`}
+            >
+              {t("pdf.decoration.savingLongDocument", { pageCount })}
             </p>
           ) : null}
 

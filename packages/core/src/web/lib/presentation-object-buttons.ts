@@ -44,8 +44,11 @@ import {
   blockNativeGroupMoveAuthority,
   blocksInGroup,
   newGroupId,
+  normalizeGroupId,
   stackGroupAtFrontmostMember,
   ungroup,
+  ungroupSoleMembers,
+  type GroupableBlock,
 } from "./presentation-crop-group";
 import { mirrorGroupMemberGeometry, toggleFlip, type BlockGeometry } from "./presentation-drag";
 import { PRESENTATION_OBJECT_GEOMETRY_MAX_EMU } from "./presentation-geometry-limit";
@@ -1200,9 +1203,20 @@ export function slideWithoutBlocks<S extends PresentationObjectSlide>(
       void _gone;
       return rest as PresentationBlock;
     });
+  // A group left holding one object is ungrouped, as PowerPoint's Delete
+  // leaves it (truth c65grpdel): the file's writer lifts it the same way.
+  const touchedGroups = new Set<string>();
+  for (const block of slide.blocks) {
+    if (!selectedIds.has(block.id)) continue;
+    const outer = normalizeGroupId((block as GroupableBlock).groupId);
+    if (outer) for (const id of [outer, ...blockGroupPath(block as GroupableBlock)]) touchedGroups.add(id);
+  }
+  const regrouped = touchedGroups.size
+    ? (ungroupSoleMembers(retained as unknown as GroupableBlock[], touchedGroups) as unknown as typeof retained)
+    : retained;
   const nextBlocks = blocksLeftOnSlide(
     { layout: (slide as { layout?: unknown }).layout },
-    retained,
+    regrouped,
     makeId,
   );
   const nextSlide: S = { ...slide, blocks: nextBlocks };

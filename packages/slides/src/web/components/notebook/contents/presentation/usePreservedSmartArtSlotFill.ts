@@ -6,7 +6,9 @@
 import { useContext, useEffect, useState } from "react";
 
 import { smartArtPictureSrc } from "@mrnote/core/web/lib/office-smartart/picture.ts";
+import { officePictureNaturalSize } from "@mrnote/core/web/lib/office-picture-fill-options.ts";
 import {
+  officeCropToFillRect,
   preservedSmartArtSlotMedia,
   readPreservedSlotPicture,
 } from "@mrnote/core/web/lib/office-smartart/preserved-slot-pictures.ts";
@@ -42,6 +44,19 @@ export function usePreservedSmartArtSlotFill(block: { source?: unknown }): Reado
   if (!slot || !key || answer?.key !== key) return null;
   const url = smartArtPictureSrc(answer.media?.[slot.embed]);
   if (!url) return null;
+  // A picture placeholder is filled as Windows PowerPoint lays it out on
+  // open: cropped to fill, centred (`officeCropToFillRect`); until its size is
+  // read, the centred cover it comes to.
+  if (slot.cropToFill) {
+    const box = asRecord(block);
+    const rect = officeCropToFillRect(officePictureNaturalSize(url), {
+      width: Number(box?.width) || 0,
+      height: Number(box?.height) || 0,
+    });
+    return rect && (rect.l || rect.t || rect.r || rect.b)
+      ? { url, fit: "cover", fillRect: rect }
+      : { url, fit: "cover" };
+  }
   const { l, t, r, b } = slot.fillRect;
   // Office stretches the picture over the shape (`a:stretch/a:fillRect`),
   // which the slide's picture fill spells `cover`, as an imported shape's own

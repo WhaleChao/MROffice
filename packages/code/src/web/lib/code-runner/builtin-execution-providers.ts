@@ -10,6 +10,11 @@ import {
   getPythonExecutionAvailability,
   runPython,
 } from "@mrnote/core/web/lib/code-runner/python-runner.ts";
+import {
+  runPythonInCloudGui,
+  runsInCloudGui,
+  type CloudGuiMessage,
+} from "./cloud-gui";
 import { runSql } from "./sql-runner";
 import { runTypeScript } from "./ts-runner";
 import { runLua } from "./lua-runner";
@@ -166,6 +171,13 @@ export interface BuiltinExecutionProviderContext {
   readonly guest?: boolean;
   /** Remote runs go here instead of the code page's route (a code draft). */
   readonly remoteTarget?: RemoteExecutionTarget | null;
+  /**
+   * A saved code page's Python that needs a desktop window, a terminal or
+   * processes runs in a cloud window when the deployment offers them
+   * (cloud-gui.ts): the page it runs as, and the page's words for its end.
+   * Absent for a draft, a guest and a test run.
+   */
+  readonly cloudGui?: { readonly pageId: string; readonly message: CloudGuiMessage } | null;
 }
 
 function capabilityFor(
@@ -434,6 +446,17 @@ export function createBuiltinExecutionProvider(
           onOutput: context.onOutput,
           sandboxOwner: owner.javaScriptSandboxOwner,
           timeoutMs: request.limits.wallTimeMs ?? undefined,
+        });
+      } else if (request.language === "python" && owner.cloudGui && runsInCloudGui(request.source)) {
+        // Its window plays in the run output, as a pygame game's does; it runs
+        // until it ends or the reader stops it, not to the 20 s stop.
+        output = await runPythonInCloudGui(request.source, {
+          pageId: owner.cloudGui.pageId,
+          namespace: owner.pageNamespace,
+          signal: context.signal,
+          onOutput: context.onOutput,
+          message: owner.cloudGui.message,
+          ...(request.stdin.trim() !== "" ? { stdin: request.stdin } : {}),
         });
       } else if (request.language === "python") {
         output = await runPython(request.source, {

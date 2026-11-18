@@ -142,6 +142,17 @@ export interface CommentRecord {
    * DOCX writer writes it back; a reply it no longer follows answers the root.
    */
   nativeReplyTo?: number;
+  /**
+   * An imported comment whose `w:commentReference` sits in a tracked
+   * deletion (`w:del` / `w:moveFrom`) or insertion (`w:ins` / `w:moveTo`) of
+   * the file, and that revision's `w:id` when it has one. Word keeps a
+   * comment at its reference mark: accepting that deletion, or rejecting
+   * that insertion, deletes the comment (a thread's root takes its replies).
+   * The page has no reference mark, so the review commands read this
+   * (trackChanges droppingCommentsOfReview); nothing writes it back.
+   */
+  nativeReference?: "deletion" | "insertion";
+  nativeReferenceRevision?: string;
   /** Word Web currently exposes Like as the first reaction type. */
   reactions?: CommentReaction[];
 }
@@ -592,6 +603,15 @@ export function normalizeComment(value: unknown): CommentRecord | null {
     record.nativeReplyTo >= 1
   ) {
     normalized.nativeReplyTo = record.nativeReplyTo;
+  }
+  if (record.nativeReference === "deletion" || record.nativeReference === "insertion") {
+    normalized.nativeReference = record.nativeReference;
+    if (
+      typeof record.nativeReferenceRevision === "string" &&
+      /^[0-9]{1,10}$/.test(record.nativeReferenceRevision)
+    ) {
+      normalized.nativeReferenceRevision = record.nativeReferenceRevision;
+    }
   }
   const nativeBody = sanitizeCommentNativeBody(record.nativeBody);
   if (nativeBody) {

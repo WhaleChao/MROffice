@@ -55,6 +55,12 @@ const EXPLICIT: ReadonlyMap<number, Lb> = (() => {
 /** What Word's mode-13 Latin breaking takes as letters (ideographsAsLetters). */
 const LATIN_SET_IDEOGRAPH = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Bopomofo}⺀-⿿\u3001-〿㇀-㇯㈀-㏿︰-﹏\uff00-\uffef]/u;
 
+/** Marks Word keeps a set-as-letter word whole across (ideographsAsLetters). */
+const WORD_KEEPS_AFTER = new Set(["?", "!", "‐"]);
+
+/** East Asian marks (the ideographic space aside), eastAsianMarksAsIdeographs. */
+const EAST_ASIAN_MARK = /[\u3001-\u303f\ufe10-\ufe6f\uff01-\uff0f\uff1a-\uff20\uff3b-\uff40\uff5b-\uff65]/u;
+
 const HAN_LIKE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Bopomofo}⺀-⿿\u3000-〿㇀-㇯㈀-㏿︰-﹏\uff00-\uffef]/u;
 
 function classOf(grapheme: string): Lb {
@@ -108,6 +114,12 @@ export interface LineBreakOptions {
    * are letters of a word, broken only where a Latin word would be. Hangul
    * and the ideographic space keep their own class. */
   readonly ideographsAsLetters?: boolean;
+  /** Windows Word's East Asian text in a Western language
+   * (wordEastAsianLineRulesApply): its full-width and ideographic marks break
+   * as ideographs do, before and after ("距离（" / "EW）", "离和场" / "）和"),
+   * where UAX #14 keeps an opening mark with what follows and a closing one
+   * with what precedes. */
+  readonly eastAsianMarksAsIdeographs?: boolean;
 }
 
 
@@ -198,7 +210,9 @@ export function lineBreakOpportunities(graphemes: readonly string[], options: Li
       ? "ID"
       : options.ideographsAsLetters && LATIN_SET_IDEOGRAPH.test(String.fromCodePoint(grapheme.codePointAt(0) ?? 0x20))
         ? "AL"
-        : classOf(grapheme),
+        : options.eastAsianMarksAsIdeographs && EAST_ASIAN_MARK.test(String.fromCodePoint(grapheme.codePointAt(0) ?? 0x20))
+          ? "ID"
+          : classOf(grapheme),
   );
   const out = new Array<boolean>(count).fill(false);
   const kinsoku = options.kinsoku ? OFFICE_KINSOKU[options.kinsoku] : null;
@@ -231,6 +245,13 @@ export function lineBreakOpportunities(graphemes: readonly string[], options: Li
     // (One place in the corpus; no fixture yet.)
     if (!out[i] && options.word && after === "SY" && before === "SP") out[i] = true;
     if (out[i] && options.powerpoint && (before === "SY" || before === "EX") && (after === "AL" || after === "NU") && i >= 2 && classes[i - 2] !== "SP") out[i] = false;
+    // Ideographs set as letters (Windows Word, mode 13 and earlier): a
+    // question or exclamation mark or a U+2010 hyphen between letters keeps
+    // the word whole, kanji or Latin ("窒素肥料?大豆生産", "abcdefgh?ijklmnop",
+    // "abcd‐efgh" never end a line; "-", "–" and "—" do: docx-look
+    // probes/cjk8). Only here: elsewhere the browser breaks after them and
+    // nothing keeps it from it.
+    if (out[i] && options.ideographsAsLetters && WORD_KEEPS_AFTER.has(graphemes[i - 1]!) && after === "AL" && i >= 2 && classes[i - 2] !== "SP") out[i] = false;
     // A closing quotation mark and spaces before an opening bracket: PowerPoint
     
     // ends a line at the quote, as Chromium does there too): today's UAX #14
@@ -316,9 +337,12 @@ const FIT_EPSILON = 1 / 128;
 /**
  * Greedy line filling. Returns the index of the first grapheme of every line
  * (the first is 0). Spaces before a break stay on their line and take no
- * room there; a line holds at least one grapheme.
+ * room there; a line holds at least one grapheme. With `keepSpace` a word
+ * also needs room for the one space that follows it (Windows Excel's wraps
+ * in a book that has wrapped complex script: lookwin p118-lw on the screen,
+ * p144-lw on the printer); the first word of a line stays.
  */
-export function breakLines(graphemes: readonly BreakableGrapheme[], width: number, opportunities: readonly boolean[]): number[] {
+export function breakLines(graphemes: readonly BreakableGrapheme[], width: number, opportunities: readonly boolean[], keepSpace = false): number[] {
   const starts = [0];
   let lineStart = 0;
   for (;;) {
@@ -330,6 +354,11 @@ export function breakLines(graphemes: readonly BreakableGrapheme[], width: numbe
       if (i > lineStart && opportunities[i]) lastBreak = i;
       const grapheme = graphemes[i];
       if (grapheme.text === " ") {
+        if (keepSpace && pendingSpace === 0 && i > lineStart && lastBreak > lineStart
+          && used + grapheme.advance > width + FIT_EPSILON) {
+          overflowAt = i;
+          break;
+        }
         pendingSpace += grapheme.advance;
         continue;
       }

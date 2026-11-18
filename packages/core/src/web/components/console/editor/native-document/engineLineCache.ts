@@ -46,6 +46,43 @@ interface Entry {
   /** The families the block's runs name, with the faces of each the browser
    * had settled when it was measured (FamilyNews). */
   readonly faces: ReadonlyArray<readonly [string, number]>;
+  /** Where the block's lines after its first start in its content
+   * (fragmentOf), when they are known. */
+  readonly starts?: readonly number[];
+}
+
+/** A block's lines taken from the block it was cut from (fragmentOf). */
+export interface EngineLineFragment<T> {
+  /** The block it was cut from. */
+  readonly whole: ProseMirrorNode;
+  /** Where in the whole's content the fragment starts. */
+  readonly offset: number;
+  /** The whole's spans from there on, at the fragment's position. */
+  readonly spans: T[];
+  /** The fragment's own line starts after its first line. */
+  readonly starts: number[];
+  /** The families the whole's runs name. */
+  readonly families: string[];
+}
+
+/** Attributes a page cut gives a block's tail and nothing else: the tail of
+ * a block is drawn as the block is from its cut on, its first line without
+ * the first-line indent (the continuation's text-indent: 0). */
+const TAIL_ONLY_ATTRS = new Set(["pageSplitContinuation", "pageSplitPieceOf"]);
+
+function sameAttrsButTail(whole: ProseMirrorNode, tail: ProseMirrorNode): boolean {
+  const a = whole.attrs as Record<string, unknown>;
+  const b = tail.attrs as Record<string, unknown>;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (TAIL_ONLY_ATTRS.has(key)) continue;
+    const x = a[key];
+    const y = b[key];
+    if (x === y) continue;
+    if (x && y && typeof x === "object" && typeof y === "object" && JSON.stringify(x) === JSON.stringify(y)) continue;
+    return false;
+  }
+  return true;
 }
 
 
@@ -100,7 +137,17 @@ export interface EngineLineCache {
   lookup<T extends { from: number; to: number }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): T[] | null;
   /** Keep the spans of a block at `pos` whose drawn lines agreed, with the
    * families its runs name. */
-  store<T extends { from: number; to: number }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, spans: readonly T[], families: readonly string[], news: FamilyNews): void;
+  store<T extends { from: number; to: number }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, spans: readonly T[], families: readonly string[], news: FamilyNews, starts?: readonly number[]): void;
+  /**
+   * The lines of a page cut's tail, from the block it was cut from, when the
+   * cut fell where one of that block's lines starts: a cut changes no line
+   * after it (the tail is laid out at the same width, from a line start,
+   * its first line no wider than the whole's later lines), so the tail's
+   * lines are the whole's from there on. Kept only from a block whose drawn
+   * lines agreed, measured as the tail is now (key and faces), and for a
+   * tail (pageSplitContinuation) of the same content and attributes.
+   */
+  fragmentOf<T extends { from: number; to: number; tabBreak?: boolean }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): EngineLineFragment<T> | null;
   forget(node: ProseMirrorNode): void;
   /** Why `lookup` found nothing for a block (probes): "node" (never kept),
    * or the first part of the key that differed. */
@@ -109,15 +156,53 @@ export interface EngineLineCache {
 
 export function createEngineLineCache(): EngineLineCache {
   const entries = new WeakMap<ProseMirrorNode, Entry>();
+  /** The last block stored that ends with this child (a tail keeps its
+   * whole's last child: Fragment.cut keeps the children it does not cut). */
+  const byLastChild = new WeakMap<ProseMirrorNode, ProseMirrorNode>();
   return {
     lookup<T extends { from: number; to: number }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): T[] | null {
       const entry = entries.get(node);
       if (!entry || !sameKey(entry.key, key) || !sameFaces(entry, news)) return null;
       return entry.spans.map((span) => ({ ...span, from: span.from + pos, to: span.to + pos }) as unknown as T);
     },
-    store(node, key, pos, spans, families, news) {
+    store(node, key, pos, spans, families, news, starts) {
       const faces = [...new Set(families.map(normalizeFamily))].map((family) => [family, news.count(family)] as const);
-      entries.set(node, { key, faces, spans: spans.map((span) => ({ ...span, from: span.from - pos, to: span.to - pos })) });
+      entries.set(node, { key, faces, spans: spans.map((span) => ({ ...span, from: span.from - pos, to: span.to - pos })), ...(starts?.length ? { starts } : {}) });
+      const last = node.lastChild;
+      if (starts?.length && last) byLastChild.set(last, node);
+    },
+    fragmentOf<T extends { from: number; to: number; tabBreak?: boolean }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): EngineLineFragment<T> | null {
+      if (node.attrs?.pageSplitContinuation !== true) return null;
+      const last = node.lastChild;
+      const whole = last ? byLastChild.get(last) : undefined;
+      if (!whole || whole === node || whole.type !== node.type) return null;
+      const entry = entries.get(whole);
+      if (!entry?.starts || !sameKey(entry.key, key) || !sameFaces(entry, news)) return null;
+      const offset = whole.content.size - node.content.size;
+      if (offset <= 0 || !entry.starts.includes(offset)) return null;
+      if (!sameAttrsButTail(whole, node) || !whole.content.cut(offset).eq(node.content)) return null;
+      // Spans are kept relative to the block's position: content offset c is at 1 + c.
+      const spans: T[] = [];
+      for (const span of entry.spans) {
+        // The whole's own hyphens off (the engine hyphenates it,
+        // documentEngineLineBreaks' manualHyphens): its tail's too.
+        if ((span as { manualHyphens?: boolean }).manualHyphens) {
+          spans.push({ ...span, from: pos + 1, to: pos + 1 } as unknown as T);
+          continue;
+        }
+        if (span.from < 1 + offset) continue;
+        // The hyphen that ends the line before the cut is the head's.
+        if (span.from === 1 + offset && (span as { hyphen?: boolean }).hyphen) continue;
+        // A break before a tab that would open the tail: the tail's first line
+        // starts there anyway (and the break would draw an empty line).
+        if (span.from === 1 + offset && (span as { tabBreak?: boolean }).tabBreak) return null;
+        spans.push({ ...span, from: span.from - offset + pos, to: span.to - offset + pos } as unknown as T);
+      }
+      return {
+        whole, offset, spans,
+        starts: entry.starts.filter((start) => start > offset).map((start) => start - offset),
+        families: entry.faces.map(([family]) => family),
+      };
     },
     forget(node) {
       entries.delete(node);

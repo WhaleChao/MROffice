@@ -124,6 +124,9 @@ export interface ChartTextFrame {
   stacked?: boolean;
   /** WordArt drawn over every run (`officeTextPaintCss`). */
   paint?: Record<string, unknown>;
+  /** A worksheet chart's title of several lines: its lines this many ems
+   * apart, its face's own line, as the drawing sets them (Calibri 1.221). */
+  lineEm?: number;
 }
 
 export type ChartTextPart = "title" | "axisX" | "axisY";

@@ -54,6 +54,7 @@ import {
   reducedOfficeLineHeight,
   type PresentationFontSizeUnit,
   presentationTextPaintOwnsShadow,
+  textBlockTabSizeCss,
 } from "../../../../lib/presentation/text-layout-css";
 import { PresentationAutofitScaleContext, PresentationRunsText } from "./PresentationRunsText";
 import {
@@ -275,6 +276,10 @@ function ShapeTextOverlayDrawing({
     ...alignCss,
     whiteSpace: shapeTextWraps ? "pre-wrap" : "pre",
     overflowWrap: shapeTextWraps ? "anywhere" : "normal",
+    // Its tabs step as the label states (`textBlockTabSizeCss`): stops, else
+    
+    // shape drawn by the browser for its 3-D words).
+    ...textBlockTabSizeCss({ style }),
     // `latinLineBreak` (`a:pPr@latinLnBrk="1"`): Latin words break anywhere.
     ...(shapeTextWraps ? textBlockLineBreakCss(block) : {}),
     ...(colorOverride === undefined ? {} : { color: colorOverride }),
@@ -380,6 +385,7 @@ function ShapeTextOverlayDrawing({
             tabStops={labelTabStops}
             defaultTabPx={labelDefaultTabPx}
             kerning={asRecord(block.source)?.nativeKerning}
+            eastAsianLines={asRecord(block.source)?.nativeEastAsianLines}
             widthPx={editWidthEmu === null ? null : editWidthEmu / AUTOFIT_EMU_PER_PX}
             wrap={shapeTextWraps}
             colorOverride={colorOverride}
@@ -474,7 +480,7 @@ function ShapeTextOverlayDrawing({
   const engineWidthEmu = engineEligible ? shapeTextAreaWidthEmu(block) : null;
   const engineRows = (() => {
     if (!engineEligible) return null;
-    const rows = labelParagraphs ?? paragraphBuildRows(text, runs);
+    const rows = labelParagraphs ?? paragraphBuildRows(text, runs, (block as { endLatinFace?: unknown }).endLatinFace);
     if (!rows.length) return null;
     return planPresentationParagraphRows({
       paragraphs: rows,
@@ -579,6 +585,7 @@ function ShapeTextOverlayDrawing({
           tabStops={labelTabStops}
           defaultTabPx={labelDefaultTabPx}
           kerning={asRecord(block.source)?.nativeKerning}
+          eastAsianLines={asRecord(block.source)?.nativeEastAsianLines}
           widthPx={engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX}
           wrap={shapeTextWraps}
           colorOverride={colorOverride}

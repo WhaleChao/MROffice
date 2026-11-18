@@ -71,6 +71,27 @@ const NATIVE_TEXT_FRAME_SLACK_PX = 3;
 
 
 
+
+
+export function pdfReaderAnnotationPressOf(target: EventTarget | null): "object" | "layer" | null {
+  const element = target instanceof Element ? target : null;
+  if (!element?.closest(".pdf-viewer__annotation-stack")) return null;
+  return element.classList.contains("pdf-viewer__text-box-layer") ? "layer" : "object";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export function pdfNativeTextEditBoxAtPoint(
   reached: HTMLElement | null,
   clientX: number,

@@ -7,6 +7,7 @@ import {
   applyCollaborativeTextDelta,
   mapIndexThroughTextDelta,
   textSplice,
+  textSpliceIsGuess,
   type CollaborativeTextDeltaOp,
   type JsonValue,
 } from "@mrnote/core/web/lib/collab/json-crdt.ts";
@@ -17,6 +18,40 @@ import { presentationPreviewPlainText, presentationPreviewSelection } from "@mrn
 export interface TextRange {
   start: number;
   end: number;
+}
+
+/**
+ * The words a browser's replacement (`insertReplacementText`: a spelling
+ * suggestion, an autocorrection) put in place of others, given by the event
+ * that made it; null for any other input.
+ */
+export function browserReplacement(event: Event | null | undefined): string | null {
+  const input = event as (InputEvent & { dataTransfer?: DataTransfer | null }) | null | undefined;
+  if (!input || input.inputType !== "insertReplacementText") return null;
+  const words = input.data ?? input.dataTransfer?.getData("text/plain") ?? null;
+  return words ? words.replace(/\r\n?/g, "\n") : null;
+}
+
+/**
+ * Where a browser's replacement was made: the one range of `before` whose
+ * replacement by `replacement` makes `after`. The browser replaces a word away
+ * from the caret (the caret stays after what was typed since), so neither the
+ * caret nor the selection says where; the replacing words do, when they fit
+ * one place only ("helo" -> "hello": comparing the two texts alone could put
+ * the new "l" after either "l", TRIAGE 49). Null when they fit no place or
+ * more than one.
+ */
+export function replacementRange(before: string, after: string, replacement: string): TextRange | null {
+  const removed = before.length - (after.length - replacement.length);
+  if (!replacement || removed < 0) return null;
+  let found: TextRange | null = null;
+  for (let at = after.indexOf(replacement); at >= 0; at = after.indexOf(replacement, at + 1)) {
+    if (at > before.length - removed) break;
+    if (after.slice(0, at) !== before.slice(0, at) || after.slice(at + replacement.length) !== before.slice(at + removed)) continue;
+    if (found) return null;
+    found = { start: at, end: at + removed };
+  }
+  return found;
 }
 
 /** A slide object's words in the room (json-crdt collaborative text). */
@@ -49,7 +84,9 @@ export function cellKeystrokeSplice(
   caretAfter: number | undefined,
 ): { start: number; end: number; insert: string } | null {
   if (before === after) return null;
-  return caretSplice(before, after, caretAfter) ?? textSplice(before, after);
+  // Without a caret, a key read off the two texts among the same letters is a
+  // guess of where it went: not noted (the publication refuses a guess, TRIAGE 47).
+  return caretSplice(before, after, caretAfter) ?? (textSpliceIsGuess(before, after) ? null : textSplice(before, after));
 }
 
 
@@ -314,7 +351,11 @@ export function carryKeystrokeToLive(options: {
   // not drawn yet).
   const drawn = read(rendered);
   if (live === rendered) {
-    return { onLive: false, text: typed, selection: selection ?? (drawn ? { start: drawn.start, end: drawn.end } : undefined), shift: 0, splice: drawn,
+    // The range the key was read at (its selection, or the caret it left when
+    // the selection captured for it was another key's): a selection that did
+    // not read it is not handed on (TRIAGE 49: the caller then read the key
+    // off the two texts, a guess among repeated letters).
+    return { onLive: false, text: typed, selection: drawn ? { start: drawn.start, end: drawn.end } : selection, shift: 0, splice: drawn,
       read: drawn ? "exact" : "compared" };
   }
   if (drawn) {

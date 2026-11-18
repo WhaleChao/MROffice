@@ -1381,15 +1381,46 @@ export function PdfReaderTextBoxLayer({
     }
     return ranks;
   }, [boxes, stackRanks]);
+  // The page around the boxes is the layer's only while a box is being typed
+  // (selected): the press that leaves the box ends its typing and goes no
+  // further. A box the layer merely holds -- handed on and waiting for the
+  // page to paint it, or kept as a draft after a save that was refused --
+  // takes the pointer on itself alone. Holding any box, the layer lay over
+  // the whole page and took every press: the pen drew nothing and no text
+  // could be selected, without a word, for as long as the draft was kept
+  
+  const typing = selectedBoxId !== null && boxes.some((box) => box.id === selectedBoxId);
+  // That leaving press, to its end: the box is no longer selected by the
+  // time the button comes up, and the click of a press the layer took
+  // belongs to the layer too, not to what the page shows under it.
+  const [leavingPress, setLeavingPress] = useState(false);
+  useEffect(() => {
+    if (!leavingPress) return;
+    let timer: number | null = null;
+    // After the click, which the browser sends with the release.
+    const release = () => { timer ??= window.setTimeout(() => setLeavingPress(false), 0); };
+    window.addEventListener("pointerup", release, true);
+    window.addEventListener("pointercancel", release, true);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("pointerup", release, true);
+      window.removeEventListener("pointercancel", release, true);
+      window.removeEventListener("blur", release);
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [leavingPress]);
   if (!addMode && boxes.length === 0 && !placing && paintedTargets.length === 0) return null;
   return (
     <div
       ref={layerRef}
       className={`pdf-viewer__text-box-layer${addMode ? " pdf-viewer__text-box-layer--placing" : ""}${
         boxes.length > 0 ? " pdf-viewer__text-box-layer--holding" : ""
-      }`}
+      }${typing || leavingPress ? " pdf-viewer__text-box-layer--typing" : ""}`}
       data-testid="pdf-reader-text-box-layer"
-      onPointerDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+        if (event.target === event.currentTarget && typing) setLeavingPress(true);
+      }}
       onClick={(event) => event.stopPropagation()}
     >
       {paintedTargets.map((edit) => (

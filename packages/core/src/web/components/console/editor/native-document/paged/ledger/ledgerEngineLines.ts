@@ -23,7 +23,7 @@ import { blockFormulaBoxes } from "./ledgerEngineMath";
 import { katexBox } from "../../../../../../lib/text-engine/katex-box";
 import type { KinsokuList } from "../../../../../../lib/text-engine/kinsoku";
 import { normalizeWordCompatibilityMode } from "../../documentOverflowPunctuation";
-import { wordSetsIdeographsAsLetters } from "../../wordFarEastDefaults";
+import { wordSetsIdeographsAsLetters, wordEastAsianLineRulesApply } from "../../wordFarEastDefaults";
 import { textEngineAnswerEpoch, textEngineEpoch } from "../../../../../../lib/text-engine/measure";
 
 const SAME_HEIGHT_PX = 0.5;
@@ -104,6 +104,36 @@ export function noteEngineBlockLines(
     lines: layout.lines.map((line, index) => ({ heightPx: line.heightPx, gridPx: line.gridPx ?? line.heightPx, offset: lineOffsets[index] ?? null })),
     state: "new",
   });
+}
+
+/**
+ * The lines of a block cut from `whole` where one of its lines starts
+ * (`offset`, in the whole's content): the whole's lines from there on, with
+ * the tail's own padding and borders. Held against the page as any block's
+ * lines are. False when the whole's lines do not start there.
+ */
+export function noteEngineTailLines(
+  tail: PmNode,
+  whole: PmNode,
+  offset: number,
+  rule: DocsLineRule,
+  chrome: { readonly top: number; readonly bottom: number },
+): boolean {
+  const block = blocks.get(whole);
+  if (!block) return false;
+  const first = block.lines.findIndex((line) => line.offset === offset);
+  if (first <= 0) return false;
+  const lines = block.lines.slice(first).map((line) => ({ ...line, offset: line.offset === null ? null : line.offset - offset }));
+  const chromePx = Math.max(0, chrome.top) + Math.max(0, chrome.bottom);
+  blocks.set(tail, {
+    heightPx: lines.reduce((sum, line) => sum + line.heightPx, 0) + chromePx,
+    chromed: chromePx > 0.01,
+    lineCount: lines.length,
+    kind: `${tail.type.name}:${rule.kind}:${lines.length === 1 ? "one" : "many"}`,
+    lines,
+    state: "new",
+  });
+  return true;
 }
 
 /**
@@ -308,8 +338,10 @@ export function unlaidEngineBlock(
     // An empty paragraph is one line of its own font (its mark's), as Word
     // draws it: laid out on the paragraph's strut.
     if (!paragraph.unsupported && !paragraph.pending && (paragraph.pieces.length > 0 || paragraph.strut)) {
-      const kinsoku: KinsokuList | null = CJK.test(node.textContent) ? "zh-CN" : null;
-      const rules = { compatibilityMode: normalizeWordCompatibilityMode(docAttrs.wordCompatibilityMode), kinsoku, ideographsAsLetters: kinsoku !== null && wordSetsIdeographsAsLetters(docAttrs) };
+      const eastAsian = CJK.test(node.textContent);
+      const lineRules = eastAsian && wordEastAsianLineRulesApply(docAttrs, node);
+      const kinsoku: KinsokuList | null = lineRules ? "zh-CN" : null;
+      const rules = { compatibilityMode: normalizeWordCompatibilityMode(docAttrs.wordCompatibilityMode), kinsoku, ideographsAsLetters: eastAsian && wordSetsIdeographsAsLetters(docAttrs), ...(eastAsian && !lineRules ? { eastAsianLineRules: false } : {}) };
       const starts = normalizeStarts(paragraph, docsEngineLineStarts(paragraph, rules));
       const rule = docsBlockLineRule(node, element);
       const layout = layoutDocsBlockLines(paragraph, starts, rule, paragraph.pieces.length === 0 ? paragraph.strut?.font ?? null : null);

@@ -93,6 +93,17 @@ export function resetPdfReaderHeldWork(): void {
 
 
 
+export function pdfHeldStatesTogether(
+  states: ReadonlyArray<PdfReaderHeldState | null>,
+): PdfReaderHeldState | null {
+  if (states.includes("unsaved")) return "unsaved";
+  return states.includes("saving") ? "saving" : null;
+}
+
+
+
+
+
 
 
 

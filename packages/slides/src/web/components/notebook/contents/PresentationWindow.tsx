@@ -122,6 +122,7 @@ import {
 import { nativeLayoutConvertsOnOpen, nativeLayoutIdentityForCatalogPick, nativeLayoutToCatalogId } from "@mrnote/core/web/lib/office-smartart/native-layouts.ts";
 import {
   smartArtConversionMedia,
+  smartArtSceneMedia,
   smartArtPictureConversionUnreachable,
 } from "@mrnote/core/web/lib/office-smartart/slot-media-client.ts";
 import {
@@ -1307,10 +1308,12 @@ import {
 } from "@mrnote/core/web/lib/presentation-shape-catalog.ts";
 import {
   collectDeckFonts,
-  replaceDeckFont,
-  replaceMasterFonts,
+  deckFontReplacementsOf,
+  newFontReplacementId,
+  replaceFontsInDeck,
+  type FontReplacement,
   collectMasterFonts,
-} from "../../../lib/presentation-replace-font";
+} from "@mrnote/core/web/lib/presentation-replace-font.ts";
 import {
   type Point,
 } from "@mrnote/core/web/lib/presentation-polygon-points.ts";
@@ -1730,6 +1733,7 @@ import { storedPresentationAudioUrl } from "../../../lib/presentation-stored-aud
 import { getApiHttpBaseUrl } from "@mrnote/core/web/lib/env.ts";
 import { inlinePackageSounds } from "../../../lib/presentation-package-sounds";
 import { apiDelete, apiFetchRaw, apiGet, apiPost, isApiRequestError, type ApiRequestError } from "@mrnote/core/web/lib/api.ts";
+import { createReplaceFontsPrewarm } from "../../../lib/presentation-replace-font-prewarm";
 import {
   OfficeThesaurusPane,
   type OfficeThesaurusEntry,
@@ -2038,6 +2042,7 @@ import {
   repairContentTextLayers,
 } from "@mrnote/core/web/lib/presentation-collab-text.ts";
 import {
+  browserReplacement,
   caretSplice,
   carryKeystrokeToLive,
   cellKeystrokeEdit,
@@ -2050,6 +2055,7 @@ import {
   keystrokeSplice,
   mapTextRangeThroughChange,
   recordUnrenderedTextChange,
+  replacementRange,
   slideBlockTextPath,
   tableCellTextPath,
   textContainerOf,
@@ -2588,12 +2594,13 @@ import {
 } from "@mrnote/core/web/hooks/usePageContentSync.ts";
 import { rebaseSlidesOntoLive } from "../../../lib/presentation-live-rebase";
 import { textKeyCarried } from "@mrnote/core/web/lib/collab/collab-text-keys.ts";
-import { jsonEquals, textSplice, type JsonValue } from "@mrnote/core/web/lib/collab/json-crdt.ts";
+import { jsonEquals, textSplice, textSpliceIsGuess, type JsonValue } from "@mrnote/core/web/lib/collab/json-crdt.ts";
 import {
   embeddedPresentationAutosave,
   type EmbeddedPresentationSession,
 } from "../../../lib/presentation-embedded-session";
 import { useRegisterWindowSaveStatus } from "@mrnote/core/web/components/notebook/WindowCloseGuard.tsx";
+import { PACKAGE_WRITE_NOTICE_AFTER_MS, slidesAwaitingPackageWrite } from "../../../lib/presentation/package-write-pending";
 import {
   DropdownMenu,
   DropdownMenuItem,
@@ -2945,6 +2952,7 @@ import {
   presentationInkBlockPlacement,
   geometryInputValue,
   clampNumber,
+  presentationSmartArtCameraStyle,
   type PresentationSmartArtGroup,
 } from "../../../lib/presentation/selection-geometry";
 import {
@@ -3169,6 +3177,7 @@ import { PresentationSmartArtGroupFrame } from "./presentation/PresentationSmart
 import { attachRibbonKeysReturn } from "@mrnote/core/web/components/office-ribbon/ribbonKeysReturn.ts";
 import { smartArtMemberDeletedItemId } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import { presentationBlocksWithSmartArtBackground, presentationSmartArtBackgroundsAfterReset, presentationSmartArtBackgroundsCarried } from "../../../lib/presentation/smartart-background";
+import { isSmartArtGraphicPlate, withNativeSmartArtGraphicPlates } from "../../../lib/presentation/smartart-graphic-plate";
 import { readSmartArtGraphicEffect, readSmartArtGraphicFormat, sheetSmartArtBackgroundStyle, smartArtGraphicEffects, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
 import { PresentationSmartArtGraphicHitLayer, presentationShapeGeometryHitClassName } from "./presentation/PresentationSmartArtGraphicHitArea";
 import {
@@ -3664,6 +3673,11 @@ const ABSENT_SMARTART_NEAR_SLIDES = 7;
 /** How long a diagram the engine could not answer waits before it is asked again (doubling). */
 const ABSENT_SMARTART_RETRY_MS = 1_000;
 const ABSENT_SMARTART_RETRY_MAX_MS = 10_000;
+/**
+ * How long a slide's picture waits for its cache-less diagrams to be laid out
+ * (TRIAGE S15). An object, not a constant, so a test can shorten the wait.
+ */
+export const slidePictureSceneTiming = { waitMs: 30_000 };
 
 function absentCacheSmartArtKey(block: PresentationBlock): string | null {
   const source = (block as unknown as { source?: unknown }).source;
@@ -4762,6 +4776,34 @@ export default function PresentationWindow({
     PresentationViewSettings | undefined
   >(undefined);
   const viewSettingsRef = useRef<PresentationViewSettings | undefined>(undefined);
+  // Home > Replace > Replace Fonts' log (`lib/presentation-replace-font`):
+  // undefined until the deck has one. The layout and master cards drawn beside
+  // the page are drawn through it (`cardBlocksWithFontReplacements`).
+  const [fontReplacements, setFontReplacements] = useState<FontReplacement[] | undefined>(undefined);
+  const fontReplacementsRef = useRef<FontReplacement[] | undefined>(undefined);
+  // The replayed original projected ahead of the next save once a Replace
+  // Fonts, its Undo or Redo settles (`lib/presentation-replace-font-prewarm`).
+  const fontPrewarmRef = useRef<ReturnType<typeof createReplaceFontsPrewarm> | null>(null);
+  const fontPrewarmPageRef = useRef<string | null>(null);
+  // Read through a ref: the deck's commit and history callbacks call it
+  // without listing it (their own dependencies stay as they were).
+  const fontPrewarmTargetRef = useRef<string | null>(null);
+  fontPrewarmTargetRef.current = guestMode ? null : pageId || null;
+  const scheduleFontPrewarm = useCallback((log: readonly FontReplacement[] | undefined) => {
+    const target = fontPrewarmTargetRef.current;
+    if (!target || log === undefined) return;
+    if (fontPrewarmPageRef.current !== target) {
+      fontPrewarmRef.current?.cancel();
+      fontPrewarmRef.current = createReplaceFontsPrewarm((sent) => {
+        void Promise.resolve(
+          apiPost(`/api/v1/pages/${target}/pptx-replace-fonts-prewarm`, { fontReplacements: sent }),
+        ).catch(() => undefined);
+      });
+      fontPrewarmPageRef.current = target;
+    }
+    fontPrewarmRef.current?.schedule(log);
+  }, []);
+  useEffect(() => () => fontPrewarmRef.current?.cancel(), []);
   // Deck-level Set Up Slide Show state. Omission keeps the OOXML default
   // (`useTimings=true`) and locally-created decks byte-clean; imported decks
   // retain a strict native presProps receipt through every unrelated save.
@@ -4804,7 +4846,21 @@ export default function PresentationWindow({
     fontFaces,
     now: deckDateNow,
   });
-  const captureSlidePicture = slidePictures.captureSlide;
+  // A slide drawn into a picture (Export > slide as image, the HTML show, the
+  // show's 3-D transition textures, the presenter view) wears its cache-less
+  // SmartArts' laid-out shapes as the canvas does (TRIAGE S15): the page model
+  // holds only their frames, and those pictures showed nothing where the
+  // diagram stands. Set once the scenes' helpers exist (below); the page model
+  // itself is never written.
+  const slideForPictureRef = useRef<(slide: SlideModel) => Promise<SlideModel>>(async (slide) => slide);
+  /** Cache-less diagrams a slide picture was drawn without since the count was last reset (TRIAGE S15). */
+  const slidePictureMissingScenesRef = useRef(0);
+  const captureSlideModelPicture = slidePictures.captureSlide;
+  const captureSlidePicture = useCallback(
+    async (slide: SlideModel, index: number) =>
+      captureSlideModelPicture(await slideForPictureRef.current(slide), index),
+    [captureSlideModelPicture],
+  );
   // Pictures of slides for the transitions the show draws in 3-D
   // (`PresentationGlTransition`), made ahead of the slide they enter.
   const slideTexturesRef = useRef(new WeakMap<SlideModel, ImageBitmap | "pending">());
@@ -7123,6 +7179,9 @@ export default function PresentationWindow({
     );
     customSlideShowsRef.current = loadedCustomSlideShows;
     setCustomSlideShows(loadedCustomSlideShows);
+    const loadedFontReplacements = deckFontReplacementsOf(loadedPage.content_json);
+    fontReplacementsRef.current = loadedFontReplacements;
+    setFontReplacements(loadedFontReplacements);
     if (source === "remote" || source === "history") {
       const matchingIndex = previousActiveSlideId
         ? loadedSlides.findIndex((slide) => slide.id === previousActiveSlideId)
@@ -7231,6 +7290,9 @@ export default function PresentationWindow({
       );
       customSlideShowsRef.current = restoredCustomSlideShows;
       setCustomSlideShows(restoredCustomSlideShows);
+      const restoredFontReplacements = deckFontReplacementsOf(content);
+      fontReplacementsRef.current = restoredFontReplacements;
+      setFontReplacements(restoredFontReplacements);
       const restoredActiveIndex = Math.max(
         0,
         Math.min(activeIndexRef.current, restoredSlides.length - 1),
@@ -7618,6 +7680,9 @@ export default function PresentationWindow({
     );
     customSlideShowsRef.current = loadedCustomSlideShows;
     setCustomSlideShows(loadedCustomSlideShows);
+    const seededFontReplacements = deckFontReplacementsOf(seedContent);
+    fontReplacementsRef.current = seededFontReplacements;
+    setFontReplacements(seededFontReplacements);
     setCollapsedSections(new Set());
     activeIndexRef.current = 0;
     setActiveIndex(0);
@@ -10900,7 +10965,7 @@ export default function PresentationWindow({
       : slidesRef.current,
     themeRef.current, mastersRef.current, sectionsRef.current,
     headerFooterRef.current, printSettingsRef.current, sensitivityRef.current,
-    slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+    slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
   ) as CopilotPresentationContent, []);
   const presentationCopilotSourceIdentity = useMemo(() => ({
     slides, activeSlideId: activeSlide.id, theme, masters, sections, headerFooter,
@@ -10964,7 +11029,7 @@ export default function PresentationWindow({
     appliedFontAcknowledgementRef.current = ack;
     const live = buildContent(slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
       headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     // This exact transport draft may refresh server-derived native layout, but
     // an older save cannot replace subsequent typing or create a history step.
     if (!pageDocumentJsonEquals(ack.draft.content_json, live) ||
@@ -10978,7 +11043,7 @@ export default function PresentationWindow({
     fontCanonicalSaveRef.current = { generation: deckContentGenerationRef.current, before: live,
       after: buildContent(acceptedSlides, themeRef.current, mastersRef.current, sectionsRef.current,
         headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current), saved: canonical };
+        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current), saved: canonical };
   }, [readDeckSlides, autosave, pageId, title, guestMode, embeddedPresentation, fontDisplay.verifiedVersion, fontAcknowledgementAuth]);
   // The fields the server settled on the page after a save (an Office theme
   // written over the file's master: each listed slide's master graphics and
@@ -10999,7 +11064,7 @@ export default function PresentationWindow({
       typeof saved.content_version !== "number" || deckContentGenerationRef.current !== generation) return false;
     const live = buildContent(slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
       headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     if (!pageDocumentJsonEquals(sent, live)) return false;
     const settled = readPresentationSettledSave(live, saved.content_json, saved.content_version, native.settled);
     if (!settled || pageDocumentJsonEquals(settled, live)) return false;
@@ -11014,7 +11079,7 @@ export default function PresentationWindow({
     fontCanonicalSaveRef.current = { generation, before: live,
       after: buildContent(acceptedSlides, themeRef.current, mastersRef.current, sectionsRef.current,
         headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current), saved: saved.content_json };
+        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current), saved: saved.content_json };
     return true;
   }, [readDeckSlides]);
   const appliedSettledAcknowledgementRef = useRef<unknown>(null);
@@ -11043,7 +11108,7 @@ export default function PresentationWindow({
         printSettingsRef.current,
         sensitivityRef.current,
         slideShowSettingsRef.current,
-        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
       );
     // The visible page may contain an unsaved collaboration projection paired
     // with an older version. Only the frozen REST acknowledgement is durable.
@@ -11072,7 +11137,7 @@ export default function PresentationWindow({
     // Refresh before native command preflights compare this saved version.
     const live = buildContent(slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
       headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     const canonical = Array.isArray(content.slides) && content.slides.some(hasPendingNativeSmartArtStructure)
       ? null : readPresentationFontCanonicalSave(content, savedPage.content_json);
     if (canonical && fontResolutionContextRef.current.active && fontResolutionContextRef.current.pageId === pageId &&
@@ -11088,7 +11153,7 @@ export default function PresentationWindow({
       fontCanonicalSaveRef.current = { generation, before: content,
         after: buildContent(acceptedSlides, themeRef.current, mastersRef.current, sectionsRef.current,
           headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-          customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current), saved: canonical };
+          customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current), saved: canonical };
     } else if (isSavedPageHotCacheScopeCurrent(auth) && savedPage.id === pageId &&
       savedPage.notebook_id === autosave.page?.notebook_id && savedPage.page_type === "presentation" &&
       Number.isSafeInteger(savedPage.content_version) &&
@@ -11130,7 +11195,7 @@ export default function PresentationWindow({
         if (settled && settled.contentVersion === savedVersion) {
           const live = buildContent(slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
             headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-            customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+            customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
           if (presentationNativeSavedContentMatches(settled.content ?? page.content_json, live)) return savedVersion;
         }
       }
@@ -11442,6 +11507,7 @@ export default function PresentationWindow({
       duration: Number.POSITIVE_INFINITY,
     });
     try {
+      slidePictureMissingScenesRef.current = 0;
       const picture = await captureSlidePicture(slide, index);
       // Twice the slide's design size, for a crisp picture.
       const png = await rasterElementPicture(picture, {
@@ -11452,6 +11518,8 @@ export default function PresentationWindow({
         dpi: 192,
       });
       progress.dismiss();
+      // A diagram that could not be drawn is said, not left out silently (TRIAGE S15).
+      if (slidePictureMissingScenesRef.current) toast({ title: t("presentation.exportSmartArtNotDrawn") });
       // A picture with many photos finishes after its click stopped counting
       // as one (iPad Safari then drops the download): the shell offers Save.
       // The shared Blob download also keeps the object URL alive through
@@ -11492,6 +11560,7 @@ export default function PresentationWindow({
     // Up until the page is made or fails, however long the slides take.
     const progress = toast({ title: working(0), duration: Number.POSITIVE_INFINITY });
     try {
+      slidePictureMissingScenesRef.current = 0;
       const pictures: HtmlShowSlide[] = [];
       for (const [position, { slide, index }] of shown.entries()) {
         progress.update({ id: progress.id, title: working(position + 1) });
@@ -11519,6 +11588,8 @@ export default function PresentationWindow({
         },
       });
       progress.dismiss();
+      // A diagram that could not be drawn is said, not left out silently (TRIAGE S15).
+      if (slidePictureMissingScenesRef.current) toast({ title: t("presentation.exportSmartArtNotDrawn") });
       const file = new Blob([html], { type: "text/html;charset=utf-8" });
       // Drawing every slide outlasts the click's activation on iPad Safari,
       // which then refuses the download silently: the shell offers Save.
@@ -11554,7 +11625,7 @@ export default function PresentationWindow({
       printSettingsRef.current,
       sensitivityRef.current,
       slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
     );
     // Every edit is already in the shared room as its own step; what Save
     // still differs in is the deck's reading of it (a step of the shared
@@ -11622,7 +11693,7 @@ export default function PresentationWindow({
           printSettingsRef.current,
           sensitivityRef.current,
           slideShowSettingsRef.current,
-          customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+          customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
         ),
       });
     },
@@ -11730,7 +11801,7 @@ export default function PresentationWindow({
           normalized,
           sensitivityRef.current,
           slideShowSettingsRef.current,
-          customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+          customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
         ),
       });
     },
@@ -11764,7 +11835,7 @@ export default function PresentationWindow({
           slideShowSettingsRef.current,
           customSlideShowsRef.current,
           fontFacesRef.current,
-          merged,
+          merged, fontReplacementsRef.current,
         ),
       });
     },
@@ -12077,6 +12148,7 @@ export default function PresentationWindow({
       nextSlideShowSettings?: PresentationSlideShowSettings,
       nextCustomSlideShows?: PresentationCustomShows,
       nextFontFaces?: readonly OfficeFontFace[],
+      nextFontReplacements?: FontReplacement[],
     ) => {
       // A preview is read: no command that reached this far changes its deck.
       if (previewMode) return;
@@ -12105,6 +12177,7 @@ export default function PresentationWindow({
         nextSlideShowSettings === undefined &&
         nextCustomSlideShows === undefined &&
         nextFontFaces === undefined &&
+        nextFontReplacements === undefined &&
         nextMasters === mastersRef.current &&
         presentationHistoryCoalesceEnabled() &&
         historyCoalesceRef.current?.key === coalesceKey &&
@@ -12155,7 +12228,7 @@ export default function PresentationWindow({
                 slideShowSettingsRef.current,
                 customSlideShowsRef.current,
                 fontFacesRef.current,
-                viewSettingsRef.current,
+                viewSettingsRef.current, fontReplacementsRef.current,
               ),
             });
             if (roomStep) deckRoomHistory.settle(false);
@@ -12185,6 +12258,7 @@ export default function PresentationWindow({
         headerFooter: headerFooterRef.current,
         slideShowSettings: slideShowSettingsRef.current,
         customSlideShows: customSlideShowsRef.current,
+        fontReplacements: fontReplacementsRef.current,
       };
       const linkSafeSlides = reconcileDeletedSlideRunLinks(
         liveSlides,
@@ -12213,6 +12287,11 @@ export default function PresentationWindow({
       ) {
         customSlideShowsRef.current = appliedCustomSlideShows;
         setCustomSlideShows(appliedCustomSlideShows);
+      }
+      if (nextFontReplacements !== undefined) {
+        fontReplacementsRef.current = nextFontReplacements;
+        setFontReplacements(nextFontReplacements);
+        scheduleFontPrewarm(nextFontReplacements);
       }
       // Resolve the next sections. When the caller supplies them (a section-only
       // edit), re-normalize against the next slide ids so a now-dangling anchor
@@ -12409,7 +12488,7 @@ export default function PresentationWindow({
         printSettingsRef.current,
         sensitivityRef.current,
         appliedSlideShowSettings,
-        appliedCustomSlideShows, appliedFontFaces, viewSettingsRef.current,
+        appliedCustomSlideShows, appliedFontFaces, viewSettingsRef.current, fontReplacementsRef.current,
       );
       // A shared deck's history is the room's: what is worked out from an
       // edit is not a step of its own there, or Undo took back only that, it
@@ -12476,6 +12555,7 @@ export default function PresentationWindow({
             slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
             headerFooterRef.current, printSettingsRef.current, sensitivityRef.current,
             slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current,
+            viewSettingsRef.current, fontReplacementsRef.current,
           ) as Record<string, unknown>;
           const rebased = rebaseClassicEdits({ realBase: current, guestBase: edits.base, guestFinal: edits.final });
           if (!rebased.ok) {
@@ -12618,7 +12698,7 @@ export default function PresentationWindow({
     let allowedVersion = context.version;
     const readCurrent = () => buildContent(slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
       headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     let snapshot = structuredClone(readCurrent());
     const current = () => {
       const live = fontResolutionContextRef.current;
@@ -13509,16 +13589,26 @@ export default function PresentationWindow({
     pictureTransparencyCommitRef.current = commitSlides;
   }, [commitSlides]);
 
-  // Replace Fonts (PowerPoint): swap one font for another across the WHOLE deck
-  // -- the slides' explicit fonts and the faces the masters' own `p:txStyles`
-  // name (§73) -- committed as ONE undoable step through the unified deck
-  // commit, so a single Undo puts both back.
+  // Replace Fonts (PowerPoint): every word that draws in one font takes another
+  // -- on the slides, in tables, SmartArt and the masters' and layouts' shapes
+  // (`replaceFontsInDeck`), the text styles left as they are -- and the deck's
+  // log gains the entry the save replays on the file, committed as ONE undoable
+  // step through the unified deck commit, so a single Undo puts all back.
   const applyReplaceFonts = useCallback(
     (fromCss: string, toCss: string) => {
-      commitDeck(
-        replaceDeckFont(slidesRef.current, fromCss, toCss),
-        replaceMasterFonts(mastersRef.current, fromCss, toCss),
+      const replaced = replaceFontsInDeck(
+        { slides: slidesRef.current, masters: mastersRef.current, log: fontReplacementsRef.current ?? [] },
+        fromCss,
+        toCss,
+        newFontReplacementId(),
       );
+      if (replaced) {
+        commitDeck(
+          replaced.slides, replaced.masters,
+          undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+          replaced.log,
+        );
+      }
       closeReplaceFontsDialog();
     },
     [closeReplaceFontsDialog, commitDeck],
@@ -13939,7 +14029,9 @@ export default function PresentationWindow({
           sensitivityRef.current,
           snapshot.slideShowSettings,
           snapshot.customSlideShows, snapshot.fontFaces,
-          viewSettingsRef.current,
+          // The log as the restore left it (an Undo of the first entry keeps
+          // the list, empty), written through before the save.
+          viewSettingsRef.current, fontReplacementsRef.current,
         ),
       });
     },
@@ -14395,6 +14487,7 @@ export default function PresentationWindow({
       headerFooter: headerFooterRef.current,
       slideShowSettings: slideShowSettingsRef.current,
       customSlideShows: customSlideShowsRef.current,
+      fontReplacements: fontReplacementsRef.current,
     };
     const nextUndo = stack.slice(0, -1);
     const nextRedo = boundedHistory([...redoStackRef.current, current]);
@@ -14421,6 +14514,13 @@ export default function PresentationWindow({
     setSlideShowSettings(previous.slideShowSettings);
     customSlideShowsRef.current = previous.customSlideShows;
     setCustomSlideShows(previous.customSlideShows);
+    // A log the deck had stays a list (empty, at the first entry's Undo).
+    const undoneFontReplacements = previous.fontReplacements ?? (fontReplacementsRef.current ? [] : undefined);
+    if (JSON.stringify(undoneFontReplacements) !== JSON.stringify(fontReplacementsRef.current)) {
+      scheduleFontPrewarm(undoneFontReplacements);
+    }
+    fontReplacementsRef.current = undoneFontReplacements;
+    setFontReplacements(undoneFontReplacements);
     setUndoStack(nextUndo);
     setRedoStack(nextRedo);
     setSlides(previous.slides);
@@ -14489,6 +14589,7 @@ export default function PresentationWindow({
       headerFooter: headerFooterRef.current,
       slideShowSettings: slideShowSettingsRef.current,
       customSlideShows: customSlideShowsRef.current,
+      fontReplacements: fontReplacementsRef.current,
     };
     const nextRedo = stack.slice(0, -1);
     const nextUndo = boundedHistory([...undoStackRef.current, current]);
@@ -14511,6 +14612,12 @@ export default function PresentationWindow({
     setSlideShowSettings(next.slideShowSettings);
     customSlideShowsRef.current = next.customSlideShows;
     setCustomSlideShows(next.customSlideShows);
+    const redoneFontReplacements = next.fontReplacements ?? (fontReplacementsRef.current ? [] : undefined);
+    if (JSON.stringify(redoneFontReplacements) !== JSON.stringify(fontReplacementsRef.current)) {
+      scheduleFontPrewarm(redoneFontReplacements);
+    }
+    fontReplacementsRef.current = redoneFontReplacements;
+    setFontReplacements(redoneFontReplacements);
     setRedoStack(nextRedo);
     setUndoStack(nextUndo);
     setSlides(next.slides);
@@ -21623,7 +21730,7 @@ export default function PresentationWindow({
       content_json: buildContent(
         slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
         headerFooterRef.current, printSettingsRef.current, sensitivityRef.current,
-        slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+        slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
       ),
     });
   }, [autosave, deckParts, persistPreparedTyping]);
@@ -21768,6 +21875,8 @@ export default function PresentationWindow({
     onRoomsChanged: touchDeckRoomHistory,
     ownRoomStep: deckOwnRoomStep,
     onRoomRefused: onDeckRoomRefused,
+    // A part's text that could not be merged without a guess: a conflict (TRIAGE 47).
+    onTextMergeRefused: () => autosave.noteTextMergeRefused?.(),
   });
   deckPartRoomsRef.current = deckPartsView.rooms;
   // "Saved" says the server has it: a later part's typing goes to its room, which
@@ -21784,6 +21893,28 @@ export default function PresentationWindow({
       : deckRoomsAwaitingServer || autosave.roomFoldBehind === true ? "saving" : autosave.saveStatus;
   // A save this browser could not send: the server's live room holds every edit.
   const deckShowsSynced = autosave.syncedToServer === true && autosave.saveStatus === "unsaved";
+  // Slides whose save must write them into the PowerPoint file (a reused
+  // slide, a native copy, a font resolution, a SmartArt structure) and the
+  // saved page does not hold yet: the first such save after the deck's
+  // projection went cold can take minutes (TRIAGE 55). Said after a moment,
+  // in the Reuse Slides pane and the save face's tip; the save is unchanged.
+  const savedDeckSlides = (autosave.page?.content_json as { slides?: unknown[] } | null | undefined)?.slides;
+  // Only while the save itself has not landed: a deck held as parts keeps a
+  // later part's slides out of its page body, and a landed save is the end.
+  const packageWritePending = useMemo(
+    () => !guestMode && deckSaveStatus !== "saved" && slidesAwaitingPackageWrite(slides, savedDeckSlides).length > 0,
+    [guestMode, deckSaveStatus, slides, savedDeckSlides],
+  );
+  const [packageWriteNotice, setPackageWriteNotice] = useState(false);
+  useEffect(() => {
+    if (!packageWritePending) {
+      setPackageWriteNotice(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setPackageWriteNotice(true), PACKAGE_WRITE_NOTICE_AFTER_MS);
+    return () => window.clearTimeout(timer);
+  }, [packageWritePending]);
+  const packageWriteStatus = packageWriteNotice ? t("office.packageWrite.slides") : null;
   const deckResilience = useDeckSaveResilience<SlideModel>({
     pageId,
     enabled: !guestMode && !embeddedPresentation && Boolean(pageId),
@@ -22546,7 +22677,7 @@ export default function PresentationWindow({
       // graphics from them at once, as PowerPoint does.
       const cardsPage = guestMode ? null : pageId;
       const layoutMasters = cardsPage
-        ? withLayoutCards(mastersRef.current, layoutCardsOf(cardsPage))
+        ? withLayoutCards(mastersRef.current, layoutCardsOf(cardsPage), fontReplacementsRef.current)
         : mastersRef.current;
       const nextSlide = slideWithLayout(
         liveSlide,
@@ -22581,7 +22712,7 @@ export default function PresentationWindow({
           const at = current.findIndex((slide) => slide.id === nextSlide.id);
           const slide = at >= 0 ? current[at] : null;
           if (!slide || slide.layoutId !== layoutPart || slide.blocks !== drawnBefore) return;
-          const cardMasters = withLayoutCards(mastersRef.current, layoutCardsOf(cardsPage));
+          const cardMasters = withLayoutCards(mastersRef.current, layoutCardsOf(cardsPage), fontReplacementsRef.current);
           const drawn = slideWithNativeLayoutBackground(
             liveSlide,
             slideWithNativeLayoutGraphics(slide, cardMasters),
@@ -25035,6 +25166,8 @@ export default function PresentationWindow({
       insertedLineBreaksAreSoft = false,
       /** The collapsed caret the keystroke left, when known. */
       caretAfter?: number,
+      /** The words a browser's replacement put in (`browserReplacement`). */
+      replacement?: string | null,
     ): number => {
       // A SmartArt item holds what its Text Pane row can: an edit past the
       // bound is refused whole, with a word, as a shape's label is (PPT-B318:
@@ -25067,6 +25200,11 @@ export default function PresentationWindow({
       const liveSlide = slidesRef.current.find((slide) => slide.id === activeSlide.id);
       const liveTarget = liveSlide?.blocks.find((block) => block.id === blockId);
       if (target?.type !== "text") return 0;
+      // A spelling suggestion or an autocorrection replaced a word away from
+      // the caret: the words it put in say where (TRIAGE 49).
+      if (replacement) {
+        editSelection = replacementRange(presentationEditableText(target as PresentationTextBlock), text, replacement) ?? editSelection;
+      }
       let base = {
         slide: drawnSlide,
         block: target as PresentationTextBlock,
@@ -25075,6 +25213,7 @@ export default function PresentationWindow({
       let selection = editSelection;
       let shift = 0;
       let keystrokeRead: KeystrokeRead | null = null;
+      let carriedSplice: { start: number; end: number; insert: string } | null = null;
       if (liveSlide && liveTarget?.type === "text") {
         const keystroke = carryKeystrokeToLive({
           changes: unrenderedTextChangesRef.current, slideId: activeSlide.id, blockId,
@@ -25083,6 +25222,7 @@ export default function PresentationWindow({
           typed: text, selection: editSelection, caretAfter,
         });
         keystrokeRead = keystroke.read;
+        if (keystroke.read === "exact") carriedSplice = keystroke.splice;
         noteTextEditOutcome(`box-read-${keystroke.read}`);
         if (keystroke.onLive) {
           base = { slide: liveSlide, block: liveTarget as PresentationTextBlock, carried: true };
@@ -25171,9 +25311,19 @@ export default function PresentationWindow({
       // A key read against drawn words the live ones have moved past
       // (`stale`, carryKeystrokeToLive) is not compared into the room: the
       // box keeps it as typed and the next publication merges it.
+      // The key where it was read: at its selection, as the carry read it
+      // (exactly, at its selection or caret, when it still makes these
+      // words), or at the caret it left (TRIAGE 49: a key read only off the
+      // two texts is a guess among repeated letters).
+      const makes = (splice: { start: number; end: number; insert: string } | null) =>
+        splice && before.slice(0, splice.start) + splice.insert + before.slice(splice.end) === words ? splice : null;
       const typed = words !== null && source0.text === before && words !== before
         ? keystrokeSplice(before, words, selection) ??
-          (keystrokeRead !== "stale" ? textSplice(before, words) : null) : null;
+          makes(carriedSplice) ??
+          caretSplice(before, words, caretAfter === undefined ? undefined : caretAfter + shift) ??
+          // No caret: a change read off the two texts is noted only where its
+          // place is no guess (TRIAGE 47); otherwise the publication takes it.
+          (keystrokeRead !== "stale" && !textSpliceIsGuess(before, words) ? textSplice(before, words) : null) : null;
       if (!typed && words !== before) noteTextEditOutcome("box-not-noted");
       let outcome: PageTextEditOutcome | void = undefined;
       if (typed) {
@@ -25400,7 +25550,8 @@ export default function PresentationWindow({
       const caretAfter = textarea.selectionStart !== null && textarea.selectionStart === textarea.selectionEnd
         ? textarea.selectionStart : undefined;
       try {
-        shift = updateTextBlock(blockId, nextText, consumeTextEditSelection(blockId), false, caretAfter);
+        shift = updateTextBlock(blockId, nextText, consumeTextEditSelection(blockId), false, caretAfter,
+          browserReplacement(event.nativeEvent));
       } finally {
         typingLetterRef.current = false;
       }
@@ -25547,6 +25698,8 @@ export default function PresentationWindow({
       preview: HTMLElement,
       paragraphs?: readonly SlideParagraphWithRuns[],
       letterTyped = false,
+      /** The words a browser's replacement put in (`browserReplacement`). */
+      replacement?: string | null,
     ) => {
       const nextText = presentationPreviewPlainText(preview);
       const range = presentationPreviewSelection(
@@ -25560,7 +25713,7 @@ export default function PresentationWindow({
       let shift = 0;
       try {
         shift = updateTextBlock(blockId, nextText, consumeTextEditSelection(blockId), false,
-          range.start === range.end ? range.start : undefined);
+          range.start === range.end ? range.start : undefined, replacement);
       } finally {
         typingLetterRef.current = false;
       }
@@ -36418,7 +36571,7 @@ export default function PresentationWindow({
     const readCurrent = () => buildContent(slidesRef.current, themeRef.current,
       mastersRef.current, sectionsRef.current, headerFooterRef.current,
       printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     let requestedSnapshot: Record<string, unknown> | null = null;
     const valid = () => {
       const latestContext = nativeCopyContextRef.current;
@@ -36525,7 +36678,7 @@ export default function PresentationWindow({
     const generation = deckContentGenerationRef.current;
     const readCurrent = () => buildContent(slidesRef.current, themeRef.current,
       mastersRef.current, sectionsRef.current, headerFooterRef.current, printSettingsRef.current,
-      sensitivityRef.current, slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      sensitivityRef.current, slideShowSettingsRef.current, customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     let snapshot = JSON.parse(JSON.stringify(readCurrent())) as Record<string, unknown>;
     const valid = () => nativeCopyContextRef.current.active &&
       nativeCopyContextRef.current.pageId === context.pageId && !nativeCopyContextRef.current.readOnly &&
@@ -38072,6 +38225,8 @@ export default function PresentationWindow({
       edit?: { readonly selection?: TextEditSelection; readonly softLineBreaks?: boolean },
       /** The collapsed caret the keystroke left, when known. */
       caretAfter?: number,
+      /** The words a browser's replacement put in (`browserReplacement`). */
+      replacement?: string | null,
     ): number => {
       // A label past a shape's bound is refused whole, with a word, not cut
       // to the bound without one (PPT-B268 lost a text box's tail at the
@@ -38099,6 +38254,14 @@ export default function PresentationWindow({
       let keystrokeRead: KeystrokeRead | null = null;
       if (target?.type === "shape" && typeof (target as { text?: unknown }).text === "string") {
         before = (target as { text: string }).text;
+        // A spelling suggestion or an autocorrection: the words it put in say
+        // where it replaced (TRIAGE 49), the caret does not.
+        const replaced = replacement ? replacementRange(before, raw, replacement) : null;
+        if (replaced) {
+          selection = replaced;
+          edit = { ...edit, selection: replaced };
+          retype = edit;
+        }
         if (liveSlide && liveTarget?.type === "shape" && typeof (liveTarget as { text?: unknown }).text === "string") {
           const keystroke = carryKeystrokeToLive({
             changes: unrenderedTextChangesRef.current, slideId: activeSlide.id, blockId,
@@ -38147,7 +38310,7 @@ export default function PresentationWindow({
       const typed = before !== null && written !== null
         ? keystrokeSplice(before, written, selection) ??
           caretSplice(before, written, caretAfter === undefined ? undefined : caretAfter + shift) ??
-          (before !== written && keystrokeRead !== "stale" ? textSplice(before, written) : null)
+          (before !== written && keystrokeRead !== "stale" && !textSpliceIsGuess(before, written) ? textSplice(before, written) : null)
         : null;
       if (!typed) noteTextEditOutcome(before === null ? "shape-no-words" : "shape-not-noted");
       if (coeditTraceOn()) coeditTrace("shape-input", { raw: raw.length, before: before?.length ?? null, written: written === null ? null : (written as string).length,
@@ -38210,7 +38373,7 @@ export default function PresentationWindow({
       try {
         // The caret the key left, so the key is read where it was typed
         // (carryKeystrokeToLive), not by comparing words.
-        updateShapeText(blockId, nextText, undefined, start === end ? start : undefined);
+        updateShapeText(blockId, nextText, undefined, start === end ? start : undefined, browserReplacement(event.nativeEvent));
       } finally {
         typingLetterRef.current = false;
       }
@@ -38770,6 +38933,10 @@ export default function PresentationWindow({
                 ...(view.customizations ? { customizations: view.customizations } : {}),
                 // The graphic's own 3-D Rotation, one scene over its style's.
                 ...(view.graphicScene3d ? { graphicScene3d: view.graphicScene3d } : {}),
+                // The diagram's own pictures (Radial List's centre, readings
+                // row 1005), only for the layout the file draws them in: a
+                // pick of another layout has no such slot.
+                ...(view.docPictures && !layoutId ? { docPictures: view.docPictures } : {}),
                 ...((() => {
                   // The diagram's own master's theme when the file states one
                   // (a deck of several themes), else its slide's, else the deck's.
@@ -38949,12 +39116,13 @@ export default function PresentationWindow({
       // A diagram whose points carry pictures brings them from the deck's own
       // package first, as 转换为可编辑 does.
       let images: Readonly<Record<string, string>> | undefined;
-      if (view.outline.some((item) => item.imageRelId)) {
+      if (view.outline.some((item) => item.imageRelId) || view.docPictures) {
         const media = await smartArtConversionMedia({
           pageId,
           view: view.slotMediaView,
           layoutId: nativeLayoutToCatalogId(view.layoutIdentity) ?? view.layoutIdentity,
           outline: view.outline,
+          docPictures: view.docPictures ?? null,
         });
         if (!media.ok) return { refusal: media.reason };
         images = media.images;
@@ -39046,14 +39214,34 @@ export default function PresentationWindow({
         let laid: PresentationBlock[] | null = null;
         if (view) {
           try {
-            laid = await convertedNativeSmartArtBlocks(
-              view,
-              null,
-              [],
-              undefined,
-              undefined,
-              smartArtColorThemeForSlideRef.current(item.slide),
-            );
+            // A diagram whose points carry pictures is laid out WITH them,
+            // brought from the deck's own package as every other conversion
+            // brings them (`askSmartArtConversion`, 转换为可编辑): asked
+            // without, a picture layout refused the outline and the frame of
+            // a cache-less Vertical Picture List or Picture Strips drew
+            
+            // Pictures that cannot be brought whole leave it as before.
+            const media = await smartArtSceneMedia({
+              pageId,
+              view: view.slotMediaView,
+              layoutId: nativeLayoutToCatalogId(view.layoutIdentity) ?? view.layoutIdentity,
+              outline: view.outline,
+              // Drawn, not converted: a picture past the inline cap comes
+              // scaled down to the frame's drawn size (TRIAGE S14c).
+              frameEmu: view.frameEmu,
+              // The diagram's own pictures too (Radial List's centre, row 1005).
+              docPictures: view.docPictures ?? null,
+            });
+            laid = media
+              ? await convertedNativeSmartArtBlocks(
+                  view,
+                  null,
+                  [],
+                  media.images,
+                  undefined,
+                  smartArtColorThemeForSlideRef.current(item.slide),
+                )
+              : null;
           } catch (error) {
             if (!(error instanceof EngineRefusedError)) {
               // Not answered yet (busy, no connection): it waits its turn again.
@@ -39070,7 +39258,7 @@ export default function PresentationWindow({
     } finally {
       absentScenePumpingRef.current = false;
     }
-  }, [convertedNativeSmartArtBlocks]);
+  }, [convertedNativeSmartArtBlocks, pageId]);
   const requestAbsentScenes = useCallback(
     (wanted: readonly SlideModel[]) => {
       const keys: string[] = [];
@@ -39158,6 +39346,16 @@ export default function PresentationWindow({
     for (const block of activeSlide.blocks) for (const shown of absentSceneOf(block) ?? []) ids.add(shown.id);
     return ids;
   }, [activeSlide, absentSceneOf]);
+  // The active slide with its cache-absent diagrams laid out: the group a
+  // laid-out member's 3-D camera turns about (TRIAGE S17).
+  const activeSlideWithAbsentScenes = useMemo(
+    () => (absentSmartArtSceneIds.size ? withAbsentSmartArtScenes(activeSlide.blocks) : activeSlide.blocks),
+    [absentSmartArtSceneIds, activeSlide, withAbsentSmartArtScenes],
+  );
+  const activeSlideDrawnWithAbsentScenes = useMemo(
+    () => (activeSlideWithAbsentScenes === activeSlide.blocks ? activeSlide : { ...activeSlide, blocks: activeSlideWithAbsentScenes }),
+    [activeSlide, activeSlideWithAbsentScenes],
+  );
   // One drawn copy per slide object while the scenes stand: a slide keeps its
   // identity from render to render, as the rail's and the show's caches need.
   const absentSmartArtSceneSlideCache = useMemo(
@@ -39177,6 +39375,33 @@ export default function PresentationWindow({
       }),
     [absentSceneOf, absentSmartArtSceneSlideCache, withAbsentSmartArtScenes],
   );
+  const slideForPicture = useCallback(
+    async (slide: SlideModel): Promise<SlideModel> => {
+      const keys = slide.blocks.map((block) => absentCacheSmartArtKey(block)).filter((key): key is string => !!key);
+      if (!keys.length) return slide;
+      requestAbsentScenes([slide]);
+      const until = Date.now() + slidePictureSceneTiming.waitMs;
+      while (!keys.every((key) => absentScenesRef.current.has(key)) && Date.now() < until) {
+        await new Promise((resolve) => window.setTimeout(resolve, 100));
+      }
+      // Laid out too slowly, or refused: the picture is drawn without them, and
+      // that is said -- in the log, and by the export that asked
+      // (`slidePictureMissingScenesRef`), never left silent.
+      const missing = keys.filter(
+        (key) => !absentScenesRef.current.has(key) || !absentScenesRef.current.get(key)?.length,
+      ).length;
+      if (missing) {
+        slidePictureMissingScenesRef.current += missing;
+        console.warn(`[smartart] slide ${slide.id} drawn into a picture without ${missing} cache-less diagram(s) laid out`);
+      }
+      // A copy for the picture: the slide in the page is the one handed in.
+      return withAbsentSmartArtSceneSlides([slide])[0] ?? slide;
+    },
+    [requestAbsentScenes, withAbsentSmartArtSceneSlides],
+  );
+  useEffect(() => {
+    slideForPictureRef.current = slideForPicture;
+  }, [slideForPicture]);
   /** The show's slides: a slide whose diagrams are still being laid out is held
    * dark (only ever the slide the show opens on: a move waits for its slide). */
   const absentScenePresentSlides = useCallback(
@@ -39520,6 +39745,7 @@ export default function PresentationWindow({
         view: view.slotMediaView,
         layoutId,
         outline: view.outline,
+        docPictures: view.docPictures ?? null,
       });
       // The slide must still be the one the command was raised on: an await
       // has passed, so the deck is re-checked before anything is written — and
@@ -40441,7 +40667,7 @@ export default function PresentationWindow({
     const groupId = contextualNativeSmartArt.groupId;
     const readCurrent = () => buildContent(slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
       headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     let snapshot: Record<string, unknown> | null = null;
     const valid = () => {
       const live = nativeCopyContextRef.current, currentSlide = slidesRef.current[activeIndexRef.current];
@@ -40528,7 +40754,7 @@ export default function PresentationWindow({
       ack.page.notebook_id !== autosave.page?.notebook_id) return;
     const live = buildContent(slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current,
       headerFooterRef.current, printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current,
-      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current);
+      customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current);
     if (!pageDocumentJsonEquals(ack.draft.content_json, live) || (ack.draft.title !== undefined && ack.draft.title !== title)) return;
     const receipts = slidesRef.current.flatMap(s => {
       const value = asRecord(s.source)?.nativeSmartArtStructures;
@@ -45881,6 +46107,7 @@ export default function PresentationWindow({
     guestMode ? null : pageId,
     masters,
     !guestMode && viewMode === "master",
+    fontReplacements,
   );
   const masterViewLayouts = viewMode !== "master" ? [] : ((): Array<{
     masterId: string;
@@ -46923,6 +47150,8 @@ export default function PresentationWindow({
     edit?: { readonly selection?: TextEditSelection; readonly softLineBreaks?: boolean },
     /** A plain letter typed in this host (`typingBurstRef`). */
     letterIn?: HTMLElement,
+    /** The words a browser's replacement put in (`browserReplacement`). */
+    replacement?: string | null,
   ) => {
     if (letterIn && typingBurstRef.current) {
       // Nothing is drawn again: the caret stays where the browser left it.
@@ -46946,7 +47175,7 @@ export default function PresentationWindow({
     typingLetterRef.current = letterIn !== undefined;
     let shift = 0;
     try {
-      shift = updateShapeText(blockId, text, edit, start === end ? start : undefined);
+      shift = updateShapeText(blockId, text, edit, start === end ? start : undefined, replacement);
     } finally {
       typingLetterRef.current = false;
     }
@@ -48483,7 +48712,7 @@ export default function PresentationWindow({
             printSettingsRef.current,
             sensitivityRef.current,
             slideShowSettingsRef.current,
-            customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+            customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
           );
           try {
             const fetchedSource = await getPage(operation.source_page_id);
@@ -48524,7 +48753,7 @@ export default function PresentationWindow({
               printSettingsRef.current,
               sensitivityRef.current,
               slideShowSettingsRef.current,
-              customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+              customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
             );
             restorePresentationContent(nextContent);
             activeIndexRef.current = result.insertedIndex;
@@ -48603,7 +48832,7 @@ export default function PresentationWindow({
         printSettingsRef.current,
         sensitivityRef.current,
         slideShowSettingsRef.current,
-        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
       );
       const result = applyPresentationPageCommandWithResult(
         previousContent as never,
@@ -48734,7 +48963,7 @@ export default function PresentationWindow({
         printSettingsRef.current,
         sensitivityRef.current,
         slideShowSettingsRef.current,
-        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current,
+        customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
       );
       // The undo is the AI's edit played backwards.
       const undoMotion = stageAiBlockTransition(rootRef.current, PRESENTATION_AI_BLOCK_SELECTOR);
@@ -56521,7 +56750,8 @@ export default function PresentationWindow({
         details={autosave.conflictDetails}
         disabled={autosave.isSaving}
         onRetry={() => void autosave.retrySave()}
-        onReload={() => void autosave.discardLocalAndReload()}
+        // The slides this member changed are set aside first (useDeckSaveResilience).
+        onReload={() => void deckResilience.discardForRemote()}
         onOverwrite={() => void autosave.overwriteRemote()}
         onSaveCopy={() => void autosave.saveConflictAsCopy()}
       />
@@ -56761,6 +56991,7 @@ export default function PresentationWindow({
                       : autosave.notConnected ? t("pages.notConnectedKeptOnDevice") : t(`pages.${deckSaveStatus}` as "pages.saving"),
                     failureReason: !guestMode && autosave.error ? autosave.error : undefined,
                     failureTestId: "presentation-save-failure-reason",
+                    statusDetail: packageWriteStatus ?? undefined,
                     actionLabel: t("pages.save"), autosave: officeAutosaveLabels(t), onSave: saveNow,
                     // a signed-out visitor's Save asks for an account (the host's gate)
                     disabled: guestMode ? !onGuestSaveRequest : autosave.readOnly || autosave.loading,
@@ -60502,7 +60733,9 @@ export default function PresentationWindow({
                   const graphics = new Map<string, { member: PresentationBlock; rects: { left: number; top: number; width: number; height: number }[] }>();
                   for (const block of activeSlideVisibleBlocks) {
                     const groupId = readSmartArtBlockMarker(block)?.groupId;
-                    if (!groupId || isBlockNotDrawn(block)) continue;
+                    // A prepared conversion lies unseen over the file's
+                    // drawing, which wears the graphic's plate meanwhile.
+                    if (!groupId || isBlockNotDrawn(block) || preparedSmartArtHidden?.has(block.id)) continue;
                     const left = geometryNumber(block, "left");
                     const top = geometryNumber(block, "top");
                     const width = geometryNumber(block, "width");
@@ -60542,7 +60775,10 @@ export default function PresentationWindow({
                 })()
               : null}
             {presentationInPaintOrder(
-              [
+              // A file's SmartArt drawn from its cached drawing wears its
+              // graphic's own fill, line and effect across its frame
+              // (`smartart-graphic-plate`): drawn, never taken.
+              withNativeSmartArtGraphicPlates([
                 ...(activeSlideUsesCanvas
                   ? withAbsentSmartArtScenes(activeSlideVisibleBlocks).map((block, index) =>
                       hasLayoutGeometry(block)
@@ -60565,7 +60801,7 @@ export default function PresentationWindow({
                 // stays what is seen; the conversion lies over it, unseen,
                 // taking the presses.
                 ...preparedSmartArtDrawnOriginals,
-              ],
+              ]),
               { reordered: presentationSlideReordersNativeObjects(activeSlide) },
             ).map(({ block, index: blockIndex }) => {
               // Selection Pane hide: a hidden block is not painted on the edit
@@ -60574,8 +60810,9 @@ export default function PresentationWindow({
               // consistently everywhere.
               if (isBlockNotDrawn(block)) return null;
               if (activeSlideBlankFillerIds?.has(block.id)) return null;
-              // A cache-absent SmartArt's laid-out shapes: drawn, never taken.
-              if (absentSmartArtSceneIds.has(block.id)) {
+              // A cache-absent SmartArt's laid-out shapes, and a file's
+              // SmartArt graphic's own plate: drawn, never taken.
+              if (absentSmartArtSceneIds.has(block.id) || isSmartArtGraphicPlate(block)) {
                 return (
                   <div
                     key={`${block.id}:${blockIndex}`}
@@ -60588,8 +60825,21 @@ export default function PresentationWindow({
                       block={block}
                       bounds={activeSlideBounds}
                       theme={theme}
-                      slide={activeSlide}
+                      // The slide WITH its laid-out scenes: a member's place in
+                      // its diagram is read off it, and 3d6's balanced light
+                      // falls across the whole diagram by that place (the
+                      
+                      // p3); off the bare slide every member drew unlit.
+                      slide={activeSlideDrawnWithAbsentScenes}
                       masters={masters}
+                      // A 3-D quick style's camera (3d5-3d9) tilts the laid-out
+                      // diagram as one object, as the slide's other views and the
+                      // print draw it: without it the canvas drew a cache-less
+                      
+                      smartArtCamera={presentationSmartArtCameraStyle(activeSlideWithAbsentScenes, block)}
+                      // The editing canvas: an empty picture slot shows its
+                      // "insert picture" icon, as PowerPoint's edit view does.
+                      editingSlots
                     />
                   </div>
                 );
@@ -64133,6 +64383,7 @@ export default function PresentationWindow({
             }}
             error={reuseSlidesError}
             busy={reuseSlidesBusy}
+            writingStatus={packageWriteStatus}
             pages={reuseSlidesPages}
             sourceTitle={reuseSlidesSourcePage ? (reuseSlidesSourcePage.title ?? "") : null}
             slides={reuseSlidesSourceSlides}

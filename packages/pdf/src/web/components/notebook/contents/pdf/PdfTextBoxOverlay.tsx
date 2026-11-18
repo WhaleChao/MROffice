@@ -73,7 +73,7 @@ import {
   reconcilePdfTextLineLayout,
   type PdfTextLineLayout,
 } from "@mrnote/core/web/lib/pdf/text-line-layout.ts";
-import type { NativePdfFreeTextAnnotationSource } from "../../../../lib/pdf/native-free-text-annotations";
+import { pdfTextBoxLaneWrites, type NativePdfFreeTextAnnotationSource } from "../../../../lib/pdf/native-free-text-annotations";
 import {
   fallbackTextFromPdfFormulaLatex,
   latexForPdfFormulaTextEdit,
@@ -107,6 +107,12 @@ import {
 } from "../../../../lib/pdf/font-resolve";
 import { ensurePdfEastAsianFace } from "../../../../lib/pdf/east-asian-face";
 import { TEXTBOX_FONT_FAMILY_OPTIONS, type TextBoxFontFamilyOption } from "../../../../lib/pdf/text-box-font-options";
+import {
+  notePdfTextBoxEditGiven,
+  pdfTextBoxEditsWithAhead,
+  settlePdfTextBoxEditsAhead,
+  type PdfTextBoxEditsAhead,
+} from "../../../../lib/pdf/text-box-edits-ahead";
 import { pdfTextBoxOfficeFamily, pdfTextBoxRunCssFamily } from "../../../../lib/pdf/text-box-runs";
 import { classifyFontName } from "../../../../lib/pdf/font-resolve";
 import { toast } from "@mrnote/core/web/hooks/use-toast.ts";
@@ -1351,6 +1357,9 @@ interface PendingTypingFormat {
   readonly caret: number;
 }
 const PENDING_TYPING_KEYS = ["fontFamily", "sourceFontName", "officeFamily", "fontSize", "bold", "italic", "color"] as const;
+/** The character formats a box holds for all its words (no run of them is
+ * made by this layer): a caret holds none of them for the words typed next. */
+const BOX_OWN_CHARACTER_KEYS = ["underline", "strikethrough"] as const;
 
 /** The characters `next` added to `previous` at one place, or null. */
 function insertedTextRange(previous: string, next: string): { start: number; end: number } | null {
@@ -3477,8 +3486,8 @@ export default function PdfTextBoxOverlay({
   pageWidth,
   pageHeight,
   documentPageHeight,
-  editsById,
-  onEditBox,
+  editsById: shownEditsById,
+  onEditBox: giveEditBox,
   formulaDraftsByKey,
   onFormulaDraftsChange,
   active = true,
@@ -3497,6 +3506,45 @@ export default function PdfTextBoxOverlay({
 }: PdfTextBoxOverlayProps) {
   const t = useTranslations("console-notebooks");
   const locale = useLocale();
+  // Each box as the newest this layer knows of it: the page's, or the one
+  // this layer last gave the page while the page has not given it back
+  // (lib/pdf/text-box-edits-ahead.ts). The page hands a changed box down a
+  // task or a transition later, and a key typed before that was built from
+  // the box of one or more keys ago: Bold pressed in a new box and a word
+  // typed at once kept its bold run on the first key's box only.
+  // The map is this layer's own copy, written to as a box is given
+  // (onEditBox below), so a handler made by the last render reads the box
+  // just given too -- no render stands between two keys.
+  const [editsAhead] = useState<PdfTextBoxEditsAhead<PdfTextBoxEdit>>(() => new Map());
+  const editsById = useMemo(
+    () => pdfTextBoxEditsWithAhead(editsAhead, shownEditsById),
+    [editsAhead, shownEditsById],
+  );
+  const editsByIdRef = useRef(editsById);
+  const shownEditsByIdRef = useRef(shownEditsById);
+  // Settled when the render is the page's for good, and before any other
+  // effect of this layer gives a box: a render thrown away (a transition a
+  // key cut short) has shown the page nothing.
+  useLayoutEffect(() => {
+    settlePdfTextBoxEditsAhead(editsAhead, shownEditsById);
+    editsByIdRef.current = editsById;
+    shownEditsByIdRef.current = shownEditsById;
+  }, [editsAhead, editsById, shownEditsById]);
+  const onEditBox = useCallback(
+    (...given: Parameters<PdfTextBoxOverlayProps["onEditBox"]>) => {
+      const [edit] = given;
+      // A box the page keeps as a record of its own (one made here, a PDF
+      // text box). A change to the page's own text has no such record: the
+      // page answers it in its own way (the line's editor, or a refusal),
+      // and the layer goes on from what the page shows.
+      if (pdfTextBoxLaneWrites(edit)) {
+        notePdfTextBoxEditGiven(editsAhead, edit.id, edit, shownEditsByIdRef.current[edit.id]);
+        editsByIdRef.current[edit.id] = edit;
+      }
+      giveEditBox(...given);
+    },
+    [editsAhead, giveEditBox],
+  );
   // A box that is drawn keeps its place among the boxes drawn with it: given
   // in another order (a box passing from one of the host's lists to another),
   // the element of the box being typed in was moved in the document, and
@@ -4967,7 +5015,7 @@ export default function PdfTextBoxOverlay({
   const emitStyle = useCallback(
     (
       box: TextBox,
-      patch: Partial<
+      asked: Partial<
         Pick<
           PdfTextBoxEdit,
           | "color"
@@ -4996,20 +5044,7 @@ export default function PdfTextBoxOverlay({
       const kind = effectiveTextBoxKind(box, existing);
       const currentText = currentTextForBox(box, existing);
       const currentRuns = persistableRunsForBoxText(box, existing, currentText);
-      const runPatch: Partial<
-        Omit<PdfTextStyleRun, "text" | "displayFontFamily">
-      > = {};
-      if ("fontFamily" in patch) runPatch.fontFamily = patch.fontFamily;
-      if ("sourceFontName" in patch) {
-        runPatch.sourceFontName = patch.sourceFontName;
-      }
-      // An Office family (or a portable face, which clears it) goes with
-      // the face onto the runs it is put on (lib/pdf/text-box-runs.ts).
-      if ("officeFamily" in patch) runPatch.officeFamily = patch.officeFamily;
-      if ("fontSize" in patch) runPatch.fontSize = patch.fontSize;
-      if ("bold" in patch) runPatch.bold = patch.bold;
-      if ("italic" in patch) runPatch.italic = patch.italic;
-      if ("color" in patch) runPatch.color = patch.color;
+      let patch = asked;
       // A selection inside THIS box scopes the change to the selected
       // characters. Until now every style change covered the whole box, so
       // bolding a word bolded the sentence — the one thing a text box is
@@ -5039,24 +5074,54 @@ export default function PdfTextBoxOverlay({
         const caret = activeSelection?.start ?? currentText.length;
         const held: Record<string, unknown> = {};
         for (const name of PENDING_TYPING_KEYS) if (name in patch) held[name] = patch[name];
-        if (Object.keys(held).length === 0) return;
-        const prior = pendingTypingFormatsRef.current[key];
-        putPendingTypingFormat(key, {
-          patch: { ...(prior?.caret === caret ? prior.patch : {}), ...(held as PendingTypingPatch) },
-          caret,
-        });
-        // Back to the words, the caret where it was, as Word returns from
-        // its font boxes: what is typed next goes in with the format.
-        window.setTimeout(() => {
-          const node = textBoxRefs.current.get(key);
-          if (!node?.isConnected || pendingTypingFormatsRef.current[key]?.caret !== caret) return;
-          // The caret first: the box's focus handler records where it is.
-          setSelectionByTextOffsets(node, caret, caret, textEditStabilityV2);
-          node.focus({ preventScroll: true });
-          setSelectionByTextOffsets(node, caret, caret, textEditStabilityV2);
-        }, 0);
-        return;
+        // Underline and Strikethrough are the box's own here (no run of
+        // them is made), so a caret cannot hold them for the next words. In
+        // a box with no character yet, every word is typed after the press:
+        // the box takes them, as Word gives a format toggled at an empty
+        // insertion point to the text typed next. (Pressed in a new box
+        // before its first word they were let go with nothing said, and the
+        // word was typed, and written, without them.) In a box that has
+        // words they would reformat those, with nothing highlighted.
+        const boxOwn: Record<string, unknown> = {};
+        if (currentText.length === 0) {
+          for (const name of BOX_OWN_CHARACTER_KEYS) {
+            if (name in patch && Boolean(patch[name]) !== Boolean(existing?.[name])) boxOwn[name] = patch[name];
+          }
+        }
+        if (Object.keys(held).length > 0) {
+          const prior = pendingTypingFormatsRef.current[key];
+          putPendingTypingFormat(key, {
+            patch: { ...(prior?.caret === caret ? prior.patch : {}), ...(held as PendingTypingPatch) },
+            caret,
+          });
+          // Back to the words, the caret where it was, as Word returns from
+          // its font boxes: what is typed next goes in with the format.
+          window.setTimeout(() => {
+            const node = textBoxRefs.current.get(key);
+            if (!node?.isConnected || pendingTypingFormatsRef.current[key]?.caret !== caret) return;
+            // The caret first: the box's focus handler records where it is.
+            setSelectionByTextOffsets(node, caret, caret, textEditStabilityV2);
+            node.focus({ preventScroll: true });
+            setSelectionByTextOffsets(node, caret, caret, textEditStabilityV2);
+          }, 0);
+        }
+        if (Object.keys(boxOwn).length === 0) return;
+        patch = boxOwn as typeof asked;
       }
+      const runPatch: Partial<
+        Omit<PdfTextStyleRun, "text" | "displayFontFamily">
+      > = {};
+      if ("fontFamily" in patch) runPatch.fontFamily = patch.fontFamily;
+      if ("sourceFontName" in patch) {
+        runPatch.sourceFontName = patch.sourceFontName;
+      }
+      // An Office family (or a portable face, which clears it) goes with
+      // the face onto the runs it is put on (lib/pdf/text-box-runs.ts).
+      if ("officeFamily" in patch) runPatch.officeFamily = patch.officeFamily;
+      if ("fontSize" in patch) runPatch.fontSize = patch.fontSize;
+      if ("bold" in patch) runPatch.bold = patch.bold;
+      if ("italic" in patch) runPatch.italic = patch.italic;
+      if ("color" in patch) runPatch.color = patch.color;
       // An extracted line usually carries NO runs — "no runs" means "uniform
       // styling". A whole-box change can stay that way, but a word-scoped one
       // cannot be expressed without runs, so seed one covering the text with
@@ -5210,18 +5275,43 @@ export default function PdfTextBoxOverlay({
   // the selection's runs, not the box's own flag -- a word made bold inside
   // a regular box left the flag false, so Bold re-applied bold to it and
   // could never take it off again.
+  // The same holds with nothing highlighted. At a bare caret in the words
+  // being typed the press is for the words typed next (emitStyle), so it
+  // turns over what they would be typed in: the format held at the caret,
+  // else that of the character before it (the one typing continues,
+  // reconcilePdfTextStyleRuns). And on a box selected as an object it is
+  // for every character of the box. Read from the box's flag alone, Bold
+  // pressed again after a word typed bold (its run bold, the flag off) set
+  // bold once more: the words after it could not be typed regular, nor the
+  
   const toggledCharacterFlag = useCallback(
     (box: TextBox, key: "bold" | "italic"): boolean => {
       const existing = editsById[box.id];
       const boxValue = Boolean(existing?.[key] ?? box[key]);
-      const node = textBoxRefs.current.get(stateKeyForId(box.id));
-      const remembered = lastSelectionRef.current.get(stateKeyForId(box.id)) ?? null;
+      const boxKey = stateKeyForId(box.id);
+      const node = textBoxRefs.current.get(boxKey);
+      const remembered = lastSelectionRef.current.get(boxKey) ?? null;
       const selection = node
         ? (selectionOffsetsInNode(node, remembered) ?? remembered)
         : null;
-      if (!selection || selection.end <= selection.start) return !boxValue;
       const text = currentTextForBox(box, existing);
       const runs = persistableRunsForBoxText(box, existing, text);
+      if (!selection || selection.end <= selection.start) {
+        if (effectiveTextBoxKind(box, existing) === "formula") return !boxValue;
+        if (typingBoxKeyRef.current !== boxKey) {
+          return runs && runs.length > 0 ? !runs.every((run) => run[key] ?? boxValue) : !boxValue;
+        }
+        const caret = selection?.start ?? text.length;
+        const held = pendingTypingFormatsRef.current[boxKey];
+        if (held && held.caret === caret && typeof held.patch[key] === "boolean") return !held.patch[key];
+        const before = Math.max(0, caret - 1);
+        let end = 0;
+        for (const run of runs ?? []) {
+          end += run.text.length;
+          if (before < end) return !(run[key] ?? boxValue);
+        }
+        return !boxValue;
+      }
       if (!runs) return !boxValue;
       let offset = 0;
       let allOn = true;

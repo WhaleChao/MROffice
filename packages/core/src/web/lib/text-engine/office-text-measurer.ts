@@ -27,6 +27,7 @@ export const PT_PER_PX = 0.75;
 
 
 
+
 const SYNTHETIC_BOLD_STEP_PT = 0.12;
 const SYNTHETIC_BOLD_STEP_FROM_PT = 16;
 const SYNTHETIC_BOLD_EM_BY_FAMILY: ReadonlyMap<string, number> = new Map([
@@ -42,6 +43,10 @@ const SYNTHETIC_BOLD_EM_BY_FAMILY: ReadonlyMap<string, number> = new Map([
   ["segoe ui light", 0],
   ["pmingliu", 0],
   ["新細明體", 0],
+  
+  
+  ["dfkai-sb", 0],
+  ["標楷體", 0],
 ]);
 
 /** The extra advance (pt) PowerPoint for Windows gives a grapheme of `stack`'s face set in a bold it synthesizes. */
@@ -88,6 +93,38 @@ const OFFICE_WIN_BOX: Readonly<Record<string, { readonly unitsPerEm: number; rea
   "ms pgothic": { unitsPerEm: 256, regular: [220, 36] },
   "ms ui gothic": { unitsPerEm: 256, regular: [220, 36] },
   "yu gothic": { unitsPerEm: 2048, regular: [2017, 619] },
+  // Their Mincho members, and the Chinese and Korean families Office themes
+  // name, whose stand-ins (Noto Sans / Serif SC, KR: win 1160/288 of 1000)
+  // are another box: Office's own msmincho.ttc, simsun.ttc, SimHei, KaiTi
+  // and FangSong (220/36 of 256, MS Gothic's), batang.ttc / gulim.ttc
+  // (879/145 of 1024), malgun.ttf (2229/495), msyh.ttc (2167/536) and
+  // Deng.ttf (1659/475), every weight alike. Latin words in them, and a line
+  
+  // SimHei numbers 1.031 em down (Windows' print, 0.432-0.437 em under their
+  // boxes' middle), where Noto Sans SC's box put them at 0.96 (look-fit 13th,
+  // ea13/center.py).
+  "ms mincho": { unitsPerEm: 256, regular: [220, 36] },
+  "ms pmincho": { unitsPerEm: 256, regular: [220, 36] },
+  simsun: { unitsPerEm: 256, regular: [220, 36] },
+  nsimsun: { unitsPerEm: 256, regular: [220, 36] },
+  "宋体": { unitsPerEm: 256, regular: [220, 36] },
+  "新宋体": { unitsPerEm: 256, regular: [220, 36] },
+  simhei: { unitsPerEm: 256, regular: [220, 36] },
+  "黑体": { unitsPerEm: 256, regular: [220, 36] },
+  kaiti: { unitsPerEm: 256, regular: [220, 36] },
+  "楷体": { unitsPerEm: 256, regular: [220, 36] },
+  fangsong: { unitsPerEm: 256, regular: [220, 36] },
+  "仿宋": { unitsPerEm: 256, regular: [220, 36] },
+  batang: { unitsPerEm: 1024, regular: [879, 145] },
+  "바탕": { unitsPerEm: 1024, regular: [879, 145] },
+  gulim: { unitsPerEm: 1024, regular: [879, 145] },
+  "굴림": { unitsPerEm: 1024, regular: [879, 145] },
+  "malgun gothic": { unitsPerEm: 2048, regular: [2229, 495] },
+  "맑은 고딕": { unitsPerEm: 2048, regular: [2229, 495] },
+  "microsoft yahei": { unitsPerEm: 2048, regular: [2167, 536] },
+  "微软雅黑": { unitsPerEm: 2048, regular: [2167, 536] },
+  dengxian: { unitsPerEm: 2048, regular: [1659, 475] },
+  "等线": { unitsPerEm: 2048, regular: [1659, 475] },
   // Office's cloud Source Sans Pro does not set USE_TYPO_METRICS (win 984/273
   // of 1000, every weight); the served Source Sans 3 does, on a typo box
   
@@ -135,7 +172,10 @@ function drawnByOtherDesign(stack: string): boolean {
 export function officeWinBox(stack: string, weight: number): { ascent: number; descent: number } | null {
   const family = splitFamilyList(stack)[0] ?? "";
   const office = officeFontSubstitution(family)?.office;
-  const box = OFFICE_WIN_BOX[family.trim().toLowerCase()] ?? (office ? OFFICE_WIN_BOX[office.toLowerCase()] : undefined);
+  const plain = family.trim().replace(/^["']|["']$/g, "").trim();
+  // A full-width spelling (ＭＳ Ｐゴシック) is the same family.
+  const box = OFFICE_WIN_BOX[plain.toLowerCase()] ?? OFFICE_WIN_BOX[plain.normalize("NFKC").toLowerCase()] ??
+    (office ? OFFICE_WIN_BOX[office.toLowerCase()] : undefined);
   if (!box) return null;
   const [ascent, descent] = weight >= 600 && box.bold ? box.bold : box.regular;
   return { ascent: ascent / box.unitsPerEm, descent: descent / box.unitsPerEm };

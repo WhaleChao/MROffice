@@ -828,6 +828,43 @@ function sliceIsWholeTableRows(slice: Slice): boolean {
   return rows;
 }
 
+/**
+ * The merged cells a Delete Rows shortened (prosemirror-tables' removeRow
+ * restates a cell merged down across the row with one row less), as
+ * `{ pos, rowspan }`: where the cell stands in the document after
+ * `laterTransactions`, and the span it had before. With Track Changes on the
+ * deleted row comes back as a row marked deleted, which the merge still
+ * covers, as Word keeps it until the deletion is accepted.
+ */
+function cellsShortenedByRowRemoval(
+  userTr: Transaction,
+  laterTransactions: readonly Transaction[],
+): Array<{ pos: number; rowspan: number }> {
+  const out: Array<{ pos: number; rowspan: number }> = [];
+  for (let i = 0; i < userTr.steps.length; i += 1) {
+    const step = userTr.steps[i];
+    if (
+      !(step instanceof ReplaceAroundStep) ||
+      step.insert !== 1 ||
+      step.gapFrom !== step.from + 1 ||
+      step.gapTo !== step.to - 1 ||
+      step.slice.content.childCount !== 1
+    )
+      continue;
+    const after = step.slice.content.firstChild!;
+    const role = after.type.spec.tableRole;
+    if (role !== "cell" && role !== "header_cell") continue;
+    const before = (userTr.docs[i] ?? null)?.nodeAt(step.from);
+    if (!before || before.type !== after.type) continue;
+    const was = Number(before.attrs.rowspan) || 1;
+    if ((Number(after.attrs.rowspan) || 1) >= was) continue;
+    let pos = userTr.mapping.slice(i + 1).map(step.from, 1);
+    for (const later of laterTransactions) pos = later.mapping.map(pos, 1);
+    out.push({ pos, rowspan: was });
+  }
+  return out;
+}
+
 /** Whether a slice holds a leaf block (a picture, a rule): not only edges. */
 function sliceHasLeafObject(slice: Slice): boolean {
   let found = false;
@@ -1354,6 +1391,7 @@ function buildTrackingTransaction(
     const deletionMark = deletionType.create(stampedAttrs());
     const sorted = [...deleted].sort((a, b) => b.insertAt - a.insertAt);
     const backspace = backspaceDeletion(userTr, oldState);
+    let rowsKept = false;
     for (const run of sorted) {
       const report = { keptObject: false };
       const tombstone = applyMarkToSlice(
@@ -1371,6 +1409,7 @@ function buildTrackingTransaction(
         
         // one of its rows deleted (Word writes w:trPr/w:del on each row).
         if (sliceIsWholeTableRows(run.slice)) {
+          rowsKept = true;
           let rowPos = run.insertAt;
           tombstone.content.forEach((row) => {
             if (ROW_DELETION_REVISION_ATTR in (row.type.spec.attrs ?? {})) {
@@ -1390,6 +1429,26 @@ function buildTrackingTransaction(
         if (backspace && inserted.length === 0 && deleted.length === 1 && run.replaceTo === undefined) {
           tr.setSelection(TextSelection.create(tr.doc, run.insertAt));
         }
+      }
+    }
+    // A row deleted under a cell merged down across it comes back marked
+    // deleted, and the merge covers it again: shortened by the deletion, it
+    // left the row a cell short, the table plugin filled the gap with a new
+    // cell, and the stored table had one row more than its merge (corpus
+    // R473-D04 LIVE: a row of a 34-row merged column deleted, the save
+    // declined the table). `window.__docsTrackedRowSpanKeptOff = true`
+    // leaves the merge shortened, as before.
+    const keptOff =
+      typeof window !== "undefined" &&
+      (window as Window & { __docsTrackedRowSpanKeptOff?: boolean }).__docsTrackedRowSpanKeptOff === true;
+    if (rowsKept && !keptOff) {
+      for (const { pos, rowspan } of cellsShortenedByRowRemoval(userTr, laterTransactions)) {
+        const at = tr.mapping.map(pos, 1);
+        const node = tr.doc.nodeAt(at);
+        const role = node?.type.spec.tableRole;
+        if (!node || (role !== "cell" && role !== "header_cell") || (Number(node.attrs.rowspan) || 1) >= rowspan) continue;
+        tr.setNodeMarkup(at, undefined, { ...node.attrs, rowspan });
+        changed = true;
       }
     }
   }

@@ -18,7 +18,7 @@ import { InkEffectSvgGradient, InkEffectSvgPaths } from "@mrnote/core/web/compon
 import { inkEffectSvgPlan } from "@mrnote/core/web/lib/office-ink-effects.ts";
 import { documentInkEffectPaint, documentInkPencilFilter, documentInkPencilSeed, inkStrokeEndPaint, inkStrokeTipsAlongPathData, inkStrokeTipsPathData, type DocumentInkFilter } from "@mrnote/core/web/lib/document-ink.ts";
 import { PresentationNativeShapeGraphic } from "@mrnote/slides/web/components/notebook/contents/presentation/PresentationNativeShapeGraphic.tsx";
-import { MAX_NATIVE_SMARTART_TEXT_LENGTH, spreadsheetNativeSmartArtShapeKey, type NativeSmartArtMember, type SpreadsheetNativeSmartArtShapeTransform } from "../../../../lib/spreadsheet/native-smartart";
+import { MAX_NATIVE_SMARTART_TEXT_LENGTH, spreadsheetNativeSmartArtMemberGeometry, spreadsheetNativeSmartArtShapeKey, type NativeSmartArtMember, type SpreadsheetNativeSmartArtShapeTransform } from "../../../../lib/spreadsheet/native-smartart";
 import { smartArtContourStroke, smartArtShape3dFilter } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
 import { OfficeSmartArtBevelFilter, officeSmartArtBevelFilterRef, officeSmartArtNeedsShapeFilter } from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtBevelFilter.tsx";
 import { handleOfficeShapeTextKey, OfficeShapeTextField, type OfficeShapeTextFieldElement } from "@mrnote/core/web/components/office-ribbon/OfficeShapeTextField.tsx";
@@ -1139,6 +1139,7 @@ export function SpreadsheetNativeSmartArtView({
           const fill = member.fill ?? "none";
           const stroke = member.stroke ?? "none";
           const strokeWidth = member.strokeWidth ?? 0;
+          const geometry = spreadsheetNativeSmartArtMemberGeometry(member);
           return (
             <div
               key={member.memberId || index}
@@ -1161,7 +1162,7 @@ export function SpreadsheetNativeSmartArtView({
               {member.customPath ? (
                 <PresentationNativeShapeGraphic
                   drawing={{
-                    geometry: member.customPath,
+                    geometry: geometry ?? member.customPath,
                     ...(member.lineEnds ? { lineEnds: member.lineEnds } : {}),
                     ...(member.paintOpacity
                       ? { paintOpacity: member.paintOpacity }
@@ -1177,7 +1178,9 @@ export function SpreadsheetNativeSmartArtView({
                   fill={fill}
                   stroke={stroke}
                   strokeWidth={strokeWidth}
-                  style={{ display: "block" }}
+                  // Office draws an outline's points where they lie, past
+                  // the member's box too (a connector, R439-X11).
+                  style={{ display: "block", overflow: "visible" }}
                 >
                   {null}
                 </PresentationNativeShapeGraphic>

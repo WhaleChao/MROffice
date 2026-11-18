@@ -7,7 +7,7 @@ import { SheetFact } from "../../../../../lib/editor/sheet-facts";
 import { PX_PER_PT } from "../../../../../lib/office-units";
 import { Extension } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 
 import {
@@ -18,10 +18,12 @@ import {
   wordTabAdvanceAt,
   wordTabAdvances,
   wordTabLeader,
+  wordTabStopAfter,
   withHangingIndentStop,
   type PositionalTab,
 } from "../../../../../lib/document-tabstops";
 
+import { normalizeWordCompatibilityMode } from "../documentOverflowPunctuation";
 import { inlineTextWidthPx } from "./bandRichDom";
 import { BAND_RUN_MARK_NAME } from "./bandRunMark";
 import { measurementRange } from "./measurementRange";
@@ -37,6 +39,10 @@ import { REBALANCE_META as PAGINATION_MOVE_META } from "./pageRebalanceExtension
 interface BandTabState {
   set: DecorationSet;
   edits: number;
+  /** How many decorations the set holds, and whether the last change of the
+   * document took some of them with it (see tabRestoreOff). */
+  count: number;
+  lost: boolean;
 }
 
 const bandTabLayoutKey = new PluginKey<BandTabState>("bandTabLayout");
@@ -59,6 +65,53 @@ interface TabbedLine {
   /** Word 2010 compatibility: a tab may run past the right margin and the
    * text after it stays on the line (`source.wordTabOverMargin`). */
   overMargin: boolean;
+  /** A paragraph with stops of its own in a table cell of a document in
+   * compatibility mode 14 or earlier: its tabs run past the cell's right
+   * edge the same way (tables/probes/tabedge; see `tabOverMarginLineOff`). */
+  cellOverMargin: boolean;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function tabOverMarginLineOff(win: Window | null | undefined): boolean {
+  return (win as (Window & { __docsTabOverMarginLineOff?: boolean }) | null | undefined)?.__docsTabOverMarginLineOff === true;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function tabPastIndentOff(win: Window | null | undefined): boolean {
+  return (win as (Window & { __docsTabPastIndentOff?: boolean }) | null | undefined)?.__docsTabPastIndentOff === true;
 }
 
 function indentPx(value: unknown): number {
@@ -70,10 +123,39 @@ function indentPx(value: unknown): number {
  * every layout to look for one. */
 const tablessBlocks = new WeakSet<PmNode>();
 
+/**
+ * Whether a line ends just before `pos`: a Shift+Enter, as the editor holds
+ * it -- a hardBreak node, or (a Word import's w:br) a newline in the text,
+ * which the paragraph's pre-wrap draws as a break. Only the node was read:
+ * tables/probes/tabind15 Ta08 "Ta08 Alpha<Tab>Y08<Shift+Enter>Ta08b
+ * Beta<Tab>Y08b", a right stop past the right indent, measured the text
+ * after the first tab through the second line, took that tab to a line of
+ * its own and drew Y08 at the margin (Word: on its line, at the stop).
+ * `window.__docsTabNewlineBreakOff = true` reads only the node (A/B).
+ */
+function lineEndsBefore(doc: PmNode, pos: number): boolean {
+  const before = doc.resolve(pos).nodeBefore;
+  if (!before) return false;
+  if (before.type.name === "hardBreak") return true;
+  return before.isText && (before.text ?? "").endsWith("\n") && !tabNewlineBreakOff();
+}
+
+function tabNewlineBreakOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabNewlineBreakOff?: boolean }).__docsTabNewlineBreakOff === true;
+}
+
 const HOLDS_TAB = new SheetFact((node) => node.isText && (node.text ?? "").includes("\t"));
+
+/** The document's tabbed lines as read for layout: their tabs and the text
+ * each tab aligns (exported for tests). */
+export function tabbedLinesForTest(doc: PmNode): Pick<TabbedLine, "tabs" | "segments" | "contentStart" | "contentEnd">[] {
+  return tabbedLines(doc).map(({ tabs, segments, contentStart, contentEnd }) => ({ tabs, segments, contentStart, contentEnd }));
+}
 
 function tabbedLines(doc: PmNode): TabbedLine[] {
   const lines: TabbedLine[] = [];
+  const mode = normalizeWordCompatibilityMode(doc.attrs.wordCompatibilityMode);
+  const oldMode = mode !== null && mode < 15;
   HOLDS_TAB.descendants(doc, (node, pos) => {
     if (!node.isTextblock) return true;
     // Code keeps its own tab width: Word's stops are a paragraph's.
@@ -89,10 +171,16 @@ function tabbedLines(doc: PmNode): TabbedLine[] {
     const positional: (PositionalTab | null)[] = [];
     // Shift+Enter ends a line: the text after a tab runs only to it.
     const breaks: number[] = [];
+    const newlines = !tabNewlineBreakOff();
     node.forEach((child, offset) => {
       if (child.type.name === "hardBreak") breaks.push(contentStart + offset);
       if (!child.isText) return;
       const text = child.text ?? "";
+      if (newlines) {
+        for (let index = text.indexOf("\n"); index >= 0; index = text.indexOf("\n", index + 1)) {
+          breaks.push(contentStart + offset + index);
+        }
+      }
       // Every tab of a positional tab's text node is one (the editor joins
       // two alike ones into one node), as the story reads it back.
       const ptab = normalizePositionalTab(
@@ -118,17 +206,27 @@ function tabbedLines(doc: PmNode): TabbedLine[] {
       const cut = breaks.find((at) => at >= start && at < end);
       if (cut !== undefined) segments[index] = [start, cut];
     }
+    const stops = withHangingIndentStop(normalizeTabStops(node.attrs.tabStops ?? null), node.attrs.indentLeftPt, node.attrs.firstLineIndentPt);
+    let inCell = false;
+    if (oldMode && (stops ?? []).some((stop) => stop.align !== "bar")) {
+      const $pos = doc.resolve(pos);
+      for (let depth = $pos.depth; depth > 0 && !inCell; depth -= 1) {
+        const name = $pos.node(depth).type.name;
+        if (name === "tableCell" || name === "tableHeader") inCell = true;
+      }
+    }
     lines.push({
       tabs,
       positional,
       segments,
-      stops: withHangingIndentStop(normalizeTabStops(node.attrs.tabStops ?? null), node.attrs.indentLeftPt, node.attrs.firstLineIndentPt),
+      stops,
       contentStart,
       contentEnd,
       blockPos,
       indentLeftPx: indentPx(node.attrs.indentLeftPt),
       indentRightPx: indentPx(node.attrs.indentRightPt),
       overMargin: (node.attrs.source as { wordTabOverMargin?: unknown } | null)?.wordTabOverMargin === 1,
+      cellOverMargin: inCell,
     });
     return false;
   });
@@ -228,6 +326,137 @@ function keepLineTabs(memo: SheetMeasureMemo<SheetTabs>, place: TabLinePlace, at
   kept.lines.set(place.block, tabs);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function tabRestoreOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabRestoreOff?: boolean }).__docsTabRestoreOff === true;
+}
+
+/** Each tabbed paragraph's tabs as last measured, by what decides them: its
+ * own content and attributes, and its cell's attributes (the column width). */
+const tabsByContent = new WeakMap<HTMLElement, Map<string, { at: string; tabs: LineTabs }>>();
+const TABS_BY_CONTENT_MAX = 4000;
+const contentKeys = new WeakMap<PmNode, string>();
+
+function lineContentKey(doc: PmNode, line: TabbedLine): string | null {
+  return contentKeyAt(doc, line.blockPos);
+}
+
+function contentKeyAt(doc: PmNode, blockPos: number): string | null {
+  if (blockPos < 0 || blockPos >= doc.content.size) return null;
+  const block = doc.nodeAt(blockPos);
+  if (!block || !block.isTextblock) return null;
+  let own = contentKeys.get(block);
+  if (own === undefined) contentKeys.set(block, (own = JSON.stringify(block.toJSON())));
+  const $at = doc.resolve(blockPos);
+  const holder = $at.parent;
+  const cell = holder.type.spec.tableRole === "cell" || holder.type.spec.tableRole === "header_cell" || /cell|header/i.test(holder.type.name)
+    ? JSON.stringify(holder.attrs)
+    : holder.type.name;
+  return `${cell}|${own}`;
+}
+
+/** A tab decoration of the line at `blockPos`, carrying what it is relative to
+ * its block (restoreDroppedTabs). */
+function tabDecoration(blockPos: number, item: LineTabDecoration): Decoration {
+  const from = blockPos + item.from, to = blockPos + item.to;
+  const spec = { bandTab: item };
+  return item.node ? Decoration.node(from, to, item.attrs, spec) : Decoration.inline(from, to, item.attrs, spec);
+}
+
+/**
+ * The decorations a change of the document took away, put back in the same
+ * transaction on the paragraphs of the same content in cells of the same
+ * attributes: the ledger re-cutting a table (its pieces built anew) is read by
+ * the ledger's next pass before a frame could measure the tabs again, and R417
+ * page 40's header row, measured five lines without them, went round: re-cut
+ * on the tall row, tabs back, re-cut on the short one, 52 and 53 pages every
+ * few seconds (nd14/t-old). Null when nothing could be put back.
+ */
+function restoreDroppedTabs(before: DecorationSet, tr: Transaction, mapped: DecorationSet): DecorationSet | null {
+  const old = tr.before;
+  const byKey = new Map<string, LineTabDecoration[]>();
+  const keyOfBlock = new Map<number, string | null>();
+  for (const decoration of before.find()) {
+    const item = (decoration.spec as { bandTab?: LineTabDecoration } | undefined)?.bandTab;
+    if (!item) continue;
+    const blockPos = decoration.from - item.from;
+    let key = keyOfBlock.get(blockPos);
+    if (key === undefined) {
+      key = contentKeyAt(old, blockPos);
+      keyOfBlock.set(blockPos, key);
+      // The first paragraph of a content takes it.
+      if (key !== null && byKey.has(key)) {
+        key = null;
+        keyOfBlock.set(blockPos, null);
+      } else if (key !== null) byKey.set(key, []);
+    }
+    if (key !== null) byKey.get(key)!.push(item);
+  }
+  if (byKey.size === 0) return null;
+  const added: Decoration[] = [];
+  const seen = new Set<number>();
+  for (const line of tabbedLines(tr.doc)) {
+    if (seen.has(line.blockPos)) continue;
+    seen.add(line.blockPos);
+    const block = tr.doc.nodeAt(line.blockPos);
+    if (!block || mapped.find(line.blockPos, line.blockPos + block.nodeSize).length > 0) continue;
+    const key = contentKeyAt(tr.doc, line.blockPos);
+    const items = key !== null ? byKey.get(key) : undefined;
+    if (!items) continue;
+    for (const item of items) added.push(tabDecoration(line.blockPos, item));
+  }
+  return added.length ? mapped.add(tr.doc, added) : null;
+}
+
+function rememberTabsByContent(root: HTMLElement, key: string | null, at: string, tabs: LineTabs): void {
+  if (!key) return;
+  let byKey = tabsByContent.get(root);
+  if (!byKey) tabsByContent.set(root, (byKey = new Map()));
+  if (byKey.size >= TABS_BY_CONTENT_MAX && !byKey.has(key)) byKey.clear();
+  byKey.set(key, { at, tabs });
+}
+
+function rememberedTabsByContent(root: HTMLElement, key: string | null, at: string): LineTabs | undefined {
+  if (!key) return undefined;
+  const kept = tabsByContent.get(root)?.get(key);
+  return kept && kept.at === at ? kept.tabs : undefined;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const BAND_TAB_LAYOUT_REASON = "band-tab-layout";
+
+function tabLedgerNudgeOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabLedgerNudgeOff?: boolean }).__docsTabLedgerNudgeOff === true;
+}
+
 /**
  * The measurements a paragraph's tabs have had since the layout's inputs last
  * changed, by its node. Tabs sized for one line can make that line wrap, and
@@ -321,6 +550,14 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
     const lineDecorations: LineTabDecoration[] = [];
     let lineWrapped = false;
     const done = (): LineTabs => ({ keys: lineKeys, decorations: lineDecorations, wrapped: lineWrapped });
+    // Word 2010: the paragraph's tabs may run past its right edge, and from
+    // the first that does its line is kept whole (`tabOverMarginLineOff`);
+    // switched off, the whole paragraph is one line, as before.
+    const lineOff = tabOverMarginLineOff(view.dom.ownerDocument.defaultView);
+    const overMarginLine = line.overMargin || (!lineOff && line.cellOverMargin);
+    // Word 2013 and later: a stop past the right indent but inside the
+    // column is where its tab goes (`tabPastIndentOff`).
+    const reachColumn = !overMarginLine && !tabPastIndentOff(view.dom.ownerDocument.defaultView);
     // The paragraph's own containing block: its box plus the margins its
     // indents render as. On a page that is the sheet's text column; in a
     // table it is the cell. The story's root serves when the block has no
@@ -372,7 +609,7 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       // there, where Word (2013 and later) takes it to the next line, to that
       // line's first stop (corpus R37-D22: 22 default tabs, ten to a line).
       const rightEdgePx = columnPx - line.indentRightPx + TAB_STOP_REACH_PX;
-      const hangs = !line.overMargin && drawnPastRightEdge(view, line, origin, scale, rightEdgePx);
+      const hangs = !overMarginLine && drawnPastRightEdge(view, line, origin, scale, rightEdgePx);
       if (!hangs && (off <= TAB_STOP_REACH_PX || defaultIntervalPx - off <= TAB_STOP_REACH_PX)) return done();
     }
     // The text between two tabs as drawn, all of it even where it has
@@ -443,7 +680,7 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
     // line, and the paragraph does not wrap.
     let overMargin = false;
     let oneLine: number[] | null = null;
-    if (line.overMargin) {
+    if (overMarginLine && lineOff) {
       oneLine = wordTabAdvances({
         segments,
         stops: line.stops,
@@ -451,7 +688,8 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
         defaultIntervalTwips,
         positional: line.positional,
         line: column,
-        stopsEndAtRightEdge: !line.overMargin,
+        stopsEndAtRightEdge: !overMarginLine,
+        stopsReachColumn: reachColumn,
       });
       const rightEdge = columnPx - line.indentRightPx;
       let at = startPx + segments[0].widthPx;
@@ -479,7 +717,8 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
           defaultIntervalTwips,
           positional: line.positional,
           line: column,
-          stopsEndAtRightEdge: !line.overMargin,
+          stopsEndAtRightEdge: !overMarginLine,
+          stopsReachColumn: reachColumn,
         });
     if (overMargin) {
       lineKeys.push("over-margin");
@@ -490,7 +729,19 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       );
     }
     let pen = startPx + segments[0].widthPx;
+    // The first tab whose next stop lies past the right edge (Word 2010):
+    // from it on the line runs on, kept whole by the page.
+    let overFrom: number | null = null;
+    let overTo = line.contentEnd;
+    // Where the kept line starts, and each tab as laid out (decorated once
+    // the kept line is known: a tab before the one past the edge on that
+    // line is kept too).
+    const keptLines: [number, number][] = [];
+    const laidTabs: { tab: number; pen: number; advance: number; leader: ReturnType<typeof wordTabLeader> }[] = [];
     for (const [index, tab] of line.tabs.entries()) {
+      // A tab after the Shift+Enter that ended the kept line stands on a
+      // line of its own again.
+      if (overFrom !== null && tab >= overTo) overFrom = null;
       // On a wrapped paragraph the pen is where this tab stands now, on its
       // own line: where the text before it ends. The tab's own box is not
       // that place: a tab the browser drew too wide (its uniform width, or
@@ -498,9 +749,9 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       // and a pen read there took it to the line's first stop again -- the
       // tab after a right stop's text went back to that stop, repeated its
       // leader and pushed the rest onto a second line for good (WUA 171).
-      if (wraps) {
+      if (wraps && overFrom === null) {
         const startsLine =
-          tab === line.contentStart || view.state.doc.resolve(tab).nodeBefore?.type.name === "hardBreak";
+          tab === line.contentStart || lineEndsBefore(view.state.doc, tab);
         pen = (view.coordsAtPos(tab, startsLine ? 1 : -1).left - origin) / scale;
       }
       let advance = advances
@@ -512,11 +763,92 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
             defaultIntervalTwips,
             positional: line.positional[index],
             line: column,
-            stopsEndAtRightEdge: !line.overMargin,
+            stopsEndAtRightEdge: !overMarginLine,
+            stopsReachColumn: reachColumn,
           });
+      if (overFrom === null && !line.positional[index] && ((overMarginLine && !lineOff) || reachColumn)) {
+        const stop = wordTabStopAfter(line.stops, pen);
+        const stopPx = stop ? stop.pos / 15 : 0;
+        // Past the edge by more than a twip: a stop set AT the margin is no
+        // stop past it (the column reads in 1/64 px).
+        const pastEdge = stop !== null && stopPx > columnPx - line.indentRightPx + 1 / 15;
+        // The tab's line runs to the next Shift+Enter or the paragraph's end.
+        let to = line.contentEnd;
+        let last = line.segments.length - 1;
+        for (let next = index + 1; next < line.segments.length; next += 1) {
+          const natural = next < line.tabs.length ? line.tabs[next] : line.contentEnd;
+          if (line.segments[next][1] < natural) {
+            to = line.segments[next][1];
+            last = next;
+            break;
+          }
+        }
+        let keep = pastEdge && overMarginLine;
+        if (pastEdge && !overMarginLine && stopPx <= columnPx + 1 / 15) {
+          // Word 2013 and later: kept whole only when its text ends inside
+          // the column (tabind15; past it Word wraps at the column's edge).
+          let end = pen + advance + segments[index + 1].widthPx;
+          for (let next = index + 1; next < last; next += 1) {
+            end += wordTabAdvanceAt({
+              penPx: end,
+              next: segments[next + 1],
+              stops: line.stops,
+              defaultIntervalTwips,
+              positional: line.positional[next],
+              line: column,
+              stopsEndAtRightEdge: true,
+              stopsReachColumn: true,
+            }) + segments[next + 1].widthPx;
+          }
+          keep = end <= columnPx + TAB_STOP_REACH_PX;
+        }
+        if (keep) {
+          overFrom = index;
+          // The tab's line: from where the line it stands on starts (the
+          // browser would break that line short of the stop: "Kc01 Alpha<Tab>"
+          // went down as "Kc01" / "Alpha<Tab>...", tables/nd10 b4) to the
+          // next Shift+Enter or the paragraph's end. The text before the tab
+          // is laid out as Word lays it: where its line starts is read off
+          // the page.
+          let from = tab;
+          if (tab > line.contentStart) {
+            from = tab - 1;
+            const ref = view.coordsAtPos(tab, -1);
+            const sameLine = (box: { top: number; bottom: number }) =>
+              Math.min(box.bottom, ref.bottom) - Math.max(box.top, ref.top) >
+              0.5 * Math.min(box.bottom - box.top, ref.bottom - ref.top);
+            for (let at = tab - 1; at > line.contentStart; at -= 1) {
+              if (lineEndsBefore(view.state.doc, at)) break;
+              if (!sameLine(view.coordsAtPos(at - 1, 1))) break;
+              from = at - 1;
+            }
+          }
+          overTo = to;
+          keptLines.push([from, to]);
+          lineKeys.push(`over:${index}:${from - line.blockPos}:${to - line.blockPos}`);
+          // The editor's overflow-wrap lets Chromium break between two spans
+          // that do not wrap (the character before the tab, the tab): on this
+          // paragraph a word is never broken for overflowing, as Word's are
+          // not past such a tab (tables/nd10, a Chromium probe: only with
+          // overflow-wrap and word-break normal do the spans hold).
+          lineDecorations.push({
+            node: true,
+            from: 0,
+            to: line.contentEnd + 1 - line.blockPos,
+            attrs: { "data-tab-over-margin-line": to === line.contentEnd ? "end" : "true" },
+          });
+          lineDecorations.push({
+            node: false,
+            from: from - line.blockPos,
+            to: to - line.blockPos,
+            attrs: { "data-tab-over-margin": "true" },
+          });
+        }
+      }
       if (
         wraps &&
-        !line.overMargin &&
+        !overMarginLine &&
+        overFrom === null &&
         !line.positional[index] &&
         pen > line.indentLeftPx + TAB_STOP_REACH_PX &&
         (pen + advance > columnPx - line.indentRightPx + TAB_STOP_REACH_PX ||
@@ -536,7 +868,8 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
           defaultIntervalTwips,
           positional: null,
           line: column,
-          stopsEndAtRightEdge: !line.overMargin,
+          stopsEndAtRightEdge: !overMarginLine,
+          stopsReachColumn: reachColumn,
         });
       }
       const leader = wordTabLeader(line.stops, pen, line.positional[index]);
@@ -545,6 +878,36 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       // are laid out exactly as before, and the mapped decorations already
       // hold them, so nothing is dispatched.
       lineKeys.push(`${index}:${advance}:${leader}`);
+      laidTabs.push({ tab, pen, advance, leader });
+      pen += advance + segments[index + 1].widthPx;
+    }
+    for (const { tab, pen: at, advance, leader } of laidTabs) {
+      if (keptLines.some(([from, to]) => tab >= from && tab < to)) {
+        // On the kept line a tab is no box: Chromium breaks before an
+        // inline-block whatever the spans around it say, and the tab took a
+        // line of its own (build t10, tables/nd10/te-cell-14-new-b1.json; a
+        // word joiner before it did not hold it either). Drawn as the tab
+        // character it is, with its tab size the distance from the block's
+        // text edge to where it ends, it goes there and nothing breaks
+        // before it. A tab that advances less than half a character goes on
+        // to the next multiple of its size (Chromium, scratch probe: 1 px
+        // short of a 19 px size went 19 px further): such a one, and one
+        // that ends where it starts (a right stop whose text is wider than
+        // the room), is drawn with no size and its advance as padding.
+        const size = at + advance - textEdgePx;
+        const small = advance < 8 || size < 8;
+        lineDecorations.push({
+          node: false,
+          from: tab - line.blockPos,
+          to: tab + 1 - line.blockPos,
+          attrs: {
+            class: "sheet-band-story-tab",
+            style: small ? `white-space:pre;tab-size:0;padding-right:${Math.max(0, advance)}px` : `white-space:pre;tab-size:${size}px`,
+            ...(leader !== "none" ? { "data-leader": leader } : {}),
+          },
+        });
+        continue;
+      }
       lineDecorations.push({
         node: false,
         from: tab - line.blockPos,
@@ -558,7 +921,6 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
           ...(leader !== "none" ? { "data-leader": leader } : {}),
         },
       });
-      pen += advance + segments[index + 1].widthPx;
     }
     return done();
   };
@@ -570,13 +932,18 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
   const installed = horizon ? bandTabLayoutKey.getState(view.state)?.set ?? DecorationSet.empty : null;
   let deferred = false;
   let firstRead = false;
+  const restore = !tabRestoreOff();
   for (const [lineIndex, line] of tabbedLines(view.state.doc).entries()) {
     const place = memo ? tabLinePlace(view, root, line) : null;
     let result = place ? keptLineTabs(memo!, place, memoAt) : undefined;
     if (!result && horizon && place && !horizon.has(place.sheet)) {
       deferred = true;
       keys.push(`${lineIndex}:deferred`);
-      decorations.push(...installed!.find(line.contentStart, line.contentEnd));
+      const kept = installed!.find(line.contentStart, line.contentEnd);
+      const remembered = kept.length || !restore ? undefined : rememberedTabsByContent(root, lineContentKey(view.state.doc, line), memoAt);
+      if (remembered) {
+        for (const item of remembered.decorations) decorations.push(tabDecoration(line.blockPos, item));
+      } else decorations.push(...kept);
       continue;
     }
     if (!result) {
@@ -586,12 +953,10 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       if (rounds && block && !rounds.has(block)) firstRead = true;
       result = settledRound(rounds, block, measureLine(line));
       if (place) keepLineTabs(memo!, place, memoAt, result);
+      if (restore) rememberTabsByContent(root, lineContentKey(view.state.doc, line), memoAt, result);
     }
     for (const key of result.keys) keys.push(`${lineIndex}:${key}`);
-    for (const item of result.decorations) {
-      const from = line.blockPos + item.from, to = line.blockPos + item.to;
-      decorations.push(item.node ? Decoration.node(from, to, item.attrs) : Decoration.inline(from, to, item.attrs));
-    }
+    for (const item of result.decorations) decorations.push(tabDecoration(line.blockPos, item));
     if (result.wrapped) wrapped = true;
   }
   return { set: DecorationSet.create(view.state.doc, decorations), key: keys.join("|"), wrapped, deferred, firstRead };
@@ -604,13 +969,27 @@ export const BandTabLayout = Extension.create({
       new Plugin<BandTabState>({
         key: bandTabLayoutKey,
         state: {
-          init: () => ({ set: DecorationSet.empty, edits: 0 }),
+          init: () => ({ set: DecorationSet.empty, edits: 0, count: 0, lost: false }),
           apply(tr, state) {
             const next = tr.getMeta(bandTabLayoutKey) as DecorationSet | undefined;
             // The pagination moving blocks between sheets (its own steps) is no
             // edit: it changes no paragraph's text, stops or width.
             const edits = tr.docChanged && tr.getMeta(PAGINATION_MOVE_META) !== true ? state.edits + 1 : state.edits;
-            return { set: next ?? state.set.map(tr.mapping, tr.doc), edits };
+            if (next) return { set: next, edits, count: next.find().length, lost: false };
+            if (!tr.docChanged) return state;
+            let set = state.set.map(tr.mapping, tr.doc);
+            // A change that replaced decorated text took its decorations with
+            // it (a table piece the pagination built anew): put back where the
+            // same paragraph stands, and measured again.
+            let count = state.count > 0 ? set.find().length : 0;
+            if (count < state.count && !tabRestoreOff()) {
+              const restored = restoreDroppedTabs(state.set, tr, set);
+              if (restored) {
+                set = restored;
+                count = set.find().length;
+              }
+            }
+            return { set, edits, count, lost: state.lost || count < state.count };
           },
         },
         props: {
@@ -667,12 +1046,20 @@ export const BandTabLayout = Extension.create({
               return;
             }
             lastDeferred = Boolean(next?.deferred);
-            if (!next || next.key === installed) return;
+            // Decorations a change of the document took away are put back
+            // even where the measurement reads as it did.
+            const restoring = bandTabLayoutKey.getState(editorView.state)?.lost === true && !tabRestoreOff();
+            if (!next || (next.key === installed && !restoring)) return;
             installed = next.key;
             ownDispatchAt = now();
             editorView.dispatch(
               editorView.state.tr.setMeta(bandTabLayoutKey, next.set).setMeta("addToHistory", false),
             );
+            // The pages' editor: its ledger reads the sheets the tabs changed.
+            const root = editorView.dom;
+            if (!tabLedgerNudgeOff() && root instanceof HTMLElement && win && sheetsOf(root).length > 0) {
+              root.dispatchEvent(new win.CustomEvent("mrn-page-rebalance", { bubbles: true, detail: { reason: BAND_TAB_LAYOUT_REASON } }));
+            }
             // A tab just sized on a wrapped paragraph moved what follows it:
             // read the tabs again where they stand now.
             if (next.wrapped) {
@@ -784,7 +1171,11 @@ export const BandTabLayout = Extension.create({
               // long as the pages kept moving with them (R350-D07: interlinear
               // glosses one line, then two, then one, every few frames; 157 to
               // 160 sheets, never settled, a tab burning a core).
-              if (bandTabLayoutKey.getState(view.state)?.edits !== bandTabLayoutKey.getState(previous)?.edits) schedule();
+              const state = bandTabLayoutKey.getState(view.state);
+              if (state?.edits !== bandTabLayoutKey.getState(previous)?.edits) schedule();
+              // Decorations the change took away: measured again now, however
+              // many passes the settling has had.
+              else if (state?.lost && !bandTabLayoutKey.getState(previous)?.lost && !tabRestoreOff()) schedule();
               else settleAgain();
             },
             destroy() {

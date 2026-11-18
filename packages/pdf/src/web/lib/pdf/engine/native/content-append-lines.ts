@@ -57,3 +57,22 @@ export function wrapPdfContentAppendTextByMeasure(
     ? breakPdfContentAppendLines(Array.from(paragraph, (character) => ({ text: character, width: measure(character) })), maxWidth).join("\n")
     : "").join("\n");
 }
+
+/**
+ * How far the last line of `text` runs once appended: every character at
+ * its own advance (`measure`), as the append sets them -- no pair kerning,
+ * no ligature, which a browser's measure of the whole string would add.
+ * Words appended after it on the same line start there.
+ */
+export function pdfContentAppendLastLineAdvance(
+  text: string,
+  measure: (character: string) => number,
+): number {
+  const line = text.slice(Math.max(text.lastIndexOf("\n"), text.lastIndexOf("\r")) + 1);
+  let advance = 0;
+  for (const character of line) {
+    const width = measure(character);
+    if (Number.isFinite(width) && width > 0) advance += width;
+  }
+  return advance;
+}

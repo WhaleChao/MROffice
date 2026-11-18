@@ -38,6 +38,9 @@ import { requestChartPicture } from "../../../../../lib/office-charts/chart-pict
 import { documentChartPictureContent } from "../../../../../lib/office-charts/document-chart-picture";
 import { sanitizeChartPicture } from "../../../../../lib/office-charts/chart-picture-sanitize";
 import { normalizeDocumentShapeAttrs } from "../../../../../lib/document-shapes";
+import { normalizeOfficeTextWarp, textWarpDrawing } from "../../../../../lib/office-text-warp";
+import { paintTextWarpSurface, TEXT_WARP_CANVAS_ATTRIBUTE } from "../../../../../lib/office-text-warp-render";
+import { textEffectsCss } from "../../extensions/TextEffects";
 import { bandListMarkers } from "./bandListMarkers";
 import { numberingSuffixTabStopTwips } from "../documentNumberingLayout";
 
@@ -65,6 +68,13 @@ import {
   wordTabLeader,
   type PositionalTab,
 } from "../../../../../lib/document-tabstops";
+
+/** `window.__docsBandRunBackgroundOff = true`: band runs drawn without their
+ * highlight or shading, as before (A/B of one build). */
+function bandRunBackgroundOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsBandRunBackgroundOff?: boolean }).__docsBandRunBackgroundOff === true;
+}
 
 export interface BandTokenContext {
   pageLabel: string;
@@ -263,6 +273,16 @@ function appendRuns(
         if (run.underline) span.style.textDecoration = "underline";
         if (run.sizePt) span.style.fontSize = `${run.sizePt}pt`;
         if (run.color) span.style.color = run.color;
+        // Font > Text Effects, drawn as a body run's mark draws them (outline,
+        // text fill, shadow, glow, reflection): R471-D27's white letterhead
+        // words with a navy outline were drawn navy.
+        if (run.textEffects && !bandTextEffectsOff(parent.ownerDocument)) {
+          const effects = textEffectsCss(run.textEffects);
+          if (effects) span.style.cssText += `;${effects}`;
+        }
+        // Highlight / shading: painted behind the run's characters (R308-D01's
+        // white footer words on dark red were white on the paper without it).
+        if (run.background && !bandRunBackgroundOff()) span.style.backgroundColor = run.background;
         // Font > Advanced > Spacing: every character set this much farther
         // apart (Word's "Page | 1" footer: "Page" 3 pt apart, R433-D06).
         if (run.spacingPt) span.style.letterSpacing = `${run.spacingPt}pt`;
@@ -383,7 +403,10 @@ function applyBandRunLineHeights(paragraph: HTMLElement, line: BandRichLine, con
   for (const span of spans) {
     const sizePt = span.style.fontSize.endsWith("pt") ? Number.parseFloat(span.style.fontSize) : paragraphPt;
     const face = span.style.fontFamily || bandFontCss(line.lineFont, context);
-    const ratio = wordSingleLineRatio(doc, face, textHasEastAsian(span.textContent ?? ""));
+    const stated = span.style.fontWeight || paragraph.style.fontWeight || "400";
+    const weight = stated === "bold" ? 700 : Number.parseInt(stated, 10);
+    const italic = (span.style.fontStyle || paragraph.style.fontStyle) === "italic";
+    const ratio = wordSingleLineRatio(doc, face, textHasEastAsian(span.textContent ?? ""), Number.isFinite(weight) ? weight : 400, italic);
     if (ratio === null || !(sizePt > 0)) return;
     heights.push(ratio * sizePt * PX_PER_PT * (line.lineHeight ?? 1));
   }
@@ -942,7 +965,80 @@ function buildBandFrame(
   if (frame.line) applyBandLineHeight(line, frame.line, runs, context);
   appendRuns(line, runs, context);
   box.appendChild(line);
+  markBandTextWarp(box, frame);
   return box;
+}
+
+/** `window.__docsBandTextEffectsOff = true` draws a band run without its
+ * text effects, as before (A/B). */
+function bandTextEffectsOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsBandTextEffectsOff?: boolean }) | null)?.__docsBandTextEffectsOff === true;
+}
+
+/** `window.__docsBandTextWarpOff = true` draws a band WordArt box's words
+ * straight, as before (A/B). */
+function bandTextWarpOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsBandTextWarpOff?: boolean }) | null)?.__docsBandTextWarpOff === true;
+}
+
+/**
+ * A WordArt box (`textWarp`, Insert > WordArt): its words stay in the line,
+ * laid out (they are what is measured and read), and `paintBandTextWarps`
+ * paints them bent over the box once the band is laid out -- by the ONE warp
+ * painter the body's WordArt frame is painted by. A warp the shared
+ * primitive does not draw is left straight.
+ */
+function markBandTextWarp(box: HTMLElement, frame: BandRichFrame): void {
+  const warp = frame.textWarp;
+  const drawing = warp ? textWarpDrawing(warp.preset) : null;
+  if (!warp || !drawing || drawing === "none" || bandTextWarpOff(box.ownerDocument)) return;
+  box.setAttribute(BAND_TEXT_WARP_ATTR, JSON.stringify(warp));
+  // The canvas is placed over the box: the box is its containing block.
+  if (!box.style.position) box.style.position = "relative";
+}
+
+const BAND_TEXT_WARP_ATTR = "data-band-text-warp";
+
+/**
+ * Paint every band WordArt box under `root` (`markBandTextWarp`) as laid out
+ * now: a canvas over the box holding the box's words bent by its warp, the
+ * words themselves hidden under it. Run again whenever the band's layout
+ * changes (its fonts, its width); a box not laid out yet keeps its words
+ * straight until then. Nothing is left observing: the band is rebuilt, not
+ * patched, when what it draws changes.
+ */
+export function paintBandTextWarps(root: ParentNode): void {
+  for (const box of Array.from(root.querySelectorAll<HTMLElement>(`[${BAND_TEXT_WARP_ATTR}]`))) {
+    const source = box.querySelector<HTMLElement>(":scope > .sheet-band-rich__frame-text");
+    let warp = null;
+    try {
+      warp = normalizeOfficeTextWarp(JSON.parse(box.getAttribute(BAND_TEXT_WARP_ATTR) ?? ""));
+    } catch {
+      warp = null;
+    }
+    if (!source || !warp) continue;
+    let canvas = box.querySelector<HTMLCanvasElement>(`:scope > canvas[${TEXT_WARP_CANVAS_ATTRIBUTE}]`);
+    if (!canvas) {
+      canvas = box.ownerDocument.createElement("canvas");
+      canvas.setAttribute(TEXT_WARP_CANVAS_ATTRIBUTE, warp.preset);
+      canvas.setAttribute("aria-hidden", "true");
+      canvas.style.position = "absolute";
+      canvas.style.pointerEvents = "none";
+      box.appendChild(canvas);
+    }
+    // Measured straight, then hidden under the painting.
+    source.style.opacity = "";
+    const align = box.style.textAlign;
+    const painted = paintTextWarpSurface(canvas, {
+      source,
+      host: box,
+      warp,
+      insetsFromPadding: true,
+      align: align === "center" || align === "right" ? align : "left",
+    });
+    if (painted) source.style.opacity = "0";
+    else canvas.remove();
+  }
 }
 
 /**
@@ -992,6 +1088,7 @@ function buildBandInlineFrame(
   if (frame.line) applyBandLineHeight(line, frame.line, runs, context);
   appendRuns(line, runs, context);
   box.appendChild(line);
+  markBandTextWarp(box, frame);
   return box;
 }
 
@@ -1824,6 +1921,28 @@ export function buildBandRichDom(
         block.bidiVisual === true &&
         !(typeof window !== "undefined" &&
           (window as Window & { __docsBandBidiVisualOff?: boolean }).__docsBandBidiVisualOff === true);
+      // Indent from left (`w:tblInd`): Word stands the table's leading edge
+      // that far in from the margin, a negative indent out into it (the
+      // reading leaves it out for a centred or right-aligned table). Corpus
+      // R400-D05: the footer table at -3835 twips from a 4395-twip margin
+      // puts its page-number cell at 547-568 pt; at the margin the cell ran
+      // off the paper. A right-to-left table's leading edge is its right one
+      // (R379-D02's header table at -96 stands 4.8 pt right of the right
+      // margin). `window.__docsBandTableIndentOff = true` stands it at the
+      // margin, for an A/B of the same build.
+      const indentPx =
+        !block.floatPosition &&
+        block.tableAlign !== "center" &&
+        block.tableAlign !== "right" &&
+        typeof block.tableIndentTwips === "number" &&
+        !(typeof window !== "undefined" &&
+          (window as Window & { __docsBandTableIndentOff?: boolean }).__docsBandTableIndentOff === true)
+          ? block.tableIndentTwips / 15
+          : 0;
+      if (indentPx && !bidiVisual) {
+        table.style.marginLeft = `${indentPx}px`;
+        table.style.marginRight = "0";
+      }
       if (bidiVisual) {
         table.style.direction = "rtl";
         table.dataset.wordBidiVisual = "true";
@@ -1846,8 +1965,11 @@ export function buildBandRichDom(
             (window as Window & { __docsBandBidiOverflowOff?: boolean }).__docsBandBidiOverflowOff === true)
         ) {
           const total = widths.reduce((sum, width) => sum + width, 0);
-          table.style.marginLeft = `calc(100% - ${Math.round(total * 1000) / 1000}px)`;
-          table.style.marginRight = "0";
+          table.style.marginLeft = `calc(100% - ${Math.round((total + indentPx) * 1000) / 1000}px)`;
+          table.style.marginRight = `${indentPx}px`;
+        } else if (indentPx) {
+          table.style.marginLeft = "auto";
+          table.style.marginRight = `${indentPx}px`;
         }
       }
       const covered = new Set<string>();

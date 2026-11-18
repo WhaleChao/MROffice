@@ -53,6 +53,9 @@ export interface SheetFormulaReferenceOptions {
   /** The rewrite a chart's series references take instead of `rewrite`
    * (they are references alone, which Excel stores its own way). */
   seriesRewrite?: FormulaRewrite;
+  /** The rewrite a defined name's `ref` takes instead of `rewrite` (its
+   * formula is stored without the `=` a cell's has). */
+  nameRewrite?: FormulaRewrite;
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -283,10 +286,11 @@ export function rewriteSheetFormulaReferences<T extends object>(
   };
   assign("cells", rewriteCells(source.cells, rewrite));
   if (!options.skipNamedRanges) {
+    const nameRewrite = options.nameRewrite ?? rewrite;
     assign(
       "namedRanges",
       rewriteArray(source.namedRanges, (entry) =>
-        isRecord(entry) ? rewriteFields(entry, ["ref"], rewrite) : entry,
+        isRecord(entry) ? rewriteFields(entry, ["ref"], nameRewrite) : entry,
       ),
     );
   }
@@ -393,6 +397,14 @@ export function invalidateDeletedSheetReferences<T extends object>(
       const eq = broken.startsWith("=") ? "=" : "";
       const body = eq ? broken.slice(1) : broken;
       return body.startsWith("#REF!") && !body.includes(",") ? `${eq}#REF!` : broken;
+    },
+    // A name's formula is stored bare (`Table6[]`, no `=`): a reference to a
+    // table that goes with the sheet breaks there too, as Excel's does
+    // (xlsx-rounds R450-X51 E18: `Table8.3` read Table6[] after the delete).
+    nameRewrite: (formula) => {
+      if (formula.startsWith("=")) return invalidate(formula);
+      const broken = invalidate(`=${formula}`);
+      return broken === `=${formula}` ? formula : broken.slice(1);
     },
   });
   return withoutBrokenSpills(sheet, rewritten);

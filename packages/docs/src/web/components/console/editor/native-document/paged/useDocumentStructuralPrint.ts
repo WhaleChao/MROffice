@@ -80,6 +80,11 @@ export interface UseDocumentStructuralPrintOptionsInputs {
   sectionBands: UseDocumentPagedSurfaceResult["sectionBands"];
   sheetFootnoteZones: UseDocumentPagedSurfaceResult["sheetFootnoteZones"];
   sheetNoteContinuationPages: UseDocumentPagedSurfaceResult["sheetNoteContinuationPages"];
+  /** The page fields each drawn sheet's header and footer show (the
+   * sections' own Start at / format / chapter numbers): the copy prints the
+   * same, not a plain count of its own. */
+  sheetBandBoxes?: UseDocumentPagedSurfaceResult["sheetBandBoxes"];
+  sheetBandContext?: UseDocumentPagedSurfaceResult["sheetBandContext"];
   showPageNumbers: DocumentSurfaceAttrState["showPageNumbers"];
   t: ReturnType<typeof useTranslations<"console-notebooks">>;
   titleRef: RefObject<string>;
@@ -98,6 +103,8 @@ export function useDocumentStructuralPrintOptions({
   sectionBands,
   sheetFootnoteZones,
   sheetNoteContinuationPages,
+  sheetBandBoxes,
+  sheetBandContext,
   showPageNumbers,
   t,
   titleRef,
@@ -164,6 +171,9 @@ export function useDocumentStructuralPrintOptions({
         pageNumberFormat,
         pageNumberStart,
         pageNumberStartSection,
+        sheetPageFields: sheetBandContext && sheetBandBoxes
+          ? { sheets: sheetBandBoxes.length, at: (index: number, kind: "header" | "footer") => sheetBandContext(index, kind) }
+          : null,
         // V3.4: per-sheet footnote zones print above the footer band.
         footnoteZones: sheetFootnoteZones.size > 0 ? sheetFootnoteZones : null,
         footnoteContinuationPages: sheetNoteContinuationPages,
@@ -191,6 +201,8 @@ export function useDocumentStructuralPrintOptions({
     sectionBands,
     sheetFootnoteZones,
     sheetNoteContinuationPages,
+    sheetBandBoxes,
+    sheetBandContext,
     showPageNumbers,
     t,
     titleRef,

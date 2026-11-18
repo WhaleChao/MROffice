@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import type { BandRichBlock } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import { afterFontsReady } from "@mrnote/core/web/lib/font-face-news.ts";
 
-import { buildBandRichDom, keepBandObjectsOnPaper, layoutBandTabs, wrapBandTextAroundObjects, type BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
+import { buildBandRichDom, keepBandObjectsOnPaper, layoutBandTabs, paintBandTextWarps, wrapBandTextAroundObjects, type BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 
 
 
@@ -98,12 +98,16 @@ export default function BandRichView({
       kept: Boolean(host.querySelector("[data-band-keep-on-paper] [data-band-keep]")),
       // An object the band's own lines go round (`wrapBandTextAroundObjects`).
       wraps: Boolean(host.querySelector("[data-band-wrap]")),
+      // A WordArt box whose words are painted bent once laid out
+      // (`paintBandTextWarps`).
+      warps: Boolean(host.querySelector("[data-band-text-warp]")),
     });
     const layout = () => {
-      const { tabs, kept, wraps } = watched();
+      const { tabs, kept, wraps, warps } = watched();
       if (tabs) layoutBandTabs(host);
       if (kept) keepBandObjectsOnPaper(host);
       if (wraps || host.querySelector("[data-band-wrap-push]")) wrapBandTextAroundObjects(host);
+      if (warps) paintBandTextWarps(host);
     };
     let cancelled = false;
     const fonts = host.ownerDocument.fonts;
@@ -120,8 +124,8 @@ export default function BandRichView({
     // (each read lays the whole document out first: afterFontsReady).
     const stopRedraw = afterFontsReady(host.ownerDocument, redraw);
     fonts?.addEventListener?.("loadingdone", redraw);
-    const { tabs, kept, wraps } = watched();
-    if (!tabs && !kept && !wraps) {
+    const { tabs, kept, wraps, warps } = watched();
+    if (!tabs && !kept && !wraps && !warps) {
       return () => {
         cancelled = true;
         stopRedraw();

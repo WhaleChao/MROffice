@@ -7,13 +7,13 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { contentKey } from "@mrnote/core/web/lib/content-hash.ts";
-import { clampRowHeight, MAX_ROW_HEIGHT_PX, officeCombinedRowHeight, officeCombinedRowParts, officeRowHeight, officeRowMetricsKnown, officeStackedLinesHeight, stackedTextLetterSpacing, type OfficeRowFont } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
+import { clampRowHeight, MAX_NATIVE_ROW_HEIGHT_PX, officeCombinedRowHeight, officeCombinedRowParts, officeFloorRowHeight, officeRowHeight, officeStandingRowHeight, officeRowMetricsKnown, officeStackedLinesHeight, stackedTextLetterSpacing, type OfficeRowFont } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import { SPREADSHEET_WRAP_LINE_HEIGHT } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
 import { layoutNativeText, measureNativeTextHeightBatch, measureNativeAutoRowHeight, measureNativeParagraphLineHeight, measureNativeTextHeight, type NativeTextLayoutRequest, type NativeTextLine, type NativeTextPart } from "../../../../lib/spreadsheet/native-text-layout";
 import { clampNativeAutomaticRowHeight, nativeTextAdvances, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { useSpreadsheetTextEngineEpoch } from "./useSpreadsheetTextEngineEpoch";
 import { fontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
-import { officeHintedWrapLines, officeHintedWrapRunLines } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
+import { OFFICE_COMPLEX_WRAP_TEXT, officeDigitPx, officeHintedWrapLines, officeHintedWrapRoom, officeHintedWrapRunLines } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
 
 export interface AutoRowMeasurement {
   row: number;
@@ -43,10 +43,16 @@ export interface AutoRowMeasurement {
   /** The faces of the row's positions with no cell (its format's, else the
    * columns' and the workbook's): an imported Windows grid's row fits them
    * with its cells' faces (officeCombinedRowHeight). */
-  rowFonts?: { family: string; sizePt: number; bold?: boolean }[];
+  rowFonts?: { family: string; sizePt: number; bold?: boolean; record?: OfficeRowFont["record"]; standing?: boolean }[];
   /** False for a cell aligned top, center, justify or distributed: its lines
    * do not stand on the row's baseline (officeStackedLinesHeight). */
   baseline?: false;
+  /** The workbook's Normal font's widest digit, px: the steps of Windows
+   * Excel's wrap room (officeHintedWrapRoom, lookwin p116b-lw). */
+  normalDigitPx?: number;
+  /** Excel wraps this cell after a wrapped complex-script cell of the load:
+   * a line broken at a space keeps room for one (officeSpacedWraps). */
+  spaced?: true;
 }
 
 /**
@@ -149,14 +155,56 @@ function boldWeight(weight: unknown): boolean {
   return weight === "bold" || weight === "bolder" || (typeof weight === "number" ? weight >= 600 : Number(weight) >= 600);
 }
 
+/** The custom properties a measurement marks a Superscript / Subscript cell
+ * or run with (the painted CSS shrinks a run's size; Excel's row grows for
+ * the face at its own size, officeScriptExtra). */
+export const OFFICE_SCRIPT_MARK = "--mrai-office-script";
+export const OFFICE_SCRIPT_SIZE_MARK = "--mrai-office-size";
+
+/** The marks a measurement carries for a Superscript / Subscript cell or run:
+ * its script, and a run's own size (px) where its painted CSS is shrunk. */
+export function officeScriptMarks(style: { readonly superscript?: boolean; readonly subscript?: boolean } | undefined, sizePx?: unknown): CSSProperties {
+  const script = style?.superscript === true ? "super" : style?.subscript === true ? "sub" : undefined;
+  if (!script) return {};
+  return { [OFFICE_SCRIPT_MARK]: script, ...(typeof sizePx === "number" && sizePx > 0 ? { [OFFICE_SCRIPT_SIZE_MARK]: sizePx } : {}) } as CSSProperties;
+}
+
+/** Whether a measurement holds a Superscript / Subscript cell or run. */
+function scriptMarked(item: AutoRowMeasurement): boolean {
+  const marked = (style: unknown) => Boolean(style && (style as Record<string, unknown>)[OFFICE_SCRIPT_MARK]);
+  return marked(item.style) || (item.parts ?? []).some((part) => marked(part.style));
+}
+
+/** The face one line of a cell styled `style` stands its row in, where the
+ * row tables know it (Windows Excel's own measure); undefined for a face they
+ * lack. */
+export function officeKnownStyleFace(style: CSSProperties): OfficeRowFont | undefined {
+  const face = officeStyleFace(style, style);
+  if (!face || !officeRowMetricsKnown(face.family, face.sizePt)) return undefined;
+  return { family: face.family, sizePt: face.sizePt, bold: face.bold, ...(face.script ? { script: face.script } : {}) };
+}
+
+/** The face a style draws its text in, as Excel's rows and wraps read it: a
+ * scripted run at its own size, with its script. */
+function officeStyleFace(style: CSSProperties, base: CSSProperties): (OfficeRowFont & { family: string; sizePt: number; italic: boolean }) | undefined {
+  const marks = style as Record<string, unknown>;
+  const script = marks[OFFICE_SCRIPT_MARK] === "super" || marks[OFFICE_SCRIPT_MARK] === "sub" ? marks[OFFICE_SCRIPT_MARK] as "super" | "sub" : undefined;
+  const family = leadFamily(style.fontFamily);
+  const marked = marks[OFFICE_SCRIPT_SIZE_MARK];
+  const size = typeof marked === "number" ? marked
+    : typeof style.fontSize === "number" ? style.fontSize
+    : script && typeof base.fontSize === "number" ? base.fontSize : Number.NaN;
+  if (!family || !(size > 0)) return undefined;
+  return { family, sizePt: size * 0.75, bold: boldWeight(style.fontWeight), italic: style.fontStyle === "italic", ...(script ? { script } : {}) };
+}
+
 function officeLineFaces(item: AutoRowMeasurement): { height: number; fonts: OfficeRowFont[] } | undefined {
   let height = 0;
   const fonts: OfficeRowFont[] = [];
   for (const style of [item.style, ...(item.parts ?? []).map((part) => ({ ...item.style, ...(part.style as CSSProperties | undefined) }))]) {
-    const family = leadFamily(style.fontFamily);
-    const size = typeof style.fontSize === "number" ? style.fontSize : Number.NaN;
-    if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return undefined;
-    const font = { family, sizePt: size * 0.75, bold: boldWeight(style.fontWeight) };
+    const face = officeStyleFace(style, item.style);
+    if (!face || !officeRowMetricsKnown(face.family, face.sizePt)) return undefined;
+    const font = { family: face.family, sizePt: face.sizePt, bold: face.bold, ...(face.script ? { script: face.script } : {}) };
     fonts.push(font);
     height = Math.max(height, officeRowHeight(font));
   }
@@ -179,11 +227,15 @@ function officeLinesHeight(item: AutoRowMeasurement, office: number, lines: numb
     // One line: its faces set with the row's other faces (a top-aligned line
     // too stands no lower than the row's own line, officeStackedLinesHeight).
     if (item.baseline === false) {
-      const floor = item.rowFonts?.length ? officeCombinedRowHeight(item.rowFonts) : undefined;
+      const floor = item.rowFonts?.length ? officeFloorRowHeight(item.rowFonts) : undefined;
       return Math.max(office, floor ?? 0);
     }
-    const combined = faces ? officeCombinedRowHeight(item.rowFonts?.length ? [...faces.fonts, ...item.rowFonts] : faces.fonts) : undefined;
-    return Math.max(office, combined ?? 0);
+    // Only the bottom-aligned positions share its baseline; a top or centred
+    // one stands at its own line (officeFloorRowHeight, lookwin p168-lw).
+    const bottom = item.rowFonts?.filter((font) => !font.standing) ?? [];
+    const combined = faces ? officeCombinedRowHeight(bottom.length ? [...faces.fonts, ...bottom] : faces.fonts) : undefined;
+    const standing = item.rowFonts?.length ? officeStandingRowHeight(item.rowFonts) : 0;
+    return Math.max(office, combined ?? 0, standing ?? 0);
   }
   let own = lines * office;
   let last = faces ? officeCombinedRowParts(faces.fonts) : undefined;
@@ -201,9 +253,11 @@ function officeLinesHeight(item: AutoRowMeasurement, office: number, lines: numb
       last = (lastFonts ? officeCombinedRowParts(lastFonts) : undefined) ?? last;
     }
   }
-  const floor = item.rowFonts?.length ? officeCombinedRowParts(item.rowFonts) : undefined;
-  if (!last) return Math.max(own, floor ? floor.ascent + floor.descent + 1 : 0);
-  return officeStackedLinesHeight(own, last, floor, item.baseline !== false);
+  const bottom = item.rowFonts?.filter((font) => !font.standing) ?? [];
+  const floor = bottom.length ? officeCombinedRowParts(bottom) : undefined;
+  const standing = item.rowFonts?.length ? officeStandingRowHeight(item.rowFonts) ?? 0 : 0;
+  if (!last) return Math.max(own, floor ? floor.ascent + floor.descent + 1 : 0, standing);
+  return Math.max(officeStackedLinesHeight(own, last, floor, item.baseline !== false), standing);
 }
 
 /**
@@ -230,18 +284,17 @@ function officeLaidLinesFonts(item: AutoRowMeasurement, laid: readonly NativeTex
       ? [...line.parts.map((part) => ({ ...item.style, ...(part.style as CSSProperties | undefined) })),
         ...(line.hardBreak && line.breakStyle ? [{ ...item.style, ...line.breakStyle }] : [])]
       : [{ ...item.style, ...line.emptyStyle }];
-    out.push(officeStyleFonts(styles));
+    out.push(officeStyleFonts(styles, item.style));
   }
   return out;
 }
 
-function officeStyleFonts(styles: readonly CSSProperties[]): OfficeRowFont[] | undefined {
+function officeStyleFonts(styles: readonly CSSProperties[], base: CSSProperties): OfficeRowFont[] | undefined {
   const fonts: OfficeRowFont[] = [];
   for (const style of styles) {
-    const family = leadFamily(style.fontFamily);
-    const size = typeof style.fontSize === "number" ? style.fontSize : Number.NaN;
-    if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return undefined;
-    fonts.push({ family, sizePt: size * 0.75, bold: boldWeight(style.fontWeight) });
+    const face = officeStyleFace(style, base);
+    if (!face || !officeRowMetricsKnown(face.family, face.sizePt)) return undefined;
+    fonts.push({ family: face.family, sizePt: face.sizePt, bold: face.bold, ...(face.script ? { script: face.script } : {}) });
   }
   return fonts;
 }
@@ -289,13 +342,11 @@ function hintedLines(item: AutoRowMeasurement): { count: number; laid?: NativeTe
 function hintedRunLines(item: AutoRowMeasurement, parts: readonly NativeTextPart[]): { count: number; laid: NativeTextLine[] } | undefined {
   const runs = [];
   for (const part of parts) {
-    const style = { ...item.style, ...(part.style as CSSProperties | undefined) };
-    const family = leadFamily(style.fontFamily);
-    const size = typeof style.fontSize === "number" ? style.fontSize : Number.NaN;
-    if (!family || !(size > 0)) return undefined;
-    runs.push({ text: part.text.replace(/\r\n?/g, "\n"), family, sizePt: size * 0.75, bold: boldWeight(style.fontWeight), italic: style.fontStyle === "italic" });
+    const face = officeStyleFace({ ...item.style, ...(part.style as CSSProperties | undefined) }, item.style);
+    if (!face) return undefined;
+    runs.push({ text: part.text.replace(/\r\n?/g, "\n"), family: face.family, sizePt: face.sizePt, bold: face.bold === true, italic: face.italic });
   }
-  const lines = officeHintedWrapRunLines(runs, item.width);
+  const lines = officeHintedWrapRunLines(runs, item.width, { normalDigitPx: item.normalDigitPx, spaced: item.spaced === true });
   if (!lines?.length) return undefined;
   // Each line's pieces of the runs, found in the cell's text from where the
   // last one ended (the server's cell_line_segments).
@@ -328,12 +379,33 @@ function hintedRunLines(item: AutoRowMeasurement, parts: readonly NativeTextPart
   return { count: lines.length, laid };
 }
 
+/**
+ * The width complex-script letters (Bengali in Nirmala UI, Arabic, Hebrew)
+ * of an imported Windows grid wrap at, px: Windows Excel's own room of the
+ * column (officeHintedWrapRoom) at the face's whole-pixel em, scaled to its
+ * size (lookwin p119-lw: 36 of R379-X18's Bengali texts x 16 widths in Arial
+ * 10 and SutonnyMJ 12 cells, 1,124 of 1,152 line counts, the column less the
+ * cell's padding 1,085). The API's cell_text_lines is the same rule.
+ * Undefined for other text (the probe keeps the column less its padding).
+ */
+function complexWrapWidth(item: AutoRowMeasurement): number | undefined {
+  if (item.dpi !== 96 || item.singleLine || item.rotation || item.stacked || item.nativeParagraph) return undefined;
+  if (!OFFICE_COMPLEX_WRAP_TEXT.test(itemText(item))) return undefined;
+  const family = leadFamily(item.style.fontFamily);
+  const size = typeof item.style.fontSize === "number" ? item.style.fontSize : Number.NaN;
+  if (!family || !(size > 0)) return undefined;
+  const emPx = Math.max(1, Math.floor(size * 0.75 * 96 / 72 + 0.5));
+  const digitPx = officeDigitPx({ family, sizePt: size * 0.75, bold: boldWeight(item.style.fontWeight), italic: item.style.fontStyle === "italic" });
+  return Math.max(1, officeHintedWrapRoom(item.width, emPx, item.normalDigitPx, digitPx) * size / emPx);
+}
+
 function hintedLineCount(item: AutoRowMeasurement): number | undefined {
   const family = leadFamily(item.style.fontFamily);
   const size = typeof item.style.fontSize === "number" ? item.style.fontSize : Number.NaN;
   if (!family || !(size > 0)) return undefined;
   const bold = boldWeight(item.style.fontWeight);
-  const lines = officeHintedWrapLines(item.text, { family, sizePt: size * 0.75, bold, italic: item.style.fontStyle === "italic" }, item.width);
+  const lines = officeHintedWrapLines(item.text, { family, sizePt: size * 0.75, bold, italic: item.style.fontStyle === "italic" }, item.width,
+    { normalDigitPx: item.normalDigitPx, spaced: item.spaced === true });
   return lines?.length;
 }
 
@@ -341,10 +413,13 @@ function hintedLineCount(item: AutoRowMeasurement): number | undefined {
  * A row Windows Excel fits to its lines, px: the faces' own heights, not
  * floored at the grid's 18 px minimum row (clampRowHeight) -- a wrapped
  * Arial 8 line is a 15 px row, as Excel fits and prints it (R298-X21: every
- * "Ranked first" row printed 18 px tall, 11 pages for Excel's 7).
+ * "Ranked first" row printed 18 px tall, 11 pages for Excel's 7) -- and
+ * capped at Excel's tallest row, 409.5 pt (546 px), not the 512 px a row can
+ * be dragged to: a row of 516 characters of Calibri 9 that Excel saved at
+ * 409.5 pt stands there (lookwin p57-lw; R350-X21 printed 24.7 pt short).
  */
 function officeAutoRowHeight(height: number): number {
-  return Math.min(MAX_ROW_HEIGHT_PX, Math.max(1, Math.round(height)));
+  return Math.min(MAX_NATIVE_ROW_HEIGHT_PX, Math.max(1, Math.round(height)));
 }
 
 function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, text: HTMLElement): number | null {
@@ -355,6 +430,13 @@ function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, tex
     // faces (lookwin p58-lw); a face the metrics do not know asks nothing.
     const office = officeLineHeight(item);
     return office === undefined ? 0 : officeAutoRowHeight(officeLinesHeight(item, office, 1));
+  }
+  if (item.singleLine && item.dpi === 96 && !item.rotation && !item.stacked && !item.baseHeightOnly && scriptMarked(item)) {
+    // One line with a Superscript / Subscript face: Excel's own row of its
+    // faces, the script's rise or drop included (officeScriptExtra), not the
+    // browser's line box of its shrunk text.
+    const office = officeLineHeight(item);
+    if (office !== undefined) return officeAutoRowHeight(officeLinesHeight(item, office, 1));
   }
   if (!item.baseHeightOnly && !item.numericValue) {
     const hinted = hintedLines(item);
@@ -402,7 +484,7 @@ function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, tex
     // Normal view has 9px padding on each side; Page Layout has less.
     // One shared height must fit both, independent of the active view.
     // The painted paragraph also loses the cell's 1px gridline.
-    width: `${Math.max(1, item.width - 2 * (item.paddingX ?? 9) - (item.singleLine || item.nativeParagraph ? 0 : 1))}px`, height: "auto",
+    width: `${complexWrapWidth(item) ?? Math.max(1, item.width - 2 * (item.paddingX ?? 9) - (item.singleLine || item.nativeParagraph ? 0 : 1))}px`, height: "auto",
   });
   if (item.dpi) {
     const font = `${text.style.fontStyle} ${text.style.fontWeight} ${text.style.fontSize} ${text.style.fontFamily}`;

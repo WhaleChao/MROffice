@@ -4,10 +4,12 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { SheetFact } from "../../../../lib/editor/sheet-facts";
-import { plainTextEdits } from "./textblockOnlyEdits";
+import { editsStayInsideTextblocks, plainTextEdits } from "./textblockOnlyEdits";
+import { imeReplayingAppendTransaction } from "./imeCompositionGuard";
 import { Extension } from "@tiptap/core";
-import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { Node as ProseMirrorNode, NodeType } from "@tiptap/pm/model";
+import { AttrStep, Mapping, ReplaceAroundStep } from "@tiptap/pm/transform";
+import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import styles from "./sourceHardBreakTail.module.css";
 
@@ -21,12 +23,21 @@ type Segment = {
   styleName: unknown;
 };
 
-function sourceSegment(node: ProseMirrorNode): Segment | null {
+/**
+ * A piece of a source paragraph a page or column break splits. Its layout
+ * (`sourceHardBreakTailPositions`, `sourceHardBreakPiecePositions`) is read
+ * only where the source does not state `w:splitPgBreakAndParaMark`, which
+ * moves the mark after a paragraph's last page break. `anyMark` reads the
+ * pieces where it does too: they are still one `w:p`, whose properties are
+ * the whole paragraph's (corpus R465-D20, R466-D19).
+ */
+function sourceSegment(node: ProseMirrorNode, anyMark = false): Segment | null {
   if (node.type.name !== "paragraph" && node.type.name !== "heading") return null;
   const source = node.attrs.source;
   const marker = source?.hardBreakSegment;
   if (!source || source.adapter !== "docx" || source.nodeType !== "paragraph" ||
-      !marker || marker.version !== 1 || marker.splitParagraphMark !== false ||
+      !marker || marker.version !== 1 ||
+      (anyMark ? typeof marker.splitParagraphMark !== "boolean" : marker.splitParagraphMark !== false) ||
       !Number.isSafeInteger(marker.index) || !Number.isSafeInteger(marker.count) ||
       marker.index < 0 || marker.count < 2 || marker.index >= marker.count ||
       typeof marker.nonPrintingEmptyTail !== "boolean") return null;
@@ -122,7 +133,23 @@ export function sourceHardBreakTailPositions(doc: ProseMirrorNode): number[] {
   return result;
 }
 
+/**
+ * Whether `node` is a Word paragraph's empty tail after a page break inside
+ * it (the paragraph mark standing after `<w:br w:type="page"/>`), or a list
+ * holding only that tail (a numbered paragraph's). Read from the node alone,
+ * for the page ledger: at the end of the document Word opens no page for it.
+ */
+export function isNonPrintingEmptyTailBlock(node: ProseMirrorNode): boolean {
+  let tail = node;
+  if (LIST_NODES.has(node.type.name)) {
+    if (node.childCount !== 1 || node.firstChild!.childCount !== 1) return false;
+    tail = node.firstChild!.firstChild!;
+  }
+  return tail.content.size === 0 && sourceSegment(tail)?.nonPrintingEmptyTail === true;
+}
+
 const HOLDS_SOURCE_SEGMENT = new SheetFact((node) => sourceSegment(node) !== null);
+const HOLDS_ANY_SOURCE_SEGMENT = new SheetFact((node) => sourceSegment(node, true) !== null);
 
 /**
  * The pieces of paragraphs a page break inside them split, as Word lays them
@@ -172,6 +199,150 @@ export function sourceHardBreakPiecePositions(doc: ProseMirrorNode): { leads: nu
     }
   });
   return { leads, continuations };
+}
+
+/**
+ * Attributes of a piece that are not the paragraph's properties: its own
+ * identity and provenance, the paragraph mark's formatting and its revision
+ * (held by the last piece), the break Word puts before the paragraph's first
+ * line, a drop cap (its own frame on the first letter), and comment anchors.
+ * A tracked paragraph format revision is the whole paragraph's, as Word keeps
+ * one `w:pPrChange` in the `w:p`: Track Changes records it on the piece the
+ * command changed, and it is handed on with the properties it records.
+ */
+const PIECE_OWN_ATTRS = new Set([
+  "source", "block_id", "anchor_id", "toc_anchor_id", "commentThreadIds",
+  "paragraphMarkMarks", "paragraphFontSize", "pageBreakBefore",
+  "dropCap", "dropCapLines", "dropCapPosition", "dropCapDistancePt",
+  "trackParagraphMark", "wordHorizontalRule",
+]);
+
+type Piece = { node: ProseMirrorNode; pos: number };
+
+/** The flow pieces of split source paragraphs stand in: page blocks and
+ * lists are looked through, as for the tails. */
+function pieceFlow(doc: ProseMirrorNode): Piece[] {
+  const flow: Piece[] = [];
+  function collect(parent: ProseMirrorNode, start: number) {
+    parent.forEach((node, offset) => {
+      const pos = start + offset;
+      if (node.type.name === "pageBlock") collect(node, pos + 1);
+      else if (LIST_NODES.has(node.type.name)) {
+        node.forEach((item, itemOffset) => {
+          const itemPos = pos + 1 + itemOffset;
+          item.forEach((child, childOffset) => flow.push({ node: child, pos: itemPos + 1 + childOffset }));
+        });
+      } else flow.push({ node, pos });
+    });
+  }
+  collect(doc, 0);
+  return flow;
+}
+
+/**
+ * Each source paragraph whose pieces all stand, in order, with their own
+ * breaks between them: its base anchor -> its pieces by index. A paragraph
+ * whose pieces an edit has parted, joined or duplicated has none.
+ */
+export function sourceParagraphPieceGroups(doc: ProseMirrorNode): Map<string, Piece[]> {
+  const groups = new Map<string, Piece[]>();
+  if (!HOLDS_ANY_SOURCE_SEGMENT.inDoc(doc)) return groups;
+  const flow = pieceFlow(doc);
+  const ambiguous = new Set<string>();
+  flow.forEach((entry, start) => {
+    const head = sourceSegment(entry.node, true);
+    if (!head || head.index !== 0) return;
+    const pieces: Piece[] = [entry];
+    for (let index = 1; index < head.count; index++) {
+      const separator = flow[start + 2 * index - 1];
+      const candidate = flow[start + 2 * index];
+      const part = candidate ? sourceSegment(candidate.node, true) : null;
+      if (!part || part.base !== head.base || part.count !== head.count || part.index !== index ||
+          separator.node.type.name !== (part.breakBefore === "page" ? "pageBreak" : "columnBreak")) return;
+      pieces.push(candidate);
+    }
+    if (groups.has(head.base)) ambiguous.add(head.base);
+    groups.set(head.base, pieces);
+  });
+  for (const base of ambiguous) groups.delete(base);
+  return groups;
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  return a === b || JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+/** Where the batch set a node's attributes or type (`setNodeMarkup`,
+ * `setNodeAttribute`, `setBlockType`), in the batch's final document. */
+function retypedNodePositions(transactions: readonly Transaction[]): Set<number> {
+  const steps = transactions.flatMap((tr) => tr.steps);
+  const maps = transactions.flatMap((tr) => tr.mapping.maps);
+  const positions = new Set<number>();
+  steps.forEach((step, index) => {
+    let at: number | null = null;
+    if (step instanceof AttrStep) at = step.pos;
+    else if (step instanceof ReplaceAroundStep) {
+      const { from, to, gapFrom, gapTo, insert, structure } = step as unknown as {
+        from: number; to: number; gapFrom: number; gapTo: number; insert: number; structure: boolean };
+      if (structure && insert === 1 && gapFrom === from + 1 && gapTo === to - 1) at = from;
+    }
+    if (at !== null) positions.add(new Mapping(maps.slice(index + 1)).map(at));
+  });
+  return positions;
+}
+
+/**
+ * Word's paragraph properties are the whole `w:p`'s: Borders, Shading,
+ * alignment, indents, spacing or a style given to one piece of a paragraph
+ * a page or column break splits are given to every piece of it, as Word
+ * formats the whole paragraph wherever the caret is in it (corpus R460-D16
+ * E46: a box given to the title after a column break framed half the
+ * paragraph, and the export wrote the pieces as three paragraphs).
+ * Read from the steps that set a piece's attributes or type, old document
+ * against new, so a command, the ribbon and Undo all go through it; a piece
+ * whose content an edit rebuilt hands nothing on.
+ */
+export function sourceParagraphPieceFormatSync(
+  transactions: readonly Transaction[], oldState: EditorState, newState: EditorState,
+): Transaction | null {
+  if (!transactions.some((tr) => tr.docChanged && tr.getMeta("addToHistory") !== false && tr.getMeta("y-sync$") === undefined)) return null;
+  if (editsStayInsideTextblocks(transactions) || !HOLDS_ANY_SOURCE_SEGMENT.inDoc(newState.doc)) return null;
+  const touched = retypedNodePositions(transactions);
+  if (!touched.size) return null;
+  const before = sourceParagraphPieceGroups(oldState.doc);
+  if (!before.size) return null;
+  const tr = newState.tr;
+  for (const [base, pieces] of sourceParagraphPieceGroups(newState.doc)) {
+    const earlier = before.get(base);
+    if (!earlier || earlier.length !== pieces.length || !pieces.some((piece) => touched.has(piece.pos))) continue;
+    // What the edit set on its pieces, read in order.
+    const changed = new Map<string, unknown>();
+    let type: NodeType | null = null;
+    for (let index = 0; index < pieces.length; index++) {
+      const now = pieces[index].node;
+      const old = earlier[index].node;
+      if (!touched.has(pieces[index].pos)) continue;
+      if (now.type !== old.type) type = now.type;
+      for (const key of new Set([...Object.keys(old.attrs), ...Object.keys(now.attrs)])) {
+        if (!PIECE_OWN_ATTRS.has(key) && !sameValue(old.attrs[key], now.attrs[key])) changed.set(key, now.attrs[key]);
+      }
+    }
+    if (!changed.size && !type) continue;
+    for (const piece of pieces) {
+      const node = tr.doc.nodeAt(piece.pos);
+      if (!node) continue;
+      const nextType = type ?? node.type;
+      if (nextType === node.type && [...changed].every(([key, value]) => sameValue(node.attrs[key], value))) continue;
+      if (!nextType.validContent(node.content)) continue;
+      // A piece standing where its new type may not (a list item's first
+      // paragraph cannot become a heading) keeps its type.
+      const $piece = tr.doc.resolve(piece.pos);
+      const type_ = $piece.parent.canReplaceWith($piece.index(), $piece.index() + 1, nextType) ? nextType : node.type;
+      if (type_ === node.type && [...changed].every(([key, value]) => sameValue(node.attrs[key], value))) continue;
+      tr.setNodeMarkup(piece.pos, type_, { ...node.attrs, ...Object.fromEntries(changed) }, node.marks);
+    }
+  }
+  return tr.docChanged ? tr : null;
 }
 
 type TailState = { positions: number[]; decorations: DecorationSet };
@@ -224,6 +395,8 @@ export const SourceHardBreakTail = Extension.create({
         },
       },
       props: { decorations: (state) => sourceHardBreakTailKey.getState(state)?.decorations ?? DecorationSet.empty },
+    }), new Plugin({
+      appendTransaction: imeReplayingAppendTransaction(sourceParagraphPieceFormatSync),
     })];
   },
 });

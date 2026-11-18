@@ -9,6 +9,7 @@ import OFFICE_DIGIT_WHOLE_EM from "./office-digit-whole-em.json";
 import OFFICE_ROW_METRICS from "./office-row-metrics.json";
 import OFFICE_ROW_HEIGHTS from "./office-row-heights.json";
 import OFFICE_ROW_PARTS from "./office-row-parts.json";
+import OFFICE_ROW_SCRIPTS from "./office-row-scripts.json";
 import { excelFontRecordOf, excelWindowsFaceKey, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
 import { advancesOf } from "./office-hinted-wrap";
 
@@ -104,6 +105,8 @@ interface SparseAxisResolverMetadata {
   defaultSize: number;
   overrides: ReadonlyMap<number, number>;
   hidden?: ReadonlySet<number>;
+  /** Hidden lines held as inclusive runs (``maskHiddenAxisLines``). */
+  hiddenSpans?: ReadonlyArray<readonly [number, number]>;
   intrinsic?: SparseAxisSizeResolver;
 }
 
@@ -180,53 +183,88 @@ export function createSparseAxisSizeResolver(options: {
 }
 
 /** View-only collapse. Stored dimensions remain in the base resolver. */
-export function maskHiddenAxisLines(base: SparseAxisSizeResolver, hiddenLines: Iterable<number>): SparseAxisSizeResolver {
+export function maskHiddenAxisLines(
+  base: SparseAxisSizeResolver,
+  hiddenLines: Iterable<number>,
+  
+
+
+
+  hiddenSpans: ReadonlyArray<readonly [number, number]> = [],
+): SparseAxisSizeResolver {
   const baseMetadata = base[SPARSE_AXIS_RESOLVER];
   const intrinsic = baseMetadata.intrinsic ?? base;
   const source = intrinsic[SPARSE_AXIS_RESOLVER];
-  const hidden = new Set([...(baseMetadata.hidden ?? []), ...hiddenLines].filter(index => Number.isSafeInteger(index) && index >= 0));
-  if (hidden.size === 0) return base;
-  const indices = [...hidden].sort((a,b)=>a-b);
-  const runs: Array<{ first: number; last: number }> = [];
-  for (const index of indices) {
-    const previous = runs[runs.length-1];
-    if (previous && previous.last + 1 === index) previous.last = index;
-    else runs.push({ first:index, last:index });
+  // Runs of hidden lines, merged: the base's and these.
+  const spans: Array<[number, number]> = [];
+  for (const [first, last] of [...(baseMetadata.hiddenSpans ?? []), ...hiddenSpans]
+    .filter(([first, last]) => Number.isSafeInteger(first) && Number.isSafeInteger(last) && first >= 0 && first <= last)
+    .sort(([left], [right]) => left - right)) {
+    const previous = spans[spans.length - 1];
+    if (previous && first <= previous[1] + 1) previous[1] = Math.max(previous[1], last);
+    else spans.push([first, last]);
   }
-  const overrides=[...source.overrides].filter(([index])=>!hidden.has(index)).sort(([a],[b])=>a-b);
-  const overrideIndices=overrides.map(([index])=>index),prefixDeltas:number[]=[];
-  let delta=0;
-  for(const [,size] of overrides){delta+=size-source.defaultSize;prefixDeltas.push(delta);}
-  const positive=overrides.filter(([,size])=>size>0).map(([index])=>index);
-  const lowerBound=(values:readonly number[],index:number)=>{
-    let low=0,high=values.length;
-    while(low<high){const middle=(low+high)>>>1;if(values[middle]<index)low=middle+1;else high=middle;}
+  const spanFirsts = spans.map(([first]) => first);
+  const spanPrefix: number[] = [];
+  let spanned = 0;
+  for (const [first, last] of spans) { spanned += last - first + 1; spanPrefix.push(spanned); }
+  const lowerBound = (values: readonly number[], index: number) => {
+    let low = 0, high = values.length;
+    while (low < high) { const middle = (low + high) >>> 1; if (values[middle] < index) low = middle + 1; else high = middle; }
     return low;
   };
-  const resolver = ((index:number)=>hidden.has(index)?0:intrinsic(index)) as SparseAxisSizeResolver;
+  /** The span holding `index`, or undefined. */
+  const spanAt = (index: number): [number, number] | undefined => {
+    const span = spans[lowerBound(spanFirsts, index + 1) - 1];
+    return span && index <= span[1] ? span : undefined;
+  };
+  /** How many spanned lines lie before `bound`. */
+  const spannedBefore = (bound: number): number => {
+    const position = lowerBound(spanFirsts, bound);
+    if (position === 0) return 0;
+    const [first, last] = spans[position - 1];
+    return (position > 1 ? spanPrefix[position - 2] : 0) + Math.min(last, bound - 1) - first + 1;
+  };
+  const hidden = new Set([...(baseMetadata.hidden ?? []), ...hiddenLines]
+    .filter(index => Number.isSafeInteger(index) && index >= 0 && !spanAt(index)));
+  if (hidden.size === 0 && spans.length === 0) return base;
+  const isHidden = (index: number) => hidden.has(index) || spanAt(index) !== undefined;
+  const indices = [...hidden].sort((a, b) => a - b);
+  const runs: Array<{ first: number; last: number }> = [];
+  for (const [first, last] of [...indices.map((index): [number, number] => [index, index]), ...spans].sort(([a], [b]) => a - b)) {
+    const previous = runs[runs.length - 1];
+    if (previous && previous.last + 1 >= first) previous.last = Math.max(previous.last, last);
+    else runs.push({ first, last });
+  }
+  const overrides = [...source.overrides].filter(([index]) => !isHidden(index)).sort(([a], [b]) => a - b);
+  const overrideIndices = overrides.map(([index]) => index), prefixDeltas: number[] = [];
+  let delta = 0;
+  for (const [, size] of overrides) { delta += size - source.defaultSize; prefixDeltas.push(delta); }
+  const positive = overrides.filter(([, size]) => size > 0).map(([index]) => index);
+  const resolver = ((index: number) => isHidden(index) ? 0 : intrinsic(index)) as SparseAxisSizeResolver;
   resolver[SPARSE_AXIS_RESOLVER] = {
-    defaultSize:source.defaultSize,overrides:source.overrides,hidden,intrinsic,
+    defaultSize: source.defaultSize, overrides: source.overrides, hidden, hiddenSpans: spans, intrinsic,
     offsetOfLine(index) {
-      const bound=Math.max(0,Math.floor(index)),position=lowerBound(overrideIndices,bound);
+      const bound = Math.max(0, Math.floor(index)), position = lowerBound(overrideIndices, bound);
       // Count visible default lines instead of subtracting two large fractional
       // sums: a fully hidden interval must have exactly zero extent for hits.
-      return (bound-lowerBound(indices,bound))*source.defaultSize+(position?prefixDeltas[position-1]:0);
+      return (bound - lowerBound(indices, bound) - spannedBefore(bound)) * source.defaultSize + (position ? prefixDeltas[position - 1] : 0);
     },
-    visibleLine(index,count,direction) {
-      if(index<0||index>=count)return index;
-      if(source.defaultSize<=0){
-        const position=direction===1?lowerBound(positive,index):lowerBound(positive,index+1)-1;
-        const found=positive[position];
-        return found===undefined?(direction===1?count:-1):found;
+    visibleLine(index, count, direction) {
+      if (index < 0 || index >= count) return index;
+      if (source.defaultSize <= 0) {
+        const position = direction === 1 ? lowerBound(positive, index) : lowerBound(positive, index + 1) - 1;
+        const found = positive[position];
+        return found === undefined ? (direction === 1 ? count : -1) : found;
       }
-      let candidate=index;
-      while(candidate>=0&&candidate<count){
-        let low=0,high=runs.length;
-        while(low<high){const middle=(low+high)>>>1;if(runs[middle].first<=candidate)low=middle+1;else high=middle;}
-        const run=runs[low-1];
-        if(run&&candidate<=run.last){candidate=direction===1?run.last+1:run.first-1;continue;}
-        if(intrinsic(candidate)>0)return candidate;
-        candidate+=direction;
+      let candidate = index;
+      while (candidate >= 0 && candidate < count) {
+        let low = 0, high = runs.length;
+        while (low < high) { const middle = (low + high) >>> 1; if (runs[middle].first <= candidate) low = middle + 1; else high = middle; }
+        const run = runs[low - 1];
+        if (run && candidate <= run.last) { candidate = direction === 1 ? run.last + 1 : run.first - 1; continue; }
+        if (intrinsic(candidate) > 0) return candidate;
+        candidate += direction;
       }
       return candidate;
     },
@@ -406,6 +444,43 @@ export interface OfficeRowFont {
   readonly bold?: boolean;
   /** The font record's class where Windows lacks its face (excelFontRecordOf). */
   readonly record?: ExcelFontRecordClass | null;
+  /** A superscript or subscript face: its line is taller (officeScriptExtra). */
+  readonly script?: "super" | "sub";
+  /** A top or centred position's face: it stands at its own line, never on
+   * the row's baseline (officeFloorRowHeight). */
+  readonly standing?: boolean;
+}
+
+/** A face the table lacks: the share of its em the measured faces' scripts
+ * add (lookwin p109-lw, twelve faces at 6-48 pt). */
+const SCRIPT_EM_SHARE = { super: 0.17, sub: 0.2 } as const;
+
+/**
+ * The px a superscript adds to a line's ascent ("super") or a subscript to
+ * its descent ("sub") in Windows Excel's automatic row (lookwin p109-lw:
+ * Excel's own rows on resave): Arial 12 stands 20 px, superscript 24,
+ * subscript 26, and a superscript beside Calibri 11 stands 25 (its descent
+ * is still Arial's). The face's own sizes (office-row-scripts.json, the API's
+ * office_row_scripts.json), else the nearest measured size's share of the em.
+ * The API's office_script_extra is the same rule.
+ */
+export function officeScriptExtra(font: OfficeRowFont): number {
+  const script = font.script;
+  const size = font.sizePt;
+  if ((script !== "super" && script !== "sub") || typeof size !== "number" || !Number.isFinite(size) || size <= 0 || size > 409) return 0;
+  const at = script === "super" ? 0 : 1;
+  const faces = (OFFICE_ROW_SCRIPTS as { faces: Readonly<Record<string, Readonly<Record<string, readonly number[]>>>> }).faces;
+  const sizes = faces[(font.family ?? "").trim().toLowerCase()] ?? faces[excelWindowsFaceKey(font.family, font.record)];
+  let share: number = SCRIPT_EM_SHARE[script];
+  if (sizes && Object.keys(sizes).length) {
+    const found = sizes[String(Math.round(size * 2) / 2)];
+    if (found && found.length === 2) return found[at] ?? 0;
+    let nearest = "";
+    for (const key in sizes) if (!nearest || Math.abs(Number(key) - size) < Math.abs(Number(nearest) - size)) nearest = key;
+    const parts = sizes[nearest];
+    if (parts && parts.length === 2) share = (parts[at] ?? 0) / ((Number(nearest) * 96) / 72);
+  }
+  return Math.max(0, Math.round((share * size * 96) / 72));
 }
 
 /** Windows Excel's own split of a line, [ascent, descent] px with the height
@@ -444,6 +519,7 @@ function officeRowHeightMeasured(key: string, sizePt: number): number | undefine
 export function officeRowHeight(
   font: OfficeRowFont | undefined,
 ): number {
+  if (font?.script) return officeRowHeight({ ...font, script: undefined }) + officeScriptExtra(font);
   const split = officeRowPartsOf(font);
   if (split) return split[0] + split[1] + 1;
   const size = font?.sizePt;
@@ -475,6 +551,12 @@ export function officeRowHeight(
 export function officeRowParts(
   font: OfficeRowFont,
 ): { ascent: number; descent: number } | undefined {
+  if (font.script) {
+    const parts = officeRowParts({ ...font, script: undefined });
+    if (!parts) return undefined;
+    const extra = officeScriptExtra(font);
+    return font.script === "super" ? { ascent: parts.ascent + extra, descent: parts.descent } : { ascent: parts.ascent, descent: parts.descent + extra };
+  }
   const split = officeRowPartsOf(font);
   if (split) return { ascent: split[0], descent: split[1] };
   const key = excelWindowsFaceKey(font.family, font.record);
@@ -525,6 +607,34 @@ export function officeEmptyRowHeight(
   if (styled < 16_384) faces.set(`${font.family}\u0000${font.sizePt}\u0000${JSON.stringify(font.record ?? null)}`, { family: font.family, sizePt: font.sizePt, record: font.record });
   for (const face of faces.values()) if (!officeRowMetricsKnown(face.family, face.sizePt, face.record)) return undefined;
   return officeCombinedRowHeight([...faces.values()]);
+}
+
+/**
+ * One line of a row's empty positions and empty cells: the bottom-aligned
+ * faces stand on one baseline, their tallest ascent over their deepest
+ * descent; a `standing` (top or centred) face at its own line (lookwin
+ * p168-lw: blank or "Hxgy" Arial 12 and Courier New 10 cells fit 21 px both
+ * bottom-aligned, 20 -- the taller line -- centred, top or one of each). The
+ * API's office_floor_row_height. Undefined for a face the metrics lack.
+ */
+export function officeFloorRowHeight(fonts: readonly OfficeRowFont[]): number | undefined {
+  const bottom = fonts.filter((font) => !font.standing);
+  const combined = bottom.length ? officeCombinedRowHeight(bottom) : 0;
+  const standing = officeStandingRowHeight(fonts);
+  return combined === undefined || standing === undefined ? undefined : Math.max(combined, standing) || undefined;
+}
+
+/** The tallest line of the `standing` faces (0 for none), undefined for one
+ * the metrics lack. */
+export function officeStandingRowHeight(fonts: readonly OfficeRowFont[]): number | undefined {
+  let tallest = 0;
+  for (const font of fonts) {
+    if (!font.standing) continue;
+    const height = officeCombinedRowHeight([font]);
+    if (height === undefined) return undefined;
+    tallest = Math.max(tallest, height);
+  }
+  return tallest;
 }
 
 export function officeCombinedRowHeight(

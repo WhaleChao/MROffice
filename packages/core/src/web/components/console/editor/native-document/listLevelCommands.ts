@@ -48,11 +48,13 @@
  */
 
 import { Extension, getNodeType, type CommandProps, type Editor } from "@tiptap/core";
-import type { Node as PmNode, NodeType } from "@tiptap/pm/model";
+import type { Node as PmNode, NodeType, ResolvedPos } from "@tiptap/pm/model";
 import { sinkListItem as sinkListItemCommand } from "@tiptap/pm/schema-list";
 import type { EditorState, Selection } from "@tiptap/pm/state";
+import { canJoin } from "@tiptap/pm/transform";
 
-import { normalizeListDefinition } from "./listLevelDefinition";
+import { explicitOrderedListLevel } from "./listDefinitionMarkers";
+import { normalizeListDefinition, type ListDefinition } from "./listLevelDefinition";
 import { indentWholeList } from "./listWholeIndent";
 import { DEFAULT_LIST_STYLE, normalizeListStyleType } from "./listNumbering";
 
@@ -72,14 +74,62 @@ export function nextLevelListAttrs(
 }
 
 /**
+ * The Word numbering definition the list at `depth` of `$pos` draws from and
+ * the level it draws at, as the marker walk (listDefinitionMarkers) numbers
+ * it: a list with a definition of its own is a numbering's root (at its
+ * stated level, or one below the list it sits in); an ordered or bullet list
+ * nested item by item under it is that numbering one level further down.
+ * Null outside a defined numbering. PURE.
+ */
+export function definedListLevelAt(
+  $pos: ResolvedPos,
+  depth: number,
+): { definition: ListDefinition; level: number } | null {
+  let definition: ListDefinition | null = null;
+  let level = -1;
+  for (let d = 1; d <= depth; d += 1) {
+    const node = $pos.node(d);
+    const name = node.type.name;
+    if (name === "listItem") continue;
+    if (name !== "orderedList" && name !== "bulletList") {
+      definition = null;
+      level = -1;
+      continue;
+    }
+    if (level >= 0 && $pos.node(d - 1).type.name !== "listItem") {
+      definition = null;
+      level = -1;
+    }
+    const own =
+      name === "orderedList" ? normalizeListDefinition(node.attrs.listDefinition) : null;
+    if (own) definition = own;
+    level =
+      (name === "orderedList" ? explicitOrderedListLevel(node) : null) ??
+      (level >= 0 ? level + 1 : 0);
+  }
+  return definition ? { definition, level: Math.min(level, 8) } : null;
+}
+
+/**
  * Where ProseMirror's sinkListItem will CREATE a nested list for the selected
- * items, with the attributes it needs; null when it will not create one (not
- * sinkable, or the items join the previous item's existing deeper list).
+ * items, with the type and attributes it needs; null when it will not create
+ * one (not sinkable, or the items join the previous item's existing deeper
+ * list) or the created list needs nothing.
+ *
+ * In a defined numbering the new level is the definition's next `w:lvl`,
+ * whose format says what kind of list it is (Word keeps the `w:numId` and
+ * shows that level's marker; the import reads a bullet level as a bullet
+ * list nested in the numbered one, corpus R157-D16): a bullet level of a
+ * numbered list (1. / • / •) is a bullet list, a number level under a bullet
+ * level an ordered one. ProseMirror nests the parent's kind, so an ordered
+ * list at a bullet level drew "•" while every save read it as a numbering of
+ * its own: the patch wrote it a new definition ("a." in Word, R466-D95 E13)
+ * and the full export Word's bullet level, which reimported as a bullet list.
  */
 function newLevelTarget(
   selection: Selection,
   itemType: NodeType,
-): { pos: number; type: NodeType; attrs: Record<string, unknown> } | null {
+): { pos: number; from: NodeType; type: NodeType; attrs: Record<string, unknown> } | null {
   const { $from, $to } = selection;
   const range = $from.blockRange(
     $to,
@@ -90,10 +140,20 @@ function newLevelTarget(
   const before = list.child(range.startIndex - 1);
   if (before.type !== itemType) return null;
   if (before.lastChild?.type === list.type) return null;
+  // The new list opens where the previous item's content ended.
+  const pos = range.start - 1;
+  const defined = definedListLevelAt($from, range.depth);
+  if (defined) {
+    const next = defined.definition.levels[Math.min(defined.level + 1, 8)];
+    const schema = list.type.schema.nodes;
+    const kind =
+      next?.format === "bullet" ? schema.bulletList : next ? schema.orderedList : undefined;
+    if (!kind || kind === list.type) return null;
+    return { pos, from: list.type, type: kind, attrs: {} };
+  }
   const attrs = nextLevelListAttrs(list);
   if (!attrs) return null;
-  // The new list opens where the previous item's content ended.
-  return { pos: range.start - 1, type: list.type, attrs };
+  return { pos, from: list.type, type: list.type, attrs };
 }
 
 /** Word's list levels: nine (`w:ilvl` 0-8; [MS-OI29500] 17.9.6, Word will
@@ -131,11 +191,20 @@ export const DocumentListLevels = Extension.create({
           if (!sinkListItemCommand(itemType)(state, dispatch)) return false;
           if (!dispatch || !target) return true;
           const created = tr.doc.nodeAt(target.pos);
-          if (created?.type === target.type && created.firstChild?.type === itemType) {
-            tr.setNodeMarkup(target.pos, undefined, {
-              ...created.attrs,
-              ...target.attrs,
-            });
+          if (created?.type === target.from && created.firstChild?.type === itemType) {
+            if (target.type === target.from) {
+              tr.setNodeMarkup(target.pos, undefined, {
+                ...created.attrs,
+                ...target.attrs,
+              });
+            } else {
+              tr.setNodeMarkup(target.pos, target.type, target.attrs);
+              // The previous item already ends in a list of that kind (the
+              // level's earlier items): the new items join it, as Word's
+              // paragraphs of one level are one run of that level.
+              if (tr.doc.resolve(target.pos).nodeBefore?.type === target.type && canJoin(tr.doc, target.pos))
+                tr.join(target.pos);
+            }
           }
           return true;
         },

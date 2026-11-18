@@ -8,7 +8,8 @@ import * as Y from "yjs";
 import { isSharedJsonRead, jsonEquals, yToJson, yToJsonShared, type JsonValue } from "./json-crdt";
 import { CODE_COLLAB_TEXT_KEY } from "./code-collab-model";
 import {
-  documentContentSaysProjection, isDocumentSaveCopy, readDocumentCausalProjection, readSharedDocumentCausalProjection,
+  documentContentSaysProjection, isDocumentSaveCopy, readDocumentCausalProjection, readDocumentCausalProjectionAsApiReads,
+  readSharedDocumentCausalProjection,
   retainDocumentCausalSaveProjection,
 } from "./document-page-causal-model";
 import { appendPdfCausalNativeCommand, pdfSharedContent, withPdfDurableJournal } from "./pdf-page-causal-model";
@@ -810,6 +811,22 @@ function matchesProjection(doc: Y.Doc, model: PageCausalModel, content: Record<s
   return matchesRead(readProjection(doc, model), model, content);
 }
 
+
+
+
+
+
+
+function matchesApiRead(update: Uint8Array, model: PageCausalModel, content: Record<string, JsonValue>): boolean {
+  if (model !== "document-canonical-v1") return false;
+  try {
+    const api = readDocumentCausalProjectionAsApiReads(update);
+    return api !== null && matchesRead(api, model, content);
+  } catch {
+    return false;
+  }
+}
+
 function matchesRead(projection: Record<string, JsonValue>, model: PageCausalModel, content: Record<string, JsonValue>): boolean {
   if (model === "document-canonical-v1") return documentContentSaysProjection(content, projection);
   return jsonEquals(projection, model === "pdf-author-v1" ? pdfSharedContent(content) : content);
@@ -983,7 +1000,7 @@ export async function preparePageCausalCheckpoint(
       try { Y.applyUpdate(isolated, update); }
       catch { invalid(); }
       requireComplete(isolated);
-      if (!matchesProjection(isolated, model, expected)) {
+      if (!matchesProjection(isolated, model, expected) && !matchesApiRead(update, model, expected)) {
         throw new PageCausalCheckpointError("projection_mismatch");
       }
       held = rememberExtent(expectedDigest, extentOf(isolated));

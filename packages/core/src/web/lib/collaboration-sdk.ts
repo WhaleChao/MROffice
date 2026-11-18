@@ -330,8 +330,16 @@ export async function removeNotebookMember(
 // Invite links and pending (e-mail bound) invites
 // ---------------------------------------------------------------------------
 
-/** Invites carry at most edit access; the server refuses `manager`. */
+
+
+
+
 export type NotebookInviteRole = "viewer" | "editor" | "manager";
+
+/** Any other role on the wire is a malformed invite, refused as such. */
+function isNotebookInviteRole(value: unknown): value is NotebookInviteRole {
+  return value === "viewer" || value === "editor" || value === "manager";
+}
 export const NOTEBOOK_INVITE_EXPIRY_DAYS = [1, 7, 30] as const;
 export type NotebookInviteExpiryDays =
   (typeof NOTEBOOK_INVITE_EXPIRY_DAYS)[number];
@@ -383,7 +391,7 @@ function inviteFromWire(wire: InviteWire): NotebookInviteRecord {
   if (
     typeof wire.id !== "string" ||
     (wire.kind !== "link" && wire.kind !== "email") ||
-    (wire.role !== "viewer" && wire.role !== "editor") ||
+    !isNotebookInviteRole(wire.role) ||
     typeof wire.expires_at !== "string"
   ) {
     throw new Error("Malformed notebook invite");
@@ -570,7 +578,7 @@ export async function previewNotebookInvite(
   if (
     (data.status !== "active" && data.status !== "member") ||
     (data.kind !== "link" && data.kind !== "email") ||
-    (data.role !== "viewer" && data.role !== "editor")
+    !isNotebookInviteRole(data.role)
   ) {
     throw new Error("Malformed invite preview");
   }

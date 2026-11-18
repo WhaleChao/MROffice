@@ -4,6 +4,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { openingPagePaint, type OpeningPagePaint } from "../../../lib/pdf/first-page-paint";
+import { pdfSourcePolicyRefusal } from "../../../lib/pdf/source-policy-refusal";
 import { pdfDevErrorText } from "../../../lib/pdf/dev-error-text";
 import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import type { PdfArmedTextKind } from "@mrnote/core/web/lib/pdf/text-box-create.ts";
@@ -1734,6 +1736,7 @@ import {
   pdfNativeTextPointerGestureOwnsClick,
   beginPdfNativeTextActivationFeedback,
   pdfNativeTextEditBoxAtPoint,
+  pdfReaderAnnotationPressOf,
   pdfPageTextEditBoxAt,
   pdfPageTextEditPointAt,
   PDF_NATIVE_TEXT_HOVERED_ATTR,
@@ -3737,6 +3740,14 @@ export default function PDFViewer({
   const [noteSaving, setNoteSaving] = useState(false);
   const noteSavingRef = useRef(false);
   const [noteActionError, setNoteActionError] = useState<string | null>(null);
+  /** Why a write of an annotation was not taken: the file's own reason when
+   * its policy refused it a moment ago (an encrypted or signed PDF read
+   * 「保存失败，请重试」 for a retry that can never pass), else that saving
+   * failed. */
+  const saveFailedReasonRef = useRef<() => string>(() => "");
+  saveFailedReasonRef.current = () =>
+    pdfSourcePolicyRefusal(dataItemId, 3_000, { showing: true }) ?? t("pages.saveFailed");
+  const saveFailedReason = () => saveFailedReasonRef.current();
   // ---- Ink / freehand drawing -------------------------------------------
   // Freehand strokes persisted as `pdf_ink` annotations (additive to
   // `pdf_highlight` / `pdf_note`). `drawMode` turns pointer drags on a page into
@@ -6557,6 +6568,16 @@ export default function PDFViewer({
   
   const textPointerDownRef = useRef(false);
   const deferredTextSwapsRef = useRef<Array<() => void>>([]);
+  // A press held in this viewer: the selection it is dragging out is not
+  // finished. A tool armed for "the next selection" (Comment > Highlight
+  // Text and its siblings, the Replace Text mark) takes it when the press is
+  // let go. Taken at the first selectionchange, it marked the first
+  // character of the drag, disarmed, and dropped the selection under the
+  
+  // left a 6 px mark, in Chromium and in WebKit).
+  const selectionPressHeldRef = useRef(false);
+  const armedSelectionAwaitsReleaseRef = useRef(false);
+  const [armedSelectionReleases, setArmedSelectionReleases] = useState(0);
   // What each text layer on the page was built from, and the words it then
   // held: a revision whose page reads the same keeps it (prepareNativeTextOfPages).
   const shownTextLayerBuildsRef = useRef(new WeakMap<HTMLElement, Readonly<{ signature: string; text: string }>>());
@@ -6569,6 +6590,20 @@ export default function PDFViewer({
   }, []);
   useEffect(() => {
     const flush = () => {
+      if (selectionPressHeldRef.current) {
+        selectionPressHeldRef.current = false;
+        // After the browser has settled the selection the release made.
+        window.setTimeout(() => {
+          if (
+            selectionPressHeldRef.current ||
+            !armedSelectionAwaitsReleaseRef.current
+          ) {
+            return;
+          }
+          armedSelectionAwaitsReleaseRef.current = false;
+          setArmedSelectionReleases((count) => count + 1);
+        }, 0);
+      }
       if (!textPointerDownRef.current) return;
       textPointerDownRef.current = false;
       // After the browser has settled the selection the release made.
@@ -6583,7 +6618,13 @@ export default function PDFViewer({
     const down = (event: PointerEvent) => {
       const target = event.target instanceof Element ? event.target : null;
       const root = viewerRootRef.current;
-      if (target && root?.contains(target) && target.closest("[data-pdf-text-layer]")) {
+      if (!target || !root?.contains(target)) return;
+      // (A secondary mouse button drags no selection out, and the menu it
+      // opens may keep its release.)
+      if (event.pointerType !== "mouse" || event.button === 0) {
+        selectionPressHeldRef.current = true;
+      }
+      if (target.closest("[data-pdf-text-layer]")) {
         textPointerDownRef.current = true;
       }
     };
@@ -6598,6 +6639,8 @@ export default function PDFViewer({
       window.removeEventListener("blur", flush);
       textPointerDownRef.current = false;
       deferredTextSwapsRef.current = [];
+      selectionPressHeldRef.current = false;
+      armedSelectionAwaitsReleaseRef.current = false;
     };
   }, []);
   // The in-flight pan drag (null when not panning). `moved` flips once the
@@ -6657,6 +6700,7 @@ export default function PDFViewer({
   // one previously opened huge PDF cannot retain a promise per historical
   // page for the component's whole lifetime.
   const renderChainsRef = useRef<Map<number, Promise<void>>>(new Map());
+  const firstPagePaintRef = useRef<OpeningPagePaint | null>(null);
   // The render session of each document published to the reader: its page
   // renders settle with it at the latest (createPdfRenderSession), so a
   // render pdf.js never answers for a destroyed document does not hold the
@@ -8800,7 +8844,9 @@ export default function PDFViewer({
   const nativeTextRebuildClickRef = useRef<PdfNativeTextRebuildClickHandle | null>(null);
   // Where the last primary press on an Edit Content page was: a click that
   // ends a drag is kept at its press, not where it was let go.
-  const nativeTextLastPressRef = useRef<Readonly<{ clientX: number; clientY: number; at?: number }> | null>(null);
+  // `own`: on one of the reader's own objects (pdfReaderAnnotationPressOf):
+  // what it drags is that object, never a line of the page under it.
+  const nativeTextLastPressRef = useRef<Readonly<{ clientX: number; clientY: number; at?: number; own?: boolean }> | null>(null);
   const nativeTextPressKeptRef = useRef<PdfNativeTextPressKept | null>(null);
   const nativeTextLastKeyAtRef = useRef(0);
   // Every primary press is recorded at the pointer stage: the mouse events
@@ -8812,7 +8858,8 @@ export default function PDFViewer({
   useEffect(() => {
     const record = (event: PointerEvent) => {
       nativeTextLastPressRef.current = event.button === 0
-        ? { clientX: event.clientX, clientY: event.clientY, at: event.timeStamp } : null;
+        ? { clientX: event.clientX, clientY: event.clientY, at: event.timeStamp,
+          own: pdfReaderAnnotationPressOf(event.target) === "object" } : null;
     };
     const recordKey = () => { nativeTextLastKeyAtRef.current = Date.now(); };
     window.addEventListener("pointerdown", record, true);
@@ -10276,6 +10323,8 @@ export default function PDFViewer({
     },
     [visiblePages],
   );
+  const nearestVisiblePageRef = useRef(nearestVisiblePage);
+  nearestVisiblePageRef.current = nearestVisiblePage;
   const visibleOrdinalForOriginal = useCallback(
     (pageNumber: number): number => {
       const index = visiblePageItems.findIndex(
@@ -14239,8 +14288,12 @@ export default function PDFViewer({
       const requestedPageEpoch = renderLifecycleV2
         ? (pageRenderEpochsRef.current.get(pageNumber) ?? 0)
         : 0;
-      const previous =
+      // A document's first paint: a page asked while the page it opens on is
+      // being drawn starts once that one has its text (lib/pdf/first-page-paint).
+      const firstPaint = pdfDoc ? openingPagePaint(firstPagePaintRef, pdfDoc, nearestVisiblePageRef.current(currentPageRef.current), pageNumber, densityOnly !== false) : null;
+      const chained =
         renderChainsRef.current.get(pageNumber) ?? Promise.resolve();
+      const previous = firstPaint?.waitFor ? chained.then(() => firstPaint.waitFor) : chained;
       // Waited for no longer than its document's session lasts, and not
       // begun for a document whose session is over (createPdfRenderSession).
       const session = pdfDoc ? renderSessionsRef.current.get(pdfDoc) ?? null : null;
@@ -14254,6 +14307,7 @@ export default function PDFViewer({
         () => undefined,
       );
       renderChainsRef.current.set(pageNumber, settled);
+      firstPaint?.opens?.(settled);
       // Track queued/getPage work in both lifecycle modes, not only V2 maps.
       ordinaryReaderRenderActivityRef.current.add(run);
       const releaseOrdinaryActivity = () => {
@@ -18828,7 +18882,7 @@ export default function PDFViewer({
           currentId === targetNoteId ? null : currentId,
         );
       } catch {
-        setNoteActionError(t("pages.saveFailed"));
+        setNoteActionError(saveFailedReason());
         // Keep the popover open so its local draft remains available to retry.
       } finally {
         noteSavingRef.current = false;
@@ -18869,7 +18923,7 @@ export default function PDFViewer({
       if (nativeDeleteCommitted) {
         await syncManagedNote(current).catch(() => undefined);
       }
-      setNoteActionError(t("pages.saveFailed"));
+      setNoteActionError(saveFailedReason());
       /* leave the popover open so the user can retry */
     } finally {
       noteSavingRef.current = false;
@@ -18944,7 +18998,7 @@ export default function PDFViewer({
       } catch {
         // The status stays as it was, and that is said: the click did not
         // take, and pressing it again is the retry.
-        setNoteActionError(t("pages.saveFailed"));
+        setNoteActionError(saveFailedReason());
       } finally {
         noteSavingRef.current = false;
         setNoteSaving(false);
@@ -20641,7 +20695,7 @@ export default function PDFViewer({
             created.map((row) => apiDelete(`/api/v1/annotations/${row.id}`)),
           );
         }
-        setNoteActionError(t("pages.saveFailed"));
+        setNoteActionError(saveFailedReason());
       } finally {
         inkSavingRef.current = false;
         setInkSaving(false);
@@ -20991,7 +21045,7 @@ export default function PDFViewer({
             apiPatch(`/api/v1/annotations/${entry.before.id}`, { payload_json: buildInkPayload(entry.before) }),
           ),
         );
-        setNoteActionError(t("pages.saveFailed"));
+        setNoteActionError(saveFailedReason());
       } finally {
         inkSavingRef.current = false;
         setInkSaving(false);
@@ -24482,7 +24536,7 @@ export default function PDFViewer({
         );
         return true;
       } catch {
-        setNoteActionError(t("pages.saveFailed"));
+        setNoteActionError(saveFailedReason());
         /* the marker snaps back so the user can retry */
         return false;
       } finally {
@@ -40666,13 +40720,27 @@ export default function PDFViewer({
         return;
       }
       const element = event.target instanceof Element ? event.target : null;
+      // A click on one of the reader's own objects, and the click that ends
+      // a drag begun on one (wherever it is let go), is that object's: no
+      // line under it opens, moves or is kept for the page's next revision.
+      const stackPress = pdfReaderAnnotationPressOf(element);
+      const ownPress = nativeTextLastPressRef.current;
+      if (stackPress === "object" || (ownPress?.own && event.detail > 0 &&
+        (ownPress.at === undefined || event.timeStamp - ownPress.at < 5_000) &&
+        Math.hypot(event.clientX - ownPress.clientX, event.clientY - ownPress.clientY) >= 3)) {
+        nativeTextPointerGestureOwnerRef.current = null;
+        return;
+      }
       // The box the press is on by geometry, not the span the browser gave
       // it to (pdfNativeTextEditBoxAtPoint).
       // A click with no pointer behind it (Enter on a focused box) has no
       // point: it is on the box it was sent to.
+      // (On the text box layer lying over the page while a box is typed, it
+      // is on the page: the line whose frame holds the point.)
       const span = pdfNativeTextEditBoxAtPoint(element?.closest<HTMLElement>(
         `span[${PDF_NATIVE_TEXT_EDIT_BOX_ATTR}="true"]`,
-      ) ?? null, event.detail === 0 ? Number.NaN : event.clientX, event.clientY, element);
+      ) ?? null, event.detail === 0 ? Number.NaN : event.clientX, event.clientY,
+      stackPress === "layer" ? element?.closest(".pdf-viewer__page")?.querySelector("[data-pdf-text-layer]") ?? element : element);
       const loaded = loadedPdfSourceIdentityRef.current;
       const gestureGeneration = JSON.stringify([
         loaded?.dataItemId ?? null,
@@ -40725,7 +40793,7 @@ export default function PDFViewer({
       // A press dragged before it was let go (WPS moves a box by a drag on
       // it): the press of this very click, a press older than it being another.
       const press = nativeTextLastPressRef.current;
-      const drag = press && event.detail > 0 && (press.at === undefined || event.timeStamp - press.at < 5_000) &&
+      const drag = press && !press.own && event.detail > 0 && (press.at === undefined || event.timeStamp - press.at < 5_000) &&
         Math.hypot(event.clientX - press.clientX, event.clientY - press.clientY) >= 3
         ? { dx: event.clientX - press.clientX, dy: event.clientY - press.clientY } : null;
       // Pressed while the boxes were held and let go once they were back: no
@@ -40933,13 +41001,17 @@ export default function PDFViewer({
       markPdfTextLatency("open.pointerdown");
       if (nativeTextWarmTimerRef.current !== null) window.clearTimeout(nativeTextWarmTimerRef.current);
       nativeTextWarmTimerRef.current = null;
+      // (On one of the reader's own objects, the press is that object's:
+      // nothing of it is kept for a line -- pdfReaderAnnotationPressOf.)
+      const stackPress = pdfReaderAnnotationPressOf(event.target);
       nativeTextLastPressRef.current = event.button === 0
-        ? { clientX: event.clientX, clientY: event.clientY, at: event.timeStamp } : null;
+        ? { clientX: event.clientX, clientY: event.clientY, at: event.timeStamp, own: stackPress === "object" } : null;
       // A revision going up while the mouse is held replaces the element
       // pressed, and the browser sends no click for it (native-text-lost-click).
       nativeTextPressKeptRef.current?.cancel();
       nativeTextPressKeptRef.current = null;
-      const pressedPage = event.button === 0 && contentEditModeLiveRef.current && event.target instanceof Element
+      const pressedPage = event.button === 0 && contentEditModeLiveRef.current && event.target instanceof Element &&
+        stackPress !== "object"
         ? event.target.closest<HTMLElement>(".pdf-viewer__page[data-page-number]") : null;
       if (pressedPage && event.target instanceof Element) {
         const pageNumber = pressedPage.dataset.pageNumber;
@@ -40961,14 +41033,21 @@ export default function PDFViewer({
         nativeTextPointerGestureOwnerRef.current = null;
         return;
       }
+      if (stackPress === "object") {
+        nativeTextPointerGestureOwnerRef.current = null;
+        return;
+      }
       const element = event.target instanceof Element ? event.target : null;
       // The box the press is on by geometry, not the span the browser gave
       // it to (pdfNativeTextEditBoxAtPoint).
       // A click with no pointer behind it (Enter on a focused box) has no
       // point: it is on the box it was sent to.
+      // (On the text box layer lying over the page while a box is typed, it
+      // is on the page: the line whose frame holds the point.)
       const span = pdfNativeTextEditBoxAtPoint(element?.closest<HTMLElement>(
         `span[${PDF_NATIVE_TEXT_EDIT_BOX_ATTR}="true"]`,
-      ) ?? null, event.detail === 0 ? Number.NaN : event.clientX, event.clientY, element);
+      ) ?? null, event.detail === 0 ? Number.NaN : event.clientX, event.clientY,
+      stackPress === "layer" ? pressedPage?.querySelector("[data-pdf-text-layer]") ?? element : element);
       // A press the text layer took (pdf.js sets a span as wide as its run's
       // advance: a table cell's "21" reached over the cell beside it) that
       // is in no line's frame, over a shape or a picture: it is that
@@ -45036,11 +45115,11 @@ export default function PDFViewer({
           dataItemId ? undefined : t("pdf.editNotReady"),
         );
         if (outcome !== "executed") {
-          setNoteActionError(t("pages.saveFailed"));
+          setNoteActionError(saveFailedReason());
         }
         return outcome;
       } catch {
-        setNoteActionError(t("pages.saveFailed"));
+        setNoteActionError(saveFailedReason());
         return "blocked" as const;
       }
     },
@@ -45266,6 +45345,11 @@ export default function PDFViewer({
     ) {
       return;
     }
+    // The drag making this selection is still held: taken when it is let go.
+    if (selectionPressHeldRef.current) {
+      armedSelectionAwaitsReleaseRef.current = true;
+      return;
+    }
     proofingBusyRef.current = true;
     setProofingBusy(true);
     setProofingError(null);
@@ -45312,6 +45396,7 @@ export default function PDFViewer({
         setProofingBusy(false);
       });
   }, [
+    armedSelectionReleases,
     dismissSelection,
     onManagedProofingUpsert,
     pdfDoc,
@@ -45445,6 +45530,12 @@ export default function PDFViewer({
     ) {
       return;
     }
+    // The drag making this selection is still held: the mark takes what is
+    // selected when it is let go, not the drag's first character.
+    if (selectionPressHeldRef.current) {
+      armedSelectionAwaitsReleaseRef.current = true;
+      return;
+    }
     // Held only while the mark is measured (its page's geometry): it is
     // drawn then and written behind, and the next press is taken at once.
     ribbonMarkupBusyRef.current = true;
@@ -45467,6 +45558,7 @@ export default function PDFViewer({
         ribbonMarkupBusyRef.current = false;
       });
   }, [
+    armedSelectionReleases,
     dataItemId,
     dismissSelection,
     handleHighlightRequest,
@@ -56712,6 +56804,10 @@ export default function PDFViewer({
       data-pdf-working-revision={workingSource?.workingRevision}
       data-pdf-comments-hidden={commentsHidden ? "true" : "false"}
       data-pdf-proofing-mode={pendingProofingKind ?? "none"}
+      // A text mark armed from the ribbon (Highlight Text, Underline, ...):
+      // the next drag over the page's words is the mark's (pdf-viewer.css
+      // lets it through the link regions).
+      data-pdf-markup-armed={pendingRibbonMarkupStyle ?? undefined}
       data-pdf-page-workspace={
         pageReplaceWorkspaceActive ? "replace" : pageGridActive ? "grid" : undefined
       }
@@ -57825,7 +57921,14 @@ export default function PDFViewer({
             data-testid="pdf-ink-unsaved-notice"
             data-ink-unsaved={inkUnsavedNotice}
           >
-            {inkUnsavedNotice === "failing" ? t("pdfViewer.inkNotSavedYet") : t("pdfViewer.inkPageFull")}
+            {inkUnsavedNotice === "failing"
+              ? (() => {
+                  // A file whose policy refuses the stroke for good: its
+                  // reason, not "saving is tried again, check your connection".
+                  const policy = pdfSourcePolicyRefusal(dataItemId, 60_000, { showing: true });
+                  return policy ? `${policy} ${t("pdfViewer.inkStaysPageFileReadOnly")}` : t("pdfViewer.inkNotSavedYet");
+                })()
+              : t("pdfViewer.inkPageFull")}
           </div>
         </WindowNotice>
       ) : null}

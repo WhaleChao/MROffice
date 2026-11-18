@@ -18,8 +18,6 @@ const PYTHON_BLOCKED_MODULES: ReadonlyMap<string, CodeRuntimeGuardKind> = new Ma
   ["tkinter", "gui"],
   ["Tkinter", "gui"],
   ["_tkinter", "gui"],
-  ["turtle", "gui"],
-  ["turtledemo", "gui"],
   ["PyQt4", "gui"],
   ["PyQt5", "gui"],
   ["PyQt6", "gui"],
@@ -35,9 +33,6 @@ const PYTHON_BLOCKED_MODULES: ReadonlyMap<string, CodeRuntimeGuardKind> = new Ma
   ["_curses", "terminal"],
   ["subprocess", "process"],
 ]);
-
-/** Opening pygame's window: the one pygame use that needs a screen. */
-const PYGAME_DISPLAY = /\bdisplay\s*\.\s*set_mode\s*\(|\bpygame\s*\.\s*display\s*\.\s*init\s*\(/;
 
 /**
  * ``source`` with every comment and string literal blanked to spaces (line
@@ -154,12 +149,9 @@ export function codeRuntimeGuardFindings(
   const code = pythonCodeOnly(source);
   const findings: CodeRuntimeGuardFinding[] = [];
   const seen = new Set<string>();
-  const opensPygameWindow = PYGAME_DISPLAY.test(code);
   for (const { module, line } of pythonImports(code)) {
     const top = module.split(".")[0];
-    const kind =
-      PYTHON_BLOCKED_MODULES.get(top) ??
-      ((top === "pygame" || top === "pygame_ce") && opensPygameWindow ? "gui" : undefined);
+    const kind = PYTHON_BLOCKED_MODULES.get(top);
     if (!kind || seen.has(top)) continue;
     seen.add(top);
     findings.push({ module, kind, line });

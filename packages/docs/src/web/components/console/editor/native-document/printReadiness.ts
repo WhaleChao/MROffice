@@ -227,11 +227,45 @@ async function waitForImage(
     await withAbort(image.decode(), signal);
   } catch (error) {
     if (error instanceof PrintReadinessError) throw error;
+    // Chromium refuses decode() for a picture too large to decode whole at
+    // once (an EncodingError), though it paints it, scaled down, as ever:
+    // R404-D02's 7000 x 5000 photographs failed every print of the
+    // document, and its PDF came from the fallback writer (31 pages where
+    // Word has 24). Its pixels are read again at a small size; only a
+    // picture that cannot give even those fails the print.
+    if (await decodesScaledDown(image, signal)) return;
     throw new PrintReadinessError(
       "image-decode",
       "An image in the print document failed to decode.",
       error,
     );
+  }
+}
+
+/** `window.__docsPrintScaledDecodeOff = true`: a refused decode() fails the
+ * print, as before (A/B of one build). */
+function scaledDecodeOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsPrintScaledDecodeOff?: boolean }).__docsPrintScaledDecodeOff === true;
+}
+
+/** Whether a loaded picture whose decode() was refused gives its pixels at a
+ * small size (createImageBitmap's scaled decode). */
+async function decodesScaledDown(image: HTMLImageElement, signal: AbortSignal): Promise<boolean> {
+  if (scaledDecodeOff() || !(image.naturalWidth > 0) || !(image.naturalHeight > 0)) return false;
+  const view = image.ownerDocument?.defaultView as (Window & typeof globalThis) | null;
+  const scope = typeof view?.createImageBitmap === "function" ? view : typeof createImageBitmap === "function" ? globalThis : null;
+  if (!scope) return false;
+  try {
+    const bitmap = await withAbort(
+      scope.createImageBitmap(image, { resizeWidth: Math.min(64, image.naturalWidth), resizeQuality: "low" }),
+      signal,
+    );
+    bitmap.close?.();
+    return true;
+  } catch (error) {
+    if (error instanceof PrintReadinessError) throw error;
+    return false;
   }
 }
 

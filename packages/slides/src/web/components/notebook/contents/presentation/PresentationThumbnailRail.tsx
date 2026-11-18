@@ -111,7 +111,8 @@ export interface PresentationThumbnailRailCtl {
   openSlideRailContextMenu: (slideId: string, clientX: number, clientY: number, slideIds?: readonly string[]) => void;
   openSlideRailGapMenu: (afterSlideId: string, clientX: number, clientY: number) => void;
   setSlideRailViewport: Dispatch<SetStateAction<HTMLDivElement | null>>;
-  updateTextBlock: (blockId: string, text: string, editSelection?: TextEditSelection, insertedLineBreaksAreSoft?: boolean) => void;
+  updateTextBlock: (blockId: string, text: string, editSelection?: TextEditSelection, insertedLineBreaksAreSoft?: boolean,
+    caretAfter?: number) => void;
   commitLiveTextBlockChange: (blockId: string, transform: (block: PresentationTextBlock, slide: SlideModel) => PresentationTextBlock | null) => boolean;
   railSlideEnters: (slideId: string) => boolean;
   /** The deck's Header & Footer and the date its fields read. */
@@ -798,15 +799,15 @@ export function PresentationThumbnailRail({ ctl }: { ctl: PresentationThumbnailR
                   setActiveIndex(index);
                 }
               }}
-              onTitleChange={(slideId, text) => {
+              onTitleChange={(slideId, text, caretAfter) => {
                 const slide = slidesRef.current.find((candidate) => candidate.id === slideId);
                 const titleId = slide ? presentationOutlineProjection(slide).titleBlockId : null;
-                if (titleId) updateTextBlock(titleId, text);
+                if (titleId) updateTextBlock(titleId, text, undefined, false, caretAfter);
               }}
-              onBodyChange={(slideId, lines) => {
+              onBodyChange={(slideId, lines, caretAfter) => {
                 const slide = slidesRef.current.find((candidate) => candidate.id === slideId);
                 const bodyId = slide ? presentationOutlineProjection(slide).bodyBlockId : null;
-                if (bodyId) updateTextBlock(bodyId, lines.join("\n"));
+                if (bodyId) updateTextBlock(bodyId, lines.join("\n"), undefined, false, caretAfter);
               }}
               onLevelChange={(slideId, lineIndex, delta) => {
                 const slide = slidesRef.current.find((candidate) => candidate.id === slideId);

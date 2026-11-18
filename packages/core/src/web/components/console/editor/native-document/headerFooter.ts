@@ -36,7 +36,8 @@ import {
   type DocumentParagraphBorders,
   type DocumentTextBoxPictureFill,
 } from "../../../../lib/document-borders";
-import { textWarpDrawing } from "../../../../lib/office-text-warp";
+import { normalizeOfficeTextWarp, textWarpDrawing, type OfficeTextWarp } from "../../../../lib/office-text-warp";
+import { hasTextEffects, normalizeTextEffectMarkAttributes } from "../extensions/TextEffects";
 import {
   normalizeDocumentShapeAttrs,
   type DocumentShapeAttrs,
@@ -482,6 +483,13 @@ export interface BandRichRun {
   spacingPt?: number;
   /** Font > Advanced > Scale (`w:w`), in percent: each character this much as wide. */
   scalePct?: number;
+  /** The run's highlight or shading fill (Word's `w:highlight` / `w:shd`),
+   * painted behind its characters: `#rrggbb`. */
+  background?: string;
+  /** Font > Text Effects: a body run's `textEffects` mark value (w14 outline,
+   * fill, glow, shadow, reflection; the legacy toggles), drawn as the body
+   * draws it (`textEffectsCss`). */
+  textEffects?: Record<string, unknown>;
   font?: BandRunFont;
   text?: string;
   nativeTextId?: string;
@@ -614,6 +622,10 @@ export interface BandRichFrame {
   /** For a turned legacy VML box: Word turns the box, never its words
    * (`floatAnchor.rotation` places the box, its words stay upright). */
   textUpright?: true;
+  /** Insert > WordArt: the box's words bent by this warp (the one value the
+   * editors share, as the body's `frameBody.warp`), painted by the shared
+   * warp painter over the box (corpus R471-D27's letterhead). */
+  textWarp?: OfficeTextWarp;
   /** For a box that draws `blocks`: how many of the line's runs stand before
    * it. */
   runsBefore?: number;
@@ -664,6 +676,7 @@ type BandFrameExtras = Pick<
   | "autoHeight"
   | "autoWidth"
   | "textUpright"
+  | "textWarp"
   | "runsBefore"
   | "floatAnchor"
   | "inline"
@@ -695,6 +708,18 @@ function normalizeBandFrameExtras(
   if (frame.textUpright !== undefined) {
     if (frame.textUpright !== true) return null;
     out.textUpright = true;
+  }
+  if (frame.textWarp !== undefined) {
+    // As the server's `_normalize_frames`: a warp the shared value refuses
+    // (or `textNoShape`, which bends nothing) is not a frame this band states.
+    let warp: OfficeTextWarp | null = null;
+    try {
+      warp = normalizeOfficeTextWarp(frame.textWarp);
+    } catch {
+      warp = null;
+    }
+    if (!warp) return null;
+    out.textWarp = warp;
   }
   if (frame.textBoxFill !== undefined) {
     const fill = frame.textBoxFill as Record<string, unknown> | null;
@@ -1314,6 +1339,10 @@ export interface BandRichTable {
   /** Table direction: Right-to-left (`w:bidiVisual`): Word runs the columns
    * from the right, the first cell on the right (corpus R350-D01). */
   bidiVisual?: true;
+  /** Indent from left (`w:tblInd`, twips; negative into the margin): Word
+   * stands the table's leading edge (the right one when `bidiVisual`) that
+   * far in from the margin (corpus R400-D05's footer table, -3835). */
+  tableIndentTwips?: number;
   /** Text Wrapping: Around placed from the page or margin (`w:tblpPr`):
    * Word draws the table there and wraps the body around it. */
   floatPosition?: BandRichTableFloat;
@@ -2365,6 +2394,16 @@ export function normalizeBandRichBlocks(
         ) {
           out.scalePct = run.scalePct;
         }
+        // Font > Highlight / Shading: the run's background.
+        if (typeof run.background === "string" && /^#[0-9a-f]{6}$/.test(run.background)) {
+          out.background = run.background;
+        }
+        // Font > Text Effects: kept as read when it states an effect the
+        // body's mark draws (the API checks it against its own reader).
+        if (run.textEffects && typeof run.textEffects === "object" && !Array.isArray(run.textEffects)) {
+          const effects = normalizeTextEffectMarkAttributes(run.textEffects);
+          if (hasTextEffects(effects) || effects.stated) out.textEffects = run.textEffects as Record<string, unknown>;
+        }
         if (
           typeof run.frame === "number" &&
           Number.isInteger(run.frame) &&
@@ -2609,6 +2648,12 @@ export function normalizeBandRichBlocks(
       }
       if (record.tableAlign === "center" || record.tableAlign === "right") table.tableAlign = record.tableAlign;
       if (record.bidiVisual === true) table.bidiVisual = true;
+      if (
+        typeof record.tableIndentTwips === "number" &&
+        Number.isInteger(record.tableIndentTwips) &&
+        record.tableIndentTwips !== 0 &&
+        Math.abs(record.tableIndentTwips) <= 31_680
+      ) table.tableIndentTwips = record.tableIndentTwips;
       const floatPosition = normalizeBandRichTableFloat(record.floatPosition);
       if (floatPosition) table.floatPosition = floatPosition;
       const nativeGrid = record.nativeColumnWidthsTwips;

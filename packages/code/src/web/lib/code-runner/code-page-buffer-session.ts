@@ -58,6 +58,7 @@ import { jsonEquals, spliceYText, type JsonValue } from "@mrnote/core/web/lib/co
 import { MAX_CODE_SOURCE_CHARS } from "./code-file-import";
 import { codeLanguageId } from "@mrnote/core/web/lib/code-runner/languages.ts";
 import type {
+  DiscardedChangesKeep,
   PageDocumentDraft,
   PageSaveConflictDetails,
   PageSaveStatus,
@@ -91,7 +92,7 @@ export interface CodePageBufferSaveController {
   overwriteRemote(): Promise<PageItem | null>;
   saveConflictAsCopy(): Promise<PageItem | null>;
   reload(): Promise<PageItem | null>;
-  discardLocalAndReload(): Promise<PageItem | null>;
+  discardLocalAndReload(options?: { keepAside?: DiscardedChangesKeep }): Promise<PageItem | null>;
 }
 
 export interface CodePageBufferAuthority {
@@ -1050,7 +1051,7 @@ export interface CodePageBufferLease {
   overwriteRemote(): Promise<PageItem | null>;
   saveConflictAsCopy(): Promise<PageItem | null>;
   reload(): Promise<PageItem | null>;
-  discardLocalAndReload(): Promise<PageItem | null>;
+  discardLocalAndReload(options?: { keepAside?: DiscardedChangesKeep }): Promise<PageItem | null>;
   release(): void;
 }
 
@@ -1376,11 +1377,11 @@ export function acquireCodePageBuffer(
         entry.acceptNextHydration = false;
       });
     },
-    discardLocalAndReload() {
+    discardLocalAndReload(options) {
       if (!requireLive()) return asyncNull();
       entry.acceptNextHydration = true;
       return (
-        ownerController()?.discardLocalAndReload() ?? asyncNull()
+        ownerController()?.discardLocalAndReload(options) ?? asyncNull()
       ).finally(() => {
         entry.acceptNextHydration = false;
       });

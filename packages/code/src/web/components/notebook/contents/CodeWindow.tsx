@@ -4,6 +4,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { PythonGameSurface } from "@mrnote/core/web/components/notebook/contents/PythonGameSurface.tsx";
 import { useDesktopToolchainInstallHint } from "@mrnote/core/web/lib/desktop-code-toolchains.ts";
 import { withoutEscapeClause } from "@mrnote/core/web/lib/touch-copy.ts";
 import { useTouchMode } from "@mrnote/core/web/lib/touch-mode.ts";
@@ -318,6 +319,7 @@ import {
 import {
   hasPythonKernel,
   interruptPython,
+  stopPlayingPythonGame,
   isPythonRuntimeReady,
   resetPythonRuntime,
   runPython,
@@ -377,6 +379,13 @@ import {
   codeRuntimeGuardFindings,
   type CodeRuntimeGuardFinding,
 } from "../../../lib/code-runner/code-runtime-guard";
+import {
+  cloudGuiCapability,
+  cloudGuiCapabilityNow,
+  runsInCloudGui,
+  stopCloudGui,
+  type CloudGuiMessage,
+} from "../../../lib/code-runner/cloud-gui";
 import { carriesBuildCache } from "../../../lib/code-runner/build-cache";
 import {
   assembleLatexProject,
@@ -2611,6 +2620,18 @@ export default function CodeWindow({
     () => `code-page:${pageId}`,
     [pageId],
   );
+  // A desktop Python program runs in a cloud window (cloud-gui.ts), its end
+  // said in the reader's language as it is when the window closes.
+  const cloudGuiTranslateRef = useRef(t);
+  cloudGuiTranslateRef.current = t;
+  const cloudGuiMessage = useCallback<CloudGuiMessage>(
+    (key, values) => cloudGuiTranslateRef.current(`code.cloudGui.${key}`, values),
+    [],
+  );
+  // Read once whether cloud windows are offered, so Run knows at once.
+  useEffect(() => {
+    if (language === "python" && !guestMode) void cloudGuiCapability();
+  }, [guestMode, language]);
   const executionProviders = useMemo(
     () =>
       createBuiltinExecutionProviderRegistry({
@@ -2619,8 +2640,12 @@ export default function CodeWindow({
         // A draft's review runs remotely through the draft's own route.
         guest: guestMode && draftRemoteExecution === null,
         remoteTarget: draftRemoteExecution,
+        cloudGui:
+          guestMode || draftRemoteExecution !== null || !pageId
+            ? null
+            : { pageId, message: cloudGuiMessage },
       }),
-    [draftRemoteExecution, guestMode, javaScriptSandboxOwner, pageId],
+    [cloudGuiMessage, draftRemoteExecution, guestMode, javaScriptSandboxOwner, pageId],
   );
   const executionProviderLifecycleGenerationsRef = useRef(
     new WeakMap<object, number>(),
@@ -9518,11 +9543,31 @@ export default function CodeWindow({
     }
     const invocationSource = contentRef.current;
     // What can never run in the browser runtime (a GUI window, a terminal UI,
-    // a subprocess) is said before the run starts, not after it fails.
+    // a subprocess) is said before the run starts, not after it fails --
+    // unless the deployment offers cloud windows: then it runs in one
+    
     const guardedSource = selection?.source ?? invocationSource;
     const runtimeGuardFindings = codeRuntimeGuardFindings(invocationLanguage, guardedSource);
+    const cloudGuiEligible =
+      runtimeGuardFindings.length > 0 &&
+      invocationLanguage === "python" &&
+      !guestMode &&
+      draftRemoteExecution === null &&
+      Boolean(pageId);
+    let runsInCloud = false;
+    if (cloudGuiEligible) {
+      // Not read yet (a Run right after the page opened): the run shows it
+      // started at once, and is decided once the answer is in -- a cloud
+      // window, or the guard's notice. Never a silent "finished".
+      if (cloudGuiCapabilityNow() === null) {
+        updateOutputPanelVisibility(true);
+        setOutput({ logs: [t("code.cloudGui.starting")] });
+      }
+      runsInCloud = (await cloudGuiCapability()).available && runsInCloudGui(guardedSource);
+    }
     if (
       runtimeGuardFindings.length > 0 &&
+      !runsInCloud &&
       runtimeGuardOverrideRef.current !== guardedSource
     ) {
       const guardOutput: RunResult = {
@@ -9675,7 +9720,11 @@ export default function CodeWindow({
     try {
       if (invocationLanguage === "python") {
         setOutput(
-          isPythonRuntimeReady() ? null : { logs: [t("code.loadingPython")] },
+          runsInCloud
+            ? { logs: [t("code.cloudGui.starting")] }
+            : isPythonRuntimeReady()
+              ? null
+              : { logs: [t("code.loadingPython")] },
         );
       } else if (!compilesLatex) {
         setOutput(null);
@@ -10052,6 +10101,7 @@ export default function CodeWindow({
     draftReviewing,
     ensureWorkspacePageDetails,
     executionProviders,
+    guestMode,
     previewHtmlBuffer,
     releasePageExecutionClaim,
     showCompiledDocumentWindow,
@@ -11591,6 +11641,16 @@ export default function CodeWindow({
       return;
     }
     const runningLanguage = authority.language;
+    // A program with a window -- a cloud window, or a pygame game in the page
+    // -- stops as its own Stop button stops it: it ends by itself and the run
+    // settles with its output, as finished, never an "interrupted" error with
+    // an AI fix to offer. A cloud session is closed and charged to that moment.
+    if (
+      runningLanguage === "python" &&
+      (stopCloudGui(authority.pageId) || stopPlayingPythonGame(authority.pageId))
+    ) {
+      return;
+    }
     // Stop means stop: no compile waiting to follow this one starts.
     if (compilesLatexProject(runningLanguage)) {
       latexCompileSchedulerRef.current?.cancel();
@@ -17474,11 +17534,13 @@ export default function CodeWindow({
           void (lease ? lease.retrySave() : autosave.retrySave());
         }}
         onReload={() => {
+          // What Reload discards is kept aside first (TRIAGE 38).
+          const keep = { keepAside: { reason: "discarded-for-remote" as const } };
           const lease = codePageBufferLeaseRef.current;
           void (
             lease
-              ? lease.discardLocalAndReload()
-              : autosave.discardLocalAndReload()
+              ? lease.discardLocalAndReload(keep)
+              : autosave.discardLocalAndReload(keep)
           );
         }}
         onOverwrite={() => {
@@ -18796,6 +18858,10 @@ export default function CodeWindow({
               fontSize: 12,
             }}
           >
+            {language === "python" ? (
+              // A pygame program's window, played here (shown once it draws).
+              <PythonGameSurface namespace={pageId} />
+            ) : null}
             {displayedOutput.notebookOutputs !== undefined ? (
               <CellOutput
                 output={{

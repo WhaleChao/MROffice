@@ -3233,6 +3233,19 @@ export default function NoteEditor({
     ? autosave.causalUpgradeHeldBy ?? null : null;
   const canonicalPreparing = !documentPartsPage && !canonicalReady && !awaitsWriterUpgrade && upgradeHeldBy === null && Boolean(documentCausalModel?.model.active ||
     autosave.page?.page_causal_checkpoint || autosave.page?.page_causal_activation_available);
+  // A model that failed to prepare (its checkpoint refused, the room's
+  // originals unreadable) holds the page's opening until a new read of the
+  // page prepares it again: said, with Retry, instead of "Preparing
+  
+  // browser refused stayed on the loading card; nothing was reported).
+  const canonicalFailure = canonicalPreparing ? documentCausalModel?.model.failure ?? null : null;
+  useEffect(() => {
+    if (!canonicalFailure) return;
+    reportClientError(
+      Object.assign(new Error(`docs_causal_model_failed:${canonicalFailure.slice(0, 120)}`), { name: "DocsCausalModelFailed" }),
+      { source: "window", windowType: "document" },
+    );
+  }, [canonicalFailure]);
   const lifecycleAuthorityRef = useRef({ page: autosave.page, pending: true });
   useLayoutEffect(() => {
     lifecycleAuthorityRef.current = {
@@ -6042,6 +6055,21 @@ export default function NoteEditor({
       clearCurrentAutoRecover(pageId);
     }
   }, [autoRecoverEnabled, pageId, autosave.saveStatus, autosave.isDirty]);
+  // The conflict notice's Reload: the document as this view holds it is set
+  // aside first -- offered at the next open, never merged unasked
+  // ("kept-server-version", below) -- and then the saved version replaces it.
+  
+  // conflict came while its member typed).
+  const keepDocumentDiscardedByReload = useCallback(async () => {
+    if (!autoRecoverEnabled || !pageId) return;
+    const content = readLiveDocumentForSaveBase();
+    const base = autosave.page?.content_json ?? null;
+    if (!content || (base && sameAuthoredBody(content, base))) return;
+    await setAsideAutoRecoverCopy(pageId, {
+      payload: { content: content as Record<string, unknown>, ...(base ? { extra: { [AUTORECOVER_BASE_KEY]: base } } : {}) },
+      baseContentVersion: autoRecoverBaseRef.current, reason: "kept-server-version",
+    }).catch(() => null);
+  }, [autoRecoverEnabled, autosave.page, pageId, readLiveDocumentForSaveBase]);
   useEffect(() => {
     if (!autoRecoverEnabled || !pageId || autoRecoverCheckedRef.current) return undefined;
     if (autosave.loading || !autosave.page || autosave.isCachedPreview || blockedUnsentDraft) return undefined;
@@ -12174,6 +12202,8 @@ export default function NoteEditor({
     sectionBands,
     sheetFootnoteZones,
     sheetNoteContinuationPages,
+    sheetBandBoxes,
+    sheetBandContext,
     showPageNumbers,
     t,
     titleRef,
@@ -13007,6 +13037,27 @@ export default function NoteEditor({
     );
   }
 
+  if (canonicalFailure && !editorHydrated && !autosave.loading) {
+    return (
+      <div
+        className="note-editor-import-error"
+        data-testid="note-editor-model-error"
+        role="alert"
+      >
+        <span>{t("editor.hydrationUnavailable")}</span>{" "}
+        <button
+          className="note-editor-import-button"
+          type="button"
+          data-testid="note-editor-model-retry"
+          // A new read of the page prepares the model again.
+          onClick={() => void autosave.reload()}
+        >
+          {t("pages.conflictRetry")}
+        </button>
+      </div>
+    );
+  }
+
   if (
     !usableEditor ||
     !editorHydrated ||
@@ -13379,9 +13430,12 @@ export default function NoteEditor({
           details={autosave.conflictDetails}
           disabled={autosave.isSaving}
           onRetry={() => void autosave.retrySave()}
-          onReload={() => void (traceDocsHandover({ step: "discard-reload", why: "conflict-notice" }), autosave.discardLocalAndReload())}
+          onReload={() => void (traceDocsHandover({ step: "discard-reload", why: "conflict-notice" }),
+            keepDocumentDiscardedByReload().then(() => autosave.discardLocalAndReload()))}
           onOverwrite={() => void autosave.overwriteRemote()}
           onSaveCopy={() => void autosave.saveConflictAsCopy()}
+          // Docs keeps its own conflict choices as they were: no confirmation.
+          confirmDestructive={false}
           passive
         />}
 

@@ -1111,11 +1111,20 @@ export function borderModePatchedSheet<S extends CellButtonsSheet>(
  * already at an end of the list are left out.
  */
 export function fontSizeStepPlan(
-  sheet: { cells: CellMap },
+  sheet: { cells: CellMap; nativeGrid?: unknown },
   selRect: { r1: number; c1: number; r2: number; c2: number },
   direction: 1 | -1,
   nativeGrid: boolean,
 ): Array<{ row: number; column: number; fontSize: number | undefined }> | null {
+  // A cell with no size of its own is drawn at the workbook's Normal size
+  // (an imported sheet's nativeGrid.font), and Excel steps it from there: a
+  // 10 pt Arial workbook's cell shrinks to 9, not from 11 to 10 (xlsx-rounds
+  // R449-X23 WALK2: the step wrote 10, the size it already had).
+  const gridFont = (sheet.nativeGrid as { font?: { sizePt?: unknown } } | null | undefined)?.font;
+  const defaultPt = nativeGrid && typeof gridFont?.sizePt === "number" &&
+    Number.isFinite(gridFont.sizePt) && gridFont.sizePt >= 1 && gridFont.sizePt <= 409
+    ? gridFont.sizePt
+    : SPREADSHEET_DEFAULT_FONT_PT;
   const planned: Array<{
     row: number;
     column: number;
@@ -1142,7 +1151,7 @@ export function fontSizeStepPlan(
       ) {
         return null;
       }
-      const current = officePixelsToPoints(nativeFontSizeCss(rawSize as number | undefined, style?.nativeFontSize) ?? spreadsheetPtToPx(SPREADSHEET_DEFAULT_FONT_PT));
+      const current = officePixelsToPoints(nativeFontSizeCss(rawSize as number | undefined, style?.nativeFontSize) ?? spreadsheetPtToPx(defaultPt));
       // Excel's own size list, past its top and back down by the same steps
       
       const stepped = stepOfficeFontSize(current, direction, "excel");

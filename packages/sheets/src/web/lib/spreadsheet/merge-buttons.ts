@@ -179,14 +179,133 @@ export function sheetAfterMergeButton<S extends CellButtonsSheet & { merges?: Me
     // (xlsx-rounds R16-X02 E15).
     next = updateCellStyle(next, spans[0].row, spans[0].col, cellHorizontalChoicePatch("center"));
   }
+  const covered = cellsCoveredInTheAnchorsFormat(next.cells, sheet.cells, spans);
+  const lined = mergedAreaLinesAsExcelLeavesThem(covered, sheet.cells, spans);
   return {
     ...next,
-    cells: anchorsShowTheirCoveredRightEdge(
-      cellsCoveredInTheAnchorsFormat(next.cells, sheet.cells, spans),
-      sheet.cells,
-      spans,
-    ),
+    cells: anchorsShowTheirCoveredRightEdge(lined.cells, sheet.cells, lined.unread),
   };
+}
+
+const AREA_SIDES = [
+  ["top", "borderTop"],
+  ["right", "borderRight"],
+  ["bottom", "borderBottom"],
+  ["left", "borderLeft"],
+] as const;
+type AreaSide = (typeof AREA_SIDES)[number][0];
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function mergedAreaLinesAsExcelLeavesThem(
+  cells: CellMap,
+  before: CellMap,
+  spans: readonly MergeSpan[],
+): { cells: CellMap; unread: MergeSpan[] } {
+  let next = cells;
+  const unread: MergeSpan[] = [];
+  for (const span of spans) {
+    if (span.rowSpan * span.colSpan < 2) continue;
+    const r2 = span.row + span.rowSpan - 1;
+    const c2 = span.col + span.colSpan - 1;
+    const own = new Map<string, Partial<Record<AreaSide, unknown>>>();
+    let legacy = false;
+    for (let r = span.row; r <= r2 && !legacy; r += 1) {
+      for (let c = span.col; c <= c2; c += 1) {
+        const key = `${r}:${c}`;
+        const style = before[key]?.style as Record<string, unknown> | undefined;
+        const edges = normalizeBorderEdges(style?.borderEdges) ?? {};
+        if (style?.border === true && AREA_SIDES.some(([side]) => !edges[side])) legacy = true;
+        if (AREA_SIDES.some(([side, flag]) => style?.[flag] === true && !edges[side])) legacy = true;
+        if (legacy) break;
+        own.set(key, edges);
+      }
+    }
+    if (legacy) {
+      unread.push(span);
+      continue;
+    }
+    const lineOf = (r: number, c: number, side: AreaSide) => own.get(`${r}:${c}`)?.[side];
+    const anchorSides = AREA_SIDES.map(([side]) => side).filter((side) => lineOf(span.row, span.col, side));
+    const spread =
+      anchorSides.length === 1
+      && ((anchorSides[0] === "right" && span.colSpan > 1) || (anchorSides[0] === "bottom" && span.rowSpan > 1))
+        ? anchorSides[0]
+        : null;
+    const along = (side: AreaSide): Array<[number, number]> => {
+      const out: Array<[number, number]> = [];
+      if (side === "top" || side === "bottom") {
+        for (let c = span.col; c <= c2; c += 1) out.push([side === "top" ? span.row : r2, c]);
+      } else {
+        for (let r = span.row; r <= r2; r += 1) out.push([r, side === "left" ? span.col : c2]);
+      }
+      return out;
+    };
+    const kept = new Set<AreaSide>();
+    for (const [side] of AREA_SIDES) {
+      if (side === spread) continue;
+      const cellsAlong = along(side);
+      const first = lineOf(cellsAlong[0]![0], cellsAlong[0]![1], side);
+      if (first && cellsAlong.every(([r, c]) => JSON.stringify(lineOf(r, c, side)) === JSON.stringify(first))) kept.add(side);
+    }
+    const onSide = (r: number, c: number, side: AreaSide) =>
+      side === "top" ? r === span.row : side === "bottom" ? r === r2 : side === "left" ? c === span.col : c === c2;
+    const result = new Map<string, Record<string, unknown>>();
+    for (let r = span.row; r <= r2; r += 1) {
+      for (let c = span.col; c <= c2; c += 1) {
+        const key = `${r}:${c}`;
+        const edges: Record<string, unknown> = { ...(own.get(key) ?? {}) };
+        for (const [side] of AREA_SIDES) {
+          if (side === spread) edges[side] = lineOf(span.row, span.col, side);
+          else if (!(kept.has(side) && onSide(r, c, side))) delete edges[side];
+        }
+        result.set(key, edges);
+      }
+    }
+    // The anchor draws the area: its outline, not its own record's far sides.
+    const anchorKey = `${span.row}:${span.col}`;
+    const anchorEdges = { ...(result.get(anchorKey) ?? {}) };
+    const farRight = result.get(`${span.row}:${c2}`)?.right;
+    const farBottom = result.get(`${r2}:${span.col}`)?.bottom;
+    if (farRight) anchorEdges.right = farRight;
+    else delete anchorEdges.right;
+    if (farBottom) anchorEdges.bottom = farBottom;
+    else delete anchorEdges.bottom;
+    result.set(anchorKey, anchorEdges);
+    for (const [key, edges] of result) {
+      const cell = next[key];
+      const current = normalizeBorderEdges(cell?.style?.borderEdges);
+      const wanted = normalizeBorderEdges(edges);
+      if (JSON.stringify(current ?? null) === JSON.stringify(wanted ?? null)) continue;
+      if (!cell && !wanted) continue;
+      const style: Record<string, unknown> = { ...(cell?.style ?? {}) };
+      delete style.border;
+      if (wanted) style.borderEdges = wanted;
+      else delete style.borderEdges;
+      for (const [side, flag] of AREA_SIDES) {
+        if (wanted?.[side]) style[flag] = true;
+        else delete style[flag];
+      }
+      if (next === cells) next = { ...cells };
+      next[key] = {
+        ...(cell ?? { value: "", kind: "text" }),
+        style: style as NonNullable<SpreadsheetCell["style"]>,
+      } as CellMap[string];
+    }
+  }
+  return { cells: next, unread };
 }
 
 /** The cells once the merges of `before` that `after` no longer holds are
@@ -302,7 +421,24 @@ export function cellsWithTheirCoveredLinks(
   for (const span of before) {
     const each = span.coveredLinks;
     const whole = span.coveredLink;
-    if ((!each && !whole) || kept.has(`${span.row}:${span.col}:${span.rowSpan}:${span.colSpan}`)) continue;
+    const anchorArea = span.coveredAnchorArea;
+    if ((!each && !whole && !anchorArea) || kept.has(`${span.row}:${span.col}:${span.rowSpan}:${span.colSpan}`)) continue;
+    // The anchor linked on its own keeps the area's link beneath (reading row
+    // 941; R447-X08 E16: A11 over A11:M11, which Excel's unmerge leaves).
+    if (anchorArea?.hyperlink) {
+      const key = `${span.row}:${span.col}`;
+      const anchor = next[key] as (CellMap[string] & { hyperlinkArea?: unknown; hyperlinkRank?: unknown }) | undefined;
+      if (anchor?.hyperlink && !anchor.hyperlinkArea) {
+        const { ownRank, ...area } = anchorArea;
+        if (next === cells) next = { ...cells };
+        next[key] = {
+          ...anchor,
+          hyperlinkArea: { ...area },
+          ...(typeof ownRank === "number" && anchor.hyperlinkRank === undefined ? { hyperlinkRank: ownRank } : {}),
+        } as CellMap[string];
+      }
+    }
+    if (!each && !whole) continue;
     
     // anchor's own; it holds only while the anchor still has it.
     if (!each && next[`${span.row}:${span.col}`]?.hyperlink !== whole?.hyperlink) continue;
@@ -320,6 +456,7 @@ export function cellsWithTheirCoveredLinks(
           hyperlink: link.hyperlink,
           ...(link.hyperlinkTooltip ? { hyperlinkTooltip: link.hyperlinkTooltip } : {}),
           ...(link.hyperlinkDisplay ? { hyperlinkDisplay: link.hyperlinkDisplay } : {}),
+          ...("hyperlinkInArea" in link && link.hyperlinkInArea === true ? { hyperlinkInArea: true } : {}),
         } as CellMap[string];
       }
     }

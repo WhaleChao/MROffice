@@ -34,6 +34,8 @@ type RunLook = {
   italic: boolean | null;
   /** The style's underline ("single", "double", ...); null for none. */
   underline?: string | null;
+  /** The style's Superscript / Subscript (`w:vertAlign`); null for the baseline. */
+  vertAlign?: "superscript" | "subscript" | null;
 };
 
 const record = (value: unknown): Record<string, unknown> | null =>
@@ -72,7 +74,7 @@ export function paragraphStyleRunLook(docAttrs: Record<string, unknown>, styleId
     chain.unshift(style);
     current = typeof style.basedOn === "string" ? style.basedOn : null;
   }
-  const look: RunLook = { family: null, sizePt: null, color: null, bold: null, italic: null, underline: null };
+  const look: RunLook = { family: null, sizePt: null, color: null, bold: null, italic: null, underline: null, vertAlign: null };
   let themedFace = false;
   for (const style of chain) {
     const rPr = record(style.rPr) ?? {};
@@ -94,6 +96,8 @@ export function paragraphStyleRunLook(docAttrs: Record<string, unknown>, styleId
     if (typeof rPr.underline === "string") {
       look.underline = rPr.underline === "none" ? null : rPr.underline === "wave" ? "wavy" : rPr.underline;
     }
+    if (rPr.vertAlign === "superscript" || rPr.vertAlign === "subscript") look.vertAlign = rPr.vertAlign;
+    else if (rPr.vertAlign === "baseline") look.vertAlign = null;
   }
   if (themedFace) look.family = undefined;
   if (look.sizePt === null) {
@@ -195,6 +199,23 @@ export function restyleJoinedRuns(
           if (nextLine !== null) {
             tr.addMark(start, end, underlineType.create(nextLine === "single" ? {} : { underlineStyle: nextLine }));
           }
+        });
+      }
+    }
+    // The style's Superscript / Subscript: Word applies a paragraph style's
+    // w:vertAlign to the words in it that state none, so words joined onto a
+    // paragraph whose style raises its text are raised (corpus R470-D53 E6:
+    // an affiliation line backspaced onto an "Authors" line whose style is
+    // superscript; Word, and the file the save writes, raise them). A run
+    // whose raise differs from its old style's is its own and stays.
+    const oldRaise = before.vertAlign ?? null;
+    const nextRaise = after.vertAlign ?? null;
+    if (oldRaise !== nextRaise && schema.marks.superscript && schema.marks.subscript) {
+      const current = mark("superscript") ? "superscript" : mark("subscript") ? "subscript" : null;
+      if (current === oldRaise) {
+        edits.push(() => {
+          if (oldRaise) tr.removeMark(start, end, schema.marks[oldRaise]);
+          if (nextRaise) tr.addMark(start, end, schema.marks[nextRaise].create());
         });
       }
     }

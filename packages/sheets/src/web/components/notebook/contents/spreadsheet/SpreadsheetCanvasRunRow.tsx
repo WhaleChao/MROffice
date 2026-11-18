@@ -322,6 +322,14 @@ function shareOf(value: unknown): number | null {
   return match ? Number(match[1]) / 100 : null;
 }
 
+/** A data bar's or its axis's share of Excel's box (DATA_BAR_BOX): the
+ * percent of `dataBarBoxLeft` / `dataBarPaintCss`, whose px term is the box. */
+function boxShareOf(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const match = /^calc\((-?\d*\.?\d+)% [+-] \d*\.?\d+px\)$/.exec(value.trim());
+  return match ? Number(match[1]) / 100 : shareOf(value);
+}
+
 function childSpans(children: ReactNode, into: ReactElement<{ className?: unknown; style?: CSSProperties }>[] = []) {
   if (Array.isArray(children)) for (const child of children) childSpans(child, into);
   else if (isValidElement(children) && children.type === "span") into.push(children as ReactElement<{ className?: unknown; style?: CSSProperties }>);
@@ -338,14 +346,14 @@ function dataBarOf(children: ReactNode): GridCanvasCellPaint["bar"] | null | und
   for (const span of childSpans(children)) {
     const style = span.props.style ?? {};
     if (span.props.className === "spreadsheet-window__data-bar-axis") {
-      const at = shareOf(style.left);
+      const at = boxShareOf(style.left);
       const color = typeof style.borderLeftColor === "string" ? style.borderLeftColor : null;
       if (at === null || !color || color.includes("var(")) return undefined;
       axis = { at, color };
       continue;
     }
     if (span.props.className !== "spreadsheet-window__data-bar") continue;
-    const start = shareOf(style.left), width = shareOf(style.width);
+    const start = boxShareOf(style.left), width = boxShareOf(style.width);
     const color = typeof style.backgroundColor === "string" ? style.backgroundColor : null;
     if (start === null || width === null || !color || color.includes("var(")) return undefined;
     const image = style.backgroundImage;

@@ -22,6 +22,7 @@ import {
   flushAutoRecoverWrites,
   listAutoRecoverCopies,
   noteAutoRecoverChange,
+  setAsideAutoRecoverCopy,
   type AutoRecoverCopy,
 } from "@mrnote/core/web/lib/autorecover-store.ts";
 import { openReauthWindow, reauthLoginUrl, watchSessionRestore } from "@mrnote/core/web/lib/session-reauth.ts";
@@ -302,6 +303,7 @@ export interface DeckSaveResilienceOptions<S extends DeckSlide> {
     readonly page: { readonly id?: string; readonly content_version?: number | null } | null;
     readonly retrySave: () => Promise<unknown>;
     readonly saveNow: () => Promise<unknown>;
+    readonly discardLocalAndReload?: () => Promise<unknown>;
   };
   readonly liveSlides: () => readonly S[];
   
@@ -489,7 +491,22 @@ export function useDeckSaveResilience<S extends DeckSlide>(options: DeckSaveResi
     setOffered((list) => list.filter((entry) => entry.slot !== copy.slot));
   }, [pageId]);
 
-  return { noteEdit, sessionHeld, accountChanged, popupBlocked, signIn, offered, forgetCopy, copyRestored };
+  // ── the conflict notice's Reload ────────────────────────────────────────
+  // The slides this member changed are set aside first (offered at the next
+  // open, as a workbook's are), then the saved version replaces the window's.
+  
+  
+  // with it.
+  const discardForRemote = useCallback(async () => {
+    const entry = enabled && pageId ? buildEntry() : null;
+    if (entry) {
+      await setAsideAutoRecoverCopy(pageId, { ...entry, reason: "discarded-for-remote" }).catch(() => null);
+      clearCurrentAutoRecover(pageId);
+    }
+    await optionsRef.current.autosave.discardLocalAndReload?.();
+  }, [buildEntry, enabled, pageId]);
+
+  return { noteEdit, sessionHeld, accountChanged, popupBlocked, signIn, offered, forgetCopy, copyRestored, discardForRemote };
 }
 
 export type DeckSaveResilience = ReturnType<typeof useDeckSaveResilience>;

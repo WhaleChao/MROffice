@@ -39,6 +39,19 @@ export type PresentationFontSizeUnit = "design-px" | "point";
 /** CSS px per point (`office-units.ts`, every editor's one source). */
 export const CSS_PX_PER_POINT = PX_PER_PT;
 
+/**
+ * A free text box's default size: PowerPoint's 18 pt (the presentation's
+ * default text style), in the editor's design px (pt x 4/3). A new text box
+ * states it (`NEW_TEXT_BOX_FONT_SIZE_PX`, PPT-G011); a box that states no
+ * size is drawn at the canvas's 17 px fallback while the PDF, the PPTX and
+ * PowerPoint draw 18 pt. Stated here, where a module-level constant anywhere
+ * may be derived from it (presentation-shape-buttons.ts does), not in
+ * presentation-text-buttons.ts, inside whose import cycle that module runs.
+ */
+export const PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PX = 24;
+/** The same 18 pt, as a box marked `textFontSizeUnit: "point"` states it. */
+export const PRESENTATION_DEFAULT_TEXT_BOX_SIZE_PT = 18;
+
 /** A number known to be points. */
 export const asPoints = (value: number): Points => value as Points;
 /** A number known to be design px. */

@@ -300,6 +300,9 @@ export const DocumentHyphenationRules = Extension.create({
               if ((node.attrs as Record<string, unknown>).suppressAutoHyphens === true) return false;
               const element = view.nodeDOM(pos);
               if (!(element instanceof HTMLElement) || element.getAttribute("data-auto-hyphenation") !== "true") return false;
+              // A paragraph the line engine hyphenates by Word's rules itself
+              // (documentEngineLineBreaks' DOCS_ENGINE_HYPHENATION_ATTR).
+              if (element.getAttribute("data-docs-engine-hyphenation") === "true") return false;
               if (horizon && !horizon.has(element.closest("article[data-page-sheet]") ?? element)) return false;
               const count = passes.get(node) ?? 0;
               if (count >= MAX_PASSES_PER_BLOCK) return false;

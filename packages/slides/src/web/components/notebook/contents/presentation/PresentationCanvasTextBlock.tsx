@@ -69,6 +69,7 @@ import { presentationSmartArtLabelLineHeight, presentationTextVisualLayout, Pres
 import { useRichTextSelectionFollower } from "./useRichTextSelectionFollower";
 import { PresentationTypingTextarea } from "./PresentationTypingTextarea";
 import { inputIsLetterInPlace, usePresentationRichTypingKey } from "./usePresentationRichTypingKey";
+import { browserReplacement } from "../../../../lib/presentation/collab-caret";
 import { isTextEditLocked, isTextKeptReadOnly, isTextKeptReadOnlyTruncated } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import { useCallback, useId, useLayoutEffect, useRef } from "react";
 import type {
@@ -154,7 +155,8 @@ export interface PresentationCanvasTextBlockCtl {
   pendingImportedPreviewCaret: (blockId: string) => { start: number; end: number } | null;
   /** The words of a body the window's typing burst holds and has not drawn, else null. */
   heldBlockWords: (blockId: string) => string | null;
-  commitImportedPreviewText: (blockId: string, preview: HTMLElement, paragraphs?: readonly SlideParagraphWithRuns[], letterTyped?: boolean) => void;
+  commitImportedPreviewText: (blockId: string, preview: HTMLElement, paragraphs?: readonly SlideParagraphWithRuns[], letterTyped?: boolean,
+    replacement?: string | null) => void;
   replaceImportedPreviewSelection: (blockId: string, preview: HTMLElement, insertedText: string, paragraphs?: readonly SlideParagraphWithRuns[], softLineBreaks?: boolean) => number;
   clearLiveRibbonList: () => boolean;
   pasteIntoImportedPreview: (blockId: string, preview: HTMLElement, clipboard: DataTransfer, paragraphs?: readonly SlideParagraphWithRuns[]) => void;
@@ -1106,6 +1108,7 @@ export function PresentationCanvasTextBlock({ ctl }: { ctl: PresentationCanvasTe
                                     event.currentTarget,
                                     paragraphs,
                                     inputIsLetterInPlace(event.nativeEvent),
+                                    browserReplacement(event.nativeEvent),
                                   );
                                 },
                                 onCompositionStart: () => {

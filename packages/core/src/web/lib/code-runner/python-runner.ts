@@ -217,6 +217,178 @@ interface PendingRun {
   onOutput?: OnOutput;
   /** Independent host-side guard even when a worker/relay violates its contract. */
   streamLimiter: ExecutionStreamLimiter;
+  /**
+   * The namespace whose page shows this run as a game, once its first frame
+   * came (python-worker.js runGame): from then on it runs until stopped.
+   */
+  gameNamespace?: string;
+}
+
+
+
+/**
+ * One frame of a game: its window's pixels and its caption. The page's own
+ * Python sends RGBA pixels; a desktop program in a cloud window
+ * (cloud-gui.ts) sends a decoded picture of its windows.
+ */
+export interface PythonGameFrame {
+  width: number;
+  height: number;
+  caption: string;
+  pixels?: Uint8ClampedArray<ArrayBuffer>;
+  bitmap?: ImageBitmap;
+  /** It plays in a cloud window, not in the page (its hint says so). */
+  cloud?: boolean;
+}
+
+export type PythonGameSignal =
+  | { kind: "frame"; frame: PythonGameFrame }
+  | { kind: "ended" };
+
+/**
+ * A game played somewhere other than the page's own Python worker (a cloud
+ * window, cloud-gui.ts): the page's keys, mouse and Stop go to it.
+ */
+export interface PythonGameController {
+  input(events: readonly PythonGameInput[]): boolean;
+  stop(): void;
+}
+
+/** The page's keys and mouse, as python-worker.js acceptGameInput reads them. */
+export interface PythonGameInput {
+  t: "kd" | "ku" | "mm" | "md" | "mu" | "wheel" | "blur" | "quit";
+  key?: string;
+  code?: string;
+  x?: number;
+  y?: number;
+  dy?: number;
+  button?: number;
+  shift?: boolean;
+  ctrl?: boolean;
+  alt?: boolean;
+  meta?: boolean;
+  repeat?: boolean;
+}
+
+const GAME_MAX_SIDE = 2048;
+/** How long a stopped game has to end itself before its kernel is stopped. */
+const GAME_STOP_GRACE_MS = 1_500;
+const gameListeners = new Map<string, Set<(signal: PythonGameSignal) => void>>();
+const gameRuns = new Map<string, { handle: WorkerHandle; id: number }>();
+const gameControllers = new Map<string, PythonGameController>();
+
+/** Route a namespace's game input and Stop to ``controller`` until the returned
+ * function is called. */
+export function registerPythonGameController(
+  namespace: string,
+  controller: PythonGameController,
+): () => void {
+  gameControllers.set(namespace, controller);
+  return () => {
+    if (gameControllers.get(namespace) === controller) gameControllers.delete(namespace);
+  };
+}
+
+/** Show a frame, or the end, of a game played outside the page's worker. */
+export function emitPythonGame(namespace: string, signal: PythonGameSignal): void {
+  emitGame(namespace, signal);
+}
+
+function emitGame(namespace: string, signal: PythonGameSignal): void {
+  for (const listener of Array.from(gameListeners.get(namespace) ?? [])) {
+    try {
+      listener(signal);
+    } catch {
+      /* a listener's failure is its own */
+    }
+  }
+}
+
+function boundedGameFrame(data: Record<string, unknown>): PythonGameFrame | null {
+  const { width, height, pixels } = data;
+  if (
+    typeof width !== "number" ||
+    typeof height !== "number" ||
+    !Number.isSafeInteger(width) ||
+    !Number.isSafeInteger(height) ||
+    width < 1 ||
+    height < 1 ||
+    width > GAME_MAX_SIDE ||
+    height > GAME_MAX_SIDE ||
+    !(pixels instanceof ArrayBuffer) ||
+    pixels.byteLength !== width * height * 4
+  ) {
+    return null;
+  }
+  return {
+    width,
+    height,
+    caption: typeof data.caption === "string" ? data.caption.slice(0, 200) : "",
+    pixels: new Uint8ClampedArray(pixels),
+  };
+}
+
+/** Follow the game a namespace's run plays: its frames, then its end. */
+export function subscribePythonGame(
+  namespace: string,
+  listener: (signal: PythonGameSignal) => void,
+): () => void {
+  let listeners = gameListeners.get(namespace);
+  if (!listeners) {
+    listeners = new Set();
+    gameListeners.set(namespace, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    const current = gameListeners.get(namespace);
+    current?.delete(listener);
+    if (current && current.size === 0) gameListeners.delete(namespace);
+  };
+}
+
+/** Hand the running game the page's keys and mouse. False when none runs. */
+export function sendPythonGameInput(
+  namespace: string,
+  events: readonly PythonGameInput[],
+): boolean {
+  const controller = gameControllers.get(namespace);
+  if (controller) return controller.input(events.slice(0, 200));
+  const run = gameRuns.get(namespace);
+  if (!run || !run.handle.active || !run.handle.pending.has(run.id)) return false;
+  try {
+    run.handle.transport.postMessage({ id: run.id, op: "game-input", events: events.slice(0, 200) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The run's own Stop on a page whose Python plays a game: stopped as the
+ * game's Stop button stops it (QUIT, then the kernel), so the run ends as a
+ * game does, not as an interrupted program. False when no game plays there.
+ */
+export function stopPlayingPythonGame(namespace: string): boolean {
+  if (!gameControllers.has(namespace) && !gameRuns.has(namespace)) return false;
+  stopPythonGame(namespace);
+  return true;
+}
+
+/** Close the game's window (a QUIT it can answer), then stop it if it does not. */
+export function stopPythonGame(namespace: string): void {
+  const controller = gameControllers.get(namespace);
+  if (controller) {
+    controller.stop();
+    return;
+  }
+  const run = gameRuns.get(namespace);
+  if (!run) return;
+  sendPythonGameInput(namespace, [{ t: "quit" }]);
+  setTimeout(() => {
+    if (gameRuns.get(namespace) === run && run.handle.pending.has(run.id)) {
+      interruptPython(namespace);
+    }
+  }, GAME_STOP_GRACE_MS);
 }
 
 interface PendingInspect {
@@ -936,6 +1108,11 @@ function settlePendingRun(
   if (handle.pending.get(id) !== pending) return;
   handle.pending.delete(id);
   clearTimeout(pending.timer);
+  if (pending.gameNamespace !== undefined) {
+    const run = gameRuns.get(pending.gameNamespace);
+    if (run && run.handle === handle && run.id === id) gameRuns.delete(pending.gameNamespace);
+    emitGame(pending.gameNamespace, { kind: "ended" });
+  }
   if (pending.signal && pending.abortListener) {
     pending.signal.removeEventListener("abort", pending.abortListener);
   }
@@ -1495,6 +1672,20 @@ function getWorker(namespace: string): WorkerHandle {
     // An incremental stream chunk (progressive output): route it to the pending
     // run's onOutput sink WITHOUT settling the run. The final message (below)
     // still carries the authoritative complete logs that get reconciled in.
+    // A game's frame: the run is played, not timed, from its first frame on.
+    if (data.type === "game-frame") {
+      const pending = handle.pending.get(data.id);
+      if (!pending) return;
+      const frame = boundedGameFrame(raw as Record<string, unknown>);
+      if (!frame) return;
+      if (pending.gameNamespace === undefined) {
+        pending.gameNamespace = namespace;
+        clearTimeout(pending.timer);
+        gameRuns.set(namespace, { handle, id: data.id as number });
+      }
+      emitGame(namespace, { kind: "frame", frame });
+      return;
+    }
     if (data.type === "stream") {
       const pending = handle.pending.get(data.id);
       if (!pending?.onOutput || typeof data.chunk !== "string") return;

@@ -18,6 +18,14 @@
  * The empty host is given no height and its spacing moves onto the picture
  * that follows it. Paint and layout only; nothing is saved, and the
  * paragraph takes its line again as soon as it holds anything.
+ *
+ * A host that holds only spaces is empty to Word's line too: the spaces
+ * between a row of in-line pictures take no line of their own, and the line
+ * is the pictures' height with no descent under them (Windows Word, corpus
+ * R421-D02's Indexing row of six 21.6 pt logos: 24.0 pt with their effect
+ * extents; the spaces' paragraph drew an 8 pt Book Antiqua line above them,
+ * 33.5 pt). `window.__docsCellPictureSpacesHostOff = true` keeps such a host
+ * on its own line, for an A/B of one build.
  */
 import { SheetFact } from "../../../../lib/editor/sheet-facts";
 import { Extension } from "@tiptap/core";
@@ -34,10 +42,28 @@ function points(value: unknown): number {
   return Number.isFinite(number) && number > 0 ? number : 0;
 }
 
+function spacesHostOff(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    (window as Window & { __docsCellPictureSpacesHostOff?: boolean }).__docsCellPictureSpacesHostOff === true
+  );
+}
+
+/** Nothing but spaces: no atom, no break, no character that draws. */
+function holdsOnlySpaces(paragraph: ProseMirrorNode): boolean {
+  if (paragraph.content.size === 0) return true;
+  if (spacesHostOff()) return false;
+  let spaces = true;
+  paragraph.forEach((child) => {
+    if (!child.isText || !/^[ \u00a0]*$/.test(child.text ?? "")) spaces = false;
+  });
+  return spaces;
+}
+
 function hostsInlinePicture(paragraph: ProseMirrorNode, next: ProseMirrorNode | null | undefined): boolean {
   return Boolean(
     paragraph.type.name === "paragraph" &&
-      paragraph.content.size === 0 &&
+      holdsOnlySpaces(paragraph) &&
       next &&
       next.type.name === "image" &&
       next.attrs.officeDrawingKind !== "anchor",

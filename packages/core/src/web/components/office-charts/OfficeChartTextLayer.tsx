@@ -520,8 +520,9 @@ function ChartTextBox({
           whiteSpace: frame.wrapWidth ? "pre-wrap" : "pre",
           maxWidth: frame.wrapWidth,
           textAlign: "center",
-          // A wrapped title's lines at Office's 1.2, as the picture draws them.
-          lineHeight: frame.wrapWidth ? 1.2 : 1,
+          // A wrapped title's lines at Office's 1.2, as the picture draws them
+          // (a worksheet chart's at its face's line).
+          lineHeight: frame.lineEm ?? (frame.wrapWidth ? 1.2 : 1),
           flex: "0 0 auto",
           minWidth: editing ? 2 : undefined,
           minHeight: editing ? (firstLook?.fontSize ?? 12) : undefined,

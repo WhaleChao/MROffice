@@ -4,6 +4,9 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 export interface RoomCustodyEdits {
+  /** What is sent; the same bytes again are not sent again. A part room's
+   * custody (lib/collab/document-part-room) sends its updates by id and puts
+   * their ids here. */
   update: Uint8Array;
   epoch: number;
   model: string;
@@ -18,14 +21,14 @@ export interface RoomCustodyState {
   settled: boolean;
 }
 
-export interface RoomCustodyPumpOptions {
+export interface RoomCustodyPumpOptions<E extends RoomCustodyEdits = RoomCustodyEdits> {
   /** What the document holds beyond its adopted checkpoint; null: nothing
    * (or the room confirmed everything). */
-  read: () => RoomCustodyEdits | null;
+  read: () => E | null;
   state: () => RoomCustodyState;
   /** `signal` aborts a request a newer state supersedes (still waiting for a
    * connection, or for its answer). */
-  send: (edits: RoomCustodyEdits, signal: AbortSignal) => Promise<unknown>;
+  send: (edits: E, signal: AbortSignal) => Promise<unknown>;
   /** How often a waiting change is looked at. */
   tickMs?: number;
   /** How long a live room's confirmation may lag before the edits go to
@@ -68,6 +71,19 @@ const DEFAULT_MAX_IN_FLIGHT = 2;
 /** After a request failed for want of the server (a network error, 5xx). */
 const RETRY_AFTER_MS = 2_000;
 
+
+
+
+
+
+
+
+
+
+
+
+const LIVE_MIN_INTERVAL_MS = 2_000;
+
 function sameBytes(left: Uint8Array | null, right: Uint8Array): boolean {
   if (!left || left.length !== right.length) return false;
   for (let index = 0; index < left.length; index += 1) if (left[index] !== right[index]) return false;
@@ -98,7 +114,9 @@ export function roomCustodyPumpEnabled(): boolean {
   }
 }
 
-export function createRoomCustodyPump(options: RoomCustodyPumpOptions): RoomCustodyPump {
+export function createRoomCustodyPump<E extends RoomCustodyEdits = RoomCustodyEdits>(
+  options: RoomCustodyPumpOptions<E>,
+): RoomCustodyPump {
   const tickMs = options.tickMs ?? DEFAULT_TICK_MS;
   const unsettledMs = options.unsettledMs ?? DEFAULT_UNSETTLED_MS;
   const offlineMs = options.offlineMs ?? DEFAULT_OFFLINE_MS;
@@ -118,6 +136,8 @@ export function createRoomCustodyPump(options: RoomCustodyPumpOptions): RoomCust
   let sent = 0;
   let stopped: string | null = null;
   let staleRetries = 0;
+  // The live pace: when the next request may leave while the room relays.
+  let liveNextAt = 0;
 
   const schedule = () => {
     if (stopped || timer !== null) return;
@@ -141,7 +161,9 @@ export function createRoomCustodyPump(options: RoomCustodyPumpOptions): RoomCust
     if (!dirty) { schedule(); return; }
     if (at - unsettledSince < (state.live ? unsettledMs : offlineMs)) { schedule(); return; }
     if (at < retryAt) { schedule(); return; }
-    let edits: RoomCustodyEdits | null = null;
+    // A live room's backstop: one on its way, paced by the last one's answer.
+    if (state.live && (inFlight.length > 0 || at < liveNextAt)) { schedule(); return; }
+    let edits: E | null = null;
     try { edits = options.read(); } catch { edits = null; }
     dirty = false;
     if (!edits || sameBytes(lastSent, edits.update)) { schedule(); return; }
@@ -154,12 +176,26 @@ export function createRoomCustodyPump(options: RoomCustodyPumpOptions): RoomCust
     inFlight.push(entry);
     const settle = () => { const at = inFlight.indexOf(entry); if (at >= 0) inFlight.splice(at, 1); };
     sent += 1;
+    const sentAt = at;
+    const answered = () => {
+      const done = now();
+      liveNextAt = Math.max(sentAt + LIVE_MIN_INTERVAL_MS, done + (done - sentAt));
+    };
     let request: Promise<unknown>;
     try { request = options.send(edits, entry.controller.signal); } catch (error) { request = Promise.reject(error); }
-    request.then(() => {
+    request.then((result) => {
       settle();
+      answered();
+      if (result === "superseded") {
+        // The server took a newer request of this window instead (custody_gate):
+        // this one was not kept. If nothing newer went since, it goes again.
+        if (lastSent === bytes) lastSent = previous;
+        dirty = true;
+        schedule();
+      }
     }, (error: unknown) => {
       settle();
+      answered();
       // Superseded by a newer request: nothing to do.
       if (entry.controller.signal.aborted) return;
       const stale = (error as { code?: unknown } | null)?.code === STALE_CODE && staleRetries < STALE_RETRIES;
@@ -169,9 +205,12 @@ export function createRoomCustodyPump(options: RoomCustodyPumpOptions): RoomCust
         if (timer !== null) { clearTimer(timer); timer = null; }
         return;
       }
-      // Not taken: the same document goes again once the server answers.
+      // Not taken: the same document goes again once the server answers --
+      // when it said (429 Retry-After, live or not), else after the usual wait.
       if (lastSent === bytes) lastSent = previous;
-      retryAt = now() + (stale ? STALE_RETRY_AFTER_MS : RETRY_AFTER_MS);
+      const retryAfter = (error as { status?: unknown; retryAfterMs?: unknown } | null);
+      const serverSaid = retryAfter?.status === 429 && typeof retryAfter.retryAfterMs === "number" ? retryAfter.retryAfterMs : null;
+      retryAt = now() + (serverSaid ?? (stale ? STALE_RETRY_AFTER_MS : RETRY_AFTER_MS));
       dirty = true;
       schedule();
     });

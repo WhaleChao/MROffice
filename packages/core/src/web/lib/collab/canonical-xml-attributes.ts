@@ -7,11 +7,19 @@ import * as Y from "yjs";
 import type { Node as ProseMirrorNode, Schema } from "@tiptap/pm/model";
 import { updateYFragment } from "@tiptap/y-tiptap";
 import { reconcileRootByIdentity } from "./y-root-reconcile";
+import { holdsUndefined, jsonCleanYValue } from "./y-json-values";
 
 function omitUndefinedElementAttributes(element: Y.XmlElement): boolean {
   let changed = false;
   for (const [key, value] of Object.entries(element.getAttributes())) {
     if (value === undefined) { element.removeAttribute(key); changed = true; }
+    // Inside a JSON value too (a hard break's run formatting holding
+    // `{hint: undefined}`): the API reads it as null, this browser as absent,
+    
+    else if (!((value as unknown) instanceof Y.AbstractType) && holdsUndefined(value)) {
+      element.setAttribute(key, jsonCleanYValue(value) as never);
+      changed = true;
+    }
   }
   return changed;
 }

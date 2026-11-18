@@ -56,6 +56,11 @@ export function normalizeDocxBreakRunMarks(value: unknown): JSONContent[] | null
     const rawAttrs = raw.attrs ?? {};
     if (typeof rawAttrs !== "object" || Array.isArray(rawAttrs)) return fail();
     const attrs = { ...rawAttrs };
+    // A mark's schema default of `undefined` (fontFamily's hint, hintLanguage,
+    // hintCharset: TextStyling) is no value: kept, it reached the shared
+    // document, which the API reads as null, and every later save of the
+    
+    for (const key of Object.keys(attrs)) if (attrs[key] === undefined) delete attrs[key];
     // Use the same bounded identity as text runs. Asset references still go
     // through page-owned font authorization; the carrier grants no authority.
     if (type === "fontFamily" || type === "fontCjkFamily" || type === "fontComplexFamily") {

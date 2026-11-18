@@ -21,7 +21,10 @@
  * onto the line as it reads now (rereadPdfNativeTextQueuedDraft). And a
  * paragraph's box is its line, though it holds the rows a line break apart
  * where the line reads them a blank apart or not apart at all: the draft's
- * change is put onto the rows (rowedPdfNativeTextQueuedDraft).
+ * change is put onto the rows (rowedPdfNativeTextQueuedDraft). And a line
+ * whose words are set apart by position alone is the box's text without
+ * its blanks: the draft typed in the box goes in as it is
+ * (spacedPdfNativeTextQueuedDraft).
  *
  * A carry whose automatic reopen does not come (the saved revision's line
  * was not found, Edit mode was held) is never dropped: the reader is told
@@ -46,6 +49,10 @@ export type PdfNativeTextQueuedDraft = Readonly<{
   selectionEnd: number;
   /** The reader clicked away: the reopened box finishes on its own. */
   finish: boolean;
+  
+
+
+  finishInEditor?: boolean;
   /** Epoch ms by which the automatic reopen should have taken the carry. */
   until: number;
   /** The page the line is on (its inline input's page host); a late carry
@@ -142,6 +149,59 @@ export function rowedPdfNativeTextQueuedDraft(current: string, carry: PdfNativeT
   return carriedOnto(current, carry, at);
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function spacedPdfNativeTextQueuedDraft(current: string, carry: PdfNativeTextQueuedDraft): PdfNativeTextQueuedDraft | null {
+  const original = carry.originalText;
+  if (current === original) return null;
+  const blank = (character: string | undefined) => character !== undefined && /\s/u.test(character);
+  // Where each unit of the original stands in the box's text (a blank the
+  // box does not show, at the unit after it).
+  const at: number[] = [];
+  let read = 0, apart = 0;
+  for (let index = 0; index < original.length;) {
+    if (read < current.length && original[index] === current[read]) { at.push(read); index += 1; read += 1; continue; }
+    if (blank(current[read])) { read += 1; apart += 1; continue; }
+    if (!blank(original[index])) return null;
+    at.push(read);
+    index += 1;
+    apart += 1;
+  }
+  while (blank(current[read])) { read += 1; apart += 1; }
+  if (read !== current.length || apart === 0) return null;
+  at.push(current.length);
+  const shared = (text: string) => {
+    const most = Math.min(carry.value.length, text.length);
+    let before = 0;
+    while (before < most && carry.value[before] === text[before]) before += 1;
+    let after = 0;
+    while (after < most - before && carry.value[carry.value.length - 1 - after] === text[text.length - 1 - after]) after += 1;
+    return before + after;
+  };
+  return shared(current) >= shared(original)
+    ? Object.freeze({ ...carry, originalText: current })
+    : carriedOnto(current, carry, at);
+}
+
 /** The draft's change put onto `current`, where `at[i]` is the place in it
  * of the original's unit `i` (and `at[original.length]` its end). */
 function carriedOnto(current: string, carry: PdfNativeTextQueuedDraft, at: readonly number[]): PdfNativeTextQueuedDraft {
@@ -181,7 +241,9 @@ function carriedOnto(current: string, carry: PdfNativeTextQueuedDraft, at: reado
  * and an input event, so the editor's state follows as if it were typed.
  * Returns false (and changes nothing) when the box is another text (a line
  * whose font was read right meanwhile takes the draft read the same way; a
- * paragraph's box, its rows a line break apart, takes it on its rows). */
+ * paragraph's box, its rows a line break apart, takes it on its rows; a box
+ * that shows the line's words a blank apart where the line holds none takes
+ * it as it was typed there). */
 export function applyPdfNativeTextQueuedDraft(input: HTMLTextAreaElement, carry: PdfNativeTextQueuedDraft): boolean {
   if (carry.typedAhead) {
     if (!carry.typedAhead.line(input.value)) return false;
@@ -189,7 +251,8 @@ export function applyPdfNativeTextQueuedDraft(input: HTMLTextAreaElement, carry:
     return true;
   }
   if (input.value !== carry.originalText) {
-    const reread = rereadPdfNativeTextQueuedDraft(input.value, carry) ?? rowedPdfNativeTextQueuedDraft(input.value, carry);
+    const reread = rereadPdfNativeTextQueuedDraft(input.value, carry) ?? rowedPdfNativeTextQueuedDraft(input.value, carry) ??
+      spacedPdfNativeTextQueuedDraft(input.value, carry);
     return reread !== null && applyPdfNativeTextQueuedDraft(input, reread);
   }
   if (carry.value !== carry.originalText) {

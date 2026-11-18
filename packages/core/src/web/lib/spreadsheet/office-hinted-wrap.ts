@@ -57,6 +57,16 @@ function isIdeograph(ch: string): boolean {
 export const OFFICE_HINTED_WRAP_ROOM_STEP_PX = 29;
 export const OFFICE_HINTED_WRAP_ROOM_STEP_FROM_PX = 56;
 
+/** The workbook-wide inputs of Windows Excel's screen wrap beyond a cell's own face. */
+export interface OfficeHintedWrapOptions {
+  /** The workbook's Normal font's widest digit, px (its max digit width, Excel's column unit): sets the room's
+   * steps (officeHintedWrapRoom). */
+  readonly normalDigitPx?: number;
+  /** Excel's wrap after it has fitted a wrapped complex-script cell in this load (officeComplexWrapTrigger): a
+   * line broken at a space keeps room for the space after it. */
+  readonly spaced?: boolean;
+}
+
 /**
  * The room a wrapped line of a `columnPx` column breaks at, for a face of
  * `emPx` whole pixels per em: the column less a margin of 2 p + 1 px,
@@ -68,12 +78,47 @@ export const OFFICE_HINTED_WRAP_ROOM_STEP_FROM_PX = 56;
  * 19 pt and over). A line fits while its hinted width is at most the room.
  * The linear 0.978 x px - 5.2 before it gave a 300 px column 288; Excel's is
  * 285. The API's office_hinted_wrap_room is the same rule.
+ *
+ * `normalDigitPx`, the workbook's Normal font's widest digit d, sets the
+ * steps: a pixel less every 4 d + 1 px past 8 d (29 past 56 at 7 px; lookwin
+ * p116/p116b-lw: Arial 8 and Calibri 8, 6 px, every 25 past 48; Times New
+ * Roman 12 and Verdana 10, 8 px, every 33 past 64; 0 misses over 146 widths).
+ * `digitPx`, the cell face's own widest digit, sets the margin:
+ * p = (d - 1) // 4 + 2 (Arial 12, 9 px: 9 px where its 16 px em gave 7).
  */
-export function officeHintedWrapRoom(columnPx: number, emPx = 15): number {
-  const margin = 2 * (Math.floor((Math.max(1, Math.trunc(emPx)) - 1) / 8) + 2) + 1;
+export function officeHintedWrapRoom(columnPx: number, emPx = 15, normalDigitPx?: number, digitPx?: number): number {
+  const margin = digitPx !== undefined && Number.isInteger(digitPx) && digitPx > 0
+    ? 2 * (Math.floor((digitPx - 1) / 4) + 2) + 1
+    : 2 * (Math.floor((Math.max(1, Math.trunc(emPx)) - 1) / 8) + 2) + 1;
   const width = columnPx - margin;
-  return width - Math.max(0, Math.floor((width - OFFICE_HINTED_WRAP_ROOM_STEP_FROM_PX) / OFFICE_HINTED_WRAP_ROOM_STEP_PX));
+  const stepped = normalDigitPx !== undefined && Number.isInteger(normalDigitPx) && normalDigitPx > 0;
+  const start = stepped ? 8 * normalDigitPx : OFFICE_HINTED_WRAP_ROOM_STEP_FROM_PX;
+  const step = stepped ? 4 * normalDigitPx + 1 : OFFICE_HINTED_WRAP_ROOM_STEP_PX;
+  return width - Math.max(0, Math.floor((width - start) / step));
 }
+
+/** The widest of a face's ten digits at its whole-pixel em (Excel's max digit width), or undefined (the API's
+ * office_digit_px). */
+export function officeDigitPx(face: OfficeHintedWrapFace): number | undefined {
+  const advance = advancesOf(face);
+  if (!advance) return undefined;
+  let widest = 0;
+  for (const digit of "0123456789") {
+    const value = advance(digit);
+    if (value === undefined) return undefined;
+    widest = Math.max(widest, value);
+  }
+  return widest;
+}
+
+/**
+ * Letters of the complex scripts Windows Excel shapes through Uniscribe
+ * (Hebrew, Arabic, Syriac, Thaana, the Indic scripts, Thai, Lao, Tibetan,
+ * Myanmar, Khmer, the Hebrew/Arabic presentation forms): the API's
+ * _COMPLEX_WRAP_TEXT (office-hinted-wrap.cases.json complexCases holds the
+ * answers both give).
+ */
+export const OFFICE_COMPLEX_WRAP_TEXT = /[\u0590-\u08ff\u0900-\u0dff\u0e00-\u0eff\u0f00-\u0fff\u1000-\u109f\u1780-\u17ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
 
 /** GDI's whole pixels per em of a `sizePt` face at 96 dpi (the advances table's key). */
 function emPxOf(sizePt: number): number {
@@ -103,14 +148,43 @@ function faceKey(family: string): string {
   return ALIASES[key] ?? key;
 }
 
+/**
+ * Office's fixed-pitch Latin faces: every glyph's advance in 2048ths of the em
+ * (Courier New 1229, Consolas 1126, Lucida Console 1234). GDI sets each at its
+ * whole-pixel em, rounded: Courier New 10 is 8 px at 13 px per em. Their lines
+ * are GDI's own, so their rows are fitted, not kept at a stated height
+ * (R379-X18's one-line Courier New 10 names, 18 px). The API's
+ * _FIXED_PITCH_UNITS.
+ */
+const FIXED_PITCH_UNITS: Readonly<Record<string, number>> = { "courier new": 1229, consolas: 1126, "lucida console": 1234 };
+/** The fixed-pitch faces Office ships without a bold cut: GDI emboldens each glyph a pixel wider. */
+const FIXED_PITCH_NO_BOLD = new Set(["lucida console"]);
+
 /** The face's advances at its pixel em, or undefined where the table has none. */
 export function advancesOf(face: OfficeHintedWrapFace): ((ch: string) => number | undefined) | undefined {
   // The face Windows Excel draws the name in (one it lacks, Helvetica Neue,
   // wraps in Arial's widths; lookwin faces probe), then the table's own name.
   const key = faceKey(excelWindowsFaceKey(face.family, face.record));
   const styles = table.faces[key];
-  if (!styles || !Number.isFinite(face.sizePt) || face.sizePt <= 0) return undefined;
-  const style = face.bold ? (face.italic ? "bi" : "b") : face.italic ? "i" : "r";
+  if (!Number.isFinite(face.sizePt) || face.sizePt <= 0) return undefined;
+  const fixedPitch = FIXED_PITCH_UNITS[key];
+  if (!styles && fixedPitch !== undefined) {
+    const width = Math.floor((fixedPitch * Math.floor((face.sizePt * 96) / 72 + 0.5)) / 2048 + 0.5)
+      + (face.bold && FIXED_PITCH_NO_BOLD.has(key) ? 1 : 0);
+    // The table's Latin characters only: a face's other scripts fall back.
+    return (ch) => (charIndex.has(ch) ? width : undefined);
+  }
+  if (!styles) return undefined;
+  let style = face.bold ? (face.italic ? "bi" : "b") : face.italic ? "i" : "r";
+  // A face Office ships without a bold cut (ＭＳ Ｐゴシック, ＭＳ ゴシック,
+  // SimSun) is emboldened by GDI: its regular advances, a pixel wider each
+  // (lookwin p166-lw / R361-X03 A131: a bold ＭＳ Ｐゴシック 11 label wraps five
+  // 16 px kana a line where regular 15 px ones made six). The API's _advances.
+  let widen = 0;
+  if (face.bold && !styles[style] && styles.r) {
+    style = "r";
+    widen = 1;
+  }
   const ppem = String(Math.floor((face.sizePt * 96) / 72 + 0.5));
   const encoded = styles[style]?.[ppem];
   if (!encoded) return undefined;
@@ -125,12 +199,12 @@ export function advancesOf(face: OfficeHintedWrapFace): ((ch: string) => number 
   return (ch) => {
     const at = charIndex.get(ch);
     const own = at === undefined ? undefined : decode(encoded[at]);
-    if (own !== undefined) return own;
+    if (own !== undefined) return own + widen;
     const cjkAt = cjkCharIndex.get(ch) ?? (isIdeograph(ch) ? IDEOGRAPH_INDEX : undefined);
     if (cjkAt === undefined) return undefined;
     for (const cjk of cjkTables) {
       const value = cjk ? decode(cjk[cjkAt]) : undefined;
-      if (value !== undefined) return value;
+      if (value !== undefined) return value + widen;
     }
     return undefined;
   };
@@ -147,10 +221,10 @@ function tokens(paragraph: string): string[] {
  * wide, or undefined when the table cannot say (the caller measures as it
  * did). A typed line break starts a new line; an empty paragraph is a line.
  */
-export function officeHintedWrapLines(text: string, face: OfficeHintedWrapFace, columnPx: number): string[] | undefined {
+export function officeHintedWrapLines(text: string, face: OfficeHintedWrapFace, columnPx: number, options: OfficeHintedWrapOptions = {}): string[] | undefined {
   const advance = advancesOf(face);
   if (!advance) return undefined;
-  return wrapWith(text, (_at, ch) => advance(ch), columnPx, emPxOf(face.sizePt));
+  return wrapWith(text, (_at, ch) => advance(ch), columnPx, emPxOf(face.sizePt), options, officeDigitPx(face));
 }
 
 /** One rich-text run: its text and the face it is set in. */
@@ -163,10 +237,12 @@ export interface OfficeHintedWrapRun extends OfficeHintedWrapFace {
  * hinted advance (the server's office_hinted_wrap_runs; R195-X01's footnote
  * marks, R226-X05's notes); undefined when the table cannot say for any run.
  */
-export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], columnPx: number): string[] | undefined {
+export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], columnPx: number, options: OfficeHintedWrapOptions = {}): string[] | undefined {
   let text = "";
   const owners: ((ch: string) => number | undefined)[] = [];
   let emPx: number | undefined;
+  let digitPx: number | undefined;
+  let firstRun = true;
   for (const run of runs) {
     const piece = String(run.text).replace(/\r\n?/g, "\n");
     if (!piece) continue;
@@ -176,16 +252,30 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
     owners.push(...Array.from(piece, () => advance));
     // The cell's margin is its first run's face's.
     emPx ??= emPxOf(run.sizePt);
+    if (firstRun) {
+      digitPx = officeDigitPx(run);
+      firstRun = false;
+    }
   }
   if (!owners.length) return undefined;
-  return wrapWith(text, (at, ch) => owners[at]?.(ch), columnPx, emPx ?? 15);
+  return wrapWith(text, (at, ch) => owners[at]?.(ch), columnPx, emPx ?? 15, options, digitPx);
 }
 
 /** The rule over `text`, `advanceAt(index, character)` the advance of the
- * character at that code point index. */
-function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | undefined, columnPx: number, emPx = 15): string[] | undefined {
+ * character at that code point index.
+ *
+ * `spaced`: once Windows Excel has wrapped a cell of complex-script text in a
+ * row it fits, every later wrap of the load keeps room for one space after a
+ * line it breaks at a space: the line and that space must fit (lookwin
+ * p115b-lw: Arial 10's first line of "A B tail" kept at room - 4; a hyphen
+ * break and a last word keep the plain room, a paragraph's trailing spaces
+ * count as one; p117b/p117d/p118-lw; R379-X18's formula notes wrap 9 and 19
+ * lines, not 8 and 18). The API's _wrap is the same rule. */
+function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | undefined, columnPx: number, emPx = 15,
+  options: OfficeHintedWrapOptions = {}, digitPx?: number): string[] | undefined {
   if (!Number.isFinite(columnPx)) return undefined;
-  const room = officeHintedWrapRoom(columnPx, emPx);
+  const room = officeHintedWrapRoom(columnPx, emPx, options.normalDigitPx, digitPx);
+  const spaced = options.spaced === true;
   const lines: string[] = [];
   let offset = 0;
   for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
@@ -195,7 +285,8 @@ function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | 
     let pendingWidth = 0;
     let first = true;
     let at = offset;
-    for (const token of tokens(paragraph)) {
+    const all = tokens(paragraph);
+    for (const [tokenIndex, token] of all.entries()) {
       const tokenAt = at;
       const chars = [...token];
       at += chars.length;
@@ -213,7 +304,9 @@ function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | 
         widths.push(value);
       }
       const tokenWidth = widths.reduce((sum, value) => sum + value, 0);
-      if (!first && width + pendingWidth + tokenWidth <= room + 1e-9) {
+      let follow = 0;
+      if (spaced && !token.endsWith("-") && all[tokenIndex + 1] === " ") follow = advanceAt(at, " ") ?? 0;
+      if (!first && width + pendingWidth + tokenWidth + follow <= room + 1e-9) {
         line += pendingSpaces + token;
         width += pendingWidth + tokenWidth;
         pendingSpaces = "";

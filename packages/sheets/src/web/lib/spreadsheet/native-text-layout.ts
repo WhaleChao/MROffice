@@ -38,6 +38,15 @@ export function resolveRelativePartFontSizes(parts: readonly NativeTextPart[], s
     return Number.isFinite(percent) ? { ...part, style: { ...part.style, fontSize: base * percent / 100 } } : part;
   });
 }
+/** A style key (`"1"`) that makes a cell's engine wraps keep room for the
+ * space after a word (breakLines `keepSpace`): an imported Windows grid's
+ * printed cell in a book that wrapped complex script (lookwin p144-lw). */
+export const NATIVE_KEEP_SPACE_MARK = "--mrai-office-keep-space";
+/** A style mark: the paragraph's room is the printer's re-wrap room (the
+ * printed column less its margin, lookwin p138-lw), whose lines Windows
+ * Excel's printer breaks at its own whole printer pixels per em, not the
+ * screen's (excelWrapRoom). */
+export const NATIVE_PRINTED_ROOM_MARK = "--mrai-office-printed-room";
 export interface NativeTextLine { parts: NativeTextPart[]; hardBreak: string; emptyStyle?: CSSProperties; breakStyle?: CSSProperties }
 /** Logical, unscaled cell geometry; independent of the painted text width. */
 export interface NativeTextAlignmentBox { width: number; textLeft: number; textRight: number; wrapText: boolean }
@@ -227,6 +236,36 @@ export function nativeAutoRowIsNumeric(cell: { kind?: string; formula?: string; 
   return cell.kind === "number";
 }
 
+const unhungLines = new WeakMap<readonly NativeTextLine[], readonly NativeTextLine[]>();
+/** A wrapped paragraph's lines without the spaces that end them: Excel sets
+ * a wrapped line by its words, the spaces at its break (or after its last
+ * word) hanging past the edge, so they move neither a centred nor a
+ * right-aligned line (lookwin R223-X13: "Population" and 45 spaces, centred
+ * in K3:M3, printed at the merge's left edge). A line of nothing but spaces
+ * keeps them. The same array for the same lines. */
+export function nativeLinesWithoutHangingSpaces(lines: readonly NativeTextLine[]): readonly NativeTextLine[] {
+  const known = unhungLines.get(lines);
+  if (known) return known;
+  let changed = false;
+  const out = lines.map((line) => {
+    const parts = [...line.parts];
+    while (parts.length) {
+      const last = parts[parts.length - 1];
+      if (!last) break;
+      const text = last.text.replace(/ +$/u, "");
+      if (text === last.text) break;
+      if (text) { parts[parts.length - 1] = { ...last, text }; break; }
+      parts.pop();
+    }
+    if (!parts.length || (parts.length === line.parts.length && parts.every((part, index) => part === line.parts[index]))) return line;
+    changed = true;
+    return { ...line, parts };
+  });
+  const result = changed ? out : lines;
+  unhungLines.set(lines, result);
+  return result;
+}
+
 export function measureNativeLineAdvance(parts: readonly NativeTextPart[], style: CSSProperties, dpi: number): number | undefined {
   let width = 0;
   for (const part of parts) {
@@ -401,8 +440,26 @@ function fontStyle(style: CSSProperties, scale: number): Partial<CSSStyleDeclara
 export function excelWrapRoom(width: number, style: CSSProperties, dpi: number): number {
   const size = style.fontSize;
   if (dpi !== 96 || !(width < 1e5) || typeof size !== "number" || !(size > 0)) return width;
+  // The printer's re-wrap: its pixels per em are the 600-dpi ones (Calibri
+  // 11: 92 for 91.67), a room 0.4 % short of the design widths' where the
+  // screen's 15 px em cut 2.2 % (R35-X05's 356 pt note line, 360.5 pt of
+  // room: Excel prints it whole, the screen's room sent "own" down). The
+  // API prints with the printer's own advances (FaceMeasure.printed).
+  if ((style as unknown as Record<string, unknown>)[NATIVE_PRINTED_ROOM_MARK] === "1") {
+    const printed = size * 600 / 96;
+    return width * printed / Math.max(1, Math.floor(printed + 0.5));
+  }
+  // A fixed-pitch face sets every glyph at round(0.6 em) of GDI's whole-pixel
+  // em, the advance the screen's whole pixels already measure (Courier New
+  // 10: 8 px at 13 px per em and at 13.33): its room is the column's. Cut to
+  // the 14 px em's, R379-X18's 29-character "caretaker_hh_longitude_manual"
+  // broke in two in a 247 px column and stood its row two lines tall, where
+  // Windows Excel sets it on one.
+  if (typeof style.fontFamily === "string" && FIXED_PITCH_OFFICE_FACE.test(style.fontFamily)) return width;
   return width * size / Math.ceil(size - 1e-6);
 }
+/** Office's fixed-pitch Latin faces, first in a font stack. */
+const FIXED_PITCH_OFFICE_FACE = /^\s*["']?(courier new|consolas|lucida console)["']?\s*(,|$)/i;
 
 type NativeTextAtom = {text:string;part:number;marker:HTMLElement;hardBreak?:boolean};
 
@@ -1071,7 +1128,14 @@ function canvasFallback(reason: string, font: string, text: string): undefined {
 
 function engineNativeTextLayout(parts: readonly NativeTextPart[], style: CSSProperties, width: number, dpi: number, browserAdvances = false): NativeTextLine[] | undefined {
   if (!spreadsheetTextEngineOn()) return undefined;
-  width = excelWrapRoom(width, style, dpi);
+  // The printer's re-wrap (NATIVE_PRINTED_ROOM_MARK on the print page) breaks
+  // at the advances the line is painted at, the printer's whole dots at its
+  // pixels per em, as Windows Excel's printer and the API's writer
+  // (FaceMeasure.printed) break it: the screen's whole pixels ran Arial 11
+  // 2.6 % narrow and R219-X03's notes took a word more a line than Excel's
+  // (565 pt of printed advances in a 555 pt room measured 550).
+  const printedRoom = (style as unknown as Record<string, unknown>)[NATIVE_PRINTED_ROOM_MARK] === "1" && nativeTextPrinterDpi() > 0;
+  width = printedRoom ? width : excelWrapRoom(width, style, dpi);
   // Probes compare the grid's own decisions across browsers through this.
   (window as unknown as Record<string, unknown>).__mraiSpreadsheetTextLayout ??= { layoutNativeText, measureNativeParagraphLineHeight, measureNativeLineAdvance, measureNativeTextHeight, engineParagraphHeight };
   type Atom = { text: string; part: number; advance: number; hardBreak?: false } | { text: string; part: number; hardBreak: true };
@@ -1097,7 +1161,7 @@ function engineNativeTextLayout(parts: readonly NativeTextPart[], style: CSSProp
       // web font still loading measures as its fallback (the probe then
       // lays the text out, and the load lays it out again).
       if (browserAdvances && !browserFontReady(font, piece)) return canvasFallback("fontNotReady", font, piece);
-      const advances = nativeTextAdvances(piece, font, dpi, 1, "measure");
+      const advances = nativeTextAdvances(piece, font, dpi, 1, printedRoom ? "paint" : "measure");
       if (advances.length !== segments.length || advances.some((advance) => advance.advance === undefined)) {
         return browserAdvances ? canvasFallback("noAdvances", font, piece) : undefined;
       }
@@ -1130,7 +1194,7 @@ function engineNativeTextLayout(parts: readonly NativeTextPart[], style: CSSProp
     // browser's advances by its own ASCII table (after "?", "–", "…"; inside
     // a run of ideographs; never before "。").
     const opportunities = lineBreakOpportunities(run.map((atom) => atom.text), { kinsoku: null, excel: true });
-    const starts = new Set(breakLines(run, width, opportunities));
+    const starts = new Set(breakLines(run, width, opportunities, (style as unknown as Record<string, unknown>)[NATIVE_KEEP_SPACE_MARK] === "1"));
     run.forEach((atom, index) => addText(atom, index > 0 && starts.has(index)));
     run = [];
   };

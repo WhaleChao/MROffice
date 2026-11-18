@@ -81,6 +81,7 @@ import {
   planMraiNativeParagraphRewrite,
   planMraiNativeParagraphRewriteHistory,
   proveMraiNativeParagraphRewriteOwnership,
+  readMraiNativeParagraphTextRules,
   readMraiNativeParagraphRewriteEvidence,
   type MraiNativeParagraphRewriteCharacterFormat,
   type MraiNativeParagraphRewriteFace,
@@ -685,6 +686,10 @@ export interface PdfNativeListTextSelectionProof {
   readonly sourceGeometry?: import("../../source-text-appearance").PdfTextSourceAppearance;
   /** Read-only source paint/layout; not a grant to modify these properties. */
   readonly sourceAppearance?: readonly PdfNativeSourceTextAppearanceRun[];
+  /** The rules this writer drew under (through) all of the text of a box of
+   * several shows or lines (the paragraph rewrite's reading of them): what
+   * its editor reads 下划线 and 删除线 by, where no one run states a rule. */
+  readonly textRules?: Readonly<{ underline?: true; strikethrough?: true }>;
   readonly target: PdfNativeIndirectObjectRef;
   readonly evidence: PdfNativeListTextFidelityEvidence;
   readonly properties: PdfNativeTextPropertyProof | null;
@@ -1241,6 +1246,10 @@ export interface PdfNativeListTextReplacementPlan {
   /** Notices of the write (appearance the user may want to check). */
   readonly notices?: readonly PdfNativeEditNotice[];
   readonly sourceAppearance?: readonly PdfNativeSourceTextAppearanceRun[];
+  /** The rules this writer drew under (through) all of the box's text, where
+   * the plan is of a box of several shows (the paragraph rewrite's read
+   * proof). Plan-level only; the proof carries it. */
+  readonly textRules?: Readonly<{ underline?: true; strikethrough?: true }>;
   /** Read-only layout hint; never part of a persisted transaction record. */
   readonly singleLineFit?: PdfNativeSingleLineFitHint;
   readonly request: PdfNativeContentStreamTransactionRequest;
@@ -16394,6 +16403,13 @@ function readTextEvents(
       `(?:/(?<markedTag>${PDF_SOURCE_NAME})\\s*(?<markedProperties><<(?:[^<>]|<[0-9A-Fa-f\\s]*>)*>>|/${PDF_SOURCE_NAME})\\s*BDC)|` +
       `(?:/(?<markedContentTag>${PDF_SOURCE_NAME})\\s+BMC)|` +
       `(?<endMarkedContent>EMC)(?=$|[\\s\\[\\]()<>/{}/%])|` +
+      // `BX` and `EX` bracket a stretch in which a reader passes over an
+      // operator it does not know (ISO 32000-1 7.8.2). What stands between
+      // them is read by the alternatives here like everything else, so an
+      // operator this walk does not know is left in the residue and refused
+      // as before -- and so is whatever one of the two letters pairs would
+      // be the end of (a name, a longer word): its start stays behind.
+      `(?<compatibility>BX|EX)(?=$|[\\s\\[\\]()<>/{}/%])|` +
       `(?<nextLine>T\\*)|` +
       `(?<emptyTextShow><>\\s*Tj)|` +
       // An array of nothing but empty strings and numbers draws no glyph; it
@@ -16659,6 +16675,11 @@ function readTextEvents(
         // may set the stroke width (/LW): its own, the width before it when
         // it sets none, unknown when it cannot be read.
         lineWidth = extGStateLineWidth(provenExtGStates, decodePdfSourceName(groups.extGState), lineWidth);
+      } else if (groups.compatibility !== undefined) {
+        // Distiller 3 brackets the graphics state it sets inside a text
+        // object (`BX /GS1 gs EX`, an RFC's pages). The brackets draw
+        // nothing, move nothing and set no state; the operators between
+        // them are walked as their own entries.
       } else if (groups.renderingIntent !== undefined) {
         // Colour rendering intent (PDF 32000-1 8.6.5.8): how CIE-based
         // colour is converted for the device. Distiller writes it beside the
@@ -16966,13 +16987,20 @@ function readTextEvents(
               fillColorSpace?.tint != null && fillColorComponents !== null
                 ? fillColorComponents
                 : null,
-            strokeMatchesFill:
-              stroke.strokeColor !== undefined &&
-              stroke.strokeColor.kind === deviceColor.kind &&
-              stroke.strokeColor.components.length === deviceColor.components.length &&
-              stroke.strokeColor.components.every(
+            // The stroke colour in force, as strokeColorInForce reads it: one
+            // no operator set is the PDF's initial black, which is what the
+            // group bold strokes a black line in without naming it
+            // (text-group-move.ts, boldWrap). Read as "not the fill's", the
+            // editor's own bold of such a line came back as an outlined run
+            
+            // off refused).
+            strokeMatchesFill: ((inForce) =>
+              inForce !== undefined &&
+              inForce.kind === deviceColor.kind &&
+              inForce.components.length === deviceColor.components.length &&
+              inForce.components.every(
                 (component, index) => component === deviceColor.components[index],
-              ),
+              ))(strokeColorInForce(stroke)?.color),
             ...(strokeColorInForce(stroke) ? { strokeInForce: strokeColorInForce(stroke)! } : {}),
             graphicsMatrix,
             textMatrix,
@@ -19163,10 +19191,26 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         positionedLineIndexes[edited - 1] === positionedLineIndexes[edited] &&
         positionedLineItems[edited - 1].str.trim() ? edited : -1;
       const linePlans: PlannedNativeTextReplacement[] = [];
+      // The paragraph's source fragments, counted as its lines are proved:
+      // past the budget (checked below, once every line is proved) the
+      // paragraph is refused whatever its other lines are, so the lines
+      // left are not proved for it. A paragraph of some two thousand glyphs,
+      // each its own show, proved all its lines to be refused for the
+      // eighty-odd fragments of the first four: half a minute a try, and
+      
+      // Only once a line is a group of runs: a paragraph of plain shows may
+      // still be the fixed-frame compiler's (fixedFrameCanOwnPositionedLines).
+      let fragments = 0, grouped = false;
       for (const [index, item] of positionedLineItems.entries()) {
-        linePlans.push(index === emptiedLine
+        const linePlan = index === emptiedLine
           ? emptiedShowPlan(await proveLine([item], item.str, true, lastAnswer), stream.streamBytes)
-          : await proveLine([item], shares[index], true, lastAnswer));
+          : await proveLine([item], shares[index], true, lastAnswer);
+        linePlans.push(linePlan);
+        const runs = linePlan.plan.evidence.positionedRunGroup?.runs.length;
+        fragments += runs ?? 1;
+        grouped ||= runs !== undefined;
+        if (grouped && fragments > PDF_NATIVE_MAX_FIXED_FRAME_ITEMS)
+          refuse("Positioned paragraph exceeds the source-fragment budget.");
       }
       // Leave the established uniform-line reflow compiler in charge of its
       // existing documents. This route handles fragmented or kerned shows and
@@ -19694,7 +19738,19 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
           (!blankShow && (event.fontSize !== first.fontSize || event.horizontalScale !== first.horizontalScale)) || event.vertical ||
           !(["Tj", "Tj-literal", "TJ", "TJ-literal", "TJ-mixed"].includes(event.operatorKind) ||
             (index === start && ["'", "'-literal"].includes(event.operatorKind))) ||
-          !matrixNearlyEqual(event.graphicsMatrix, first.graphicsMatrix) ||
+          // One scale and turn of the page for every run; where each
+          // stands is its own. Quartz draws a line a word to a
+          // `q 0.24 0 0 0.24 x y cm BT 45 0 0 45 0 0 Tm … ET Q` (a JSTOR
+          // cover page), Antenna House moves on by `1 0 0 1 dx 0 cm`
+          // between a line's text objects (an IRS form's links): the
+          // place is in the `cm`, the text matrix the same for all. The
+          // runs' order, drift and gaps are read on the page below, a
+          // run that is moved is moved through its own operand by its own
+          // matrix's scale (positionedGroupShiftOperands), and a paragraph
+          // set again is placed in the matrix in force where it is
+          // written. Held to one whole matrix, such a line was no line:
+          // no format, and words typed into it became a text box.
+          !matrixLinearPartNearlyEqual(event.graphicsMatrix, first.graphicsMatrix) ||
           // A run may be set at another scale of the same axes (TeX's font
           // expansion, Word's small caps), or upright after a synthetic
           // oblique on its baseline: the reader reads on from the pen the
@@ -22656,10 +22712,25 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
       const eventMetrics = resolvedMetricsFor(event);
       if (!eventMetrics) return false;
       try {
-        const geometry = textEventSelectionGeometry(event, textEventCodesAdvance(event.codes, event, eventMetrics));
-        const run = baselineRunAlong(itemGeometry, geometry);
-        if (run === null || Math.min(singleSelectionItem.width, run[1]) - Math.max(0, run[0]) <= 0 ||
-          !clipCutsThroughShow(geometry, event.clipBox)) return false;
+        const whole = textEventSelectionGeometry(event, textEventCodesAdvance(event.codes, event, eventMetrics));
+        const run = baselineRunAlong(itemGeometry, whole);
+        if (run === null || Math.min(singleSelectionItem.width, run[1]) - Math.max(0, run[0]) <= 0) return false;
+        // What a clip can cut is ink: the white-space glyphs a show opens
+        // and closes with draw nothing, so a clip through them hides nothing
+        // and the reader shows what the page draws. Word closes a table
+        // cell's line with a space that its word spacing carries past the
+        // cell's clip (a court caption's "…others similarly " under
+        
+        // such cell was no text this route could read.
+        // (A show whose ink cannot be told from its white space is judged
+        // by its whole advance, as before.)
+        let geometry: Readonly<{ transform: PdfMatrix; width: number }> | null = whole;
+        try {
+          geometry = inkedShowGeometry(event, eventMetrics);
+        } catch (error) {
+          if (!(error instanceof PdfNativeTransactionError)) throw error;
+        }
+        if (geometry === null || !clipCutsThroughShow(geometry, event.clipBox)) return false;
         // The show written again under other clips, the copies' clips
         // together showing it whole (banded output): the copies are edited
         // together below, and none of them is cut.
@@ -24222,9 +24293,13 @@ async function deviceColorSpaceOfValue(
   depth = 0,
 ): Promise<PdfNativeProvenColorSpace | null> {
   if (depth > 4) return null;
-  const named = /^\/Device(Gray|RGB|CMYK)$/.exec(value.trim());
+  // A family that takes no parameters is named by its name alone or by an
+  // array of that one name (ISO 32000-1 8.6.3): `/CS1 [/DeviceRGB]` is
+  // DeviceRGB, as a court-filing producer (tx11) writes every page's.
+  const named = /^(?:\/Device(Gray|RGB|CMYK)|\[\s*\/Device(Gray|RGB|CMYK)\s*\])$/.exec(value.trim());
   if (named) {
-    const kind = named[1] === "Gray" ? "gray" : named[1] === "RGB" ? "rgb" : "cmyk";
+    const family = named[1] ?? named[2];
+    const kind = family === "Gray" ? "gray" : family === "RGB" ? "rgb" : "cmyk";
     return Object.freeze({
       kind,
       inputs: deviceColorComponentCount(kind),
@@ -25557,6 +25632,23 @@ function contiguousSingleLineSelection(
   if (!nearlyEqual(advance, selection.item.width, 0.05)) return null;
   return Object.freeze({sourceSha256:selection.sourceSha256,selectionRevision:selection.selectionRevision,
     pageNumber:selection.pageNumber,startOffset:selection.startOffset,endOffset:selection.endOffset,item:selection.item});
+}
+
+/**
+ * The selection a planner proves a box of several reader items as, where no
+ * route reads the items as they stand: the box's own item alone, when the
+ * items are one line's fragments laid end to end in one face
+ * (contiguousSingleLineSelection) -- one show the reader cut at its wide
+ * gaps (a leaned line reads a word an item). A plan made of a command that
+ * names the items carries this selection as its own, so a write checks its
+ * plan against its command by it (mrai-native planAnswersSelection): it is
+ * the command's selection and nothing else, less the cut. Null where the
+ * items are not such fragments.
+ */
+export function pdfNativeListTextSelectionAsOneShow(
+  selection: PdfNativeListTextSelectionEvidence,
+): PdfNativeListTextSelectionEvidence | null {
+  return contiguousSingleLineSelection(selection);
 }
 
 /**
@@ -28896,8 +28988,12 @@ function paragraphFormatResolver(input: {
       if (!face) {
         const option = input.fontOptions.find((entry) => entry.resourceName === name);
         face = option
+          // (Its own name rides along: what tells the rewrite a face of the
+          // text's own family, asked for its style, from another family's.)
           ? resolvedPropertyFont(input.sourceBytes, option).then((resolved) => Object.freeze({
-            resourceName: name, font: resolved.metrics as unknown as MraiNativeParagraphRewriteFace["font"] }))
+            resourceName: name, font: Object.freeze({ ...resolved.metrics,
+              ...(option.baseFont ? { faceName: option.baseFont.replace(/^[A-Z]{6}\+/u, "") } : {}) }) as unknown as
+              MraiNativeParagraphRewriteFace["font"] }))
           : Promise.resolve(null);
         pageFaces.set(name, face);
       }
@@ -30477,8 +30573,14 @@ async function prepareNativeTextFromReadInspection(
   // synthetic bold on any line: a group of shows takes one as a whole).
   const groupMove = groupMoveFirst !== undefined ? groupMoveFirst
     : await proveMraiNativeTextGroupMove(input.sourceBytes, proved, { bold: !surgicalProof.properties });
-  const proof = move || groupMove
-    ? Object.freeze({ ...surgicalProof, ...(move ? { move } : {}), ...(groupMove ? { groupMove } : {}) })
+  // A box no one run states (several shows, several lines) states no one
+  // run's rule either: the rules the paragraph rewrite reads under all of
+  // its text, which is the tier that writes its formats.
+  const textRules = surgicalProof.properties ? null
+    : await readMraiNativeParagraphTextRules(paragraphRewriteKernel(input.sourceBytes, shared), input.selection, proved);
+  const proof = move || groupMove || textRules
+    ? Object.freeze({ ...surgicalProof, ...(move ? { move } : {}), ...(groupMove ? { groupMove } : {}),
+      ...(textRules ? { textRules } : {}) })
     : surgicalProof;
   // Same-length spaces keep every route's line geometry; a paragraph that is
   // one text object (its lines are shows inside one BT…ET) refuses an
@@ -31063,6 +31165,7 @@ export function proofFromNativeListTextPlan(
       ? { provenDeviceColorSpaces: proved.provenDeviceColorSpaces } : {}),
     ...(proved.sourceRun ? { sourceRun: proved.sourceRun } : {}),
     ...(proved.sourceAppearance ? { sourceAppearance: proved.sourceAppearance } : {}),
+    ...(proved.textRules ? { textRules: proved.textRules } : {}),
     ...(proved.propertyRuns && !proved.request.formInstanceIsolation
       ? { propertyRuns: proved.propertyRuns } : {}),
     ...(proved.type3Text ? { type3Text: true as const } : {}),

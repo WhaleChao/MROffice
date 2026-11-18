@@ -15,6 +15,7 @@ import {
   textContainersAlike,
   textContainerWithEditAt,
   textSplice,
+  textSpliceIsGuessNear,
   type TextSplice,
   withJsonValueAt,
   withTextContainerWords,
@@ -184,6 +185,10 @@ export class CollaborativeTextKeys {
     // comparison placed it -- but written as a key, so the editor's words
     // that lack a collaborator's characters never read as deleting them.
     const known = this.deltasSince(key, edit.base);
+    // Read off the two texts, the room's change is a guess where its letters
+    // meet the same letters near the key (TRIAGE 47): the key is not carried
+    // over it by that guess -- the publication refuses it as a conflict.
+    if (!known && textSpliceIsGuessNear(edit.base, roomText, splice)) return { outcome: "room-differs-uncarried" };
     const since = known ?? [spliceDelta(textSplice(edit.base, roomText))];
     const carried = carryTextEditThroughDeltas(edit.base, splice, since);
     const room = collaborativeTextContainerAt(this.root, containerPath);

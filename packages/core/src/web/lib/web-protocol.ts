@@ -17,5 +17,10 @@
  * the reload notice. A save refused on an old build shows it as well, without
  * waiting for anyone to raise a number (lib/web-build.ts).
  */
-export const WEB_CLIENT_PROTOCOL = 1;
+// 2 (TRIAGE 51): the page reads a shape label the room created with the
+// shape (an empty one flagged in its keyed list is no text). A server whose
+// rooms create such labels (page_causal_crdt.py, MRAI_SHAPE_LABELS_FROM_CREATION)
+// refuses the save of an older page's deck that holds one; raise the minimum
+// to 2 with or before switching that on in production.
+export const WEB_CLIENT_PROTOCOL = 2;
 export const WEB_MIN_CLIENT_PROTOCOL = 1;

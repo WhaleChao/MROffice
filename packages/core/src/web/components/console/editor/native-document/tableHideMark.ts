@@ -24,6 +24,25 @@ import { plainTextEdits } from "./textblockOnlyEdits";
  * read); a cell holding words is not affected, as in Word.
  */
 export const TABLE_HIDE_MARK_ATTR = "data-word-hide-mark";
+/**
+ * The same cell's last paragraph when it is empty and the cell holds more:
+ * that paragraph is only the end-of-cell mark, which Word leaves out of the
+ * row's height, its spacing with it (tables/probes/hidemark, Windows Word,
+ * modes 14 and 15: [words, empty] is one line tall, [words, empty, empty]
+ * two, [words, empty with 12 pt before or after] one; an empty paragraph
+ * between two with words keeps its line). Corpus R382-D11 page 9: a title
+ * cell [Chinese, empty, English, empty] stood a line taller than Word's row,
+ * and the table's last row went to the next page.
+ */
+export const TABLE_HIDE_MARK_TAIL_ATTR = "data-word-hide-mark-tail";
+
+/**
+ * Harness switch (`window.__docsHideMarkTailOff = true`): a hideMark cell
+ * that holds words keeps its empty last paragraph's line, as before (A/B).
+ */
+function hideMarkTailOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsHideMarkTailOff?: boolean }).__docsHideMarkTailOff === true;
+}
 
 const tableHideMarkKey = new PluginKey<DecorationSet>("documentTableHideMark");
 
@@ -46,8 +65,17 @@ function isEmptyCell(cell: ProseMirrorNode): boolean {
   return cell.childCount === 1 && cell.firstChild!.isTextblock && cell.firstChild!.content.size === 0;
 }
 
+/** Offset in the cell of its empty last paragraph when the cell holds more. */
+function emptyTailOffset(cell: ProseMirrorNode): number | null {
+  if (cell.childCount < 2) return null;
+  const last = cell.lastChild!;
+  if (!last.isTextblock || last.content.size !== 0) return null;
+  return cell.content.size - last.nodeSize;
+}
+
 export function buildTableHideMarkDecorations(doc: ProseMirrorNode): DecorationSet {
   const decorations: Decoration[] = [];
+  const tails = !hideMarkTailOff();
   HOLDS_TABLE.descendants(doc, (node, pos) => {
     if (node.isTextblock || node.isAtom) return false;
     if (node.type.name !== "table") return true;
@@ -67,9 +95,17 @@ export function buildTableHideMarkDecorations(doc: ProseMirrorNode): DecorationS
           seen.add(offset);
           if (!slots.has(`${row}:${col}`)) continue;
           const cell = node.nodeAt(offset);
-          if (!cell || !isEmptyCell(cell)) continue;
+          if (!cell) continue;
           const from = pos + 1 + offset;
-          decorations.push(Decoration.node(from, from + cell.nodeSize, { [TABLE_HIDE_MARK_ATTR]: "true" }));
+          if (isEmptyCell(cell)) {
+            decorations.push(Decoration.node(from, from + cell.nodeSize, { [TABLE_HIDE_MARK_ATTR]: "true" }));
+            continue;
+          }
+          const tail = tails ? emptyTailOffset(cell) : null;
+          if (tail !== null) {
+            const at = from + 1 + tail;
+            decorations.push(Decoration.node(at, at + cell.lastChild!.nodeSize, { [TABLE_HIDE_MARK_TAIL_ATTR]: "true" }));
+          }
         }
       }
     }

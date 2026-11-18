@@ -29,6 +29,7 @@ import {
   documentDesignStyleRecipe,
   normalizeDocumentDesign,
   type DocumentDesign,
+  type DocumentDesignBase,
   type DocumentStyleRecipe,
   type DocumentStyleRunRecipe,
 } from "../../../../lib/document-design";
@@ -48,6 +49,47 @@ import {
   normalizeFontSize,
   normalizeTextThemeColor,
 } from "../extensions/TextStyling";
+
+/** The theme schemes a Design command sets (Colors, Fonts, Effects; Themes all three). */
+export type DocumentThemeAxis = "colors" | "fonts" | "effects";
+
+/**
+ * Whether the document's styles are its own (an imported Word document's
+ * style graph or theme), not a style set the Design tab installed: the
+ * export keeps them as they are (the API's `document_design_package`).
+ */
+export function documentKeepsOwnStyles(doc: ProseMirrorNode): boolean {
+  return doc.attrs.styleDefinitions != null || doc.attrs.documentThemeColors != null;
+}
+
+function numeric(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Whether the document's defaults are its design's (size, spacing, line
+ * height): an imported document whose styles are one of Word's style sets
+ * (the importer recognised it), or one the Design tab restyled. An imported
+ * document of its own styles, given a design by a Colors / Fonts choice
+ * alone, keeps its own defaults and does not.
+ */
+function documentWearsDesignBase(doc: ProseMirrorNode, design: DocumentDesign | null): boolean {
+  const base = design ? documentDesignBase(design) : null;
+  if (!base) return false;
+  const near = (key: keyof DocumentDesignBase, tolerance: number) => {
+    const want = numeric(base[key]);
+    const have = numeric(doc.attrs[key]);
+    // A default the document does not state is the design's.
+    return doc.attrs[key] == null || (want !== null && have !== null && Math.abs(want - have) <= tolerance);
+  };
+  return (
+    near("defaultFontSize", 0.1) &&
+    near("defaultLineHeight", 0.01) &&
+    near("defaultParagraphSpaceBefore", 0.05) &&
+    near("defaultParagraphSpaceAfter", 0.05)
+  );
+}
 
 /** The design a document is drawn in: its own, or none (`null`) yet. */
 export function documentDesignOfDoc(doc: ProseMirrorNode): DocumentDesign | null {
@@ -479,12 +521,28 @@ export function restyleDocumentDesign(
   tr: Transaction,
   previous: DocumentDesign | null,
   next: DocumentDesign,
+  themeAxes?: readonly DocumentThemeAxis[],
 ): Transaction | null {
   const doc = tr.doc;
   const base = documentDesignBase(next);
   // Word's style sets not here yet: nothing is written (the command refuses).
   if (!base) return null;
   tr.setDocAttribute("documentDesign", { ...next });
+  if (themeAxes && documentKeepsOwnStyles(doc) && !documentWearsDesignBase(doc, previous)) {
+    // An imported document keeps its own styles (styles.xml): Word's Colors,
+    // Fonts, Effects and Themes change only the theme part, never the
+    // document defaults' spacing or a style's definition (that is the style
+    // set's and Paragraph Spacing's work). Body text that follows the theme's
+    // body font takes the new one; text coloured from the theme takes the
+    // new colours. The rest stays as the document has it.
+    if (themeAxes.includes("fonts")) tr.setDocAttribute("defaultFontFamily", base.defaultFontFamily);
+    if (themeAxes.includes("colors")) {
+      if (doc.attrs.designColorSet != null) tr.setDocAttribute("designColorSet", null);
+      if (doc.attrs.documentThemeColors != null) tr.setDocAttribute("documentThemeColors", null);
+      recolorThemeTextColors(tr, next);
+    }
+    return tr;
+  }
   for (const [key, value] of Object.entries(base)) tr.setDocAttribute(key, value);
   // The design's theme is the document's theme from now on: the Design tab's
   // older colour sets and an imported theme give way, as Word's theme part does.

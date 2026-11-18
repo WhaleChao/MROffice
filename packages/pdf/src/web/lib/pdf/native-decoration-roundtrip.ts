@@ -13,13 +13,25 @@ import {
 } from "./document-decorations";
 import {
   MAX_MANAGED_NATIVE_DECORATION_LAYOUT_CHARS,
+  MAX_MANAGED_NATIVE_STAMP_PATCHES,
   planManagedNativeStampAnnotations,
   type ManagedNativeStampRecord,
 } from "./native-stamp-roundtrip";
 import { sanitizeSignatureImage } from "@mrnote/core/web/lib/pdf/signatures.ts";
 
 export const PDF_NATIVE_DECORATION_ID_PREFIX = "pdf-decoration:";
-export const MAX_NATIVE_DECORATION_PAGES = 64;
+
+
+
+
+
+
+
+
+
+
+
+export const MAX_NATIVE_DECORATION_PAGES = 9_999;
 export const MAX_NATIVE_DECORATION_CANVAS_DIMENSION = 1600;
 const PDF_NATIVE_DECORATION_ID_PATTERN =
   /^pdf-decoration:[a-z0-9][a-z0-9._~-]{0,79}:page:([1-9][0-9]{0,3})$/i;
@@ -75,6 +87,10 @@ export type PdfNativeDecorationFailureReason =
   | "duplicate_existing_id"
   | "reserved_id_collision"
   | "native_stamp_plan_refused"
+  /** More pages to decorate than one write carries (with the page's other stamps). */
+  | "stamp_limit"
+  /** The decorated pages together (an image watermark's layers) are too large for one write. */
+  | "total_size_limit"
   | "native_stamp_coverage_mismatch"
   | "canvas_unavailable"
   | "image_resolver_required"
@@ -136,7 +152,18 @@ export interface RenderPdfDecorationNativeStampInput {
   readonly rotation?: 0 | 90 | 180 | 270;
   readonly resolveImage?: PdfDecorationImageResolver;
   readonly canvasFactory?: PdfDecorationCanvasFactory;
+  /**
+   * Image-watermark layers already painted in this reconciliation, by what
+   * they show: pages of one size carry the same layer, painted once (a
+   * canvas and a PNG encoding per page held the main thread for the whole
+   * document).
+   */
+  readonly rasterLayers?: Map<string, Promise<PdfNativeDecorationRasterLayer>>;
 }
+
+type PdfNativeDecorationRasterLayer =
+  | { supported: true; raster: string }
+  | { supported: false; reason: PdfNativeDecorationFailureReason };
 
 export type PdfDecorationPageRenderer = (
   input: RenderPdfDecorationNativeStampInput,
@@ -475,12 +502,26 @@ export async function renderPdfDecorationNativeStamp(
   );
   let raster = "";
   if (imageEntries.length > 0) {
-    const layer = await renderImageWatermarkLayer(
-      imageEntries,
-      renderedPage.width,
-      renderedPage.height,
-      input,
-    );
+    const paint = () =>
+      renderImageWatermarkLayer(
+        imageEntries,
+        renderedPage.width,
+        renderedPage.height,
+        input,
+      );
+    let painted: Promise<PdfNativeDecorationRasterLayer>;
+    if (input.rasterLayers) {
+      const key = JSON.stringify([
+        renderedPage.width,
+        renderedPage.height,
+        imageEntries,
+      ]);
+      painted = input.rasterLayers.get(key) ?? paint();
+      input.rasterLayers.set(key, painted);
+    } else {
+      painted = paint();
+    }
+    const layer = await painted;
     if (!layer.supported) return layer;
     raster = layer.raster;
   }
@@ -532,6 +573,75 @@ function isManagedDecorationRecordShape(
   );
 }
 
+/** The pages (one-based) the decorations draw anything on. */
+function decoratedPageNumbers(
+  model: PdfDocumentDecorations,
+  pageSizes: readonly PdfNativeDecorationPageSize[],
+): number[] {
+  const pages: number[] = [];
+  const pageCount = pageSizes.length;
+  for (let index = 0; index < pageCount; index += 1) {
+    const size = pageSizes[index];
+    const renderedPage = renderedPageGeometry(
+      size.width,
+      size.height,
+      pageRotation(size.rotation) ?? 0,
+    );
+    if (
+      pdfDecorationPreviewEntries(
+        model,
+        index + 1,
+        pageCount,
+        renderedPage.width,
+        renderedPage.height,
+      ).length > 0
+    ) {
+      pages.push(index + 1);
+    }
+  }
+  return pages;
+}
+
+/**
+ * Whether one write carries these decorations: a decorated page is one
+ * stamp record, and a page's stamp records -- the reader's own stamps and
+ * the records of pages no longer decorated included -- go to the PDF as one
+ * plan of at most {@link MAX_MANAGED_NATIVE_STAMP_PATCHES}. `pages` is how
+ * many pages the decorations draw on, `max` how many this page still takes.
+ * Answered from the model and the page sizes alone, before anything is laid
+ * out or sent, so a refusal names its reason at once. Null when the page
+ * geometry is not readable (the reconciliation names that).
+ */
+export function pdfDecorationNativeStampBudget(input: {
+  readonly decorations: PdfDocumentDecorations;
+  readonly pageSizes: readonly PdfNativeDecorationPageSize[];
+  readonly currentRecords: readonly ManagedNativeStampRecord[];
+}): Readonly<{ pages: number; max: number; within: boolean }> | null {
+  const model = sanitizePdfDocumentDecorations(input.decorations);
+  if (
+    input.pageSizes.length < 1 ||
+    input.pageSizes.some(
+      ({ width, height, rotation }) =>
+        !finitePositive(width) ||
+        !finitePositive(height) ||
+        pageRotation(rotation) === null,
+    )
+  ) {
+    return null;
+  }
+  const decorated = new Set(
+    decoratedPageNumbers(model, input.pageSizes).map((page) =>
+      pdfDecorationNativeStampId(model.id, page),
+    ),
+  );
+  let others = 0;
+  for (const record of input.currentRecords) {
+    if (!decorated.has(record.id)) others += 1;
+  }
+  const max = Math.max(0, MAX_MANAGED_NATIVE_STAMP_PATCHES - others);
+  return { pages: decorated.size, max, within: decorated.size <= max };
+}
+
 export function hasExactPdfDecorationNativeStampCoverage(input: {
   readonly decorations: PdfDocumentDecorations;
   readonly pageSizes: readonly PdfNativeDecorationPageSize[];
@@ -552,28 +662,11 @@ export function hasExactPdfDecorationNativeStampCoverage(input: {
     return false;
   }
 
-  const expected = new Set<string>();
-  const pageCount = input.pageSizes.length;
-  for (let index = 0; index < pageCount; index += 1) {
-    const page = index + 1;
-    const size = input.pageSizes[index];
-    const renderedPage = renderedPageGeometry(
-      size.width,
-      size.height,
-      pageRotation(size.rotation) ?? 0,
-    );
-    if (
-      pdfDecorationPreviewEntries(
-        model,
-        page,
-        pageCount,
-        renderedPage.width,
-        renderedPage.height,
-      ).length > 0
-    ) {
-      expected.add(pdfDecorationNativeStampId(model.id, page));
-    }
-  }
+  const expected = new Set<string>(
+    decoratedPageNumbers(model, input.pageSizes).map((page) =>
+      pdfDecorationNativeStampId(model.id, page),
+    ),
+  );
 
   const active = new Set<string>();
   for (const record of input.records) {
@@ -645,8 +738,23 @@ export async function reconcilePdfDecorationNativeStamps(
     }
   }
 
+  // Known before a page is laid out or an image layer painted: a document
+  // with more pages to decorate than one write carries is refused here.
+  const budget = pdfDecorationNativeStampBudget({
+    decorations: model,
+    pageSizes: input.pageSizes,
+    currentRecords: input.currentRecords,
+  });
+  if (budget && !budget.within) {
+    return unchangedFailure(input.currentRecords, "stamp_limit");
+  }
+
   const pageCount = input.pageSizes.length;
   const renderPage = input.renderPage ?? renderPdfDecorationNativeStamp;
+  const rasterLayers = new Map<
+    string,
+    Promise<PdfNativeDecorationRasterLayer>
+  >();
   const desired = new Map<string, ManagedNativeStampRecord>();
   for (let index = 0; index < pageCount; index += 1) {
     const page = index + 1;
@@ -676,6 +784,7 @@ export async function reconcilePdfDecorationNativeStamps(
       pageHeight: size.height,
       rotation,
       resolveImage: input.resolveImage,
+      rasterLayers,
     });
     if (!rendered.supported) {
       return unchangedFailure(input.currentRecords, rendered.reason);
@@ -713,8 +822,16 @@ export async function reconcilePdfDecorationNativeStamps(
   for (const [id, record] of desired) {
     if (!consumed.has(id)) records.push(record);
   }
-  if (!planManagedNativeStampAnnotations(records).supported) {
-    return unchangedFailure(input.currentRecords, "native_stamp_plan_refused");
+  const plan = planManagedNativeStampAnnotations(records);
+  if (!plan.supported) {
+    return unchangedFailure(
+      input.currentRecords,
+      plan.reason === "patch_limit"
+        ? "stamp_limit"
+        : plan.reason === "image_stamp_total_limit"
+          ? "total_size_limit"
+          : "native_stamp_plan_refused",
+    );
   }
   if (
     !hasExactPdfDecorationNativeStampCoverage({

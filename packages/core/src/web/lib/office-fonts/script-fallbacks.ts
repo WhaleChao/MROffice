@@ -11,6 +11,7 @@
 // included, rather than by whatever the reader's system picks.
 import table from "./script-fallbacks.json";
 import { ensureOfficeAliasFamily, officeFontSubstitutes } from "./substitutes";
+import { stackPrimaryFamily } from "./hangul-em";
 
 export type ScriptFallbackClass = "sans" | "serif" | "mono";
 
@@ -36,7 +37,7 @@ const unquote = (name: string) => name.trim().replace(/^["']|["']$/g, "").trim()
 
 /** Serif, sans or mono, by the stack's first face and its stand-ins' names. */
 export function scriptFallbackClass(stack: string): ScriptFallbackClass {
-  const first = unquote(stack.split(",")[0] ?? "");
+  const first = stackPrimaryFamily(stack);
   const names = [first, ...officeFontSubstitutes(first)].map((name) => name.toLowerCase());
   if (names.some((name) => classes.mono.some((word) => name.includes(word)))) return "mono";
   

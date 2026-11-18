@@ -982,6 +982,8 @@ export const spreadsheetFloatingChartSchema = z
     // Insert Chart over numbers side by side, or without a heading).
     noCategories: z.literal(true).optional(),
     noSeriesNames: z.literal(true).optional(),
+    
+    nameRowsAbove: z.number().int().min(1).max(32).optional(),
     showLegend: z.boolean().optional(),
     legendPosition: z.enum(["top", "bottom", "left", "right", "topRight"]).optional(),
     showAxisLabels: z.boolean().optional(),
@@ -2442,6 +2444,18 @@ export const spreadsheetSheetSchema = z
     // past rowCount are hidden as well as those listed above. Absent = Excel's
     // default, every row shown unless hidden.
     rowsHiddenByDefault: z.literal(true).optional(),
+    
+    // a sheet hidden by default (row 1,048,576 of a run hidden to 1,048,575).
+    // A row delete brings in shown rows at the grid's end, one per row deleted
+    // (Excel shows them), so the list is bounded by the grid, not by a small
+    // count: 64 made a sheet with 65 rows deleted open read-only.
+    rowsShownPastEnd: z
+      .array(z.number().int().min(0).max(MAX_GRID_ROWS - 1))
+      .max(MAX_GRID_ROWS)
+      .optional(),
+    // Reading 945: the hidden default is the file's own run of hidden rows,
+    // not zeroHeight; a row delete brings shown rows in at the grid's end.
+    rowsHiddenByFileRun: z.literal(true).optional(),
     // Named ranges (Excel/WPS parity): per-sheet defined names that formulas may
     // use in place of a cell/range reference (e.g. =SUM(Sales)). Each entry maps
     // a name to an A1 reference string ("B2" or "B2:B10"). Optional so existing

@@ -53,6 +53,7 @@ import {
   THAI_SANS_FALLBACK_FAMILY,
   THAI_SERIF_FALLBACK_FAMILY,
 } from "../../../../lib/office-fonts/substitutes";
+import { withHangulEmFaces } from "../../../../lib/office-fonts/hangul-em";
 import {
   OFFICE_CJK_FONT_FAMILY_VALUES,
   OFFICE_FONT_FAMILY_LABELS,
@@ -65,6 +66,7 @@ import {
 } from "../native-document/symbolCharMark";
 export * from "./cssColor";
 import { normalizeColor } from "./cssColor";
+import { OFFICE_COMPLEX_SCALE_PREFIX, officeComplexScaleStack } from "../../../../lib/spreadsheet/office-complex-scales";
 import { normalizeEastAsianFontFamilies } from "../../../../lib/document-word-line-metrics";
 import { wordFontIsEastAsian, wordFontIsRecordedLatin } from "../native-document/wordFontMetrics";
 
@@ -485,10 +487,28 @@ export function normalizeFontSize(value: unknown): FontSizeValue | null {
 }
 
 /** A declared charset belongs to the source East Asian face. Changing that
- * face must not apply the old font's charset to a different font. */
+ * face must not apply the old font's charset to a different font.
+ *
+ * Read from the transaction, not the command's state: in a chain the state's
+ * doc is the one before the chain's earlier steps (Tiptap's chainable state
+ * catches up only when its `tr` is read), and a mark rebuilt from it put the
+ * old face back. After it, the state is brought up to the transaction, so the
+ * `setMark` that follows merges into the cleared mark: it re-added the old
+ * charset from the stale doc (corpus R466-D72 E44, the Font box over a SimSun
+ * run hinted with charset 86: Georgia kept GB2312, the file read back none). */
 function clearChangedFontHintCharset(
   tr: Transaction,
   state: EditorState,
+  slot: "primary" | "eastAsia",
+  nextFamily: string | null,
+): void {
+  clearChangedFontHintCharsetIn(tr, slot, nextFamily);
+  // Tiptap's chainable state takes the transaction's doc when `tr` is read.
+  void (state as EditorState & { tr?: Transaction }).tr;
+}
+
+function clearChangedFontHintCharsetIn(
+  tr: Transaction,
   slot: "primary" | "eastAsia",
   nextFamily: string | null,
 ): void {
@@ -505,9 +525,9 @@ function clearChangedFontHintCharset(
     if (from === undefined || to === undefined) tr.addStoredMark(mark);
     else tr.addMark(from, to, mark);
   };
-  const { from, to, empty, $from } = state.selection;
-  if (empty) update(state.storedMarks ?? $from.marks());
-  else state.doc.nodesBetween(from, to, (node, pos) => {
+  const { from, to, empty, $from } = tr.selection;
+  if (empty) update(tr.storedMarks ?? $from.marks());
+  else tr.doc.nodesBetween(from, to, (node, pos) => {
     if (node.isText) update(node.marks, Math.max(from, pos), Math.min(to, pos + node.nodeSize));
   });
 }
@@ -2287,6 +2307,55 @@ const THAI_CAPABLE_FACE_RE =
 const SERIF_LATIN_FACE_RE =
   /cambria|times|georgia|garamond|book antiqua|palatino|century|bookman|baskerville|caladea|tinos|gelasio|liberation serif|constantia|perpetua|rockwell|^serif$/i;
 
+/** Faces Word draws Hebrew, Arabic or Bengali in themselves (a face of the
+ * script, a Unicode face, Courier New), and Arial, whose letters of those
+ * scripts are its own metric-clone script parts: given no fallback. */
+const OWN_COMPLEX_SCRIPT_FACE_RE =
+  /arab|hebr|naskh|nasta|kufi|thuluth|majalla|aldhabi|typesetting|traditional|simplified|andalus|david|miriam|narkisim|gisha|levenim|aharoni|frank ?ruehl|\brod\b|courier|microsoft sans serif|lucida sans unicode|arial unicode|mangal|nirmala|vrinda|shonar|kalinga|noto|jameel|nafees|urdu|\bb (?:nazanin|lotus|zar|titr|mitra|yekan)\b|vazir|sahel|shabnam|dubai|sakkal|^arial$|^mrai /i;
+/** Faces Windows Office draws those scripts in at widths the Excel table
+ * measured for the face itself (office-complex-scales.json). */
+const OWN_COMPLEX_SCALE_FACES = new Set(["times new roman", "calibri", "tahoma", "segoe ui"]);
+/** Where Word's own advances differ from Excel's printed widths: Times New
+ * Roman's Hebrew, whose advances Word lays out at exactly (R399-D17's Word
+ * PDF, every letter = the font's hmtx, Windows and Mac alike), is 0.796 of
+ * Noto Sans Hebrew's over a running text (R399-D17 0.7963, R305-D06 0.7959;
+ * bold 0.80), where Excel prints it at 0.825 -- 3.6 % wide, and R399-D17's
+ * pages ran a line or two longer each. Arial's 0.912 is its advances too. */
+const WORD_COMPLEX_SCALES: Readonly<Record<string, Readonly<Partial<Record<"arabic" | "hebrew" | "bengali", number>>>>> = {
+  "times new roman": { hebrew: 0.796 },
+};
+
+/**
+ * Hebrew, Arabic and Bengali at Windows Word's widths, right behind the
+ * run's face (ahead of its stand-ins and every other fallback): the letters
+ * of each script in its packaged Noto face at the width Office sets them in
+ * (lib/spreadsheet/office-complex-scales, the table the sheet grid and its
+ * PDF writer share; each family covers its script alone). A face that lacks
+ * the script is drawn as Word draws it (probes/hebslot f1): a serif face's
+ * letters in Times New Roman's, a sans face's in Arial's, a mono face's
+ * left to Courier New further down. Corpus R399-D17: pandoc's Hebrew in
+ * the theme's Cambria, Word Times New Roman, was set in the browser's own
+ * Hebrew face, wider, and its pages ran long. Display only.
+ * `window.__docsWordComplexWidthsOff = true` leaves the stack as it was (A/B).
+ */
+function withWordComplexScriptWidths(tokens: string[]): string[] {
+  if (typeof window !== "undefined" &&
+    (window as Window & {__docsWordComplexWidthsOff?: boolean}).__docsWordComplexWidthsOff === true) return tokens;
+  const first = tokens[0] ? unquotedFontFamilyToken(tokens[0]).trim() : "";
+  if (!first || TERMINAL_GENERIC_FAMILIES.has(first.toLowerCase()) || OWN_COMPLEX_SCRIPT_FACE_RE.test(first)) return tokens;
+  if (tokens.some((token) => unquotedFontFamilyToken(token).startsWith(OFFICE_COMPLEX_SCALE_PREFIX))) return tokens;
+  const key = first.toLowerCase();
+  const as = OWN_COMPLEX_SCALE_FACES.has(key)
+    ? key
+    : /mono|consol|courier|menlo|monaco|lucida console/i.test(key)
+      ? null
+      : SERIF_LATIN_FACE_RE.test(key) && !/sans/i.test(key) ? "times new roman" : "arial";
+  if (!as) return tokens;
+  const families = officeComplexScaleStack(as, { ownScriptParts: false, scales: WORD_COMPLEX_SCALES[as] })
+    .split(",").map((token) => token.trim()).filter(Boolean);
+  return families.length ? [tokens[0]!, ...families, ...tokens.slice(1)] : tokens;
+}
+
 /**
  * Word's Thai face for a run that names no complex-script font: Angsana New
  * behind a serif Latin face, Browallia New behind a sans one (Word 16 for
@@ -2296,9 +2365,9 @@ const SERIF_LATIN_FACE_RE =
  */
 export function withThaiScriptFallback(stack: string | null): string | null {
   if (!stack) return stack;
-  const tokens = stack.split(",").map((token) => token.trim()).filter(Boolean);
+  const tokens = withWordComplexScriptWidths(stack.split(",").map((token) => token.trim()).filter(Boolean));
   const names = tokens.map((token) => unquotedFontFamilyToken(token));
-  if (names.some((name) => THAI_CAPABLE_FACE_RE.test(name))) return stack;
+  if (names.some((name) => THAI_CAPABLE_FACE_RE.test(name))) return tokens.join(", ");
   const serif = names.some((name) => SERIF_LATIN_FACE_RE.test(name)) &&
     !names.slice(0, 1).some((name) => /arial|calibri|helvetica|verdana|segoe|aptos|sans/i.test(name));
   const family = serif ? THAI_SERIF_FALLBACK_FAMILY : THAI_SANS_FALLBACK_FAMILY;
@@ -2310,7 +2379,18 @@ export function withThaiScriptFallback(stack: string | null): string | null {
   return [...tokens.slice(0, at), `"${family}"`, ...tokens.slice(at)].join(", ");
 }
 
+/**
+ * The display stack (below), with each Korean Office family's Hangul at its
+ * own full em in front of it (lib/office-fonts/hangul-em.ts): Word draws
+ * Malgun Gothic's, Gulim's and Batang's Hangul 1 em where the served Noto KR
+ * draws 0.92 (corpus R284-D30).
+ */
 export function fontFamilyWithCjkRenderFallback(value: unknown): string | null {
+  const stack = cjkRenderFallbackStack(value);
+  return stack ? withHangulEmFaces(stack, ensureOfficeFontFaces) : stack;
+}
+
+function cjkRenderFallbackStack(value: unknown): string | null {
   const family = normalizeFontFamily(value);
   if (!family) return null;
 

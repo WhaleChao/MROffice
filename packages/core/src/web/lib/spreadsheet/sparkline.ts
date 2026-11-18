@@ -309,6 +309,41 @@ export function sparklineStrokeWidthPx(
   return (points * 96) / 72 * factor;
 }
 
+/**
+ * Windows Excel's line-sparkline marker: a diamond whose diagonal (points at
+ * 100 %) follows the group's lineWeight, measured from its printed sparklines
+ * (lookwin p151: 2.88 pt up to a 1 pt line, then 3.84 / 6.00 / 6.96 / 7.92 /
+ * 9.84 pt at 1.5 / 2.25 / 3 / 4.5 / 6 pt).
+ */
+const SPARKLINE_MARKER_DIAGONAL_PT: ReadonlyArray<readonly [number, number]> = [
+  [1, 2.88], [1.5, 3.84], [2.25, 6], [3, 6.96], [4.5, 7.92], [6, 9.84],
+];
+
+/** A line marker's diamond diagonal in CSS px at 100 % (times `scale`). */
+export function sparklineMarkerDiagonalPx(
+  sparkline: Pick<Sparkline, "lineWeight">,
+  scale = 1,
+): number {
+  const weight = sparkline.lineWeight ?? DEFAULT_SPARKLINE_LINE_WEIGHT_PT;
+  const factor = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  const table = SPARKLINE_MARKER_DIAGONAL_PT;
+  let points = table[0][1];
+  if (weight >= table[table.length - 1][0]) {
+    const [lastWeight, lastPoints] = table[table.length - 1];
+    points = lastPoints + (weight - lastWeight) * 1.28;
+  } else {
+    for (let i = 1; i < table.length; i += 1) {
+      const [w0, p0] = table[i - 1];
+      const [w1, p1] = table[i];
+      if (weight <= w1) {
+        points = weight <= w0 ? p0 : p0 + ((weight - w0) / (w1 - w0)) * (p1 - p0);
+        break;
+      }
+    }
+  }
+  return (points * 96) / 72 * factor;
+}
+
 /** A line-mode point in [0, w] x [0, h] (y is already flipped for SVG). */
 export interface SparklinePoint {
   x: number;
@@ -516,7 +551,10 @@ export function sparklinePoints(
     }
     const { min, max } = bounds;
     const span = max - min;
-    const step = slots > 1 ? width / (slots - 1) : 0;
+    // Each point stands in the middle of its slot, as Excel draws a line
+    // sparkline (lookwin R139-X01: five points over a cell at 1/10, 3/10 ...
+    // 9/10 of its width, not edge to edge), as a column's bar does.
+    const step = slots > 0 ? width / slots : 0;
     const points: SparklinePoint[] = [];
     const pointIndexes: number[] = [];
     const pointValues: number[] = [];
@@ -530,7 +568,7 @@ export function sparklinePoints(
         }
         continue;
       }
-      const x = slots > 1 ? sample.index * step : width / 2;
+      const x = slots > 1 ? (sample.index + 0.5) * step : width / 2;
       // Normalize into [0, 1] then flip so the max is at the top (y = 0). When
       // every value is equal (span = 0), draw the line through the middle.
       const norm = span === 0 ? 0.5 : (sample.value - min) / span;

@@ -467,7 +467,11 @@ export function buildOfflineDocumentHtml(
       if (raw === null) continue;
       const face = parseOfficeFontFace(raw);
       if (!face) throw new OfflineHtmlExportError("Invalid font face identity");
-      fontRules.set(face.postscriptName, officeFontFaceRule(face));
+      // Written once per face: a document's runs name the same few faces
+      // thousands of times, and a face of the document's own is its files
+      // base64-encoded (installDocumentFontRules).
+      if (!fontRules.has(face.postscriptName))
+        fontRules.set(face.postscriptName, officeFontFaceRule(face));
     }
   }
   const embeddedDocument = semanticSnapshot

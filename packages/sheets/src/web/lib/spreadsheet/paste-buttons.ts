@@ -43,6 +43,7 @@ import {
   normalizeRule as normalizeValidationRule,
   planRulesForValidationPaste,
   ruleForCell,
+  validationRuleAreas,
   type ValidationRule,
 } from "@mrnote/core/web/lib/spreadsheet/data-validation.ts";
 import { styleWithOwnTextIdentity } from "@mrnote/core/web/lib/spreadsheet/entry-parse.ts";
@@ -870,11 +871,11 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
       range.c1 <= maxC &&
       range.c2 >= baseCol;
     const validationBefore = options.validationPlan
-      ? validations.filter((rule) => inDestination(rule.range))
+      ? validations.filter((rule) => validationRuleAreas(rule).some(inDestination))
       : [];
     const validationAfter = options.validationPlan
       ? options.validationPlan.rules.filter((rule) =>
-          inDestination(rule.range),
+          validationRuleAreas(rule).some(inDestination),
         )
       : [];
     const facetAt = (

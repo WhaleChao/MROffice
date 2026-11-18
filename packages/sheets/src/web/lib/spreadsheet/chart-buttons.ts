@@ -395,7 +395,7 @@ export interface SheetChartData {
 /** A chart's next model, its binding, and record flags the write settles. */
 /** Record fields a write removes: a #REF! source repaired, a label line the
  * chart's range now has. */
-export type SheetChartSettledField = "sourceRefError" | "noCategories" | "noSeriesNames";
+export type SheetChartSettledField = "sourceRefError" | "noCategories" | "noSeriesNames" | "nameRowsAbove";
 
 export interface SheetChartWrite {
   attrs: ChartBlockAttrsV2;
@@ -783,6 +783,8 @@ export interface InsertChartSelectionLayout {
   readonly noCategories?: true;
   readonly noSeriesNames?: true;
   readonly outer: number;
+   
+  readonly nameRowsAbove?: number;
 }
 
 /**
@@ -816,6 +818,7 @@ export function insertChartSelectionLayout(
   if (!LABEL_RULE_TYPES.has(type)) {
     const { c1, c2, outer } = insertChartSelectionColumns(rect, type, value);
     const range = { r1: rect.r1, c1, r2: rect.r2, c2 };
+    let above = 0;
     if ((type === "treemap" || type === "sunburst") && rect.r2 > rect.r1 && c2 > c1) {
       // A tree map's or a sunburst's points start on the first row whose
       // value columns hold a number; every row above it heads the selection
@@ -841,6 +844,8 @@ export function insertChartSelectionLayout(
         while (first <= rect.r2 && !numberRow(first)) first += 1;
         if (first > rect.r1 + 1 && first <= rect.r2) range.r1 = first - 1;
       }
+      
+      above = range.r1 - rect.r1;
     }
     // A tree map, a sunburst and a stock chart read their first row as the
     // series' names by Excel's label rule: "A 店" / 50 or 门店 / 2024 on top
@@ -854,7 +859,7 @@ export function insertChartSelectionLayout(
     ) {
       return { range, seriesInColumns: true, noSeriesNames: true, outer };
     }
-    return { range, seriesInColumns: true, outer };
+    return { range, seriesInColumns: true, outer, ...(above > 0 ? { nameRowsAbove: above } : {}) };
   }
   if (rect.r2 > rect.r1 && !selectionHoldsANumber(rect, value, display)) {
     // A selection with no number in it is laid in rows: its last row is the
@@ -876,14 +881,59 @@ export function insertChartSelectionLayout(
   const lines = excelChartRangeLabelLines(rect, value, display);
   let range: ChartRange = { ...rect };
   let outer = 0;
+  const blankCell = (row: number, col: number) =>
+    String(value(row, col) ?? "").trim() === "" && String(display(row, col) ?? "").trim() === "";
   if (lines.firstColumn) {
     const columns = insertChartSelectionColumns(rect, type, value);
-    range = { ...range, c1: columns.c1, c2: columns.c2 };
-    outer = columns.outer;
+    // A column with nothing in it between the labels and the numbers is a
+    // series, not a category level: Excel plots it, empty (Excel for
+    
+    // column chart over A2:G13 with B blank is =SERIES(B2:B4, A5:A13,
+    // B5:B13) and C..G after it). Before, B was the category axis, A an
+    // outer level over it, and every point read a blank category.
+    let c1 = columns.c1;
+    const columnBlank = (col: number) => {
+      for (let row = rect.r1; row <= rect.r2; row += 1) if (!blankCell(row, col)) return false;
+      return true;
+    };
+    while (c1 > rect.c1 && columnBlank(c1)) c1 -= 1;
+    range = { ...range, c1, c2: columns.c2 };
+    outer = c1 === columns.c1 ? columns.outer : Math.min(columns.outer, c1 - rect.c1);
   }
-  const dataRows = range.r2 - range.r1 + 1 - (lines.firstRow ? 1 : 0);
-  const dataColumns = range.c2 - range.c1 + 1 - (lines.firstColumn ? 1 : 0);
-  const seriesInColumns = dataRows > dataColumns;
+  // Several heading rows over the series (a title row, a units row, a row
+  // of year names) are all names: the points start under the last row
+  // whose value columns hold a text before the first row of numbers (Excel
+  
+  // A5:A13 / C5:C13, the series named by C2:C4). Read as one name row, the
+  // rows below it were points of text, plotted as zeros. The name kept is
+  // that last row's (Excel names the series by the cells of all of them).
+  // A blank top-left cell is Excel's other rule (one name row): left as it
+  // was, as for a tree map.
+  const headed = (candidate: ChartRange): ChartRange => {
+    if (!lines.firstRow || blankCell(rect.r1, rect.c1) || candidate.c2 <= candidate.c1) return candidate;
+    const firstValue = candidate.c1 + (lines.firstColumn ? 1 : 0);
+    const numberRow = (row: number) => {
+      for (let col = firstValue; col <= candidate.c2; col += 1) {
+        const raw = String(value(row, col) ?? "").trim();
+        if (raw !== "" && chartNumericText(raw)) return true;
+      }
+      return false;
+    };
+    const textRow = (row: number) => {
+      for (let col = firstValue; col <= candidate.c2; col += 1) if (!blankCell(row, col)) return true;
+      return false;
+    };
+    let lastName = candidate.r1;
+    for (let row = candidate.r1 + 1; row <= candidate.r2 && !numberRow(row); row += 1) {
+      if (textRow(row)) lastName = row;
+    }
+    return lastName > candidate.r1 && lastName < candidate.r2 ? { ...candidate, r1: lastName } : candidate;
+  };
+  const inColumns = (candidate: ChartRange) =>
+    candidate.r2 - candidate.r1 + 1 - (lines.firstRow ? 1 : 0) > candidate.c2 - candidate.c1 + 1 - (lines.firstColumn ? 1 : 0);
+  const named = headed(range);
+  if (named !== range && inColumns(named)) range = named;
+  const seriesInColumns = inColumns(range);
   const fields = chartRangeLabelFields(lines, seriesInColumns);
   if (ONE_SERIES_TYPES.has(type)) {
     // The first series alone: the label line, then the first value line.
@@ -894,7 +944,10 @@ export function insertChartSelectionLayout(
   }
   // The outer levels sit beside a category column, under a row of names.
   if (!seriesInColumns || fields.noCategories || fields.noSeriesNames) outer = 0;
-  return { range, seriesInColumns, ...fields, outer };
+  
+  // (=SERIES(B2:B4, ...)), as Excel names the series by all of them.
+  const above = !seriesInColumns || fields.noSeriesNames ? 0 : range.r1 - rect.r1;
+  return { range, seriesInColumns, ...fields, outer, ...(above > 0 ? { nameRowsAbove: above } : {}) };
 }
 
 /**
@@ -1086,6 +1139,7 @@ export function plannedSheetChart(input: PlannedSheetChartInput): { chart: Sprea
     ...(chartTakesColorPalette(spreadsheetChartFamily(type)) ? { chartColorPalette: "colorful-1" as const } : {}),
     ...(chartSubtype ? { chartSubtype } : {}),
     ...(outer > 0 ? { outerCategoryColumns: outer } : {}),
+    ...(laid.nameRowsAbove ? { nameRowsAbove: laid.nameRowsAbove } : {}),
     ...(secondaryAxisLastSeries
       ? { secondaryAxisSeries: [lastValueSeries] }
       : {}),
@@ -1338,6 +1392,9 @@ function sheetChartLabelFieldsWrite(fields: { noCategories?: true; noSeriesNames
     if (fields[key]) record[key] = true;
     else settled.push(key);
   }
+  
+  // series of that range only; a new Chart data range has its own name row.
+  settled.push("nameRowsAbove");
   return { ...(Object.keys(record).length ? { record } : {}), settled };
 }
 

@@ -49,6 +49,23 @@ interface Refusal {
 }
 
 /**
+ * A page whose painted body ran past its foot while its plan, which cut a
+ * block at its end, measured it within: the plan measured that page short by
+ * `shortfallPx`. The next plans lay the page out that much shorter, so the
+ * block is cut earlier on it instead of leaving the page whole (R465-D87's
+ * print: a 25-item list's head pushed whole off a page it had 730 px of,
+ * one page more than Word). Kept until the next authored edit, for the page
+ * opened by the same fragment at the same capacity.
+ */
+interface Shortfall {
+  opener: OpenerSignature;
+  capacityPx: number;
+  shortfallPx: number;
+  tries: number;
+  editSeq: number;
+}
+
+/**
  * Page boundaries the physical verifier refused, which the plan keeps.
  *
  * The plan fills a page from measured atoms; the verifier then checks the
@@ -71,12 +88,78 @@ interface Refusal {
 export class LedgerPhysicalRefusals {
   private entries: Refusal[] = [];
 
+  private shortfallEntries: Shortfall[] = [];
+
   get size(): number {
     return this.entries.length;
   }
 
   clear(): void {
     this.entries = [];
+    this.shortfallEntries = [];
+  }
+
+  /**
+   * After a repair that pushed a cuttable block's piece off a page whose
+   * plan measured it short (see Shortfall): the px the next plans take off
+   * that page. `page` is the page node as it stood when the verifier read it
+   * (its opening is the same after the push). Returns how many times the
+   * page has now been short, this one included.
+   */
+  recordShortfall(page: PmNode, capacityPx: number, shortfallPx: number, editSeq: number): number {
+    const first = page.firstChild;
+    if (!first || !(shortfallPx > 0)) return 0;
+    const opener = openerSignature(first);
+    const previous = this.shortfallEntries.find((entry) =>
+      entry.editSeq === editSeq && sameOpener(entry.opener, opener) &&
+      Math.abs(entry.capacityPx - capacityPx) <= CAPACITY_TOLERANCE_PX);
+    if (previous) {
+      previous.shortfallPx += shortfallPx;
+      previous.tries += 1;
+      return previous.tries;
+    }
+    this.shortfallEntries.push({ opener, capacityPx, shortfallPx, tries: 1, editSeq });
+    if (this.shortfallEntries.length > MAX_REFUSALS) this.shortfallEntries.splice(0, this.shortfallEntries.length - MAX_REFUSALS);
+    return 1;
+  }
+
+  /** How many times the page `page` (at that capacity) was recorded short. */
+  shortfallTries(page: PmNode, capacityPx: number, editSeq: number): number {
+    const first = page.firstChild;
+    if (!first) return 0;
+    const opener = openerSignature(first);
+    return this.shortfallEntries.find((entry) =>
+      entry.editSeq === editSeq && sameOpener(entry.opener, opener) &&
+      Math.abs(entry.capacityPx - capacityPx) <= CAPACITY_TOLERANCE_PX)?.tries ?? 0;
+  }
+
+  /**
+   * The px each short page (by index) gives up in this plan. An entry from
+   * before the last authored edit, or whose opening no page has at its
+   * capacity any more, is dropped.
+   */
+  shortfalls(build: LedgerBuild, editSeq: number): ReadonlyMap<number, number> {
+    const result = new Map<number, number>();
+    if (this.shortfallEntries.length === 0) return result;
+    // The fragment that opens each sheet, whole block or continuation.
+    const openers = new Map<number, PmNode>();
+    for (const block of build.logical) {
+      for (const part of block.parts) {
+        if (part.childIndex === 0 && !openers.has(part.sheet)) openers.set(part.sheet, part.node);
+      }
+    }
+    this.shortfallEntries = this.shortfallEntries.filter((entry) => {
+      if (entry.editSeq !== editSeq) return false;
+      for (const [sheet, node] of openers) {
+        if (result.has(sheet)) continue;
+        if (!sameOpener(openerSignature(node), entry.opener)) continue;
+        if (!(Math.abs(entry.capacityPx - (build.capacities[sheet] ?? Number.NaN)) <= CAPACITY_TOLERANCE_PX)) continue;
+        result.set(sheet, entry.shortfallPx);
+        return true;
+      }
+      return false;
+    });
+    return result;
   }
 
   /** After a repair dispatched: the pages it pushed content off, with the

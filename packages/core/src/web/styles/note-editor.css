@@ -1302,6 +1302,19 @@ body.note-editor-object-moving * {
   overflow: hidden;
 }
 
+/* ...and a cell holding words loses its empty last paragraph the same way:
+   it is only the end-of-cell mark (TABLE_HIDE_MARK_TAIL_ATTR). */
+.ProseMirror td > [data-word-hide-mark-tail="true"],
+.ProseMirror th > [data-word-hide-mark-tail="true"] {
+  height: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+  overflow: hidden;
+}
+
 /* Blanks ending a paragraph do not raise Word's last line
    (trailingBlankLineHeight.ts). */
 .ProseMirror [data-word-trailing-blank="true"] {
@@ -4917,6 +4930,17 @@ br[data-docx-break-run-marks] {
   font-weight: var(--docs-native-list-marker-weight, 400);
   font-style: var(--docs-native-list-marker-style, normal);
   user-select: none;
+}
+/* The marker strut (documentAutoLineSpacing markerStrut) rides this marker
+   box as it rides a gallery marker: the line rises to the Word marker's
+   ascent, relative paint returns the glyph to the baseline (corpus R371-D01:
+   the zero line height above won, a Symbol bullet's line stood at 13.8pt
+   where Word sets 14.65pt). */
+.note-editor-content :is(ol.docs-native-list-indent:not([data-list-style]), ul.docs-native-list-indent:not([data-bullet-style]):not([data-bullet-picture])) > li.docs-native-list-indent__item:not([data-docs-numbering-marker-host="true"]):not(.docs-native-list-indent__item--continued):not([data-page-split-item-continuation="true"]) > p:first-of-type[data-document-list-marker-strut="true"]:not([data-document-list-marker-strut-native-off="true"])::before {
+  line-height: var(--document-list-marker-strut-height);
+  vertical-align: var(--document-list-marker-strut-shift);
+  position: relative;
+  top: var(--document-list-marker-strut-shift);
 }
 .note-editor-content ol.docs-native-list-indent:not([data-list-style]) > li.docs-native-list-indent__item:not([data-docs-numbering-marker-host="true"]):not(.docs-native-list-indent__item--continued):not([data-page-split-item-continuation="true"]) > p:first-of-type::before {
   content: counter(list-item, decimal) ".";
@@ -13164,6 +13188,21 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
   content: none;
 }
 
+ 
+.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="equation"] .katex {
+  position: relative;
+}
+
+.note-editor-content .mrnote-tc-object-deletion[data-tc-object-kind="equation"] .katex::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 1px solid var(--console-danger, #dc2626);
+  pointer-events: none;
+}
+
 /* An inserted object (trackObjectInsertion): a picture, chart, shape or text
    box is underlined in the revision colour, as inserted text is; a display
    equation is revision-coloured underlined text; a break or a rule only gets
@@ -13191,6 +13230,13 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 
 .note-editor-content .mrnote-tc-object-insertion[data-tc-object-kind="equation"]::after {
   content: none;
+}
+
+/* An equation one reviewer inserted and another deleted (w:ins > w:del in its
+   m:r) is drawn deleted: the deleter's colour and the line (office-truth m0,
+   the display "E = m"), not the insertion's colour. */
+.note-editor-content .mrnote-tc-object-insertion.mrnote-tc-object-deletion[data-tc-object-kind="equation"] {
+  color: var(--console-danger, #dc2626);
 }
 
 .note-editor-content .mrnote-tc-formatting,
@@ -17576,6 +17622,31 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
 .sheet-band-print {
   pointer-events: none;
 }
+/* The print copy carries a page's header and footer inside its sheet, so
+   under `.note-editor-content`; on screen they are the sheet's overlay
+   siblings, outside it. The body's own table and picture rules (a 12px
+   margin, a light 1px border, 8px 12px cell padding, 0.9375rem table type, a
+   rounded picture with a 0.75rem margin) reached them in print alone:
+   R308-D01's footer table stood its 12px margin (9pt) above Word's on every
+   page and its watermark 12px below. Here they are as the screen draws them.
+   (`data-docs-print-band-body-rules` on the copy's root: the old copy, for an
+   A/B of one build.) */
+:root:not([data-docs-print-band-body-rules]) .note-editor-content .sheet-band-print table {
+  margin: 0;
+  border: none;
+  font-size: inherit;
+  overflow: visible;
+}
+:root:not([data-docs-print-band-body-rules]) .note-editor-content .sheet-band-print table :is(td, th) {
+  padding: 0 4px;
+  border: none;
+  word-break: normal;
+  position: static;
+}
+:root:not([data-docs-print-band-body-rules]) .note-editor-content .sheet-band-print img {
+  margin: 0;
+  border-radius: 0;
+}
 /* Bands live beside ProseMirror, so use the document typography variable
    explicitly just as the body does. */
 /* Verified page fonts affect paint, not the persisted font-family mark. */
@@ -18377,6 +18448,36 @@ span.document-auto-linebox .document-auto-line-fraction,
    line on that line (bandTabLayout, source.wordTabOverMargin). */
 .ProseMirror [data-tab-over-margin="true"] {
   white-space: pre !important;
+}
+/* Its paragraph: Chromium breaks between two such spans by the paragraph's
+   overflow-wrap / word-break (the editor's break-word), not theirs. */
+.ProseMirror [data-tab-over-margin-line] {
+  overflow-wrap: normal !important;
+  word-break: normal !important;
+}
+/* ...and its closing widgets (the paragraph mark, the editor's separator
+   image) stand out of the flow: after a kept line running past the edge
+   they took a line of their own, where Word's paragraph mark stays on it
+   (tables/nd10/b14-dbg4.json: each such paragraph 5 px taller). */
+.ProseMirror [data-tab-over-margin-line] .mrnote-formatting-mark--pilcrow,
+.ProseMirror [data-tab-over-margin-line] img.ProseMirror-separator {
+  position: absolute !important;
+}
+/* A cell's paragraph ends with the cell-end mark instead: an inline-block,
+   which the line run past the cell's edge left for a line of its own, 5 px
+   under it (tables/probes/tabedge te-cell-14, Windows Word mode 14: every
+   such row ~4 pt taller than Word's, nd13/tc14-para.json). Out of the flow
+   as the paragraph mark is. `data-docs-tab-cell-end-mark-off` on the root
+   leaves it in the flow (A/B). */
+:root:not([data-docs-tab-cell-end-mark-off]) .ProseMirror [data-tab-over-margin-line] .mrnote-formatting-mark--cellEnd {
+  position: absolute !important;
+}
+/* The editor's trailing break after such a line went to a line of its own
+   too (a cell's paragraph 5 px taller, tables/nd10/c14-dbg5.json); the
+   line has text, so it needs none (only when that line ends the paragraph:
+   after a Shift+Enter it holds the empty last line up). */
+.ProseMirror [data-tab-over-margin-line="end"] > br.ProseMirror-trailingBreak:last-child {
+  display: none !important;
 }
 
 .sheet-band-story-tab[data-leader] {

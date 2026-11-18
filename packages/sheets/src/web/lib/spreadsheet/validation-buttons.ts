@@ -20,6 +20,7 @@ import {
   rangeHasRule,
   sameValidationSettingsAs,
   validationOperatorNeedsSecondValue,
+  validationRuleAreas,
   type ErrorStyle,
   type ValidationFormulaShifter,
   type ValidationMessages,
@@ -275,14 +276,17 @@ export function validationsAfterDefine(
     ? []
     : same.flatMap((candidate) => {
         const next = build({ ...candidate.range });
+        // A rule over several areas takes the new settings on every area,
+        
+        if (next && candidate.areas && candidate.areas.length > 1) {
+          next.areas = candidate.areas.map((area) => ({ ...area }));
+        }
         return next ? [next] : [];
       });
-  const covered = same.some(
-    (candidate) =>
-      candidate.range.r1 <= range.r1 &&
-      candidate.range.c1 <= range.c1 &&
-      candidate.range.r2 >= range.r2 &&
-      candidate.range.c2 >= range.c2,
+  const covered = same.some((candidate) =>
+    validationRuleAreas(candidate).some(
+      (area) => area.r1 <= range.r1 && area.c1 <= range.c1 && area.r2 >= range.r2 && area.c2 >= range.c2,
+    ),
   );
   const kept = clearRulesInRange(
     validations.filter((candidate) => !same.includes(candidate)),

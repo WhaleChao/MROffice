@@ -139,6 +139,26 @@ export interface SlideParagraph {
 
 
   runDefaults?: ParagraphRunDefaults;
+  /**
+   * The Latin face the row's paragraph mark is set in, on a row with East
+   * Asian words (`a:endParaRPr`'s `a:latin`, else the last run's, else the
+   * level's; readings row 899). PowerPoint lays the line that holds the mark
+   * by it; the runs name only the faces their own script draws in. A flat
+   * body says it on the block. For the text engine only; carried, never
+   * written.
+   */
+  endLatinFace?: string;
+  /**
+   * The row ends at a line break of its paragraph (`a:br`), not at the
+   * paragraph's mark: a row a one-paragraph flat body is split into at its
+   * breaks (`paragraphBuildRows`). Built for drawing only, never stored.
+   */
+  endsInLineBreak?: true;
+}
+
+/** A stated mark Latin face (`endLatinFace`), or undefined. */
+export function normalizeParagraphEndLatinFace(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() && value.length <= 200 ? value.trim() : undefined;
 }
 
 /** {@link SlideParagraph.runDefaults}. */
@@ -200,10 +220,13 @@ export function normalizeParagraphEndFontSize(value: unknown): number | undefine
 /** A row's own formatting the editor carries without drawing or authoring it. */
 export function paragraphCarriedFields(
   record: unknown,
-): Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults"> {
+): Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults" | "endLatinFace"> {
   if (!record || typeof record !== "object") return {};
   const raw = record as Record<string, unknown>;
-  const out: Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults"> = {};
+  const out: Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults" | "endLatinFace"> = {};
+  // The mark's Latin face goes with the row (readings row 899), as its mark does.
+  const endLatinFace = normalizeParagraphEndLatinFace(raw.endLatinFace);
+  if (endLatinFace !== undefined) out.endLatinFace = endLatinFace;
   // The row's own run defaults go with it through every rebuild, as its
   // `a:pPr` does in PowerPoint (readings row 885).
   const runDefaults = normalizeParagraphRunDefaults(raw.runDefaults);

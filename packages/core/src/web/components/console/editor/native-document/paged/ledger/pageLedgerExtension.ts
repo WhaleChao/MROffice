@@ -456,6 +456,43 @@ function restStepPages(dom: HTMLElement): number {
 /** How many times a print reads all its pages' feet before it ends (each push lays out anew). */
 const PRINT_FOOT_CHECKS = 4;
 
+/** The least a cuttable block must keep of a page, past what the plan
+ * measured short, for the repair to cut it shorter there rather than push
+ * it whole (about two lines). */
+const SHORTFALL_MIN_KEEP_PX = 40;
+/** How many times a page is laid out shorter before its block is pushed
+ * whole as before. */
+const SHORTFALL_MAX_TRIES = 3;
+/** The height `plan` gave each page that stands as it planned it (its
+ * opening and the next page's as planned); NaN for the others. A pass that
+ * held a layout against a cycle ends with the plan it refused. */
+function plannedUsedAsStanding(plan: LedgerPlan, current: readonly string[]): number[] {
+  const planned = pageStartAtoms(plan);
+  return plan.pages.map((page, index) =>
+    planned[index] === current[index] && (index + 1 >= planned.length ? index + 1 >= current.length : planned[index + 1] === current[index + 1])
+      ? page.usedPx : Number.NaN);
+}
+/** The block kinds a plan can cut at a line or an item. */
+const SHORTFALL_CUTTABLE = new Set(["paragraph", "heading", "orderedList", "bulletList", "taskList", "blockquote", "codeBlock"]);
+
+/**
+ * A print whose page ran past its foot with a cuttable block's piece at its
+ * end (the plan measured the page short): the next plans lay that page out
+ * shorter by what it ran over and cut the block earlier there, instead of
+ * pushing the piece whole to the next page (LedgerPhysicalRefusals'
+ * Shortfall). `window.__docsRepairShortfallOff = true` pushes it whole as
+ * before; `window.__docsRepairShortfall = true` does it on screen too.
+ */
+function repairShortfallOn(view: EditorView): boolean {
+  const win = view.dom.ownerDocument.defaultView as (Window & {
+    __docsRepairShortfallOff?: boolean;
+    __docsRepairShortfall?: boolean;
+    __MRAI_PAGE_PREVIEW_SHOW?: unknown;
+  }) | null;
+  if (!win || win.__docsRepairShortfallOff === true) return false;
+  return win.__docsRepairShortfall === true || typeof win.__MRAI_PAGE_PREVIEW_SHOW === "function";
+}
+
 /** How long a print waits for the faces its text draws with before laying out without them. */
 const PRINT_FACES_WAIT_MS = 15_000;
 
@@ -764,7 +801,12 @@ function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | 
   const pictured = new Set<number>();
   const footZones = projectedSheetFootZones(view, pages, sheets);
   step("footZones");
-  for (const index of projectedIndexes) projectUnequalColumnSheet(sheets[index], footZones?.[index] ?? 0);
+  // Compatibility mode 15: a kept paragraph's last lines go on with a
+  // follower that cannot start at its column's foot.
+  const columnSheetOptions = {
+    keepNextCutsLastLines: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) >= 15,
+  };
+  for (const index of projectedIndexes) projectUnequalColumnSheet(sheets[index], footZones?.[index] ?? 0, columnSheetOptions);
   step("columns");
   for (const pageIndex of projectedIndexes) {
     const page = pages[pageIndex];
@@ -793,7 +835,7 @@ function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | 
   }
   step("pictures");
   for (const index of projectedIndexes) {
-    if (pictured.has(index)) projectUnequalColumnSheet(sheets[index], footZones?.[index] ?? 0);
+    if (pictured.has(index)) projectUnequalColumnSheet(sheets[index], footZones?.[index] ?? 0, columnSheetOptions);
   }
   step("columnsAgain");
   // The projections' own writes are part of the state they produced.
@@ -1301,6 +1343,9 @@ function planLedgerPass(
   }
   const leading = copilotLeadingSpacePolicy(view.state);
   const breakBefore = refusals?.breakBefore(view.state.doc, build);
+  // Pages the physical verifier found the plan measured short (repairShortfallOn).
+  const shortfalls = refusals?.shortfalls(build, authoredEditSeq(view));
+  const shortOf = (index: number): number => (shortfalls?.size ? shortfalls.get(index) ?? 0 : 0);
   // Continued footnotes: the zone chrome a page with continued rows pays,
   // and the body text it keeps above them (two note rows' worth).
   const noteChromePx = Math.max(0, ...build.logical.flatMap((block) => block.parts.map((part) => part.noteChromePx)));
@@ -1336,13 +1381,14 @@ function planLedgerPass(
       ...(breakBefore?.size ? { breakBefore } : {}),
       noteContinuationChromePx: noteChromePx,
       noteContinuationMinBodyPx: notePitchPx * 2,
-      capacityFor: (index) => capacities[Math.min(index, capacities.length - 1)] ?? capacities[capacities.length - 1] ?? 0,
+      capacityFor: (index) => Math.max(0, (capacities[Math.min(index, capacities.length - 1)] ?? capacities[capacities.length - 1] ?? 0) - shortOf(index)),
       sectionCapacityFor: sectionCapacityForPlan(source, sectionColumnPage(view)),
       columnsFor: (index) => source.columns[Math.min(index, source.columns.length - 1)] ?? 1,
       columnBandTopsFor: (index) => source.bandTops?.[index] ?? null,
       preserveLeadingSpace: (index, forced, tail) => (index < leading.length ? leading[index] : index === 0 || (forced && !tail)),
       gapPx: view.state.doc.attrs?.wordSpacingAddsUp === true ? ledgerAddedGapPx : ledgerGapPx,
       oracle: source.oracle,
+      keepChainBacksUp: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) >= 15,
       ...(scoped && source === build ? { start: hasNotes && notesCarryLeadingAfter(view) ? scoped.start : { ...scoped.start, leadingAfterPx: 0 }, stopAt: scopedStopAt(build, scoped, currentStarts, carriedInto, hasNotes && resyncsOnlyLaidOut(view) ? pagesLaidOut(view) : null) } : {}),
     });
   // A whole-document plan reads every atom: one left unmeasured voids it
@@ -1436,7 +1482,7 @@ function finishLedgerPass(
   };
   if (same) recordLaidOut();
   if (same && laterPending) {
-    const repaired = repairPhysicalOverflow(view, refusals, overTallSheetsOf(plan, build), build.changedSheets, verifyRange, { starts: currentStarts, capacities });
+    const repaired = repairPhysicalOverflow(view, refusals, overTallSheetsOf(plan, build), build.changedSheets, verifyRange, { starts: currentStarts, capacities, plannedUsed: plannedUsedAsStanding(plan, currentStarts) });
     return { dispatched: repaired, converged: false, plan, build, scope: scopeOutcome, stablePages };
   }
   if (same) {
@@ -1445,7 +1491,7 @@ function finishLedgerPass(
     // geometry the atoms could not foresee).
     const overTall = overTallSheetsOf(plan, build);
     const range = verifyRange && notesVerifyEvery(view) ? null : verifyRange;
-    const repaired = repairPhysicalOverflow(view, refusals, overTall, build.changedSheets, range, { starts: currentStarts, capacities });
+    const repaired = repairPhysicalOverflow(view, refusals, overTall, build.changedSheets, range, { starts: currentStarts, capacities, plannedUsed: plannedUsedAsStanding(plan, currentStarts) });
     if (!repaired) {
       publishOverTallSheets(view, build, overTall, scoped ? scoped.start.page : 0, stopPage);
       publishContinuedFootnotes(view, plan, build, noteChromePx);
@@ -1999,8 +2045,9 @@ function repairPhysicalOverflow(
   /** The sheets to verify (by index, `to` exclusive); null: every sheet. */
   range?: { from: number; to: number } | null,
   /** The page openings as they stand before this repair, and the pages'
-   * capacities (see lastPhysicalRepair). */
-  before?: { starts: readonly string[]; capacities: readonly number[] } | null,
+   * capacities (see lastPhysicalRepair); `plannedUsed`, the height the plan
+   * of the pages as they stand gave each (repairShortfallOn). */
+  before?: { starts: readonly string[]; capacities: readonly number[]; plannedUsed?: readonly number[] } | null,
 ): boolean {
   const docBefore = view.state.doc;
   const pages = collectPages(view.state.doc);
@@ -2011,6 +2058,9 @@ function repairPhysicalOverflow(
   const pageType = tr.doc.type.schema.nodes[PAGE_BLOCK_NODE];
   let mismatches = 0;
   const repairedSheets: Array<{ sheet: number; capacityPx: number }> = [];
+  const shortSheets: Array<{ sheet: number; capacityPx: number; shortfallPx: number }> = [];
+  const shortfallOn = Boolean(refusals) && repairShortfallOn(view);
+  const editSeq = authoredEditSeq(view);
   const last = range ? Math.min(sheets.length, range.to) - 1 : sheets.length - 1;
   const first = range ? Math.max(0, range.from) : 0;
   for (let i = last; i >= first; i -= 1) {
@@ -2111,11 +2161,33 @@ function repairPhysicalOverflow(
         continue;
       }
     }
+    // A cuttable block's piece the page ran over with, the rest of the page
+    // its own: the plan measured the page short by what the painted blocks
+    // run past the height it planned. Laid out that much shorter, the block
+    // is cut earlier on this page; pushed whole, the page kept only what
+    // stood before it (R465-D87's print: list B's head, 730 px of the page,
+    // went whole to the next one, a page more than Word).
+    let shortfallPx: number | null = null;
+    if (shortfallOn && columns === 1 && !stackedRegions && keep === children.length - 1 &&
+        SHORTFALL_CUTTABLE.has(page.node.child(keep).type.name)) {
+      const end = flowEnd(children[children.length - 1]);
+      const planned = before?.plannedUsed?.[i];
+      const plannedPx = typeof planned === "number" && Number.isFinite(planned) && planned > 0 && planned <= capacity + PHYSICAL_PAGE_SPILL_TOLERANCE_PX
+        ? planned : capacity;
+      const short = end - plannedPx + 0.5;
+      const blockTop = paginationLayoutRect(children[keep], repairScale).top - sheetRect.top - paddingTop;
+      if (end > capacity + PHYSICAL_PAGE_SPILL_TOLERANCE_PX && short > 0 &&
+          capacity - short - blockTop >= SHORTFALL_MIN_KEEP_PX &&
+          refusals!.shortfallTries(page.node, capacity, editSeq) < SHORTFALL_MAX_TRIES) {
+        shortfallPx = short;
+      }
+    }
     if (ledgerTraceEnabled(view)) {
       const top = sheetRect.top + paddingTop;
       traceLedgerPass(view, {
         repair: i,
         overflowPx: Math.round(overflow * 100) / 100,
+        ...(shortfallPx !== null ? { shortfallPx: Math.round(shortfallPx * 100) / 100, plannedUsed: Math.round((before?.plannedUsed?.[i] ?? Number.NaN) * 100) / 100 } : {}),
         keep,
         children: children.length,
         capacity: Math.round(capacity * 100) / 100,
@@ -2128,7 +2200,8 @@ function repairPhysicalOverflow(
     }
     applyBoundaryMove(tr, pageType, i, children.length - keep, { isolateTrailingForcedBreak: true });
     mismatches += 1;
-    repairedSheets.push({ sheet: i, capacityPx: capacity });
+    if (shortfallPx !== null) shortSheets.push({ sheet: i, capacityPx: capacity, shortfallPx });
+    else repairedSheets.push({ sheet: i, capacityPx: capacity });
   }
   if (!tr.docChanged) return false;
   writeDocumentLayoutStatus(view.dom, PAGE_LEDGER_MISMATCH_ATTR, String(mismatches), view);
@@ -2136,6 +2209,17 @@ function repairPhysicalOverflow(
   const dispatched = safeDispatch(view, tr);
   // The painted page is the verdict: later plans keep these boundaries.
   if (dispatched) refusals?.record(view.state.doc, repairedSheets);
+  // ...or lay out the short pages shorter (the piece pushed now comes back
+  // cut earlier).
+  // (Its opening as the document now has it: a block id the push's own
+  // transaction gave is the one the next plans read.)
+  if (dispatched && shortSheets.length > 0) {
+    const after = collectPages(view.state.doc);
+    for (const short of shortSheets) {
+      const node = after?.[short.sheet]?.node;
+      if (node) refusals?.recordShortfall(node, short.capacityPx, short.shortfallPx, editSeq);
+    }
+  }
   if (dispatched) for (const { sheet } of repairedSheets) markLaidOutPages(view, sheet, sheet + 2);
   if (dispatched && before) {
     // A repair right after another one continues its run: the layout the run
@@ -3870,6 +3954,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               const pushed = repairPhysicalOverflow(editorView, refusals, overTallSheetsOf(outcome.plan, outcome.build), new Set(), null, {
                 starts: currentPageStartAtoms(outcome.build),
                 capacities: outcome.build.capacities,
+                plannedUsed: plannedUsedAsStanding(outcome.plan, currentPageStartAtoms(outcome.build)),
               });
               if (pushed) {
                 schedule();
@@ -4265,8 +4350,11 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             // round three layouts never stopped (R345-D08: 14 minutes, about
             // 1,200 changes a second, a tab burning a core for as long as it
             // stays open).
+            // So are the tabs' widths (bandTabLayout): they change no
+            // document, and a row they made short again on a page the
+            // ledger had pushed past was never read (R417-D03 page 40).
             if (reason === "document-auto-line-spacing-projection" || reason === "word-cjk-spacing-projection" ||
-                reason === SYNTHETIC_BOLD_ADVANCE_REASON || reason === "hyphenation-rules") {
+                reason === SYNTHETIC_BOLD_ADVANCE_REASON || reason === "hyphenation-rules" || reason === "band-tab-layout") {
               // A projection the ledger flushed itself is read by the pass
               // about to run; only an unsolicited one needs a frame.
               // While an edit's pass waits for typing to pause (a long

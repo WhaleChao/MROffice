@@ -857,6 +857,13 @@ function continuousStartOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsContinuousStartOff?: boolean}).__docsContinuousStartOff === true;
 }
 
+/** `window.__docsFrontMatterCountOff = true` asks the older numbering (a
+ * Continue section after unnumbered front matter starts at the
+ * document-level start), for an A/B of one build. */
+function frontMatterCountOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsFrontMatterCountOff?: boolean}).__docsFrontMatterCountOff === true;
+}
+
 /**
  * Word's per-section page numbering over structural sheets: each section
  * numbers in its own format; a section with a Start at value restarts there
@@ -889,6 +896,17 @@ export function resolveSectionSheetPageNumberLabels(
   const numberedSection = legacy
     ? (normalizePageNumberStartSection(legacy.startSection) ?? 0)
     : 0;
+  // An imported document's front matter is unnumbered only on paper: Word
+  // counts its pages, so a numbered section that Continues from the previous
+  // section (its own w:pgNumType without w:start) goes on from them, never
+  // from the document-level start (corpus R401-D01: sections 1-2 "Start at 3",
+  // the third section's first page prints 4, where this printed 1).
+  const countsFrontMatter =
+    legacy !== null &&
+    numberedSection > 0 &&
+    sections[numberedSection] != null &&
+    normalizePageNumberStart(sections[numberedSection]?.start) === null &&
+    !frontMatterCountOff();
   let runBase: number | null = null;
   let runPhysical = 1;
   let currentSection = -1;
@@ -896,13 +914,14 @@ export function resolveSectionSheetPageNumberLabels(
     const physicalStart = Math.max(1, Math.floor(Number(raw.physicalStart) || 1));
     const span = Math.max(1, Math.floor(Number(raw.span) || 1));
     const sectionIndex = Math.max(0, Math.floor(Number(raw.sectionIndex) || 0));
-    if (sectionIndex < numberedSection) return { first: null, last: null };
+    const frontMatter = sectionIndex < numberedSection;
+    if (frontMatter && !countsFrontMatter) return { first: null, last: null };
     const scheme = sections[sectionIndex] ?? null;
     const explicitStart = normalizePageNumberStart(scheme?.start);
     if (runBase === null) {
       runBase =
         explicitStart ??
-        (legacy ? normalizePageNumberStart(legacy.start) : null) ??
+        (legacy && !countsFrontMatter ? normalizePageNumberStart(legacy.start) : null) ??
         DEFAULT_PAGE_NUMBER_START;
       runPhysical = physicalStart;
     } else if (sectionIndex !== currentSection && explicitStart !== null) {
@@ -915,6 +934,7 @@ export function resolveSectionSheetPageNumberLabels(
       runPhysical = raw.sectionContinues === true && !continuousStartOff() ? physicalStart - 1 : physicalStart;
     }
     currentSection = sectionIndex;
+    if (frontMatter) return { first: null, last: null };
     // A section's own w:pgNumType without w:fmt numbers in Arabic: Word
     // never carries a format over from another section (tdf164499: Roman
     // front matter, then a section restarting at 1 numbers 1, 2, …). The

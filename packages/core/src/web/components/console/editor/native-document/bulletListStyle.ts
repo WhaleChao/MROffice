@@ -82,6 +82,25 @@ export function bulletStyleForGlyph(value: unknown): BulletStyleType | null {
 export const LIST_MARKER_HOST_SELECTOR =
   ':is(ul[data-bullet-style], ol[data-list-style]) > li:not([data-page-split-item-continuation="true"]) > p:first-of-type';
 
+/** Whether this paragraph's `::before` paints an imported Word list's own
+ * marker (note-editor.css: the first paragraph of a docs-native-list-indent
+ * item the gallery does not style -- the default bullet, a number the
+ * measured label does not carry). Checked by hand: jsdom rejects the
+ * stylesheet's `:is()` selector list. */
+export function isNativeListMarkerHost(element: Element): boolean {
+  const item = element.parentElement;
+  const list = item?.parentElement;
+  if (element.tagName !== "P" || !item || !list || item.tagName !== "LI") return false;
+  if (item.querySelector(":scope > p") !== element) return false;
+  if (!item.classList.contains("docs-native-list-indent__item") ||
+    item.classList.contains("docs-native-list-indent__item--continued") ||
+    item.getAttribute("data-docs-numbering-marker-host") === "true" ||
+    item.getAttribute("data-page-split-item-continuation") === "true") return false;
+  if (!list.classList.contains("docs-native-list-indent")) return false;
+  if (list.tagName === "OL") return !list.hasAttribute("data-list-style");
+  return list.tagName === "UL" && !list.hasAttribute("data-bullet-style") && !list.hasAttribute("data-bullet-picture");
+}
+
 /**
  * The OOXML `<w:numFmt w:val>` for a bullet list is always "bullet"; the glyph
  * itself rides the `<w:lvlText>`. Exposed for symmetry with listNumbering's

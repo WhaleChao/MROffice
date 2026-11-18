@@ -283,7 +283,10 @@ export function applyRunFormat(runs: readonly TextRun[], start: number, end: num
     } else {
       if (low > 0) out.push({...run,text:run.text.slice(0,low)});
       const text = run.text.slice(low,high);
-      const formatted = sharedApplyRunFormat([{...run,text}],0,text.length,patch);
+      // In hundredths, as a cell's runs keep their size: rounded to whole
+      // pixels, a 309.5 pt cell (412.67 px) gave its runs 413 px, 309.75 pt
+      // (xlsx-rounds R443-X80 WALK2, Font Size on a rich cell).
+      const formatted = sharedApplyRunFormat([{...run,text}],0,text.length,patch,SPREADSHEET_RUN_NORMALIZATION);
       for (const next of formatted) {
         const style: RunStyle = {...next.style};
         if (!Object.prototype.hasOwnProperty.call(patch,"fontSize")) {

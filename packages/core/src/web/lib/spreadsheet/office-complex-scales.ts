@@ -66,13 +66,25 @@ export function officeComplexScaleFamily(script: OfficeComplexScript, scale: num
  * The quoted families, comma-terminated, a cell stack in `face` carries
  * behind the face and its stand-ins: each listed script's letters in its
  * packaged Noto face at Excel's scale. Each family is declared on first use.
+ * `ownScriptParts: false` lists the scripts the face's own stack carries too.
+ * `scales` sets a script at another width than Excel's (Docs: Word's own
+ * advances of the face, where Excel prints the letters wider).
  */
-export function officeComplexScaleStack(face: string | null | undefined): string {
+export function officeComplexScaleStack(
+  face: string | null | undefined,
+  options: {
+    readonly ownScriptParts?: boolean;
+    readonly scales?: Readonly<Partial<Record<OfficeComplexScript, number>>>;
+  } = {},
+): string {
   const key = (face ?? "").trim().toLowerCase();
   let out = "";
   for (const entry of SCRIPT_FACES) {
-    if (OWN_SCRIPT_PARTS[key]?.includes(entry.script)) continue;
-    const scale = officeComplexScale(entry.script, face);
+    // A caller drawing another face's letters at this face's widths (Docs:
+    // a sans face that lacks Hebrew, as Word sets it, at Arial's) takes the
+    // scale even where this face's own stack has the letters.
+    if (options.ownScriptParts !== false && OWN_SCRIPT_PARTS[key]?.includes(entry.script)) continue;
+    const scale = options.scales?.[entry.script] ?? officeComplexScale(entry.script, face);
     if (scale === undefined || !(scale > 0)) continue;
     const family = officeComplexScaleFamily(entry.script, scale);
     ensureOfficeScaledScriptFamily(family, entry.face, entry.letter, entry.range, `${(scale * 100).toFixed(2)}%`);

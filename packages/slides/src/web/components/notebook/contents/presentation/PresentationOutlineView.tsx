@@ -67,9 +67,13 @@ export interface PresentationOutlineViewProps {
   readonly readOnly: boolean;
   readonly labels: PresentationOutlineViewLabels;
   readonly onActivate: (slideId: string) => void;
-  readonly onTitleChange: (slideId: string, text: string) => void;
+  /** `caretAfter`: where the caret stands in `text` after the change (the
+   *  room writes the key there, not where a comparison of the two texts
+   *  would put it -- TRIAGE 49: "Hel" -> "Hell" is a guess without it). */
+  readonly onTitleChange: (slideId: string, text: string, caretAfter?: number) => void;
   /** The body's paragraphs as plain lines, one per paragraph. */
-  readonly onBodyChange: (slideId: string, lines: readonly string[]) => void;
+  /** `caretAfter`: the caret in the lines joined by "\n" (see onTitleChange). */
+  readonly onBodyChange: (slideId: string, lines: readonly string[], caretAfter?: number) => void;
   readonly onLevelChange: (slideId: string, lineIndex: number, delta: 1 | -1) => void;
   /** Enter on a title: a new slide after it; returns its id. */
   readonly onNewSlideAfter: (slideId: string) => string | null;
@@ -256,7 +260,7 @@ export function PresentationOutlineView({
               data-outline-line="title"
               data-testid="presentation-outline-slide-title"
               onFocus={() => onActivate(slide.id)}
-              onChange={(event) => onTitleChange(slide.id, event.target.value)}
+              onChange={(event) => onTitleChange(slide.id, event.target.value, event.target.selectionStart ?? undefined)}
               onKeyDown={(event) => onTitleKeyDown(event, slide)}
             />
           </div>
@@ -276,7 +280,9 @@ export function PresentationOutlineView({
               onChange={(event) => {
                 const next = slide.lines.map((entry) => entry.text);
                 next[index] = event.target.value;
-                onBodyChange(slide.id, next);
+                const caret = event.target.selectionStart;
+                const lineStart = next.slice(0, index).reduce((length, text) => length + text.length + 1, 0);
+                onBodyChange(slide.id, next, caret === null ? undefined : lineStart + caret);
               }}
               onKeyDown={(event) => onLineKeyDown(event, slide, index)}
             />

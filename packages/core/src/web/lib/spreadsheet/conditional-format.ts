@@ -973,6 +973,15 @@ export interface ConditionalIcon {
 export const CONDITIONAL_ICON_TEXT_INSET_PX = 21;
 
 /**
+ * How much further in than the cell's text Windows Excel prints the value of a
+ * cell with an icon-set icon: the icon's own 16 px, at the page's scale
+ * (lookwin R12-X02: 65-80 dot icons, each value exactly that far past the
+ * column's other text, where the grid's 21 px less its padding set it 3 px
+ * further; the API's draw_cell_icon).
+ */
+export const CONDITIONAL_ICON_PRINTED_TEXT_SHIFT_PX = 16;
+
+/**
  * The room an icon-set icon takes from the value beside it, over the cell's
  * own text padding: AutoFit Column Width adds it, and a number has that much
  * less width before it shows #. Excel does both (measured: 0-100 with 3
@@ -2218,6 +2227,11 @@ export function evaluateRule(
   value: unknown,
 ): boolean {
   if (!isComparisonRule(rule)) return false;
+  // Text never matches, a number written as text included: a formula's "1"
+  // is not equal to 1 in Excel (lookwin R139-X01: IF(..., "1") quartiles
+  // under an "equal to 1" fill print unfilled). The calculation hands a
+  // number cell's value over as a number.
+  if (typeof value === "string") return false;
   const n = value === null || value === undefined ? 0 : toNumber(value);
   if (n === null) return false;
   switch (rule.operator) {
@@ -4493,26 +4507,68 @@ export function sanitizeHyperlink(raw: unknown): string | null {
 }
 
 /**
- * The CSS a painted data bar draws with: its place and length, its fill (a
- * gradient fades to white away from the axis, as Excel 2010+ draws it) and,
- * for a bordered bar, its border.
+ * Excel's data bar box, px at 100% (lookwin p158-lw, Windows Excel's printed
+ * bars): 2 px in from the cell's left and right lines and its top line, 3.2 px
+ * (2.40 pt) above the next row's line, whatever the row's height or the
+ * column's width. A bar's place, its length and its zero axis are shares of
+ * the box's width, not of the cell's. The API's draw_cell_visuals is the same.
  */
-export function dataBarPaintCss(bar: ConditionalDataBar): {
+export const DATA_BAR_BOX = { side: 2, top: 2, bottom: 3.2 } as const;
+/** The box printed, px of the paper at 96 dpi: 1.44 pt in, 2.40 pt above the foot. */
+export const DATA_BAR_PRINTED_BOX = { side: 1.92, top: 1.92, bottom: 3.2 } as const;
+type DataBarBox = { side: number; top: number; bottom: number };
+
+/** A data bar's gradient end: its colour 85% of the way to white, each
+ * channel truncated (lookwin p158: 156082 fades to DBE7EC), not white. */
+export function dataBarFadedColor(color: string): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color)?.[1];
+  if (!hex) return "#ffffff";
+  return `#${[0, 2, 4]
+    .map((at) => {
+      const part = parseInt(hex.slice(at, at + 2), 16);
+      return Math.floor(part + (255 - part) * 0.85 + 1e-9).toString(16).padStart(2, "0");
+    })
+    .join("")}`;
+}
+
+function boxPx(value: number): string {
+  return `${Number(value.toFixed(3))}px`;
+}
+
+/** A share (0..100) of the data bar box's width as a CSS left, in its cell:
+ * the box's left plus that share of the cell less both sides. */
+export function dataBarBoxLeft(percent: number, scale = 1, box: DataBarBox = DATA_BAR_BOX): string {
+  const offset = box.side * scale * (1 - percent / 50);
+  return offset === 0 ? `${percent}%` : `calc(${percent}% ${offset < 0 ? "-" : "+"} ${boxPx(Math.abs(offset))})`;
+}
+
+/**
+ * The CSS a painted data bar draws with: its place and length in Excel's box
+ * (DATA_BAR_BOX; a printed page's DATA_BAR_PRINTED_BOX at its scale), its fill (a
+ * gradient fades to its colour 85% of the way to white away from the axis, as
+ * Excel 2010+ draws it) and, for a bordered bar, its border.
+ */
+export function dataBarPaintCss(bar: ConditionalDataBar, scale = 1, box: DataBarBox = DATA_BAR_BOX): {
   left: string;
   width: string;
+  top: string;
+  bottom: string;
   backgroundColor: string;
   backgroundImage?: string;
   border?: string;
   borderRadius?: number;
   opacity?: number;
 } {
+  const narrower = (2 * box.side * scale * bar.widthPercent) / 100;
   return {
-    left: `${bar.startPercent}%`,
-    width: `${bar.widthPercent}%`,
+    left: dataBarBoxLeft(bar.startPercent, scale, box),
+    width: narrower === 0 ? `${bar.widthPercent}%` : `calc(${bar.widthPercent}% - ${boxPx(narrower)})`,
+    top: boxPx(box.top * scale),
+    bottom: boxPx(box.bottom * scale),
     backgroundColor: bar.color,
     ...(bar.gradient
       ? {
-          backgroundImage: `linear-gradient(to ${bar.direction === "negative" ? "left" : "right"}, ${bar.color}, #ffffff)`,
+          backgroundImage: `linear-gradient(to ${bar.direction === "negative" ? "left" : "right"}, ${bar.color}, ${dataBarFadedColor(bar.color)})`,
         }
       : {}),
     ...(bar.borderColor ? { border: `1px solid ${bar.borderColor}` } : {}),

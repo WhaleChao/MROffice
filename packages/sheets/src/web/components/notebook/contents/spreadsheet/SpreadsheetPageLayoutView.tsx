@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { OFFICE_TITLE_THICK_GAP_DOTS } from "../../../../lib/spreadsheet/office-wrapped-bottom";
 import { PX_PER_PT, pxToPt } from "@mrnote/core/web/lib/office-units.ts";
 import { OFFICE_PRINT_IDENTITY, officePrintedDrawingFrame, type OfficePrintScale } from "../../../../lib/spreadsheet/office-print-metrics";
 import { PRINT_DOT_PT, PRINTED_DIAGONAL_VARIABLE, PRINTED_GRID_FRAME_PT, PRINTED_GRID_INSET_PT, isPrintedDiagonal, printedBorderLine, printedDiagonalEdges, printedDiagonalStroke, printedGridOffset, printedBorderLineOfVariable, printedEdgeStrokes, printedEdgeVariable, type PrintedEdge } from "../../../../lib/spreadsheet/printed-cell-borders";
@@ -46,6 +47,7 @@ import {
   pageLayoutAxisSourceAt,
   pageLayoutWideColumns,
   pageLayoutClampColumnPoint,
+  pageLayoutPrintedAxisPoint,
   pageLayoutUnclampColumnPoint,
   pageLayoutDrawingHandlePoint,
   pageLayoutEdgeScrollStep,
@@ -204,6 +206,9 @@ export interface SpreadsheetPageLayoutViewProps {
    */
   printMode?: boolean;
   printPageStart?: number;
+  /** The rows the file marks thickBot (`rowThickEdges` & 2): printed, the
+   * body stands 8 printer dots below repeated print titles that end in one. */
+  thickBottomRows?: ReadonlySet<number>;
   /** Printing: "print" is the editor's Print (Excel's File > Print), else
    * Save as PDF's carried tails (pageLayoutCarriedRunPrints). */
   printRoute?: "export" | "print";
@@ -218,7 +223,11 @@ export interface SpreadsheetPageLayoutViewProps {
   getCellDisplay: (row: number, col: number) => string;
   getCellStyle?: (row: number, col: number) => CSSProperties | undefined;
   renderCellOverlay?: (row: number, col: number, occurrence: string, frame: SpreadsheetCellControlFrame) => ReactNode;
-  renderCellContent?: (row: number, col: number, fontScale: number, nativeTextWidth?: number, frame?: { width: number; height: number }) => ReactNode;
+  /** `frame.dotPx`: one 600-dpi printer dot on the page at 100 % (a printed
+   * offset the page's scale does not shrink, lookwin p123b-lw). Printed,
+   * `frame.pageTop` is the content box's top below the paper's top edge (px),
+   * where a printed baseline's whole dot is counted from. */
+  renderCellContent?: (row: number, col: number, fontScale: number, nativeTextWidth?: number, frame?: { width: number; height: number; dotPx?: number; pageTop?: number }) => ReactNode;
   /** A cell whose painting leans past its box (an angled cell's band). */
   cellPaintsOutside?: (row: number, col: number) => boolean;
   getCellInputProps: (
@@ -667,6 +676,11 @@ function vectorizePrintedBorders(
   /** Whether the box is the whole cell or merge: a merge the page cuts
    * prints no diagonal (the API's writer leaves it out too). */
   wholeBox = true,
+  /** The sides where the page cuts a merge: its border is on the merge's
+   * own edge, on another page, and prints none at the cut (R5-X05's A27:G36
+   * notes rows, cut after F: Excel prints no line at the page's edge;
+   * R274-X05's C44:C81, cut by the pages' feet: none at the top or foot). */
+  cut: { left?: boolean; right?: boolean; top?: boolean; bottom?: boolean } = {},
 ): CSSProperties | undefined {
   if (!given) return given;
   const diagonalValue = (given as Record<string, unknown>)[PRINTED_DIAGONAL_VARIABLE];
@@ -678,20 +692,20 @@ function vectorizePrintedBorders(
     return typeof value === "string" ? value : undefined;
   };
   const sides = {
-    borderTop: sharedTop ? undefined : side("borderTop"),
-    borderRight: side("borderRight"),
-    borderBottom: side("borderBottom"),
-    borderLeft: sharedLeft ? undefined : side("borderLeft"),
+    borderTop: sharedTop || cut.top ? undefined : side("borderTop"),
+    borderRight: cut.right ? undefined : side("borderRight"),
+    borderBottom: cut.bottom ? undefined : side("borderBottom"),
+    borderLeft: sharedLeft || cut.left ? undefined : side("borderLeft"),
   };
   // The edges the grid paints as strips (a hairline, dots, dash-dot): the
   // printed cell carries them as variables (printedStripEdges).
   const variable = (key: "borderTop" | "borderRight" | "borderBottom" | "borderLeft") =>
     (style as Record<string, unknown>)[printedEdgeVariable(key.slice(6).toLowerCase() as "top" | "right" | "bottom" | "left")];
   const stripped = {
-    borderTop: sharedTop ? undefined : printedBorderLineOfVariable(variable("borderTop")),
-    borderRight: printedBorderLineOfVariable(variable("borderRight")),
-    borderBottom: printedBorderLineOfVariable(variable("borderBottom")),
-    borderLeft: sharedLeft ? undefined : printedBorderLineOfVariable(variable("borderLeft")),
+    borderTop: sharedTop || cut.top ? undefined : printedBorderLineOfVariable(variable("borderTop")),
+    borderRight: cut.right ? undefined : printedBorderLineOfVariable(variable("borderRight")),
+    borderBottom: cut.bottom ? undefined : printedBorderLineOfVariable(variable("borderBottom")),
+    borderLeft: sharedLeft || cut.left ? undefined : printedBorderLineOfVariable(variable("borderLeft")),
   };
   if (!sides.borderTop && !sides.borderRight && !sides.borderBottom && !sides.borderLeft &&
     !stripped.borderTop && !stripped.borderRight && !stripped.borderBottom && !stripped.borderLeft) return style;
@@ -709,8 +723,89 @@ function vectorizePrintedBorders(
       edges.push({ ...at[key], line });
       out[key] = undefined;
     } else {
-      out[key] = side(key);
+      out[key] = cut[key === "borderTop" ? "top" : key === "borderRight" ? "right" : key === "borderBottom" ? "bottom" : "left"] ? undefined : side(key);
     }
+  }
+  return out;
+}
+
+type PrintedRect = { x: number; y: number; width: number; height: number };
+type PrintedFill = PrintedRect & { color: string };
+
+/**
+ * A cell's plain fill taken out of its CSS onto the printed fills
+ * (PrintedCellFills), as Windows Excel prints it: one printer dot past its
+ * right and bottom edges, and at the page's first column and row from the
+ * gridline frame's inner edge, four dots in from the grid's origin (the API's
+ * printed_fill_rect; every bench fill: R305-X12, R178-X03, R257-X09). A
+ * pattern, gradient or picture fill stays the cell's.
+ */
+function vectorizePrintedFill(
+  style: CSSProperties | undefined,
+  box: { left: number; top: number; width: number; height: number },
+  fills: PrintedFill[],
+  dot: number,
+  insetLeft: boolean,
+  insetTop: boolean,
+): CSSProperties | undefined {
+  const color = style?.backgroundColor;
+  if (!style || typeof color !== "string" || !color || /^transparent$/i.test(color) || style.backgroundImage || style.background) return style;
+  const left = insetLeft ? 4 * dot : 0;
+  const top = insetTop ? 4 * dot : 0;
+  fills.push({ x: box.left + left, y: box.top + top, width: Math.max(0, box.width - left) + dot, height: Math.max(0, box.height - top) + dot, color });
+  const out: CSSProperties = { ...style };
+  delete out.backgroundColor;
+  return out;
+}
+
+/** The printed cells' plain fills (vectorizePrintedFill), in the cells'
+ * order: a later cell's fill covers the dot an earlier one runs into it. */
+function PrintedCellFills({ fills }: { fills: readonly PrintedFill[] }) {
+  return (
+    <svg aria-hidden="true" data-testid="spreadsheet-page-layout-printed-fills" width={1} height={1}
+      style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none" }}>
+      {fills.map((fill, index) => (
+        <path key={index} data-printed-fill="" fill={fill.color} d={printedRectPath(fill.x, fill.y, fill.width, fill.height)} />
+      ))}
+    </svg>
+  );
+}
+
+/** Collinear rectangles that touch or overlap as one: a border runs on by
+ * half its width past each corner, and a path's overlapping subpaths are
+ * covered twice along their anti-aliased edge -- a grey tick under every
+ * join of a thick rule (R223-X13's group separators); Excel's is one bar
+ * (the API's merged_rule_boxes). */
+function mergedPrintedRects(rects: readonly PrintedRect[]): PrintedRect[] {
+  const lines = new Map<string, { horizontal: boolean; at: number; across: number; runs: [number, number][] }>();
+  for (const rect of rects) {
+    const horizontal = rect.width >= rect.height;
+    const at = horizontal ? rect.y : rect.x;
+    const across = horizontal ? rect.height : rect.width;
+    const key = `${horizontal ? "h" : "v"}:${at.toFixed(4)}:${across.toFixed(4)}`;
+    const line = lines.get(key) ?? { horizontal, at, across, runs: [] };
+    line.runs.push(horizontal ? [rect.x, rect.x + rect.width] : [rect.y, rect.y + rect.height]);
+    lines.set(key, line);
+  }
+  const out: PrintedRect[] = [];
+  for (const { horizontal, at, across, runs } of lines.values()) {
+    runs.sort((a, b) => a[0] - b[0]);
+    let start = Number.NaN;
+    let end = Number.NaN;
+    const emit = () => {
+      if (Number.isNaN(start)) return;
+      out.push(horizontal ? { x: start, y: at, width: end - start, height: across } : { x: at, y: start, width: across, height: end - start });
+    };
+    for (const [first, last] of runs) {
+      if (!Number.isNaN(start) && first <= end + 1e-6) {
+        end = Math.max(end, last);
+        continue;
+      }
+      emit();
+      start = first;
+      end = last;
+    }
+    emit();
   }
   return out;
 }
@@ -723,7 +818,7 @@ function PrintedCellBorders({ edges, scale, pxPerPt }: { edges: readonly Printed
   // paints a lone hair-thin rectangle as a whole black pixel row, the lines
   // of one path by their coverage (pdfium: a 0.12 pt line black alone, grey
   // in a path of several -- the API's fill_rule_box / flush_rules).
-  const solid = new Map<string, string[]>();
+  const solid = new Map<string, PrintedRect[]>();
   const strokes: ReactNode[] = [];
   edges.forEach((edge, index) => {
     if (isPrintedDiagonal(edge)) {
@@ -749,14 +844,15 @@ function PrintedCellBorders({ edges, scale, pxPerPt }: { edges: readonly Printed
         return;
       }
       const parts = solid.get(stroke.color) ?? [];
-      parts.push(printedRectPath(stroke.x, stroke.y, stroke.width, stroke.height));
+      parts.push({ x: stroke.x, y: stroke.y, width: stroke.width, height: stroke.height });
       solid.set(stroke.color, parts);
     });
   });
   return (
     <svg aria-hidden="true" data-testid="spreadsheet-page-layout-printed-borders" width={1} height={1}
       style={{ position: "absolute", left: 0, top: 0, overflow: "visible", pointerEvents: "none", zIndex: 2 }}>
-      {[...solid].map(([color, parts]) => <path key={`fill:${color}`} data-printed-lines="" fill={color} d={parts.join("")} />)}
+      {[...solid].map(([color, parts]) => <path key={`fill:${color}`} data-printed-lines="" fill={color}
+        d={mergedPrintedRects(parts).map((rect) => printedRectPath(rect.x, rect.y, rect.width, rect.height)).join("")} />)}
       {strokes}
     </svg>
   );
@@ -2244,9 +2340,21 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
             colOffsets.set(col, gridWidthPoints);
             gridWidthPoints += geometry.colSizes[col] ?? geometry.colWidth;
           }
+          // Repeated print titles whose last row the file marks thickBot
+          // stand the body 8 printer dots (at any scale) below them on every
+          // page but the one the titles open in their own place (lookwin
+          // p132b/p134-lw; R223-X13's pages 2-4; the API's title_gaps). The
+          // rows keep their heights; the gap opens between them.
+          const titleCount = geometry.rowProjection.repeatCount;
+          const lastTitle = geometry.rowProjection.repeatStart + titleCount - 1;
+          const titleGapAfter = printMode && titleCount > 0 && pageLayoutProps.thickBottomRows?.has(lastTitle) &&
+            page.rows.length > titleCount && page.rows[titleCount - 1] === lastTitle &&
+            page.rows.slice(0, titleCount).every((row, index) => row === geometry.rowProjection.repeatStart + index) &&
+            page.rows[titleCount] !== lastTitle + 1 ? lastTitle : null;
           for (const row of page.rows) {
             rowOffsets.set(row, gridHeightPoints);
             gridHeightPoints += geometry.rowSizes[row] ?? geometry.rowHeight;
+            if (row === titleGapAfter) gridHeightPoints += (OFFICE_TITLE_THICK_GAP_DOTS * 72) / 600;
           }
           const gridWidth = gridWidthPoints * paperScale;
           const gridHeight = gridHeightPoints * paperScale;
@@ -2278,6 +2386,23 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
           // prints at the page's printable width (lookwin p48-lw), from where
           // the grid starts (the API's wide_column_limit).
           const printedGridRoom = geometry.dataAreaWidth * paperScale - headingWidth;
+          // How far past its top and foot a printed page's grid shows: half a
+          // thick border (3 px), where no merge the page cuts there would.
+          const edgeBleed = (() => {
+            if (!printMode || !page.rows.length) return { top: 0, bottom: 0 };
+            const first = sourceRowAt(page.rows[0]!);
+            const last = sourceRowAt(page.rows[page.rows.length - 1]!);
+            const pageCols = new Set(page.cols);
+            const cutAt = (edge: "top" | "bottom") => merges.some((merge) => {
+              const end = merge.row + merge.rowSpan - 1;
+              const crosses = edge === "top" ? merge.row < first && end >= first : merge.row <= last && end > last;
+              if (!crosses) return false;
+              for (let col = merge.col; col < merge.col + merge.colSpan; col += 1) if (pageCols.has(col)) return true;
+              return false;
+            });
+            const bleed = 1.5 * paperScale;
+            return { top: cutAt("top") ? 0 : bleed, bottom: cutAt("bottom") ? 0 : bleed };
+          })();
           // Where a run of columns starting at `first` and `widthPoints` wide
           // sits from the grid's left edge, in points: mirrored right to left.
           const columnsLeft = (first: number, widthPoints: number) => {
@@ -2376,6 +2501,10 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
           // dots centred on the grid (PrintedCellBorders); the CSS border
           // stays only where no Excel line is read from it.
           const printedEdges: PrintedEdge[] = [];
+          // Printed, a cell's plain fill is a vector rectangle too
+          // (PrintedCellFills): Chrome sets a box's background on whole CSS
+          // pixels, Excel at the printer's dots.
+          const printedFills: PrintedFill[] = [];
           const textOnlyStyle = (style: CSSProperties | undefined): CSSProperties | undefined => {
             if (!style) return style;
             const out: Record<string, unknown> = {};
@@ -2428,7 +2557,12 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                 }
                 if (source < 0 || pageFirstCol - source > 256
                   || unclippedIn?.get(sourceRow)?.some((entry) => entry.col === source && !entry.rich)) return [];
-                const sourceWidth = geometry.colSizes[source] ?? geometry.colWidth;
+                // At the width its column prints at: a column wider than the
+                // page is cut at the page's width and a text that fits the
+                // column but not the cut runs on from it (R34-X08's H10, 3 pt
+                // into page 5 in Excel's print; laid against all of H it never
+                // spilled and page 5 printed blank).
+                const sourceWidth = printedColSizes[source] ?? geometry.colWidth;
                 const spill = getTextSpill(sourceRow, source, sourceWidth * paperScale, fontScale);
                 if (!spill || spill.startCol !== source || spill.endCol < pageFirstCol) return [];
                 const span = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
@@ -2486,6 +2620,8 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                     content={renderCellContent?.(sourceRow, source, fontScale, nativeTextWidth, {
                       width: sourceWidth * paperScale,
                       height,
+                      dotPx: paperScale * 72 / 600,
+                      ...(printMode ? { pageTop: dataTop + (rowOffsets.get(row) ?? 0) * paperScale } : {}),
                     })}
                     textOverPrintedBorders={Boolean(printMode && nativeTextDpi)}
                     spillBox={{ left: -between * paperScale, width: runWidth }}
@@ -2548,7 +2684,8 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                   occurrence={occurrence}
                   paintsDisplay={!renderCellContent}
                   cellHandlers={cellHandlers}
-                  content={renderCellContent?.(sourceRow, col, fontScale, nativeTextWidth, { width: cellWidth, height })}
+                  content={renderCellContent?.(sourceRow, col, fontScale, nativeTextWidth, { width: cellWidth, height, dotPx: paperScale * 72 / 600,
+                    ...(printMode ? { pageTop: dataTop + (rowOffsets.get(row) ?? 0) * paperScale } : {}) })}
                   spillBox={{ left: 0, width: runWidth }}
                   // The paper's width, from the cell's left edge.
                   spillClip={{ left: -(dataLeft + left), width: geometry.paperWidth * paperScale }}
@@ -2591,8 +2728,11 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
               // A column wider than the page prints at the page's printable width,
               // its text wrapped there and cut at the margin (lookwin p48-lw; the
               // API's wide_column_limit): R154-X12's 962 px notes column wrapped
-              // its sentences at 962 px and printed them cut mid-line.
-              const ownWidthPoints = !merge && printMode && !rightToLeft
+              // its sentences at 962 px and printed them cut mid-line. A merge
+              // over such a column too (R274-X05's C44:C81, a 182-character
+              // column: its centred name stands mid-page, its right line at
+              // the margin).
+              const ownWidthPoints = printMode && !rightToLeft
                 ? sizeOf(cols, printedColSizes, geometry.colWidth) : sizeOf(cols, geometry.colSizes, geometry.colWidth);
               const cellWidthPx = sizeOf(cols, geometry.colSizes, geometry.colWidth) * paperScale;
               // An unclipped text prints in its own layer (unclippedNodes).
@@ -2635,14 +2775,23 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
               const ownStyle = acrossRun
                 ? withoutPrintedSides(pageCellStyle(anchorRow, anchorCol), col > acrossRun.startCol, col < acrossRun.endCol)
                 : pageCellStyle(anchorRow, anchorCol);
+              const printedBox = {
+                left: columnsLeft(cols[0], sizeOf(cols, geometry.colSizes, geometry.colWidth)) * paperScale,
+                top: (rowOffsets.get(rows[0]) ?? 0) * paperScale,
+                width: ownWidthPoints * paperScale,
+                height: sizeOf(rows, geometry.rowSizes, geometry.rowHeight) * paperScale,
+              };
               const cellStyle = printMode && nativeTextDpi
-                ? vectorizePrintedBorders(ownStyle, {
-                    left: columnsLeft(cols[0], sizeOf(cols, geometry.colSizes, geometry.colWidth)) * paperScale,
-                    top: (rowOffsets.get(rows[0]) ?? 0) * paperScale,
-                    width: ownWidthPoints * paperScale,
-                    height: sizeOf(rows, geometry.rowSizes, geometry.rowHeight) * paperScale,
-                  }, sharedLeft, sharedTop, printedEdges,
-                  !merge || (rows.length === merge.rowSpan && cols.length === merge.colSpan))
+                ? vectorizePrintedFill(vectorizePrintedBorders(ownStyle, printedBox, sharedLeft, sharedTop, printedEdges,
+                  !merge || (rows.length === merge.rowSpan && cols.length === merge.colSpan),
+                  merge ? {
+                    left: (cols[0] ?? merge.col) > merge.col, right: (cols.at(-1) ?? merge.col) < merge.col + merge.colSpan - 1,
+                    top: sourceRowAt(rows[0] ?? 0) > merge.row, bottom: sourceRowAt(rows.at(-1) ?? 0) < merge.row + merge.rowSpan - 1,
+                  } : undefined), printedBox, printedFills, PRINT_DOT_PT * paperScale,
+                  // Without headings a fill at the page's first column and
+                  // row starts past the gridline frame's inner edge.
+                  !rightToLeft && headingWidth <= 0 && printedBox.left < 1e-6,
+                  headingHeight <= 0 && printedBox.top < 1e-6)
                 : ownStyle;
               const display = getCellDisplay(anchorRow, anchorCol);
               const nativeText = nativeTextDpi && hasNativeTextLayout?.(anchorRow,anchorCol,display);
@@ -2651,7 +2800,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
               // out in its own column, a right-aligned run was set from the
               // run's far end (P12's RTL rows printed broken and overlapping).
               const nativeTextWidth = nativeText ? Math.max(1,
-                (merge?lineTotal(geometry.colSizes,merge.col,merge.col+merge.colSpan):spillBox?spillBox.width/paperScale:ownWidthPoints)
+                (merge?lineTotal(printMode && !rightToLeft ? printedColSizes : geometry.colSizes,merge.col,merge.col+merge.colSpan):spillBox?spillBox.width/paperScale:ownWidthPoints)
                 * PAPER_POINT_TO_CSS_PIXEL / Math.max(.001,geometry.contentScale) - 5*96/nativeTextDpi
               ) : undefined;
               const active = merge
@@ -2716,6 +2865,10 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                     // The box the content is laid out in: the whole merge.
                     width: (merge ? lineTotal(geometry.colSizes, merge.col, merge.col + merge.colSpan) : ownWidthPoints) * paperScale,
                     height: (merge ? sourceRowHeight(merge.row, merge.row + merge.rowSpan) : sizeOf(rows, geometry.rowSizes, geometry.rowHeight)) * paperScale,
+                    dotPx: paperScale * 72 / 600,
+                    // A merge's box starts at its first row, above a fragment the page cut.
+                    ...(printMode ? { pageTop: dataTop + ((rowOffsets.get(rows[0] ?? 0) ?? 0)
+                      - (merge ? sourceRowHeight(merge.row, sourceRowAt(rows[0] ?? 0)) : 0)) * paperScale } : {}),
                   })}
                   paintsOutside={!merge && Boolean(cellPaintsOutside?.(anchorRow, anchorCol))}
                   textOverPrintedBorders={Boolean(printMode && nativeTextDpi)}
@@ -3034,9 +3187,14 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                     // page prints cut at the right margin, its fill, lines
                     // and text (lookwin p48-lw, p61-lw: the note's ink stops
                     // at 546 pt, the paper is 595).
+                    // Printed, a border on the page's first row's top or
+                    // last row's foot prints whole, straddling the grid's
+                    // edge (R305-X12's medium table foot: Excel's 2 pt line,
+                    // the clip left 0.8 pt), unless a merge the page cuts
+                    // there would show past it.
                     clipPath: printMode && !rightToLeft && gridWidth > printedGridRoom + 0.5
-                      ? `inset(0px ${gridWidth - printedGridRoom}px 0px -100000px)`
-                      : "inset(0px -100000px 0px -100000px)",
+                      ? `inset(${-edgeBleed.top}px ${gridWidth - printedGridRoom}px ${-edgeBleed.bottom}px -100000px)`
+                      : `inset(${-edgeBleed.top}px -100000px ${-edgeBleed.bottom}px -100000px)`,
                     // Grid chrome must not move cells away from drawing/axis
                     // coordinates. Cell borders already own their box insets.
                     boxShadow: pageGridlines && !printMode ? "inset 1px 1px var(--page-gridline, #d9dee7)" : undefined,
@@ -3071,6 +3229,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                       gaps={gridlineGaps}
                     />
                   ) : null}
+                  {printedFills.length ? <PrintedCellFills fills={printedFills} /> : null}
                   {cellNodes}
                   {continuationNodes}
                   {printedEdges.length ? (
@@ -3138,11 +3297,24 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                 ) : null}
                 {drawingRowBands.flatMap((rowBand, rowBandIndex) => drawingColumnBands.flatMap((colBand, colBandIndex) => drawings.map((drawing) => {
                   const [id, , label, content] = drawing;
-                  const [drawingLeft, drawingTop, width, height] = officePrintedDrawingFrame(
-                    drawing[1], drawing[4]?.printAnchor, geometry.printScale ?? OFFICE_PRINT_IDENTITY);
+                  const printAnchor = drawing[4]?.printAnchor;
+                  const [scaledLeft, scaledTop, scaledWidth, scaledHeight] = officePrintedDrawingFrame(
+                    drawing[1], printAnchor, geometry.printScale ?? OFFICE_PRINT_IDENTITY);
                   const scale = pxToPt(geometry.contentScale);
-                  const left = pageLayoutClampColumnPoint(drawingLeft * scale, wideColumns);
-                  const top = drawingTop * scale;
+                  // Printed, a drawing stands by its markers on the printed
+                  // lines (pageLayoutPrintedAxisPoint); an absolute one keeps
+                  // its place and a one-cell one its extent.
+                  const marked = printMode && printAnchor !== "absolute";
+                  const rowAt = (point: number) => marked && geometry.sourceRowPoints
+                    ? pageLayoutPrintedAxisPoint(point, geometry.sourceRowPoints, geometry.rowSizes) : point;
+                  const colAt = (point: number) => marked && geometry.sourceColPoints
+                    ? pageLayoutPrintedAxisPoint(point, geometry.sourceColPoints, geometry.colSizes) : point;
+                  const markedLeft = colAt(scaledLeft * scale), markedTop = rowAt(scaledTop * scale);
+                  const twoCell = printAnchor === undefined || printAnchor === "twoCell";
+                  const width = twoCell ? (colAt((scaledLeft + scaledWidth) * scale) - markedLeft) / scale : scaledWidth;
+                  const height = twoCell ? (rowAt((scaledTop + scaledHeight) * scale) - markedTop) / scale : scaledHeight;
+                  const left = pageLayoutClampColumnPoint(markedLeft, wideColumns);
+                  const top = markedTop;
                   // An outline is centred on the frame's edge: its outer half
                   // lies past the frame, and clipped to the frame a 1.5 pt
                   // line printed 0.75 pt (P20's text box). The page's own

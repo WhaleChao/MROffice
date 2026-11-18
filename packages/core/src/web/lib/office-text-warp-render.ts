@@ -515,6 +515,16 @@ function segments(text: string): string[] {
   return Array.from(text);
 }
 
+/** The text fill a run states between `element` and `root` (its own inline
+ * `-webkit-text-fill-color`, the nearest one), or "". */
+function statedTextFill(element: HTMLElement, root: HTMLElement): string {
+  for (let current: HTMLElement | null = element; current && current !== root; current = current.parentElement) {
+    const stated = current.style.getPropertyValue("-webkit-text-fill-color").trim();
+    if (stated) return stated;
+  }
+  return "";
+}
+
 /**
  * Every visible glyph under `root`, as laid out, in `root`'s own CSS pixels
  * (a host scaled by a CSS transform is measured in its untransformed space).
@@ -556,7 +566,16 @@ export function collectTextWarpGlyphs(root: HTMLElement): TextWarpGlyph[] {
       : undefined;
     const strokeWidth = office ? (officeWidthPt * 96) / 72 : Number.parseFloat(style.getPropertyValue("-webkit-text-stroke-width")) || 0;
     const stroke = strokeWidth > 0 ? (office ? officeColor : style.getPropertyValue("-webkit-text-stroke-color") || null) : null;
-    const fill = style.getPropertyValue("--office-text-warp-fill") || style.color;
+    // A Word text fill (`w14:textFill`, the mark's `-webkit-text-fill-color`)
+    // over the run's colour: R471-D27's white words with a navy outline were
+    // painted navy. Only a fill a run STATES (inline, between the glyph and
+    // the source) counts: the computed one is also what hides the source's
+    // own glyphs (`hide: "fill"`, transparent), and read from there every
+    // body WordArt was painted without a fill. A gradient fill (clipped
+    // background) keeps the colour.
+    const textFill = statedTextFill(parent, root);
+    const clippedFill = (style.backgroundImage || "none") !== "none";
+    const fill = style.getPropertyValue("--office-text-warp-fill") || (textFill && !clippedFill ? textFill : style.color);
     let offset = 0;
     for (const text of segments(node.data)) {
       const start = offset;
@@ -631,6 +650,143 @@ export interface TextWarpSurfaceOptions {
   readonly fillGradient?: OfficeShapeGradient | null;
 }
 
+/**
+ * Paint `options.source`'s words warped onto `canvas` once, as laid out now
+ * (the one drawing `attachOfficeTextWarp` repeats on every change). The canvas
+ * is placed over the geometry box; the caller owns it and the source's paint.
+ * False when nothing was painted (no box yet, or a warp that bends nothing).
+ */
+export function paintTextWarpSurface(canvas: HTMLCanvasElement, options: TextWarpSurfaceOptions): boolean {
+  // The words are read in the box's own frame: a TURNED box (`rotate(...)` in
+  // its own or an ancestor's inline transform) is measured unturned, or every
+  // glyph's client rectangle is the turned one's bounding box -- each on a
+  // "line" of its own and the zoom read off the turned bounds (R234-D21's
+  // 315 degree "DRAFT" band was painted as a short scrawl). The canvas is the
+  // box's child: it turns with it again once the turn is put back.
+  const turned: [HTMLElement, string][] = [];
+  if (!textWarpTurnedMeasureOff(options.host.ownerDocument)) {
+    for (
+      let element: HTMLElement | null = options.overSource ? options.source : options.host;
+      element && element !== element.ownerDocument.body;
+      element = element.parentElement
+    ) {
+      const transform = element.style.transform;
+      if (transform && /rotate\(/.test(transform)) {
+        turned.push([element, transform]);
+        element.style.transform = transform.replace(/rotate\([^)]*\)/g, "").trim();
+      }
+    }
+  }
+  try {
+    const painted = paintTextWarpSurfaceUnturned(canvas, options);
+    // A canvas outside the turned element (a body frame's, laid over its
+    // source from the frame's wrapper) is turned itself, about the turned
+    // element's centre as CSS turns that element: drawn unturned, the
+    // 315 degree "SAMPLE" of corpus 7d3bc247 lay level across the table.
+    const outside = turned.filter(([element]) => !element.contains(canvas));
+    if (outside.length) {
+      const [element] = outside[0];
+      const at = element.getBoundingClientRect();
+      const origin = canvas.getBoundingClientRect();
+      const zoom = element.offsetWidth > 0 ? at.width / element.offsetWidth || 1 : 1;
+      const turns = outside
+        .flatMap(([, transform]) => transform.match(/rotate\([^)]*\)/g) ?? [])
+        .join(" ");
+      canvas.style.transformOrigin = `${(at.left + at.width / 2 - origin.left) / zoom}px ${(at.top + at.height / 2 - origin.top) / zoom}px`;
+      canvas.style.transform = turns;
+      canvas.setAttribute(TEXT_WARP_TURNED_ATTRIBUTE, "");
+    } else if (canvas.hasAttribute(TEXT_WARP_TURNED_ATTRIBUTE)) {
+      canvas.style.transform = "";
+      canvas.style.transformOrigin = "";
+      canvas.removeAttribute(TEXT_WARP_TURNED_ATTRIBUTE);
+    }
+    return painted;
+  } finally {
+    for (const [element, transform] of turned) element.style.transform = transform;
+  }
+}
+
+const TEXT_WARP_TURNED_ATTRIBUTE = "data-office-text-warp-turned";
+
+
+
+function textWarpTurnedMeasureOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsTextWarpTurnedMeasureOff?: boolean }) | null)?.__docsTextWarpTurnedMeasureOff === true;
+}
+
+function paintTextWarpSurfaceUnturned(canvas: HTMLCanvasElement, options: TextWarpSurfaceOptions): boolean {
+  const { source, host, warp } = options;
+  const view = host.ownerDocument.defaultView;
+  if (!view) return false;
+  const box = options.overSource ? source : host;
+  const width = box.offsetWidth;
+  const height = box.offsetHeight;
+  if (!(width > 0 && height > 0)) return false;
+  const bounds = box.getBoundingClientRect();
+  const zoom = bounds.width / width || 1;
+  const shadow = options.shadow ?? null;
+  // Room past the box for a shadow that is offset or larger than the words.
+  const bleed = shadow ? textWarpShadowBleed(shadow, width, height) : 0;
+  if (options.overSource) {
+    // Wherever the canvas's containing block is: measure where (0, 0)
+    // lands and move by the difference.
+    Object.assign(canvas.style, { left: "0px", top: "0px" });
+    const origin = canvas.getBoundingClientRect();
+    canvas.style.left = `${(bounds.left - origin.left) / zoom - bleed}px`;
+    canvas.style.top = `${(bounds.top - origin.top) / zoom - bleed}px`;
+  } else {
+    canvas.style.left = `${-bleed}px`;
+    canvas.style.top = `${-bleed}px`;
+  }
+  canvas.style.width = `${width + bleed * 2}px`;
+  canvas.style.height = `${height + bleed * 2}px`;
+  const scale = Math.min(4, Math.max(1, (view.devicePixelRatio || 1) * zoom));
+  const pixelWidth = Math.ceil((width + bleed * 2) * scale);
+  const pixelHeight = Math.ceil((height + bleed * 2) * scale);
+  if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+  if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+  let insets = options.insets ?? { left: 0, top: 0, right: 0, bottom: 0 };
+  if (options.insetsFromPadding) {
+    // The geometry box's own padding: the source's when the words are
+    // drawn over it, the host's when the host is the frame.
+    const style = view.getComputedStyle(box);
+    const border = (side: string) => Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) || 0;
+    const padding = (side: string) => Number.parseFloat(style.getPropertyValue(`padding-${side}`)) || 0;
+    insets = {
+      left: padding("left") + border("left"),
+      top: padding("top") + border("top"),
+      right: padding("right") + border("right"),
+      bottom: padding("bottom") + border("bottom"),
+    };
+  }
+  const sourceBounds = source.getBoundingClientRect();
+  const glyphs = collectTextWarpGlyphs(source).map((glyph) => ({
+    ...glyph,
+    // Into the geometry box's coordinates.
+    x: glyph.x + (sourceBounds.left - bounds.left) / zoom - insets.left,
+    baseline: glyph.baseline + (sourceBounds.top - bounds.top) / zoom - insets.top,
+  }));
+  let boxWidth = width - insets.left - insets.right;
+  if (options.noWrap && glyphs.length) {
+    const lines = textWarpLines(glyphs);
+    boxWidth = Math.max(
+      ...lines.map((line) => line.reduce((sum, glyph) => sum + glyph.advance, 0)),
+    );
+  }
+  return paintOfficeTextWarp(canvas, {
+    warp,
+    width: boxWidth,
+    height: height - insets.top - insets.bottom,
+    glyphs,
+    scale,
+    originX: insets.left + bleed,
+    originY: insets.top + bleed,
+    align: options.align,
+    shadow,
+    fillGradient: options.fillGradient ?? null,
+  });
+}
+
 export const TEXT_WARP_SOURCE_ATTRIBUTE = "data-office-text-warp-source";
 export const TEXT_WARP_CANVAS_ATTRIBUTE = "data-office-text-warp";
 
@@ -664,73 +820,7 @@ export function attachOfficeTextWarp(options: TextWarpSurfaceOptions): () => voi
   let frame = 0;
   const paint = () => {
     frame = 0;
-    const box = options.overSource ? source : host;
-    const width = box.offsetWidth;
-    const height = box.offsetHeight;
-    if (!(width > 0 && height > 0)) return;
-    const bounds = box.getBoundingClientRect();
-    const zoom = bounds.width / width || 1;
-    const shadow = options.shadow ?? null;
-    // Room past the box for a shadow that is offset or larger than the words.
-    const bleed = shadow ? textWarpShadowBleed(shadow, width, height) : 0;
-    if (options.overSource) {
-      // Wherever the canvas's containing block is: measure where (0, 0)
-      // lands and move by the difference.
-      Object.assign(canvas.style, { left: "0px", top: "0px" });
-      const origin = canvas.getBoundingClientRect();
-      canvas.style.left = `${(bounds.left - origin.left) / zoom - bleed}px`;
-      canvas.style.top = `${(bounds.top - origin.top) / zoom - bleed}px`;
-    } else {
-      canvas.style.left = `${-bleed}px`;
-      canvas.style.top = `${-bleed}px`;
-    }
-    canvas.style.width = `${width + bleed * 2}px`;
-    canvas.style.height = `${height + bleed * 2}px`;
-    const scale = Math.min(4, Math.max(1, (view.devicePixelRatio || 1) * zoom));
-    const pixelWidth = Math.ceil((width + bleed * 2) * scale);
-    const pixelHeight = Math.ceil((height + bleed * 2) * scale);
-    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
-    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
-    let insets = options.insets ?? { left: 0, top: 0, right: 0, bottom: 0 };
-    if (options.insetsFromPadding) {
-      // The geometry box's own padding: the source's when the words are
-      // drawn over it, the host's when the host is the frame.
-      const style = view.getComputedStyle(box);
-      const border = (side: string) => Number.parseFloat(style.getPropertyValue(`border-${side}-width`)) || 0;
-      const padding = (side: string) => Number.parseFloat(style.getPropertyValue(`padding-${side}`)) || 0;
-      insets = {
-        left: padding("left") + border("left"),
-        top: padding("top") + border("top"),
-        right: padding("right") + border("right"),
-        bottom: padding("bottom") + border("bottom"),
-      };
-    }
-    const sourceBounds = source.getBoundingClientRect();
-    const glyphs = collectTextWarpGlyphs(source).map((glyph) => ({
-      ...glyph,
-      // Into the geometry box's coordinates.
-      x: glyph.x + (sourceBounds.left - bounds.left) / zoom - insets.left,
-      baseline: glyph.baseline + (sourceBounds.top - bounds.top) / zoom - insets.top,
-    }));
-    let boxWidth = width - insets.left - insets.right;
-    if (options.noWrap && glyphs.length) {
-      const lines = textWarpLines(glyphs);
-      boxWidth = Math.max(
-        ...lines.map((line) => line.reduce((sum, glyph) => sum + glyph.advance, 0)),
-      );
-    }
-    paintOfficeTextWarp(canvas, {
-      warp,
-      width: boxWidth,
-      height: height - insets.top - insets.bottom,
-      glyphs,
-      scale,
-      originX: insets.left + bleed,
-      originY: insets.top + bleed,
-      align: options.align,
-      shadow,
-      fillGradient: options.fillGradient ?? null,
-    });
+    paintTextWarpSurface(canvas, options);
   };
   const schedule = () => {
     if (!frame) frame = view.requestAnimationFrame(paint);

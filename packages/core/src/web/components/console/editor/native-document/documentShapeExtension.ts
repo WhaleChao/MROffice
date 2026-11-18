@@ -9476,6 +9476,50 @@ function transactionPutsInlineShapeInList(tr: Transaction): boolean {
   return inList;
 }
 
+/** A transaction taking every mark off the in-line shapes the
+ * transactions' steps reached; null when none wears one. */
+export function inlineShapesWithoutMarks(
+  transactions: readonly Transaction[],
+  state: EditorState,
+  name: string,
+): Transaction | null {
+  if (!transactions.some((tr) => tr.docChanged)) return null;
+  const ranges: Array<[number, number]> = [];
+  transactions.forEach((tr, trIndex) => {
+    const after = transactions.slice(trIndex + 1);
+    const toEnd = (position: number, bias: number) =>
+      after.reduce((at, next) => next.mapping.map(at, bias), position);
+    tr.steps.forEach((step, index) => {
+      const later = tr.mapping.slice(index);
+      const { from, to, pos } = step as unknown as { from?: number; to?: number; pos?: number };
+      if (typeof from === "number" && typeof to === "number") {
+        ranges.push([toEnd(later.map(from, -1), -1), toEnd(later.map(to, 1), 1)]);
+      } else if (typeof pos === "number") {
+        const at = toEnd(later.map(pos, 1), 1);
+        ranges.push([at, at + 1]);
+      }
+    });
+  });
+  const size = state.doc.content.size;
+  const marked = new Set<number>();
+  for (const [from, to] of ranges) {
+    const start = Math.max(0, Math.min(from, size));
+    const end = Math.min(size, Math.max(to, start));
+    if (end <= start) continue;
+    state.doc.nodesBetween(start, end, (node, pos) => {
+      if (node.type.name === name && node.marks.length > 0) marked.add(pos);
+      return true;
+    });
+  }
+  if (marked.size === 0) return null;
+  const tr = state.tr;
+  for (const pos of marked) {
+    const node = tr.doc.nodeAt(pos);
+    if (node) tr.setNodeMarkup(pos, undefined, node.attrs, []);
+  }
+  return tr;
+}
+
 export const InlineDocumentShape = DocumentShapeBlock.extend({
   name: INLINE_SHAPE_NODE_NAME,
   group: "inline",
@@ -9514,6 +9558,18 @@ export const InlineDocumentShape = DocumentShapeBlock.extend({
         filterTransaction: (tr) =>
           tr.getMeta("y-sync$") !== undefined ||
           !transactionPutsInlineShapeInList(tr),
+      }),
+      new Plugin({
+        key: new PluginKey("inlineDocumentShapeWearsNoMarks"),
+        // A font, size, colour or link set over a line that holds an
+        // in-line shape went onto the shape too (ProseMirror marks every
+        // inline node of the range): the server refuses the page then
+        // ("inlineDocumentShape nodes must be atomic"), and the save with
+        // it (corpus R471-D47 E51, a font set over a paragraph holding
+        // one). Word's drawing run takes no character formatting the
+        // drawing shows either. Its own story's words keep theirs.
+        appendTransaction: (transactions, _oldState, state) =>
+          inlineShapesWithoutMarks(transactions, state, this.name),
       }),
     ];
   },

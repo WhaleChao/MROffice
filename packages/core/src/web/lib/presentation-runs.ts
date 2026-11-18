@@ -122,6 +122,10 @@ export interface RunStyle {
   subscript?: boolean;
   /** DrawingML proofing language (`a:rPr/@lang`) for this exact run. */
   proofingLanguage?: string;
+  /** DrawingML `a:rPr/@altLang` (the run's East Asian language beside a
+   * Western `lang`) as the file states it (readings row 1001): PowerPoint
+   * breaks and hangs the run's words by it; carried, never edited. */
+  alternateLanguage?: string;
   /** DrawingML `a:rPr/@noProof`; true disables checking for this exact run. */
   noProof?: boolean;
   color?: string;
@@ -808,6 +812,13 @@ export function normalizeRunStyle(
   ) {
     style.proofingLanguage = record.proofingLanguage.trim();
   }
+  if (
+    typeof record.alternateLanguage === "string" &&
+    record.alternateLanguage.length <= 64 &&
+    PROOFING_LANGUAGE_RE.test(record.alternateLanguage.trim())
+  ) {
+    style.alternateLanguage = record.alternateLanguage.trim();
+  }
   if (typeof record.letterSpacing === "number" && Number.isFinite(record.letterSpacing)) {
     // The block's own bounds (`MIN/MAX_LETTER_SPACING_PT`), hundredths of a point.
     style.letterSpacing =
@@ -874,6 +885,8 @@ export function runStyleEquals(a: RunStyle | undefined, b: RunStyle | undefined)
     (left.textOutlineDash ?? undefined) === (right.textOutlineDash ?? undefined) &&
     (left.proofingLanguage ?? undefined) ===
       (right.proofingLanguage ?? undefined) &&
+    (left.alternateLanguage ?? undefined) ===
+      (right.alternateLanguage ?? undefined) &&
     (left.href ?? undefined) === (right.href ?? undefined) &&
     (left.linkTooltip ?? undefined) === (right.linkTooltip ?? undefined) &&
     (left.linkColor ?? undefined) === (right.linkColor ?? undefined) &&

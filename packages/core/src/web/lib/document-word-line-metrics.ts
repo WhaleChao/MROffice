@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { wordWindowsEastAsianFactor } from "./office-fonts/word-windows-lines";
+
 /**
  * Word's single-line height rule, shared by the browser DOCX importer, the
  * editor's auto line-spacing projection and the document attribute contract.
@@ -102,6 +104,13 @@ export function wordDocumentEastAsianSingleLineFactor(family: string | null | un
     const name = (family ?? "").trim().replace(/^["']|["']$/g, "");
     for (const [pattern, factor] of WORD_WINDOWS_EAST_ASIAN_LINE_FACTORS) if (pattern.test(name)) return factor;
   }
+  // Every other East Asian face whose Windows line is not 1.3x the recorded
+  // box: the win box plus 0.15 of it on each side in whole font units, so
+  // 1.2969 em for SimSun, KaiTi, MS Mincho (256 units), 1.3008 for Batang,
+  // Gulim, MingLiU (1024) -- SimSun 15.56 pt at 12 pt where the Mac Word
+  // measurement gave 15.52 (word-windows-lines.ts).
+  const windows = wordWindowsEastAsianFactor(family);
+  if (windows !== undefined) return windows;
   return wordEastAsianSingleLineFactor(family);
 }
 

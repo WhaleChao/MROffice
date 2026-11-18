@@ -41,7 +41,10 @@ import {
 } from "../../../../lib/presentation/table-canvas-layout";
 import { tableCellIntersectsSelection, type TableSelectionScope } from "@mrnote/core/web/lib/presentation-table-selection.ts";
 import { normalizeCellStyle, type CellStyleInput } from "@mrnote/core/web/lib/presentation-table-style.ts";
-import { presentationTableCellParagraphStyles } from "../../../../lib/presentation/table-cell-paragraphs";
+import {
+  presentationTableCellParagraphStyles,
+  presentationTableCellTrailingParagraphStyle,
+} from "../../../../lib/presentation/table-cell-paragraphs";
 import { PresentationTypingCellEditor } from "./PresentationTypingCellEditor";
 import { OfficeTableTouchGrips } from "@mrnote/core/web/components/office-ribbon/OfficeTableTouchGrips.tsx";
 import { canManipulateBlock, isTextEditLocked } from "@mrnote/core/web/lib/presentation-text-case.ts";
@@ -167,6 +170,8 @@ interface PresentationCanvasTableCellProps {
   rowBoundaryActive: boolean;
   readOnly: boolean;
   editorKey: string;
+  /** Its table draws a cell's empty last paragraph as a line (readings row 1004). */
+  trailingParagraphLines: boolean;
   t: PresentationCanvasTableBlockCtl["t"];
 }
 
@@ -245,6 +250,7 @@ const PresentationCanvasTableCell = memo(function PresentationCanvasTableCell({
   rowBoundaryActive,
   readOnly,
   editorKey,
+  trailingParagraphLines,
   t,
 }: PresentationCanvasTableCellProps) {
   const L = () => live.current;
@@ -461,6 +467,8 @@ const PresentationCanvasTableCell = memo(function PresentationCanvasTableCell({
       runs={cell.runs}
       
       paragraphStyles={presentationTableCellParagraphStyles(cell, cell.text)}
+      
+      trailingParagraph={presentationTableCellTrailingParagraphStyle({ source: { cellTrailingParagraphLines: trailingParagraphLines } }, cell)}
       
       powerPointLineFit
       
@@ -1020,6 +1028,7 @@ const PresentationCanvasTableRow = memo(function PresentationCanvasTableRow({
                                     cellIndex={cellIndex}
                                     cellTag={displayed.headerRow === true && rowIndex === 0 ? "th" : "td"} // PPT-B361
                                     tdStyle={tableCellTdStyle(displayed, cell, rowIndex, cellIndex)}
+                                    trailingParagraphLines={(displayed.source as { cellTrailingParagraphLines?: unknown } | undefined)?.cellTrailingParagraphLines === true}
                                     textStyle={tableCellVisualTextStyle(displayed, { ...cellStyle, superscript: false, subscript: false }, headerEmphasis, true, cell, tableCellStatedHeightPx(displayed, rowIndex, cell))}
                                     isFocusedCell={isFocusedCell}
                                     isSelectedCell={isSelectedCell}

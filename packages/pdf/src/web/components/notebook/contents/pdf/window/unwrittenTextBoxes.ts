@@ -197,10 +197,19 @@ export function withoutUnwrittenPdfTextBoxes(
 
 
 
+
+
+
+
+
+
+
+
 export function carryUnwrittenPdfTextBoxesOverLoad(
   marks: UnwrittenPdfTextBoxes,
   windowBoxes: readonly PdfTextBoxEdit[],
   loaded: readonly PdfTextBoxEdit[],
+  onlyInRecord?: (row: PdfTextBoxEdit) => boolean,
 ): Readonly<{ boxes: readonly PdfTextBoxEdit[]; marks: UnwrittenPdfTextBoxes }> {
   if (marks.size === 0) return { boxes: loaded, marks };
   const nowByKey = new Map(windowBoxes.map((edit) => [keyOf(edit), edit] as const));
@@ -228,6 +237,12 @@ export function carryUnwrittenPdfTextBoxesOverLoad(
     if (held === null) {
       // A box the PDF did not hold when its write failed.
       if (gone(now)) { drop(); continue; }
+      if (onPage && onlyInRecord?.(onPage)) {
+        // In the record's list and in no row of the PDF: still to write.
+        if (!sameBox(onPage, now)) put(at, now);
+        keep(key, null, held);
+        continue;
+      }
       if (onPage) {
         // A write nobody answered put it there after all.
         if (sameBox(onPage, now)) { drop(); continue; }

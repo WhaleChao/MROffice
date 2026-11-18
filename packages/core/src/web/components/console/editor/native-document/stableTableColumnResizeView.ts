@@ -60,8 +60,12 @@ import { releaseTablePageFrame, TABLE_PAGE_FRAME_ATTR } from "./tablePageFrame";
 import {
   applyWordAutofitGeometry,
   clearWordAutofitGeometry,
+  NATIVE_GRID_RESYNC_EVENT,
+  NATIVE_GRID_USED_WIDTH_ATTR,
+  WORD_SHARE_GROWN_ATTR,
   wordAutofitGeometryFor,
   wordMinContentFloorFor,
+  wordShareTableGrowthFor,
   wordTableDisplayMarginLeftPx,
 } from "./wordTableAutofitDisplay";
 import { readWordTableLayout, wordCellHorizontalMargins } from "./wordTableLayout";
@@ -155,6 +159,8 @@ function syncNativeGridDisplay(table: HTMLTableElement, colgroup: HTMLTableColEl
   const widths = (floored && floored.length === nativeWidths?.length ? [...floored] : null) ??
     nativeWidths ?? (isNestedTable(table) ? nestedTableColumnWidths(node) : null);
   const nativeBox = nativeWidths && view ? documentNativeTableGridBorderProfile(view.state, node) : null;
+  if (nativeBox) table.setAttribute(NATIVE_GRID_USED_WIDTH_ATTR, String(nativeBox.usedWidthPx));
+  else table.removeAttribute(NATIVE_GRID_USED_WIDTH_ATTR);
   if (nativeBox) {
     // w:gridCol describes shared grid-edge distances. A collapsed CSS outer
     // box also contains half of each outer border. Use the engine's measured
@@ -181,6 +187,24 @@ function syncNativeGridDisplay(table: HTMLTableElement, colgroup: HTMLTableColEl
   }
   const total = widths.reduce((sum, value) => sum + value, 0);
   table.dataset.nativeGridDisplay = "true";
+  // Its narrowest contents need more than its share of the text column (or, of
+  // no width of its own, more than the column): Word draws it as wide as they
+  // need, up to the right margin from where it starts (wordShareTableGrowthFor).
+  const grown = floored ? wordShareTableGrowthFor(view, node) : null;
+  if (grown !== null) {
+    table.setAttribute(WORD_SHARE_GROWN_ATTR, "true");
+    table.style.width = `${grown + (nativeBox?.usedWidthPx ?? 0)}px`;
+    table.style.maxWidth = "none";
+    for (let index = 0; index < widths.length; index += 1) {
+      const column = colgroup.children[index] as HTMLTableColElement | undefined;
+      if (column) {
+        column.style.width = `${widths[index] / total * 100}%`;
+        column.style.removeProperty("min-width");
+      }
+    }
+    return;
+  }
+  table.removeAttribute(WORD_SHARE_GROWN_ATTR);
   const wordLayout = readWordTableLayout(node.attrs);
   // A stated width under the columns: Word draws the table at it and shares it out
   // (wordMinContentFloorWidths; Word 16.86, a table of tblW 8328 over 12000 twips of
@@ -888,6 +912,7 @@ export class StableTableColumnResizeView extends TableView {
   ) {
     super(node, cellMinWidth, view, HTMLAttributes);
     this.editorView = view ?? null;
+    this.table.addEventListener(NATIVE_GRID_RESYNC_EVENT, this.onGridResync);
     this.syncRenderedTableAttributes(node);
     this.removeConflictingColumnStyles(node);
     syncTablePositioningProjection(this.dom, this.table, node, this.editorView);
@@ -996,7 +1021,14 @@ export class StableTableColumnResizeView extends TableView {
     }
   }
 
+  /** The AutoFit pass took back a width it had grown the table to. */
+  private readonly onGridResync = () => {
+    if (tableResizeViews.get(this.table) !== this) return;
+    syncNativeGridDisplay(this.table, this.colgroup, this.node, this.editorView);
+  };
+
   destroy(): void {
+    this.table.removeEventListener(NATIVE_GRID_RESYNC_EVENT, this.onGridResync);
     this.cancelGesture();
     this.dom.removeEventListener("mousedown", this.onMouseDown, true);
     this.touchGuardCleanup?.();

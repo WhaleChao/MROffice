@@ -52,6 +52,7 @@ import type { ValidationRule } from "@mrnote/core/web/lib/spreadsheet/data-valid
 import { spreadsheetCellIsFormula } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import {
   convertRemovedTableReferencesToA1,
+  literalReadsAsNonText,
   shiftFormula,
   type TableDefinition,
 } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
@@ -248,7 +249,15 @@ export function tableHeaderRenamesAfterReplace<S extends TableButtonSheet>(
       // showed (sheet model fuzz).
       if (!cell) nextCells[key] = { value: normalized[col - c1], kind: "text" };
       else if (cell.value !== normalized[col - c1]) {
-        nextCells[key] = { ...cell, value: normalized[col - c1] };
+        // A header is text. The string type the file gave the old value
+        // ("2024") belonged to that value: "Column2" is read afresh, as any
+        // new value is (xlsx-rounds R440-X04 WALK1: B5:C5 of a table, cleared,
+        // kept stringValue and read back without it).
+        const name = normalized[col - c1];
+        const renamed: typeof cell & { stringValue?: boolean } = { ...cell, value: name };
+        if (literalReadsAsNonText(name)) renamed.stringValue = true;
+        else delete renamed.stringValue;
+        nextCells[key] = renamed;
       }
     }
     normalized.forEach((name, index) => {

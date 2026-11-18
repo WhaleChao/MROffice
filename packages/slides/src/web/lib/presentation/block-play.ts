@@ -17,7 +17,7 @@ import {
   patternRevealKind,
 } from "../presentation-anim-pattern-reveal";
 import { createContext, type CSSProperties } from "react";
-import { paragraphsFromText } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
+import { normalizeParagraphEndLatinFace, paragraphsFromText } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 import type { EffectRecipeBox } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
 import { blockAnimationKeyframeName, isBlockAnimation } from "@mrnote/core/web/lib/presentation-block-fx.ts";
 import {
@@ -279,12 +279,22 @@ export function paragraphPlayRowProps(
 export function paragraphBuildRows(
   text: string,
   runs: unknown,
+  /** The flat body's mark Latin face (`endLatinFace`, readings row 899): its last row's. */
+  endLatinFace?: unknown,
 ): SlideParagraphWithRuns[] {
-  return withFlatRunsSplitAcrossParagraphs(
+  const rows = withFlatRunsSplitAcrossParagraphs(
     paragraphsFromText(text) as SlideParagraphWithRuns[],
     runs,
     text,
   );
+  const face = normalizeParagraphEndLatinFace(endLatinFace);
+  if (face === undefined || !rows.length || rows[rows.length - 1]!.endLatinFace !== undefined) return rows;
+  // A body saying its mark's face is one paragraph (readings row 899): its rows
+  // before the last end at line breaks (`a:br`), which hold no mark.
+  return [
+    ...rows.slice(0, -1).map((row) => ({ ...row, endsInLineBreak: true as const })),
+    { ...rows[rows.length - 1]!, endLatinFace: face },
+  ];
 }
 
 /**

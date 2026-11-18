@@ -25,6 +25,8 @@ import {
   PDFName,
   PDFNull,
   PDFNumber,
+  PDFObjectParser,
+  PDFRawStream,
   PDFRef,
   PDFStream,
   PDFString,
@@ -44,11 +46,14 @@ const NAME_ACRO_FORM = PDFName.of("AcroForm");
 const NAME_BYTE_RANGE = PDFName.of("ByteRange");
 const NAME_CONTENTS = PDFName.of("Contents");
 const NAME_DOC_MDP = PDFName.of("DocMDP");
+const NAME_ENCRYPT = PDFName.of("Encrypt");
 const NAME_FIELDS = PDFName.of("Fields");
 const NAME_FILTER = PDFName.of("Filter");
+const NAME_FIRST = PDFName.of("First");
 const NAME_FT = PDFName.of("FT");
 const NAME_KIDS = PDFName.of("Kids");
 const NAME_M = PDFName.of("M");
+const NAME_N = PDFName.of("N");
 const NAME_NAME = PDFName.of("Name");
 const NAME_PARENT = PDFName.of("Parent");
 const NAME_PERMS = PDFName.of("Perms");
@@ -59,6 +64,7 @@ const NAME_TRANSFORM_METHOD = PDFName.of("TransformMethod");
 const NAME_TRANSFORM_PARAMS = PDFName.of("TransformParams");
 const NAME_TYPE = PDFName.of("Type");
 const NAME_V = PDFName.of("V");
+const NAME_XREF = PDFName.of("XRef");
 
 export interface DetectedCertificateSignature {
   /** /T of the signature field, or a stable fallback. */
@@ -307,6 +313,64 @@ function grantsUsageRights(doc: PDFDocument, signature: PDFDict): boolean {
   return true;
 }
 
+/**
+ * What an object pdf-lib kept opaque provably is: nothing (null), or the
+ * dictionary of a cross-reference stream. Anything else refuses.
+ *
+ * Opacity is not proof that an object is harmless or unsigned, and its bytes
+ * are never searched for one. Two shapes are read for what they are:
+ *
+ * - No bytes between `obj` and `endobj` (ImageMagick writes `13 0 obj endobj`
+ *   for a slot it leaves unused). Nothing is there to be a dictionary, and a
+ *   signature field or /Perms entry that names it still refuses below, since
+ *   it does not resolve to one.
+ * - A cross-reference stream whose table pdf-lib could not decode (the one a
+ *   decrypting tool leaves behind, its rows garbage, under the new one).
+ *   pdf-lib's own object parser reads the same bytes as a stream: what failed
+ *   was reading its payload as a table. The dictionary is then judged as any
+ *   stream's is, and the payload is cross-reference rows, never objects.
+ *
+ * Such a stream is also a trailer pdf-lib did not read. If the /Encrypt it
+ * names exists, the file may be ciphertext that `isEncrypted` missed and no
+ * walk of it proves anything; only a reference to an object the file does
+ * not hold is known to encrypt nothing. An object stream that did not decode
+ * hides members never seen, whatever /Type it states, so /N or /First refuse.
+ *
+ * The attachment inspection reads an opaque object the same way
+ * (save-policy's hasEmbeddedFileRisk): one rule for what such an object is.
+ */
+export function opaqueObjectDictionary(
+  doc: PDFDocument,
+  object: PDFInvalidObject,
+): PDFDict | null {
+  const size = object.sizeInBytes();
+  if (size === 0) return null;
+  const bytes = new Uint8Array(size);
+  object.copyBytesInto(bytes, 0);
+  let parsed: unknown;
+  try {
+    parsed = PDFObjectParser.forBytes(bytes, doc.context).parseObject();
+  } catch {
+    parsed = undefined;
+  }
+  if (
+    !(parsed instanceof PDFRawStream) ||
+    parsed.dict.get(NAME_TYPE) !== NAME_XREF ||
+    parsed.dict.get(NAME_N) !== undefined ||
+    parsed.dict.get(NAME_FIRST) !== undefined
+  ) {
+    malformed("opaque indirect object prevents signature presence proof");
+  }
+  const encrypt = parsed.dict.get(NAME_ENCRYPT);
+  if (
+    encrypt !== undefined &&
+    !(encrypt instanceof PDFRef && doc.context.lookup(encrypt) === undefined)
+  ) {
+    malformed("unread cross-reference stream declares encryption");
+  }
+  return parsed.dict;
+}
+
 export function detectCertificateSignatures(
   doc: PDFDocument,
 ): DetectedCertificateSignature[] {
@@ -519,9 +583,19 @@ export function detectCertificateSignatures(
   for (const [ref, object] of indirectObjects) {
     if (object instanceof PDFInvalidObject) {
       // pdf-lib deliberately preserves an indirect object it cannot parse as
-      // an opaque PDFInvalidObject.  Opacity is not proof that the object is
-      // harmless or unsigned, so never inspect or classify its raw bytes.
-      malformed("opaque indirect object prevents signature presence proof");
+      // an opaque PDFInvalidObject. Only an empty one and an undecoded
+      // cross-reference stream are read (opaqueObjectDictionary); any other
+      // refuses there.
+      const unread = opaqueObjectDictionary(doc, object);
+      if (unread) {
+        if (isSignatureLike(unread)) {
+          malformed("signature-like streams are unsupported");
+        }
+        for (const [, child] of unread.entries()) {
+          inspectDirectValue(child, 1);
+        }
+      }
+      continue;
     }
     if (object instanceof PDFArray) {
       for (let index = 0; index < object.size(); index += 1) {

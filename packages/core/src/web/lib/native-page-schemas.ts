@@ -3772,6 +3772,23 @@ export const presentationPageContentObjectSchema = z
     // Optional deck-level PRINT / HANDOUT settings (slides per page + scale).
     // Additive — existing decks omit it and still validate byte-for-byte.
     printSettings: presentationPrintSettingsSchema.optional(),
+    // Home > Replace > Replace Fonts, in order (`lib/presentation-replace-font`):
+    // the log a save of an imported deck replays on its original
+    // (`pptx/replace_fonts`). Ids unique; each face one family, never a theme
+    // reference.
+    fontReplacements: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(64),
+            from: z.string().trim().min(1).max(120).refine((face) => !/^\+m[nj]-(lt|ea|cs)$/i.test(face)),
+            to: z.string().trim().min(1).max(120).refine((face) => !/^\+m[nj]-(lt|ea|cs)$/i.test(face)),
+          })
+          .strict(),
+      )
+      .max(200)
+      .refine((entries) => new Set(entries.map((entry) => entry.id)).size === entries.length)
+      .optional(),
   })
   .passthrough();
 export type PresentationPageContentParsed = z.infer<typeof presentationPageContentObjectSchema>;

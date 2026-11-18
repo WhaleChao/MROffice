@@ -684,7 +684,10 @@ export function normalizeSectionLayouts(
         const sizeEighths =
           edge.sizeEighths === undefined
             ? undefined
-            : integer(edge.sizeEighths, 0, 96);
+            : // A line border holds up to 12 pt; an imported art border
+              // (chainLink, twistedLines1, ...) is drawn as a band of its
+              // own width, up to 31 pt (ECMA-376 17.3.4, reading 200).
+              integer(edge.sizeEighths, 0, 248);
         const spacePt =
           edge.spacePt === undefined ? undefined : integer(edge.spacePt, 0, 31);
         const color = edge.color;

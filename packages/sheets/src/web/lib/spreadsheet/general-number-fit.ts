@@ -42,6 +42,11 @@ export interface NumberFitInput {
   availablePx: number;
   /** The drawn width of a text in the cell's font, px. */
   measure: (text: string) => number;
+  /** The width a #### fill takes, where not `availablePx` (the printed
+   * sheet: the cell less one #, lookwin p150-lw). Given, a General number too
+   * small for its digits or its scientific spelling shows 0, as Windows
+   * Excel prints it (the API's fit_number_text hash_available). */
+  hashAvailablePx?: number;
 }
 
 function trimFraction(text: string): string {
@@ -106,7 +111,9 @@ export function fitNumberText({
   general,
   availablePx,
   measure,
+  hashAvailablePx,
 }: NumberFitInput): string {
+  const hashes = hashAvailablePx ?? availablePx;
   const fits = (text: string) =>
     text.replace(/^-/, "").length <= GENERAL_MAX_CHARS && measure(text) <= availablePx;
   // What General writes is a decimal or a scientific spelling; any other
@@ -116,22 +123,24 @@ export function fitNumberText({
   // A date or time the format cannot write is # across the whole cell, as a
   // number too wide for its column is (ED023: 1E12 under yyyy-mm-dd fills
   // its cell in Excel; the format's fixed eight marks sat in its right half).
-  if (display === DATE_TIME_OUT_OF_RANGE_DISPLAY) return hashFill(availablePx, measure);
+  if (display === DATE_TIME_OUT_OF_RANGE_DISPLAY) return hashFill(hashes, measure);
   if (!generalSpelling || !Number.isFinite(value)) {
-    return measure(display) <= availablePx ? display : hashFill(availablePx, measure);
+    return measure(display) <= availablePx ? display : hashFill(hashes, measure);
   }
   // A plain decimal the cell already shows in full is left as it is.
   if (/^-?(\d+\.?\d*|\.\d+)$/.test(display) && fits(display)) return display;
-  if (value === 0) return fits("0") ? "0" : hashFill(availablePx, measure);
+  if (value === 0) return fits("0") ? "0" : hashFill(hashes, measure);
   const sign = value < 0 ? "-" : "";
   const magnitude = Math.abs(value);
   let decimal: string | null = null;
+  let roundsToZero = false;
   const integerDigits = Math.floor(magnitude) === 0 ? 1 : String(Math.floor(magnitude)).length;
   if (magnitude < 1e21 && integerDigits <= GENERAL_MAX_CHARS) {
     for (let places = Math.max(0, GENERAL_MAX_CHARS - integerDigits - 1); places >= 0; places -= 1) {
       const text = sign + trimFraction(fixed(magnitude, places));
       if (!fits(text)) continue;
       if (Number(text) !== 0) decimal = text;
+      else roundsToZero = true;
       break;
     }
   }
@@ -146,5 +155,6 @@ export function fitNumberText({
   if (decimal !== null && (exponential === null || significantDigits(decimal) >= significantDigits(exponential))) {
     return decimal;
   }
-  return exponential ?? hashFill(availablePx, measure);
+  if (exponential !== null) return exponential;
+  return hashAvailablePx !== undefined && roundsToZero && fits("0") ? "0" : hashFill(hashes, measure);
 }

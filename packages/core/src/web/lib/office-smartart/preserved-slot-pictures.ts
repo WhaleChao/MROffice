@@ -47,6 +47,13 @@ export interface PreservedSlotPicture {
   readonly embed: string;
   readonly fillRect: SlotPictureRect;
   readonly srcRect: SlotPictureRect;
+  /**
+   * The slot is the layout's picture PLACEHOLDER (`blipPhldr`, reading
+   * `smartArtPictureSlotCropToFill`): Windows PowerPoint fills it cropped to
+   * fill, centred, whatever `fillRect` / `srcRect` say
+   * ({@link officeCropToFillRect}).
+   */
+  readonly cropToFill?: true;
 }
 
 const ZERO_RECT: SlotPictureRect = { l: 0, t: 0, r: 0, b: 0 };
@@ -81,7 +88,28 @@ export function readPreservedSlotPicture(value: unknown): PreservedSlotPicture |
   const fillRect = readRect(record.fillRect);
   const srcRect = readRect(record.srcRect);
   if (!fillRect || !srcRect) return null;
-  return { embed, fillRect, srcRect };
+  return { embed, fillRect, srcRect, ...(record.cropToFill === true ? { cropToFill: true as const } : {}) };
+}
+
+
+
+
+
+
+
+
+
+
+export function officeCropToFillRect(
+  natural: { readonly width: number; readonly height: number } | null,
+  slot: { readonly width: number; readonly height: number },
+): SlotPictureRect | null {
+  if (!natural || !(natural.width > 0) || !(natural.height > 0) || !(slot.width > 0) || !(slot.height > 0)) return null;
+  const ratio = natural.width / natural.height / (slot.width / slot.height);
+  const side = (over: number) => -Math.round(((over - 1) / 2) * 100) * 1000;
+  return ratio >= 1
+    ? { l: side(ratio), t: 0, r: side(ratio), b: 0 }
+    : { l: 0, t: side(1 / ratio), r: 0, b: side(1 / ratio) };
 }
 
 /**

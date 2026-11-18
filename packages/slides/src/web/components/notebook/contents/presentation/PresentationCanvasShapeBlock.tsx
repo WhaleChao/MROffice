@@ -52,6 +52,7 @@ import { ShapeTextOverlay } from "./PresentationShapeTextOverlay";
 import { useRichTextSelectionFollower } from "./useRichTextSelectionFollower";
 import { PresentationTypingTextarea } from "./PresentationTypingTextarea";
 import { inputIsLetterInPlace, usePresentationRichTypingKey } from "./usePresentationRichTypingKey";
+import { browserReplacement } from "../../../../lib/presentation/collab-caret";
 import { normalizeParagraphsWithRuns } from "@mrnote/core/web/lib/presentation-text-buttons.ts";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { useCallback, useContext, useRef, useState } from "react";
@@ -108,6 +109,8 @@ export interface PresentationCanvasShapeBlockCtl {
     end: number,
     edit?: { readonly selection?: { start: number; end: number }; readonly softLineBreaks?: boolean },
     letterIn?: HTMLElement,
+    /** The words a browser's replacement put in (`browserReplacement`). */
+    replacement?: string | null,
   ) => void;
   recordShapeTextRange: (blockId: string, start: number, end: number) => void;
   /** The caret a remounted rich label body restores (the last commit's, else
@@ -255,9 +258,9 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
       range: presentationPreviewSelection(host, text.length) ?? { start: text.length, end: text.length },
     };
   };
-  const commitRichHost = (host: HTMLElement, letterTyped = false) => {
+  const commitRichHost = (host: HTMLElement, letterTyped = false, replacement?: string | null) => {
     const { text, range } = richSelection(host);
-    commitShapeRichText(block.id, text, range.start, range.end, undefined, letterTyped ? host : undefined);
+    commitShapeRichText(block.id, text, range.start, range.end, undefined, letterTyped ? host : undefined, replacement);
   };
   const replaceRichSelection = (host: HTMLElement, inserted: string, softLineBreaks = false) => {
     const { text, range } = richSelection(host);
@@ -511,7 +514,7 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                               },
                               onInput: (event) => {
                                 if (richComposing.current) return;
-                                commitRichHost(event.currentTarget, inputIsLetterInPlace(event.nativeEvent));
+                                commitRichHost(event.currentTarget, inputIsLetterInPlace(event.nativeEvent), browserReplacement(event.nativeEvent));
                               },
                               onCompositionStart: () => {
                                 richComposing.current = true;

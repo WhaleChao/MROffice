@@ -95,11 +95,15 @@ export const EAST_ASIAN_FIRST_BASELINE_EM: Readonly<Record<string, number>> = {
 
 
 const BOX_GROUPS: Readonly<Record<string, readonly string[]>> = {
-  // win 220 / 36 of 256: msgothic.ttc, msmincho.ttc, simsun.ttc, Word's HGRSMP /
+  // win 220 / 36 of 256: msgothic.ttc, msmincho.ttc, simsun.ttc, SimHei, KaiTi, FangSong, Word's HGRSMP /
   // HGRSGU / HGRGE / HGRME.
   "ms-gothic-box": [
     "ms gothic", "ms pgothic", "ms ui gothic", "ms mincho", "ms pmincho", "simsun", "nsimsun",
     "ms ゴシック", "ms pゴシック", "ms 明朝", "ms p明朝", "宋体", "新宋体",
+    
+    // SimHei labels under a SimHei mark stand 1.031 em down in Windows' print, the box's
+    // Latin line (0.431-0.437 em under their boxes' middle).
+    "simhei", "黑体", "kaiti", "楷体", "fangsong", "仿宋",
     "hgmarugothicmpro", "hg丸ゴシックm-pro", "hgsoeikakugothicub", "hgpsoeikakugothicub", "hgssoeikakugothicub",
     "hg創英角ゴシックub", "hgp創英角ゴシックub", "hgs創英角ゴシックub", "hggothice", "hgpgothice", "hgsgothice",
     "hgゴシックe", "hgpゴシックe", "hgsゴシックe", "hgminchoe", "hgpminchoe", "hgsminchoe", "hg明朝e", "hgp明朝e", "hgs明朝e",
@@ -118,6 +122,7 @@ const BOX_GROUPS: Readonly<Record<string, readonly string[]>> = {
   calibri: ["calibri"],
   arial: ["arial"],
   "times new roman": ["times new roman"],
+  "microsoft sans serif": ["microsoft sans serif"],
 };
 
 /**
@@ -154,12 +159,17 @@ export function eastAsianBoxGroup(family: string): string | undefined {
  * paragraph, less the same under a Calibri mark).
  */
 export const EAST_ASIAN_MARK_SHIFT_EM: Readonly<Record<string, Readonly<Record<string, number>>>> = {
-  "ms-gothic-box": { arial: 0.03, "times new roman": 0.025, meiryo: -0.06, "yu gothic": -0.01 },
+  // (Microsoft Sans Serif: -malgun-mark-'s MS Gothic row, 0.992 / 0.989 over 0.959.)
+  "ms-gothic-box": { arial: 0.03, "times new roman": 0.025, meiryo: -0.06, "yu gothic": -0.01, "microsoft sans serif": 0.032 },
   meiryo: { arial: 0.01, "times new roman": 0.01, "ms-gothic-box": 0.025, "yu gothic": -0.005 },
   "yu gothic": { arial: 0.01, "times new roman": 0.01, "ms-gothic-box": 0.025, meiryo: -0.055 },
   "microsoft yahei": { arial: 0.025, "times new roman": 0.025, "ms-gothic-box": 0.035, meiryo: -0.06, "yu gothic": -0.01 },
   dengxian: { arial: 0.005, "times new roman": 0.005, "ms-gothic-box": 0.02, meiryo: -0.065, "yu gothic": -0.015 },
-  "malgun gothic": { arial: 0.02, "times new roman": 0.02, "ms-gothic-box": 0.03, meiryo: -0.06, "yu gothic": -0.015 },
+  // Malgun Gothic's Latin marks over Hangul in ko-KR (look-fit truth-probes lookfit-malgun-mark-probe-win.pdf,
+  // 18 and 24 pt, compatLnSpc either way): Arial 0.973 / 0.975 em, Times New Roman 0.967 / 0.970, Microsoft
+  // Sans Serif 0.980 over the Calibri mark's 0.946 / 0.945 -- -markline-'s 0.02 / 0.02 were measured on Han,
+  
+  "malgun gothic": { arial: 0.028, "times new roman": 0.023, "microsoft sans serif": 0.035, "ms-gothic-box": 0.03, meiryo: -0.06, "yu gothic": -0.015 },
   "microsoft jhenghei": { arial: 0.025, "times new roman": 0.02, "ms-gothic-box": 0.035, meiryo: -0.065, "yu gothic": -0.015 },
 };
 
