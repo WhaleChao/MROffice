@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/th"><img src="../docs/media/mr-office-demo.webp" alt="ตัวแก้ไขโอเพนซอร์สของ MR Office ได้แก่ เอกสาร สเปรดชีต งานนำเสนอ PDF การเขียนด้วยมือ และโค้ด ที่ทำงานในเบราว์เซอร์" width="100%"></a></p>
 
-<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 ดูวิดีโอแนะนำ 50 วินาทีพร้อมเสียง</a></p>
+<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 ดูวิดีโอแนะนำ 50 วินาทีพร้อมเสียง</a></p>
 
 <table>
 <tr>

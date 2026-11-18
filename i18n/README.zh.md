@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/zh"><img src="../docs/media/mr-office-demo.webp" alt="MR Office 的开源编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。" width="100%"></a></p>
 
-<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 观看 50 秒介绍视频（有声）</a></p>
+<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 观看 50 秒介绍视频（有声）</a></p>
 
 <table>
 <tr>

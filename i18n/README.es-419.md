@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/es-419"><img src="../docs/media/mr-office-demo.webp" alt="Los editores de código abierto de MR Office (documentos, hojas de cálculo, presentaciones, PDF, escritura a mano y código) en el navegador." width="100%"></a></p>
 
-<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 Ver el recorrido de 50 segundos con sonido</a></p>
+<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 Ver el recorrido de 50 segundos con sonido</a></p>
 
 <table>
 <tr>

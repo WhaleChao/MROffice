@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/id"><img src="../docs/media/mr-office-demo.webp" alt="Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban." width="100%"></a></p>
 
-<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 Tonton tur 50 detik dengan suara</a></p>
+<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 Tonton tur 50 detik dengan suara</a></p>
 
 <table>
 <tr>

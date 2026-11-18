@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/ko"><img src="../docs/media/mr-office-demo.webp" alt="MR Office의 오픈 소스 편집기: 문서, 스프레드시트, 프레젠테이션, PDF, 필기, 코드가 브라우저에서 실행됩니다." width="100%"></a></p>
 
-<p align="center"><a href="../docs/media/mr-office-demo.mp4">🔊 50초 소개 영상 보기 (소리 포함)</a></p>
+<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 50초 소개 영상 보기 (소리 포함)</a></p>
 
 <table>
 <tr>
