@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/en-GB"><img src="../docs/media/mr-office-demo.webp" alt="The open-source editors of MR Office — documents, spreadsheets, presentations, PDF, handwriting and code — running in the browser." width="100%"></a></p>
 
-<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 Watch the 50-second tour with sound</a></p>
+<p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Watch the 50-second tour with sound</a></p>
 
 <table>
 <tr>

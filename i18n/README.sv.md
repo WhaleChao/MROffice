@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/sv"><img src="../docs/media/mr-office-demo.webp" alt="MR Offices redigerare med öppen källkod – dokument, kalkylblad, presentationer, PDF, handskrift och kod – i webbläsaren." width="100%"></a></p>
 
-<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 Se den 50 sekunder långa rundturen med ljud</a></p>
+<p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Se den 50 sekunder långa rundturen med ljud</a></p>
 
 <table>
 <tr>

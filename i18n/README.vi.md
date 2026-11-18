@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/vi"><img src="../docs/media/mr-office-demo.webp" alt="Các trình soạn thảo mã nguồn mở của MR Office — tài liệu, bảng tính, bản trình bày, PDF, viết tay và mã — chạy trong trình duyệt." width="100%"></a></p>
 
-<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 Xem video giới thiệu 50 giây có âm thanh</a></p>
+<p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Xem video giới thiệu 50 giây có âm thanh</a></p>
 
 <table>
 <tr>

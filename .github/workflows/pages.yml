@@ -34,6 +34,8 @@ jobs:
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+      - name: The README's tour video, served where a browser plays it
+        run: mkdir -p apps/playground/dist/media && cp docs/media/mr-office-demo.mp4 apps/playground/dist/media/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/playground/dist

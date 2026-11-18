@@ -10,7 +10,7 @@
 
 <p align="center"><a href="https://mroffice.ai/nl"><img src="../docs/media/mr-office-demo.webp" alt="De opensource-editors van MR Office — documenten, spreadsheets, presentaties, pdf, handschrift en code — in de browser." width="100%"></a></p>
 
-<p align="center"><a href="https://github.com/user-attachments/assets/3dbe2320-c587-497b-a554-73e469909387">🔊 Bekijk de rondleiding van 50 seconden met geluid</a></p>
+<p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 Bekijk de rondleiding van 50 seconden met geluid</a></p>
 
 <table>
 <tr>
