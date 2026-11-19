@@ -136,12 +136,19 @@ export function readMraiNativeParagraphRewriteEvidence(
       raw.originTransactionId.length > 200 || (raw.direction !== "undo" && raw.direction !== "redo")) return null;
     history = Object.freeze({ originTransactionId: raw.originTransactionId, direction: raw.direction });
   }
-  if (!block && !history) return null;
+  // A format written by state where the text stands: no block, no pen, no
+  // source bytes (mirror of the server's NativeParagraphRewrite._in_place).
+  const inPlace = record.inPlace === true;
+  if (record.inPlace != null && !inPlace) return null;
+  if (inPlace && (block || history || pens.length > 0 || originalBytes.length > 0 || record.twins != null)) return null;
+  if (!inPlace && originalBytes.length < 1) return null;
+  if (!block && !history && !inPlace) return null;
   return Object.freeze({
     schemaVersion: MRAI_NATIVE_PARAGRAPH_REWRITE_SCHEMA_VERSION,
     target: Object.freeze({ objectNumber: target.objectNumber as number, generation: target.generation as number }),
     items: Object.freeze(items), shows: Object.freeze(shows), pens: Object.freeze(pens), originalBytes,
     pins: Object.freeze(pins), block,
     ...(history ? { history } : {}),
+    ...(inPlace ? { inPlace: true as const } : {}),
   });
 }

@@ -8,7 +8,7 @@
 import { OFFICE_TITLE_THICK_GAP_DOTS } from "../../../../lib/spreadsheet/office-wrapped-bottom";
 import { PX_PER_PT, pxToPt } from "@mrnote/core/web/lib/office-units.ts";
 import { OFFICE_PRINT_IDENTITY, officePrintedDrawingFrame, type OfficePrintScale } from "../../../../lib/spreadsheet/office-print-metrics";
-import { PRINT_DOT_PT, PRINTED_DIAGONAL_VARIABLE, PRINTED_GRID_FRAME_PT, PRINTED_GRID_INSET_PT, isPrintedDiagonal, printedBorderLine, printedDiagonalEdges, printedDiagonalStroke, printedGridOffset, printedBorderLineOfVariable, printedEdgeStrokes, printedEdgeVariable, type PrintedEdge } from "../../../../lib/spreadsheet/printed-cell-borders";
+import { PRINT_DOT_PT, PRINTED_DIAGONAL_VARIABLE, PRINTED_GRID_FRAME_PT, PRINTED_GRID_INSET_PT, isPrintedDiagonal, printedBorderLine, printedDiagonalEdges, printedDiagonalStroke, printedGridOffset, printedLeftEdgeFloor, printedBorderLineOfVariable, printedEdgeStrokes, printedEdgeVariable, type PrintedEdge } from "../../../../lib/spreadsheet/printed-cell-borders";
 import { officeObjectKeyAction } from "@mrnote/core/web/lib/office-object-nudge.ts";
 import { isMacPlatform } from "@mrnote/core/web/lib/mac-platform.ts";
 import { officeLocaleUsesInches } from "@mrnote/core/web/lib/office-measurement-units.ts";
@@ -117,14 +117,17 @@ export interface SpreadsheetPageLayoutViewProps {
    * Where a cell's text may run over its empty neighbours (the grid's text
    * spill), as a column range, or null when it stays in its cell. Asked for
    * unmerged cells with the cell's drawn width; the run is painted across
-   * those columns and clipped at the page's edge.
+   * those columns and clipped at the page's edge. `across`: a Center Across
+   * Selection run, which a page break does not narrow -- printed, its text is
+   * centred over the whole run and each page prints the part over its own
+   * columns (Windows Excel, R453-X83's title over A2:L2 on two pages).
    */
   getTextSpill?: (
     row: number,
     col: number,
     cellWidthPx: number,
     fontScale: number,
-  ) => { startCol: number; endCol: number; textWidthPx?: number; centred?: boolean } | null;
+  ) => { startCol: number; endCol: number; textWidthPx?: number; centred?: boolean; across?: boolean } | null;
   /** Whether a cell holds a value (a stored empty string and a formula
    * showing nothing too): a run carried on from an earlier page prints only
    * where it reaches a column holding one in the page's rows (Windows Excel's
@@ -2381,7 +2384,10 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
               centerOffset -
               headingWidth -
               gridWidth
-            : geometry.margins.left * paperScale + centerOffset + headingWidth;
+            : (geometry.margins.left + (printMode
+                ? printedLeftEdgeFloor(geometry.margins.left, geometry.dataAreaWidth, (gridWidth + headingWidth) / paperScale,
+                    geometry.settings.centerHorizontally === true)
+                : 0)) * paperScale + centerOffset + headingWidth;
           // The width a page's grid prints in: a column wider than the page
           // prints at the page's printable width (lookwin p48-lw), from where
           // the grid starts (the API's wide_column_limit).
@@ -2565,6 +2571,12 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                 const sourceWidth = printedColSizes[source] ?? geometry.colWidth;
                 const spill = getTextSpill(sourceRow, source, sourceWidth * paperScale, fontScale);
                 if (!spill || spill.startCol !== source || spill.endCol < pageFirstCol) return [];
+                // A Center Across Selection run the page break cut: this page
+                // prints the part of its text over its own columns, centred
+                // over the whole run as the page before printed its part
+                // (the API's draw_center_across_from_left; R453-X83's title
+                // on its third page, 430.9 pt left of the page's columns).
+                const acrossRun = spill.across === true;
                 const span = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
                 // A column wider than the page printed cut at the page's
                 // width: its text runs on from the cut (lookwin p61-lw).
@@ -2574,8 +2586,9 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                 const height = sizeOf([row], geometry.rowSizes, geometry.rowHeight) * paperScale;
                 const display = getCellDisplay(sourceRow, source);
                 const nativeText = nativeTextDpi && hasNativeTextLayout?.(sourceRow, source, display);
-                const runWidth = (between + onPage) * paperScale;
-                if (!pageLayoutCarriedRunPrints({
+                const runWidth = (between + (acrossRun
+                  ? sizeOf(span(pageFirstCol, spill.endCol + 1), printedColSizes, geometry.colWidth) : onPage)) * paperScale;
+                if (!acrossRun && !pageLayoutCarriedRunPrints({
                   pageCols: page.cols,
                   colSizes: printedColSizes,
                   colWidth: geometry.colWidth,
@@ -2740,17 +2753,57 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
               const spill = !merge && !unclippedText ? getTextSpill?.(anchorRow, anchorCol, cellWidthPx, fontScale) ?? null : null;
               const spillRun = (() => {
                 if (!spill) return undefined;
-                const first = page.cols[0];
-                const last = page.cols[page.cols.length - 1];
+                // The run is cut at the page's columns, and at the seam between
+                // repeated title columns and the page's own share: a title's
+                // text never runs on over the body (Excel clips it at its band;
+                // R450-X47 pages 2-3, A1's heading cut at B's right edge; the
+                // API's draw_data_row walks consecutive columns only).
+                const at = page.cols.indexOf(col);
+                let firstIndex = at, lastIndex = at;
+                while (firstIndex > 0 && page.cols[firstIndex - 1] === (page.cols[firstIndex] ?? 0) - 1) firstIndex -= 1;
+                while (lastIndex >= 0 && lastIndex < page.cols.length - 1
+                  && page.cols[lastIndex + 1] === (page.cols[lastIndex] ?? 0) + 1) lastIndex += 1;
+                const first = at >= 0 ? page.cols[firstIndex] ?? col : page.cols[0] ?? col;
+                const last = at >= 0 ? page.cols[lastIndex] ?? col : page.cols[page.cols.length - 1] ?? col;
                 const startCol = Math.max(spill.startCol, first);
                 const endCol = Math.min(spill.endCol, last);
                 if (startCol === col && endCol === col) return undefined;
                 const span = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
                 return {
+                  startCol, endCol,
                   // Right to left, the columns after this one lie on its left.
                   left: -sizeOf(rightToLeft ? span(col + 1, endCol + 1) : span(startCol, col), geometry.colSizes, geometry.colWidth) * paperScale,
                   width: sizeOf(span(startCol, endCol + 1), geometry.colSizes, geometry.colWidth) * paperScale,
                 };
+              })();
+              // A right-aligned run starting before the page's own columns. A
+              // centred one that ends at its cell (its right neighbour taken)
+              // is not one: it stays centred on its own cell (R324-X16's
+              // prefecture names, centred in the print area's first column B
+              // with A empty before it, printed 3.5 pt left of Excel's).
+              const spillCutBefore = (() => {
+                if (!spill || spill.centred || rightToLeft || spill.endCol !== col || spill.startCol >= col) return false;
+                const at = page.cols.indexOf(col);
+                let index = at;
+                while (index > 0 && page.cols[index - 1] === (page.cols[index] ?? 0) - 1) index -= 1;
+                return at >= 0 && spill.startCol < (page.cols[index] ?? col);
+              })();
+              // A Center Across Selection run that goes on past the page's
+              // last column is centred over all of it and cut at that
+              // column's edge; the next page across prints the rest
+              // (continuationNodes; the API's draw_data_row; R453-X83's
+              // A2:L2, centred over the page's own A:H before). The width of
+              // its columns after the page, at the size each prints at.
+              const acrossBeyond = (() => {
+                if (!printMode || rightToLeft || !spill?.across || spill.startCol !== col || pageLastCol === undefined
+                  || spill.endCol <= pageLastCol) return 0;
+                // The run reaches the page's last column over its own columns
+                // (not over the seam after repeated title columns).
+                for (let index = page.cols.indexOf(col); index < page.cols.length - 1; index += 1) {
+                  if (index < 0 || page.cols[index + 1] !== (page.cols[index] ?? 0) + 1) return 0;
+                }
+                const after = Array.from({ length: spill.endCol - pageLastCol }, (_, index) => pageLastCol + 1 + index);
+                return sizeOf(after, printedColSizes, geometry.colWidth) * paperScale;
               })();
               // A centred text overflows both its sides alike, centred on its
               // own cell, and is cut where its run ends (Excel; the API's
@@ -2762,10 +2815,28 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                 const before = Math.max(0, -spillRun.left);
                 const side = Math.max(before, spillRun.width - before - cellWidthPx);
                 return { left: -side, width: cellWidthPx + 2 * side };
-              })() : spillRun;
+              })() : spillCutBefore && spill ? (() => {
+                // A right-aligned text whose run starts before the page's
+                // columns keeps its right end at its cell and is cut at the
+                // page's first column, as Excel prints it (R449-X64 page 2's
+                // 「単位：人  各年度末」, its 単 cut at the grid's left edge):
+                // laid out in the page's part of the run alone it overflowed
+                // to the right, past its cell.
+                const span = (from: number, to: number) => Array.from({ length: Math.max(0, to - from) }, (_, index) => from + index);
+                return {
+                  left: -sizeOf(span(spill.startCol, col), geometry.colSizes, geometry.colWidth) * paperScale,
+                  width: sizeOf(span(spill.startCol, col + 1), geometry.colSizes, geometry.colWidth) * paperScale,
+                };
+              })() : acrossBeyond > 0 ? {
+                left: 0,
+                width: (spillRun ? spillRun.width : cellWidthPx) + acrossBeyond,
+              } : spillRun;
+              // Cut to the page's part of the run, or to the cell alone.
+              const spillCut = spillCutBefore || acrossBeyond > 0 ? spillRun ?? { left: 0, width: cellWidthPx } : spillRun;
               if (printMode && merge) coverEdges(rows, cols);
               if (printMode && spill && spillBox) {
-                coverEdges([row], page.cols.filter((value) => value >= spill.startCol && value <= spill.endCol));
+                coverEdges([row], page.cols.filter((value) => value >= (spillRun?.startCol ?? spill.startCol)
+                  && value <= (spillRun?.endCol ?? spill.endCol)));
               }
               const sharedLeft = !merge && neighbourStatesEdge(row, col, "Left");
               const sharedTop = !merge && neighbourStatesEdge(row, col, "Top");
@@ -2878,7 +2949,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
                   // Printed, a run out of the page's last column is cut at
                   // that column's edge, not run on into the margin (lookwin
                   // p40, p59-lw: the ink stops at 393.5 / 506.2 pt).
-                  spillClip={printMode || spillBox !== spillRun ? spillRun : undefined}
+                  spillClip={printMode || spillBox !== spillRun ? spillCut : undefined}
                   mergeContent={
                     merge
                       ? {

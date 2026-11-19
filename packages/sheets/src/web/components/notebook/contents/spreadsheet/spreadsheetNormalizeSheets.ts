@@ -683,10 +683,18 @@ export function normalizeSheets(
       SPREADSHEET_CELL_HEIGHT_PX,
       true,
     );
-    const sortState = normalizeSpreadsheetSortState(
+    // The file's sort state is kept as the file states it: Excel records the
+    // whole block it sorted (A4:V732 over a page 17 columns wide, R452-X04),
+    // and spelled again or dropped for reaching past the page's grid, a save
+    
+    // Reapply still reads it against the grid (`reapplySortPlan`).
+    const sortState = rememberLoadedSpelling(
+      normalizeSpreadsheetSortState(
+        sheet.sortState,
+        MAX_SHEET_ROWS,
+        MAX_SHEET_COLS,
+      ),
       sheet.sortState,
-      rowCount,
-      columnCount,
     );
     const advancedFilterState = normalizeSpreadsheetAdvancedFilterState(
       sheet.advancedFilterState,

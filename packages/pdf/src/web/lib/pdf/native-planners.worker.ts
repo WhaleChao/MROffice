@@ -39,6 +39,11 @@ import { planMraiNativeByteRestoreHistory } from "./engine/native/byte-restore-h
 import { planMraiNativeTextMove } from "./engine/native/text-move";
 import { planMraiNativeTextGroupMove } from "./engine/native/text-group-move";
 import { findMraiNativeTextDecoration, readMraiNativeTextRuleBesideRun } from "./engine/native/text-decoration";
+import {
+  planMraiNativeInvisibleTextRuleChanges,
+  proveMraiNativeInvisibleTextRules,
+  readMraiNativeInvisibleTextRulesStanding,
+} from "./engine/native/invisible-text-rule";
 import { planPdfNativeContentAppend } from "./engine/native/content-append-transaction";
 import { fetchVerifiedPdfComplexScriptFont, fetchVerifiedPdfUnicodeFallbackFont } from "./unicode-font-asset";
 import {
@@ -127,6 +132,12 @@ export const PDF_NATIVE_BROWSER_PLANNERS: Readonly<Record<string, Entry>> = Obje
   warmMraiNativeParagraphFormatPlans,
   findMraiNativeTextDecoration,
   readMraiNativeTextRuleBesideRun,
+  // A scanned line's rules-only proof: where a rule beside its invisible
+  // words goes and whether it would be seen.
+  proveMraiNativeInvisibleTextRules,
+  // The rules standing beside it now, and the rule changes a format asks.
+  readMraiNativeInvisibleTextRulesStanding,
+  planMraiNativeInvisibleTextRuleChanges,
   // The faces it draws in, fetched here by their pinned digests (a loader
   // the editor holds cannot be posted to this Worker).
   planPdfNativeContentAppend: (input: Parameters<typeof planPdfNativeContentAppend>[0]) => planPdfNativeContentAppend({

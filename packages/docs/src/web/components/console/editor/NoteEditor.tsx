@@ -14141,7 +14141,11 @@ export default function NoteEditor({
           {commentsOpen && usableEditor && !previewMode ? (
             <CommentsPanel
               editor={usableEditor}
-              author={guestMode ? null : collabUserName}
+              // A comment is stored with its author's name, which every
+              // collaborator reads: the person's own name, as Word writes
+              // it, never this reader's "You" (every comment read "You" to
+              // everyone, in the writer's language).
+              author={guestMode ? null : revisionIdentity.name || collabUserName}
               focusCommentRequest={commentFocusRequest}
               newCommentRequestId={newCommentRequestId}
               onClose={closeCommentsPanel}

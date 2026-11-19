@@ -8,13 +8,17 @@ import type { CSSProperties } from "react";
 import { officePrimaryFontFamily } from "../../components/office-ribbon/officeTypographyCatalog";
 import { officeFaceName } from "../office-fonts/face-names";
 import { setPrintedCellScripts } from "./cell-text-effects";
+import { excelCutFamilyEmboldens, excelCutFamilyOf, isExcelCutFamily, withoutLeadingExcelCutFamilies } from "../office-fonts/excel-cut-families";
+import { stackPrimaryFamily } from "../office-fonts/hangul-em";
 import { ensureOfficeFauxBoldProbe, officeFamilyHasNoBold } from "../office-fonts/faux-bold";
-import { ensureOfficeFontFaces, loadOfficeFamilySpace, officeFontDeclared, officeFontSubstitutes, setOfficeEmboldenedRegularCuts } from "../office-fonts/substitutes";
+import { ensureExcelCutFamily, ensureOfficeFontFaces, loadOfficeFamilySpace, officeFontDeclared, officeFontSubstitutes, setOfficeEmboldenedRegularCuts } from "../office-fonts/substitutes";
 import { columnBaseWidthToPixels, columnFileWidthToPixels } from "./grid-sizing";
 import { isSpreadsheetFauxBoldStroke, setSpreadsheetFauxBoldPrinted, spreadsheetEngineIdealAdvances, spreadsheetEngineTextWidth, spreadsheetFauxBoldCss, spreadsheetTextEngineOn } from "./spreadsheet-text-engine";
 import { withScriptFallbacks } from "../office-fonts/script-fallbacks";
 import { OFFICE_COMPLEX_SCALE_PREFIX, officeComplexScaleStack } from "./office-complex-scales";
-import { excelFontRecordOf, excelWindowsDrawnFaces, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
+import { excelFontRecordOf, excelWindowsCellPitch, excelWindowsDrawnFaces, excelWindowsFaceKey, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
+import OFFICE_DIGIT_WHOLE_EM from "./office-digit-whole-em.json";
+import OFFICE_HINTED_ADVANCES from "./office-hinted-advances.json";
 import { GENERIC_FAMILIES } from "../text-engine/face-index";
 import { fontMeasureContext } from "./font-measure-context";
 
@@ -150,13 +154,48 @@ export function resolveNativeRowHeights(metrics: NativeRowMetrics | undefined, h
 
 /** Whether a default row the file marks custom (sheetFormatPr customHeight)
  * holds the rows that state no height of their own at it: only while no row
- * of the sheet states a custom height. Once one does, Windows Excel fits
- * those rows to their content (lookwin p97e-lw: a wrapped bold W92000004 in a
- * row with no ht stands one line, two once row 1, 3 or 5 states ht
- * customHeight; R346-X27). The API's writer (custom_row_stated) is the same. */
-export function nativeDefaultHoldsRows(metrics: NativeRowMetrics | undefined): boolean {
-  if (!metrics?.default.customHeight) return false;
-  return !Object.values(metrics.rows).some((row) => row.customHeight);
+ * of the sheet states a custom height, or a height other than the default's.
+ * Once one does, Windows Excel fits those rows to their content (lookwin
+ * p97e-lw: a wrapped bold W92000004 in a row with no ht stands one line, two
+ * once row 1, 3 or 5 states ht customHeight; R346-X27; p210b-lw / p210c-lw:
+ * under a 15 pt custom default one row stating ht 30, 14, 38.25 or 12.75
+ * without customHeight has every row fitted, where ht 15 leaves them 15 pt).
+ * A hidden row does the same (`hidesRows`; R455-X33: six rows a filter hid,
+ * no row stating a height, every row fitted). The API's writer
+ * (_custom_default_row_fits) is the same. */
+export function nativeDefaultHoldsRows(metrics: NativeRowMetrics | undefined, hidesRows = false): boolean {
+  if (!metrics?.default.customHeight || hidesRows) return false;
+  const stated = metrics.default.heightPt;
+  return !Object.values(metrics.rows).some((row) => row.customHeight || Math.abs(row.heightPt - stated) > .005);
+}
+
+/** The height, in 96 dpi pixels at the sheet's zoom, of the grid Windows
+ * Excel opens a workbook on (the truth machine's window): the API's
+ * _EXCEL_OPEN_VIEW_GRID_PX. */
+export const EXCEL_OPEN_VIEW_GRID_PX = 640;
+
+/** Where a custom default holds its rows (nativeDefaultHoldsRows), how many
+ * leading rows it holds: the ones Excel's opening view shows. Every recorded
+ * row below them is fitted to its content after all, below the default too
+ * (lookwin p34-lw: under a 15.75 pt custom default rows 1-31 stand 15.75 pt
+ * and rows 32-80 are fitted; under 30 pt 16 rows; at zoom 50 59 rows;
+ * R453-X62). undefined where the default holds no row. The API's
+ * _custom_default_view_rows is the same. */
+export function nativeDefaultViewRows(metrics: NativeRowMetrics | undefined, hidesRows = false, zoomScale?: unknown, freezeRows?: unknown, openingTopRow?: unknown): number | undefined {
+  if (!metrics || !nativeDefaultHoldsRows(metrics, hidesRows)) return undefined;
+  const height = metrics.default.heightPt;
+  if (!(height > 0 && height <= 409.5)) return undefined;
+  const zoom = typeof zoomScale === "number" && Number.isInteger(zoomScale) && zoomScale >= 10 && zoomScale <= 400 ? zoomScale / 100 : 1;
+  const rowPx = Math.floor(Math.floor(height / .75 + .5) * zoom + .5);
+  // Frozen rows stand above the scrolling pane's own view (p34-lw: ySplit 1
+  // holds rows 1-32).
+  const frozen = typeof freezeRows === "number" && Number.isInteger(freezeRows) && freezeRows > 0 ? freezeRows : 0;
+  // A sheet that opens scrolled down (the page's openingTopRow, reading 955)
+  // holds every row down to its view's last (p34-lw: A40 holds rows 1-70;
+  // ySplit 5 with the bottom pane at A30, rows 1-60).
+  const start = typeof openingTopRow === "number" && Number.isInteger(openingTopRow) && openingTopRow > frozen && openingTopRow < 1_048_576
+    ? openingTopRow : frozen;
+  return rowPx > 0 ? start + Math.ceil(EXCEL_OPEN_VIEW_GRID_PX / rowPx) : undefined;
 }
 
 /** Excel's row limit applies to computed heights as well as authored heights. */
@@ -343,6 +382,8 @@ export function spreadsheetFontStack(
   // A face Windows lacks whose record states its class (a grid font's
   // `record`, a cell's `fontRecord`) is drawn in GDI's pick for that class:
   // Carlito stating nothing in Arial, charset 134 in SimSun.
+  // A stack built here and handed back: its face, not the cut family in front of it.
+  if (family) family = withoutLeadingExcelCutFamilies(family);
   const record = excelFontRecordOf(traits.fontRecord ?? traits.record);
   if (record) {
     const drawn = excelWindowsDrawnFaces(family?.trim(), record);
@@ -396,6 +437,17 @@ function buildSpreadsheetFontStack(family: string | undefined): string {
     return servedStack(`"${face}", "Arial", ${arial}${officeComplexScaleStack(face)}"Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", sans-serif`);
   }
   ensureOfficeFontFaces(face);
+  // A face Windows Excel prints lighter than the catalog's cut of its
+  // stand-in (游ゴシック Medium: Noto Sans JP's 500, half as heavy again as
+  // Excel's ink) is drawn by the sheet's own family of it, named in front of
+  // the face (lib/office-fonts/excel-cut-families.ts): the measured cut at
+  // the same advances. It stands first, so its space is the line's first
+  // available font.
+  const cut = excelCutFamilyOf(face);
+  if (cut) {
+    ensureExcelCutFamily(cut.face);
+    loadOfficeFamilySpace(cut.alias);
+  }
   const standIns = face ? officeFontSubstitutes(face) : [];
   const substitutes = standIns.map((name) => `"${name}", `).join("");
   // Han text in a Latin face has no glyphs of its own and takes the system's
@@ -419,7 +471,7 @@ function buildSpreadsheetFontStack(family: string | undefined): string {
   // fall to Wine Tahoma's Arabic, behind every face here, or to the script
   // fallback's Noto at its own size. Each family covers its script alone.
   const complex = officeComplexScaleStack(face);
-  return servedStack(`${face ? `"${face}", ${complex}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
+  return servedStack(`${face ? `${cut ? `"${cut.alias}", ` : ""}"${face}", ${complex}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
 }
 
 /** The system faces a stack's Han and kana fall to when its own faces lack them. */
@@ -438,7 +490,7 @@ const HAN_FALLBACK_FACES = new Set(["simsun", "songti sc", "microsoft yahei", "m
  */
 export function spreadsheetShapeFontStack(family: string | undefined, eastAsianFace?: string | null): string {
   const stack = spreadsheetFontStack(family);
-  const named = family?.split(",")[0]?.replace(/["']/g, "").trim();
+  const named = family ? withoutLeadingExcelCutFamilies(family).split(",")[0]?.replace(/["']/g, "").trim() : undefined;
   if (!eastAsianFace || !named || named === eastAsianFace) return stack;
   const parts = stack.split(",").map((part) => part.trim()).filter(Boolean);
   const bare = (part: string) => part.replace(/^["']|["']$/g, "").toLowerCase();
@@ -470,7 +522,7 @@ function servedStack(stack: string): string {
   const parts = stack.split(",").map((part) => part.trim()).filter((part) => part && !/^["']?PingFang SC["']?$/i.test(part));
   for (const part of parts) {
     const name = part.replace(/^["']|["']$/g, "");
-    if (!GENERIC_FAMILIES.has(name.toLowerCase()) && !name.startsWith(OFFICE_COMPLEX_SCALE_PREFIX)) ensureOfficeFontFaces(name);
+    if (!GENERIC_FAMILIES.has(name.toLowerCase()) && !name.startsWith(OFFICE_COMPLEX_SCALE_PREFIX) && !isExcelCutFamily(name)) ensureOfficeFontFaces(name);
   }
   return withScriptFallbacks(parts.join(", "));
 }
@@ -510,7 +562,7 @@ export function resolveSpreadsheetFontStyle(style: CSSProperties): CSSProperties
 function withOfficeFauxBold(style: CSSProperties): CSSProperties {
   const bold = style.fontWeight === "bold" || Number(style.fontWeight) >= 600;
   const family = typeof style.fontFamily === "string" ? style.fontFamily : undefined;
-  if (bold && officeFamilyHasNoBold(family)) {
+  if (bold && (officeFamilyHasNoBold(family) || excelCutFamilyEmboldens(family))) {
     const faux = spreadsheetFauxBoldCss();
     if (style.WebkitTextStrokeWidth === faux.WebkitTextStrokeWidth && style.fontSynthesis === faux.fontSynthesis) return style;
     ensureOfficeFauxBoldProbe();
@@ -690,6 +742,82 @@ function designedTextLine(text: string): boolean {
   return false;
 }
 
+/**
+ * The print windows whose sheet prints on a landscape page, by owner (as
+ * setNativeTextDesignedLines keeps its lines). File > Print through Microsoft
+ * Print to PDF turns a landscape page's text itself, and a pure-ASCII string
+ * of a GDI East Asian face (digits and Latin half an em: ＭＳ ゴシック, ＭＳ 明朝,
+ * ＭＳ Ｐゴシック, ＭＳ Ｐ明朝, MS UI Gothic, 宋体, 新宋体) at 51 printer dots an em
+ * or more then stands its half-dot advances rounded down -- 37 dots a digit
+ * at 9 pt, where a portrait page, a smaller em and every string holding a
+ * full-width character stand them 38 -- while Excel still places the text by
+ * the rounded-up width, so a right-aligned number ends that many dots short
+ * of its inset (lookwin p202-lw to p205-lw; R70-X09). The API's writer is the
+ * same (notebooks.py FaceMeasure.printed `set_short`). The page's windows
+ * share one text cache: the rule is on while every registered window is
+ * landscape (a workbook of both orientations keeps the rounded-up advances).
+ */
+const landscapePrintOwners = new Map<object, boolean>();
+export function setNativeTextLandscapePrint(owner: object, landscape: boolean | null): void {
+  const before = nativeTextLandscapePrint();
+  if (landscape === null) landscapePrintOwners.delete(owner);
+  else landscapePrintOwners.set(owner, landscape);
+  if (before !== nativeTextLandscapePrint()) advancesCache.clear();
+}
+function nativeTextLandscapePrint(): boolean {
+  if (!landscapePrintOwners.size) return false;
+  for (const landscape of landscapePrintOwners.values()) if (!landscape) return false;
+  return true;
+}
+/** A GDI East Asian face whose digits and Latin are half an em (office-digit-whole-em.json; Gill Sans Nova, its one
+ * Western face, prints rounded up like Times New Roman's half-em digits). */
+function halfEmAsciiFace(family: string | null | undefined): boolean {
+  const own = (family ?? "").trim().replace(/^["']|["']$/g, "").trim();
+  if (!own) return false;
+  const faces = OFFICE_DIGIT_WHOLE_EM as readonly string[];
+  return [own.toLowerCase(), excelWindowsFaceKey(own)].some((name) => name !== "gill sans nova" && faces.includes(name));
+}
+
+/**
+ * office-hinted-advances.json (the API's office_hinted_advances.json is the
+ * same file): the printer dots Windows Excel's print sets an ASCII character
+ * of a face wider or narrower than its design advance rounded to a whole dot,
+ * per whole printer ppem (33-134; to 300 for the faces measured there) --
+ * GDI's hinted advances, which the old TrueType faces do not keep linear
+ * (Times New Roman's y prints 1-4 dots short at 90 of those sizes, Arial's W
+ * 1-6 over at 100; lookwin p206-lw / p207-lw). The table of `family` (its
+ * own name, or the face Windows Excel draws it in) regular, bold, italic or
+ * bold italic: ppem -> character -> dots; null for a face or a weight not
+ * measured.
+ */
+const hintedAdvanceTables = new Map<string, ReadonlyMap<number, ReadonlyMap<string, number>> | null>();
+export function officeHintedAdvanceDeltas(family: string | null | undefined, bold: boolean, italic: boolean): ReadonlyMap<number, ReadonlyMap<string, number>> | null {
+  const own = (family ?? "").trim().replace(/^["']|["']$/g, "").trim();
+  if (!own) return null;
+  const style = `${bold ? "B" : ""}${italic ? "I" : ""}` || "R";
+  const faces = (OFFICE_HINTED_ADVANCES as unknown as { faces: Record<string, Record<string, Record<string, Record<string, string>>> | undefined> }).faces;
+  for (const key of [own.toLowerCase(), excelWindowsFaceKey(own)]) {
+    const cached = `${key}\u0000${style}`;
+    let table = hintedAdvanceTables.get(cached);
+    if (table === undefined) {
+      const stated = faces[key]?.[style];
+      table = null;
+      if (stated) {
+        const byPpem = new Map<number, ReadonlyMap<string, number>>();
+        for (const [ppem, differences] of Object.entries(stated)) {
+          const byCharacter = new Map<string, number>();
+          for (const [dots, characters] of Object.entries(differences)) for (const character of characters) byCharacter.set(character, Number(dots));
+          byPpem.set(Number(ppem), byCharacter);
+        }
+        table = byPpem;
+      }
+      hintedAdvanceTables.set(cached, table);
+    }
+    if (table) return table;
+  }
+  return null;
+}
+
 export function nativeTextAdvances(text: string, fontCss: string, dpi: number, scale = 1, purpose: "paint" | "measure" = "paint", advanceOffset = 0): Array<{ text: string; spacing: number; advance?: number }> {
   if (typeof document === "undefined" || /[\u0590-\u0fff]/u.test(text)) return [{ text, spacing: 0 }];
   if (textContext === undefined) {
@@ -715,6 +843,34 @@ export function nativeTextAdvances(text: string, fontCss: string, dpi: number, s
   if (advancesCache.size > 20000) advancesCache.clear();
   advancesCache.set(answerKey, answer.map((run) => ({ ...run })));
   return answer;
+}
+
+/**
+ * One character's printed advance, whole printer dots, as Windows Excel sets
+ * it (the API's writer the same, notebooks.py FaceMeasure.printed / unit):
+ * its design advance (`units`, thousandths of an em) at the printer's pixels
+ * per em, the half dot rounded up -- but
+ * - a Hangul syllable or compatibility jamo a whole em in every face, as each
+ *   Korean face of Windows sets it (Malgun Gothic, Gulim, Batang, ...: 92 dots
+ *   at 11 pt, lookwin p187-lw), where the stand-ins set it 0.92 em;
+ * - in a fixed-pitch East Asian face of GDI's (`cells`: ＭＳ ゴシック, 黑体,
+ *   新宋体, 楷体, 굴림체, ...; excel-windows-cell-pitch-faces.json) an ASCII
+ *   character one half-width cell, half the em rounded up to a whole dot,
+ *   whatever stand-in draws it, and a character an em wide two cells: 76 dots
+ *   at 9 pt where the em is 75, 118 at 14 pt (lookwin p186-lw; 宋体 and ＭＳ Ｐ
+ *   ゴシック set theirs at the em);
+ * - `setShort`: the half dot rounded down from 51 dots an em.
+ */
+export function printedAdvanceDots(character: string, units: number, ppem: number, cells: boolean, setShort = false): number {
+  const code = character.length <= 2 && [...character].length === 1 ? character.codePointAt(0) ?? 0 : 0;
+  if ((code >= 0xac00 && code <= 0xd7a3) || (code >= 0x3131 && code <= 0x318e)) units = 1000;
+  else if (cells && ((code >= 0x20 && code <= 0x7e) || code === 0x20a9)) units = 500;
+  if (cells && Math.abs(units - 1000) < 0.5) return 2 * Math.floor(ppem / 2 + 0.5);
+  const exact = units / 1000 * ppem;
+  // `setShort`: a landscape print's pure-ASCII string in a GDI East Asian
+  // face, as the printer sets it (setNativeTextLandscapePrint).
+  if (setShort && ppem > 50 && Math.abs(exact - Math.floor(exact) - 0.5) < 1e-3) return Math.floor(exact);
+  return Math.round(exact);
 }
 
 function measureNativeTextAdvances(context: CanvasRenderingContext2D, text: string, fontCss: string, dpi: number, scale: number, advanceOffset: number, printer = 0): Array<{ text: string; spacing: number; advance?: number }> {
@@ -764,6 +920,30 @@ function measureNativeTextAdvances(context: CanvasRenderingContext2D, text: stri
     }
     return width;
   });
+  // A fixed-pitch East Asian face of GDI's prints in cells (printedAdvanceDots).
+  const primaryFamily = printer > 0 ? stackPrimaryFamily(fontCss.slice(fontCss.indexOf(fontSize[0]) + fontSize[0].length).replace(/^\s*\/\s*[^\s]+/, "")) : "";
+  const cells = printer > 0 && excelWindowsCellPitch(primaryFamily);
+  // A landscape print's pure-ASCII string in a GDI East Asian face: the
+  // glyphs at the printer's own advances, the line as wide as Excel lays it
+  // out (the dots the glyphs fall short stand after the line's last one).
+  const setShort = printer > 0 && nativeTextLandscapePrint() && /^[\u0000-\u007f]*$/.test(text) && halfEmAsciiFace(primaryFamily);
+  const lineEnds = new Set<number>();
+  if (setShort) {
+    let last = -1;
+    segments.forEach((segment, index) => {
+      if (segment === "\n" || segment === "\r") {
+        if (last >= 0) lineEnds.add(last);
+        last = -1;
+      } else last = index;
+    });
+    if (last >= 0) lineEnds.add(last);
+  }
+  let shortDots = 0;
+  // An old TrueType face's ASCII at GDI's hinted advances (officeHintedAdvanceDeltas).
+  const stylePrefix = fontCss.slice(0, fontCss.indexOf(fontSize[0]));
+  const hinted = printer > 0 && !cells
+    ? officeHintedAdvanceDeltas(primaryFamily, /\b(?:bold|[6-9]00)\b/.test(stylePrefix), /\b(?:italic|oblique)\b/.test(stylePrefix))
+    : null;
   return segments.map((segment, index) => {
     if (segment === "\n" || segment === "\r") {
       totalDesired = 0;
@@ -775,8 +955,17 @@ function measureNativeTextAdvances(context: CanvasRenderingContext2D, text: stri
     // advance (lookwin R223-X13: Arial Narrow 8 at 90 % rounds at 60 px per
     // em, as Windows Excel and the API print it, 169.2 pt a note line where
     // 67 px per em scaled to 90 % made 170.5).
+    const ppem = Math.round(pixels * safeScale * printer / 96);
+    let printedDots = printer > 0 ? printedAdvanceDots(segment, ideals[index], ppem, cells, setShort) + (hinted?.get(ppem)?.get(segment) ?? 0) : 0;
+    if (setShort) {
+      shortDots += printedAdvanceDots(segment, ideals[index], ppem, cells) + (hinted?.get(ppem)?.get(segment) ?? 0) - printedDots;
+      if (lineEnds.has(index)) {
+        printedDots += shortDots;
+        shortDots = 0;
+      }
+    }
     const desired = printer > 0
-      ? Math.round(ideals[index] / 1000 * Math.round(pixels * safeScale * printer / 96)) * 96 / printer
+      ? printedDots * 96 / printer
       : printer < 0
         ? idealWidth * safeScale
         : Math.round(idealWidth * dpi / 96) * 96 / dpi * safeScale;

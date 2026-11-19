@@ -10,6 +10,7 @@
  * discards values; a command proceeds, as Excel's Range.Merge does).
  */
 
+import { sheetWithoutHyperlinkAreasAround, sheetWithoutLaidAreaLinksAround } from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 import { styleStatesAFormat } from "./style-source-xf";
 import { updateCellStyle, type CellButtonsSheet, type CellMap, type SpreadsheetCell } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
 import { cellHorizontalChoicePatch } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
@@ -181,10 +182,22 @@ export function sheetAfterMergeButton<S extends CellButtonsSheet & { merges?: Me
   }
   const covered = cellsCoveredInTheAnchorsFormat(next.cells, sheet.cells, spans);
   const lined = mergedAreaLinesAsExcelLeavesThem(covered, sheet.cells, spans);
-  return {
+  let merged: S = {
     ...next,
     cells: anchorsShowTheirCoveredRightEdge(lined.cells, sheet.cells, lined.unread),
   };
+  // A merge made inside a link the sheet holds over a large area deletes
+  // that whole link (Windows Excel, xlsx-rounds probe/n35-p948 p2f).
+  for (const span of spans) {
+    const area = {
+      r1: span.row,
+      c1: span.col,
+      r2: span.row + span.rowSpan - 1,
+      c2: span.col + span.colSpan - 1,
+    };
+    merged = sheetWithoutLaidAreaLinksAround(sheet, sheetWithoutHyperlinkAreasAround(merged, area), area);
+  }
+  return merged;
 }
 
 const AREA_SIDES = [

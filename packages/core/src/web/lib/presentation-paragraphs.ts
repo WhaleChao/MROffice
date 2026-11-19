@@ -149,11 +149,59 @@ export interface SlideParagraph {
    */
   endLatinFace?: string;
   /**
+   * The row's own kerning threshold in points (readings row 1009): PowerPoint
+   * kerns its runs' character pairs from that size up (`a:rPr@kern` as the
+   * row's first worded run resolves it; 0: not kerned). The row's share of
+   * `source.nativeKerning`, carried with the row -- a row Enter splits off
+   * takes it -- for the text engine, and written back by a download rebuilt
+   * from the page; never authored. A flat body says it on the block.
+   */
+  nativeKerning?: number;
+  /**
+   * The row's own East Asian line rules (readings row 1009; truth look-fit
+   * hang13): the `lang` / `altLang` its runs that state none inherit, and
+   * `hangingPunct` false, `latinLnBrk` true, `eaLnBrk` false where it
+   * resolves them so. The row's share of `source.nativeEastAsianLines`,
+   * carried with the row as PowerPoint copies a row's `a:pPr` to both halves
+   * of an Enter (office-truth lf13-enter); never authored. A flat body says
+   * it on the block.
+   */
+  nativeEastAsianLines?: ParagraphEastAsianLines;
+  /**
    * The row ends at a line break of its paragraph (`a:br`), not at the
    * paragraph's mark: a row a one-paragraph flat body is split into at its
    * breaks (`paragraphBuildRows`). Built for drawing only, never stored.
    */
   endsInLineBreak?: true;
+}
+
+/** {@link SlideParagraph.nativeEastAsianLines}. */
+export interface ParagraphEastAsianLines {
+  lang?: string;
+  altLang?: string;
+  hangingPunct?: false;
+  latinLnBrk?: true;
+  eaLnBrk?: false;
+}
+
+const LINE_RULE_LANGUAGE = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8}){0,5}$/;
+
+/** A row's stated kerning threshold (`nativeKerning`, points 0..4000), or undefined. */
+export function normalizeParagraphNativeKerning(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 4000 ? value : undefined;
+}
+
+/** A row's stated East Asian line rules (`nativeEastAsianLines`), or undefined. */
+export function normalizeParagraphEastAsianLines(value: unknown): ParagraphEastAsianLines | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const out: ParagraphEastAsianLines = {};
+  if (typeof raw.lang === "string" && LINE_RULE_LANGUAGE.test(raw.lang)) out.lang = raw.lang;
+  if (typeof raw.altLang === "string" && LINE_RULE_LANGUAGE.test(raw.altLang)) out.altLang = raw.altLang;
+  if (raw.hangingPunct === false) out.hangingPunct = false;
+  if (raw.latinLnBrk === true) out.latinLnBrk = true;
+  if (raw.eaLnBrk === false) out.eaLnBrk = false;
+  return out;
 }
 
 /** A stated mark Latin face (`endLatinFace`), or undefined. */
@@ -217,13 +265,29 @@ export function normalizeParagraphEndFontSize(value: unknown): number | undefine
     : undefined;
 }
 
+type CarriedParagraphKey =
+  | "endFontSize"
+  | "endScript"
+  | "fontAlign"
+  | "fontAlignInherited"
+  | "runDefaults"
+  | "endLatinFace"
+  | "nativeKerning"
+  | "nativeEastAsianLines";
+
 /** A row's own formatting the editor carries without drawing or authoring it. */
 export function paragraphCarriedFields(
   record: unknown,
-): Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults" | "endLatinFace"> {
+): Pick<SlideParagraph, CarriedParagraphKey> {
   if (!record || typeof record !== "object") return {};
   const raw = record as Record<string, unknown>;
-  const out: Pick<SlideParagraph, "endFontSize" | "endScript" | "fontAlign" | "fontAlignInherited" | "runDefaults" | "endLatinFace"> = {};
+  const out: Pick<SlideParagraph, CarriedParagraphKey> = {};
+  // The row's own kerning and East Asian line rules go with it (readings row
+  // 1009), as PowerPoint copies its `a:pPr` to both halves of an Enter.
+  const nativeKerning = normalizeParagraphNativeKerning(raw.nativeKerning);
+  if (nativeKerning !== undefined) out.nativeKerning = nativeKerning;
+  const nativeEastAsianLines = normalizeParagraphEastAsianLines(raw.nativeEastAsianLines);
+  if (nativeEastAsianLines !== undefined) out.nativeEastAsianLines = nativeEastAsianLines;
   // The mark's Latin face goes with the row (readings row 899), as its mark does.
   const endLatinFace = normalizeParagraphEndLatinFace(raw.endLatinFace);
   if (endLatinFace !== undefined) out.endLatinFace = endLatinFace;
@@ -768,6 +832,10 @@ export function isFlatEquivalentParagraphs(
         p.dir === undefined &&
         p.fontAlign === undefined &&
         p.fontAlignInherited === undefined &&
+        // A row's own kerning and East Asian line rules (readings row 1009)
+        // are the row's: a flat body keeps one set for all of its rows.
+        p.nativeKerning === undefined &&
+        p.nativeEastAsianLines === undefined &&
         !paragraphStatesIndent(p),
     )
   );

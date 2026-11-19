@@ -729,16 +729,10 @@
 @font-face{font-family:"Segoe UI Variable Small";font-style:italic;font-weight:700;font-display:swap;src:local("Segoe UI Variable Small Bold Italic"),local("SegoeUIVariableSmall-BoldItalic")}
 @font-face{font-family:"Segoe UI Light";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Light"),url(/fonts/office/selawik/300.woff2) format("woff2")}
 @font-face{font-family:"Segoe UI Light";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Light")}
-@font-face{font-family:"Segoe UI Light";font-style:normal;font-weight:700;font-display:swap;src:local("Segoe UI Light Bold"),local("SegoeUILight-Bold"),url(/fonts/office/selawik/400.woff2) format("woff2")}
-@font-face{font-family:"Segoe UI Light";font-style:normal;font-weight:700;font-display:swap;src:local("Segoe UI Light Bold"),local("SegoeUILight-Bold")}
 @font-face{font-family:"Segoe UI Semilight";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Semilight"),url(/fonts/office/selawik/350.woff2) format("woff2")}
 @font-face{font-family:"Segoe UI Semilight";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Semilight")}
-@font-face{font-family:"Segoe UI Semilight";font-style:normal;font-weight:700;font-display:swap;src:local("Segoe UI Semilight Bold"),local("SegoeUISemilight-Bold"),url(/fonts/office/selawik/600.woff2) format("woff2")}
-@font-face{font-family:"Segoe UI Semilight";font-style:normal;font-weight:700;font-display:swap;src:local("Segoe UI Semilight Bold"),local("SegoeUISemilight-Bold")}
 @font-face{font-family:"Segoe UI Semibold";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Semibold"),url(/fonts/office/selawik/600.woff2) format("woff2")}
 @font-face{font-family:"Segoe UI Semibold";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Semibold")}
-@font-face{font-family:"Segoe UI Semibold";font-style:normal;font-weight:700;font-display:swap;src:local("Segoe UI Semibold Bold"),local("SegoeUISemibold-Bold"),url(/fonts/office/selawik/700.woff2) format("woff2")}
-@font-face{font-family:"Segoe UI Semibold";font-style:normal;font-weight:700;font-display:swap;src:local("Segoe UI Semibold Bold"),local("SegoeUISemibold-Bold")}
 @font-face{font-family:"Segoe UI Black";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Black"),url(/fonts/office/selawik/700.woff2) format("woff2")}
 @font-face{font-family:"Segoe UI Black";font-style:normal;font-weight:400;font-display:swap;src:local("Segoe UI Black")}
 @font-face{font-family:"Segoe UI Black";font-style:normal;font-weight:700;font-display:swap;src:local("Segoe UI Black Bold"),local("SegoeUIBlack-Bold"),url(/fonts/office/selawik/700.woff2) format("woff2")}

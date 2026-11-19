@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+// mroffice-mcp          MCP over stdin/stdout (an AI app that starts the server
+//                       itself; --stdio says the same), with the editor pages
+//                       on the HTTP side
 // mroffice-mcp --http   the MCP endpoint at <public url>/mcp, with the editor pages
-// mroffice-mcp --stdio  MCP over stdin/stdout (a host that starts the server
-//                       itself), with the editor pages on the HTTP side
 //
 // Settings come from the environment (src/config.ts): MROFFICE_MCP_PORT,
 // MROFFICE_MCP_PUBLIC_URL, MROFFICE_MCP_EDITOR_DIST, MROFFICE_MCP_EDITOR_ORIGIN,
@@ -24,13 +25,21 @@ if (process.argv.includes("--version") || process.argv.includes("-v")) {
 if (process.argv.includes("--help") || process.argv.includes("-h")) {
   process.stdout.write(`mroffice-mcp ${VERSION}: MR Office's editors as an MCP server
 
-  mroffice-mcp --stdio   MCP over stdin/stdout, for an AI app that starts the server itself
+  mroffice-mcp           MCP over stdin/stdout, for an AI app that starts the server itself
+                         (the default; --stdio says the same)
   mroffice-mcp --http    MCP over Streamable HTTP at http://127.0.0.1:<port>/mcp
   mroffice-mcp login     sign in to your MR Office account (for Word, Excel and PowerPoint files)
   mroffice-mcp logout    sign out and revoke this computer's access
   mroffice-mcp whoami    who is signed in
 
 Both also serve the editor page that links open, on http://127.0.0.1:<port> (default 3410).
+Nothing needs setting up: the first Word, Excel or PowerPoint file opens
+MR Office's sign-in in your browser.
+
+Add it to an AI app: in its MCP settings, the command is
+  npx -y mroffice-mcp
+or add the hosted server, https://mcp.mroffice.ai/mcp, as a remote MCP server
+(connector). Instructions for each app: https://mroffice.ai/developers/mcp
 
 Environment:
   MROFFICE_MCP_PORT        port of the HTTP side (3410)
@@ -81,7 +90,12 @@ if (command) {
 const services: Services = { config, store: new DocumentStore(config.dataDir), engine: createEngine(config, account), renderer: new HeadlessEditor(config), account: config.auth === "oauth" ? undefined : account };
 const log = (line: string) => process.stderr.write(`[mroffice-mcp] ${line}\n`);
 
-if (process.argv.includes("--stdio")) {
+if (!process.argv.includes("--http")) {
+  if (process.stdin.isTTY && !process.argv.includes("--stdio")) {
+    // started by hand in a terminal: say what this is instead of waiting silently
+    log("this is an MCP server: an AI app starts it itself (its MCP settings take the command `npx -y mroffice-mcp`; https://mroffice.ai/developers/mcp).");
+    log("waiting for an MCP client on stdin; Ctrl-C to stop. --http serves it over HTTP, --help says more.");
+  }
   // the editor pages and links; another process over the same data directory may already serve them
   try {
     await startHttp(services);

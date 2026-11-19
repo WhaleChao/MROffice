@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { stackPrimaryFamily } from "@mrnote/core/web/lib/office-fonts/hangul-em.ts";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { contentKey } from "@mrnote/core/web/lib/content-hash.ts";
 import { clampRowHeight, MAX_NATIVE_ROW_HEIGHT_PX, officeCombinedRowHeight, officeCombinedRowParts, officeFloorRowHeight, officeRowHeight, officeStandingRowHeight, officeRowMetricsKnown, officeStackedLinesHeight, stackedTextLetterSpacing, type OfficeRowFont } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
@@ -132,7 +133,8 @@ function autoRowParts(item: AutoRowMeasurement): NativeTextPart[] {
 /** The first family of a CSS font stack, unquoted: the face the cell names. */
 function leadFamily(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  const first = value.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim();
+  // The face, not a sheet's cut family in front of it (excel-cut-families.ts).
+  const first = stackPrimaryFamily(value);
   return first || undefined;
 }
 
@@ -481,6 +483,8 @@ function measureAutoRowItem(item: AutoRowMeasurement, defaultHeight: number, tex
     lineHeight: item.singleLine || item.nativeParagraph ? "normal" : String(SPREADSHEET_WRAP_LINE_HEIGHT),
     whiteSpace: item.singleLine ? "pre" : "pre-wrap", overflowWrap: "anywhere",
     wordBreak: "break-word", boxSizing: "content-box",
+    // Punctuation marks that meet keep their full widths, as the cell draws them.
+    textSpacingTrim: "space-all",
     // Normal view has 9px padding on each side; Page Layout has less.
     // One shared height must fit both, independent of the active view.
     // The painted paragraph also loses the cell's 1px gridline.

@@ -301,6 +301,10 @@ export interface TextCutContext {
    * page-bottom credit, pageEdgeLeading). Applied where no rendered head
    * decides: the rows' own line-box bottoms are compared with the space. */
   footCreditPx?: number;
+  /** The page gives the head no page-bottom credit (notes stand below it:
+   * LedgerSplitRequest.noFootCredit): a rendered head is judged by its whole
+   * height, not less its last row's Auto leading. */
+  noFootCredit?: boolean;
   /** Rows of the same paragraph in fragments before this one that the head
    * already holds: Word's orphan floor counts the paragraph's lines. */
   rowsBefore?: number;
@@ -621,7 +625,7 @@ export function planTextCutByChars(
   } | "unmeasured" | null => {
     const fits = (index: number, endOfPrevious = false): boolean | null => {
       const head = probe.measure(index, endOfPrevious);
-      return head ? head.heightPx - head.creditPx <= availablePx + 1e-6 : null;
+      return head ? head.heightPx - (context.noFootCredit ? 0 : head.creditPx) <= availablePx + 1e-6 : null;
     };
     // The head that stops before the picture rows ahead of `index`, when it fits.
     const beforePictures = (index: number): { index: number; rect: { top: number; bottom: number }; endOfPrevious: true } | null => {

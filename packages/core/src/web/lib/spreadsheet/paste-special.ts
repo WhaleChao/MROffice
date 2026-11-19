@@ -14,6 +14,7 @@
  * available to browser JavaScript.
  */
 
+import type { AreaLinkSource } from "./hyperlink-areas";
 import type { TextRun } from "./cell-rich-text";
 import {
   clonePhonetic,
@@ -98,6 +99,9 @@ export interface RichClipboardCell {
   hyperlink?: string;
   hyperlinkTooltip?: string;
   hyperlinkDisplay?: string;
+  /** The area the copied link is (hyperlink-areas `areaLinkSourceOf`): a paste
+   *  inside that same area deletes it and takes the link beneath instead. */
+  hyperlinkFrom?: AreaLinkSource;
   /** Complete Note or threaded-comment state. */
   comment?: CellComment;
   /**
@@ -203,6 +207,15 @@ export function detachRichClipboardCell(
     hyperlink: cell.hyperlink,
     hyperlinkTooltip: cell.hyperlinkTooltip,
     hyperlinkDisplay: cell.hyperlinkDisplay,
+    ...(cell.hyperlinkFrom
+      ? {
+          hyperlinkFrom: {
+            ...cell.hyperlinkFrom,
+            ...(cell.hyperlinkFrom.range ? { range: { ...cell.hyperlinkFrom.range } } : {}),
+            ...(cell.hyperlinkFrom.beneath ? { beneath: { ...cell.hyperlinkFrom.beneath } } : {}),
+          },
+        }
+      : {}),
     comment: cloneCellCommentForPaste(cell.comment),
     ...(cell.picture
       ? {

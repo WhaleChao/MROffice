@@ -25,7 +25,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { app, protocol, session, type BrowserWindow, type Session, WebContentsView } from "electron";
+import { app, protocol, session, type BrowserWindow, type Session, type WebContents, WebContentsView } from "electron";
 
 import { documentThumbnail, instantDocument, quickLookThumbnail } from "./document-thumbnail";
 
@@ -120,12 +120,16 @@ function fileUnder(root: string, relative: string): string | null {
 let deckPicture: { bytes: Buffer | null; type: string; name: string } | null = null;
 let served: Session | null = null;
 
-/**
- * The double-clicked deck being opened: its first slide (the picture the file
- * carries, small: shown at a modest size) on a card with its name, over the
- * home as last shown when there is one (the deck opens in it), with a
- * script-free progress bar.
- */
+
+
+
+
+
+
+
+
+
+
 function deckPage(name: string, picture: boolean): string {
   const title = name.replace(/[<>&"]/g, "");
   const style = `<style>
@@ -134,7 +138,7 @@ function deckPage(name: string, picture: boolean): string {
 .mrai-instant-deck img{display:block;width:auto;height:auto;max-width:min(56vw,640px);max-height:56vh;min-width:min(40vw,420px);object-fit:contain;border:1px solid #e5e7eb;border-radius:3px;background:#fff}
 .mrai-instant-deck .name{max-width:min(56vw,640px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:#374151}
 .mrai-instant-deck .bar{position:relative;width:180px;height:3px;overflow:hidden;border-radius:2px;background:#e5e7eb}
-.mrai-instant-deck .bar::after{content:"";position:absolute;inset:0 auto 0 -40%;width:40%;background:#0f766e;animation:mrai-instant-bar 1.1s ease-in-out infinite!important}
+.mrai-instant-deck .bar::after{content:"";position:absolute;inset:0 auto 0 -40%;width:40%;background:#0f766e;animation:mrai-instant-bar 1.2s steps(12,end) infinite!important}
 @keyframes mrai-instant-bar{to{left:100%}}
 </style>`;
   const image = picture ? `<img src="/deck-picture?${Date.now()}" alt="">` : "";
@@ -174,6 +178,50 @@ function instantSession(webDir: string): Session {
   });
   served = ses;
   return ses;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const HELD_ANIMATIONS = "*,*::before,*::after{animation-play-state:paused!important}";
+
+function holdCoveredAnimations(page: WebContents, coverGone: () => boolean): () => void {
+  const keys = new Set<string>();
+  const hold = () => {
+    if (coverGone() || page.isDestroyed()) return;
+    void page
+      .insertCSS(HELD_ANIMATIONS, { cssOrigin: "user" })
+      .then((key) => {
+        if (coverGone() && !page.isDestroyed()) void page.removeInsertedCSS(key).catch(() => undefined);
+        else keys.add(key);
+      })
+      .catch(() => undefined);
+  };
+  // A new document has none of the old one's sheets: held again as it commits.
+  const committed = (_event: unknown, _url: string, _code: number, _status: string) => {
+    keys.clear();
+    hold();
+  };
+  page.on("did-navigate", committed);
+  page.on("dom-ready", hold);
+  return () => {
+    page.removeListener("did-navigate", committed);
+    page.removeListener("dom-ready", hold);
+    if (page.isDestroyed()) return;
+    for (const key of keys) void page.removeInsertedCSS(key).catch(() => undefined);
+    keys.clear();
+  };
 }
 
 export interface InstantCover {
@@ -232,10 +280,12 @@ export function coverWindow(
   contents.once("did-finish-load", () => options.onShown?.());
   void contents.loadURL(`${INSTANT_SCHEME}://app/${kind}`).catch(() => undefined);
   let removed = false;
+  const releaseCovered = holdCoveredAnimations(window.webContents, () => removed);
   const remove = (reason = "shown") => {
     if (removed) return;
     removed = true;
     console.log(`[classic] instant view off (${reason})`);
+    releaseCovered();
     clearTimeout(giveUp);
     window.removeListener("resize", fit);
     if (!window.isDestroyed()) window.contentView.removeChildView(view);

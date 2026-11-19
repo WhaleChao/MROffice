@@ -41,6 +41,7 @@ import {
   selectPresentationPreviewWordAtPress,
   presentationPreviewPlainText,
   presentationPreviewSelection,
+  presentationShapeWordsDoubleClickRange,
   setPresentationPreviewSelection,
 } from "@mrnote/core/web/lib/presentation/text-selection.ts";
 import type { PresentationShapeBlock } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
@@ -116,6 +117,12 @@ export interface PresentationCanvasShapeBlockCtl {
   /** The caret a remounted rich label body restores (the last commit's, else
    * -- with `orRecorded`, the default -- the recorded one). */
   takeShapeRichSelection: (blockId: string, orRecorded?: boolean, shown?: string) => { start: number; end: number } | null;
+  /**
+   * The selection the label's words open with, whichever editor draws them
+   * (its drawn body or its plain field): taken by `takeShapeRichSelection`
+   * once the editor mounts. Selection only: no history step.
+   */
+  placeShapeTextCaret: (blockId: string, start: number, end: number) => void;
   /** The words of a label the window's typing burst holds and has not drawn, else null. */
   heldBlockWords: (blockId: string) => string | null;
   /** Ctrl/Cmd+B, I or U in the label's words: Home's own toggle. */
@@ -206,6 +213,7 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
     commitShapeRichText,
     recordShapeTextRange,
     takeShapeRichSelection,
+    placeShapeTextCaret,
     heldBlockWords,
     toggleShapeWordsRunStyle,
     copyShapeText,
@@ -324,6 +332,24 @@ export function PresentationCanvasShapeBlock({ ctl }: { ctl: PresentationCanvasS
                               // (the file's diagrams already do, 5675e053ae); any
                               // other shape's caret goes where the words were clicked.
                               if (editSmartArtShapeText(block.id, undefined, { x: event.clientX, y: event.clientY, word: true })) return;
+                              // Words not open yet open where they were
+                              // double-clicked, as PowerPoint opens them: the
+                              // word under the pointer selected, or, in the
+                              // frame off the words, the caret at the nearest
+                              // place. The editor opened with the caret after
+                              
+                              // slide 1, under the subtitle's one line). Read
+                              // from the words drawn at rest, before they open.
+                              if (editingShapeTextId !== block.id) {
+                                const range = presentationShapeWordsDoubleClickRange(
+                                  event.currentTarget,
+                                  event.target,
+                                  event.clientX,
+                                  event.clientY,
+                                  (block as PresentationShapeBlock).text ?? "",
+                                );
+                                if (range) placeShapeTextCaret(block.id, range[0], range[1]);
+                              }
                               setSelectedBlockId(block.id);
                               setEditingShapeTextId(block.id);
                             }

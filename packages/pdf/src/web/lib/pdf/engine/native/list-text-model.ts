@@ -744,7 +744,9 @@ export function pdfNativeListTextSourceRunSpan(
   // last show's text object, over text that is not the paragraph's: it names
   
   // opened: its proof grants no native write at all.
-  if (proof.evidence.paragraphRewrite || (proof as { fallbackText?: unknown }).fallbackText) return undefined;
+  // Nor a box whose words are fixed (PdfNativeListTextSelectionProof.wordsFixed).
+  if (proof.evidence.paragraphRewrite || (proof as { fallbackText?: unknown }).fallbackText ||
+    (proof as { wordsFixed?: unknown }).wordsFixed) return undefined;
   const span = proof.sourceRun?.span ?? proof.evidence.textOperatorSpan;
   const showEnd = proof.evidence.lineShift?.showEnd;
   if (showEnd === undefined) return span;

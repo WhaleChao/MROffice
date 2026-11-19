@@ -9,6 +9,7 @@ import type * as ByteRestore from "../engine/native/byte-restore-history";
 import type * as TextMove from "../engine/native/text-move";
 import type * as TextGroupMove from "../engine/native/text-group-move";
 import type * as TextDecorationRead from "../engine/native/text-decoration";
+import type * as InvisibleTextRule from "../engine/native/invisible-text-rule";
 import type * as ContentAppend from "../engine/native/content-append-transaction";
 import type * as ParagraphProperties from "../engine/native/paragraph-properties-transaction";
 import type * as SourceCheckpoint from "../engine/native/source-checkpoint";
@@ -294,6 +295,12 @@ function bindPdfNativePlanners(pageId: string | null) {
       remote<typeof TextDecorationRead.findMraiNativeTextDecoration>(pageId, "findMraiNativeTextDecoration"),
     readMraiNativeTextRuleBesideRun:
       remote<typeof TextDecorationRead.readMraiNativeTextRuleBesideRun>(pageId, "readMraiNativeTextRuleBesideRun"),
+    proveMraiNativeInvisibleTextRules:
+      remote<typeof InvisibleTextRule.proveMraiNativeInvisibleTextRules>(pageId, "proveMraiNativeInvisibleTextRules"),
+    readMraiNativeInvisibleTextRulesStanding:
+      remote<typeof InvisibleTextRule.readMraiNativeInvisibleTextRulesStanding>(pageId, "readMraiNativeInvisibleTextRulesStanding"),
+    planMraiNativeInvisibleTextRuleChanges:
+      remote<typeof InvisibleTextRule.planMraiNativeInvisibleTextRuleChanges>(pageId, "planMraiNativeInvisibleTextRuleChanges"),
     planPdfNativeContentAppend: contentAppend(pageId),
     planMraiNativeParagraphProperties:
       remote<typeof ParagraphProperties.planMraiNativeParagraphProperties>(pageId, "planMraiNativeParagraphProperties"),

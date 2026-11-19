@@ -34,7 +34,7 @@ import { HOLLOW_SHEET_ATTR } from "../pageSheetView";
 import { dispatchKeepingReader } from "../readerAnchor";
 import { anyPageHollow, hollowPagePositions, hollowSheetsEnabled, NO_HOLLOW_ATTR, pageHollowSheetsKey, setHollowPages, viewMayDrawHollow } from "../pageHollowSheets";
 import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import type { EditorView } from "@tiptap/pm/view";
 import {
@@ -78,7 +78,9 @@ import {
   projectWordAutofitTables,
 } from "../../wordTableAutofitDisplay";
 import { disposeWordRowspanHeights, projectWordRowspanHeights } from "../../wordRowspanHeights";
-import { invalidateRenderedTextHeads } from "../renderedTextHead";
+import { invalidateRenderedTextHeads, joinedTextBreaksAtSeam } from "../renderedTextHead";
+import { engineJoinedRows } from "./ledgerEngineLines";
+import { createTwitchWatch, noteLayoutTwitch, pageOnScreen, reportLayoutTwitch, type TwitchWatch } from "./ledgerTwitch";
 import { refreshInlineImagePageProjection } from "../../ImageResizeNodeView";
 import { INLINE_PICTURE_NODE_NAME } from "../../documentObjectNodes";
 import { isForcedBreakBlock, PAGE_BLOCK_NODE } from "../pageBlockExtension";
@@ -169,6 +171,7 @@ import {
   type LedgerPassScope,
 } from "./ledgerScope";
 import { sheetsOf } from "../sheetMeasureMemo";
+import { coldFirstLayout, holdFirstLayoutForFaces } from "../coldFirstLayout";
 
 export const pageLedgerKey = new PluginKey("pageLedger");
 export const PAGE_LEDGER_MISMATCH_ATTR = "data-pagination-ledger-mismatch";
@@ -209,7 +212,15 @@ const lastLedgerDispatch = new WeakMap<EditorView, {
   capacityFlips: number;
   /** Each atom's measured extent (by atom index) the plan was made with. */
   extents: number[];
+  /** The plan cut a paragraph's page seam again (LogicalBlock.editedSeams):
+   * its head's last row sent on to be laid out with the tail. The pass after
+   * takes back the rows that fit -- the same ones, when the row breaks where
+   * it did -- and that is the cut's second half, not two layouts alternating. */
+  seamRecut: boolean;
 }>();
+
+/** Each view's watch for pages that come back to openings they had (ledgerTwitch). */
+const twitchWatches = new WeakMap<EditorView, TwitchWatch>();
 
 const atomExtentPx = (atom: LedgerBuild["atoms"][number]): number => atom.heightPx + atom.spaceBeforePx + atom.spaceAfterPx;
 
@@ -302,6 +313,13 @@ function repairedPagesUnchanged(capacities: readonly number[], now: readonly num
 
 export function seamWanderStops(view: EditorView): boolean {
   return (view.dom.ownerDocument.defaultView as (Window & { __docsSeamWanderStop?: boolean }) | null)?.__docsSeamWanderStop === true;
+}
+
+/** `window.__docsSeamRecutPutBackHeld = true`: the pass after a seam was cut
+ * again is held like any plan that puts the last one's pages back, as before
+ * (an A/B of one build). */
+function seamRecutPutBackHeld(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsSeamRecutPutBackHeld?: boolean }) | null)?.__docsSeamRecutPutBackHeld === true;
 }
 
 /** `window.__docsSectionColumnPage = false` reads a section's capacity on a
@@ -548,7 +566,16 @@ function pageHoldsMath(page: PmNode): boolean {
  */
 /** The first sheets of a long document, before the first pass. */
 function initialMeasureHorizon(view: EditorView): Set<Element> {
-  return new Set(sheetsOf(view.dom).slice(0, INITIAL_MEASURE_HORIZON_SHEETS + 1));
+  // The cold first layout measures the reader's first sheets only before the
+  // first pass (coldFirstLayout): the pass widens it to what it lays out.
+  const cold = coldFirstLayout(view.dom.ownerDocument.defaultView);
+  return new Set(sheetsOf(view.dom).slice(0, cold ? cold.horizon : INITIAL_MEASURE_HORIZON_SHEETS + 1));
+}
+
+/** The fewest sheets a document is laid out progressively with: any of more
+ * than a page under the cold first layout, a long one otherwise. */
+function progressiveMinSheets(view: EditorView): number {
+  return coldFirstLayout(view.dom.ownerDocument.defaultView)?.minSheets ?? PROGRESSIVE_MIN_SHEETS;
 }
 
 function progressiveScope(pagesPerPass: number): NonNullable<LedgerPassScope["progressive"]> {
@@ -557,7 +584,7 @@ function progressiveScope(pagesPerPass: number): NonNullable<LedgerPassScope["pr
 
 function progressiveEligible(view: EditorView): boolean {
   const pages = collectPages(view.state.doc);
-  return Boolean(pages && pages.length >= PROGRESSIVE_MIN_SHEETS && notesAllowProgress(view));
+  return Boolean(pages && pages.length >= progressiveMinSheets(view) && notesAllowProgress(view));
 }
 
 /** Whether the document's footnotes leave it to be laid out a window at a
@@ -605,9 +632,11 @@ function progressiveHorizon(
   /** Sheets a restored receipt laid out, standing unmeasured as they are
    * (restoredLayoutMark): no background step goes to them. */
   trusted?: WeakSet<HTMLElement>,
+  /** The initial settle's pass (the cold first layout measures less past its window). */
+  initial = false,
 ): { horizon: LedgerMeasureHorizon; visible: { first: number; last: number } | null; pagesPerPass: number; startPage: number } | null {
   const sheets = sheetsOf(view.dom);
-  if (sheets.length < PROGRESSIVE_MIN_SHEETS) return null;
+  if (sheets.length < progressiveMinSheets(view)) return null;
   if (!notesAllowProgress(view)) return null;
   // A sheet drawn hollow whose blocks all keep their measurements has nothing
   // to read (its element, new each time, was never "measured").
@@ -630,6 +659,24 @@ function progressiveHorizon(
   const newFrom = firstPending > startPage ? firstPending : startPage;
   const pages = Math.max(1, windowEnd - newFrom);
   const capacity = readCapacity(view, sheets[Math.min(newFrom, sheets.length - 1)]);
+  // The cold first layout's opening passes measure their window and a sheet
+  // or two past it: the reader's first page is shown once it stands, and the
+  // margin sized for a long book's windows (the window's pages again, six
+  // more) was the whole of a document of a few pages. A plan that reaches
+  // past it widens the horizon as any (widenHorizon).
+  const coldMargin = initial ? coldFirstLayout(view.dom.ownerDocument.defaultView)?.margin ?? null : null;
+  if (coldMargin !== null) {
+    return {
+      visible,
+      pagesPerPass,
+      startPage,
+      horizon: {
+        fromSheet: newFrom,
+        budgetPx: (Math.ceil(pages * 1.5) + 4) * reach * Math.max(120, capacity),
+        maxSheet: Math.min(sheets.length - 1, windowEnd + coldMargin * reach),
+      },
+    };
+  }
   return {
     visible,
     pagesPerPass,
@@ -848,7 +895,8 @@ function projectSheetsUnobserved(view: EditorView, cache?: LedgerMeasureCache | 
   step("autofit");
   // Word gives a merged cell's extra height to the merge's last row, at the
   // widths just projected.
-  for (const table of projectWordRowspanHeights(view)) {
+  const rowspanThrough = coldFirstLayout(view.dom.ownerDocument.defaultView) ? maxSheet : null;
+  for (const table of projectWordRowspanHeights(view, rowspanThrough)) {
     const sheet = table.closest<HTMLElement>("article[data-page-sheet]");
     if (sheet) cache?.markSheet(sheet);
   }
@@ -1090,7 +1138,7 @@ export function runLedgerPass(
   if (!build) {
     return { dispatched: false, converged: false, plan: null, build: null, scope: null };
   }
-  markEditedSeams(build, editedRanges);
+  markEditedSeams(view, build, editedRanges);
   markStaleSeams(view, build);
   // A hollow sheet whose blocks have no measurement kept is drawn whole
   // first; the pass runs again once it is.
@@ -1163,7 +1211,7 @@ export function runLedgerPass(
     const changedSheets = new Set(rebuilt.changedSheets);
     for (const sheet of unplannedChanged) changedSheets.add(sheet);
     build = { ...rebuilt, changedSheets };
-    markEditedSeams(build, editedRanges);
+    markEditedSeams(view, build, editedRanges);
     markStaleSeams(view, build);
   }
 }
@@ -1183,9 +1231,44 @@ interface LedgerEditState {
   hydrations?: number;
 }
 
+/**
+ * Whether a page seam an edit came near has to be cut again: not when the
+ * paragraph's joined text still starts a row where the tail starts.
+ *
+ * An edit near a seam used to cut it again whatever it changed: the head's
+ * last row went to the next page and the pass after took it back. Every key
+ * typed within some six rows of the seam (the end of a paragraph that had
+ * just run on to the next page: where one types) moved the last row of the
+ * page before down and up again, a second apart on a document whose pass
+ * waits for a pause; and the pass that took it back read as putting the last
+ * one's pages back, so every other key left the row on the next page (9 rows
+ * and 2, then 8 and 3, then 7 and 4 for a frame and 9 and 2 again). Only an
+ * edit that changes where the rows break at the seam needs the cut made
+ * again -- a space typed or deleted there, text deleted above that leaves the
+ * head's last row room for the tail's first word -- and the joined text laid
+ * out off-screen says which (joinedTextBreaksAtSeam).
+ *
+ * `window.__docsEditedSeamProbeOff = true` cuts every seam an edit came near
+ * again, as before (an A/B of one build).
+ */
+export function editedSeamNeedsRecut(
+  head: { readonly dom: HTMLElement; readonly hollow?: boolean },
+  tail: { readonly dom: HTMLElement; readonly hollow?: boolean },
+  breaksAtSeam: (head: HTMLElement, tail: HTMLElement) => boolean | null = (h, t) => joinedTextBreaksAtSeam(h, t),
+): boolean {
+  if (head.hollow || tail.hollow) return true;
+  const win = head.dom.ownerDocument?.defaultView as (Window & { __docsEditedSeamProbeOff?: boolean }) | null | undefined;
+  if (win?.__docsEditedSeamProbeOff === true) return true;
+  try {
+    return breaksAtSeam(head.dom, tail.dom) !== true;
+  } catch {
+    return true;
+  }
+}
+
 /** Mark the page seams of paragraphs cut across pages that an edit reached
- * (LogicalBlock.editedSeams). */
-function markEditedSeams(build: LedgerBuild, ranges: ReadonlyArray<{ from: number; to: number }> | null | undefined): void {
+ * and left stale (LogicalBlock.editedSeams). */
+function markEditedSeams(view: EditorView, build: LedgerBuild, ranges: ReadonlyArray<{ from: number; to: number }> | null | undefined): void {
   if (!ranges || ranges.length === 0) return;
   for (const block of build.logical) {
     if (block.kind !== "text" || block.parts.length < 2) continue;
@@ -1196,7 +1279,8 @@ function markEditedSeams(build: LedgerBuild, ranges: ReadonlyArray<{ from: numbe
       if (head.sheet === tail.sheet) continue;
       const headEnd = head.pos + head.node.nodeSize - 1;
       const tailStart = tail.pos + 1;
-      if (ranges.some((range) => range.to >= headEnd - EDITED_SEAM_REACH && range.from <= tailStart + EDITED_SEAM_REACH)) {
+      if (ranges.some((range) => range.to >= headEnd - EDITED_SEAM_REACH && range.from <= tailStart + EDITED_SEAM_REACH) &&
+          editedSeamNeedsRecut(head, tail, (h, t) => joinedTextBreaksAtSeam(h, t, (copy) => engineJoinedRows(view, head, tail, copy)))) {
         (seams ??= new Set()).add(index);
       }
     }
@@ -1584,8 +1668,11 @@ function finishLedgerPass(
   // page a little differently from its plan (R286-D01: never held once).
   const sameInputs = Boolean(last) && (last!.doc === view.state.doc || last!.editSeq === authoredEditSeq(view) ||
     editLeavesOpeningInputs(last!, view.state.doc, build, plannedStarts, currentStarts));
-  const putsBackWhole = Boolean(last && sameInputs && last.before.join("/") === plannedStarts.join("/"));
-  const putsBackLocally = Boolean(last && sameInputs && !putsBackWhole && putsPagesBack(last.before, plannedStarts, currentStarts));
+  // (Taking back the rows a seam cut again sent on is that cut's second
+  // half: read as an alternation, the row stayed on the next page.)
+  const afterSeamRecut = last?.seamRecut === true && !seamRecutPutBackHeld(view);
+  const putsBackWhole = Boolean(last && sameInputs && !afterSeamRecut && last.before.join("/") === plannedStarts.join("/"));
+  const putsBackLocally = Boolean(last && sameInputs && !afterSeamRecut && !putsBackWhole && putsPagesBack(last.before, plannedStarts, currentStarts));
   const putsBack = putsBackWhole || putsBackLocally;
   // Putting back what the last pass replaced is a cycle only when the pages
   // above the change still have the room that pass planned with. A header
@@ -1711,6 +1798,20 @@ function finishLedgerPass(
   }
   refuseColumnCuts(view, result.mergedInSheet);
   recordLaidOut();
+  {
+    // Pages that came back to openings they had since the last authored
+    // edit: a twitch, counted (ledgerTwitch).
+    let watch = twitchWatches.get(view);
+    if (!watch) twitchWatches.set(view, (watch = createTwitchWatch()));
+    const page = watch.dispatched(currentStarts, plannedStarts, authoredEditSeq(view));
+    if (page !== null) {
+      const seen = pageOnScreen(view.dom, page);
+      noteLayoutTwitch(view.dom.ownerDocument.defaultView, {
+        kind: "returned", page, seen, at: Date.now(), detail: `${currentStarts[page] ?? "(none)"} -> ${plannedStarts[page] ?? "(none)"}`,
+      });
+      if (seen) reportLayoutTwitch("returned");
+    }
+  }
   lastLedgerDispatch.set(view, {
     before: currentStarts,
     after: plannedStarts,
@@ -1719,6 +1820,7 @@ function finishLedgerPass(
     capacities: [...capacities],
     capacityFlips: putsBack && !capacitiesHeld ? (last?.capacityFlips ?? 0) + 1 : 0,
     extents: build.atoms.reduce<number[]>((extents, atom) => { extents[atom.index] = atomExtentPx(atom); return extents; }, []),
+    seamRecut: build.logical.some((block) => block.kind === "text" && Boolean(block.editedSeams?.size)),
   });
   let heldPage: number | undefined;
   if (cycle?.aEarlier && !pageCountCycle && refusals) {
@@ -2015,6 +2117,22 @@ function ledgerTraceEnabled(view: EditorView): boolean {
 
 function traceLedgerPass(view: EditorView, entry: Record<string, unknown>): void {
   const win = view.dom.ownerDocument.defaultView as (Window & { __pageLedgerTrace?: unknown[] }) | null;
+  // A guard that stopped two layouts alternating is a twitch whether or not
+  // anything traces (ledgerTwitch).
+  const held = (entry.cycleHeld ?? entry.repairHeld) as { page?: unknown; kept?: unknown; over?: unknown; refused?: unknown } | undefined;
+  if (held && typeof held === "object") {
+    const text = (value: unknown) => (Array.isArray(value) ? value.join("/") : String(value ?? "")).slice(0, 80);
+    const page = typeof held.page === "number" ? held.page : -1;
+    const seen = page >= 0 && pageOnScreen(view.dom, page);
+    noteLayoutTwitch(win, {
+      kind: "held",
+      page,
+      seen,
+      at: Date.now(),
+      detail: `${entry.cycleHeld ? "cycle" : "repair"}: kept ${text(held.kept)}, refused ${text(held.over ?? held.refused)}`,
+    });
+    if (seen) reportLayoutTwitch(entry.cycleHeld ? "held-cycle" : "held-repair");
+  }
   // Only a harness that pre-creates the array receives the trace.
   if (!win || !Array.isArray(win.__pageLedgerTrace)) return;
   win.__pageLedgerTrace.push({ at: Date.now(), ...entry });
@@ -2246,6 +2364,23 @@ function repairPhysicalOverflow(
  * its line heights and its page count ("about 170" to "about 487") from the
  * fallback, whatever the document was imported from.
  */
+/** What a sheet draws in which font (collectDocumentFontCharacters), kept for
+ * the editor state it was read in, under the cold first layout: the settle asks
+ * again every frame it holds for the faces, each time walking the sheet's text
+ * and reading a computed style per element. The sheet's text and styles come
+ * from the state; a new state (any transaction, a font plan applied) reads it
+ * again. */
+const sheetFontCharacters = new WeakMap<HTMLElement, { state: EditorState; groups: ReturnType<typeof collectDocumentFontCharacters> }>();
+
+function sheetFontCharactersOf(view: EditorView, sheet: HTMLElement): ReturnType<typeof collectDocumentFontCharacters> {
+  if (!coldFirstLayout(view.dom.ownerDocument.defaultView)) return collectDocumentFontCharacters(sheet);
+  const kept = sheetFontCharacters.get(sheet);
+  if (kept && kept.state === view.state) return kept.groups;
+  const groups = collectDocumentFontCharacters(sheet);
+  sheetFontCharacters.set(sheet, { state: view.state, groups });
+  return groups;
+}
+
 function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement[], asked: Set<string>, settled: () => void): boolean {
   const fonts = view.dom.ownerDocument.fonts as FontFaceSet | undefined;
   if (!fonts || typeof fonts.check !== "function" || sheets.length === 0) return true;
@@ -2260,7 +2395,7 @@ function screenFacesLoaded(view: EditorView, sheets: readonly HTMLElement[], ask
     if (!sheet) continue;
     let groups: ReturnType<typeof collectDocumentFontCharacters>;
     try {
-      groups = collectDocumentFontCharacters(sheet);
+      groups = sheetFontCharactersOf(view, sheet);
     } catch {
       return true;
     }
@@ -3121,6 +3256,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
           };
           const finishInitial = () => {
             if (settledOnce) return;
+            holdFirstLayoutForFaces(editorView.dom, false);
             takeRestoredLayout(editorView.dom);
             settledOnce = true;
             initialSettleDone = true;
@@ -3435,6 +3571,10 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               if (ledgerTraceEnabled(editorView)) traceLedgerPass(editorView, { composeHeld: "screen-faces" });
               return;
             }
+            // The faces are in (or waited for as long as they may be): the
+            // line projections held meanwhile are scheduled now, and the
+            // flush below reads them in this frame (coldFirstLayout).
+            holdFirstLayoutForFaces(editorView.dom, false);
             // The background's pages far past the reader's wait for a pause.
             if (waitForIdleSlot()) { if (ledgerTraceEnabled(editorView)) traceLedgerPass(editorView, { composeHeld: "idle-slot" }); return; }
             // A long document is laid out progressively: this pass measures
@@ -3443,7 +3583,10 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             const bypassCache = Boolean((win as (Window & { __pageLedgerNoCache?: boolean }) | null)?.__pageLedgerNoCache);
             // The background takes larger steps once the pages are shown,
             // unless an edit is what this pass answers.
-            const pagesPerPass = !settledOnce || editedSinceLastPass
+            const coldTuning = coldFirstLayout(win);
+            const pagesPerPass = !settledOnce && coldTuning && !editedSinceLastPass
+              ? coldTuning.window
+              : !settledOnce || editedSinceLastPass
               ? LEDGER_WINDOW_MIN_PAGES
               // Nobody has touched the app for a while: a step's work done once
               // whatever its pages is worth sharing out over more of them. Four
@@ -3468,7 +3611,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               });
               traceLedgerPass(editorView, { restoredSheets: range });
             }
-            const progressive = bypassCache ? null : progressiveHorizon(editorView, measureCache, pending, pagesPerPass, horizonReach, trustedSheets);
+            const progressive = bypassCache ? null : progressiveHorizon(editorView, measureCache, pending, pagesPerPass, horizonReach, trustedSheets, !settledOnce);
             let projectAgain = false;
             if (progressive) {
               // The sheets this pass may measure anew, and the changed ones
@@ -3527,7 +3670,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
                 flushingMetrics = false;
               }
               if (metricsPending(editorView)) {
-                if (ledgerTraceEnabled(editorView)) traceLedgerPass(editorView, { composeHeld: "metrics" }); 
+                if (ledgerTraceEnabled(editorView)) traceLedgerPass(editorView, { composeHeld: "metrics", pendingKey: pendingMetricsKey(editorView) }); 
                 schedule();
                 return;
               }
@@ -3605,7 +3748,12 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               return;
             }
             sheetRetries = 0;
-            if (!settledOnce && !gateExpired && firstPageStands(sheets)) showPagesBeforeSettled();
+            // (The cold first layout opens on provisional sheets, the first of
+            // which may stand as a page before any pass laid it out: shown, it
+            // took the blocks the pass brought back from the next sheet under
+            // the reader. Only a page a pass laid out shows the pages early.)
+            if (!settledOnce && !gateExpired && firstPageStands(sheets) &&
+                (!coldTuning || pagesLaidOut(editorView)(0))) showPagesBeforeSettled();
             if (pendingIndex !== null) {
               const sheet = sheets[Math.min(pendingIndex, sheets.length - 1)];
               if (sheet) pending.add(sheet);
@@ -4491,6 +4639,9 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             // `editable`; apply the gate once that update has returned.
             queueMicrotask(refreshEditable);
             facesHoldUntil = performance.now() + INITIAL_SETTLE_INPUT_GATE_MAX_MS + GATE_FACES_GRACE_MS;
+            // The cold first layout: the line projections take no pass of
+            // their own until the first pass has the document's faces.
+            if (coldFirstLayout(win)?.fontsOnce && !editorView.dom.classList.contains("sheet-band-story")) holdFirstLayoutForFaces(editorView.dom, true);
             fontsHeldFirstLayout = false;
             composedSinceSettleOpened = false;
             if (gateTimer !== undefined) win?.clearTimeout(gateTimer);
@@ -4570,6 +4721,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
             },
             destroy() {
               destroyed = true;
+              holdFirstLayoutForFaces(editorView.dom, false, true);
               disposeWordRowspanHeights(editorView);
               if (hollowQuiet !== undefined) win?.clearTimeout(hollowQuiet);
               if (verifyTimer !== undefined) win?.clearTimeout(verifyTimer);

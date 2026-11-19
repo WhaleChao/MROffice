@@ -44,6 +44,7 @@ interface Table {
   eastAsian: Record<string, unknown>;
   script: Record<string, unknown>;
   windowsHas: string[];
+  windowsInstalled?: string[];
 }
 const data = table as Table;
 
@@ -58,6 +59,7 @@ const FIXED: ReadonlyMap<string, Omit<WindowsOfficeFace, "by">> = new Map(
 const LACKS: ReadonlySet<string> = new Set(data.lacks.map(normalize));
 const BY_SCRIPT: ReadonlySet<string> = new Set([...Object.keys(data.eastAsian), ...Object.keys(data.script)].map(normalize));
 const HAS: ReadonlySet<string> = new Set(data.windowsHas.map(normalize));
+const INSTALLED: ReadonlySet<string> = new Set((data.windowsInstalled ?? []).map(normalize));
 
 /** Style words a producer appends to a family name ("Avenir Next Demi Bold", "Gotham Black"). */
 const STYLE_TAIL = /[\s-]+(?:thin|hairline|extra[\s-]?light|ultra[\s-]?light|light|lt|semi[\s-]?light|book|regular|rg|normal|roman|medium|md|med|semi[\s-]?bold|demi[\s-]?bold|demi|bold|bd|extra[\s-]?bold|ultra[\s-]?bold|heavy|black|italic|italics|oblique|condensed|cond|cn)$/i;
@@ -100,6 +102,21 @@ const NO_FALLBACK: WindowsMissingFaceAdapter = { app: "powerpoint", fallback: ()
 /** Whether Windows Office has `family` (installed, Office's own, or a cloud face it fetched) by that name. */
 export function windowsOfficeHas(family: string | null | undefined): boolean {
   return !!family && HAS.has(normalize(family));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function windowsOfficeInstalled(family: string | null | undefined): boolean {
+  return !!family && INSTALLED.has(normalize(family));
 }
 
 /**

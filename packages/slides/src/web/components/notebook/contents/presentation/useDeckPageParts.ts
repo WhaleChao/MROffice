@@ -325,6 +325,18 @@ export interface DeckPageParts {
   readonly structureRefused: () => boolean;
 }
 
+/** Every slide `handed` is, by its content, the slide the window holds now. */
+function windowHolds<S extends { id: string }>(handed: ReadonlyMap<string, S>, live: readonly S[]): boolean {
+  if (handed.size === 0) return true;
+  const byId = new Map(live.map((slide) => [slide.id, slide]));
+  for (const [id, slide] of handed) {
+    const now = byId.get(id);
+    if (!now) return false;
+    if (now !== slide && JSON.stringify(now) !== JSON.stringify(slide)) return false;
+  }
+  return true;
+}
+
 export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePartsOptions<S>): DeckPageParts {
   const { session, pageId, enabled } = options;
   const snapshot = useSyncExternalStore(
@@ -1260,7 +1272,13 @@ export function useDeckPageParts<S extends DeckSlideLike>(options: UseDeckPagePa
           const liveById = new Map(shown.map((slide) => [slide.id, slide]));
           const slides = session.applyRoomContent(index, held, cause === "reset" ? shown : undefined, (id) => liveById.get(id));
           if (slides && slides.size > 0) optionsRef.current.onRoomSlides?.(slides, index, textChanges);
+          // Said to the room only when the window holds what it was handed:
+          
+          // handed and not taken in was written away by the next publication
+          // without a key, measured from the room's content with it).
+          if (slides && windowHolds(slides, optionsRef.current.liveSlides())) room.contentApplied();
         },
+        confirmsContent: true,
         onHistory: () => optionsRef.current.onRoomsChanged?.(),
         onStatus: () => optionsRef.current.onRoomsChanged?.(),
         onAcknowledged: () => optionsRef.current.onRoomsChanged?.(),

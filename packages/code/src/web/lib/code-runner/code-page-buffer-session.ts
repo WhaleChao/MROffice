@@ -67,6 +67,14 @@ import type { PageItem } from "@mrnote/core/web/lib/notebook-sdk.ts";
 import type { PageContentDocument } from "@mrnote/core/web/hooks/usePageContentSync.ts";
 import type { PageDocumentCollaborationAdapter } from "@/lib/collab/page-document-adapter";
 import { createCodePageCausalAdapter } from "./code-page-causal-adapter";
+import {
+  applyCodeTextChanges,
+  codeTextHunks,
+  normalizeCodeTextChanges,
+  writeCodeTextChanges,
+  type CodeTextChange,
+  type CodeTextChangesAgainst,
+} from "./code-text-changes";
 
 export interface CodePageBufferSaveState {
   saveStatus: PageSaveStatus;
@@ -342,6 +350,63 @@ function setTextWithoutSave(
 }
 
 /**
+ * The changes that write `next` over the Y.Text's `current` string as this
+ * browser's own edit, or null when it must not be written.
+ *
+ * An edit that says where it was made is written at exactly those places
+ * (they must describe `current` -> `next`; positions computed against an
+ * older text are no positions). Without positions the edit is placed hunk by
+ * hunk. A hunk whose letters meet the same letter at its edge ("(a" typed
+ * before "(" reads as "a(" after it) is placed by a guess, and in a room a
+ * collaborator's key typed at that moment then comes out inside the run
+ * (TRIAGE 47, Code): such a write is refused. A local-only text has no one
+ * typing at the same moment, so there the guess changes nothing anyone sees.
+ */
+function authoredTextChanges(
+  entry: CodePageBufferEntry,
+  current: string,
+  next: string,
+  positions?: CodeTextChangesAgainst,
+): CodeTextChange[] | null {
+  if (positions) {
+    if (positions.expected !== current) return null;
+    const changes = normalizeCodeTextChanges(current, positions.changes);
+    return changes && applyCodeTextChanges(current, changes) === next
+      ? changes
+      : null;
+  }
+  const { hunks, ambiguous } = codeTextHunks(current, next);
+  return ambiguous && entry.session.network ? null : hunks;
+}
+
+/** Write this browser's own edit (`authoredTextChanges`) into the Y.Text. */
+function writeAuthoredText(
+  entry: CodePageBufferEntry,
+  content: string,
+  changes: readonly CodeTextChange[],
+): void {
+  entry.acceptedText = content;
+  entry.suppressTextObserver += 1;
+  try {
+    entry.session.ydoc.transact(() => {
+      writeCodeTextChanges(entry.text, changes);
+    }, entry);
+  } finally {
+    entry.suppressTextObserver -= 1;
+  }
+}
+
+/**
+ * A refused edit leaves the text as the room has it: every view (the one that
+ * already shows the edit included) is handed that text back.
+ */
+function refuseAuthoredText(entry: CodePageBufferEntry): void {
+  const current = entry.text.toString();
+  for (const holder of entry.holders.values()) holder.applyText(current);
+  emit(entry);
+}
+
+/**
  * An empty Y.Text has no Yjs structs, so the Page V2 provider has nothing to
  * snapshot after electing this browser as the first seeder. Materialize one
  * invisible Y.Text struct only after the durable page is known-empty and the
@@ -495,17 +560,28 @@ function publishDraft(
   sourceToken: string,
   draft: PageDocumentDraft,
   replacePending: boolean,
-): void {
-  if (!entry.holders.has(sourceToken)) return;
+  positions?: CodeTextChangesAgainst,
+): boolean {
+  if (!entry.holders.has(sourceToken)) return false;
   const content = draft.content_json?.content;
-  if (typeof content !== "string") return;
-  if (content.length > MAX_CODE_SOURCE_CHARS) return;
+  if (typeof content !== "string") return false;
+  if (content.length > MAX_CODE_SOURCE_CHARS) return false;
   const draftLanguage = draft.content_json?.language;
-  if (codeLanguageId(draftLanguage) === null) return;
+  if (codeLanguageId(draftLanguage) === null) return false;
+  const current = entry.text.toString();
+  if (current !== content) {
+    const changes = authoredTextChanges(entry, current, content, positions);
+    if (!changes) {
+      refuseAuthoredText(entry);
+      return false;
+    }
+    writeAuthoredText(entry, content, changes);
+  } else {
+    entry.acceptedText = content;
+  }
   entry.revision += 1;
   entry.latestDraft = draft;
   markDirty(entry);
-  setTextWithoutSave(entry, content);
   for (const holder of entry.holders.values()) {
     if (holder.token !== sourceToken) holder.applyDraft(draft);
   }
@@ -518,6 +594,7 @@ function publishDraft(
     queueLatestDraft(entry);
   }
   emit(entry);
+  return true;
 }
 
 function acceptHydration(
@@ -1017,14 +1094,24 @@ export interface CodePageBufferLease {
     draft: PageDocumentDraft,
     contentVersion: number,
   ): PageDocumentDraft;
-  publishDraft(draft: PageDocumentDraft): void;
+  /**
+   * This view's draft, as one local edit. `positions`, when the edit knows
+   * where it was made (a Find-in-Files hit, a refactor's text changes), write
+   * it at those places. False: not written (no authority, invalid draft, or a
+   * text change whose place would be a guess; the views then have the room's
+   * text back).
+   */
+  publishDraft(
+    draft: PageDocumentDraft,
+    positions?: CodeTextChangesAgainst,
+  ): boolean;
   /** One explicit local text gesture; null means no edit was admitted. The
    * rollback only undoes this still-current gesture, never later edits. */
   applyCommandDraft(
     draft: PageDocumentDraft,
     expectedContent: string,
   ): CodePageCommandHistory | null;
-  replaceDraft(draft: PageDocumentDraft): void;
+  replaceDraft(draft: PageDocumentDraft): boolean;
   /** The page was renamed outside the editor (a collaborator, the titlebar,
    * a refused name handed back): the draft the buffer holds takes the name,
    * so a hydration or a room delivery never hands a window the old one. No
@@ -1158,10 +1245,12 @@ export function acquireCodePageBuffer(
       }
       return entry.latestDraft ?? safeDraft;
     },
-    publishDraft(draft) {
-      if (requireLive() && entryMayWrite(entry)) {
-        publishDraft(entry, token, draft, false);
-      }
+    publishDraft(draft, positions) {
+      return (
+        requireLive() &&
+        entryMayWrite(entry) &&
+        publishDraft(entry, token, draft, false, positions)
+      );
     },
     applyCommandDraft(draft, expectedContent) {
       const content = draft.content_json?.content;
@@ -1177,6 +1266,10 @@ export function acquireCodePageBuffer(
       const manager = entry.undoManager;
       const text = entry.text;
       const origin = {};
+      // An AI command replaces the whole text (set_code_content): it has no
+      // places of its own and no typed run to keep whole, so its hunks are
+      // read off the two texts. Every edit that does know its places goes
+      // through publishDraft's positions (code-text-changes, TRIAGE 47).
       const changes = diff(expectedContent, content, {
         scanLimit: 500,
         timeout: 20,
@@ -1249,9 +1342,11 @@ export function acquireCodePageBuffer(
       entry.latestDraft = { ...entry.latestDraft, title };
     },
     replaceDraft(draft) {
-      if (requireLive() && entryMayWrite(entry)) {
-        publishDraft(entry, token, draft, true);
-      }
+      return (
+        requireLive() &&
+        entryMayWrite(entry) &&
+        publishDraft(entry, token, draft, true)
+      );
     },
     publishTextareaText(content) {
       if (
@@ -1262,7 +1357,13 @@ export function acquireCodePageBuffer(
       ) {
         return;
       }
-      setTextWithoutSave(entry, content);
+      const current = entry.text.toString();
+      const changes = authoredTextChanges(entry, current, content);
+      if (!changes) {
+        refuseAuthoredText(entry);
+        return;
+      }
+      writeAuthoredText(entry, content, changes);
       publishText(entry, token, content);
     },
     registerEditorOrigin(origin) {

@@ -310,8 +310,10 @@ export function planLedgerPages(
   /** Record what the current segment holds (for its balanced height): one
    * piece per atom, its column-cut head and tail joined, as the projector
    * balances a paragraph whole. */
-  const record = (atom: LedgerAtom, heightPx: number, continuing: boolean, complete: boolean) => {
-    if (atom.hasNotes) page.notesBelow = true;
+  const record = (atom: LedgerAtom, heightPx: number, continuing: boolean, complete: boolean, notesPx?: number) => {
+    // (`notesPx`: what the planner says this piece holds of notes; a block
+    // with notes whose piece here holds none has not opened the note area.)
+    if (notesPx !== undefined ? notesPx > EPSILON_PX : atom.hasNotes) page.notesBelow = true;
     if (atom.hidden || !(heightPx > EPSILON_PX)) return;
     const last = page.segment[page.segment.length - 1];
     if (last && last.atom === atom.index) {
@@ -679,7 +681,7 @@ export function planLedgerPages(
       const placement: LedgerPlacement = { atom: index, from: entry, to: null };
       page.placements.push(placement);
       page.usedPx += gap + height;
-      record(atom, height, continuing, true);
+      record(atom, height, continuing, true, continuing ? from!.tailNotesPx : undefined);
       if (!atom.hidden) page.previous = atom;
       from = null;
       entry = null;
@@ -723,11 +725,13 @@ export function planLedgerPages(
               // it, so Word's widow/orphan floors hold (a heading four lines
               // tall there left one line at the foot of the page).
               pageEmpty: columnEmpty && !belowAnotherSection,
+              ...(page.notesBelow && atom.noteChromePx ? { pageNoteChromePx: atom.noteChromePx } : {}),
+              ...(credit <= EPSILON_PX && atom.creditPx > EPSILON_PX ? { noFootCredit: true } : {}),
             })
           : null);
       if (cut) {
         page.usedPx += gap + cut.headHeightPx;
-        record(atom, cut.headHeightPx, continuing, false);
+        record(atom, cut.headHeightPx, continuing, false, cut.headNotesPx);
         page.previous = atom;
         from = cut;
         fromColumn = columnIndex;

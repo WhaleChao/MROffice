@@ -187,9 +187,13 @@ import { withOfficeFontSubstitutes } from "../../../../lib/office-fonts/substitu
 import {
   smartArtCameraCss,
   smartArtBevelLight,
+  smartArtBevelOutline,
   smartArtBevelLightPrimitives,
   smartArtContourStroke,
   smartArtFaceTintPrimitives,
+  smartArtMaterialOpacity,
+  smartArtMaterialOpacityAfterBevel,
+  smartArtMaterialOpacityPrimitives,
   smartArtShape3dFilter,
   type SmartArtFilterPrimitive,
 } from "../../../../lib/office-smartart/canvas-3d";
@@ -212,6 +216,7 @@ import {
   documentShapePercentAxesMoved,
   documentShapeFloatMode,
   documentShapeIsTopAndBottom,
+  clearFloatLayoutState,
   floatHostParagraphAnchor,
   floatPaintOf,
 } from "./floatingTextBoxLayout";
@@ -2320,10 +2325,12 @@ function paintShapeGeometry(
   
   // the sheet draw (`OfficeSmartArtBevelFilter`), built into this canvas's
   // own DOM. It runs on the face first; the shadows then sweep the result.
-  const bevelLight = member?.shape3d ? smartArtBevelLight(member.shape3d) : null;
+  const bevelLight = member?.shape3d
+    ? smartArtBevelLight(member.shape3d, options?.groupFlip?.flipH || options?.groupFlip?.flipV ? null : smartArtBevelOutline(attrs.preset, attrs))
+    : null;
   const rigTint = member?.shape3d ? smartArtFaceTintPrimitives(member.scene3d, member.shape3d, options?.faceSpan) : [];
   let bevelFilter = "";
-  if (bevelLight || rigTint.length) {
+  if (bevelLight || rigTint.length || (member?.shape3d && smartArtMaterialOpacity(member.shape3d) !== null)) {
     const id = svg.dataset.bevelId ?? `document-shape-bevel-${++documentShapeMarkerSequence}`;
     svg.dataset.bevelId = id;
     const filter = svgElement("filter", {
@@ -2343,9 +2350,23 @@ function paintShapeGeometry(
       for (const child of primitive.children ?? []) element.append(build(child));
       return element;
     };
-    const primitives: SmartArtFilterPrimitive[] = [
+    const lit: SmartArtFilterPrimitive[] = [
       ...rigTint,
-      ...(bevelLight ? smartArtBevelLightPrimitives(bevelLight, rigTint.length ? "tinted" : "SourceGraphic") : []),
+      ...(bevelLight
+        ? smartArtBevelLightPrimitives(
+            bevelLight,
+            rigTint.length ? "tinted" : "SourceGraphic",
+            "SourceAlpha",
+            smartArtMaterialOpacity(member?.shape3d),
+          )
+        : []),
+    ];
+    // Powder's own opacity (`smartArtMaterialOpacity`): under a bevel read
+    // side by side, over any other.
+    const last = lit.length ? String(lit[lit.length - 1]!.attrs.result ?? "SourceGraphic") : "SourceGraphic";
+    const primitives: SmartArtFilterPrimitive[] = [
+      ...lit,
+      ...(smartArtMaterialOpacityAfterBevel(bevelLight) ? smartArtMaterialOpacityPrimitives(member?.shape3d, last) : []),
     ];
     for (const primitive of primitives) filter.append(build(primitive));
     const defs = svgElement("defs", {});
@@ -5172,6 +5193,9 @@ function createDocumentShapeNodeView(
       stage.style.translate = "";
       shape.style.translate = "";
       root.removeAttribute("data-float-anchor");
+      // What the float pass wrote on it while it held a floating shape
+      // (clearFloatLayoutState): only floating wrappers are visited by it.
+      clearFloatLayoutState(root);
       delete root.dataset.floatHostAnchor;
       delete root.dataset.floatBand;
       delete root.dataset.floatBandPage;
@@ -5198,6 +5222,8 @@ function createDocumentShapeNodeView(
       stage.style.translate = "";
       shape.style.translate = "";
       root.removeAttribute("data-float-anchor");
+      // (A Top and Bottom band keeps what the band pass gives it.)
+      if (!documentShapeIsTopAndBottom(node.attrs.floatAnchor, current.wrapMode)) clearFloatLayoutState(root);
       // A Top and Bottom shape stays in the flow, but the layout pass still
       // needs to know which paragraph it is anchored in: Word places it from
       // that paragraph's own top, so two such shapes of neighbouring

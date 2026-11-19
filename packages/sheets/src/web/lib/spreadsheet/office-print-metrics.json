@@ -1,5 +1,5 @@
 {
- "_source": "Windows Excel 16.0.20527 printing to 'Microsoft Print to PDF' (600 dpi), measured 2026-11-13 off probe workbooks (xlsx-rounds/lookwin/probes p3-p5, p23 and p79-lw (Gill Sans Nova, 2026-11-15) and p85-lw (Verdana 8-12, Tahoma 8-11, Segoe UI 8/12, Times New Roman 8/9, Calibri 7, Aptos Narrow 10, 等线 12, 맑은 고딕 12; 2026-11-15) and p88-lw (5-10 pt: Calibri 5/6.5/7.5/8.5, Arial 5-8.5, Aptos Narrow 6-9, Aptos 7-10, Cambria 7-10, Times New Roman 5-7.5, Verdana 6/7, Tahoma 6/7, Segoe UI 6/7, 等线 7-10; 2026-11-15), one per Normal font; p23 states the charset real files give a face Windows lacks, which GDI maps by it): per Normal-font face and size [screen default row px at 96 dpi, printed default row in 600-dpi dots, printed max digit width in 600-dpi dots]. Excel prints every row at its screen height x printed/screen default row and every column at its screen width x printed/screen digit width; text at its point size. Keys: the face as Excel names it, lower case; sizes to the half point. Read by office-print-metrics.ts (the API keeps an identical copy, office_print_metrics.json).",
+ "_source": "Windows Excel 16.0.20527 printing to 'Microsoft Print to PDF' (600 dpi), measured 2026-11-13 off probe workbooks (xlsx-rounds/lookwin/probes p3-p5, p23 and p79-lw (Gill Sans Nova, 2026-11-15) and p85-lw (Verdana 8-12, Tahoma 8-11, Segoe UI 8/12, Times New Roman 8/9, Calibri 7, Aptos Narrow 10, 等线 12, 맑은 고딕 12; 2026-11-15) and p88-lw (5-10 pt: Calibri 5/6.5/7.5/8.5, Arial 5-8.5, Aptos Narrow 6-9, Aptos 7-10, Cambria 7-10, Times New Roman 5-7.5, Verdana 6/7, Tahoma 6/7, Segoe UI 6/7, 等线 7-10; 2026-11-15) and p180-lw (游ゴシック Medium 8-14; 2026-11-18), one per Normal font; p23 states the charset real files give a face Windows lacks, which GDI maps by it): per Normal-font face and size [screen default row px at 96 dpi, printed default row in 600-dpi dots, printed max digit width in 600-dpi dots]. Excel prints every row at its screen height x printed/screen default row and every column at its screen width x printed/screen digit width; text at its point size. Keys: the face as Excel names it, lower case; sizes to the half point. Read by office-print-metrics.ts (the API keeps an identical copy, office_print_metrics.json). 2026-11-19: a face measured under one of its names is listed under the other too (malgun gothic / 맑은 고딕, yu gothic / 游ゴシック, microsoft jhenghei / 微軟正黑體: the same font file; p197b-lw's stacked Malgun Gothic 11 letters stand 139 dots apart). 2026-11-19 (p199-lw, once the truth machine had its ＭＳ 明朝, ＭＳ Ｐ明朝 and Meiryo UI back): Meiryo UI 6-20 pt (its rows printed 2-10 % off the font metrics' estimate: 11 pt is 21 px and 131 dots, not 20 and 125; 16 pt 28 px and 185 dots, not 30 and 179); ＭＳ 明朝 and ＭＳ Ｐ明朝 6-20 pt, each size the same in both and in ＭＳ Ｐゴシック and ＭＳ ゴシック (6, 8, 13, 16, 18, 20 pt and 8, 13, 18 pt measured beside them), listed under ｍｓ 明朝 for the four (6, 7, 8, 13, 18, 20 pt were the estimate's 58, 67, 75, 117, 158, 175 dots).",
  "aptos": {
   "7": [12, 84, 31],
   "8": [15, 95, 36],
@@ -111,10 +111,24 @@
   "10": [17, 103, 46]
  },
  "malgun gothic": {
-  "10": [18, 124, 46]
+  "10": [18, 124, 46],
+  "11": [22, 139, 51],
+  "12": [23, 149, 55]
  },
  "meiryo ui": {
-  "9": [16, 109, 47]
+  "6": [11, 75, 31],
+  "7": [14, 84, 36],
+  "8": [16, 97, 42],
+  "9": [16, 109, 47],
+  "10": [19, 118, 52],
+  "10.5": [20, 124, 55],
+  "11": [21, 131, 57],
+  "12": [22, 141, 62],
+  "13": [24, 151, 67],
+  "14": [26, 164, 73],
+  "16": [28, 185, 83],
+  "18": [32, 208, 93],
+  "20": [38, 230, 104]
  },
  "microsoft jhenghei": {
   "12": [21, 133, 58]
@@ -177,7 +191,18 @@
   "12": [20, 129, 64]
  },
  "yu gothic": {
+  "9": [21, 128, 42],
+  "10": [22, 140, 46],
   "11": [25, 154, 51]
+ },
+ "yu gothic medium": {
+  "8": [17, 113, 37],
+  "9": [21, 127, 42],
+  "10": [22, 140, 46],
+  "10.5": [23, 148, 49],
+  "11": [24, 153, 51],
+  "12": [26, 166, 56],
+  "14": [32, 194, 65]
  },
  "メイリオ": {
   "11": [25, 152, 57]
@@ -193,6 +218,9 @@
  },
  "微软雅黑": {
   "11": [22, 130, 54]
+ },
+ "微軟正黑體": {
+  "12": [21, 133, 58]
  },
  "新細明體": {
   "11": [21, 119, 43],
@@ -213,6 +241,15 @@
   "9": [21, 128, 42],
   "10": [22, 140, 46],
   "11": [25, 154, 51]
+ },
+ "游ゴシック medium": {
+  "8": [17, 113, 37],
+  "9": [21, 127, 42],
+  "10": [22, 140, 46],
+  "10.5": [23, 148, 49],
+  "11": [24, 153, 51],
+  "12": [26, 166, 56],
+  "14": [32, 194, 65]
  },
  "等线": {
   "7": [12, 68, 31],
@@ -238,6 +275,7 @@
   "11": [18, 113, 54]
  },
  "맑은 고딕": {
+  "10": [18, 124, 46],
   "11": [22, 139, 51],
   "12": [23, 149, 55]
  },
@@ -248,10 +286,17 @@
   "11": [18, 102, 46]
  },
  "ｍｓ 明朝": {
+  "6": [12, 60, 25],
+  "7": [13, 68, 29],
+  "8": [14, 77, 34],
   "9": [15, 85, 38],
   "10": [16, 93, 42],
   "11": [18, 102, 46],
-  "12": [19, 110, 50]
+  "12": [19, 110, 50],
+  "13": [20, 118, 54],
+  "16": [25, 143, 67],
+  "18": [28, 160, 75],
+  "20": [32, 177, 84]
  },
  "ｍｓ ｐゴシック": {
   "9": [15, 85, 38],

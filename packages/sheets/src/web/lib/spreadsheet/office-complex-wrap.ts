@@ -8,7 +8,8 @@
  * (officeHintedWrapLines' `spaced`). Excel fits rows as it opens the file,
  * the active sheet first and then the other shown sheets in order, each from
  * the top; once it has fitted a row through a wrapped cell of complex-script
- * text (Bengali, Arabic, Hebrew, Thai, Devanagari...: OFFICE_COMPLEX_WRAP_TEXT;
+ * text (Bengali, Arabic, Hebrew, Thai, Devanagari..., or a combining
+ * diacritical mark: OFFICE_SPACED_WRAP_TRIGGER_TEXT;
  * a short word that does not wrap counts, unwrapped text does not, a
  * custom-height row is not fitted so does not, a hidden sheet does not), each
  * later wrap of the load keeps room for one space after a line it breaks at a
@@ -17,7 +18,7 @@
  * The API's spaced_wrap_after (notebooks.py) is the same rule.
  */
 import { cellTextWraps } from "./cell-indexes";
-import { OFFICE_COMPLEX_WRAP_TEXT } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
+import { OFFICE_SPACED_WRAP_TRIGGER_TEXT } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
 
 interface TriggerCell {
   readonly value?: unknown;
@@ -64,7 +65,7 @@ function readSheetTrigger(cells: TriggerSheet["cells"], rows: NonNullable<NonNul
     const cell = cells[key];
     if (!cell) continue;
     const text = cellText(cell);
-    if (!text || !OFFICE_COMPLEX_WRAP_TEXT.test(text) || !cellTextWraps(cell.style)) continue;
+    if (!text || !OFFICE_SPACED_WRAP_TRIGGER_TEXT.test(text) || !cellTextWraps(cell.style)) continue;
     const separator = key.indexOf(":");
     const row = Number(key.slice(0, separator)), col = Number(key.slice(separator + 1));
     if (!Number.isInteger(row) || !Number.isInteger(col)) continue;

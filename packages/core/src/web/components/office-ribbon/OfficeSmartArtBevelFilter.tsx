@@ -25,6 +25,9 @@ import {
   smartArtBevelLightPrimitives,
   smartArtFaceTintPrimitives,
   smartArtLightRigMatrix,
+  smartArtMaterialOpacity,
+  smartArtMaterialOpacityAfterBevel,
+  smartArtMaterialOpacityPrimitives,
   type SmartArtFaceSpan,
   type SmartArtFilterPrimitive,
 } from "../../lib/office-smartart/canvas-3d";
@@ -48,7 +51,9 @@ export function officeSmartArtNeedsShapeFilter(
   scene3d?: SmartArtScene3d,
 ): boolean {
   return Boolean(
-    (shape3d && smartArtBevelLight(shape3d)) || smartArtLightRigMatrix(scene3d, shape3d),
+    (shape3d && smartArtBevelLight(shape3d)) ||
+      smartArtLightRigMatrix(scene3d, shape3d) ||
+      smartArtMaterialOpacity(shape3d) !== null,
   );
 }
 
@@ -101,6 +106,7 @@ export function OfficeSmartArtBevelFilter({
   scene3d,
   faceSpan,
   silhouette,
+  outline,
 }: {
   id: string;
   shape3d: SmartArtShape3d;
@@ -117,10 +123,12 @@ export function OfficeSmartArtBevelFilter({
 
 
   silhouette?: OfficeSmartArtSilhouette | null;
+  /** The member's outline where it stands unturned (`smartArtBevelOutline`): a box takes a bevel read side by side. */
+  outline?: string | null;
 }) {
-  const light = smartArtBevelLight(shape3d);
+  const light = smartArtBevelLight(shape3d, outline);
   const tint = smartArtFaceTintPrimitives(scene3d, shape3d, faceSpan);
-  if (!light && !tint.length) return null;
+  if (!light && !tint.length && smartArtMaterialOpacity(shape3d) === null) return null;
   
   // it; the bevel's light then works on the colour the face really shows.
   const source = tint.length ? "tinted" : "SourceGraphic";
@@ -146,10 +154,19 @@ export function OfficeSmartArtBevelFilter({
         },
       ]
     : [];
-  const primitives: SmartArtFilterPrimitive[] = [
+  const lit: SmartArtFilterPrimitive[] = [
     ...tint,
     ...shape,
-    ...(light ? smartArtBevelLightPrimitives(light, source, shape.length ? "faceGeometryAlpha" : "SourceAlpha") : []),
+    ...(light
+      ? smartArtBevelLightPrimitives(light, source, shape.length ? "faceGeometryAlpha" : "SourceAlpha", smartArtMaterialOpacity(shape3d))
+      : []),
+  ];
+  // Powder's own opacity (`smartArtMaterialOpacity`): under a bevel read side
+  // by side, over any other.
+  const last = lit.length ? String(lit[lit.length - 1]!.attrs.result ?? "SourceGraphic") : "SourceGraphic";
+  const primitives: SmartArtFilterPrimitive[] = [
+    ...lit,
+    ...(smartArtMaterialOpacityAfterBevel(light) ? smartArtMaterialOpacityPrimitives(shape3d, last) : []),
   ];
   return (
     <filter

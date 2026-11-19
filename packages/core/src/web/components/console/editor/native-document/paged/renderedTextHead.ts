@@ -392,6 +392,439 @@ function dropTrailingSourcePageBreaks(block: HTMLElement): void {
   }
 }
 
+/** Two drawn boxes stand on different rows: they share less than half the
+ * shorter one's height. (Two sizes on one row share a baseline and a raised
+ * or lowered one still stands mostly inside its row's text; rows set tighter
+ * than their glyph boxes overlap by the little the boxes run over.) */
+export function boxesOnDifferentRows(
+  a: { readonly top: number; readonly bottom: number },
+  b: { readonly top: number; readonly bottom: number },
+): boolean {
+  const shorter = Math.min(a.bottom - a.top, b.bottom - b.top);
+  if (!(shorter > 0)) return false;
+  const shared = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  return shared < shorter / 2;
+}
+
+/**
+ * An element inside a paragraph that draws nothing: the editor's own widgets
+ * (a formatting mark, a filler) and Word's rendered page break kept from the
+ * source (`data-type="source-page-break"`, zero size). An imported paragraph
+ * cut where Word cut it ends with that marker, and read as "something drawn"
+ * it sent every seam of an imported document the old way.
+ */
+function drawsNothing(element: HTMLElement): boolean {
+  if (element.getAttribute("contenteditable") !== "false" || (element.textContent ?? "").trim()) return false;
+  return element.classList.contains("ProseMirror-widget") || element.getAttribute("data-type") === "source-page-break";
+}
+
+/** A footnote or endnote reference: a small in-line mark that goes with the
+ * word before it. Rows are read from the text round it. */
+function isNoteReference(element: HTMLElement): boolean {
+  const type = element.getAttribute("data-type");
+  return type === "footnote-ref" || type === "endnote-ref";
+}
+
+/** What ends the head's part of a joined copy, or opens the tail's. */
+type SeamLeaf = { kind: "text"; node: Text; at: number } | { kind: "break" } | { kind: "box" };
+
+/** The last (`end` "last") or first drawn thing among `nodes`: a character
+ * that is no space, a line break, or a box (a picture, an in-line object). */
+function seamLeaf(nodes: readonly Node[], end: "first" | "last"): SeamLeaf | null {
+  const ordered = end === "last" ? [...nodes].reverse() : nodes;
+  for (const node of ordered) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const data = (node as Text).data;
+      const at = end === "last" ? data.search(/\S\s*$/) : data.search(/\S/);
+      if (at >= 0) return { kind: "text", node: node as Text, at };
+      continue;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+    const element = node as HTMLElement;
+    if (element.localName === "br") {
+      if (element.classList.contains("ProseMirror-trailingBreak")) continue;
+      return { kind: "break" };
+    }
+    if (element.localName === "img") {
+      if (element.classList.contains("ProseMirror-separator")) continue;
+      return { kind: "box" };
+    }
+    if (element.getAttribute("contenteditable") === "false") {
+      // What draws nothing takes no room, and a note reference goes with
+      // the word before it; anything else is an object.
+      if (drawsNothing(element) || isNoteReference(element)) continue;
+      return { kind: "box" };
+    }
+    const inner = seamLeaf(Array.from(element.childNodes), end);
+    if (inner) return inner;
+  }
+  return null;
+}
+
+/**
+ * Whether a paragraph cut across a page still breaks its rows where it is
+ * cut: `head` and `tail` are its two pieces, and their text laid out as one
+ * block (off-screen, in the head's own context) starts a row with the tail's
+ * first character. False: the joined text sets the two sides of the cut on
+ * one row (the head's last row has room for what opens the tail, or a word
+ * was joined across the cut), so the cut has to be made again. Null when it
+ * cannot be told (no editor root, columns, a box or nothing at the cut,
+ * right-to-left or vertical text): the caller decides as it did without.
+ *
+ * Nothing under the editor is touched (see the cost note above).
+ */
+export function joinedTextBreaksAtSeam(head: HTMLElement, tail: HTMLElement, engineRows?: JoinedEngineRows): boolean | null {
+  return withJoinedCopy(head, tail, ({ doc, copy, headNodes, tailNodes }) => {
+    const before = seamLeaf(headNodes, "last");
+    const after = seamLeaf(tailNodes, "first");
+    if (!before || !after) return null;
+    // A line break ends its row whatever follows it.
+    if (before.kind === "break" || after.kind === "break") return true;
+    if (before.kind !== "text" || after.kind !== "text") return null;
+    // Where the text engine breaks the paragraph's rows, its rows are the
+    // answer: the browser's own breaker differs from them by a hair on a
+    // line drawn corrected, and a seam read by it was cut again for a word
+    // the engine then sent back.
+    const rows = engineRows?.(copy);
+    if (rows === undefined && engineRows) return null;
+    if (rows) return rows.some((row) => row.node === after.node && row.offset === after.at);
+    const last = characterBox(doc, before.node, before.at);
+    const first = characterBox(doc, after.node, after.at);
+    if (!last || !first) return null;
+    return boxesOnDifferentRows(last, first);
+  });
+}
+
+/** The drawn box of one character (its own line box: blockSplitting's note
+ * on why a block's rects are not read whole). */
+function characterBox(doc: Document, node: Text, at: number): DOMRect | null {
+  const range = measurementRange(doc, "joinedTextSeam");
+  range.setStart(node, at);
+  range.setEnd(node, at + 1);
+  return Array.from(range.getClientRects()).find((rect) => rect.width > 0 && rect.height > 0) ?? null;
+}
+
+/** The text engine's rows of a joined copy, when it lays the paragraph out
+ * (ledgerEngineLines.EngineJoinedRows, bound to the two pieces): null when it
+ * does not, undefined when it cannot say. */
+export type JoinedEngineRows = (copy: HTMLElement) => ReadonlyArray<{ readonly node: Text; readonly offset: number }> | null | undefined;
+
+interface JoinedCopy {
+  doc: Document;
+  /** The copy itself: the head's block holding both pieces' content. */
+  copy: HTMLElement;
+  /** The copy's children that came from the head, and from the tail. */
+  headNodes: Node[];
+  tailNodes: Node[];
+}
+
+/**
+ * Run `read` on a copy of `head` with the tail's content appended, laid out
+ * off-screen in the head's own context (as a rendered head is: the cost note
+ * above), and take the copy away again. Null when there is nowhere to lay it
+ * out as the page does (no editor root, columns, right-to-left or vertical
+ * text).
+ */
+function withJoinedCopy<T>(head: HTMLElement, tail: HTMLElement, read: (copy: JoinedCopy) => T | null): T | null {
+  const doc = head.ownerDocument;
+  const root = head.closest<HTMLElement>(".ProseMirror");
+  if (!doc || !root?.isConnected || !root.parentElement || root === head || !root.contains(tail)) return null;
+  const style = getComputedStyle(head);
+  if (style.direction === "rtl" || /^(vertical|sideways)/.test(style.writingMode)) return null;
+  const sheet = head.closest<HTMLElement>("article[data-page-sheet]");
+  if (sheet) {
+    // As for a head (createRenderedTextHeadProbe): a column's width is not
+    // the page's, where the shell lays the copy out.
+    if (sheet.hasAttribute(COLUMN_REGIONS_ATTR)) return null;
+    const unequal = unequalColumnCount(sheet);
+    if (unequal !== null && unequal > 1) return null;
+    const columns = Number.parseInt(getComputedStyle(sheet).columnCount, 10);
+    if (Number.isFinite(columns) && columns > 1) return null;
+  }
+  const ancestors: HTMLElement[] = [];
+  for (let element = head.parentElement; element !== root; element = element.parentElement) {
+    if (!element) return null;
+    ancestors.unshift(element);
+  }
+  const task = taskHost(root, rootState(root));
+  if (!task) return null;
+  const copy = head.cloneNode(true) as HTMLElement;
+  copy.removeAttribute("id");
+  clearPageEdgeMarks(copy);
+  const headNodes = Array.from(copy.childNodes);
+  const tailNodes = Array.from(tail.childNodes, (child) => child.cloneNode(true));
+  copy.append(...tailNodes);
+  const context = contextShell(root, task, ancestors);
+  context.slot.replaceChildren(
+    ...[context.leading, copy, context.trailing].filter((node): node is HTMLElement => node !== null),
+  );
+  try {
+    return read({ doc, copy, headNodes, tailNodes });
+  } finally {
+    context.slot.replaceChildren();
+  }
+}
+
+/**
+ * The height of the tail a text cut would leave, laid out before it exists.
+ *
+ * `parts` are the block's fragments as they stand, in order; the cut falls
+ * at (`node`, `offset`) inside `parts[cutPart]`. The tail is what follows it
+ * there and every fragment after, as one continuation block: laid out
+ * off-screen in the last fragment's context and measured as the ledger
+ * measures a fragment.
+ *
+ * The plan charged the next page `total - head`: the fragments' own heights,
+ * less the head's. Wrong whenever joining re-flows the rows: a head that
+ * ran a row over its page by one typed character ends in a stub row, which
+ * the tail's first row takes up, and the arithmetic charged the stub a row
+ * of its own. The page after was planned a row short, every page after that
+ * moved with it, and the next pass put them all back (one key in a row
+ * above a seam: six passes over fifteen pages).
+ *
+ * Null where it cannot be laid out so (see withJoinedCopy's reasons).
+ */
+export function renderedTextTailHeightPx(parts: readonly HTMLElement[], cutPart: number, node: Node, offset: number): number | null {
+  const cut = parts[cutPart];
+  const last = parts[parts.length - 1];
+  if (!cut || !last) return null;
+  const doc = cut.ownerDocument;
+  const root = last.closest<HTMLElement>(".ProseMirror");
+  if (!doc || !root?.isConnected || !root.parentElement || root === last || !cut.contains(node)) return null;
+  for (const part of [cut, last]) {
+    const style = getComputedStyle(part);
+    if (style.direction === "rtl" || /^(vertical|sideways)/.test(style.writingMode)) return null;
+    const sheet = part.closest<HTMLElement>("article[data-page-sheet]");
+    if (!sheet) continue;
+    if (sheet.hasAttribute(COLUMN_REGIONS_ATTR)) return null;
+    const unequal = unequalColumnCount(sheet);
+    if (unequal !== null && unequal > 1) return null;
+    const columns = Number.parseInt(getComputedStyle(sheet).columnCount, 10);
+    if (Number.isFinite(columns) && columns > 1) return null;
+  }
+  const ancestors: HTMLElement[] = [];
+  for (let element = last.parentElement; element !== root; element = element.parentElement) {
+    if (!element) return null;
+    ancestors.unshift(element);
+  }
+  const task = taskHost(root, rootState(root));
+  if (!task) return null;
+  const copy = last.cloneNode(false) as HTMLElement;
+  copy.removeAttribute("id");
+  clearPageEdgeMarks(copy);
+  // A tail opens its page as a continuation, whatever fragment lent the shell.
+  copy.setAttribute("data-page-split-continuation", "true");
+  const range = measurementRange(doc, "renderedTextTail");
+  try {
+    range.setStart(node, offset);
+    range.setEnd(cut, cut.childNodes.length);
+  } catch {
+    return null;
+  }
+  copy.append(range.cloneContents());
+  for (const part of parts.slice(cutPart + 1)) copy.append(...Array.from(part.childNodes, (child) => child.cloneNode(true)));
+  const context = contextShell(root, task, ancestors);
+  context.slot.replaceChildren(
+    ...[context.leading, copy, context.trailing].filter((element): element is HTMLElement => element !== null),
+  );
+  try {
+    const heightPx = paginationLayoutRect(copy, paginationLayoutScale(context.slot)).height;
+    return Number.isFinite(heightPx) && heightPx > 0 ? heightPx : null;
+  } finally {
+    context.slot.replaceChildren();
+  }
+}
+
+/** The text nodes under `nodes`, in order; null when anything but text is
+ * drawn there (a picture, a line break, an in-line object, a widget with
+ * text): the rows are then not read character by character. */
+function plainTextNodes(nodes: readonly Node[]): Text[] | null {
+  const texts: Text[] = [];
+  const visit = (node: Node): boolean => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      texts.push(node as Text);
+      return true;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return true;
+    const element = node as HTMLElement;
+    if (element.localName === "br") return element.classList.contains("ProseMirror-trailingBreak");
+    if (element.localName === "img") return element.classList.contains("ProseMirror-separator");
+    // (A note reference stays in the copy and takes its room there; its
+    // own digits are not text a row is read from.)
+    if (element.getAttribute("contenteditable") === "false") return drawsNothing(element) || isNoteReference(element);
+    for (const child of Array.from(element.childNodes)) if (!visit(child)) return false;
+    return true;
+  };
+  for (const node of nodes) if (!visit(node)) return null;
+  return texts;
+}
+
+/** Where a stale page seam of a paragraph belongs (joinedTextRebreak). */
+export interface JoinedTextRebreak {
+  /** The piece the new cut falls in, and where: a text node of that piece
+   * (the page's own, not the copy's) and the offset of the first character
+   * that goes to the next page. */
+  side: "head" | "tail";
+  node: Text;
+  offset: number;
+  /** The rows the joined text has from the cut on, counted as far as asked. */
+  rowsAfter: number;
+}
+
+/**
+ * Where a paragraph cut across a page is cut once its two pieces are laid
+ * out as one: the page keeps the rows the head has now, and the cut is the
+ * start of the joined text's next row. In the tail when the head's last row
+ * has room for what opens it (the row takes it); in the head when a word
+ * joined across the cut no longer fits that row (it goes on whole).
+ *
+ * Read in one go, off-screen: the cut made before the head's last row and
+ * taken back a pass later (how a stale seam was cut again) drew the row on
+ * the next page for that pass, and every page after it moved and came back.
+ *
+ * `rows` is how many rows after the cut are counted (the paragraph's widow
+ * floor). Null when it cannot be read so (see withJoinedCopy; anything but
+ * plain text in the two pieces), when the head's own last row cannot be
+ * found, or when the joined text ends on the head's rows (nothing to cut).
+ */
+export function joinedTextRebreak(head: HTMLElement, tail: HTMLElement, rows: number, engineRows?: JoinedEngineRows): JoinedTextRebreak | null {
+  const headTexts = plainTextNodes(Array.from(head.childNodes));
+  const tailTexts = plainTextNodes(Array.from(tail.childNodes));
+  if (!headTexts || !tailTexts) return null;
+  const doc = head.ownerDocument;
+  // The head's own last row, on the page: where it starts.
+  const ownLast = lastCharacter(headTexts);
+  if (!ownLast) return null;
+  const ownLastBox = characterBox(doc, ownLast.node, ownLast.at);
+  if (!ownLastBox) return null;
+  const headLength = headTexts.reduce((sum, text) => sum + text.length, 0);
+  const rowStart = firstCharacter(doc, headTexts, 0, headLength, (box) => !boxesOnDifferentRows(box, ownLastBox));
+  if (rowStart === null) return null;
+  return withJoinedCopy(head, tail, ({ copy, headNodes, tailNodes }) => {
+    const copyHead = plainTextNodes(headNodes);
+    const copyTail = plainTextNodes(tailNodes);
+    if (!copyHead || !copyTail || copyHead.length !== headTexts.length || copyTail.length !== tailTexts.length) return null;
+    const all = [...copyHead, ...copyTail];
+    const total = all.reduce((sum, text) => sum + text.length, 0);
+    const ownText = (index: number, at: number): JoinedTextRebreak | null => {
+      const place = characterAt(all, index);
+      if (!place) return null;
+      // A row a note reference starts is cut before the reference, which no
+      // text offset says: not read so.
+      if (place.at === 0 && referenceStartsRow(copy.ownerDocument, place.node)) return null;
+      const nodeIndex = all.indexOf(place.node);
+      const side = nodeIndex < copyHead.length ? "head" : "tail";
+      const own = side === "head" ? headTexts[nodeIndex] : tailTexts[nodeIndex - copyHead.length];
+      if (!own || own.length !== place.node.length) return null;
+      return { side, node: own, offset: place.at, rowsAfter: at };
+    };
+    // The text engine's rows, where it breaks this paragraph (see
+    // joinedTextBreaksAtSeam): the row after the one the head's last row
+    // starts, and the rows from there on.
+    const engine = engineRows?.(copy);
+    if (engine === undefined && engineRows) return null;
+    if (engine) {
+      const starts: number[] = [];
+      for (const row of engine) {
+        const nodeIndex = all.indexOf(row.node);
+        if (nodeIndex < 0) return null;
+        starts.push(all.slice(0, nodeIndex).reduce((sum, text) => sum + text.length, 0) + row.offset);
+      }
+      starts.sort((a, b) => a - b);
+      // The head's rows above its last are the engine's too, or it is not read so.
+      const own = starts.indexOf(rowStart);
+      if (own < 0 || own + 1 >= starts.length) return null;
+      return ownText(starts[own + 1], Math.min(rows, starts.length - (own + 1)));
+    }
+    const start = characterAt(all, rowStart);
+    const startBox = start ? nextBox(doc, all, rowStart, total) : null;
+    if (!startBox) return null;
+    // The first character past the row the head's last row starts.
+    const cut = firstCharacter(doc, all, rowStart, total, (box) => boxesOnDifferentRows(startBox.box, box));
+    if (cut === null) return null;
+    // Rows from the cut on, as far as the floor asks.
+    let counted = 1;
+    let from = cut;
+    while (counted < rows) {
+      const rowBox = nextBox(doc, all, from, total);
+      if (!rowBox) break;
+      const next = firstCharacter(doc, all, rowBox.index, total, (box) => boxesOnDifferentRows(rowBox.box, box));
+      if (next === null) break;
+      counted += 1;
+      from = next;
+    }
+    return ownText(cut, counted);
+  });
+}
+
+/** Whether a note reference right before `text` stands on the row `text`'s
+ * first drawn character is on (the reference wrapped to that row). */
+function referenceStartsRow(doc: Document, text: Text): boolean {
+  let before: Node | null = text;
+  // The node before in document order, out of the wrappers `text` opens.
+  while (before && !before.previousSibling) before = before.parentNode;
+  before = before?.previousSibling ?? null;
+  while (before && before.nodeType === Node.ELEMENT_NODE && drawsNothing(before as HTMLElement)) before = before.previousSibling;
+  if (!before || before.nodeType !== Node.ELEMENT_NODE || !isNoteReference(before as HTMLElement)) return false;
+  const first = text.data.search(/\S/);
+  const box = first >= 0 ? characterBox(doc, text, first) : null;
+  const reference = (before as HTMLElement).getBoundingClientRect();
+  if (!box || !(reference.height > 0)) return false;
+  return !boxesOnDifferentRows(reference, box);
+}
+
+/** The last character that is no space, with its node. */
+function lastCharacter(texts: readonly Text[]): { node: Text; at: number } | null {
+  for (let index = texts.length - 1; index >= 0; index -= 1) {
+    const at = texts[index].data.search(/\S\s*$/);
+    if (at >= 0) return { node: texts[index], at };
+  }
+  return null;
+}
+
+/** The node and offset of character `index` of `texts` read as one string. */
+function characterAt(texts: readonly Text[], index: number): { node: Text; at: number } | null {
+  let rest = index;
+  for (const text of texts) {
+    if (rest < text.length) return { node: text, at: rest };
+    rest -= text.length;
+  }
+  return null;
+}
+
+/** The box of the first drawn character at or after `index` (a space the
+ * row end swallowed has none), with its index. */
+function nextBox(doc: Document, texts: readonly Text[], index: number, end: number): { box: DOMRect; index: number } | null {
+  for (let at = index; at < end && at < index + 64; at += 1) {
+    const place = characterAt(texts, at);
+    if (!place) return null;
+    const box = characterBox(doc, place.node, place.at);
+    if (box) return { box, index: at };
+  }
+  return null;
+}
+
+/**
+ * The first drawn character in `[from, end)` whose box `past` holds for,
+ * where `past` is false for a run of characters and then true to the end
+ * (rows come one after another): by bisection. Null when it holds for none.
+ */
+function firstCharacter(doc: Document, texts: readonly Text[], from: number, end: number, past: (box: DOMRect) => boolean): number | null {
+  let lo = from;
+  let hi = end;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const drawn = nextBox(doc, texts, mid, end);
+    // Nothing drawn from here on: the answer, if any, is before.
+    if (!drawn) hi = mid;
+    else if (past(drawn.box)) hi = mid;
+    else lo = drawn.index + 1;
+  }
+  if (lo >= end) return null;
+  const drawn = nextBox(doc, texts, lo, end);
+  return drawn && past(drawn.box) ? drawn.index : null;
+}
+
 /**
  * A probe for `block`'s heads, or null when the block's fragments are not
  * measured as plain border boxes (no editor root, multi-column sheets).

@@ -16,6 +16,7 @@ import { cellUnderlineIsDouble, DOUBLE_UNDERLINE_THICKNESS } from "@mrnote/core/
 import { estimateTextWidthPx } from "../../../../lib/spreadsheet/text-spill";
 import { spreadsheetFillPatternCss, spreadsheetGradientFillCss } from "@mrnote/core/web/lib/spreadsheet/fill-pattern.ts";
 import { cssFontFamilyOrUndefined } from "@mrnote/core/web/lib/css-font-family.ts";
+import { excelCutFamilyEmboldens } from "@mrnote/core/web/lib/office-fonts/excel-cut-families.ts";
 import { ensureOfficeFauxBoldProbe, officeFamilyHasNoBold } from "@mrnote/core/web/lib/office-fonts/faux-bold.ts";
 import { officeDigitWidth } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import { officePrimaryFontFamily } from "@mrnote/core/web/components/office-ribbon/officeTypographyCatalog.ts";
@@ -34,13 +35,18 @@ export const SPREADSHEET_DEFAULT_FONT_SIZE = spreadsheetPtToPx(
  * the cell's display, spill and multi-line layers.
  */
 /** Excel sets cell text without kerning or ligatures; with the text engine
- * on, the grid draws it that way too, so a measured width is the drawn one. */
+ * on, the grid draws it that way too, so a measured width is the drawn one.
+ * Nor does Excel close up two full-width punctuation marks that meet: the
+ * browser's own trimming (text-spacing-trim: normal, where the font has the
+ * half-width forms -- Noto Sans JP, SC, KR) set 「に、「建物」」 half an em
+ * short at every such pair, a width no measurement had (R447-X72's notes
+ * printed 9 pt short of Excel's over two pairs). */
 function engineTextCss(): CSSProperties {
-  return spreadsheetTextEngineOn() ? { fontKerning: "none", fontVariantLigatures: "none" } : {};
+  return spreadsheetTextEngineOn() ? { fontKerning: "none", fontVariantLigatures: "none", textSpacingTrim: "space-all" } : { textSpacingTrim: "space-all" };
 }
 
 function fauxBoldCss(fontFamily: string | undefined): CSSProperties {
-  if (!officeFamilyHasNoBold(fontFamily)) return {};
+  if (!officeFamilyHasNoBold(fontFamily) && !excelCutFamilyEmboldens(fontFamily)) return {};
   ensureOfficeFauxBoldProbe();
   return spreadsheetFauxBoldCss();
 }

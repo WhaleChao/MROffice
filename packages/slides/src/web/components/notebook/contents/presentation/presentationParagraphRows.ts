@@ -23,6 +23,9 @@ import {
   nativeBulletGlyph,
   normalizeBlockBulletChar,
   normalizeNumberFormat,
+  normalizeParagraphEastAsianLines,
+  normalizeParagraphNativeKerning,
+  type ParagraphEastAsianLines,
   paragraphEndLineFontSize,
   renderParagraphs,
 } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
@@ -222,6 +225,10 @@ export interface PresentationParagraphRowPlan {
   readonly fontAlign?: "auto" | "t" | "ctr" | "base" | "b";
   /** The Latin face its paragraph mark is set in, where the file says it (`SlideParagraph.endLatinFace`). */
   readonly endLatinFace?: string;
+  /** The row's own kerning threshold, points (`SlideParagraph.nativeKerning`, readings row 1009). */
+  readonly nativeKerning?: number;
+  /** The row's own East Asian line rules (`SlideParagraph.nativeEastAsianLines`, readings row 1009). */
+  readonly nativeEastAsianLines?: ParagraphEastAsianLines;
   /** The row ends at a line break of its paragraph, not its mark (`SlideParagraph.endsInLineBreak`). */
   readonly endsInLineBreak?: true;
 }
@@ -497,6 +504,12 @@ export function planPresentationParagraphRows({
         ? { fontAlign: paragraphs[index]!.fontAlign ?? paragraphs[index]!.fontAlignInherited }
         : {}),
       ...(paragraphs[index]?.endLatinFace ? { endLatinFace: paragraphs[index]!.endLatinFace } : {}),
+      ...(normalizeParagraphNativeKerning(paragraphs[index]?.nativeKerning) !== undefined
+        ? { nativeKerning: normalizeParagraphNativeKerning(paragraphs[index]!.nativeKerning)! }
+        : {}),
+      ...(normalizeParagraphEastAsianLines(paragraphs[index]?.nativeEastAsianLines)
+        ? { nativeEastAsianLines: normalizeParagraphEastAsianLines(paragraphs[index]!.nativeEastAsianLines)! }
+        : {}),
       ...(paragraphs[index]?.endsInLineBreak ? { endsInLineBreak: true as const } : {}),
     };
   });

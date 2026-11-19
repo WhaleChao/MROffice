@@ -92,7 +92,16 @@ export function startOfficeTextOutlineOverlay(doc: Document): void {
     style.textContent = STYLESHEET;
     doc.head.append(style);
   }
-  const observer = new MutationObserver(onMutations);
+  // A record delivered after the document's window is gone (the page torn
+  // down -- in tests, the DOM environment, `Element` with it) has nothing
+  // left to draw: the observer stops instead of throwing from `ownerOf`.
+  const observer = new MutationObserver((records, self) => {
+    if (!doc.defaultView || typeof Element === "undefined") {
+      self.disconnect();
+      return;
+    }
+    onMutations(records);
+  });
   observer.observe(doc.documentElement, {
     subtree: true,
     childList: true,

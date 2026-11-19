@@ -21,11 +21,13 @@
  * Only the paragraphs a transaction touched are measured again (typing
  * re-reads one paragraph); a font landing re-reads them all.
  */
+import { coldFirstLayout, firstLayoutHoldsFaces } from "./paged/coldFirstLayout";
 import { noteEngineDeclinedBlock, takeEngineDeclinedNews } from "./engineDeclinedBlocks";
 import { drawnLinesWidth, engineLinesKeptOn, forgetDrawnLines, noteDrawnLines, retireSeededLines, seededLinesFor, spansAt } from "./engineLinesKept";
 import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
+import { Plugin, PluginKey, type EditorState, type Transaction } from "@tiptap/pm/state";
+import { bandTabLayoutKey } from "./paged/bandTabLayout";
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view";
 
 import {
@@ -58,7 +60,7 @@ import { normalizeAutoHyphenation, normalizeHyphenationOptions } from "./documen
 import { layoutDocsBlockLines } from "../../../../lib/text-engine/docs-block-layout";
 import { textEngineEnabled } from "../../../../lib/text-engine/flags";
 import { textEngineOn } from "../../../../lib/text-engine/page-adapter";
-import { docsBlockLineRule, noteEngineBlockLines, noteEngineTailLines } from "./paged/ledger/ledgerEngineLines";
+import { docsBlockLineRule, noteEngineBlockLines, noteEngineTailLines, setEngineJoinedRows, type EngineRowStart } from "./paged/ledger/ledgerEngineLines";
 import { normalizeWordCompatibilityMode } from "./documentOverflowPunctuation";
 import { wordSetsIdeographsAsLetters, wordEastAsianLineRulesApply } from "./wordFarEastDefaults";
 import { touchedTextblockRanges } from "./touchedTextblocks";
@@ -86,6 +88,9 @@ const FACE_HOLD_MS = 4000;
  * are looked at for the engine's answer (the ledger is not held for this). */
 const FACE_WATCH_MS = 60_000;
 const FACE_WATCH_STEP_MS = 250;
+/** The same under the cold first layout, which reads only the waiting
+ * paragraphs again (a look is an epoch comparison). */
+const FACE_WATCH_ONCE_STEP_MS = 100;
 /** How long after a pass (or a flush) the paragraphs' widths are looked at
  * again, ms, and how many at most a look reads. */
 const WIDTH_WATCH_MS = 300;
@@ -276,6 +281,83 @@ function rulesFor(view: EditorView, node: ProseMirrorNode): DocsLayoutRules {
   const lineRules = eastAsian && wordEastAsianLineRulesApply(attrs, node);
   const kinsoku: KinsokuList | null = lineRules ? "zh-CN" : null;
   return { compatibilityMode: normalizeWordCompatibilityMode(attrs.wordCompatibilityMode), kinsoku, ideographsAsLetters: eastAsian && wordSetsIdeographsAsLetters(attrs), ...(eastAsian && !lineRules ? { eastAsianLineRules: false } : {}) };
+}
+
+/**
+ * The engine's rows of a paragraph's two pieces laid out as one, for the page
+ * ledger's reading of a page seam (ledgerEngineLines.EngineJoinedRows): the
+ * rows Word breaks, which the browser's own breaker misses by a hair where a
+ * drawn line is corrected to them. Read from the copy as from a paragraph on
+ * the page; the corrections its two halves carry are not read (the engine
+ * fills lines from the faces' own advances).
+ */
+function engineJoinedRows(
+  view: EditorView,
+  head: { readonly node: ProseMirrorNode; readonly dom: HTMLElement },
+  tail: { readonly node: ProseMirrorNode; readonly dom: HTMLElement },
+  copy: HTMLElement,
+): readonly EngineRowStart[] | null | undefined {
+  if (!textEngineOn("docs")) return null;
+  // A float narrows lines the engine fills whole; hyphenation needs the block's own pass.
+  const floats: DocsFloatCache = new Map();
+  if (docsParagraphBesideFloat(head.dom, floats) || docsParagraphBesideFloat(tail.dom, floats)) return undefined;
+  if (!docsHyphenationOff() && copy.getAttribute("data-auto-hyphenation") === "true" &&
+      normalizeAutoHyphenation((view.state.doc.attrs as Record<string, unknown>).autoHyphenation)) return undefined;
+  const paragraph = readDocsParagraph(copy);
+  if (paragraph.pending) return undefined;
+  if (paragraph.unsupported || !paragraph.pieces.length) return null;
+  // (The East Asian rules go by the piece that holds East Asian text.)
+  const rules = rulesFor(view, CJK.test(head.node.textContent) || !CJK.test(tail.node.textContent) ? head.node : tail.node);
+  const starts = normalizeStarts(paragraph, docsEngineLineStarts(paragraph, rules));
+  const rows: EngineRowStart[] = [];
+  for (const start of starts) {
+    const piece = paragraph.pieces[start];
+    if (!piece?.node || piece.offset === undefined) return undefined;
+    rows.push({ node: piece.node, offset: piece.offset });
+  }
+  return rows;
+}
+setEngineJoinedRows(engineJoinedRows);
+
+/**
+ * Whether an edit waiting for its lines is in a paragraph cut across pages
+ * (or columns): those are measured at once, not after the typing pauses.
+ *
+ * The page ledger cuts such a paragraph by its rows. Read on a key with the
+ * browser's own rows, and again a moment later with the engine's (which a
+ * line drawn corrected keeps where Word breaks it), the cut moved and came
+ * back: a row or a word sent across the seam and returned, every page after
+ * it with it (corpus R380-D22: 6 of 204 keys, 0 with the lines read per
+ * key). One paragraph's lines a key cost what typing in a short document
+ * does already. `window.__docsEngineSeamHoldsTyping = true` holds them for
+ * the pause, as before (A/B).
+ */
+function editAtPageSeam(view: EditorView): boolean {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsEngineSeamHoldsTyping?: boolean }) | null;
+  if (win?.__docsEngineSeamHoldsTyping === true) return false;
+  const state = documentEngineLineBreaksKey.getState(view.state);
+  if (!state || state.dirty === "all") return false;
+  const ranges = [...state.dirty, ...state.retry];
+  if (!ranges.length || ranges.length > 8) return false;
+  // The pieces of paragraphs cut across a page or a column, by their place in
+  // the document (a range's own position may name the sheet between them).
+  for (const piece of Array.from(view.dom.querySelectorAll<HTMLElement>("[data-page-split-continues='true'], [data-page-split-continuation='true']"))) {
+    let from: number;
+    try {
+      from = view.posAtDOM(piece, 0);
+    } catch {
+      continue;
+    }
+    const node = view.state.doc.nodeAt(Math.max(0, from - 1));
+    const to = from + (node && node.isTextblock ? node.content.size : (piece.textContent ?? "").length);
+    if (ranges.some(([a, b]) => b >= from - 1 && a <= to + 1)) {
+      // (Counted for a harness that checks this reaches the seam it means.)
+      const holder = win as (Window & { __docsEngineSeamReads?: number }) | null;
+      if (holder) holder.__docsEngineSeamReads = (holder.__docsEngineSeamReads ?? 0) + 1;
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Pieces' natural drawn widths; a justified paragraph is read left-aligned
@@ -642,6 +724,44 @@ function engineHyphenSpans(view: EditorView, paragraph: DocsParagraph, starts: r
   return spans;
 }
 
+/** Off with `window.__docsEngineTabNewsOff = true`: a paragraph whose tabs the
+ * tab layout sized anew is not read again, as before. */
+function engineTabNewsOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsEngineTabNewsOff?: boolean }).__docsEngineTabNewsOff === true;
+}
+
+/** The text blocks (their ranges) whose tab decorations differ between two
+ * states of the same document (bandTabLayout's set). */
+export function tabbedBlocksChanged(state: EditorState, previous: EditorState): Array<[number, number]> {
+  const now = bandTabLayoutKey.getState(state)?.set;
+  const before = bandTabLayoutKey.getState(previous)?.set;
+  if (!now || now === before || state.doc !== previous.doc) return [];
+  const byBlock = (set: DecorationSet | undefined) => {
+    const out = new Map<number, string>();
+    for (const decoration of set?.find() ?? []) {
+      let $at;
+      try {
+        $at = state.doc.resolve(decoration.from);
+      } catch {
+        continue;
+      }
+      const start = $at.depth > 0 ? $at.start($at.depth) - 1 : decoration.from;
+      const spec = (decoration as unknown as { type?: { attrs?: Record<string, unknown> } }).type?.attrs ?? {};
+      out.set(start, `${out.get(start) ?? ""}|${decoration.from}:${decoration.to}:${JSON.stringify(spec)}`);
+    }
+    return out;
+  };
+  const a = byBlock(now);
+  const b = byBlock(before);
+  const ranges: Array<[number, number]> = [];
+  for (const start of new Set([...a.keys(), ...b.keys()])) {
+    if (a.get(start) === b.get(start)) continue;
+    const node = state.doc.nodeAt(start);
+    if (node?.isTextblock) ranges.push([start, start + node.nodeSize]);
+  }
+  return ranges;
+}
+
 export const DocumentEngineLineBreaks = Extension.create({
   name: "documentEngineLineBreaks",
   addProseMirrorPlugins() {
@@ -781,12 +901,18 @@ export const DocumentEngineLineBreaks = Extension.create({
               waitUntilAttached();
               return;
             }
+            // (Under the cold first layout these lines are read while the first
+            // layout waits for the faces, unlike the projections after them:
+            // reading them asks for the face files they need, and a first
+            // layout let go before those files were in waited for them.)
+            if (firstLayoutHoldsFaces(view.dom, schedule, "engine-lines")) return;
             markPending(true);
             if (frame !== null) return;
             const seen = flushes;
             frame = win.requestAnimationFrame(() => {
               frame = win.requestAnimationFrame(() => {
                 frame = null;
+                if (firstLayoutHoldsFaces(view.dom, schedule, "engine-lines")) return;
                 if (flushes === seen) pass(false);
                 else settle(false);
               });
@@ -797,7 +923,8 @@ export const DocumentEngineLineBreaks = Extension.create({
           // the page ledger asks for the lines first.
           let typingTimer: number | null = null;
           const typingHolds = () =>
-            (win as Window & { __docsEngineLinesPerKey?: boolean }).__docsEngineLinesPerKey !== true && msSinceTyping() < TYPING_PAUSE_MS;
+            (win as Window & { __docsEngineLinesPerKey?: boolean }).__docsEngineLinesPerKey !== true && msSinceTyping() < TYPING_PAUSE_MS &&
+            !editAtPageSeam(view);
           /** Measure the edits once the typing has paused: nothing pending meanwhile. */
           const afterTyping = () => {
             if (typingTimer !== null) return;
@@ -870,6 +997,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               for (const [from, to] of parts) collect(from, to);
             });
             for (const [from, to] of state.retry) collect(from, to);
+            const takenWaiting: ProseMirrorNode[] = [];
             if (facesLanded && waitingForFaces.size && !pendingAnywhereOff()) {
               facesLanded = false;
               for (const { node, pos } of blocksWaitingForFaces(doc, waitingForFaces)) {
@@ -877,9 +1005,10 @@ export const DocumentEngineLineBreaks = Extension.create({
                 seen.add(pos);
                 blocks.push({ node, pos, retry: false });
               }
+              takenWaiting.push(...waitingForFaces);
               waitingForFaces.clear();
             }
-            return { doc, blocks, all, later, takenSheets, takenMoved, dirty: state.dirty === "all" || state.dirty.length > 0 || state.retry.length > 0 || fromFonts.length > 0 || takenMoved.length > 0 };
+            return { doc, blocks, all, later, takenSheets, takenMoved, takenWaiting, dirty: state.dirty === "all" || state.dirty.length > 0 || state.retry.length > 0 || fromFonts.length > 0 || takenMoved.length > 0 };
           };
           /** Measure; `sync`: every block now, the retry rounds too (the
            * ledger is waiting). Otherwise a slice per frame. */
@@ -903,7 +1032,7 @@ export const DocumentEngineLineBreaks = Extension.create({
               const collected = collectBlocks();
               if (!collected) return;
               readAll ||= collected.all;
-              const { doc, blocks, all, dirty, later, takenSheets, takenMoved } = collected;
+              const { doc, blocks, all, dirty, later, takenSheets, takenMoved, takenWaiting } = collected;
               if (!blocks.length) {
                 // Nothing within the horizon: dispatch only if that changes
                 // the state (a flush that finds the same ranges left does
@@ -969,6 +1098,12 @@ export const DocumentEngineLineBreaks = Extension.create({
                 if (all) full = true;
                 for (const sheet of takenSheets) fontSheets.add(sheet);
                 widthMoved.push(...takenMoved);
+                // The paragraphs it took from those waiting for faces are
+                // read by whatever reads next (the flush that cut it short).
+                if (takenWaiting.length) {
+                  for (const node of takenWaiting) waitingForFaces.add(node);
+                  facesLanded = true;
+                }
               };
               const step = () => {
                 frame = null;
@@ -1007,23 +1142,38 @@ export const DocumentEngineLineBreaks = Extension.create({
           // when a pending answer may have come: it is looked at for a minute.
           let facesWatch: number | null = null;
           let facesEpoch = "";
+          let facesAnswerEpoch = "";
           let facesWatchUntil = 0;
+          // The cold first layout (coldFirstLayout): face files that land
+          // change only the answers that were pending (textEngineAnswerEpoch),
+          // so only the paragraphs waiting for them are read again (a Chinese
+          // face's slices landing one by one read every paragraph of the
+          // document again each time, the first page held all the while).
+          const facesOnce = () => coldFirstLayout(win)?.fontsOnce === true && !pendingAnywhereOff();
           const watchFaces = () => {
             facesEpoch = textEngineEpoch();
+            facesAnswerEpoch = textEngineAnswerEpoch();
             if (facesWatch !== null) return;
             facesWatchUntil = performance.now() + FACE_WATCH_MS;
+            const once = facesOnce();
+            const step = once ? FACE_WATCH_ONCE_STEP_MS : FACE_WATCH_STEP_MS;
             const look = () => {
               facesWatch = null;
               if (textEngineEpoch() !== facesEpoch) {
+                if (once && textEngineAnswerEpoch() === facesAnswerEpoch) {
+                  facesLanded = true;
+                  schedule();
+                  return;
+                }
                 // Read again, every paragraph; still pending, the pass watches on.
                 full = true;
                 facesLanded = true;
                 schedule();
                 return;
               }
-              if (performance.now() < facesWatchUntil) facesWatch = win.setTimeout(look, FACE_WATCH_STEP_MS);
+              if (performance.now() < facesWatchUntil) facesWatch = win.setTimeout(look, step);
             };
-            facesWatch = win.setTimeout(look, FACE_WATCH_STEP_MS);
+            facesWatch = win.setTimeout(look, step);
           };
           
 
@@ -1040,6 +1190,9 @@ export const DocumentEngineLineBreaks = Extension.create({
             // later wait starts its own hold).
             if (facesPending) facesPendingSince ??= performance.now();
             else if (readAll || (facesPendingSince !== null && performance.now() - facesPendingSince >= FACE_HOLD_MS)) facesPendingSince = null;
+            // (Reading the waiting paragraphs alone ends the wait once none is
+            // waiting any more: they were the ones it was for.)
+            else if (facesPendingSince !== null && waitingForFaces.size === 0 && facesOnce()) facesPendingSince = null;
             if (facesPending) watchFaces();
             const holding = facesPendingSince !== null && performance.now() - facesPendingSince < FACE_HOLD_MS;
             markPending(work || holding);
@@ -1145,6 +1298,19 @@ export const DocumentEngineLineBreaks = Extension.create({
               if (updated.state.doc !== previousState.doc) {
                 if (typingHolds()) afterTyping();
                 else scheduleAfterPaint();
+              }
+              // ...and the tabs the tab layout sized anew (bandTabLayout): the
+              // lines are cut from the tab widths drawn, so a paragraph whose
+              // tabs changed is read again. Not read again, the lines of a
+              // tabbed paragraph were those of the widths in place when it
+              // was last read, which the tab layout may have changed after
+              // (R282-D25: two lines or three by which came last).
+              else if (!engineTabNewsOff()) {
+                const moved = tabbedBlocksChanged(updated.state, previousState);
+                if (moved.length) {
+                  widthMoved.push(...moved);
+                  schedule();
+                }
               }
             },
             destroy() {

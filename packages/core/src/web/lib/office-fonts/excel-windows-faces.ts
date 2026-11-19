@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import cellPitchFaces from "./excel-windows-cell-pitch-faces.json";
 import data from "./excel-windows-faces.json";
 
 /**
@@ -119,4 +120,18 @@ export function excelWindowsFaceKey(family: string | null | undefined, record?: 
   const own = (family ?? "").trim();
   const drawn = excelWindowsDrawnFaces(own, record ?? undefined);
   return (drawn?.latin ?? own).toLowerCase();
+}
+
+const CELL_PITCH_FACES: ReadonlySet<string> = new Set((cellPitchFaces as { faces: string[] }).faces);
+
+/**
+ * Whether `family` is a fixed-pitch East Asian face of GDI's (ＭＳ ゴシック,
+ * ＭＳ 明朝, 黑体, 新宋体, 細明體, 楷体, 仿宋, 굴림체, 돋움체, 바탕체, 궁서체):
+ * Windows Excel prints each of its full-width characters twice the half-width
+ * cell wide, 2 x floor(ppem / 2 + 0.5) printer dots, not at the em as it sets
+ * 宋体's or ＭＳ Ｐゴシック's (lookwin p186-lw; the API's
+ * excel_windows_cell_pitch, the same table).
+ */
+export function excelWindowsCellPitch(family: string | null | undefined): boolean {
+  return !!family && CELL_PITCH_FACES.has(family.trim().replace(/^["']|["']$/g, "").trim().toLowerCase());
 }

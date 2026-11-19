@@ -92,6 +92,10 @@ import {
 import { LatexCompileTimeoutNotice } from "./code-output/LatexCompileTimeoutNotice";
 import type { PdfPageHighlight, PdfPagePoint } from "@mrnote/pdf/web/components/notebook/contents/pdf/PdfReadOnlyPage.tsx";
 import { toast } from "@mrnote/core/web/hooks/use-toast.ts";
+import { ToastAction } from "@mrnote/core/web/components/ui/toast.tsx";
+import { MRNOTE_DOCUMENT_COMMAND_TYPE } from "@mrnote/core/web/components/console/editor/native-document/documentCommandShape.ts";
+import RecoveredCopiesNotice, { recoveredCopyTime } from "@mrnote/core/web/components/notebook/RecoveredCopiesNotice.tsx";
+import { deleteAutoRecoverCopy, listAutoRecoverCopies, type AutoRecoverCopy } from "@mrnote/core/web/lib/autorecover-store.ts";
 import { useChangedState } from "@mrnote/core/web/hooks/useChangedState.ts";
 import { CodeBinaryFilePreview } from "./CodeBinaryFilePreview";
 import {
@@ -645,8 +649,11 @@ import {
 } from "./codeTaskPaneDock";
 import {
   APPLY_DOCUMENT_EDIT_COMMAND_EVENT,
+  DOCUMENT_EDIT_APPLIED_EVENT,
   DOCUMENT_EDIT_CONTEXT_REQUEST_EVENT,
   DOCUMENT_EDIT_UNDO_REQUEST_EVENT,
+  dispatchDocumentEditUndoRequest,
+  type DocumentEditAppliedDetail,
   type ApplyDocumentEditCommandDetail,
   type DocumentEditContext,
   type DocumentEditUndoRequestDetail,
@@ -704,6 +711,10 @@ import {
   type CodeRefactorUndoReceipt,
 } from "../../../lib/code-runner/code-refactor-preview";
 import { pageStoredJsonEquals } from "@mrnote/core/web/lib/page-save-acknowledgement.ts";
+import {
+  invertCodeTextChanges,
+  type CodeTextChangesAgainst,
+} from "../../../lib/code-runner/code-text-changes";
 import { isUpdateDepthError } from "@mrnote/core/web/components/notebook/WindowErrorBoundary.tsx";
 import { isWorkspaceLanguage } from "../../../lib/code-runner/workspace-intelligence";
 import {
@@ -1830,6 +1841,13 @@ function sharedAppTitle(source: string): string {
   } catch {
     return "";
   }
+}
+
+/** A recovered copy's code and language, when it is a code page's body. */
+function recoveredCodeOf(copy: AutoRecoverCopy): { content: string; language: string | null } | null {
+  const body = copy.payload.content as { type?: unknown; content?: unknown; language?: unknown };
+  if (body?.type !== CODE_CONTENT_TYPE || typeof body.content !== "string") return null;
+  return { content: body.content, language: typeof body.language === "string" ? body.language : null };
 }
 
 export default function CodeWindow({
@@ -6336,6 +6354,7 @@ export default function CodeWindow({
       text: string,
       output?: RunResult | null,
       debugConfiguration?: CodeDebugConfiguration,
+      positions?: CodeTextChangesAgainst,
     ) => void
   >(() => {});
 
@@ -6345,6 +6364,9 @@ export default function CodeWindow({
       nextContent: string,
       nextOutput?: RunResult | null,
       nextDebugConfiguration?: CodeDebugConfiguration,
+      // Where the text change was made, when the caller knows: the shared
+      // text is written at those places (code-text-changes, TRIAGE 47).
+      positions?: CodeTextChangesAgainst,
     ) => {
       // In guest mode there is no backend page to write — saves are no-ops.
       // Authoring again retires the answer an earlier explicit save was given,
@@ -6363,7 +6385,7 @@ export default function CodeWindow({
       lastPersistedContentJsonRef.current = draft.content_json ?? null;
       const lease = codePageBufferLeaseRef.current;
       if (lease) {
-        lease.publishDraft(draft);
+        lease.publishDraft(draft, positions);
       } else {
         autosave.queueSave(draft);
       }
@@ -8122,7 +8144,7 @@ export default function CodeWindow({
       },
       getText: () => contentRef.current,
       getLanguage: () => languageRef.current,
-      setText: (text: string) => {
+      setText: (text: string, positions?: CodeTextChangesAgainst) => {
         if (!codeMayAuthorRef.current) return;
         if (!acceptCodeSourceLength(text)) return;
         // Registry consumers (Find in Files, Compare, Problems) may re-read the
@@ -8132,7 +8154,13 @@ export default function CodeWindow({
         debugTimelinePersistenceGenerationRef.current += 1;
         debugTimelineReplayGenerationRef.current += 1;
         installAuthoritativeContent(text);
-        persistRef.current(languageRef.current, text);
+        persistRef.current(
+          languageRef.current,
+          text,
+          undefined,
+          undefined,
+          positions,
+        );
         notifyCodeWindowRegistryChange(registeredCodeWindowEntryRef.current ?? undefined);
       },
       getProblems: () => problemsRef.current,
@@ -8984,7 +9012,14 @@ export default function CodeWindow({
         }
       }
       for (const edit of edits) {
-        entriesById.get(edit.bufferId)?.setText(edit.after);
+        entriesById
+          .get(edit.bufferId)
+          ?.setText(
+            edit.after,
+            edit.changes
+              ? { changes: edit.changes, expected: edit.before }
+              : undefined,
+          );
       }
       return true;
     },
@@ -9203,6 +9238,7 @@ export default function CodeWindow({
         bufferId: change.bufferId,
         before: change.before,
         after: change.after,
+        changes: change.changes,
       })),
       plan.guards.map((guard) => ({
         bufferId: guard.bufferId,
@@ -9251,6 +9287,9 @@ export default function CodeWindow({
         bufferId: change.bufferId,
         before: change.after,
         after: change.before,
+        changes: change.changes
+          ? invertCodeTextChanges(change.before, change.changes)
+          : undefined,
       })),
       receipt.guards.map((guard) => ({
         bufferId: guard.bufferId,
@@ -13743,7 +13782,16 @@ export default function CodeWindow({
     setFifUndoSnapshot(undoSnapshot);
     setFifActiveHitKey(null);
     for (const [id, newText] of result.changes) {
-      entryById.get(id)?.setText(newText);
+      const changes = result.edits?.get(id);
+      const before = buffers.find((buffer) => buffer.id === id)?.text;
+      entryById
+        .get(id)
+        ?.setText(
+          newText,
+          changes && before !== undefined
+            ? { changes, expected: before }
+            : undefined,
+        );
     }
   }, [
     fifBuffers,
@@ -13776,7 +13824,16 @@ export default function CodeWindow({
     setFifActiveHitKey(null);
     if (result.restoredBufferCount === 0) return;
     for (const [id, originalText] of result.changes) {
-      entryById.get(id)?.setText(originalText);
+      const changes = result.edits?.get(id);
+      const live = buffers.find((buffer) => buffer.id === id)?.text;
+      entryById
+        .get(id)
+        ?.setText(
+          originalText,
+          changes && live !== undefined
+            ? { changes, expected: live }
+            : undefined,
+        );
     }
   }, [fifUndoSnapshot, openWorkspaceReplaceTargets]);
 
@@ -14365,6 +14422,91 @@ export default function CodeWindow({
     windowId,
     t,
   ]);
+
+  // The changes a conflict's Reload set aside (TRIAGE 41; kept by
+  // discardLocalAndReload's keepAside), offered when the page opens as Word's
+  // Document Recovery pane offers recovered versions: never applied by
+  // itself. Open as new page (recommended) writes the copy to a page of its
+  // own and changes no one's code; Replace, asked first, puts it over this
+  // page's code through the AI edit path, so it can be undone.
+  const [recoveredCopies, setRecoveredCopies] = useState<AutoRecoverCopy[]>([]);
+  const recoveredCopiesReadRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (guestMode || autosave.loading || autosave.page?.id !== pageId) return;
+    if (recoveredCopiesReadRef.current === pageId) return;
+    recoveredCopiesReadRef.current = pageId;
+    void listAutoRecoverCopies(pageId).catch(() => [] as AutoRecoverCopy[]).then((copies) => {
+      if (recoveredCopiesReadRef.current !== pageId) return;
+      setRecoveredCopies(copies.filter((copy) => recoveredCodeOf(copy) !== null));
+    });
+  }, [autosave.loading, autosave.page?.id, guestMode, pageId]);
+  const dropRecoveredCopy = useCallback((copy: AutoRecoverCopy) => {
+    void deleteAutoRecoverCopy(pageId, copy.slot);
+    setRecoveredCopies((list) => list.filter((entry) => entry.slot !== copy.slot));
+  }, [pageId]);
+  const openRecoveredCopyAsPage = useCallback(async (copy: AutoRecoverCopy) => {
+    const notebookId = autosave.page?.notebook_id;
+    const code = recoveredCodeOf(copy);
+    if (!notebookId || !code || !windowManagerActions) {
+      toast({ title: t("pages.recoveredCopy.restoreFailed"), variant: "destructive" });
+      return;
+    }
+    try {
+      // A page of its own: not a file of this page's workspace (its path
+      // would name this page's file twice).
+      const body: Record<string, unknown> = { ...copy.payload.content };
+      delete body[CODE_WORKSPACE_REFERENCE_KEY];
+      const created = await createPage(notebookId, {
+        title: t("pages.recoveredCopy.newPageTitle", {
+          title: copy.payload.title || autosave.page?.title || t("pages.untitled"),
+          time: recoveredCopyTime(copy),
+        }),
+        page_type: "code",
+        content_json: body,
+      });
+      dispatchNotebookPagesChanged(notebookId);
+      windowManagerActions.openWindow({
+        type: "note",
+        title: created.title,
+        meta: { notebookId, pageId: created.id, pageType: "code" },
+      });
+      dropRecoveredCopy(copy);
+    } catch {
+      toast({ title: t("pages.recoveredCopy.restoreFailed"), variant: "destructive" });
+    }
+  }, [autosave.page?.notebook_id, autosave.page?.title, dropRecoveredCopy, t, windowManagerActions]);
+  const replaceCodeWithRecoveredCopy = useCallback((copy: AutoRecoverCopy) => {
+    const code = recoveredCodeOf(copy);
+    if (!code) return;
+    const proposalId = `autorecover:${pageId}:${copy.slot}`;
+    const time = recoveredCopyTime(copy);
+    const applied = (event: Event) => {
+      const detail = (event as CustomEvent<DocumentEditAppliedDetail>).detail;
+      if (detail?.proposalId !== proposalId) return;
+      window.removeEventListener(DOCUMENT_EDIT_APPLIED_EVENT, applied);
+      if (!detail.ok) {
+        toast({ title: t("pages.recoveredCopy.restoreFailed"), variant: "destructive" });
+        return;
+      }
+      dropRecoveredCopy(copy);
+      const receipt = detail.receipt;
+      toast({
+        title: t("pages.recoveredCopy.codeReplaced", { time }),
+        ...(receipt?.undoable ? { action: (
+          <ToastAction altText={t("pages.recoveredCopy.undo")} data-testid="code-recovered-copy-undo" onClick={() =>
+            dispatchDocumentEditUndoRequest({ receiptId: receipt.id, proposalId, targetPageId: pageId, targetWindowId: windowId ?? null })}>
+            {t("pages.recoveredCopy.undo")}
+          </ToastAction>
+        ) } : {}),
+      });
+    };
+    window.addEventListener(DOCUMENT_EDIT_APPLIED_EVENT, applied);
+    window.dispatchEvent(new CustomEvent<ApplyDocumentEditCommandDetail>(APPLY_DOCUMENT_EDIT_COMMAND_EVENT, { detail: {
+      proposalId, targetPageId: pageId, targetWindowId: windowId ?? null,
+      command: { type: MRNOTE_DOCUMENT_COMMAND_TYPE, action_type: "autorecover.replace", source: "user",
+        operations: [{ op: "set_code_content", content: code.content, ...(code.language ? { language: code.language } : {}) }] },
+    } }));
+  }, [dropRecoveredCopy, pageId, t, windowId]);
 
   useEffect(() => {
     function handler(event: Event) {
@@ -17454,6 +17596,23 @@ export default function CodeWindow({
           ) : null}
         </CodeRibbonStrip>
       </div>
+      <RecoveredCopiesNotice
+        pageId={pageId}
+        copies={recoveredCopies}
+        testIdPrefix="code"
+        description={t("pages.recoveredCopy.codeBody")}
+        actions={[
+          { id: "open-new-page", label: t("pages.recoveredCopy.openAsNewPage"), run: (copy) => void openRecoveredCopyAsPage(copy) },
+          { id: "replace", label: t("pages.recoveredCopy.replaceCode"), disabled: autosave.readOnly,
+            confirm: (_copy, time) => ({
+              title: t("pages.recoveredCopy.replaceCodeConfirmTitle"),
+              body: t("pages.recoveredCopy.replaceCodeConfirmBody", { time }),
+              confirmLabel: t("pages.recoveredCopy.replaceCodeConfirm"),
+            }),
+            run: replaceCodeWithRecoveredCopy },
+          { id: "delete", label: t("pages.recoveredCopy.delete"), run: dropRecoveredCopy },
+        ]}
+      />
       {(toolbarTab === "review" || toolbarTab === "view") &&
       savedVersionCatalogState.pageId === pageId &&
       savedVersionCatalogState.status !== "ready" ? (

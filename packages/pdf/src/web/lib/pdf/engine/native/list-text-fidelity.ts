@@ -22,7 +22,7 @@ import {
   PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP,
   PDF_NATIVE_MAX_ITEM_TEXT_LENGTH,
 } from "./vocabulary";
-import { MRAI_NATIVE_REORDERED_TEXT_MESSAGE } from "./reader-order";
+import { MRAI_NATIVE_REORDERED_TEXT_MESSAGE, pdfTextHasRightToLeftRun } from "./reader-order";
 import {
   MRAI_NATIVE_STRUCT_ACTUAL_TEXT_MESSAGE,
   pdfNativePageHasStructActualText,
@@ -82,12 +82,18 @@ import {
   planMraiNativeParagraphRewriteHistory,
   proveMraiNativeParagraphRewriteOwnership,
   readMraiNativeParagraphTextRules,
+  readMraiNativeParagraphType3PicturesOnly,
+  readMraiNativeParagraphStandingLook,
+  readMraiNativeStandingTextLook,
   readMraiNativeParagraphRewriteEvidence,
+  type MraiNativeStandingTextLook,
   type MraiNativeParagraphRewriteCharacterFormat,
   type MraiNativeParagraphRewriteFace,
   type MraiNativeParagraphRewriteFormatsResolver,
   type MraiNativeParagraphRewriteFrame,
+  type MraiNativeParagraphRewriteFont,
   type MraiNativeParagraphRewriteKernel,
+  type MraiNativeParagraphRewriteStandingStream,
   type PdfNativeParagraphRewriteAlignment,
   type PdfNativeParagraphRewriteEvidence,
   MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE,
@@ -111,7 +117,7 @@ import { pdfTextRuleCharactersAfter } from "../../native-text-part-formats";
 import { isPdfNativeEmbeddedFontKey, readPdfNativeEmbeddedFontKey } from "../../native-embedded-font-key";
 import { proveMraiNativeTextMove, type PdfNativeTextMoveProof } from "./text-move";
 import { PDF_SOURCE_NAME, PDF_SOURCE_NAME_TOKEN, decodePdfSourceName, pdfSourceNamesRead } from "./pdf-source-name";
-import { proveMraiNativeTextGroupMove, type PdfNativeTextGroupMoveProof } from "./text-group-move";
+import { mraiNativeExtGStateLineWidth, proveMraiNativeTextGroupMove, type PdfNativeTextGroupMoveProof } from "./text-group-move";
 import { MRAI_NATIVE_PARAGRAPH_OVER_OTHER_TEXT_REFUSAL } from "./refusal-details";
 
 import {
@@ -159,6 +165,8 @@ import {
   readMraiNativeTopLevelDictionaryEntries,
   applyMraiNativeRequestSpans,
   expandPdfNativeReplacementPieces,
+  inspectMraiNativePageContentStreams,
+  readMraiNativePageResourceDictionaries,
 } from "./content-stream-transaction";
 import { matchAllBehind } from "@mrnote/core/web/lib/regexp-behind.ts";
 
@@ -665,6 +673,11 @@ export interface PdfNativeSourceTextAppearanceRun {
    * by (font-program-face.ts): an editor that sets the run again in a served
    * face keeps its look. */
   readonly programFace?: PdfFontProgramFace;
+  /** `Tr` 3 or 7, nothing drawn (the OCR layer of a scanned page): stated
+   * only in the rules-only proof of such a line,
+   * proveMraiNativeInvisibleTextRunStands -- no other plan keeps such a
+   * show, so a run the page draws never carries the field. */
+  readonly renderingMode?: number;
   readonly text: string;
   readonly color: PdfNativeDeviceColor | null;
   readonly font: PdfNativeTextFontOption;
@@ -682,6 +695,10 @@ export type PdfNativeListTextSourceRun = Readonly<{
   span: Readonly<{ start: number; end: number }>;
 }>;
 
+/** Why a box's words are fixed (PdfNativeListTextSelectionProof.wordsFixed). */
+export type PdfNativeTextWordsFixedReason = "glyphs-read-as-blanks" | "glyphs-read-as-blanks-near" |
+  "letters-read-reordered";
+
 export interface PdfNativeListTextSelectionProof {
   readonly sourceGeometry?: import("../../source-text-appearance").PdfTextSourceAppearance;
   /** Read-only source paint/layout; not a grant to modify these properties. */
@@ -690,11 +707,44 @@ export interface PdfNativeListTextSelectionProof {
    * several shows or lines (the paragraph rewrite's reading of them): what
    * its editor reads 下划线 and 删除线 by, where no one run states a rule. */
   readonly textRules?: Readonly<{ underline?: true; strikethrough?: true }>;
+  
+
+
+
+
+  readonly drawnStyle?: Readonly<{ bold?: true; italic?: true }>;
   readonly target: PdfNativeIndirectObjectRef;
   readonly evidence: PdfNativeListTextFidelityEvidence;
   readonly properties: PdfNativeTextPropertyProof | null;
   /** Drawn in a Type3 face: its format can be set, its words cannot. */
   readonly type3Text?: true;
+  
+
+
+
+
+
+
+
+
+  readonly type3Pictures?: true;
+  /** Its words are fixed for another reason than a Type3 face, and nothing
+   * may set them again or carry them off -- no typing, no delete, no move,
+   * no text box of them: the formats that are written where the text stands
+   * (a colour, a stroked weight, a lean, a rule) can still be set.
+   * "glyphs-read-as-blanks": on its lines the page draws glyphs their font
+   * only calls white space (the dots an Urdu face stands over its letters),
+   * so what the reader reads of it is not what the page shows, and a box of
+   * those words would lose them (MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE).
+   * "glyphs-read-as-blanks-near": none stands on its own lines, but one
+   * stands on the lines around it, which a box made of it would come to
+   * paint over (pdfTextLinesWordsFixedReason).
+   * "letters-read-reordered": right-to-left text drawn in a font most of
+   * whose letters are glyphs of several, which the reader reads turned
+   * round: other words than the page shows, and a text box of them a line
+   * of other letters (pdfRightToLeftLinesReadReordered).
+   * Such a proof states no run and names no piece to hide. */
+  readonly wordsFixed?: PdfNativeTextWordsFixedReason;
   /** The editor asked for one word of a show the reader cut into words, and
    * this proof is of the whole show: `evidence.selection` is the item the
    * editor edits from here on (proofOfReaderChunkWholeRun). */
@@ -1239,6 +1289,8 @@ export interface PdfNativeEditNotice {
 export interface PdfNativeListTextReplacementPlan {
   /** Drawn in a Type3 face (plan-level only; the proof carries it). */
   readonly type3Text?: true;
+  /** Its Type3 glyphs are pictures all (plan-level only; the proof carries it). */
+  readonly type3Pictures?: true;
   /** The selection is one chunk of a show the reader cut at wide gaps, and
    * this is the item of the whole show (readerChunksWholeRunItem). Plan-level
    * only; no record carries it. */
@@ -1502,6 +1554,10 @@ interface FontMetrics {
 
 
   readonly inkedBlankCodes?: ReadonlySet<number>;
+  /** The codes of a simple font whose /Differences glyph name no name list
+   * reads, read here as the code itself. The reader may read such a name its
+   * own way (`/g7079` as U+7079): what these codes read as is not known. */
+  readonly nameUnreadCodes?: ReadonlySet<number>;
   /** Predefined CMap code → CID; absent for Identity and simple encodings. */
   readonly codeToCid?: ReadonlyMap<number, number>;
   readonly cmapName?: string;
@@ -2509,6 +2565,9 @@ function parseToUnicode(
    * (readPdfTrueTypeGlyphInk): a code the table calls white space whose glyph
    * draws is no space (FontMetrics.inkedBlankCodes). */
   glyphInk: ((code: number) => boolean) | null = null,
+  /** False keeps a range whose destination is several characters unread, the
+   * whole table with it (readMraiNativeToUnicodeReading says for whom). */
+  rangesOfSeveral = true,
 ): {
   readonly decode: ReadonlyMap<number, string>;
   readonly encode: ReadonlyMap<string, number>;
@@ -2601,6 +2660,23 @@ function parseToUnicode(
       const start = Number.parseInt(entry[1], 16);
       const end = Number.parseInt(entry[2], 16);
       const destinationHex = entry[3].replace(/\s+/g, "");
+      if (destinationHex.length > 8 && rangesOfSeveral) {
+        // A destination of more than two code units (a ligature's letters):
+        // the codes of the range name it with its last unit counted up, in
+        // its low byte only (ISO 32000-1, 9.10.3). Read as one number, the
+        // whole table was refused and every show of its font went unread: no
+        // format could be written on a line of it (pdf-walk-1000 0339, an
+        // Urdu face's `<227E> <227F> <063906440644>`).
+        const prefix = destinationHex.slice(0, -4);
+        const last = Number.parseInt(destinationHex.slice(-4), 16);
+        if (end < start || (last & 0xff) + end - start > 0xff) {
+          refuse("ToUnicode range is invalid.");
+        }
+        for (let code = start; code <= end; code += 1) {
+          add(code, prefix + (last + code - start).toString(16).padStart(4, "0"));
+        }
+        continue;
+      }
       const firstUnicode = Number.parseInt(destinationHex, 16);
       const hexWidth = destinationHex.length;
       if (end < start || firstUnicode + end - start > (hexWidth === 4 ? 0xffff : 0xffffffff)) {
@@ -2669,8 +2745,49 @@ export function readMraiNativeInkedBlankCodes(
   if (!toUnicodeBytes.length || isReaderDiscardedIdentityToUnicode(toUnicodeBytes)) return null;
   const glyphInk = readPdfTrueTypeGlyphInk(trueTypeProgram);
   if (!glyphInk) return null;
+  // (A table with a range whose destination is several characters is read
+  // here as the planners read it. Left unread, its font had no such codes
+  
+  // spaces was made a text box of what the reader reads of it -- other
+  // letters in another face, its dots gone -- and said only that it was saved
+  
+  // line, and it opens with its words fixed instead: preparePdfFallbackTextOpen.)
   try { return parseToUnicode(toUnicodeBytes, 2, undefined, glyphInk).inkedBlankCodes ?? null; }
   catch { return null; }
+}
+
+/**
+ * Which codes of a font its ToUnicode reads as right-to-left letters (codes
+ * of one byte or of two, as the font's are), and which of those as SEVERAL
+ * of them (a ligature's glyph: the
+ * Urdu «میں» drawn as one). The reader takes a line of right-to-left text
+ * glyph by glyph in the order the page draws them and turns the characters
+ * of the whole line round: the letters of a glyph that stands for several
+ * come out in the opposite order to the one they are written in («ںیم»).
+ * How much of what a font draws is such glyphs says how far what the reader
+ * reads of its lines is from the words the page shows
+ * (source-text-fallback: pdfRightToLeftLinesReadReordered). Null where the
+ * reader reads no text from the stream, or the table is one this engine
+ * does not read.
+ */
+export function readMraiNativeRightToLeftLetterCodes(
+  toUnicodeBytes: Uint8Array,
+  codeUnitBytes: 1 | 2,
+): Readonly<{ letters: ReadonlySet<number>; several: ReadonlySet<number> }> | null {
+  if (!toUnicodeBytes.length || isReaderDiscardedIdentityToUnicode(toUnicodeBytes)) return null;
+  let decode: ReadonlyMap<number, string>;
+  try { decode = parseToUnicode(toUnicodeBytes, codeUnitBytes).decode; }
+  catch { return null; }
+  const letters = new Set<number>(), several = new Set<number>();
+  for (const [code, text] of decode) {
+    let count = 0;
+    for (const character of text) {
+      if (pdfTextHasRightToLeftRun(character) && /\p{L}/u.test(character)) count += 1;
+    }
+    if (count >= 1) letters.add(code);
+    if (count >= 2) several.add(code);
+  }
+  return letters.size ? Object.freeze({ letters, several }) : null;
 }
 
 /** What an Identity-encoded CIDFontType2's ToUnicode (Identity CIDToGIDMap)
@@ -2686,7 +2803,10 @@ export function readMraiNativeToUnicodeReading(
   const glyphInk = readPdfTrueTypeGlyphInk(trueTypeProgram);
   if (!glyphInk) return null;
   try {
-    const read = parseToUnicode(toUnicodeBytes, 2, undefined, glyphInk);
+    // (A table with a range whose destination is several characters stays
+    // unread here, the whole table with it: the repair writes a table again
+    // entry for entry, and writes no such range.)
+    const read = parseToUnicode(toUnicodeBytes, 2, undefined, glyphInk, false);
     return Object.freeze({ decode: read.decode, inkedBlankCodes: read.inkedBlankCodes ?? new Set<number>() });
   } catch { return null; }
 }
@@ -4752,7 +4872,7 @@ function parseSimpleEncodingTables(
   /** Only the codes /Differences names are asked for, behind a ToUnicode: a
    * symbolic face with no base encoding still names those. */
   differencesSuffice = false,
-): Readonly<{ decode: ReadonlyMap<number, string>; encode: ReadonlyMap<string, number> }> {
+): Readonly<{ decode: ReadonlyMap<number, string>; encode: ReadonlyMap<string, number>; nameUnreadCodes?: ReadonlySet<number> }> {
   // A symbolic font's codes mean whatever its own program says they mean.
   // When that program has been read, it is the base; the refusals below are
   // for when there is nothing to read it from.
@@ -4891,7 +5011,8 @@ function parseSimpleEncodingTables(
   // codes as code numbers ("logHxL" for log(x)), which is no text.
   if (decode.size === 0 && base === builtin && differences === null) refuse(MRAI_NATIVE_UNNAMED_GLYPH_MESSAGE);
   if (decode.size === 0) refuse("Simple font encoding maps no editable characters.");
-  return Object.freeze({ decode, encode, ligatureEncodings: readerDisplayAliases(decode, encode) });
+  return Object.freeze({ decode, encode, ligatureEncodings: readerDisplayAliases(decode, encode),
+    ...(readAsCode.size ? { nameUnreadCodes: readAsCode as ReadonlySet<number> } : {}) });
 }
 
 function decodeInlineName(token: string): string {
@@ -5055,6 +5176,61 @@ async function refuseType3GlyphsDrawingNothing(
     if (!procedure.streamBytes || !BLANK_TYPE3_PROCEDURE.test(LATIN1.decode(procedure.streamBytes))) return;
   }
   refuse(MRAI_NATIVE_BLANK_TYPE3_GLYPHS_MESSAGE);
+}
+
+/** A Type3 glyph procedure that says its colours itself (`d0`) and draws
+ * nothing but pictures set by a matrix: `w 0 d0`, then `q`, `Q`, `cm` and
+ * `/Name Do` only. Group 1 is what follows the `d0`. */
+const PICTURE_TYPE3_PROCEDURE = new RegExp(
+  `^[\\s\\0]*(?:${NUMBER}\\s+){2}d0((?:[\\s\\0]+(?:q|Q|(?:${NUMBER}\\s+){6}cm|\\/${PDF_SOURCE_NAME}\\s+Do))+)[\\s\\0]*$`,
+);
+
+/**
+ * Whether every glyph a Type3 font paints is a picture: each of its glyph
+ * procedures either paints nothing, or says its own colours (`d0`) and draws
+ * only images its font's own resources name (a colour emoji a browser prints
+ * as an image in a Type3 procedure). Such glyphs have no weight to take -- a
+ * word processor leaves an emoji as it is in bold text -- and nothing of the
+ * text state reaches what they draw (an image takes no colour, no line width
+ * and no rendering mode), so a weight asked of the text around them is no
+ * reason to refuse it (paragraph-rewrite's Type3 refusal). False where a
+ * procedure cannot be read, draws in the text's own colour (`d1`: a letter),
+ * or draws anything but such an image (a path it strokes would take the
+ * line width a stroked weight sets).
+ */
+async function type3FontPaintsPicturesOnly(
+  fontObject: string,
+  inspectObject: NativeObjectInspector,
+): Promise<boolean> {
+  if (!/\/Subtype\s*\/Type3\b/.test(fontObject)) return false;
+  const inlined = (await inlineIndirectFontEntries(fontObject, inspectObject, ["CharProcs", "Resources"])).source;
+  const charProcs = inlineDictionaryValue(inlined, "CharProcs", false);
+  const resources = inlineDictionaryValue(inlined, "Resources", false);
+  const xObjects = resources === null ? null : inlineDictionaryValue(resources, "XObject", false);
+  if (charProcs === null || xObjects === null) return false;
+  const images = new Map<string, boolean>();
+  for (const entry of readMraiNativeTopLevelDictionaryEntries(xObjects)) {
+    const reference = /^\s*(\d+)\s+(\d+)\s+R\s*$/.exec(xObjects.slice(entry.valueStart, entry.valueEnd));
+    if (!reference) return false;
+    const object = await inspectObject({ objectNumber: Number(reference[1]), generation: Number(reference[2]) });
+    const dictionary = LATIN1.decode(object.objectBytes).split(/\bstream\b/u)[0];
+    images.set(entry.key, object.streamBytes !== null && /\/Subtype\s*\/Image\b/.test(dictionary));
+  }
+  let pictures = 0;
+  for (const entry of readMraiNativeTopLevelDictionaryEntries(charProcs)) {
+    const reference = /^\s*(\d+)\s+(\d+)\s+R\s*$/.exec(charProcs.slice(entry.valueStart, entry.valueEnd));
+    if (!reference) return false;
+    const procedure = await inspectObject({ objectNumber: Number(reference[1]), generation: Number(reference[2]) });
+    if (!procedure.streamBytes) return false;
+    const source = LATIN1.decode(procedure.streamBytes);
+    if (BLANK_TYPE3_PROCEDURE.test(source)) continue;
+    const drawn = PICTURE_TYPE3_PROCEDURE.exec(source);
+    if (!drawn) return false;
+    const named = [...drawn[1].matchAll(new RegExp(`\\/(${PDF_SOURCE_NAME})\\s+Do`, "g"))].map((match) => match[1]);
+    if (!named.length || named.some((name) => images.get(name) !== true)) return false;
+    pictures += 1;
+  }
+  return pictures > 0;
 }
 
 /**
@@ -5697,6 +5873,15 @@ function parseFontMetrics(
       const glyphCodes = readPdfSimpleTrueTypeGlyphCodes(simpleTrueTypeProgram, (code) => read.decode.get(code));
       if (glyphCodes) cmap = restrictSimpleFontEncodeToGlyphs(cmap, glyphCodes);
     }
+    // (The codes whose glyph names no list reads, whatever was made of the tables since.)
+    let nameUnreadCodes: ReadonlySet<number> | undefined;
+    if (!toUnicodeBytes) {
+      try {
+        nameUnreadCodes = parseSimpleEncodingTables(fontObject, descriptorSource, firstChar, lastChar, builtinEncoding).nameUnreadCodes;
+      } catch (error) {
+        if (!(error instanceof PdfNativeTransactionError)) throw error;
+      }
+    }
     return Object.freeze({
       encodingKind: "simple-byte",
       codeUnitBytes: 1,
@@ -5708,6 +5893,7 @@ function parseFontMetrics(
       defaultVerticalMetric: null,
       cidVerticalMetrics: null,
       ...cmap,
+      ...(nameUnreadCodes ? { nameUnreadCodes } : {}),
     });
   }
   if (!/\/Subtype\s*\/Type0\b/.test(fontObject)) {
@@ -7072,7 +7258,17 @@ function readerChunkSelectionProjection(
       return [{ chunk, start, end: chunk.advanceOffset + chunk.advance }];
     }
     if (foldedAfter) {
-      const next = chunks.find((other) => other.codeStart === chunk.codeEnd && other.advance > 0);
+      // The chunk after may start past this one's codes: the codes between
+      // are white-space glyphs the reader never wrote (a sentence's two
+      // spaces on a justified line, each kerned wider: "them.", the gap, "The
+      // time"), which only widened the gap it cut the show at -- as before a
+      // chunk with its gap folded in front.
+      const unit = metrics.codeUnitBytes;
+      const next = chunks.find((other) => other.codeStart === chunk.codeEnd && other.advance > 0) ??
+        chunks.find((other) => other.advance > 0 && other.codeStart > chunk.codeEnd &&
+          (other.codeStart - chunk.codeEnd) % unit === 0 &&
+          /^\s+$/u.test(decodeCodesOrNull(event.codes.slice(chunk.codeEnd, other.codeStart), metrics) ?? "x") &&
+          !chunks.some((between) => between.advance > 0 && between.codeStart >= chunk.codeEnd && between.codeEnd <= other.codeStart));
       if (!next) return [];
       const gap = next.advanceOffset - (chunk.advanceOffset + chunk.advance);
       if (!(gap >= threshold) ||
@@ -17264,6 +17460,11 @@ interface NativeTextPlanContext {
   readonly provenExtGStates: PdfNativeProvenExtGStates;
   /** The owner's `/ColorSpace` names that paint as a device space. */
   readonly provenDeviceColorSpaces?: PdfNativeProvenDeviceColorSpaces;
+  /** Set only by the proof of where an invisible run stands
+   * (proveMraiNativeInvisibleTextRuleStand): the shows a scanned page's OCR
+   * layer sets in `3 Tr` are read beside the drawn ones. No other plan sets
+   * it, so no write of a glyph ever names a show nobody sees. */
+  readonly keepInvisibleShows?: boolean;
   readonly siblingContentPreconditions: readonly PdfNativeObjectPrecondition[];
   /** The page's other content streams, each with the graphics state it
    * starts in; their shows are witnesses to the free space beside an edit. */
@@ -18618,7 +18819,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         context.provenExtGStates, context.initialTextState, context.initialStateKnown,
         context.initialGraphicsStack, context.requireBalancedGraphicsStack,
         new Map([[input.font.resourceName, metrics]]), [item.transform], true,
-        context.provenDeviceColorSpaces,
+        context.provenDeviceColorSpaces, context.keepInvisibleShows === true,
       );
       const distances: Array<Readonly<{ resourceName: string; distance: number; along: number }>> = [];
       for (const event of placed) {
@@ -18833,6 +19034,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
       input.selectionItems?.map(item => item.transform) ?? [],
       false,
       context.provenDeviceColorSpaces,
+      context.keepInvisibleShows === true,
     );
     return {
       page,
@@ -22194,6 +22396,7 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
               color: line.deviceColorKnown ? line.deviceColor : null,
               font: textFontOption(fontByResource.get(line.fontName)!),
               ...(line.renderingMode === 2 && line.strokeMatchesFill ? { syntheticBold: true as const } : {}),
+              ...(line.renderingMode === 3 || line.renderingMode === 7 ? { renderingMode: line.renderingMode } : {}),
               ...programFaceField(fontByResource.get(line.fontName)!),
               fontSize: line.fontSize,
               characterSpacing: line.characterSpacing,
@@ -23624,6 +23827,8 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         ...(text.renderingMode === 1 || (text.renderingMode === 2 && !text.strokeMatchesFill)
           ? { strokedOutline: true as const } : {}),
         ...(text.renderingMode === 2 && text.strokeMatchesFill ? { syntheticBold: true as const } : {}),
+        // (Read only by the rules-only proof, the one plan that keeps such shows.)
+        ...(text.renderingMode === 3 || text.renderingMode === 7 ? { renderingMode: text.renderingMode } : {}),
         ...programFaceField(activePropertyFont),
         fontSize: text.fontSize, characterSpacing: text.characterSpacing, wordSpacing: text.wordSpacing,
         horizontalScale: text.horizontalScale, textMatrix: text.textMatrix, graphicsMatrix: text.graphicsMatrix,
@@ -25735,6 +25940,9 @@ type PdfNativeListTextSelectionReplacementInternalInput =
      * forward plan's leaves are (leafOfGroup), its span the show alone and
      * the gap after it read by the group, which moves the runs after it. */
     readonly leafOfGroup?: boolean;
+    /** Asked only by proveMraiNativeInvisibleTextRuleStand: the page's own
+     * streams are read with their `3 Tr` shows kept. */
+    readonly invisibleRunRules?: boolean;
   };
 
 async function planMraiNativeListTextSelectionReplacementInternal(
@@ -25829,6 +26037,10 @@ async function planMraiNativeListTextSelectionReplacementInGroups(
   sharedInspection: NativeListTextSharedInspection | undefined,
   /** Set when the groups may be prescreened; names the ones passed over. */
   prescreen: { passedOver: string[] } | null,
+  /** Set by a format written where the text stands (standingPageStreams):
+   * the page's own streams are named, each with the context this planner
+   * reads it in, and nothing is planned. */
+  pageStreamSink?: StandingPageStreamSink,
 ): Promise<PdfNativeListTextReplacementPlan> {
   const planRefusalCauses: string[] = [];
   const sourceSha256 =
@@ -25888,6 +26100,10 @@ async function planMraiNativeListTextSelectionReplacementInGroups(
     path?: ResolvedFormPath,
   ) => {
     const context = internNativeTextPlanContext(inspectObject, askedContext);
+    if (pageStreamSink) {
+      if (context.kind === "page" && !path) pageStreamSink.streams.push(Object.freeze({ target, resources, context }));
+      return;
+    }
     const resourceGroups: Array<Array<(typeof resources)[number]>> = [];
     const mixedPdfJsFonts =
       new Set(selection.items?.map((item) => item.fontName) ?? []).size > 1;
@@ -26003,7 +26219,8 @@ async function planMraiNativeListTextSelectionReplacementInGroups(
       const stream = await inspectContentStream(target, []);
       const events = parseTextEvents(stream.streamBytes, first[1], first[0], context.initialGraphicsMatrix,
         context.provenExtGStates, context.initialTextState, context.initialStateKnown, context.initialGraphicsStack,
-        context.requireBalancedGraphicsStack, witnesses, [], true, context.provenDeviceColorSpaces ?? new Map());
+        context.requireBalancedGraphicsStack, witnesses, [], true, context.provenDeviceColorSpaces ?? new Map(),
+        context.keepInvisibleShows === true);
       return Object.assign(witnesses, { events });
     })().catch((error: unknown) => {
       if (!(error instanceof PdfNativeTransactionError)) throw error;
@@ -26579,6 +26796,7 @@ async function planMraiNativeListTextSelectionReplacementInGroups(
             requireBalancedGraphicsStack: true,
             provenExtGStates,
             provenDeviceColorSpaces,
+            ...(input.invisibleRunRules === true ? { keepInvisibleShows: true } : {}),
             siblingContentPreconditions: Object.freeze(
               pageContents.map(untouchedObjectPrecondition),
             ),
@@ -26636,6 +26854,7 @@ async function planMraiNativeListTextSelectionReplacementInGroups(
             requireBalancedGraphicsStack: pageContents.length === 1,
             provenExtGStates,
             provenDeviceColorSpaces,
+            ...(input.invisibleRunRules === true ? { keepInvisibleShows: true } : {}),
             siblingContentPreconditions: Object.freeze(
               pageContents
                 .filter((_, siblingIndex) => siblingIndex !== index)
@@ -26657,6 +26876,11 @@ async function planMraiNativeListTextSelectionReplacementInGroups(
     if (!(error instanceof PdfNativeTransactionError)) throw error;
     planRefusalCauses.push(`page-graph: ${error.message}`);
     plans.splice(pagePlanStart);
+  }
+  if (pageStreamSink) {
+    // (Only the sink is read: its caller plans from the streams named.)
+    pageStreamSink.causes.push(...planRefusalCauses);
+    return STANDING_PAGE_STREAMS_NAMED;
   }
 
   let formPaths: readonly ResolvedFormPath[] = Object.freeze([]);
@@ -28958,7 +29182,15 @@ function paragraphFormatResolver(input: {
   readonly page: PdfNativeIndirectObjectRef | null;
   readonly embeddedFonts?: PdfNativeEmbeddedFontProvider;
 }): MraiNativeParagraphRewriteFormatsResolver {
-  return async ({ request, evidence }) => {
+  // Whether the format asks nothing but what state draws where the text
+  // stands -- a colour, a stroked weight, a rule -- so that the rewrite may
+  
+  const stateFields = (fields: object) => Object.entries(fields).every(([key, value]) =>
+    value === undefined || key === "color" || key === "syntheticBold" || key === "underline" || key === "strikethrough");
+  const { parts: askedParts, alignment, leftIndent, lineStep, firstLineIndent, ...whole } = input.format;
+  const stateOnly = !alignment && !leftIndent && lineStep === undefined && firstLineIndent === undefined && stateFields(whole) &&
+    (askedParts ?? []).every((part) => stateFields({ ...part, start: undefined, end: undefined }));
+  return Object.assign(async ({ request, evidence }: Parameters<MraiNativeParagraphRewriteFormatsResolver>[0]) => {
     const pageRef = input.page ?? evidence.resources?.page ?? null;
     const parts = [...(input.format.parts ?? [])].sort((left, right) => left.start - right.start);
     for (const [index, part] of parts.entries()) {
@@ -29080,7 +29312,7 @@ function paragraphFormatResolver(input: {
       ...(input.format.lineStep !== undefined ? { lineStep: input.format.lineStep } : {}),
       ...(input.format.firstLineIndent !== undefined ? { firstLineIndent: input.format.firstLineIndent } : {}),
     });
-  };
+  }, { stateOnly });
 }
 
 /**
@@ -29215,6 +29447,26 @@ export async function planMraiNativeListTextParagraphFormat(input: Readonly<{
 }
 
 export { MRAI_NATIVE_PARAGRAPH_OVER_OTHER_TEXT_REFUSAL };
+
+
+
+
+
+
+
+
+export async function readMraiNativeListTextStandingLook(input: Readonly<{
+  sourceBytes: Uint8Array;
+  selection: PdfNativeListTextSelectionEvidence;
+}>): Promise<MraiNativeStandingTextLook | null> {
+  if (!pdfTextHasRightToLeftRun(input.selection.item.str)) return null;
+  const { inspection: own, release } = await leaseParagraphFormatInspection(input.sourceBytes);
+  try {
+    return await readMraiNativeStandingTextLook(paragraphRewriteKernel(input.sourceBytes, own), input.selection);
+  } finally {
+    release();
+  }
+}
 
 /** The plan as it is, or -- asked to -- refused where the paragraph set
  * again runs into other text of the page (the rewrite's own notices). */
@@ -30386,6 +30638,96 @@ export async function proveMraiNativeListTextSelection(
   return proofFromNativeListTextPlan(proved);
 }
 
+/** Where one run of a page's own text stands, as its proof reads it: the
+ * stream and span that draw it, the matrices its first show is set in, its
+ * font size and its advance in that text space. It states nothing of the
+ * run's glyphs (no face, colour, weight or slant): a rule drawn beside the
+ * run needs none of them. */
+export interface PdfNativeInvisibleRunStand {
+  readonly contentStream: PdfNativeIndirectObjectRef;
+  readonly runSpan: Readonly<{ start: number; end: number }>;
+  readonly textMatrix: readonly [number, number, number, number, number, number];
+  readonly graphicsMatrix: readonly [number, number, number, number, number, number];
+  readonly fontSize: number;
+  readonly advance: number;
+}
+
+/**
+ * The rules-only proof of a scanned line: where each item of the selection
+ * stands in the page's own text, its invisible shows (`3 Tr`, an OCR layer
+ * under or over the page's image) read beside the drawn ones. Every other
+ * plan of this module passes those shows over, since no glyph of them is
+ * seen and none may be written; a rule drawn beside one changes no glyph,
+ * so its proof is of the run's place alone -- its text matrix, its size and
+ * its advance, which an OCR layer fits to the scanned word.
+ *
+ * One answer an item, in the selection's order: null for an item whose run
+ * this reader cannot prove (a blank item too). The answers offer no property
+ * of the runs and no write of their text.
+ */
+export async function proveMraiNativeInvisibleTextRunStands(input: {
+  readonly sourceBytes: Uint8Array;
+  readonly selection: PdfNativeListTextSelectionEvidence;
+}): Promise<readonly (PdfNativeInvisibleRunStand | null)[]> {
+  const items = input.selection.items ?? [input.selection.item];
+  const { inspection, release } = await leaseParagraphFormatInspection(input.sourceBytes);
+  try {
+    const stands: Array<PdfNativeInvisibleRunStand | null> = [];
+    for (const item of items) {
+      if (!item.str.trim()) {
+        stands.push(null);
+        continue;
+      }
+      try {
+        const proved = proofFromNativeListTextPlan(await planMraiNativeListTextSelectionReplacementInternal({
+          sourceBytes: input.sourceBytes,
+          selection: Object.freeze({
+            sourceSha256: input.selection.sourceSha256,
+            selectionRevision: input.selection.selectionRevision,
+            pageNumber: input.selection.pageNumber,
+            startOffset: 0,
+            endOffset: item.str.length,
+            item,
+          }),
+          replacementText: item.str,
+          invisibleRunRules: true,
+        }, true, undefined, false, inspection));
+        const runs = proved.sourceAppearance ?? [];
+        const first = runs[0];
+        const span = pdfNativeListTextSourceRunSpan(proved);
+        const advance = proved.evidence.originalAdvance;
+        // One place on the page: a run drawn in a Form, a paragraph the
+        // reader joined, or shows set in different page transforms name no
+        // one stretch a rule runs along.
+        // (And invisible shows alone: a run the page draws has its rule in
+        
+        if (!first || !span || !(advance > 0) || !Number.isFinite(advance) ||
+          runs.some((run) => run.renderingMode !== 3 && run.renderingMode !== 7) ||
+          first.textMatrix.length !== 6 || first.graphicsMatrix.length !== 6 ||
+          proved.evidence.wrapping === "paragraph-reflow" || proved.evidence.paragraphRewrite ||
+          runs.some((run) => run.graphicsMatrix.some((value, index) => Math.abs(value - first.graphicsMatrix[index]) > 1e-6))) {
+          stands.push(null);
+          continue;
+        }
+        stands.push(Object.freeze({
+          contentStream: Object.freeze({ ...(proved.sourceRun?.contentStream ?? proved.target) }),
+          runSpan: Object.freeze({ start: span.start, end: span.end }),
+          textMatrix: Object.freeze([...first.textMatrix]) as unknown as PdfNativeInvisibleRunStand["textMatrix"],
+          graphicsMatrix: Object.freeze([...first.graphicsMatrix]) as unknown as PdfNativeInvisibleRunStand["graphicsMatrix"],
+          fontSize: first.fontSize,
+          advance,
+        }));
+      } catch (error) {
+        if (!(error instanceof PdfNativeTransactionError)) throw error;
+        stands.push(null);
+      }
+    }
+    return Object.freeze(stands);
+  } finally {
+    release();
+  }
+}
+
 /**
  * The selection of the whole show when the editor asked for one chunk of it
  * that proves no run property: a run set with wide word spacing reads as one
@@ -30426,6 +30768,40 @@ export async function prepareMraiNativeTextEditingSelection(
   finally { shared.dispose(); }
 }
 
+/** The formats standing on all of a box's text, as its proof states them. */
+export type PdfNativeTextStandingLook = Readonly<{
+  textRules?: Readonly<{ underline?: true; strikethrough?: true }>;
+  drawnStyle?: Readonly<{ bold?: true; italic?: true }>;
+}>;
+
+function standingLookOf(read: Awaited<ReturnType<typeof readMraiNativeParagraphStandingLook>>): PdfNativeTextStandingLook | null {
+  if (!read || (!read.textRules && !read.syntheticBold && !read.slanted)) return null;
+  return Object.freeze({
+    ...(read.textRules ? { textRules: read.textRules } : {}),
+    ...(read.syntheticBold || read.slanted ? { drawnStyle: Object.freeze({
+      ...(read.syntheticBold ? { bold: true as const } : {}), ...(read.slanted ? { italic: true as const } : {}) }) } : {}),
+  });
+}
+
+
+
+
+
+
+
+
+
+export async function readMraiNativeTextStandingLook(
+  input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">,
+): Promise<PdfNativeTextStandingLook | null> {
+  const sourceSha256 = await sha256PdfBytes(input.sourceBytes);
+  exactSelection(input.selection, sourceSha256);
+  const shared = await createNativeListTextSharedInspection(input.sourceBytes, sourceSha256);
+  try {
+    return standingLookOf(await readMraiNativeParagraphStandingLook(paragraphRewriteKernel(input.sourceBytes, shared), input.selection));
+  } finally { shared.dispose(); }
+}
+
 /**
  * Whether every item of a box of several items no route proves whole proves
  * alone in one stream: an edit that changes one item is then that item's
@@ -30437,6 +30813,10 @@ export async function prepareMraiNativeTextEditingSelection(
 async function itemsProvedAloneProof(
   input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">,
   shared: NativeListTextSharedInspection,
+  /** Asked of the first item's proof, which the answer is built on, the
+   * moment it is in: false, and no other item is proved (the caller would
+   * not take the answer). */
+  takes?: (first: PdfNativeListTextReplacementPlan) => boolean,
 ): Promise<Awaited<ReturnType<typeof prepareMraiNativeTextEditingSelection>> | null> {
   const items = input.selection.items;
   if (!items || items.length < 2) return null;
@@ -30447,6 +30827,7 @@ async function itemsProvedAloneProof(
       plans.push(await planMraiNativeListTextSelectionReplacementInternal(
         { ...input, selection: Object.freeze({ ...input.selection, items: undefined, item, startOffset: 0,
           endOffset: item.str.length }), replacementText: item.str }, true, undefined, true, shared));
+      if (plans.length === 1 && takes && !takes(plans[0])) return null;
     } catch (error) {
       if (!(error instanceof PdfNativeTransactionError)) throw error;
       // An item whose glyphs its font names no character for is no text to
@@ -30476,10 +30857,16 @@ async function itemsProvedAloneOpening(
   input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">,
   shared: NativeListTextSharedInspection,
 ): Promise<Awaited<ReturnType<typeof prepareMraiNativeTextEditingSelection>> | null> {
-  const alone = await itemsProvedAloneProof(input, shared);
-  if (!alone) return null;
+  // The proof states the first item's text: read as soon as that item is
+  // proved. Every other item was proved first -- a hundred of them, 5 s of a
+  // refused paragraph's 11 s before the run under the press could open in
+  
+  // item had already decided.
   const flat = (text: string) => text.replace(/\s+/gu, "");
-  return flat(alone.proof.evidence.originalText) === flat(input.selection.item.str) ? alone : null;
+  const whole = flat(input.selection.item.str);
+  const alone = await itemsProvedAloneProof(input, shared, (first) => flat(first.evidence.originalText) === whole);
+  if (!alone) return null;
+  return flat(alone.proof.evidence.originalText) === whole ? alone : null;
 }
 
 /**
@@ -30578,9 +30965,14 @@ async function prepareNativeTextFromReadInspection(
   // its text, which is the tier that writes its formats.
   const textRules = surgicalProof.properties ? null
     : await readMraiNativeParagraphTextRules(paragraphRewriteKernel(input.sourceBytes, shared), input.selection, proved);
-  const proof = move || groupMove || textRules
+  // A box drawn in a Type3 face that states no one run's format takes a
+  // weight as its paragraph's, where its Type3 glyphs are pictures all: read
+  
+  const type3Pictures = surgicalProof.type3Text && !surgicalProof.properties &&
+    await readMraiNativeParagraphType3PicturesOnly(paragraphRewriteKernel(input.sourceBytes, shared), input.selection);
+  const proof = move || groupMove || textRules || type3Pictures
     ? Object.freeze({ ...surgicalProof, ...(move ? { move } : {}), ...(groupMove ? { groupMove } : {}),
-      ...(textRules ? { textRules } : {}) })
+      ...(textRules ? { textRules } : {}), ...(type3Pictures ? { type3Pictures: true as const } : {}) })
     : surgicalProof;
   // Same-length spaces keep every route's line geometry; a paragraph that is
   // one text object (its lines are shows inside one BT…ET) refuses an
@@ -30655,6 +31047,167 @@ export async function readMraiNativeEvidenceFaceStyle(
  * reads the stream again from there. */
 const PLAN_STREAM_CONTEXTS = new WeakMap<PdfNativeListTextReplacementPlan, NativeTextPlanContext>();
 
+/** The page's own content streams as the selection planner reads them: what a
+ * format written where the text stands works from (standingPageStreams). */
+type StandingPageStreamSink = {
+  readonly streams: Readonly<{
+    target: PdfNativeIndirectObjectRef;
+    resources: readonly Readonly<{ resourceName: string; font: PdfNativeIndirectObjectRef; inlineDictionary?: string }>[];
+    context: NativeTextPlanContext;
+  }>[];
+  readonly causes: string[];
+};
+
+/** What the selection planner answers a sink's caller, who reads the sink
+ * and never this: no stream is planned there. */
+const STANDING_PAGE_STREAMS_NAMED = Object.freeze({}) as PdfNativeListTextReplacementPlan;
+
+/** A resource name a record can carry (the server's own pattern). */
+const RECORD_RESOURCE_NAME = /^[A-Za-z][A-Za-z0-9_.+\-]{0,63}$/;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function standingPageStreams(
+  sourceBytes: Uint8Array,
+  shared: NativeListTextSharedInspection,
+  selection: PdfNativeListTextSelectionEvidence,
+): Promise<readonly MraiNativeParagraphRewriteStandingStream[]> {
+  const sink: StandingPageStreamSink = { streams: [], causes: [] };
+  await planMraiNativeListTextSelectionReplacementInGroups(
+    { sourceBytes, selection, replacementText: selection.item.str }, true, undefined, false, shared, null, sink);
+  const joined = sink.streams.filter((entry) => entry.context.pageContentConsolidation);
+  const entries = joined.length ? joined : sink.streams;
+  const graph = shared.pages[selection.pageNumber - 1];
+  if (!graph) invalid("Selected PDF page is out of range.");
+  const keyOf = (ref: PdfNativeIndirectObjectRef) => `${ref.objectNumber}:${ref.generation}`;
+  const out: MraiNativeParagraphRewriteStandingStream[] = [];
+  for (const { target, resources, context } of entries) {
+    const faces = new Map<string, Readonly<{
+      authority: PdfNativeListFontAuthority; metrics: FontMetrics; faceName: string; inline: boolean;
+      objects: readonly PdfNativeObjectInspection[];
+    }>>();
+    for (const resource of resources) try {
+      const authority = await resolveNativeFontResourceAuthority(resource, graph.page, shared.inspectObject);
+      const read = await readSupportingFontGraph(shared.inspectObject, authority, false,
+        [resource.inlineDictionary === undefined ? {} : { inlineDictionary: resource.inlineDictionary }]);
+      faces.set(resource.resourceName, Object.freeze({
+        authority,
+        // (A Type3 face of pictures says so, as the kernel's resolveFont does.)
+        metrics: read.additionalMetrics.simpleSubtype === "Type3" &&
+          await type3FontPaintsPicturesOnly(read.additionalFontSource, shared.inspectObject)
+          ? Object.freeze({ ...read.additionalMetrics, type3Pictures: true as const }) : read.additionalMetrics,
+        faceName: fontSubsetIndependentName(read.additionalFontSource),
+        inline: resource.inlineDictionary !== undefined,
+        objects: Object.freeze([
+          read.additionalFont, read.additionalDescendant, read.additionalDescriptor, read.additionalFontFile,
+          read.additionalToUnicode, read.additionalCidGlyphMap?.object ?? null,
+          read.additionalDescendantAuthority?.arrayObject ?? null,
+          ...read.additionalBaseFontInline.objects, ...read.additionalDerived.inlinedFontObjects,
+        ].filter((item): item is PdfNativeObjectInspection => item !== null)),
+      }));
+    } catch (error) {
+      
+      
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+    }
+    if (!faces.size) continue;
+    const owners = new Map<string, PdfNativeObjectPrecondition>();
+    for (const ref of [graph.page, context.resourceOwner, context.fontOwner]) {
+      if (refsEqual(ref, target) || owners.has(keyOf(ref))) continue;
+      owners.set(keyOf(ref), objectPrecondition(await shared.inspectObject(ref)));
+    }
+    const consolidation = context.pageContentConsolidation;
+    const bind = async (objects: readonly PdfNativeObjectInspection[]) => {
+      const pins = new Map(owners);
+      for (const object of objects) {
+        if (!refsEqual(object.identity, target)) pins.set(keyOf(object.identity), objectPrecondition(object));
+      }
+      for (const sibling of context.siblingContentPreconditions) {
+        if (refsEqual(sibling, target) || pins.has(keyOf(sibling))) {
+          refuse("PDF content preconditions are duplicated or target the mutation.");
+        }
+        pins.set(keyOf(sibling), sibling);
+      }
+      const untouched = [...pins.values()];
+      if (untouched.length > 256) refuse("The page binds more objects than one edit can carry.");
+      const stream = consolidation
+        ? await inspectConsolidatedPageContent(consolidation, untouched, shared.inspectObject, shared.inspectContentStream)
+        : await shared.inspectContentStream(target, untouched);
+      return Object.freeze({
+        identity: stream.identity,
+        expectedObjectSha256: stream.objectSha256,
+        expectedStreamSha256: stream.streamSha256,
+        untouchedObjects: Object.freeze(untouched),
+        ...(consolidation ? { pageContentConsolidation: consolidation } : {}),
+      });
+    };
+    const bound = (request: Awaited<ReturnType<typeof bind>>, evidence: object) => {
+      // (A plan in what the rewrite reads of one; see above.)
+      const plan = Object.freeze({ request, evidence: Object.freeze(evidence) }) as unknown as PdfNativeListTextReplacementPlan;
+      PLAN_STREAM_CONTEXTS.set(plan, context);
+      return plan;
+    };
+    let reading: PdfNativeListTextReplacementPlan;
+    try {
+      reading = bound(await bind([]), {});
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+      sink.causes.push(`page: ${error.message}`);
+      continue;
+    }
+    out.push(Object.freeze({
+      plan: reading,
+      fonts: new Map([...faces].map(([name, face]) =>
+        [name, Object.freeze({ ...face.metrics, faceName: face.faceName }) as MraiNativeParagraphRewriteFont])),
+      firstPlan: async (fontNames: readonly string[], first: Readonly<{ fontName: string; fontSize: number }>) => {
+        const used = [...new Set([first.fontName, ...fontNames])].map((name) => {
+          const face = faces.get(name);
+          if (!face) refuse(`Font resource /${name} of the page is not proven.`);
+          return face;
+        });
+        if (!RECORD_RESOURCE_NAME.test(first.fontName) || !(first.fontSize > 0) || !(first.fontSize <= 1000)) {
+          refuse("The text's font name or size cannot be recorded.");
+        }
+        const head = used[0];
+        return bound(await bind(used.flatMap((face) => face.objects)), {
+          resourceName: first.fontName,
+          fontSize: first.fontSize,
+          fontEncoding: fontEncodingEvidence(head.metrics),
+          resources: Object.freeze({
+            page: Object.freeze({ ...head.authority.page }),
+            font: Object.freeze({ ...head.authority.font }),
+            descendantFont: head.authority.descendantFont ? Object.freeze({ ...head.authority.descendantFont }) : null,
+            descriptor: head.authority.descriptor ? Object.freeze({ ...head.authority.descriptor }) : null,
+            fontFile: head.authority.fontFile ? Object.freeze({ ...head.authority.fontFile }) : null,
+            toUnicode: head.authority.toUnicode ? Object.freeze({ ...head.authority.toUnicode }) : null,
+            ...(head.inline
+              ? { fontInline: Object.freeze({ resourceName: first.fontName, ownerKind: context.fontOwnerKind }) }
+              : {}),
+          }),
+        });
+      },
+    }));
+  }
+  if (!out.length) {
+    refuse(`The page's own content cannot be read for a format where the text stands.${
+      sink.causes.length ? ` (${sink.causes.slice(0, 3).join("; ")})` : ""}`);
+  }
+  return Object.freeze(out);
+}
+
 /** The item proofs the paragraph rewrite asked of each source inspection
  * (paragraphRewriteKernel's proveItem), kept with the inspection. */
 const PARAGRAPH_ITEM_PROOFS = new WeakMap<NativeListTextSharedInspection, Map<string, Promise<PdfNativeListTextReplacementPlan>>>();
@@ -30728,14 +31281,30 @@ function paragraphRewriteKernel(
         context.requireBalancedGraphicsStack, metrics, [], true, context.provenDeviceColorSpaces ?? new Map());
     },
     async resolveFont(resources, encoding, witness) {
-      if (witness) return (await resolvedLayoutWitnessFont(sourceBytes, { resourceName: "", resources, fontEncoding: encoding })).metrics;
+      // (A Type3 face of pictures says so: paragraph-rewrite's Type3 refusal.)
+      const pictures = async (metrics: FontMetrics) => {
+        if (metrics.simpleSubtype !== "Type3") return {};
+        try {
+          const object = LATIN1.decode((await inspectEvidenceFontObject(sourceBytes, resources)).objectBytes);
+          return await type3FontPaintsPicturesOnly(object, (target) => inspectMraiNativeObject(sourceBytes, target))
+            ? { type3Pictures: true as const } : {};
+        } catch (error) {
+          if (!(error instanceof PdfNativeTransactionError)) throw error;
+          return {};
+        }
+      };
+      if (witness) {
+        const metrics = (await resolvedLayoutWitnessFont(sourceBytes, { resourceName: "", resources, fontEncoding: encoding })).metrics;
+        return metrics.simpleSubtype === "Type3" ? Object.freeze({ ...metrics, ...(await pictures(metrics)) }) : metrics;
+      }
       const font = await inspectEvidenceFontObject(sourceBytes, resources);
       const baseFont = fontSubsetIndependentName((await inlineIndirectFontEntries(LATIN1.decode(font.objectBytes),
         (target) => inspectMraiNativeObject(sourceBytes, target), ["BaseFont"])).source);
       // The face's own name rides along: a character its font lacks is set
       // in the paragraph's font that looks most like it (paragraph-rewrite.ts).
-      return Object.freeze({ ...(await resolvedPropertyFont(sourceBytes, { resourceName: "", baseFont, family: "", bold: false,
-        italic: false, encoding, resources })).metrics, faceName: baseFont });
+      const metrics = (await resolvedPropertyFont(sourceBytes, { resourceName: "", baseFont, family: "", bold: false,
+        italic: false, encoding, resources })).metrics;
+      return Object.freeze({ ...metrics, faceName: baseFont, ...(await pictures(metrics)) });
     },
     encodeText: (text, font, preferred) => encodeText(text, font as FontMetrics, preferred ?? null),
     glyphAdvance: (codes, font, fontSize) => glyphAdvance(codes, font as FontMetrics, fontSize),
@@ -30744,10 +31313,54 @@ function paragraphRewriteKernel(
     normalizeUnicode: pdfJsNormalizeUnicode,
     visiblePageBounds: (pageNumber) => shared.visiblePageBounds[pageNumber - 1] ?? null,
     showEdgeAdjustments: pdfNativeTextShowEdgeAdjustments,
+    showCutByClip(show, font) {
+      // As the item proof judges it (the clip check above): by the ink.
+      const event = show as TextEvent, clip = event.clipBox;
+      if (!clip) return false;
+      const metrics = font as FontMetrics;
+      let geometry: Readonly<{ transform: PdfMatrix; width: number }> | null =
+        textEventSelectionGeometry(event, textEventCodesAdvance(event.codes, event, metrics));
+      try {
+        geometry = inkedShowGeometry(event, metrics);
+      } catch (error) {
+        if (!(error instanceof PdfNativeTransactionError)) throw error;
+      }
+      return geometry !== null && clipCutsThroughShow(geometry, clip);
+    },
     inspectStream: (target) => shared.inspectContentStream(target, []),
     async pinObject(target) {
       const object = await shared.inspectObject(target);
       return objectPrecondition(object);
+    },
+    standingPageStreams: (selection) => standingPageStreams(sourceBytes, shared, selection),
+    async standingStreamContext(selection, plan) {
+      try {
+        const own = plan.request.identity;
+        // (A page read as one joined stream starts in the page's initial state.)
+        const joined = Boolean(plan.request.pageContentConsolidation);
+        const streams = joined ? [] : await inspectMraiNativePageContentStreams(sourceBytes, selection.pageNumber);
+        const index = joined ? 0 : streams.findIndex((stream) =>
+          stream.identity.objectNumber === own.objectNumber && stream.identity.generation === own.generation);
+        if (index < 0) return null;
+        const prefix = streams.slice(0, index).map((stream) => LATIN1.decode(stream.streamBytes));
+        return Object.freeze({
+          prefix: Object.freeze(prefix),
+          lineWidths: async (names: readonly string[]) => {
+            const dictionaries = await readMraiNativePageResourceDictionaries(sourceBytes, selection.pageNumber, "ExtGState",
+              names.map((name) => decodePdfSourceName(name)));
+            const widths = new Map<string, string | null>();
+            for (const name of names) {
+              const dictionary = dictionaries.get(decodePdfSourceName(name));
+              const width = dictionary ? mraiNativeExtGStateLineWidth(dictionary) : undefined;
+              if (width !== undefined) widths.set(name, width);
+            }
+            return widths as ReadonlyMap<string, string | null>;
+          },
+        });
+      } catch (error) {
+        if (!(error instanceof PdfNativeTransactionError)) throw error;
+        return null;
+      }
     },
   };
 }
@@ -30941,6 +31554,12 @@ export function createMraiNativeTextReadSession() {
   return {
     prepare(input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">): ReturnType<typeof prepareMraiNativeTextEditingSelection> {
       return run(input, (bytes, inspection) => prepareNativeTextFromReadInspection({ ...input, sourceBytes: bytes }, inspection));
+    },
+    /** readMraiNativeTextStandingLook, read through the retained inspection
+     * (the item proofs the refused opening left with it). */
+    standingLook(input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">): Promise<PdfNativeTextStandingLook | null> {
+      return run(input, async (bytes, inspection) =>
+        standingLookOf(await readMraiNativeParagraphStandingLook(paragraphRewriteKernel(bytes, inspection), input.selection)));
     },
     async planReplacement(input: PdfNativeListTextSelectionReplacementInput): Promise<PdfNativeListTextReplacementPlan> {
       // The plan planMraiNativeListTextSelectionReplacement answers, read
@@ -31169,6 +31788,7 @@ export function proofFromNativeListTextPlan(
     ...(proved.propertyRuns && !proved.request.formInstanceIsolation
       ? { propertyRuns: proved.propertyRuns } : {}),
     ...(proved.type3Text ? { type3Text: true as const } : {}),
+    ...(proved.type3Pictures && !proved.properties ? { type3Pictures: true as const } : {}),
   });
 }
 

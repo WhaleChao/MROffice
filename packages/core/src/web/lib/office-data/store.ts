@@ -158,6 +158,9 @@ async function currentTransport(): Promise<OfficeDataTransport> {
 /** The signed-in check the transport answers, before it has loaded: the
  * `auth_state` cookie `lib/auth-state.ts` keeps (a guest asks nothing). */
 function signedInNow(): boolean {
+  // An embedded editor's frame is signed in with no cookie of the site's
+  // (lib/auth-state.ts markEmbedSessionSignedIn).
+  if ((globalThis as Record<string, unknown>).__mroEmbedSessionSignedIn === true) return true;
   if (transport) return transport.signedIn();
   if (typeof document === "undefined") return false;
   return /(?:^|;\s*)auth_state=1(?:;|$)/.test(document.cookie ?? "");

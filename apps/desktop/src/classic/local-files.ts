@@ -15,6 +15,7 @@
  *   its own format, without asking where.
  */
 
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { app } from "electron";
 import { originalLinks, writeFileAtomically } from "./original-links";
@@ -66,6 +67,31 @@ async function registerNow(launch: Launch, filePath: string): Promise<string | n
     // The page sends the bytes, as a browser does.
     return null;
   }
+}
+
+/** The most launch documents named at the API's start; any others register as before. */
+const NAMED_AT_START_MAX = 16;
+
+/**
+ * The documents a launch opens, named before the API starts: each gets its
+ * token here, and the API registers them under these tokens as it starts
+ * (``apiEnv``'s ``localFiles``; apps/api app/desktop/local_files.py
+ * ``register_named``), so the window's ask for its files is answered without
+ * waiting for the API and a registration call once it answers. Call only
+ * when the API is started with what this returns.
+ */
+export function nameLocalFilesAtStart(filePaths: readonly string[]): { path: string; token: string }[] {
+  const named: { path: string; token: string }[] = [];
+  for (const filePath of filePaths) {
+    if (named.length >= NAMED_AT_START_MAX) break;
+    if (!path.isAbsolute(filePath) || tokensByPath.has(filePath)) continue;
+    // As the API's own tokens (secrets.token_urlsafe(24)).
+    const token = randomBytes(24).toString("base64url");
+    tokensByPath.set(filePath, token);
+    pathsByToken.set(token, filePath);
+    named.push({ path: filePath, token });
+  }
+  return named;
 }
 
 export function pathOfToken(token: string): string | null {

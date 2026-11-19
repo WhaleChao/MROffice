@@ -820,6 +820,12 @@ export interface SfntMetrics {
     readonly winDescent: number;
     /** fsSelection bit 7. */
     readonly useTypoMetrics: boolean;
+    /** usWeightClass (OS/2 offset 4). */
+    readonly usWeightClass: number;
+    /** fsSelection as stored (OS/2 offset 62). */
+    readonly fsSelection: number;
+    /** The 10 PANOSE bytes (OS/2 offset 32): [0] bFamilyType, [1] bSerifStyle. */
+    readonly panose: readonly number[];
   } | null;
   readonly postscriptName: string | null;
   /** The raw variation tables (fvar, avar, HVAR, STAT) of a variable
@@ -863,6 +869,9 @@ function metricsFromTables(tables: ReadonlyMap<string, Uint8Array>, hmtx: Uint8A
       winAscent: os2Reader.u16(),
       winDescent: os2Reader.u16(),
       useTypoMetrics: (fsSelection & 0x80) !== 0,
+      usWeightClass: new SfntReader(os2Table, 4).u16(),
+      fsSelection,
+      panose: Object.freeze(Array.from(os2Table.subarray(32, 42))),
     };
   }
   return Object.freeze({

@@ -317,6 +317,17 @@ export function officeKeptWrappedLines(lineHeights: readonly number[], rowPx: nu
  * alike). The browser prints a baseline on the nearest whole pixel of its
  * page and a transform moves the painted line after that, so the shift is
  * from that pixel; none when it is under a thousandth of a pixel. */
+/** Printed, how far (px) the layout moves a line whose baseline it stands
+ * `pageTopPx` below the paper's top so that it stands on a whole pixel there:
+ * the pixel officePrintedBaselineShiftPx counts from. Left where the sums put
+ * it, a baseline within a hair of half a pixel was printed on the pixel above
+ * the one counted from (the browser's own sums run a 64th of a pixel short):
+ * a whole pixel, 0.75 pt, high (lookwin yu17 R450-X99: the centred numbers of
+ * one row in eight). */
+export function officePrintedBaselineSnapPx(pageTopPx: number): number {
+  return Number.isFinite(pageTopPx) ? Math.round(pageTopPx) - pageTopPx : 0;
+}
+
 export function officePrintedBaselineShiftPx(pageTopPx: number, dotPx: number): number | undefined {
   if (!Number.isFinite(pageTopPx) || !(dotPx > 0)) return undefined;
   const shift = Math.ceil(pageTopPx / dotPx - 1e-6) * dotPx - Math.round(pageTopPx);

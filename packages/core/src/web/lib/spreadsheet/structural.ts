@@ -491,6 +491,8 @@ export interface StructuralSheet {
   conditionalFormats?: StructuralRanged[];
    
   ignoredErrorRanges?: StructuralRanged[];
+   
+  hyperlinkAreas?: StructuralRanged[];
   /** Column-bound overlays (slicers): `column` shifts; dropped if its col is deleted. */
   slicers?: StructuralColumnBound[];
   /** Watched cells (Watch Window): the point shifts on its line's axis; dropped when that line is deleted. */
@@ -2694,6 +2696,11 @@ function remapOverlays<T extends StructuralSheet>(
   
   if (sheet.ignoredErrorRanges)
     patch.ignoredErrorRanges = remapRanged(sheet.ignoredErrorRanges, axis, at, delta);
+  // A hyperlink the sheet holds over a large area moves as Excel moves its
+  // <hyperlink ref>: grown by an insert inside it, gone with its last line,
+  
+  if (sheet.hyperlinkAreas)
+    patch.hyperlinkAreas = remapRanged(sheet.hyperlinkAreas, axis, at, delta);
   if (sheet.slicers) patch.slicers = remapColumnBound(sheet.slicers, axis, at, delta);
   // Watched cells (Watch Window): a single point that shifts on its line's axis,
   // and is DROPPED when that exact line is deleted — else the pinned watch would

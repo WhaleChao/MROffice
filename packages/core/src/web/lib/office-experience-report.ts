@@ -16,7 +16,7 @@
  */
 import { isDoNotTrackEnabled, sendErrorBeacon } from "./errors/report-beacon";
 
-export type OfficeExperienceKind = "save_failure" | "partial" | "smartart_kept" | "pdf_long_way";
+export type OfficeExperienceKind = "save_failure" | "partial" | "smartart_kept" | "pdf_long_way" | "layout_twitch";
 
 const NAMES: Readonly<Record<OfficeExperienceKind, string>> = {
   save_failure: "OfficeSaveFailureShown",
@@ -28,6 +28,10 @@ const NAMES: Readonly<Record<OfficeExperienceKind, string>> = {
   // way, its boxes out meanwhile, by why. The layers kept for that way (the
   // queued open, its adoption, the ghost) go once this is zero on the live site.
   pdf_long_way: "PdfRevisionLongWay",
+  // A document's pages went somewhere and came back, or a guard had to stop
+  // two layouts alternating (paged/ledger/ledgerTwitch), by which: `returned`,
+  // `held-cycle`, `held-repair`. The reader saw the page jump; the bar is zero.
+  layout_twitch: "DocsLayoutTwitch",
 };
 
 const FORMATS: Readonly<Record<string, string>> = {
@@ -134,6 +138,52 @@ export function reportOfficeExperience(
 }
 
 /** Test seam. */
+const MAX_HIDDEN_ISSUE_CODES = 12;
+
+
+
+
+
+
+
+export function reportHiddenDocumentIssues(
+  input: {
+    pageId: string | null | undefined;
+    surface: string | null | undefined;
+    keys: readonly string[];
+  },
+  now = Date.now(),
+): boolean {
+  try {
+    if (typeof window === "undefined" || isDoNotTrackEnabled()) return false;
+    const codes: string[] = [];
+    for (const key of input.keys) {
+      const code = codeOf(key) ?? "unknown";
+      if (!codes.includes(code)) codes.push(code);
+      if (codes.length >= MAX_HIDDEN_ISSUE_CODES) break;
+    }
+    if (!codes.length) return false;
+    const surface = codeOf(input.surface) ?? "unknown";
+    const page = input.pageId ? officeExperiencePageRef(input.pageId) : "none";
+    const key = `hidden|${page}|${surface}|${codes.join(",")}`;
+    const last = lastReported.get(key);
+    if (last !== undefined && now - last < REPEAT_AFTER_MS) return false;
+    lastReported.set(key, now);
+    if (lastReported.size > 500) lastReported.clear();
+    sendErrorBeacon({
+      name: "OfficeIssueHidden",
+      message: `issues=${codes.join(",")} surface=${surface} page=${page}`,
+      digest: codes[0],
+      path: "/office",
+      source: "window",
+      window_type: "office",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function resetOfficeExperienceReportsForTests(): void {
   lastReported.clear();
 }

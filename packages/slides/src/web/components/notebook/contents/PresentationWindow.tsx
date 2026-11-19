@@ -1744,6 +1744,7 @@ import { presentationNativeSavedContentMatches } from "@mrnote/core/web/lib/pres
 import { presentationGestureSurvivesRemote } from "../../../lib/presentation-gesture-authority";
 import DocumentIssueNotice, { type DocumentIssue } from "@mrnote/core/web/components/notebook/DocumentIssueNotice.tsx";
 import WindowNotice from "@mrnote/core/web/components/notebook/WindowNotice.tsx";
+import RecoveredCopiesNotice from "@mrnote/core/web/components/notebook/RecoveredCopiesNotice.tsx";
 import windowNoticeStyles from "@mrnote/core/web/components/notebook/DocumentIssueNotice.module.css";
 import { OfficePartsOversizedImportNotice } from "@mrnote/core/web/components/notebook/contents/office/OfficePartsOversizedImportNotice.tsx";
 import {
@@ -2602,6 +2603,9 @@ import {
 import { useRegisterWindowSaveStatus } from "@mrnote/core/web/components/notebook/WindowCloseGuard.tsx";
 import { PACKAGE_WRITE_NOTICE_AFTER_MS, slidesAwaitingPackageWrite } from "../../../lib/presentation/package-write-pending";
 import {
+  changedDeckTexts, deckTextAt, deckTextFormatted, deckTextIndex, deckTextKey, placeDeckText, placedTextEdit, withDeckText, type PlacedDeckText,
+} from "@mrnote/core/web/__cut__/mcf9e47dacc.ts";
+import {
   DropdownMenu,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -2844,6 +2848,7 @@ import {
   presentationPreviewOffsetAtPoint,
   presentationTurnedPreviewOffsetAtPoint,
   presentationPreviewNearestOffset,
+  presentationShapeWordsDoubleClickRange,
   presentationDoubleClickWord,
   presentationClickedWord,
   setPresentationPreviewSelection,
@@ -2990,6 +2995,7 @@ import {
   type PresentationCommentThread,
 } from "../../../lib/presentation/comment-threads";
 import { PresentationAuthoringRegion } from "./presentation/PresentationAuthoringRegion";
+import { blocksWithFitGeometry, type FitGeometry } from "../../../lib/presentation/fit-geometry";
 import type { DocumentSurfaceReadiness } from "@mrnote/docs/web/components/console/editor/NoteEditor.tsx";
 import {
   MAX_PRESENTATION_GEOMETRY_EMU,
@@ -3054,6 +3060,8 @@ import {
   PAGE_MEDIA_REPAIR_COMMIT,
   TEXT_LAYER_REPAIR_COMMIT,
   TABLE_FRAME_FIT_COMMIT,
+  FIT_QUIET_MS,
+  FIT_QUIET_POLL_MS,
   TEXT_BOX_FIT_COMMIT,
   PRESENTATION_SELECTION_CHROME_LAYER,
   PICTURE_ERASE_RADIUS,
@@ -3179,7 +3187,7 @@ import { smartArtMemberDeletedItemId } from "@mrnote/core/web/lib/office-smartar
 import { presentationBlocksWithSmartArtBackground, presentationSmartArtBackgroundsAfterReset, presentationSmartArtBackgroundsCarried } from "../../../lib/presentation/smartart-background";
 import { isSmartArtGraphicPlate, withNativeSmartArtGraphicPlates } from "../../../lib/presentation/smartart-graphic-plate";
 import { readSmartArtGraphicEffect, readSmartArtGraphicFormat, sheetSmartArtBackgroundStyle, smartArtGraphicEffects, type SmartArtGraphicFormatChange } from "@mrnote/core/web/lib/spreadsheet/smartart-background.ts";
-import { PresentationSmartArtGraphicHitLayer, presentationShapeGeometryHitClassName } from "./presentation/PresentationSmartArtGraphicHitArea";
+import { PresentationSmartArtGraphicHitLayer, presentationShapeGeometryHitClassName, presentationShapeIsNativeTextBox } from "./presentation/PresentationSmartArtGraphicHitArea";
 import {
   PresentationLiveBlockFrame,
   presentationLiveFrameOf,
@@ -3611,6 +3619,14 @@ function isPressInside(event: { readonly target: EventTarget | null; readonly cu
   return target instanceof Node && currentTarget instanceof Node && currentTarget.contains(target);
 }
 
+
+
+
+
+
+const DOUBLE_CLICK_TEXT_BOX_WIDTH_EMU = 184_731;
+const DOUBLE_CLICK_TEXT_BOX_HEIGHT_EMU = 369_332;
+
 function isCanvasOrFreeformSurface(target: EventTarget | null, canvas: EventTarget): boolean {
   if (target === canvas) return true;
   return (
@@ -3714,6 +3730,16 @@ function nativeSmartArtWithWords(
   words: ReadonlyMap<number, string>,
 ): PresentationBlock[] | null {
   let blocks = [...originals];
+  // A diagram whose connectors' words stand apart from its text channel
+  // (reading row 1017) is typed into on the slide as before the row: through
+  // its conversion. Its words written here in one window while another
+  // window's typing converted it left both sets of members on the slide
+  
+  // Find & Replace write through the channel.
+  const receipt = readNativeSmartArtGroup(blocks, blocks.find((block) => block.type === "text"))?.receipt as
+    | { labelsApart?: unknown }
+    | undefined;
+  if (Array.isArray(receipt?.labelsApart) && receipt.labelsApart.length) return null;
   // The conversion's items have ids of their own, in the diagram's outline order.
   const outline = readNativeSmartArtView(blocks, blocks[0])?.outline ?? [];
   for (const [index, text] of words) {
@@ -6389,6 +6415,18 @@ export default function PresentationWindow({
      * shape used to need never reached it). */
     editsTextOnTap: boolean;
   } | null>(null);
+  /**
+   * The shape whose press is a double click's second: that press opens the
+   * shape's words (`editsTextOnTap`) and the word under it opens selected, as
+   * PowerPoint's double click on a word does. The double click itself lands
+   * before the words' editor is drawn, so nothing else selects it. Told from
+   * the presses themselves (the second within the system's double-click time
+   * and distance of the first on the same shape): the move gesture prevents
+   * the pointerdown's default, so the browser sends no mousedown whose
+   * `detail` would count the clicks (8a94c9a6941 read it and never saw 2).
+   */
+  const shapeWordPressRef = useRef<{ blockId: string; at: number } | null>(null);
+  const shapeLastPressRef = useRef<{ blockId: string; at: number; x: number; y: number } | null>(null);
   /** `focusBlockTextEditor`, for the gesture above (declared later). */
   const enterShapeTextOnTapRef = useRef<
     (blockId: string, point?: { x: number; y: number }) => void
@@ -6790,6 +6828,7 @@ export default function PresentationWindow({
     }
     renderedSlidesRef.current = slides;
     unrenderedTextChangesRef.current.clear();
+    deckChangedAtRef.current = Date.now();
   }, [slides]);
   useEffect(() => {
     undoStackRef.current = undoStack;
@@ -6797,6 +6836,9 @@ export default function PresentationWindow({
   useEffect(() => {
     redoStackRef.current = redoStack;
   }, [redoStack]);
+  /** An AI rewrite's words per receipt, for an undo placed by its words
+   * (TRIAGE 49): set when the rewrite changed nothing but plain words. */
+  const documentEditUndoTextsRef = useRef(new Map<string, PlacedDeckText[]>());
   const documentEditUndoSnapshotsRef = useRef(
     new Map<string, Record<string, unknown>>(),
   );
@@ -28342,6 +28384,15 @@ export default function PresentationWindow({
           // the editor, which then kept the caret and hid the commands.
           !isTouchLikePointer(event) &&
           presentationShapeTextHost(activeSlide.blocks, block) !== null &&
+          // A text box taken as a shape (readings row 1018) is grabbed by its
+          // border as any text box: a click there keeps it selected whole,
+          // and a double click on its outline does not type in it either
+          
+          // outline leaves it selected, one in its middle types).
+          !(
+            event.target instanceof Element &&
+            event.target.closest(".presentation-window__text-move-band")
+          ) &&
           // A SmartArt shape is "already selected" only as THE shape: a
           // click on a selected graphic puts every member in the selection,
           // and the first click on a shape (an arrow opened a caret) must
@@ -28938,6 +28989,8 @@ export default function PresentationWindow({
         height: number;
       },
       writingMode?: "vertical-rl",
+      /** `textWrap: false`: a box that grows with its words (a double click on the empty slide). */
+      options?: { textWrap?: false },
     ) => {
       const liveSlides = slidesRef.current;
       const liveIndex = activeIndexRef.current;
@@ -28949,7 +29002,10 @@ export default function PresentationWindow({
         return;
       }
       const blockId = crypto.randomUUID();
-      const newBlock = textBoxBlock(blockId, geometry, writingMode);
+      const created = textBoxBlock(blockId, geometry, writingMode);
+      const newBlock = options?.textWrap === false
+        ? { ...created, style: { ...created.style, textWrap: false } }
+        : created;
       const nextSlide: SlideModel = {
         ...liveSlide,
         blocks: [...liveSlide.blocks, newBlock],
@@ -29004,11 +29060,8 @@ export default function PresentationWindow({
 
 
 
-  const dissolvePrevSelectedRef = useRef<string | null>(null);
-  useEffect(() => {
-    const previousId = dissolvePrevSelectedRef.current;
-    dissolvePrevSelectedRef.current = selectedBlockId;
-    if (!previousId || previousId === selectedBlockId) return;
+  /** Remove the never-typed text box `previousId` (see above); false when it is not one. */
+  const dissolveEmptyTextBox = (previousId: string): boolean => {
     const liveSlides = slidesRef.current;
     let slideIndex = -1;
     let block: PresentationBlock | undefined;
@@ -29020,7 +29073,7 @@ export default function PresentationWindow({
         break;
       }
     }
-    if (!isDissolvableEmptyTextBox(block)) return;
+    if (!isDissolvableEmptyTextBox(block)) return false;
     const pending = pendingEmptyTextBoxRef.current;
     pendingEmptyTextBoxRef.current = null;
     if (
@@ -29050,7 +29103,7 @@ export default function PresentationWindow({
       setTheme(previous.theme);
       setActiveIndex((index) => Math.min(index, previous.slides.length - 1));
       persistSnapshot(previous);
-      return;
+      return true;
     }
     commitSlides(
       liveSlides.map((slide, index) =>
@@ -29062,7 +29115,56 @@ export default function PresentationWindow({
           : slide,
       ),
     );
-  }, [selectedBlockId, commitSlides, persistSnapshot]);
+    return true;
+  };
+  const dissolveEmptyTextBoxRef = useRef(dissolveEmptyTextBox);
+  dissolveEmptyTextBoxRef.current = dissolveEmptyTextBox;
+  const dissolvePrevSelectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previousId = dissolvePrevSelectedRef.current;
+    dissolvePrevSelectedRef.current = selectedBlockId;
+    if (!previousId || previousId === selectedBlockId) return;
+    dissolveEmptyTextBoxRef.current(previousId);
+  }, [selectedBlockId]);
+  // The box a double click (or Insert > Text Box) just made, never typed in,
+  // is left as well when the editor goes away before the selection moves:
+  // the window closed, the tab hidden or left, the slide changed. It is
+  // removed before the page is written then (the autosave writes on a hidden
+  // tab, a pagehide and an unmount), so no empty box reaches the page or the
+  // file (198d893f611, PPT-E008: such boxes reached the export).
+  const leavePendingEmptyTextBox = () => {
+    const pending = pendingEmptyTextBoxRef.current;
+    if (!pending || !dissolveEmptyTextBoxRef.current(pending.blockId)) return;
+    if (selectedBlockIdRef.current === pending.blockId) {
+      selectedBlockIdRef.current = null;
+      selectedBlockIdsRef.current = new Set();
+      setSelectedBlockId(null);
+      setSelectedBlockIds(new Set());
+    }
+  };
+  const leavePendingEmptyTextBoxRef = useRef(leavePendingEmptyTextBox);
+  leavePendingEmptyTextBoxRef.current = leavePendingEmptyTextBox;
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") leavePendingEmptyTextBoxRef.current();
+    };
+    const onPageHide = () => leavePendingEmptyTextBoxRef.current();
+    // Capturing, so it runs before the autosave's own listeners write the page.
+    document.addEventListener("visibilitychange", onVisibility, true);
+    window.addEventListener("pagehide", onPageHide, true);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility, true);
+      window.removeEventListener("pagehide", onPageHide, true);
+    };
+  }, []);
+  // A layout effect's cleanup runs before the autosave's unmount write.
+  useLayoutEffect(() => () => leavePendingEmptyTextBoxRef.current(), []);
+  useEffect(() => {
+    const pending = pendingEmptyTextBoxRef.current;
+    if (!pending) return;
+    const onActive = slidesRef.current[activeIndex]?.blocks.some((block) => block.id === pending.blockId);
+    if (!onActive) dissolveEmptyTextBoxRef.current(pending.blockId);
+  }, [activeIndex]);
 
   /* --------------------------------------------------------------------- *
    * Marquee (rubber-band) multi-select — PowerPoint core.
@@ -29082,8 +29184,8 @@ export default function PresentationWindow({
    *
    * Sub-threshold guard: a press that never travels `MARQUEE_DRAG_THRESHOLD_PX`
    * is a plain empty-canvas click, which only DESELECTS (done at press time).
-   * No click or double-click creates a text box (PowerPoint: Insert > Text
-   * Box; PPT-E008).
+   * A click creates nothing; a double click puts a text box there, as
+   * PowerPoint does (handleCanvasDoubleClick).
    *
    * FREEFORM draw mode (declared here so this handler can gate on it): when
    * `freeformActive`, an empty-canvas click PLACES a vertex instead of starting a
@@ -30001,15 +30103,55 @@ export default function PresentationWindow({
    * the author double-clicked is WPS's gesture, and its stray boxes were
    * exported as empty `TextBox N` shapes (PPT-E008).
    */
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   const handleCanvasDoubleClick = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       if (!isCanvasOrFreeformSurface(event.target, event.currentTarget)) return;
       if (freeformActiveRef.current) {
         event.preventDefault();
         finishCustomGeometryRef.current(false);
+        return;
       }
+      if (event.target !== event.currentTarget || event.button !== 0) return;
+      if (autosave.readOnly || isCompatMouseFromTouch(event.nativeEvent)) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      if (!(rect.width > 0) || !(rect.height > 0)) return;
+      const slideWidth = activeSlideBounds.width;
+      const slideHeight = activeSlideBounds.height;
+      const width = Math.min(DOUBLE_CLICK_TEXT_BOX_WIDTH_EMU, slideWidth);
+      const height = Math.min(DOUBLE_CLICK_TEXT_BOX_HEIGHT_EMU, slideHeight);
+      const x = ((event.clientX - rect.left) * slideWidth) / rect.width;
+      const y = ((event.clientY - rect.top) * slideHeight) / rect.height;
+      event.preventDefault();
+      appendTextBoxWithGeometry(
+        {
+          left: Math.round(Math.max(0, Math.min(x, slideWidth - width))),
+          top: Math.round(Math.max(0, Math.min(y, slideHeight - height))),
+          width,
+          height,
+        },
+        undefined,
+        { textWrap: false },
+      );
     },
-    [],
+    [activeSlideBounds.height, activeSlideBounds.width, appendTextBoxWithGeometry, autosave.readOnly],
   );
   const beginMarqueeSelection = useCallback(
     (event: ReactPointerEvent) => {
@@ -32050,7 +32192,11 @@ export default function PresentationWindow({
                   end,
                   undefined,
                   [field],
-                ) ?? end
+                ) ??
+                // Off the words (under the last line, beside a short one):
+                // the nearest place, as PowerPoint puts the caret.
+                presentationPreviewNearestOffset(preview, point.x, point.y, end) ??
+                end
               : end;
           field.focus();
           field.setSelectionRange(at, at);
@@ -32059,6 +32205,35 @@ export default function PresentationWindow({
       }
       if (editSmartArtShapeText(blockId, undefined, point)) return;
       if (block.type === "shape" && isTextEditLocked(block)) return;
+      // A click on the selected shape puts the caret where it lands in its
+      // words, or, off them in its frame, at the nearest place (PowerPoint;
+      
+      // right of its end, leaves the caret after its last character). Read
+      // from the words drawn at rest, before they open; the editor takes it as
+      // the selection it opens with (`takeShapeRichSelection`). Selection
+      // only: no history step. The editor opened with the caret after the
+      // words wherever the click was.
+      if (point && block.type === "shape" && editingShapeTextIdRef.current !== blockId) {
+        const body = slideCanvasRef.current?.querySelector<HTMLElement>(
+          `.presentation-window__block[data-block-id="${CSS.escape(blockId)}"] [data-testid="presentation-shape-block"]`,
+        );
+        // The second press of a double click: on a word, the word (PowerPoint).
+        const wordPress = shapeWordPressRef.current;
+        shapeWordPressRef.current = null;
+        const doubleClicked = wordPress?.blockId === blockId && performance.now() - wordPress.at < 600;
+        const range = body
+          ? presentationShapeWordsDoubleClickRange(body, null, point.x, point.y, (block as PresentationShapeBlock).text ?? "", doubleClicked)
+          : null;
+        if (range) {
+          pendingShapeRichSelectionRef.current = {
+            blockId,
+            start: range[0],
+            end: range[1],
+            intent: textSelectionIntentRef.current,
+          };
+          recordShapeTextRange(blockId, range[0], range[1]);
+        }
+      }
       setSelectedBlockId(blockId);
       setEditingShapeTextId(blockId);
     },
@@ -32618,6 +32793,52 @@ export default function PresentationWindow({
     [commitSlides],
   );
 
+  // A fit of the frame to what was drawn (a table's rows to its cells' words, a
+  // text box to its words, an equation box to its equation): only the fit's
+  // geometry is put on the live block as it now stands (`blocksWithFitGeometry`),
+  // and the live deck is committed as it is -- never replayed as a command built
+  // from the drawn deck, never a cell's words. Two members typing in one cell of
+  
+  // 0a7dd1e1919 fitting every imported table edited here).
+  const commitLiveBlockFits = useCallback(
+    (fits: ReadonlyMap<string, FitGeometry>, coalesceKey: string): boolean => {
+      const liveSlides = slidesRef.current;
+      const liveIndex = activeIndexRef.current;
+      const liveSlide = liveSlides[liveIndex];
+      if (!liveSlide) return false;
+      const blocks = blocksWithFitGeometry(liveSlide.blocks, fits);
+      if (!blocks) return false;
+      commitSlides(
+        liveSlides.map((slide, index) => (index === liveIndex ? { ...liveSlide, blocks } : slide)),
+        coalesceKey,
+        true,
+      );
+      return true;
+    },
+    [commitSlides],
+  );
+  // A fit waits for the deck to rest: no typing burst open, the live deck the one
+  // drawn, nothing changed in FIT_QUIET_MS (a key, a collaborator's delivery). It
+  // is looked at again then, so a fit is put off, never dropped.
+  const deckChangedAtRef = useRef(0);
+  const [fitRetry, setFitRetry] = useState(0);
+  const fitRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fitMustWait = useCallback((): boolean => {
+    const waitMs = FIT_QUIET_MS - (Date.now() - deckChangedAtRef.current);
+    const busy = Boolean(typingBurstRef.current) || slidesRef.current !== renderedSlidesRef.current || waitMs > 0;
+    if (!busy) return false;
+    if (fitRetryTimerRef.current === null) {
+      fitRetryTimerRef.current = setTimeout(() => {
+        fitRetryTimerRef.current = null;
+        setFitRetry((count) => count + 1);
+      }, Math.max(FIT_QUIET_POLL_MS, waitMs));
+    }
+    return true;
+  }, []);
+  useEffect(() => () => {
+    if (fitRetryTimerRef.current !== null) clearTimeout(fitRetryTimerRef.current);
+  }, []);
+
   // The wet strokes land: each becomes an ink block (or, with Ink to Shape
   // on, the shape it plainly is) on the slide it was drawn on, all of one
   // slide in one commit and one Undo step. A slide the user has since left
@@ -32768,15 +32989,8 @@ export default function PresentationWindow({
       grown.set(block.id, { width: Math.max(width, needed.width), height: Math.max(height, needed.height) });
     }
     if (grown.size === 0) return;
-    commitLiveActiveBlocks(
-      (blocks) =>
-        blocks.map((block) => {
-          const size = grown.get(block.id);
-          return size ? ({ ...block, ...size } as PresentationBlock) : block;
-        }),
-      EQUATION_BOX_FIT_COMMIT,
-    );
-  }, [activeSlide, commitLiveActiveBlocks, dragPreview, presentationEquations.editorOpen]);
+    commitLiveBlockFits(grown, EQUATION_BOX_FIT_COMMIT);
+  }, [activeSlide, commitLiveBlockFits, dragPreview, presentationEquations.editorOpen]);
 
   // A table is as tall as its cells' text (PowerPoint grows a row to its
   // text and the table's frame with it): a row whose words no longer fit the
@@ -32806,6 +33020,7 @@ export default function PresentationWindow({
   useEffect(() => {
     const canvas = slideCanvasRef.current;
     if (!canvas || dragPreview || tableAxisPreview || autosave.readOnly) return;
+    if (fitMustWait()) return;
     const grown = new Map<string, { height: number; rowHeights?: Array<number | null> }>();
     const fromHistory = tableFitFromHistoryRef.current;
     tableFitFromHistoryRef.current = false;
@@ -32883,20 +33098,10 @@ export default function PresentationWindow({
       });
     }
     if (grown.size === 0) return;
-    commitLiveActiveBlocks(
-      (blocks) =>
-        blocks.map((block) => {
-          const fit = grown.get(block.id);
-          if (!fit || block.type !== "table") return block;
-          const next = { ...block, height: fit.height } as PresentationTableBlock;
-          if (fit.rowHeights) next.rowHeights = fit.rowHeights as typeof block.rowHeights;
-          // The fitted block is this window's own: not an edit to watch.
-          tableFitSeenRef.current.delete(block.id);
-          return next;
-        }),
-      TABLE_FRAME_FIT_COMMIT,
-    );
-  }, [activeSlide, autosave.readOnly, commitLiveActiveBlocks, dragPreview, tableAxisPreview]);
+    // The fitted blocks are this window's own: not an edit to watch.
+    for (const id of grown.keys()) tableFitSeenRef.current.delete(id);
+    commitLiveBlockFits(grown, TABLE_FRAME_FIT_COMMIT);
+  }, [activeSlide, autosave.readOnly, commitLiveBlockFits, dragPreview, fitMustWait, fitRetry, tableAxisPreview]);
 
   // Resize shape to fit text (`presentation-text-fit`): a text box whose
   // autofit is "resize-shape" -- every new text box and WordArt, and an
@@ -33009,15 +33214,10 @@ export default function PresentationWindow({
       if (frame) fitted.set(block.id, frame);
     }
     if (fitted.size === 0) return;
-    commitLiveActiveBlocks(
-      (blocks) =>
-        blocks.map((block) => {
-          const frame = fitted.get(block.id);
-          return frame ? ({ ...block, ...frame } as PresentationBlock) : block;
-        }),
-      TEXT_BOX_FIT_COMMIT,
-    );
-  }, [activeSlide, autosave.readOnly, commitLiveActiveBlocks, dragPreview]);
+    // As the words are typed (no wait for the deck to rest: the box grows with
+    // them), but its frame only (`commitLiveBlockFits`).
+    commitLiveBlockFits(fitted, TEXT_BOX_FIT_COMMIT);
+  }, [activeSlide, autosave.readOnly, commitLiveBlockFits, dragPreview]);
 
   const recordStudioInkMutationReady =
     recordStudioOpen &&
@@ -39239,7 +39439,10 @@ export default function PresentationWindow({
                   [],
                   media.images,
                   undefined,
-                  smartArtColorThemeForSlideRef.current(item.slide),
+                  // The file's theme lists the view read (TRIAGE S2b): its
+                  // quick style's ramp is the deck theme's own fill style,
+                  // as every other conversion of it draws.
+                  smartArtColorThemeForSlideRef.current(item.slide, view.hostTheme),
                 )
               : null;
           } catch (error) {
@@ -47211,6 +47414,11 @@ export default function PresentationWindow({
     const known = textSelectionRef.current;
     return known?.blockId === blockId ? { start: known.start, end: known.end } : null;
   };
+  /** The selection a label's words open with (a double click's place in them); selection only, no history step. */
+  const placeShapeTextCaret = (blockId: string, start: number, end: number) => {
+    pendingShapeRichSelectionRef.current = { blockId, start, end, intent: textSelectionIntentRef.current };
+    recordShapeTextRange(blockId, start, end);
+  };
    
   const copyShapeText = (blockId: string, start: number, end: number, clipboard: DataTransfer): boolean => {
     if (end <= start) return false;
@@ -48662,6 +48870,13 @@ export default function PresentationWindow({
     [canManipulateBlock, commitLiveActiveBlocks, pictureCompressionTarget],
   );
 
+  // The deck's words as this window gave them to the AI, by read (the last
+  // few): an AI rewrite comes back naming the read it was made from
+  // (command_context.deck_text_read) and is placed against those words
+  // (TRIAGE 49). In a room the page this window holds is not a saved
+  // version: a collaborator's delivery is written into it at once.
+  const deckTextReadsRef = useRef(new Map<string, ReadonlyMap<string, string>>());
+  useEffect(() => { deckTextReadsRef.current.clear(); }, [pageId]);
   useEffect(() => {
     function handler(event: Event) {
       const detail = (event as CustomEvent<ApplyDocumentEditCommandDetail>)
@@ -48850,6 +49065,51 @@ export default function PresentationWindow({
         return;
       }
       const nextContent = result.content as Record<string, unknown>;
+      // The AI's words placed by its words (TRIAGE 49): each text it changes,
+      // as whole-word splices of the words it read (the saved page's, when it
+      // read the saved version), carried onto the words this window holds;
+      // a rewrite made from an older version, or whose words were changed
+      // meanwhile, is not applied -- and the person is told so.
+      const aiTexts = changedDeckTexts(previousContent, nextContent);
+      const readId = detail.command.command_context?.deck_text_read;
+      const readTexts = typeof readId === "string" ? deckTextReadsRef.current.get(readId) ?? null : null;
+      const placedTexts: PlacedDeckText[] = [];
+      // A read this window no longer holds is whole-span strict: not applied.
+      let wordsChanged = typeof readId === "string" && aiTexts.length > 0 && !readTexts;
+      for (const field of wordsChanged ? [] : aiTexts) {
+        const live = deckTextAt(previousContent, field) ?? "";
+        const next = deckTextAt(nextContent, field) ?? "";
+        // The words it read; with no read named (a proposal made elsewhere),
+        // the window's own words only while no one else's have reached that
+        // slide here -- else not applied (whole-span strict, never a guess).
+        const base = readTexts ? readTexts.get(deckTextKey(field))
+          : deckParts.hasRemoteWords(field.slideId) ? undefined : live;
+        if (base === undefined) { wordsChanged = true; break; }
+        const formatted = deckTextFormatted(previousContent, field) || deckTextFormatted(nextContent, field);
+        const placed = placeDeckText(field, base, next, live, formatted);
+        if (!placed) { wordsChanged = true; break; }
+        placedTexts.push(placed);
+      }
+      if (wordsChanged) {
+        notifyDocumentEditApplied({
+          proposalId: detail.proposalId,
+          targetPageId: detail.targetPageId,
+          targetWindowId: detail.targetWindowId,
+          ok: false,
+          message: t("presentation.aiApply.slidesChanged"),
+        });
+        return;
+      }
+      for (const placed of placedTexts) {
+        if (placed.text !== deckTextAt(nextContent, placed.field)) {
+          Object.assign(nextContent, withDeckText(nextContent, placed.field, placed.text));
+        }
+      }
+      // Undone by its words when it changed nothing but plain words.
+      const plainTexts = placedTexts.length > 0 &&
+        placedTexts.every((placed) => !deckTextFormatted(previousContent, placed.field) && !deckTextFormatted(nextContent, placed.field)) &&
+        JSON.stringify(placedTexts.reduce((content, placed) => withDeckText(content, placed.field, placed.live), nextContent)) ===
+          JSON.stringify(previousContent);
       const nextSlides = normalizeSlides(nextContent);
       // An AI slide-block command can add / delete / reorder slides, so reconcile
       // the deck's sections against the new slide list (re-anchor a section whose
@@ -48875,6 +49135,9 @@ export default function PresentationWindow({
       if (persistableSections) nextContent.sections = persistableSections;
       else delete nextContent.sections;
       const applyMotion = stageAiBlockTransition(rootRef.current, PRESENTATION_AI_BLOCK_SELECTOR);
+      for (const placed of placedTexts) {
+        if (placed.splices.length) noteSlideTextEditRef.current(placedTextEdit(placed));
+      }
       restorePresentationContent(nextContent);
       applyMotion.play();
       void (async () => {
@@ -48907,13 +49170,17 @@ export default function PresentationWindow({
             receipt.id,
             previousContent,
           );
+          if (plainTexts) documentEditUndoTextsRef.current.set(receipt.id, placedTexts);
         }
         notifyDocumentEditApplied({
           proposalId: detail.proposalId,
           targetPageId: detail.targetPageId,
           targetWindowId: detail.targetWindowId,
           ok: Boolean(savedPage),
-          message: savedPage ? undefined : t("presentation.editSaveFailed"),
+          // Its words refused in the room (a collaborator changed them first):
+          // said as such -- the rewrite did not take effect.
+          message: savedPage ? undefined : autosave.hasConflict && placedTexts.length
+            ? t("presentation.aiApply.slidesChanged") : t("presentation.editSaveFailed"),
           receipt,
         });
       })();
@@ -48923,6 +49190,7 @@ export default function PresentationWindow({
       window.removeEventListener(APPLY_DOCUMENT_EDIT_COMMAND_EVENT, handler);
   }, [
     autosave,
+    deckParts,
     pageId,
     restorePresentationContent,
     title,
@@ -48965,17 +49233,49 @@ export default function PresentationWindow({
         slideShowSettingsRef.current,
         customSlideShowsRef.current, fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
       );
+      // A rewrite of plain words is undone by its words (TRIAGE 49): each
+      // text back from the rewrite's words to the ones before it, carried
+      // onto the words held now -- a later edit elsewhere in the deck, or in
+      // the same text away from the rewritten words, stays. Words changed
+      // since over the rewritten ones are not undone, and the person is told.
+      const rewrittenTexts = documentEditUndoTextsRef.current.get(detail.receiptId);
+      let undoneContent: Record<string, unknown> = previousContent;
+      if (rewrittenTexts) {
+        undoneContent = contentBeforeUndo as Record<string, unknown>;
+        const reversed: PlacedDeckText[] = [];
+        for (const rewritten of rewrittenTexts) {
+          const live = deckTextAt(contentBeforeUndo, rewritten.field) ?? "";
+          const back = placeDeckText(rewritten.field, rewritten.text, rewritten.live, live, deckTextFormatted(contentBeforeUndo, rewritten.field));
+          if (!back) {
+            notifyDocumentEditUndoResult({
+              receiptId: detail.receiptId,
+              proposalId: detail.proposalId,
+              targetPageId: detail.targetPageId,
+              targetWindowId: detail.targetWindowId,
+              ok: false,
+              message: t("presentation.aiUndo.textChanged"),
+            });
+            return;
+          }
+          reversed.push(back);
+          undoneContent = withDeckText(undoneContent, back.field, back.text);
+        }
+        for (const back of reversed) {
+          if (back.splices.length) noteSlideTextEditRef.current(placedTextEdit(back));
+        }
+      }
       // The undo is the AI's edit played backwards.
       const undoMotion = stageAiBlockTransition(rootRef.current, PRESENTATION_AI_BLOCK_SELECTOR);
-      restorePresentationContent(previousContent);
+      restorePresentationContent(undoneContent);
       undoMotion.play({ direction: "reverse" });
       void (async () => {
         const savedPage = await saveAiEditThroughTransientFailures(autosave, {
           title,
-          content_json: previousContent,
+          content_json: undoneContent,
         }, { until: Date.now() + AI_EDIT_TRANSIENT_SAVE_WINDOW_MS, isCurrent: () => Boolean(rootRef.current?.isConnected) });
         if (savedPage) {
           documentEditUndoSnapshotsRef.current.delete(detail.receiptId);
+          documentEditUndoTextsRef.current.delete(detail.receiptId);
         } else {
           restorePresentationContent(contentBeforeUndo);
           autosave.replacePendingDraft({
@@ -49015,6 +49315,16 @@ export default function PresentationWindow({
         liveSlides,
         activeIndexRef.current,
       );
+      // What the AI reads of the deck's words, kept to place its rewrite
+      // against (TRIAGE 49): a few reads, by id, words only.
+      const deckTextRead = `read-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      const reads = deckTextReadsRef.current;
+      reads.set(deckTextRead, deckTextIndex(buildContent(
+        liveSlides, themeRef.current, mastersRef.current, sectionsRef.current, headerFooterRef.current,
+        printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current, customSlideShowsRef.current,
+        fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
+      )));
+      while (reads.size > 8) reads.delete(reads.keys().next().value as string);
       detail.respond?.({
         page_type: "presentation",
         target_page_id: pageId,
@@ -49029,6 +49339,7 @@ export default function PresentationWindow({
           deck_sampled_slide_count:
             presentationAIDocumentContext.sampledSlideCount,
           deck_context_truncated: presentationAIDocumentContext.truncated,
+          deck_text_read: deckTextRead,
         },
       });
     }
@@ -56575,63 +56886,44 @@ export default function PresentationWindow({
           </div>
         </WindowNotice>
       ) : null}
-      {deckResilience.offered.length > 0 ? (
-        <WindowNotice
-          title={t("pages.recoveredCopy.title")}
-          label={t("pages.recoveredCopy.title")}
-          description={t("pages.recoveredCopy.body")}
-          scopeKey={`${pageId}:recovered-copy:${deckResilience.offered.map((copy) => copy.slot).join(",")}`}
-          autoOpen
-          // In the window's corner, as PowerPoint's Document Recovery pane sits
-          // beside the slides: the copies are read a few seconds after the deck
-          // opens, and a notice that then took the window and the keyboard
-          
-          passive
-          testId="presentation-recovered-copy-notice"
-        >
-          <ul className={windowNoticeStyles.list}>
-            {deckResilience.offered.map((copy) => (
-              <li key={copy.slot} data-testid="presentation-recovered-copy" className={windowNoticeStyles.item}>
-                <p>{t("pages.recoveredCopy.savedAt", { time: new Date(copy.savedAt).toLocaleString(pageInterfaceLocale()) })}</p>
-                <button type="button" className={windowNoticeStyles.action} data-testid="presentation-recovered-copy-restore"
-                  disabled={autosave.readOnly}
-                  onClick={() => {
-                    const live = slidesRef.current;
-                    const entries = recoveredSlidesOf(copy);
-                    const unread = new Set(live.filter((slide) => slide.importPending === true).map((slide) => slide.id));
-                    const fields = deckFieldsToRestore(readLiveDeckFields(), recoveredFieldsOf(copy));
-                    if (entries.some((entry) => unread.has(entry.id))) {
-                      toast({ title: t("pages.recoveredCopy.restoreFailed"), variant: "destructive" });
-                      return;
-                    }
-                    const restored = deckWithRecoveredSlides(live, entries, () => crypto.randomUUID());
-                    if (!restored) {
-                      toast({ title: t("pages.recoveredCopy.restoreFailed"), variant: "destructive" });
-                      return;
-                    }
-                    commitDeck(
-                      restored,
-                      (fields.take.masters ?? mastersRef.current) as SlideMaster[],
-                      (fields.take.sections ?? sectionsRef.current) as SlideSection[],
-                      ("theme" in fields.take ? fields.take.theme : themeRef.current) as DeckTheme | null,
-                      undefined,
-                      ("headerFooter" in fields.take ? fields.take.headerFooter : headerFooterRef.current) as DeckHeaderFooter | null,
-                      (fields.take.slideShowSettings ?? slideShowSettingsRef.current) as PresentationSlideShowSettings,
-                      (fields.take.customSlideShows ?? customSlideShowsRef.current) as PresentationCustomShows,
-                      (fields.take.fontFaces ?? fontFacesRef.current) as readonly OfficeFontFace[],
-                    );
-                    // Theme, masters and the like cannot be kept twice: what someone
-                    // changed since stays, and the member is told.
-                    if (fields.changedSince.length > 0) toast({ title: t("pages.recoveredCopy.deckChangedSince") });
-                    deckResilience.copyRestored(copy);
-                  }}>{t("pages.recoveredCopy.restore")}</button>
-                <button type="button" className={windowNoticeStyles.action} data-testid="presentation-recovered-copy-delete"
-                  onClick={() => deckResilience.forgetCopy(copy)}>{t("pages.recoveredCopy.delete")}</button>
-              </li>
-            ))}
-          </ul>
-        </WindowNotice>
-      ) : null}
+      <RecoveredCopiesNotice
+        pageId={pageId}
+        copies={deckResilience.offered}
+        testIdPrefix="presentation"
+        actions={[
+          { id: "restore", label: t("pages.recoveredCopy.restore"), disabled: autosave.readOnly, run: (copy) => {
+          const live = slidesRef.current;
+          const entries = recoveredSlidesOf(copy);
+          const unread = new Set(live.filter((slide) => slide.importPending === true).map((slide) => slide.id));
+          const fields = deckFieldsToRestore(readLiveDeckFields(), recoveredFieldsOf(copy));
+          if (entries.some((entry) => unread.has(entry.id))) {
+            toast({ title: t("pages.recoveredCopy.restoreFailed"), variant: "destructive" });
+            return;
+          }
+          const restored = deckWithRecoveredSlides(live, entries, () => crypto.randomUUID());
+          if (!restored) {
+            toast({ title: t("pages.recoveredCopy.restoreFailed"), variant: "destructive" });
+            return;
+          }
+          commitDeck(
+            restored,
+            (fields.take.masters ?? mastersRef.current) as SlideMaster[],
+            (fields.take.sections ?? sectionsRef.current) as SlideSection[],
+            ("theme" in fields.take ? fields.take.theme : themeRef.current) as DeckTheme | null,
+            undefined,
+            ("headerFooter" in fields.take ? fields.take.headerFooter : headerFooterRef.current) as DeckHeaderFooter | null,
+            (fields.take.slideShowSettings ?? slideShowSettingsRef.current) as PresentationSlideShowSettings,
+            (fields.take.customSlideShows ?? customSlideShowsRef.current) as PresentationCustomShows,
+            (fields.take.fontFaces ?? fontFacesRef.current) as readonly OfficeFontFace[],
+          );
+          // Theme, masters and the like cannot be kept twice: what someone
+          // changed since stays, and the member is told.
+          if (fields.changedSince.length > 0) toast({ title: t("pages.recoveredCopy.deckChangedSince") });
+          deckResilience.copyRestored(copy);
+          } },
+          { id: "delete", label: t("pages.recoveredCopy.delete"), run: (copy) => deckResilience.forgetCopy(copy) },
+        ]}
+      />
       {deckPartIssues.length > 0 ? (
         <DocumentIssueNotice
           scopeKey={`${pageId}:deck-parts`}
@@ -60297,9 +60589,8 @@ export default function PresentationWindow({
                 }
               }}
               data-table-draw-armed={tableBorderPenMode === "draw" ? "true" : undefined}
-            // Double-click on the empty canvas only finishes a freeform; it
-            // never creates a text box (PPT-E008). A finger's double tap does
-            // the same (an iPad may never send dblclick).
+            // Double-click on the empty canvas puts a text box there, as
+            // PowerPoint does, or finishes a freeform (handleCanvasDoubleClick).
               onDoubleClick={handleCanvasDoubleClick}
               // The keyboard on the slide itself with objects still selected
             // (Esc out of an equation or a crop returns it here): Delete and
@@ -61432,6 +61723,21 @@ export default function PresentationWindow({
                   }}
                   onPointerDown={(event) => {
                     noteBlockTouchPress(event, block.id);
+                    if (block.type === "shape" && event.button === 0) {
+                      // Windows' double click: the second press within 500 ms
+                      // and 4 px of the first (SM_CXDOUBLECLK).
+                      const now = performance.now();
+                      const last = shapeLastPressRef.current;
+                      const second =
+                        event.detail >= 2 ||
+                        (last !== null &&
+                          last.blockId === block.id &&
+                          now - last.at <= 500 &&
+                          Math.abs(event.clientX - last.x) <= 4 &&
+                          Math.abs(event.clientY - last.y) <= 4);
+                      shapeWordPressRef.current = second ? { blockId: block.id, at: now } : null;
+                      shapeLastPressRef.current = second ? null : { blockId: block.id, at: now, x: event.clientX, y: event.clientY };
+                    }
                     // A press on a member of the group selected whole: its
                     // click selects that member inside the group.
                     groupMemberPressRef.current =
@@ -61921,14 +62227,17 @@ export default function PresentationWindow({
                       }}
                     />
                   ) : null}
-                  {/* A text box's body is all text (the textarea or its
-                    preview layer), so a press inside it types. PowerPoint
-                    moves a text box from its border: the pointer turns into
-                    the move arrows on the frame, and dragging there moves
-                    the box whether or not it was selected. These four bands
-                    straddle the frame for that press; a click on them
-                    selects the box itself, not its text. */}
-                  {block.type === "text" &&
+                  {
+
+
+
+
+
+
+
+
+}
+                  {(block.type === "text" || presentationShapeIsNativeTextBox(block)) &&
                   isGeometryBlock &&
                   !smartArtLabelYieldsToShape && // its shape takes the press
                   !isBlockLocked(block) &&
@@ -62235,6 +62544,7 @@ export default function PresentationWindow({
                         commitShapeRichText,
                         recordShapeTextRange,
                         takeShapeRichSelection,
+                        placeShapeTextCaret,
                         heldBlockWords,
                         toggleShapeWordsRunStyle: (key) => {
                           toggleLiveRibbonRunStyle(key);

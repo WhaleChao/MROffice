@@ -226,11 +226,13 @@ export function textRotationCss(value: unknown): {
  */
 export function rotatedTextVerticalAnchor(
   style: Pick<CellFormatStyle, "textRotation" | "verticalText" | "verticalAlign" | "verticalJustify"> | undefined,
-): "flex-start" | "flex-end" | null {
-  // Vertical Text set Justify or Distributed down the cell starts at the top,
-  // as Excel stacks it (R20-X14's 「満足している」 headers hung from the top in
-  // Excel and stood on the bottom here, the default the alignment fell to).
-  if (style?.verticalText === true) return style.verticalJustify === "justify" || style.verticalJustify === "distributed" ? "flex-start" : null;
+): "flex-start" | "flex-end" | "center" | null {
+  // Vertical Text set Justify down the cell starts at the top, as Excel
+  // stacks it (R20-X14's 「満足している」 headers hung from the top in Excel
+  // and stood on the bottom here, the default the alignment fell to); set
+  // Distributed it stands in the middle (lookwin p197-lw; R453-X58's
+  // 「体育館・プール等」 down a merged block).
+  if (style?.verticalText === true) return style.verticalJustify === "justify" ? "flex-start" : style.verticalJustify === "distributed" ? "center" : null;
   const angle = normalizeTextRotation(style?.textRotation);
   if (angle === 0 || Math.abs(angle) === 90 || style?.verticalAlign === "middle") return null;
   return angle > 0 ? "flex-end" : "flex-start";

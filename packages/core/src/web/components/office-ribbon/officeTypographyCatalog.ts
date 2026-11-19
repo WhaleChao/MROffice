@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { ptToPx, pxToPt } from "../../lib/office-units";
+import { isExcelCutFamily } from "../../lib/office-fonts/excel-cut-families";
 import { isHangulEmAlias } from "../../lib/office-fonts/hangul-em";
 /** Shared Office typography catalog used by docs and sheets. */
 
@@ -211,8 +212,9 @@ export function officePrimaryFontFamily(fontStack: string): string {
   const known = primaryFamilies.get(fontStack);
   if (known !== undefined) return known;
   const families = fontStack.split(",").map((family) => family.replace(/["']/g, "").trim());
-  // A Hangul clone in front of a Korean family (lib/office-fonts/hangul-em.ts) is not the face asked for either.
-  const primary = families.find((family) => family && !MARK_ONLY_FACES.has(family.toLowerCase()) && !isHangulEmAlias(family)) ?? families[0] ?? fontStack.trim();
+  // A Hangul clone in front of a Korean family (lib/office-fonts/hangul-em.ts) is not the face asked for either,
+  // nor a sheet's cut family in front of its face (lib/office-fonts/excel-cut-families.ts).
+  const primary = families.find((family) => family && !MARK_ONLY_FACES.has(family.toLowerCase()) && !isHangulEmAlias(family) && !isExcelCutFamily(family)) ?? families[0] ?? fontStack.trim();
   if (primaryFamilies.size >= 2_000) primaryFamilies.clear();
   primaryFamilies.set(fontStack, primary);
   return primary;

@@ -264,6 +264,9 @@ export interface DeckPartRoomPort {
   content(): Record<string, unknown>;
   /** Write the part's content into the room; true when anything changed. */
   publish(content: Record<string, unknown>): boolean;
+  /** Write what changed from `base` to `content` into the room as it now is
+   * (another member's change since `base` kept); true when anything changed. */
+  publishOver?(base: Record<string, unknown>, content: Record<string, unknown>): boolean;
 }
 
 /** A later part's change on its way to the server (`PUT`). */
@@ -1469,6 +1472,9 @@ export class DeckPartsSession<S extends DeckSlideLike> {
     content: Rec,
     records: ReadonlyArray<{ id: string; record: Rec }>,
     liveOf: ReadonlyMap<string, S | undefined>,
+    /** A draft's slides as they were when it was typed on (the part as
+     * installed): what it changed is measured from them, not from the room. */
+    bases?: ReadonlyMap<string, Rec>,
   ): boolean {
     const room = held.room!;
     const base = room.content();
@@ -1481,19 +1487,30 @@ export class DeckPartsSession<S extends DeckSlideLike> {
       if (!saved || !now || now !== saved) changedRecords.set(id, record);
     }
     if (changedRecords.size === 0) return false;
-    const nextSlides = baseSlides.map((slide) => {
+    const stating = (records: ReadonlyMap<string, Rec>) => baseSlides.map((slide) => {
       const id = asRec(slide)?.id;
-      const record = typeof id === "string" ? changedRecords.get(id) : undefined;
+      const record = typeof id === "string" ? records.get(id) : undefined;
       if (!record) return slide;
       const { hidden: _hidden, ...stated } = record;
       void _hidden;
       return asRec(slide)?.hidden === true ? { ...stated, hidden: true } : stated;
     });
+    const nextSlides = stating(changedRecords);
     const named = namedTableEntries([...changedRecords.values()], contentTables(content));
     const next: Rec = { ...base, slides: nextSlides };
     if (named.media) next[MEDIA_KEY] = { ...(asRec(base[MEDIA_KEY]) ?? {}), ...named.media };
     if (named.receipts) next[RECEIPTS_KEY] = { ...(asRec(base[RECEIPTS_KEY]) ?? {}), ...named.receipts };
-    const touched = room.publish(next);
+    let touched: boolean;
+    if (bases && bases.size > 0 && room.publishOver) {
+      // The room as it is, those slides as the draft found them: only what the
+      // draft changed of them is written, over every other member's words.
+      const from: Rec = { ...base, slides: stating(new Map([...changedRecords.keys()]
+        .map((id) => [id, bases.get(id)] as const)
+        .filter((entry): entry is readonly [string, Rec] => entry[1] !== undefined))) };
+      touched = room.publishOver(from, next);
+    } else {
+      touched = room.publish(next);
+    }
     // The room holds these now: they are what the next change is measured
     // against, and what a delivery of the body shows.
     for (const id of changedRecords.keys()) {
@@ -1565,6 +1582,39 @@ export class DeckPartsSession<S extends DeckSlideLike> {
       const saved = held.saved.get(id);
       if (now && saved && now !== saved && !unchangedFromSaved(now, saved)) typed.set(id, { now, saved });
     }
+    // What each typed slide was when it was typed on: the part as installed
+    // (or as last saved). Only the draft's change from it goes into the room:
+    // the room may hold newer words of another member's, given to it and not
+    
+    
+    // kept as this window's recoverable copy, never dropped in silence.
+    const bases = new Map<string, Rec>();
+    const unbased: string[] = [];
+    if (typed.size > 0) {
+      let installedSlides: unknown[] | null = null;
+      if (installed) {
+        try {
+          const read = asRec(JSON.parse(installed.key));
+          installedSlides = Array.isArray(read?.slides) ? (read.slides as unknown[]) : null;
+        } catch {
+          installedSlides = null;
+        }
+      }
+      for (const id of typed.keys()) {
+        let base = installedSlides?.map(asRec).find((slide) => slide?.id === id) ?? null;
+        const stored = held.savedStore.get(id);
+        if (!base && stored !== undefined) {
+          try {
+            base = asRec(JSON.parse(stored)) ?? null;
+          } catch {
+            base = null;
+          }
+        }
+        if (base) bases.set(id, base);
+        else unbased.push(id);
+      }
+      for (const id of unbased) typed.delete(id);
+    }
     if (shownBefore) this.noteWordsMoved(shownBefore, slides.filter((slide) => !typed.has(slide.id)));
     const shown = new Map<string, S>();
     // A slide the room gives exactly as the window holds it (its whole
@@ -1603,13 +1653,22 @@ export class DeckPartsSession<S extends DeckSlideLike> {
       held.saved.set(slide.id, view);
       shown.set(slide.id, view);
     }
-    if (draft && typed.size > 0 && held.room?.accepting) {
-      const records = (Array.isArray(draft.content.slides) ? (draft.content.slides as Rec[]) : [])
-        .map((record) => ({ id: String(record.id), record }))
-        .filter(({ id }) => typed.has(id));
-      this.publishToRoom(held, draft.content as Rec, records, draft.live);
+    if (draft && (typed.size > 0 || unbased.length > 0) && held.room?.accepting) {
+      if (typed.size > 0) {
+        const records = (Array.isArray(draft.content.slides) ? (draft.content.slides as Rec[]) : [])
+          .map((record) => ({ id: String(record.id), record }))
+          .filter(({ id }) => typed.has(id));
+        this.publishToRoom(held, draft.content as Rec, records, draft.live, bases);
+      }
       this.drafts.delete(index);
-      if (this.pageId) writeKeptEdit(this.pageId, index, null);
+      if (unbased.length > 0) {
+        console.warn("[deck-parts] a draft with no reading to merge from is kept as a recoverable copy",
+          { part: index, slides: unbased.length });
+      }
+      if (this.pageId) {
+        writeKeptEdit(this.pageId, index,
+          unbased.length > 0 ? { rev: held.revision, content: draft.content, sending: false } : null);
+      }
       this.changed();
     }
     return shown;

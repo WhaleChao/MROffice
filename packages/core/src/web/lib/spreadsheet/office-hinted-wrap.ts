@@ -50,8 +50,12 @@ const alphabetIndex = new Map<string, number>([...table.alphabet].map((ch, index
 
 function isIdeograph(ch: string): boolean {
   const code = ch.codePointAt(0) ?? 0;
+  // ... or a Hangul syllable or compatibility jamo: every Korean face of
+  // Windows sets one a whole em, as it sets an ideograph (Malgun Gothic's
+  // hinted advances; printed, lookwin p187-lw).
   return (code >= 0x3400 && code <= 0x4dbf) || (code >= 0x4e00 && code <= 0x9fff)
-    || (code >= 0xf900 && code <= 0xfaff) || (code >= 0x20000 && code <= 0x3ffff);
+    || (code >= 0xf900 && code <= 0xfaff) || (code >= 0x20000 && code <= 0x3ffff)
+    || (code >= 0xac00 && code <= 0xd7a3) || (code >= 0x3131 && code <= 0x318e);
 }
 
 export const OFFICE_HINTED_WRAP_ROOM_STEP_PX = 29;
@@ -119,6 +123,12 @@ export function officeDigitPx(face: OfficeHintedWrapFace): number | undefined {
  * answers both give).
  */
 export const OFFICE_COMPLEX_WRAP_TEXT = /[\u0590-\u08ff\u0900-\u0dff\u0e00-\u0eff\u0f00-\u0fff\u1000-\u109f\u1780-\u17ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
+/** The text whose wrapped cell turns Windows Excel's later wraps of the load
+ * "spaced" (office-complex-wrap): the complex scripts' letters, and a
+ * combining diacritical mark, which Uniscribe shapes too (lookwin p217-lw: a
+ * wrapped "o" + U+0301 does, as a Hebrew alef; a zero width space, a tab and
+ * curly quotes do not). The API's _SPACED_WRAP_TRIGGER_TEXT. */
+export const OFFICE_SPACED_WRAP_TRIGGER_TEXT = /[\u0300-\u036f\u0590-\u08ff\u0900-\u0dff\u0e00-\u0eff\u0f00-\u0fff\u1000-\u109f\u1780-\u17ff\ufb1d-\ufdff\ufe70-\ufeff]/u;
 
 /** GDI's whole pixels per em of a `sizePt` face at 96 dpi (the advances table's key). */
 function emPxOf(sizePt: number): number {
@@ -140,7 +150,8 @@ export interface OfficeHintedWrapFace {
 const ALIASES: Readonly<Record<string, string>> = {
   carlito: "calibri", arimo: "arial", "liberation sans": "arial", tinos: "times new roman", "liberation serif": "times new roman",
   "ms ゴシック": "ms gothic", "ms pゴシック": "ms pgothic", "游ゴシック": "yu gothic", yugothic: "yu gothic",
-  "等线": "dengxian", "宋体": "simsun", "微软雅黑": "microsoft yahei",
+  "等线": "dengxian", "宋体": "simsun", "微软雅黑": "microsoft yahei", "맑은 고딕": "malgun gothic",
+  "ms 明朝": "ms mincho", "ms p明朝": "ms pmincho", "メイリオ": "meiryo", "游明朝": "yu mincho", yumincho: "yu mincho",
 };
 
 function faceKey(family: string): string {
@@ -161,6 +172,15 @@ const FIXED_PITCH_UNITS: Readonly<Record<string, number>> = { "courier new": 122
 const FIXED_PITCH_NO_BOLD = new Set(["lucida console"]);
 
 /** The face's advances at its pixel em, or undefined where the table has none. */
+/** The characters Windows Excel's wrap gives no width: a combining
+ * diacritical mark (it stands over its base), a zero width space and a tab
+ * (lookwin p218-lw: an Arial 10 line of 1117 px keeps its width with one or
+ * three of each inside its words; a tab between two words in place of their
+ * space takes the space's 4 px off). The API's _zero_advance. */
+function zeroAdvance(ch: string): boolean {
+  return ch === "\t" || ch === "\u200b" || (ch >= "\u0300" && ch <= "\u036f");
+}
+
 export function advancesOf(face: OfficeHintedWrapFace): ((ch: string) => number | undefined) | undefined {
   // The face Windows Excel draws the name in (one it lacks, Helvetica Neue,
   // wraps in Arial's widths; lookwin faces probe), then the table's own name.
@@ -197,6 +217,7 @@ export function advancesOf(face: OfficeHintedWrapFace): ((ch: string) => number 
     return value === undefined || value === UNKNOWN ? undefined : value;
   };
   return (ch) => {
+    if (zeroAdvance(ch)) return 0;
     const at = charIndex.get(ch);
     const own = at === undefined ? undefined : decode(encoded[at]);
     if (own !== undefined) return own + widen;
@@ -278,7 +299,15 @@ function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | 
   const spaced = options.spaced === true;
   const lines: string[] = [];
   let offset = 0;
-  for (const paragraph of text.replace(/\r\n?/g, "\n").split("\n")) {
+  const paragraphs = text.replace(/\r\n?/g, "\n").split("\n");
+  // The break a text ends with opens a last, empty line -- but not after a
+  // line of spaces alone, nor, in the spaced wrap, after a line that ends in
+  // a space (lookwin p212-lw: "abc\n" and "abc \n" stand two lines,
+  // "abc\n \n" two; p217-lw, after a wrapped complex-script cell: "abc \n"
+  // one line, "abc \n\n" three still; R454-X16's notes ending ". \n").
+  const beforeLast = paragraphs.length >= 2 && paragraphs[paragraphs.length - 1] === "" ? paragraphs[paragraphs.length - 2] : undefined;
+  if (beforeLast !== undefined && beforeLast.endsWith(" ") && (spaced || beforeLast.replace(/ /g, "") === "")) paragraphs.pop();
+  for (const paragraph of paragraphs) {
     let line = "";
     let width = 0;
     let pendingSpaces = "";
@@ -313,12 +342,29 @@ function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | 
         pendingWidth = 0;
         continue;
       }
-      if (!first) lines.push(line);
+      // The spaces a paragraph starts with stand on its first line at their
+      // advances (lookwin p216-lw: one, two and three leading spaces of Arial
+      // 10 take 4, 8 and 12 px of the room; the spaces a line ends with take
+      // none); the spaces a wrap breaks at start no line.
+      if (first) {
+        line = pendingSpaces;
+        width = pendingWidth;
+      } else {
+        lines.push(line);
+        line = "";
+        width = 0;
+      }
       first = false;
       pendingSpaces = "";
       pendingWidth = 0;
-      line = "";
-      width = 0;
+      // ...alone, where the first word does not fit after them: it starts
+      // the next line (R454-X16's U58, a space before a 17-digit coordinate
+      // wider than its 127 px column: five lines, 25 in all, not 24).
+      if (line && width + tokenWidth > room + 1e-9) {
+        lines.push(line);
+        line = "";
+        width = 0;
+      }
       // A token wider than the room breaks between its letters.
       for (let index = 0; index < chars.length; index += 1) {
         const value = widths[index];

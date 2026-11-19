@@ -1,0 +1,27 @@
+{
+ "_source": "GDI's fixed-pitch East Asian faces: Windows Excel sets each full-width character of one (an advance of one em: Han, kana, Hangul, full-width punctuation) at twice the face's half-width cell, and the cell is half the em in whole device pixels, the half rounded up -- 2 x floor(ppem / 2 + 0.5): 76 printer dots at 9 pt (75 px per em at 600 dpi), 118 at 14 pt (117), 134 at 16 pt (133), 168 at 20 pt (167), and the em itself where it is even (92 at 11 pt, 100 at 12, 150 at 18). The other East Asian faces set a full-width character at the em (宋体, ＭＳ Ｐゴシック, MS UI Gothic, 굴림, BIZ UDゴシック: 75, 117, 133, 167). Read off Excel's own PDF (xlsx-rounds/lookwin probes p186-lw, 16 faces at 8-20 pt, the pitch between neighbouring characters; p184-lw; 2026-11-19); ＭＳ 明朝 off the bench truths printed before its font went missing on the truth machine (R47-X14: 38 dots at 37 px per em, 34 at 33; R70-X09: 68 at 67, 62 at 61, 56 at 55). 'faces': the families, lower case, by every name a file gives them. The web's lib/office-fonts/excel-windows-cell-pitch-faces.json is the same table.",
+ "faces": [
+  "ｍｓ ゴシック",
+  "ms gothic",
+  "ｍｓ 明朝",
+  "ms mincho",
+  "黑体",
+  "simhei",
+  "新宋体",
+  "nsimsun",
+  "細明體",
+  "mingliu",
+  "楷体",
+  "kaiti",
+  "仿宋",
+  "fangsong",
+  "굴림체",
+  "gulimche",
+  "돋움체",
+  "dotumche",
+  "바탕체",
+  "batangche",
+  "궁서체",
+  "gungsuhche"
+ ]
+}

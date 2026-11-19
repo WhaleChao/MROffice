@@ -117,6 +117,14 @@ const CHILLY_WITHOUT_POWDER: SmartArtLightRigPaint = { face: [1, 1, 1.046] };
 
 
 
+const CHILLY_UNDER_POWDER: SmartArtLightRigPaint = { face: [1, 1, 1.058] };
+
+
+
+
+
+
+
 
 const METAL_THREE_POINT_FACE = { face: [0.98, 0.975, 0.976] as const, top: 108, bottom: 42 };
 
@@ -150,7 +158,67 @@ export function smartArtLightRigPaint(
 ): SmartArtLightRigPaint | null {
   const rig = lightRigOf(scene3d, shape3d);
   if (rig === "chilly" && shape3d?.material !== "translucentPowder") return CHILLY_WITHOUT_POWDER;
+  // Powder's "lift" was the ground showing through: the face keeps its
+  
+  // ({@link smartArtMaterialOpacityPrimitives}).
+  if (rig === "chilly" && smartArtMaterialOpacity(shape3d) !== null) return CHILLY_UNDER_POWDER;
   return rig ? SMARTART_LIGHT_RIG_PAINT[rig] ?? null : null;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function smartArtMaterialOpacity(shape3d: SmartArtShape3d | undefined): number | null {
+  return shape3d?.material === "translucentPowder" ? 0.7 : null;
+}
+
+/**
+ * The closing steps that draw `input` (the member's lit face) at its
+ * material's opacity ({@link smartArtMaterialOpacity}): its colour where the
+ * member is, and an alpha of the material's opacity over the member's
+ * coverage -- the fill's own transparency dropped. None for another material.
+ */
+/**
+ * Whether a member's material opacity is drawn AFTER its bevel (the closing
+ * {@link smartArtMaterialOpacityPrimitives}) rather than under it: a bevel read
+ * side by side is laid on the composited face ({@link smartArtBevelLightPrimitives}'
+ * `faceOpacity`), any other on the opaque face it lights.
+ */
+export function smartArtMaterialOpacityAfterBevel(light: SmartArtBevelLight | null | undefined): boolean {
+  return !light?.edges;
+}
+
+export function smartArtMaterialOpacityPrimitives(
+  shape3d: SmartArtShape3d | undefined,
+  input: string,
+): SmartArtFilterPrimitive[] {
+  const opacity = smartArtMaterialOpacity(shape3d);
+  if (opacity === null) return [];
+  return [
+    {
+      tag: "feComponentTransfer",
+      attrs: { in: "SourceAlpha", result: "materialCoverage" },
+      children: [{ tag: "feFuncA", attrs: { type: "linear", slope: 50, intercept: 0 } }],
+    },
+    {
+      tag: "feColorMatrix",
+      attrs: { in: input, type: "matrix", values: "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0 1", result: "materialFace" },
+    },
+    { tag: "feComposite", attrs: { in: "materialFace", in2: "materialCoverage", operator: "in", result: "materialCovered" } },
+    {
+      tag: "feComponentTransfer",
+      attrs: { in: "materialCovered", result: "materialResult" },
+      children: [{ tag: "feFuncA", attrs: { type: "linear", slope: opacity, intercept: 0 } }],
+    },
+  ];
 }
 
 
@@ -1002,6 +1070,10 @@ export function smartArtBevelRimPrimitives(
 
 
 
+
+
+
+
 export interface SmartArtBevelLight {
   /** The silhouette's blur that becomes the bevel's height field, in px. */
   readonly sigmaPx: number;
@@ -1016,7 +1088,203 @@ export interface SmartArtBevelLight {
   readonly specularExponent: number;
   /** The share of the light coming from the key light's mirror about the vertical. */
   readonly mirror: number;
+  /**
+   * The `dkEdge` material's dark rim, where it was measured: the face darkened
+   * by `depth` times `slope` x (1 - the silhouette blurred by `sigmaPx`), so
+   * the outermost pixel goes darkest and the face a pixel in keeps its colour.
+   */
+  readonly darkEdge?: { readonly sigmaPx: number; readonly slope: number; readonly depth: number };
+  /**
+   * The bevel drawn side by side, where Windows' own render of the style was
+   * read side by side ({@link SmartArtBevelEdges}): in place of the light, on
+   * a member whose outline is a box (see {@link smartArtBevelLight}).
+   */
+  readonly edges?: SmartArtBevelEdges;
+  /**
+   * How far inside the painted silhouette the member's own edge stands, in
+   * px, where it wears a contour: the contour is stroked on the outline, half
+   * of it outside, and the sides' depths are read from the member's edge
+   * (Windows draws 3d3's contour wholly outside the bevel, probes/sa36-s2b).
+   */
+  readonly edgeInsetPx?: number;
 }
+
+/**
+ * How far each side of a bevelled box goes toward white (positive) or black
+ * (negative) by its depth in from that side's edge, every quarter px from 0
+ * (px of the member's own space), as Windows PowerPoint draws it; past the
+ * last entry the face keeps its colour.
+ */
+export interface SmartArtBevelEdges {
+  readonly top: readonly number[];
+  readonly right: readonly number[];
+  readonly bottom: readonly number[];
+  readonly left: readonly number[];
+}
+
+/**
+ * 3d1 Polished's bevel (plastic, bevelT 120900 x 88900 EMU) side by side, read
+ * off Windows PowerPoint's own pictures at 2.67 px/pt (truth office-truth/
+ * probes/sa36-s2: Basic Block List, Basic Process and Vertical Bullet List in
+ * two fills, every side the same to 0.03 across all six): a soft highlight
+ * 3.5 px in along the top, the right edge's outer 3 px nearly white, a faint
+ * one along the left, nothing but a dark hairline along the bottom. The light
+ * it replaces on a box drew only the top (bevel bands 11.2 -> 8.3/255; held
+ * out on 3dcam's Basic Block List, 13.1 -> 9.5).
+ */
+const POLISHED_EDGES: SmartArtBevelEdges = {
+  top: [0.036, 0.038, 0.042, 0.065, 0.102, 0.164, 0.241, 0.322, 0.407, 0.479, 0.538, 0.592, 0.644, 0.686, 0.719, 0.714, 0.685, 0.653, 0.619, 0.58, 0.535, 0.489, 0.441, 0.394, 0.346, 0.297, 0.248, 0.2, 0.154, 0.11, 0.069, 0.045, 0.036, 0.031, 0.03, 0.027, 0.023, 0.02, 0.018, 0.015, 0.005],
+  right: [0.583, 0.615, 0.823, 0.946, 0.97, 0.96, 0.909, 0.835, 0.739, 0.636, 0.525, 0.409, 0.29, 0.181, 0.088, 0.035, 0.023, 0.017, 0.014, 0.012, 0.012, 0.012, 0.011, 0.009, 0.007, 0.006, 0.005, 0.004, 0.001],
+  bottom: [-0.062, -0.062, -0.058, -0.049, -0.044, -0.04, -0.032, -0.018],
+  left: [0, 0, 0, 0.004, 0.012, 0.024, 0.039, 0.052, 0.066, 0.078, 0.088, 0.097, 0.106, 0.116, 0.123, 0.12, 0.113, 0.106, 0.099, 0.092, 0.085, 0.077, 0.067, 0.059, 0.051, 0.044, 0.037, 0.028, 0.018, 0.009, 0.001],
+};
+
+/**
+ * 3d2 Inset's bevel (plastic, relaxedInset bevelT 127000 x 25400 EMU) side by
+ * side, read the same way off probes/sa36-s2b (Basic Block List, Basic Process
+ * and Vertical Bullet List in two fills, every side within 0.05 across the
+ * six): a dark lip along the top and left, the bottom dark 11 px in, the
+ * right edge's outer 6 px lit toward white, and along the left the groove's
+ * highlight 6.5-11 px in -- the inset groove the light could not draw (bevel
+ * bands 16.7 -> 10.2/255; Basic Cycle's circles 13.9 -> 9.4).
+ */
+const INSET_EDGES: SmartArtBevelEdges = {
+  top: [
+    -0.26, -0.243, -0.213, -0.171, -0.126, -0.091, -0.061, -0.045, -0.039, -0.033, -0.027, -0.019, -0.011, -0.006,
+    -0.002, 0, 0.001, 0.002, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.011, 0.012, 0.011, 0.01, 0.009, 0.009,
+    0.01, 0.01, 0.009, 0.01, 0.01, 0.011, 0.012, 0.014, 0.016, 0.018, 0.02, 0.021, 0.021, 0.022, 0.023, 0.024,
+    0.024, 0.023, 0.011
+  ],
+  right: [
+    0.177, 0.123, 0.337, 0.528, 0.676, 0.77, 0.8, 0.802, 0.773, 0.745, 0.716, 0.68, 0.638, 0.602, 0.572, 0.542,
+    0.511, 0.477, 0.441, 0.408, 0.376, 0.338, 0.298, 0.261, 0.221, 0.163, 0.087, 0.015, -0.038, -0.063, -0.065,
+    -0.066, -0.068, -0.068, -0.069, -0.07, -0.072, -0.075, -0.079, -0.082, -0.084, -0.083, -0.079, -0.074, -0.069,
+    -0.065, -0.059, -0.05, -0.022
+  ],
+  bottom: [
+    -0.431, -0.357, -0.283, -0.24, -0.206, -0.18, -0.158, -0.141, -0.126, -0.115, -0.102, -0.087, -0.073, -0.062,
+    -0.052, -0.049, -0.046, -0.039, -0.032, -0.025, -0.02, -0.019, -0.018, -0.018, -0.021, -0.034, -0.054, -0.084,
+    -0.108, -0.111, -0.109, -0.107, -0.105, -0.102, -0.1, -0.099, -0.096, -0.092, -0.088, -0.086, -0.082, -0.073,
+    -0.065, -0.058, -0.052, -0.049, -0.045, -0.034, -0.013
+  ],
+  left: [
+    -0.406, -0.341, -0.233, -0.133, -0.039, 0.014, 0.034, 0.034, 0.022, 0.009, -0.004, -0.018, -0.034, -0.052,
+    -0.071, -0.077, -0.076, -0.077, -0.078, -0.078, -0.078, -0.077, -0.077, -0.077, -0.069, 0.019, 0.172, 0.365,
+    0.545, 0.609, 0.611, 0.605, 0.6, 0.592, 0.58, 0.551, 0.512, 0.471, 0.428, 0.383, 0.337, 0.288, 0.238, 0.194,
+    0.154, 0.118, 0.086, 0.068, 0.029
+  ],
+};
+
+/**
+ * 3d3 Cartoon's bevel (metal, bevelT 88900 x 203200 EMU, a 1.5 pt contour)
+ * side by side, off probes/sa36-s2b: every side lit toward white from its
+ * edge for 3 px, and along the left and right a second, brighter band 3-7 px
+ * in (bevel bands 26.5 -> 19.0/255; Basic Cycle's circles 19.3 -> 13.5).
+ */
+const CARTOON_EDGES: SmartArtBevelEdges = {
+  top: [
+    0.499, 0.488, 0.468, 0.42, 0.356, 0.304, 0.262, 0.226, 0.194, 0.165, 0.14, 0.119, 0.103, 0.088, 0.072, 0.056,
+    0.042, 0.034, 0.03, 0.025, 0.02, 0.014, 0.008, 0.005, 0.005, 0.004, 0.003, 0.002, 0.001, 0.001
+  ],
+  right: [
+    0.264, 0.498, 0.461, 0.419, 0.37, 0.319, 0.272, 0.236, 0.211, 0.188, 0.17, 0.179, 0.216, 0.254, 0.293, 0.335,
+    0.384, 0.46, 0.561, 0.648, 0.718, 0.775, 0.807, 0.778, 0.689, 0.587, 0.474, 0.343, 0.206, 0.108, 0.053, 0.026,
+    0.021, 0.017, 0.012, 0.008, 0.005, 0.002, 0.001
+  ],
+  bottom: [
+    0.494, 0.477, 0.447, 0.388, 0.328, 0.28, 0.239, 0.207, 0.178, 0.152, 0.127, 0.106, 0.087, 0.071, 0.057, 0.046,
+    0.035, 0.028, 0.023, 0.018, 0.014, 0.01, 0.006, 0.005, 0.004, 0.003, 0.003, 0.002, 0.001
+  ],
+  left: [
+    0.499, 0.481, 0.454, 0.412, 0.359, 0.31, 0.264, 0.231, 0.205, 0.183, 0.165, 0.182, 0.224, 0.262, 0.296, 0.341,
+    0.396, 0.48, 0.581, 0.66, 0.724, 0.775, 0.812, 0.773, 0.686, 0.574, 0.448, 0.309, 0.169, 0.087, 0.043, 0.026,
+    0.021, 0.016, 0.012, 0.008, 0.005, 0.002, 0.001
+  ],
+};
+
+/**
+ * 3d4 Powder's bevel (translucentPowder, softRound bevelT 127000 x 25400 EMU)
+ * side by side, off probes/sa36-s2b: a bright lip at every edge, along the
+ * top and right lit toward white 8 px in, along the bottom and left only 2 px
+ * and then a little darker (bevel bands 6.3 -> 5.6/255; Basic Cycle's circles
+ * 5.5 -> 4.5).
+ */
+const POWDER_EDGES: SmartArtBevelEdges = {
+  top: [
+    0.678, 0.565, 0.385, 0.242, 0.125, 0.059, 0.024, 0.01, 0.011, 0.049, 0.109, 0.156, 0.192, 0.209, 0.212, 0.21,
+    0.204, 0.201, 0.2, 0.195, 0.188, 0.182, 0.174, 0.163, 0.15, 0.14, 0.131, 0.122, 0.113, 0.107, 0.103, 0.096,
+    0.087, 0.079, 0.074, 0.069, 0.066, 0.058, 0.047, 0.039, 0.032, 0.027, 0.024, 0.022, 0.02, 0.018, 0.015, 0.013,
+    0.006
+  ],
+  right: [
+    0.753, 0.604, 0.419, 0.271, 0.167, 0.089, 0.043, 0.019, 0.026, 0.061, 0.122, 0.184, 0.241, 0.272, 0.273, 0.267,
+    0.259, 0.252, 0.247, 0.24, 0.232, 0.219, 0.204, 0.19, 0.179, 0.169, 0.16, 0.151, 0.142, 0.134, 0.126, 0.118,
+    0.108, 0.099, 0.092, 0.088, 0.083, 0.073, 0.061, 0.051, 0.044, 0.039, 0.035, 0.031, 0.028, 0.024, 0.021, 0.018,
+    0.008
+  ],
+  bottom: [
+    0.761, 0.668, 0.57, 0.491, 0.405, 0.295, 0.181, 0.077, -0.002, -0.023, -0.033, -0.043, -0.052, -0.056, -0.059,
+    -0.061, -0.062, -0.061, -0.061, -0.064, -0.065, -0.062, -0.059, -0.057, -0.055, -0.054, -0.053, -0.052, -0.05,
+    -0.046, -0.043, -0.044, -0.043, -0.04, -0.036, -0.032, -0.03, -0.031, -0.03, -0.028, -0.025, -0.023, -0.021,
+    -0.019, -0.017, -0.015, -0.014, -0.011, -0.004
+  ],
+  left: [
+    0.825, 0.767, 0.675, 0.598, 0.527, 0.42, 0.288, 0.162, 0.046, -0.008, -0.023, -0.035, -0.046, -0.052, -0.055,
+    -0.057, -0.059, -0.059, -0.057, -0.057, -0.058, -0.061, -0.064, -0.065, -0.065, -0.064, -0.064, -0.064, -0.063,
+    -0.06, -0.056, -0.054, -0.052, -0.05, -0.047, -0.045, -0.042, -0.042, -0.043, -0.042, -0.039, -0.036, -0.034,
+    -0.03, -0.027, -0.024, -0.021, -0.018, -0.007
+  ],
+};
+
+/**
+ * The outline a bevel read side by side may use: the member's preset, when it
+ * stands unturned and unmirrored (Windows lights the slide's sides, so a turned
+ * box would carry its highlight round with it); else null.
+ */
+export function smartArtBevelOutline(
+  preset: string | null | undefined,
+  turn: { readonly rotation?: unknown; readonly flipH?: unknown; readonly flipV?: unknown },
+): string | null {
+  const rotation = typeof turn.rotation === "number" ? ((turn.rotation % 360) + 360) % 360 : 0;
+  if (!preset || rotation > 0.01 || turn.flipH === true || turn.flipV === true) return null;
+  return preset;
+}
+
+/** The bevels read side by side, keyed like {@link SMARTART_BEVEL_LIGHTS}. */
+const SMARTART_BEVEL_EDGES: Readonly<Record<string, SmartArtBevelEdges>> = {
+  "plastic:circle:120900:88900": POLISHED_EDGES,
+  "plastic:relaxedInset:127000:25400": INSET_EDGES,
+  "metal:circle:88900:203200": CARTOON_EDGES,
+  "translucentPowder:softRound:127000:25400": POWDER_EDGES,
+};
+
+/**
+ * The bevels whose side-by-side reading also fits an ellipse, read at its four
+ * sides' middles (Basic Cycle's circles measured nearer than the light: 3d2,
+ * 3d3 and 3d4; 3d1's did not).
+ */
+const ROUND_BEVEL_EDGES: ReadonlySet<string> = new Set([
+  "plastic:relaxedInset:127000:25400",
+  "metal:circle:88900:203200",
+  "translucentPowder:softRound:127000:25400",
+]);
+
+/**
+ * Outlines that are a box: four straight sides along the member's own axes
+ * (DrawingML preset names and the editors' own kind names), the ones a bevel
+ * read side by side fits. A circle's rim is lit round its curve, which this
+ * does not draw (3d1 on Basic Cycle's circles: the light 10.5, side by side
+ * 10.6), so every other outline keeps the light -- except an ellipse under a
+ * bevel of {@link ROUND_BEVEL_EDGES}.
+ */
+const BOX_OUTLINES: ReadonlySet<string> = new Set([
+  "rect", "rectangle", "roundRect", "rounded-rectangle",
+  "round1Rect", "single-round-corner", "round2SameRect", "same-side-corners-rounded",
+  "round2DiagRect", "diagonal-corners-rounded", "snip1Rect", "single-corner-snipped",
+  "snip2SameRect", "same-side-corners-snipped", "snip2DiagRect", "diagonal-corners-snipped",
+  "snipRoundRect", "single-corner-rounded-snipped",
+  "flowChartProcess", "flowchart-process", "flowChartAlternateProcess", "flowchart-alternate-process",
+]);
 
 const DEFAULT_BEVEL_HEIGHT_EMU = 76_200;
 
@@ -1046,8 +1314,18 @@ const light = (
 
 /** Fitted per style (see {@link SmartArtBevelLight}), keyed by the style's own bevel. */
 const SMARTART_BEVEL_LIGHTS: Readonly<Record<string, SmartArtBevelLight>> = {
-  // simple3: dkEdge, bevelT w 8200 h 38100 — under a pixel wide.
-  "dkEdge:circle:8200:38100": light(8, 10.44, 270, 23.78, 0.995, 0.074, 16.23, 0.453),
+  // simple3 (Subtle Effect): dkEdge, bevelT w 8200 h 38100 -- under a pixel
+  // wide, and no light at all: Windows PowerPoint draws the face its own
+  // colour to the edge and a dark rim round it, the outermost pixel at about
+  // a third of the face (truth office-truth/probes/sa36-s2: Basic Block List,
+  // Basic Process and Vertical Bullet List in two fills at 2.67 px/pt, their
+  // bevel bands within 36 px of each edge 9.8 -> 5.4/255 against the lit
+  // slope this used to be, which brightened the top 24 px of every member by
+  // 13; held out on Basic Cycle's circles, 4.4 -> 2.4).
+  "dkEdge:circle:8200:38100": {
+    ...light(0, 0, 315, 31, 0, 0, 30, 0),
+    darkEdge: { sigmaPx: 0.511, slope: 1.73, depth: 0.997 },
+  },
   // 3d1 Polished.
   "plastic:circle:120900:88900": light(4.55, 3.79, 255.07, 42.82, 0.956, 0.675, 60, 0.215),
   // 3d2 Inset.
@@ -1071,10 +1349,25 @@ const SMARTART_BEVEL_LIGHTS: Readonly<Record<string, SmartArtBevelLight>> = {
 
 
 
-export function smartArtBevelLight(shape3d: SmartArtShape3d): SmartArtBevelLight | null {
+export function smartArtBevelLight(
+  shape3d: SmartArtShape3d,
+  /**
+   * The member's outline (its preset), when it stands unturned and unmirrored:
+   * a box takes the bevel read side by side where there is one. Without it,
+   * or for any other outline, the light.
+   */
+  outline?: string | null,
+): SmartArtBevelLight | null {
   const key = bevelKey(shape3d);
   if (!key) return null;
   const measured = SMARTART_BEVEL_LIGHTS[key];
+  const edges = outline && (BOX_OUTLINES.has(outline) || (outline === "ellipse" && ROUND_BEVEL_EDGES.has(key)))
+    ? SMARTART_BEVEL_EDGES[key]
+    : undefined;
+  if (measured && edges) {
+    const contour = shape3d.contourWidthEmu && shape3d.contourWidthEmu > 0 ? emuToPx(shape3d.contourWidthEmu) / 2 : 0;
+    return contour > 0 ? { ...measured, edges, edgeInsetPx: contour } : { ...measured, edges };
+  }
   if (measured) return measured;
   const bevel = (shape3d.bevelTop ?? shape3d.bevelBottom)!;
   const widthPx = emuToPx(bevel.widthEmu);
@@ -1117,7 +1410,25 @@ export function smartArtBevelLightPrimitives(
    * host names the GEOMETRY's (a picture fill, see `OfficeSmartArtBevelFilter`).
    */
   height = "SourceAlpha",
+  /**
+   * The material's own face opacity (`smartArtMaterialOpacity`), laid under a
+   * bevel read side by side; the caller then adds no closing opacity step
+   * (`smartArtMaterialOpacityAfterBevel`). The light ignores it.
+   */
+  faceOpacity: number | null = null,
 ): SmartArtFilterPrimitive[] {
+  if (light.edges) return bevelEdgePrimitives(light.edges, input, height, light.edgeInsetPx ?? 0, faceOpacity);
+  if (light.surfaceScale <= 0 && light.specular <= 0.001) {
+    // No slope to light (simple3): the face as it is, with its dark rim.
+    return [
+      {
+        tag: "feColorMatrix",
+        attrs: { in: input, type: "matrix", values: "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0 1", result: "bevelFace" },
+      },
+      ...darkEdgePrimitives(light, "bevelFace", height),
+      { tag: "feComposite", attrs: { in: light.darkEdge ? "edgeLit" : "bevelFace", in2: "SourceAlpha", operator: "in", result: "bevelResult" } },
+    ];
+  }
   const elevation = Math.max(5, Math.min(90, light.elevation));
   const sin = Math.sin((elevation * Math.PI) / 180);
   const slope = (1 - light.ambient) / sin;
@@ -1215,11 +1526,185 @@ export function smartArtBevelLightPrimitives(
       lit = `bevelShine${index}`;
     });
   }
+  if (light.darkEdge) {
+    out.push(...darkEdgePrimitives(light, lit, height));
+    lit = "edgeLit";
+  }
   out.push({
     tag: "feComposite",
     attrs: { in: lit, in2: "SourceAlpha", operator: "in", result: "bevelResult" },
   });
   return out;
+}
+
+
+
+
+
+
+function coveragePrimitives(height: string): SmartArtFilterPrimitive[] {
+  return [
+    {
+      tag: "feComponentTransfer",
+      attrs: { in: height, result: "edgeCoverage" },
+      children: [{ tag: "feFuncA", attrs: { type: "linear", slope: 50, intercept: 0 } }],
+    },
+  ];
+}
+
+/** Depth fields of {@link bevelEdgePrimitives}: the alpha blurred along a side's normal by this much... */
+const EDGE_FIELD_SIGMA = 3;
+/** ...and moved this far in, so the field runs from 0 just outside the edge to 1 well inside. */
+const EDGE_FIELD_INSET = 4.5;
+const EDGE_TABLE_SIZE = 64;
+
+/** The standard normal distribution's quantile (Acklam's rational approximation, |error| < 1.2e-9). */
+function normalQuantile(p: number): number {
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  const a = [-39.6968302866538, 220.946098424521, -275.928510446969, 138.357751867269, -30.6647980661472, 2.50662827745924];
+  const b = [-54.4760987982241, 161.585836858041, -155.698979859887, 66.8013118877197, -13.2806815528857];
+  const c = [-0.00778489400243029, -0.322396458041136, -2.40075827716184, -2.54973253934373, 4.37466414146497, 2.93816398269878];
+  const d = [0.00778469570904146, 0.32246712907004, 2.445134137143, 3.75440866190742];
+  const tail = (q: number) =>
+    (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) / ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1);
+  if (p < 0.02425) return tail(Math.sqrt(-2 * Math.log(p)));
+  if (p > 1 - 0.02425) return -tail(Math.sqrt(-2 * Math.log(1 - p)));
+  const q = p - 0.5;
+  const r = q * q;
+  return ((((((a[0]! * r + a[1]!) * r + a[2]!) * r + a[3]!) * r + a[4]!) * r + a[5]!) * q) /
+    (((((b[0]! * r + b[1]!) * r + b[2]!) * r + b[3]!) * r + b[4]!) * r + 1);
+}
+
+/**
+ * A side's profile as the `feFuncA` table over its depth field: entry i is
+ * the field's value i/(n-1), the depth it stands at INSET + SIGMA * quantile,
+ * and the profile there (`sign` keeps one direction: +1 toward white, -1
+ * toward black).
+ */
+function edgeTable(profile: readonly number[], sign: 1 | -1): string | null {
+  const values: number[] = [];
+  for (let index = 0; index < EDGE_TABLE_SIZE; index += 1) {
+    const depth = EDGE_FIELD_INSET + EDGE_FIELD_SIGMA * normalQuantile(index / (EDGE_TABLE_SIZE - 1));
+    const at = depth / 0.25;
+    const low = Math.floor(at);
+    const value = depth < 0 || low >= profile.length
+      ? 0
+      : (profile[low] ?? 0) + ((profile[low + 1] ?? 0) - (profile[low] ?? 0)) * (at - low);
+    values.push(Math.max(0, Math.min(1, sign * value)));
+  }
+  return values.some((value) => value > 0.002) ? values.map((value) => fixed(value, 4)).join(" ") : null;
+}
+
+/**
+ * {@link SmartArtBevelEdges} on `input`: per side, the alpha blurred along that
+ * side's normal only and moved inward is a depth field that reads 0 outside
+ * the edge and rises to 1 inside, unaffected by the opposite side; the side's
+ * profile, as a table over that field, is how much white (or black) is laid
+ * over the face there. Clipped to the shape's alpha at the end.
+ */
+function bevelEdgePrimitives(
+  edges: SmartArtBevelEdges,
+  input: string,
+  height: string,
+  edgeInsetPx = 0,
+  /**
+   * The face's own opacity when its material sets one (`smartArtMaterialOpacity`):
+   * the sides are laid on the face as Windows composites it -- read off its
+   * pictures toward white or black FROM that composited face -- so the face is
+   * made translucent first and the member's coverage, not the fill's alpha,
+   * closes it.
+   */
+  faceOpacity: number | null = null,
+): SmartArtFilterPrimitive[] {
+  const inset = fixed(EDGE_FIELD_INSET + Math.max(0, edgeInsetPx), 3);
+  const out: SmartArtFilterPrimitive[] = [
+    {
+      tag: "feColorMatrix",
+      attrs: { in: input, type: "matrix", values: "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0 1", result: "edgeFace0" },
+    },
+  ];
+  // Depth from where the member IS, whatever its fill's alpha (`coveragePrimitives`).
+  out.push(...coveragePrimitives(height));
+  let face = "edgeFace0";
+  if (faceOpacity !== null) {
+    out.push(
+      {
+        tag: "feColorMatrix",
+        attrs: { in: "edgeFace0", type: "matrix", values: "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0 1", result: "edgeFaceOpaque" },
+      },
+      { tag: "feComposite", attrs: { in: "edgeFaceOpaque", in2: "edgeCoverage", operator: "in", result: "edgeFaceCovered" } },
+      {
+        tag: "feComponentTransfer",
+        attrs: { in: "edgeFaceCovered", result: "edgeFaceMaterial" },
+        children: [{ tag: "feFuncA", attrs: { type: "linear", slope: faceOpacity, intercept: 0 } }],
+      },
+    );
+    face = "edgeFaceMaterial";
+  }
+  let step = 0;
+  const sides = [
+    ["top", 0, inset, `0 ${EDGE_FIELD_SIGMA}`],
+    ["bottom", 0, -inset, `0 ${EDGE_FIELD_SIGMA}`],
+    ["left", inset, 0, `${EDGE_FIELD_SIGMA} 0`],
+    ["right", -inset, 0, `${EDGE_FIELD_SIGMA} 0`],
+  ] as const;
+  for (const [side, dx, dy, deviation] of sides) {
+    const tables = ([1, -1] as const)
+      .map((sign) => [sign, edgeTable(edges[side], sign)] as const)
+      .filter((entry): entry is readonly [1 | -1, string] => entry[1] !== null);
+    if (!tables.length) continue;
+    out.push(
+      { tag: "feGaussianBlur", attrs: { in: "edgeCoverage", stdDeviation: deviation, result: `${side}Blur` } },
+      { tag: "feOffset", attrs: { in: `${side}Blur`, dx, dy, result: `${side}Depth` } },
+    );
+    for (const [sign, table] of tables) {
+      const name = `${side}${sign > 0 ? "Light" : "Dark"}`;
+      step += 1;
+      out.push(
+        {
+          tag: "feComponentTransfer",
+          attrs: { in: `${side}Depth`, result: `${name}Amount` },
+          children: [{ tag: "feFuncA", attrs: { type: "table", tableValues: table } }],
+        },
+        { tag: "feFlood", attrs: { "flood-color": sign > 0 ? "#ffffff" : "#000000", result: `${name}Colour` } },
+        { tag: "feComposite", attrs: { in: `${name}Colour`, in2: `${name}Amount`, operator: "in", result: `${name}Layer` } },
+        { tag: "feComposite", attrs: { in: `${name}Layer`, in2: face, operator: "over", result: `edgeFace${step}` } },
+      );
+      face = `edgeFace${step}`;
+    }
+  }
+  out.push({
+    tag: "feComposite",
+    attrs: { in: face, in2: faceOpacity !== null ? "edgeCoverage" : "SourceAlpha", operator: "in", result: "bevelResult" },
+  });
+  return out;
+}
+
+/** {@link SmartArtBevelLight.darkEdge} over `input`, as `edgeLit` (nothing when the light has none). */
+function darkEdgePrimitives(light: SmartArtBevelLight, input: string, height: string): SmartArtFilterPrimitive[] {
+  const edge = light.darkEdge;
+  if (!edge) return [];
+  const depth = fixed(-edge.depth);
+  return [
+    ...coveragePrimitives(height),
+    { tag: "feGaussianBlur", attrs: { in: "edgeCoverage", stdDeviation: fixed(edge.sigmaPx, 3), result: "edgeBlur" } },
+    {
+      tag: "feComponentTransfer",
+      attrs: { in: "edgeBlur", result: "edgeNear" },
+      children: [{ tag: "feFuncA", attrs: { type: "linear", slope: fixed(-edge.slope), intercept: fixed(edge.slope) } }],
+    },
+    {
+      tag: "feColorMatrix",
+      attrs: {
+        in: "edgeNear",
+        type: "matrix",
+        values: `0 0 0 ${depth} 1  0 0 0 ${depth} 1  0 0 0 ${depth} 1  0 0 0 0 1`,
+        result: "edgeShade",
+      },
+    },
+    { tag: "feComposite", attrs: { in: input, in2: "edgeShade", operator: "arithmetic", k1: 1, k2: 0, k3: 0, k4: 0, result: "edgeLit" } },
+  ];
 }
 
 /**

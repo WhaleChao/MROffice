@@ -1,5 +1,5 @@
 {
-  "name": "@mroffice/mcp",
+  "name": "mroffice-mcp",
   "version": "0.1.0",
   "mcpName": "ai.mroffice/office",
   "type": "module",
@@ -17,7 +17,12 @@
     "docx",
     "mroffice"
   ],
-  "homepage": "https://mroffice.ai",
+  "homepage": "https://mroffice.ai/developers/mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XinaTian/MROffice.git",
+    "directory": "apps/mcp"
+  },
   "bugs": {
     "email": "support@mr-note.com"
   },

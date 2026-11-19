@@ -39,6 +39,10 @@ import {
   type WorkspaceLocation,
   type WorkspaceQuickInfo,
 } from "./workspace-intelligence";
+import {
+  normalizeCodeTextChanges,
+  type CodeTextChange,
+} from "./code-text-changes";
 import type { Diagnostic } from "@codemirror/lint";
 
 /** Maximum source size accepted for one compiler-backed buffer. */
@@ -106,6 +110,9 @@ export interface CodeWindowRenameEdit {
   bufferId: string;
   before: string;
   after: string;
+  /** The edits of `before` (sorted, disjoint) that make `after`, so the
+   * window writes them at their places (code-text-changes). */
+  changes?: readonly CodeTextChange[];
 }
 
 export interface CodeWindowCodeFixAction {
@@ -616,7 +623,7 @@ export async function materializeCodeWindowRefactor(
   const edits = materialized.flatMap((edit) => {
     const bufferId = snapshot.idByPath.get(edit.path);
     return bufferId
-      ? [{ bufferId, before: edit.before, after: edit.after }]
+      ? [{ bufferId, before: edit.before, after: edit.after, changes: edit.changes }]
       : [];
   });
   if (edits.length === 0) return null;
@@ -680,6 +687,7 @@ export async function resolveCodeWindowCodeFixes(
         bufferId,
         before: edit.before,
         after: edit.after,
+        changes: edit.changes,
       });
       if (bufferId !== activeBufferId) hasForeignEdit = true;
     }
@@ -772,7 +780,21 @@ export async function resolveCodeWindowRename(
         after.slice(span.to);
     }
     if (after !== buffer.source) {
-      edits.push({ bufferId, before: buffer.source, after });
+      const changes = spans
+        .map((span) => ({
+          from: span.from,
+          to: span.to,
+          insert: span.prefix + newName + span.suffix,
+        }))
+        .reverse();
+      edits.push({
+        bufferId,
+        before: buffer.source,
+        after,
+        // Overlapping spans (never expected) leave the edit to the
+        // whole-text path, which re-checks its places.
+        changes: normalizeCodeTextChanges(buffer.source, changes) ?? undefined,
+      });
     }
   }
   if (edits.length === 0) return null;

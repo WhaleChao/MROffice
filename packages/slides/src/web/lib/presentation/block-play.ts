@@ -17,7 +17,7 @@ import {
   patternRevealKind,
 } from "../presentation-anim-pattern-reveal";
 import { createContext, type CSSProperties } from "react";
-import { normalizeParagraphEndLatinFace, paragraphsFromText } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
+import { normalizeParagraphEndLatinFace, paragraphCarriedFields, paragraphsFromText } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 import type { EffectRecipeBox } from "@mrnote/core/web/lib/presentation-effect-recipes.ts";
 import { blockAnimationKeyframeName, isBlockAnimation } from "@mrnote/core/web/lib/presentation-block-fx.ts";
 import {
@@ -281,12 +281,23 @@ export function paragraphBuildRows(
   runs: unknown,
   /** The flat body's mark Latin face (`endLatinFace`, readings row 899): its last row's. */
   endLatinFace?: unknown,
+  /**
+   * The flat body's own kerning and East Asian line rules (its
+   * `nativeKerning` / `nativeEastAsianLines`, readings row 1009): every row's,
+   * as the one paragraph's rows -- and one Enter adds -- all take its `a:pPr`.
+   */
+  lineReceipts?: unknown,
 ): SlideParagraphWithRuns[] {
-  const rows = withFlatRunsSplitAcrossParagraphs(
+  const split = withFlatRunsSplitAcrossParagraphs(
     paragraphsFromText(text) as SlideParagraphWithRuns[],
     runs,
     text,
   );
+  const carried = lineReceipts && typeof lineReceipts === "object"
+    ? (({ nativeKerning, nativeEastAsianLines }) => ({ nativeKerning, nativeEastAsianLines }))(paragraphCarriedFields(lineReceipts))
+    : {};
+  const ownReceipts = Object.fromEntries(Object.entries(carried).filter(([, value]) => value !== undefined));
+  const rows = Object.keys(ownReceipts).length ? split.map((row) => ({ ...ownReceipts, ...row })) : split;
   const face = normalizeParagraphEndLatinFace(endLatinFace);
   if (face === undefined || !rows.length || rows[rows.length - 1]!.endLatinFace !== undefined) return rows;
   // A body saying its mark's face is one paragraph (readings row 899): its rows

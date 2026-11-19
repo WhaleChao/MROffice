@@ -58,16 +58,38 @@ import type { PresentationSmartArtGroupFrameCtl } from "./PresentationSmartArtGr
  * No Fill or an open outline with nothing inside it (an arc, a bracket),
  * which PowerPoint selects by its outline or its words while a
  * click on its empty interior passes through to what lies below (a dashed
- * frame drawn over a chart). A text box (`type: "text"`) is not one:
- * PowerPoint selects it by a click anywhere inside it. Nor is the frame of a
- * SmartArt whose cached drawing is absent: it paints nothing itself (its
- * diagram is drawn as the engine lays it out, taking no presses), and it is
+ * frame drawn over a chart). A text box (`type: "text"`, or a shape the deck
+ * states is one) is not one: PowerPoint selects it by a click anywhere inside
+ * it. Nor is the frame of a SmartArt whose cached drawing is absent: it
+ * paints nothing itself (its diagram is drawn as the engine lays it out, taking no presses), and it is
  * the graphic, which PowerPoint selects by a click anywhere in its frame --
  * hit by its geometry, the click went through to the title placeholder below.
  */
 export function presentationShapeHitsByGeometry(block: PresentationBlock): boolean {
   if (block.type !== "shape" || nativeSmartArtDrawingAbsent(block)) return false;
-  return readSmartArtBlockMarker(block) !== null || presentationShapeHasNoFill(block) || presentationShapeHasNoInterior(block);
+  if (readSmartArtBlockMarker(block) !== null) return true;
+  // A text box the import took as a shape (`txBox="1"` with an outline that is
+  // not a rectangle, an effect, an empty frame that paints: readings row 1018,
+  // `source.nativeTextBox`) is hit by its whole frame, as PowerPoint hits a
+  // text box: a No Fill txBox rect and roundRect return themselves for a
+  // point anywhere in their frame, beside their line included
+  
+  if (presentationShapeIsNativeTextBox(block)) return false;
+  // A placeholder is no exception: Windows PowerPoint hit-tests a No Fill
+  // placeholder as it does any No Fill shape, by its outline and its words,
+  // and a point in its blank part reaches what lies below (the same probe: a
+  // No Fill subtitle and body placeholder return Nothing under their one line).
+  return presentationShapeHasNoFill(block) || presentationShapeHasNoInterior(block);
+}
+
+/**
+ * A shape the deck states is a text box (`p:cNvSpPr@txBox`, readings row
+ * 1018): hit by its whole frame, and grabbed by its border as any text box
+ * (the text-move bands PresentationWindow draws on a text box's frame).
+ */
+export function presentationShapeIsNativeTextBox(block: PresentationBlock): boolean {
+  const source = (block as unknown as { source?: unknown }).source;
+  return !!source && typeof source === "object" && (source as { nativeTextBox?: unknown }).nativeTextBox === true;
 }
 
 /**

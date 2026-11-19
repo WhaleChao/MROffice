@@ -13,13 +13,16 @@ import {
 import {
   prepareMraiNativeTextEditingSelection,
   createMraiNativeTextReadSession,
+  readMraiNativeTextStandingLook,
   planMraiNativeListTextSelectionReplacement,
   proofFromNativeListTextPlan,
+  readMraiNativeListTextStandingLook,
   isMraiNativeListTextMissingGlyphError,
   MRAI_NATIVE_BLANK_TYPE3_GLYPHS_MESSAGE,
   type PdfNativeListTextSelectionProof,
   type PdfNativeSingleLineFitHint,
 } from "./engine/native/list-text-fidelity";
+import { pdfTextHasRightToLeftRun } from "./engine/native/reader-order";
 import { inheritPdfSourceAppearance } from "./native-source-appearance";
 import { matchPdfTextSourceAppearance, pdfNativeCandidateAppearanceSelection } from "./source-text-appearance";
 import { resolveManagedTextBoxPreviewAnnotationId } from "./native-text-box-roundtrip";
@@ -61,6 +64,23 @@ export async function openPdfNativeTextInFallbackLane(
   }
 }
 
+/** The proof of a line of right-to-left text whose words are fixed
+ * (pdfRightToLeftLineWordsFixedReason, pdfWordsFixedTextProof); null for any
+ * other line, and where the page cannot be read that way. */
+async function wordsFixedProofOfRightToLeftLine(
+  bytes: Uint8Array,
+  selection: PdfNativeTextPreparationRequest["selection"],
+): Promise<PdfNativeListTextSelectionProof | null> {
+  if (!pdfTextHasRightToLeftRun(selection.item.str)) return null;
+  try {
+    const { pdfRightToLeftLineWordsFixedReason, pdfWordsFixedTextProof } = await import("./source-text-fallback");
+    const reason = await pdfRightToLeftLineWordsFixedReason({ sourceBytes: bytes, selection });
+    return reason ? await pdfWordsFixedTextProof({ sourceBytes: bytes, selection }, reason) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Testable source-bound read preparation; no API, persistence or writer dispatch. */
 export async function prepareAndZeroizePdfNativeText(
   input: PdfNativeTextPreparationRequest,
@@ -69,6 +89,33 @@ export async function prepareAndZeroizePdfNativeText(
 ): Promise<PdfNativeTextPreparationResponse> {
   const bytes = new Uint8Array(input.sourceBytes);
   let blankedSource: Uint8Array | null = null;
+  
+  // the rules, the stroked weight and the lean a format set on the box where
+  // it stands left on all of its text are read as that write reads them, so
+  // its buttons read pressed and the next press takes them off.
+  const withStandingLook = async (opened: PdfNativeListTextSelectionProof): Promise<PdfNativeListTextSelectionProof> => {
+    const standing = await (readSession?.standingLook ?? readMraiNativeTextStandingLook)({
+      sourceBytes: bytes, selection: input.selection }).catch(() => null);
+    let proof = standing ? Object.freeze({ ...opened, ...standing }) : opened;
+    // A box of right-to-left text: its formats are written where the
+    // text stands by its shows alone, and how it is drawn is read the
+    // same way (the reading above does not read text the reader
+    // reorders): its rules, stroked weight and lean, as the proof's own
+    // textRules and drawnStyle.
+    const look = await readMraiNativeListTextStandingLook({ sourceBytes: bytes, selection: input.selection })
+      .catch(() => null);
+    if (look) {
+      const { underline, strikethrough, syntheticBold, slanted } = look;
+      proof = Object.freeze({
+        ...proof,
+        ...(underline || strikethrough
+          ? { textRules: Object.freeze({ ...proof.textRules, ...(underline ? { underline } : {}), ...(strikethrough ? { strikethrough } : {}) }) } : {}),
+        ...(syntheticBold || slanted
+          ? { drawnStyle: Object.freeze({ ...proof.drawnStyle, ...(syntheticBold ? { bold: true as const } : {}), ...(slanted ? { italic: true as const } : {}) }) } : {}),
+      });
+    }
+    return proof;
+  };
   try {
     if (
       !bytes.length ||
@@ -157,8 +204,26 @@ export async function prepareAndZeroizePdfNativeText(
           } catch { /* diagnostics never throw */ }
         }
         const opened = await openPdfNativeTextInFallbackLane(bytes, input.selection, error);
-        proof = opened.proof;
+        proof = await withStandingLook(opened.proof);
         blankedSource = opened.blankedSource;
+      }
+      
+      // lines the page draws glyphs their font only calls white space (the
+      // dots an Urdu face stands over its letters, each a show of its own):
+      
+      
+      // format set on it left the dots beside it as they were -- and no
+      // writer takes what is typed into it: the native ones place no word
+      
+      // not take such a line. Its formats are written where the text stands,
+      
+      // proves of it: there the writers keep the glyphs they do not retype.)
+      // So are the words of a line the reader reads as other words than the
+      // page shows (a Nastaleeq face's ligatures, read turned round).
+      const fixed = result ? await wordsFixedProofOfRightToLeftLine(bytes, input.selection) : null;
+      if (fixed) {
+        proof = await withStandingLook(fixed);
+        result = null;
       }
       if (result) {
         proof = result.proof;

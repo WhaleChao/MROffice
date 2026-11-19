@@ -14,14 +14,14 @@
 // Calibri's ti, tt, ft, fb; fi, fl, ff, ffi map to U+FB00..FB04 and are cut
 // at the margins as ever). The API's print route draws the same
 // (notebooks.py cell look "unclipped").
+import { stackPrimaryFamily } from "@mrnote/core/web/lib/office-fonts/hangul-em.ts";
 import table from "./office-latin-ligatures.json";
 
 const faces = table.faces as Readonly<Record<string, readonly string[]>>;
 
 /** The Office face a CSS family or stack names first, as the table keys it. */
 function faceKey(family: string | null | undefined): string {
-  const first = (family ?? "").split(",")[0] ?? "";
-  return first.trim().replace(/^["']|["']$/g, "").trim().toLowerCase();
+  return stackPrimaryFamily(family ?? "").toLowerCase();
 }
 
 /** Whether `text` set in the Office face `family` forms a ligature no code point maps to. */

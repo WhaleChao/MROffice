@@ -155,7 +155,7 @@ function ShapeTextOverlayDrawing({
   const buildParagraphs =
     shapeParagraphs ??
     (paragraphPlay !== null && text.includes("\n")
-      ? paragraphBuildRows(text, runs)
+      ? paragraphBuildRows(text, runs, undefined, block)
       : undefined);
   const labelParagraphs =
     buildParagraphs &&
@@ -480,7 +480,7 @@ function ShapeTextOverlayDrawing({
   const engineWidthEmu = engineEligible ? shapeTextAreaWidthEmu(block) : null;
   const engineRows = (() => {
     if (!engineEligible) return null;
-    const rows = labelParagraphs ?? paragraphBuildRows(text, runs, (block as { endLatinFace?: unknown }).endLatinFace);
+    const rows = labelParagraphs ?? paragraphBuildRows(text, runs, (block as { endLatinFace?: unknown }).endLatinFace, block);
     if (!rows.length) return null;
     return planPresentationParagraphRows({
       paragraphs: rows,

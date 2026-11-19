@@ -626,7 +626,11 @@ function normalizeSheetViewTables(
       ...(columnFilters ? { columnFilters } : {}),
       ...(sortState ? { sortState } : {}),
     };
-    if (sheetViewTableStateHasCriteria(state)) out.push(state);
+    // An nsvFilter with no criteria (`<nsvFilter filterId=.. tableId=../>`)
+    // is how Excel writes a view that shows that Table unfiltered: it stays,
+    // so loading and saving a workbook leaves its namedSheetView part alone
+    
+    out.push(state);
   }
   return out;
 }
@@ -660,7 +664,10 @@ export function pruneSheetViewTables(
         ...(Object.keys(columnFilters).length > 0 ? { columnFilters } : {}),
         ...(conditions.length > 0 ? { sortState: { conditions } } : {}),
       };
-      return sheetViewTableStateHasCriteria(next) ? [next] : [];
+      return sheetViewTableStateHasCriteria(next) ||
+        !sheetViewTableStateHasCriteria(entry)
+        ? [next]
+        : [];
     });
     if (
       kept.length === view.tables.length &&

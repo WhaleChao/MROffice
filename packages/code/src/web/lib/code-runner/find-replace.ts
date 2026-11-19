@@ -627,6 +627,26 @@ export function replaceAll(
   opts: FindOptions = {},
   matchLimit = MAX_FIND_REPLACEMENT_MATCHES,
 ): { text: string; count: number } {
+  const result = replaceAllWithEdits(text, query, replacement, opts, matchLimit);
+  return { text: result.text, count: result.count };
+}
+
+/**
+ * {@link replaceAll}, also returning each replaced match of `text` and what
+ * replaced it, in order: a shared text is then written at the matches' own
+ * places instead of re-finding them by comparing two texts.
+ */
+export function replaceAllWithEdits(
+  text: string,
+  query: string,
+  replacement: string,
+  opts: FindOptions = {},
+  matchLimit = MAX_FIND_REPLACEMENT_MATCHES,
+): {
+  text: string;
+  count: number;
+  edits: Array<{ from: number; to: number; insert: string }>;
+} {
   const safeMatchLimit = Number.isFinite(matchLimit)
     ? Math.max(
         0,
@@ -637,7 +657,7 @@ export function replaceAll(
   if (matches.length > safeMatchLimit) {
     throw new FindReplacementTooManyMatchesError();
   }
-  if (matches.length === 0) return { text, count: 0 };
+  if (matches.length === 0) return { text, count: 0, edits: [] };
   const replacements: string[] = [];
   let projectedLength = text.length;
   for (const match of matches) {
@@ -661,5 +681,13 @@ export function replaceAll(
     last = match.end;
   }
   parts.push(text.slice(last));
-  return { text: parts.join(""), count: matches.length };
+  return {
+    text: parts.join(""),
+    count: matches.length,
+    edits: matches.map((match, index) => ({
+      from: match.start,
+      to: match.end,
+      insert: replacements[index]!,
+    })),
+  };
 }

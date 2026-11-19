@@ -145,6 +145,29 @@ function elementAt(view: EditorView, pos: number): HTMLElement | null {
   }
 }
 
+/** The element whose letter-spacing is the run's own, under `textElement`
+ * (the element its text stands in): the nearest one the editor draws for a
+ * mark or a node, above the wrappers inline decorations draw around the text
+ * (the outermost of which carries the text's view description).
+ *
+ * Decorations covering the same characters share one wrapper, so this
+ * projection's own (and the East Asian spacing pass's, and the engine's line
+ * corrections, which all read this one's spacing or are overridden by it)
+ * lands on the very element that carries, say, the East Asian face a page
+ * routes the run to. Read from the wrappers, the run's spacing and face came
+ * out one way while the run had no piece and the other way once it had one:
+ * every face that arrived read the block again and flipped its piece
+ * (allometric.docx 中文名, bold 宋体: 0.2734 px on, off, on ... six times while
+ * it opened; the layout it stood still in depended on how many faces came). */
+function runSpacingElement(textElement: HTMLElement): HTMLElement {
+  for (let element: HTMLElement | null = textElement; element; element = element.parentElement) {
+    const desc = (element as HTMLElement & { pmViewDesc?: { node?: { isText?: boolean } | null } }).pmViewDesc;
+    if (!desc) continue;
+    return desc.node?.isText ? element.parentElement ?? textElement : textElement;
+  }
+  return textElement;
+}
+
 const OWN_CLASS = "document-synthetic-bold-word-advance";
 /** The page-rebalance reason this projection announces a change with. */
 export const SYNTHETIC_BOLD_ADVANCE_REASON = "synthetic-bold-advance";
@@ -226,16 +249,18 @@ function blockPieces(view: EditorView, block: PmNode, start: number, documentNam
         end += next > 0xffff ? 2 : 1;
       }
       const from = start + offset + index;
-      // The run's own letter-spacing: not this projection's, nor the East
-      // Asian spacing pass's (which is read from this one).
-      let element = elementAt(view, from);
-      while (element && (element.classList.contains(OWN_CLASS) || element.hasAttribute("data-docs-word-cjk-spacing")))
-        element = element.parentElement;
+      // The face and size the text is drawn in, from its own element (no
+      // decoration that reads this projection sets either); the run's own
+      // letter-spacing from above the decorations' wrappers: not this
+      // projection's, nor the East Asian spacing pass's (which is read from
+      // this one), whether or not they share the face's wrapper.
+      const element = elementAt(view, from);
       const style = element ? win.getComputedStyle(element) : null;
       const sizePx = style ? Number.parseFloat(style.fontSize) : NaN;
-      if (style && sizePx > 0 &&
+      if (element && style && sizePx > 0 &&
           (!style.writingMode || style.writingMode === "horizontal-tb")) {
-        const base = Number.parseFloat(style.letterSpacing);
+        const spacingElement = runSpacingElement(element);
+        const base = Number.parseFloat((spacingElement === element ? style : win.getComputedStyle(spacingElement)).letterSpacing);
         const spacing = Number.isFinite(base) ? base : 0;
         // Each character once in a run: the same few, thousands of times in a
         // long book's bold (a font list read for each was 4.6 s of an opening).

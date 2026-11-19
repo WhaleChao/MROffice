@@ -1,0 +1,284 @@
+{
+ "$comment": [
+  "lib/office-fonts/powerpoint-script-fallbacks.json: the face PowerPoint for Windows draws a character in when a",
+  "run's Office face, which Windows has, lacks it -- Calibri for a sans face, Cambria for a serif one -- for every",
+  "Office face with a metric clone (lib/office-fonts/metric-clones/metrics: its character map is the Office face's).",
+  "",
+  "The rule is read from PowerPoint for Windows' own PDF (MRAI-corpus/office-truth/probes/tp-fallback, 11-18:",
+  "Cyrillic, Greek and Vietnamese in 26 installed faces, character by character, whatever the run's language):",
+  "the face's OS/2 panose serif style 11-15 (sans) -> Calibri (Tw Cen MT, Gill Sans MT, Century Gothic, Franklin",
+  "Gothic Book, Lucida Sans Unicode, Trebuchet MS, Arial Narrow), 2-10 -> Cambria (Rockwell, Garamond, Georgia,",
+  "Book Antiqua). The panose is read from the Office face file the metric record names, found by its digest"
+ ],
+ "faces": {
+  "Aptos": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Aptos Black": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Aptos Display": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Aptos ExtraBold": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Aptos Light": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Aptos Narrow": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Aptos SemiBold": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Aptos Slab": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Arial Black": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Arial Nova": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Arial Unicode MS": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Avenir Next": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Avenir Next LT Pro": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Baskerville Old Face": {
+   "face": "Cambria",
+   "panoseSerifStyle": 2
+  },
+  "Bauhaus 93": {
+   "face": "Cambria",
+   "panoseSerifStyle": 3
+  },
+  "Book Antiqua": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Bookman Old Style": {
+   "face": "Cambria",
+   "panoseSerifStyle": 5
+  },
+  "Calibri Light": {
+   "face": "Calibri",
+   "panoseSerifStyle": 15
+  },
+  "Calisto MT": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Cambria": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Candara": {
+   "face": "Calibri",
+   "panoseSerifStyle": 14
+  },
+  "Century": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Century Gothic": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Century Schoolbook": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Colonna MT": {
+   "face": "Cambria",
+   "panoseSerifStyle": 2
+  },
+  "Comic Sans MS": {
+   "face": "Calibri",
+   "panoseSerifStyle": 15
+  },
+  "Consolas": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Constantia": {
+   "face": "Cambria",
+   "panoseSerifStyle": 3
+  },
+  "Cooper Black": {
+   "face": "Cambria",
+   "panoseSerifStyle": 8
+  },
+  "Corbel": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Euphemia": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Franklin Gothic Book": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Franklin Gothic Demi": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Franklin Gothic Demi Cond": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Franklin Gothic Heavy": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Franklin Gothic Medium": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Franklin Gothic Medium Cond": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Garamond": {
+   "face": "Cambria",
+   "panoseSerifStyle": 2
+  },
+  "Gill Sans MT": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Gill Sans Nova": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Goudy Old Style": {
+   "face": "Cambria",
+   "panoseSerifStyle": 2
+  },
+  "Grandview": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Grandview Display": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Harrington": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Helvetica Neue Medium": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Impact": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Ink Free": {
+   "face": "Cambria",
+   "panoseSerifStyle": 8
+  },
+  "Lucida Bright": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Lucida Console": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Lucida Grande": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Lucida Sans": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Lucida Sans Unicode": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "MS Reference Sans Serif": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Microsoft Sans Serif": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Palatino Linotype": {
+   "face": "Cambria",
+   "panoseSerifStyle": 4
+  },
+  "Perpetua": {
+   "face": "Cambria",
+   "panoseSerifStyle": 2
+  },
+  "Plantagenet Cherokee": {
+   "face": "Cambria",
+   "panoseSerifStyle": 2
+  },
+  "Rockwell": {
+   "face": "Cambria",
+   "panoseSerifStyle": 6
+  },
+  "Segoe UI": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Sylfaen": {
+   "face": "Cambria",
+   "panoseSerifStyle": 10
+  },
+  "Trebuchet MS": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Tw Cen MT": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Univers": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  },
+  "Verdana": {
+   "face": "Calibri",
+   "panoseSerifStyle": 11
+  }
+ },
+ "unread": [
+  "Aldhabi",
+  "Ebrima",
+  "Helvetica Neue Light",
+  "Helvetica Neue",
+  "Monotype Corsiva",
+  "New York",
+  "Optima",
+  "Palatino",
+  "Sabon Next LT",
+  "Skeena",
+  "Tenorite"
+ ]
+}

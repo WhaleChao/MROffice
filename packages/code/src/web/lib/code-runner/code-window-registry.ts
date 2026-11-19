@@ -23,6 +23,8 @@
  * Framework-free: no React imports. Fully unit-testable.
  */
 
+import type { CodeTextChangesAgainst } from "./code-text-changes";
+
 export type CodeWindowProblemSeverity = "error" | "warning" | "info" | "hint";
 
 /** One bounded lint problem exposed by an open code window. */
@@ -52,8 +54,12 @@ export interface CodeWindowEntry {
    * Overwrite the window's buffer with `text` and persist the change.
    * Used by Replace-in-Files to write replacements back into the right window.
    * The implementation is CodeWindow's own `setContent` + `persist` pair.
+   * `positions`, when the caller knows where its edits are (the replaced
+   * matches, a refactor's text changes): the shared text is written at those
+   * places. Without them a change whose place is a guess may be refused in a
+   * live room, and the window then shows the room's text again.
    */
-  setText: (text: string) => void;
+  setText: (text: string, positions?: CodeTextChangesAgainst) => void;
   /** Returns this window's bounded, line-sorted diagnostic snapshot. */
   getProblems?: () => readonly CodeWindowProblem[];
   /** Returns the full live diagnostic count, including rows beyond the UI cap. */

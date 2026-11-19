@@ -15,6 +15,7 @@ import { normalizeOfficeFontFace, type OfficeFontFace, type OfficeFontRole } fro
 import { officeFontRegistrationGeneration, officeFontSubstitution, withOfficeFontSubstitutes } from "./office-fonts/substitutes";
 import substituteTable from "./office-fonts/substitutes.generated.json";
 import { POWERPOINT_WINDOWS_FACES, windowsOfficeFace, windowsOfficeMeasured } from "./office-fonts/windows-office-faces";
+import { withPowerPointScriptFallbacks } from "./office-fonts/powerpoint-script-fallbacks";
 
 export type PresentationFontRequirement = {
   family: string;
@@ -271,7 +272,11 @@ function buildPresentationFontFamily(family: string, aliases: PresentationFontAl
   // a character the stand-in has no glyph for -- Arial's Arabic, Cambria's
   // Cyrillic -- is drawn by a face of its own script on every machine, the
   // print page's included, not by whatever the reader's system picks.
-  return withScriptFallbacks(withOfficeFontSubstitutes(withPowerPointMissingFace(mapped, changed ? mapped : family, aliases)));
+  // Then, behind a measured Office face's clone, the face PowerPoint for
+  // Windows draws its missing Latin, Greek and Cyrillic letters in (Calibri,
+  // Cambria: powerpoint-script-fallbacks.ts), ahead of the open stand-in
+  
+  return withScriptFallbacks(withPowerPointScriptFallbacks(withOfficeFontSubstitutes(withPowerPointMissingFace(mapped, changed ? mapped : family, aliases))));
 }
 
 /** A stack's families with each name once (two lacked faces both became Calibri). */

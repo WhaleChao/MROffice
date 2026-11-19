@@ -26,6 +26,7 @@ import { useNotebookInterior } from "./notebook-interior-context";
 import { isClassicTabWindow } from "../../lib/notebook-interior-mode";
 import { VibePresetArt } from "../../__cut__/mddf52c57d5";
 import { PageThumbnail } from "./page-thumbnails/PageThumbnail";
+import { DockThumbnail } from "./page-thumbnails/DockThumbnail";
 import { requestCollaborationShellAction } from "../../lib/collaboration-windows/shell-policy";
 import { listVibeWindows } from "../../__cut__/m404f0841db";
 import {
@@ -36,9 +37,11 @@ import { announceUserClosedWindow } from "../../__cut__/mb9a777d2ef";
 
 /**
  * The minimized windows, as tiles under the sidebar: an AI window shows its
- * own card picture (animated while pointed at), every other window its
- * glyph. Pointing at a tile opens a small preview beside the sidebar (the
- * page itself, drawn small, for a page window). A window minimizing flies
+ * own card picture (animated while pointed at), a page's window the page
+ * itself drawn small on a stack of paper (DockThumbnail, its glyph until
+ * that is ready), every other window its glyph. Pointing at a tile opens a
+ * small preview beside the sidebar (the page itself, drawn small, for a page
+ * window). A window minimizing flies
  * into its tile and flies back out when the tile is pressed
  * (lib/window-dock-motion), as on a Mac's Dock.
  */
@@ -162,6 +165,36 @@ function TrayPreview({
       <strong className="wm-tray-preview__title">{w.title}</strong>
       <small className="wm-tray-preview__note">{note}</small>
     </div>
+  );
+}
+
+/* ----------------------------------------------------------------- tile */
+
+/** A tile's face: a page's window shows the page, any other its glyph. */
+function TileFace({ window: w }: { window: WindowSemanticState }) {
+  const glyph = (
+    <WindowGlyph
+      type={w.type}
+      meta={w.meta as Record<string, unknown>}
+      size={22}
+      artworkClassName="wm-tray-tile__artwork"
+      iconClassName="wm-tray-tile__icon"
+    />
+  );
+  const pageId = w.type === "note" ? pageIdOf(w) : null;
+  if (!pageId) return glyph;
+  const variant = w.meta.pageVariant ?? w.meta.page_variant;
+  return (
+    <DockThumbnail
+      page={{
+        id: pageId,
+        title: w.title,
+        page_type: typeof w.meta.pageType === "string" ? w.meta.pageType : "document",
+        page_variant: typeof variant === "string" ? variant : null,
+      }}
+      fallback={glyph}
+      className="wm-tray-thumb"
+    />
   );
 }
 
@@ -334,13 +367,7 @@ export default function MinimizedTray() {
             {vibe ? (
               <VibePresetArt templateId={art?.templateId} cover={art?.cover} crop />
             ) : (
-              <WindowGlyph
-                type={w.type}
-                meta={w.meta as Record<string, unknown>}
-                size={22}
-                artworkClassName="wm-tray-tile__artwork"
-                iconClassName="wm-tray-tile__icon"
-              />
+              <TileFace window={w} />
             )}
           </button>
         );

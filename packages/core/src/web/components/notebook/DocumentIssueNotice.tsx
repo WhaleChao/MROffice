@@ -8,6 +8,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useMemo,
   useId,
   useLayoutEffect,
@@ -21,6 +22,7 @@ import {
 import { createPortal } from "react-dom";
 import { AlertTriangle, X } from "../office-ribbon/icons/houseIcons";
 import { useTranslations } from "../../../host/next-intl";
+import { reportHiddenDocumentIssues } from "../../lib/office-experience-report";
 import styles from "./DocumentIssueNotice.module.css";
 
 export interface DocumentIssue {
@@ -450,10 +452,39 @@ export function DocumentIssuePortal({
   return context?.host ? createPortal(entry, context.host) : entry;
 }
 
-/** Normal documents render nothing. The active child retires with its report. */
+
+
+
+
+
+
+let informativeIssuesShownForTests = false;
+
+/** Tests of what an editor reports read its informative issues on screen. */
+export function showInformativeDocumentIssuesForTests(shown: boolean): void {
+  informativeIssuesShownForTests = shown;
+}
+
 export default function DocumentIssueNotice(props: DocumentIssueNoticeProps) {
-  if (props.issues.length === 0) return null;
-  return <ActiveNotice key={props.scopeKey} {...props} />;
+  const ownerPageId = useContext(HostContext)?.ownerPageId;
+  const quietKeys = props.issues
+    .filter((issue) => !issue.action)
+    .map((issue) => issue.key);
+  const quietSignature = quietKeys.join("\n");
+  const surface = props.testId ?? "document-issue-notice";
+  useEffect(() => {
+    if (!quietSignature) return;
+    reportHiddenDocumentIssues({
+      pageId: ownerPageId ?? props.scopeKey ?? null,
+      surface,
+      keys: quietSignature.split("\n"),
+    });
+  }, [quietSignature, ownerPageId, props.scopeKey, surface]);
+  const actionable = informativeIssuesShownForTests
+    ? props.issues
+    : props.issues.filter((issue) => issue.action);
+  if (actionable.length === 0) return null;
+  return <ActiveNotice key={props.scopeKey} {...props} issues={actionable} />;
 }
 
 function ActiveNotice({

@@ -98,6 +98,18 @@ import {
   type PdfTextPartFields,
   type PdfTextPartFormats,
 } from "../../../../lib/pdf/native-text-part-formats";
+import {
+  PDF_NATIVE_COVER_RULE_STYLES,
+  pdfNativeCoverRulePressed,
+  pdfNativeCoverRulesAsk,
+  pdfNativeCoverRulesCarry,
+  pdfNativeCoverRuleSegments,
+  pdfNativeCoverRuleStretches,
+  pdfNativeCoverRulesPressed,
+  pdfNativeCoverRulesTextFits,
+  type PdfNativeCoverRules,
+  type PdfNativeCoverRulesCarry,
+} from "../../../../lib/pdf/native-cover-rules";
 import { setPdfDraftVisibility, watchPdfDraftHighlightTints } from "../../../../lib/pdf/draft-highlight-tint";
 import { pinPdfTextDraftLine, fillPdfAnchoredTextDraft, fillPdfAnchoredTextRows, fillPdfTextDraftPreview, fillPdfTextDraftRanges, fillPdfTextDraftRuns, mergePdfTextDraftRanges, planPdfAnchoredTextDraft, planPdfAnchoredTextRows, type PdfTextDraftFormatPreview } from "../../../../lib/pdf/anchored-text-draft";
 import { pdfTextBoxVerticalOffset } from "@mrnote/core/web/lib/pdf/text-box-typography.ts";
@@ -178,6 +190,7 @@ import type {
   PdfNativeTextPropertyProof,
   PdfNativeDeviceColor,
   PdfNativeSourceTextAppearanceRun,
+  PdfNativeTextWordsFixedReason,
 } from "../../../../lib/pdf/engine/native/list-text-fidelity";
 import type { PdfNativeTextMoveProof } from "../../../../lib/pdf/engine/native/text-move";
 import type { PdfNativeTextGroupMoveProof } from "../../../../lib/pdf/engine/native/text-group-move";
@@ -378,6 +391,14 @@ export interface PdfNativeListTextEditDialogProps {
   readonly onJustifyParagraph?: () => void | Promise<boolean>;
   readonly paragraphJustifyDisabledReason?: string | null;
   readonly sourceAppearance?: readonly PdfNativeSourceTextAppearanceRun[];
+  
+
+  readonly boxDrawnStyle?: Readonly<{ bold?: true; italic?: true }>;
+  /** The Type3 glyphs of the box are pictures all (colour emoji), as its
+   * proof reads them (`type3Pictures`, the engine's own reading): a weight
+   * asked of the box is written on its words. Absent, a line that holds a
+   * Type3 glyph takes no weight. */
+  readonly type3PicturesOnly?: boolean;
   readonly sourceGeometry?: PdfTextSourceAppearance;
   readonly labels: PdfNativeListTextEditDialogLabels;
   readonly ribbonLabels?: PdfTextEditingContextRibbonLabels;
@@ -406,6 +427,31 @@ export interface PdfNativeListTextEditDialogProps {
    * The draft stays editable; a second finish (or Escape) closes the editor
    * and hands the draft to `onRetainUnsavedDraft` instead of losing it. */
   readonly preparationFailed?: boolean;
+  
+
+
+
+
+
+
+
+
+
+
+  readonly onHeldRibbonActionsLeft?: (actions: readonly QueuedNativeTextRibbonAction[]) => boolean;
+  /** The presses an opening this one takes over left held (once, as the
+   * editor opens): held here in turn, and answered when its proof is in. */
+  readonly takeHeldRibbonActions?: () => readonly QueuedNativeTextRibbonAction[] | null;
+  /** Another opening has begun that takes this editor over (it closes in a
+   * moment): its held presses are that opening's, and are not answered here
+   * meanwhile -- whatever the window has by then cleared of its refusal. */
+  readonly heldRibbonActionsTakenOver?: boolean;
+  /** The window is still reading the rules standing beside the open run
+   * (after its proof, for a run whose rule is read beside it): 下划线 and
+   * 删除线 pressed meanwhile are held until they are read, a few seconds at
+   * most. Pressed on a button that read unpressed only because it was not
+   * read yet, a rule was asked of text the page already rules. */
+  readonly standingRulesPending?: boolean;
   readonly onRetainUnsavedDraft?: (text: string) => void;
   
 
@@ -506,6 +552,11 @@ export interface PdfNativeListTextEditDialogProps {
   /** Which rules this run already carries, so the buttons show their state
    * (a rule under one stretch of the run carries that stretch). */
   readonly nativeTextDecorations?: PdfNativeTextRuleDecorations;
+  /** A scanned line's own rules (lib/pdf/native-cover-rules.ts): `pending`
+   * while the window reads whether a rule is written beside its invisible
+   * words, `proven` with the rules standing there. Absent: its rules are its
+   * text box's, as every other character format of such a line is. */
+  readonly nativeCoverRules?: PdfNativeCoverRules;
   readonly onApply: (
     replacementText: string,
     properties: PdfNativeTextPropertyDraft | null,
@@ -621,6 +672,12 @@ export type PdfNativeTextLayoutEvidence = Readonly<{
   fallbackText?: boolean;
   /** Drawn in a Type3 face: its format can be set, its words cannot. */
   type3Text?: boolean;
+  /** Its words are fixed for another reason (the proof's `wordsFixed`): its
+   * font calls glyphs it draws white space, so what the reader read of it is
+   * not what the page shows. A colour, a weight, a lean and a rule can be set
+   * on the whole of it; nothing may type into it, delete it, move it or make
+   * a text box of it. */
+  wordsFixed?: PdfNativeTextWordsFixedReason;
 }>;
 
 export type PdfNativeTextLayoutDraft = Readonly<{
@@ -902,6 +959,21 @@ export function rowFormatWithParts(format: PdfNativeRowFormat, parts: PdfTextPar
   return Object.freeze({ ...whole, ...(segments.length ? { segments: Object.freeze(segments) } : {}) });
 }
 
+/** A row format without the rules it asks of parts of the box's text (a
+ * scanned line's own rules, lib/pdf/native-cover-rules.ts): what else it
+ * asks, the same object when it asks no such rule, null when nothing else. */
+function rowFormatWithoutCoverRules(format: PdfNativeRowFormat | null): PdfNativeRowFormat | null {
+  if (!format?.segments?.length) return format;
+  const { segments, ...rest } = format;
+  const kept = segments.filter((segment) => pdfNativeCoverRulesAsk({ segments: [segment] }) === null);
+  if (kept.length === segments.length) return format;
+  if (kept.length) return Object.freeze({ ...rest, segments: Object.freeze(kept) });
+  return Object.keys(rest).length ? Object.freeze(rest) : null;
+}
+
+const NO_COVER_RULES_CARRY: PdfNativeCoverRulesCarry = Object.freeze({ whole: Object.freeze({}), parts: Object.freeze([]) });
+const NO_COVER_RULE_DRAFT_RANGES: readonly PdfTextDraftFormatPreview[] = Object.freeze([]);
+
 /** The same object while `value` holds the same plain data (samePlainValue):
  * a value built afresh each render, held as one that changes only with its
  * contents. */
@@ -931,7 +1003,7 @@ function useValueStable<T>(value: T): T {
   return held.current;
 }
 
-type QueuedNativeTextRibbonAction = Readonly<{
+export type QueuedNativeTextRibbonAction = Readonly<{
   action: PdfTextEditingContextRibbonAction;
   pressed?: boolean;
   
@@ -941,10 +1013,46 @@ type QueuedNativeTextRibbonAction = Readonly<{
   range?: Readonly<{ start: number; end: number; value: string }>;
   /** The part formats before the press (what a refusal of it goes back to). */
   partsBefore?: PdfTextPartFormats;
+  /** Pressed on a box that was refused, and handed on to this one
+   * (nativeTextHeldPressesCarriedOver): nothing of it is recorded on this
+   * box yet, and it flips the state this box turns out to have. */
+  carried?: true;
 }>;
 
 type NativeTextToggleControl =
   | "bold" | "italic" | "underline" | "strikethrough" | "subscript" | "superscript";
+
+/** How long the presses held for an opening that was refused wait for the
+ * opening that takes it over (see `onHeldRibbonActionsLeft`) before they are
+ * answered by the refused one. The window opens the run under the press a
+ * moment after the refusal (the viewer looks for it for a second). */
+export const NATIVE_TEXT_REFUSED_OPENING_TAKEOVER_MS = 2_000;
+
+/**
+ * The presses held for an opening that the opening taking it over answers:
+ * the character formats pressed on the whole of the box (no part of its text
+ * selected -- a part's offsets name letters of the box that was refused), as
+ * presses on the whole of the box that opens. Nothing that would write more
+ * than a format of that box's own text is carried (a delete, a change of
+ * case, a list, a turn, a paragraph setting of the box refused).
+ */
+export function nativeTextHeldPressesCarriedOver(
+  held: readonly QueuedNativeTextRibbonAction[],
+): Readonly<{ carried: readonly QueuedNativeTextRibbonAction[]; left: readonly QueuedNativeTextRibbonAction[] }> {
+  const carried: QueuedNativeTextRibbonAction[] = [], left: QueuedNativeTextRibbonAction[] = [];
+  for (const entry of held) {
+    const { action, range } = entry;
+    const format = (action.type === "toggle" && NATIVE_TEXT_TOGGLE_CONTROLS.has(action.control)) ||
+      action.type === "fontColor" || action.type === "fontSize" || action.type === "fontSizeStep" || action.type === "fontFamily";
+    const whole = !range || range.start === range.end || (range.start === 0 && range.end === range.value.length);
+    // (Carried without the state its button showed: that was the refused
+    // box's. The box that opens flips the state it turns out to have, as the
+    // same press does once it has opened.)
+    if (format && whole) carried.push(Object.freeze({ action, carried: true as const }));
+    else left.push(entry);
+  }
+  return Object.freeze({ carried: Object.freeze(carried), left: Object.freeze(left) });
+}
 
 const NATIVE_TEXT_TOGGLE_CONTROLS: ReadonlySet<string> = new Set<NativeTextToggleControl>([
   "bold", "italic", "underline", "strikethrough", "subscript", "superscript",
@@ -1873,6 +1981,11 @@ const ruleOnlyPreview = (css: Readonly<Record<string, string>>) => Object.keys(c
 const HOVER_EXACT_REST_MS = 40;
 /** How long a format hovered that sets a box's rows again waits for its exact drawing. */
 const HOVER_DRAFT_HELD_MS = 450;
+/** What the ribbon still offers on a line whose words the reader did not read
+ * as the page draws them (initialLayout.wordsFixed): the formats written
+ * where its text stands, and the commands that are not of the line's words. */
+const WORDS_UNREAD_KEPT_CONTROLS: ReadonlySet<string> = new Set(["hand", "select", "insertText", "bold", "italic",
+  "underline", "strikethrough", "fontColor", "highlight", "keyboardInput", "save", "exit"]);
 /** A plan slower than this ends drawing ahead for the moment. */
 const HOVER_EXACT_AHEAD_SLOW_MS = 1500;
 /** Page pixels of hovered drawings kept for a return to the same format. */
@@ -1889,8 +2002,8 @@ function PdfNativeListTextInlineEditor({
   serverRefusal = null,
   applyDisabledReason,
   propertyProof: propertyProofInput,
-  nativeMoveProof = null,
-  nativeGroupMoveProof = null,
+  nativeMoveProof: nativeMoveProofInput = null,
+  nativeGroupMoveProof: nativeGroupMoveProofInput = null,
   onApplyRowFormat,
   onDetachRowFormat,
   onApplyParagraphFormat,
@@ -1899,6 +2012,8 @@ function PdfNativeListTextInlineEditor({
   onJustifyParagraph,
   paragraphJustifyDisabledReason,
   sourceAppearance,
+  boxDrawnStyle,
+  type3PicturesOnly,
   sourceGeometry,
   labels,
   ribbonLabels: ribbonLabelsInput,
@@ -1911,6 +2026,10 @@ function PdfNativeListTextInlineEditor({
   wrapFrameRight = null,
   initialDraftText = null,
   preparationFailed = false,
+  onHeldRibbonActionsLeft,
+  takeHeldRibbonActions,
+  heldRibbonActionsTakenOver = false,
+  standingRulesPending = false,
   onRetainUnsavedDraft,
   onDetachFinish,
   onDeferLayoutFinish,
@@ -1931,6 +2050,7 @@ function PdfNativeListTextInlineEditor({
   pageFonts = NO_PAGE_FONTS,
   onPreparePageFont,
   nativeTextDecorations,
+  nativeCoverRules,
   retainedLeftIndent = 0,
   retainedAlignment = "left",
   retainedFrameShift = 0,
@@ -1949,6 +2069,15 @@ function PdfNativeListTextInlineEditor({
   // to the last format the writer took): the line's proof stays its own.
   const nativeFormatTakenOver = false;
   const propertyProof = nativeFormatTakenOver ? null : propertyProofInput;
+  // A line whose words the reader did not read as the page draws them
+  // (initialLayout.wordsFixed): its words are fixed, and while it is open
+  // the page's own ink stays the line -- never the reader's words set in a
+  // browser's face, which for such a line are other letters.
+  const wordsUnread = Boolean(initialLayout?.wordsFixed);
+  // (Nor is such a line its runs' to move, size or stroke as a group: the
+  // runs a row of it proves as are not all the page draws of it.)
+  const nativeMoveProof = wordsUnread ? null : nativeMoveProofInput;
+  const nativeGroupMoveProof = wordsUnread ? null : nativeGroupMoveProofInput;
   // A family from the reader's computer being prepared for the page, and
   // the choice that waits for it (prepareLocalFont).
   const [preparingFontFamily, setPreparingFontFamily] = useState<string | null>(null);
@@ -2078,7 +2207,13 @@ function PdfNativeListTextInlineEditor({
   // by the first character format pressed on it: coverBoxStyle is then the
   // weight and slant its buttons showed before that press, which the box
   // starts in (so the press taken back leaves nothing to write).
-  const [coverBoxStyle, setCoverBoxStyle] = useState<Readonly<{ bold: boolean; italic: boolean }> | null>(null);
+  const [coverBoxStyle, setCoverBoxStyle] = useState<Readonly<{
+    bold: boolean; italic: boolean;
+    /** The rules standing in the page beside the line when it became a box
+     * (coverRulesIntoBox): the box starts under them too, so nothing of
+     * them is a change to write. */
+    underline?: boolean; strikethrough?: boolean; runs?: PdfTextStyleRun[] | null;
+  }> | null>(null);
   const unprovenTextBoxFormat = coverBoxStyle !== null;
   // A line every piece of which paints nothing: an OCR layer set invisible
   // (3 Tr, a glyphless face) under the picture of a scanned page. The window
@@ -2093,6 +2228,28 @@ function PdfNativeListTextInlineEditor({
   
   const coverLaneLine = Boolean(!propertyProof && initialLayout?.fallbackText && !initialLayout.promoted &&
     /^#[0-9a-f]{6}$/i.test(initialLayout.sourceInkCover ?? ""));
+  // Its rules (下划线, 删除线) are the page's own while the window proves a
+  // rule is written beside its invisible words (nativeCoverRules) and the
+  // line is still the scan's: its words the page's, no box made of it. The
+  // scanned words stay as they are -- taken into a text box for a rule, the
+  // line showed the OCR's misreadings in their place (pdf-walk-1000, 0436).
+  // Not proved (or the words typed over): its rules are its box's.
+  const coverRulesOpen = coverLaneLine && coverBoxStyle === null && Boolean(onApplyRowFormat);
+  const coverRulesProven = coverRulesOpen && nativeCoverRules?.state === "proven" &&
+    pdfNativeCoverRulesTextFits(nativeCoverRules.text, originalText) ? nativeCoverRules : null;
+  const coverRulesLane = coverRulesProven !== null && replacementText === originalText;
+  /** The window is still reading the page: a rule pressed meanwhile is held. */
+  const coverRulesWaiting = coverRulesOpen && nativeCoverRules?.state === "pending";
+  // The rules standing beside the open run are still being read
+  // (standingRulesPending): a rule pressed meanwhile is held too, a few
+  // seconds at most (a read that never answers does not hold the press).
+  const [standingRulesWaitOver, setStandingRulesWaitOver] = useState(false);
+  useEffect(() => {
+    if (!standingRulesPending) { setStandingRulesWaitOver(false); return; }
+    const timer = window.setTimeout(() => setStandingRulesWaitOver(true), 3_000);
+    return () => window.clearTimeout(timer);
+  }, [standingRulesPending]);
+  const standingRulesWaiting = standingRulesPending && !standingRulesWaitOver;
   const managedLayoutTypography = Boolean(!propertyProof && initialLayout && (
     (initialLayout.promoted &&
       initialLayout.sourceText?.boxId === initialLayout.box.id &&
@@ -2156,8 +2313,11 @@ function PdfNativeListTextInlineEditor({
   const managedItalic = layoutTypographyOverride.italic ?? managedItalicBaseline;
   
   // as its own formats (the managed writer draws them), not as page rules.
-  const managedUnderline = layoutTypographyOverride.underline ?? Boolean(initialLayout?.box.underline);
-  const managedStrikethrough = layoutTypographyOverride.strikethrough ?? Boolean(initialLayout?.box.strikethrough);
+  // (A scanned line's box starts under the rules standing beside the line.)
+  const managedUnderlineBaseline = coverBoxStyle?.underline ?? Boolean(initialLayout?.box.underline);
+  const managedStrikethroughBaseline = coverBoxStyle?.strikethrough ?? Boolean(initialLayout?.box.strikethrough);
+  const managedUnderline = layoutTypographyOverride.underline ?? managedUnderlineBaseline;
+  const managedStrikethrough = layoutTypographyOverride.strikethrough ?? managedStrikethroughBaseline;
   const managedJustify = layoutTypographyOverride.justify ?? Boolean(initialLayout?.box.justify);
   
   const layoutVerticalAlignBaseline = initialLayout?.box.verticalAlign ?? "top";
@@ -2166,9 +2326,11 @@ function PdfNativeListTextInlineEditor({
   // (lib/pdf/text-style-runs.ts). They go with the text as it is typed (a
   // character typed in a run takes its format) and are written by the run
   // writer (lib/pdf/text-box-runs.ts).
-  const initialManagedRuns = useMemo(() => managedLayoutTypography
-    ? normalizePdfTextStyleRuns(initialLayout?.box.runs, { expectedText: originalText }) ?? null : null,
-  [managedLayoutTypography, initialLayout?.box.runs, originalText]);
+  const coverBoxRuns = coverBoxStyle?.runs;
+  const initialManagedRuns = useMemo(() => !managedLayoutTypography ? null
+    : coverBoxRuns !== undefined ? coverBoxRuns
+      : normalizePdfTextStyleRuns(initialLayout?.box.runs, { expectedText: originalText }) ?? null,
+  [managedLayoutTypography, coverBoxRuns, initialLayout?.box.runs, originalText]);
   const [managedRunsState, setManagedRunsState] = useState<Readonly<{
     text: string; runs: PdfTextStyleRun[] | null;
   }>>(() => ({ text: originalText, runs: initialManagedRuns }));
@@ -2184,8 +2346,8 @@ function PdfNativeListTextInlineEditor({
     redo: ManagedFormatStep<typeof layoutTypographyOverride>[];
   }>({ undo: [], redo: [] });
   const managedDecorationDirty = managedLayoutTypography && (
-    managedUnderline !== Boolean(initialLayout?.box.underline) ||
-    managedStrikethrough !== Boolean(initialLayout?.box.strikethrough) ||
+    managedUnderline !== managedUnderlineBaseline ||
+    managedStrikethrough !== managedStrikethroughBaseline ||
     managedJustify !== Boolean(initialLayout?.box.justify));
   const managedFontClass = classifyFontName(managedSourceFontName || managedFontFamily);
   const managedLegacyTypographySupported = isPortableNativeTextBoxTypography(
@@ -2234,15 +2396,20 @@ function PdfNativeListTextInlineEditor({
   const runReadsBold = (run: Readonly<{ font: Readonly<{ bold?: boolean; baseFont?: string }>; syntheticBold?: true }>) =>
     faceReadsBold(run.font) || run.syntheticBold === true;
   const sourceInkFaces = (sourceAppearance ?? []).filter((run) => run.text.trim()).map((run) => run.font);
-  const sourceFacesBold = sourceInkFaces.length > 0 &&
-    (sourceAppearance ?? []).filter((run) => run.text.trim()).every(runReadsBold);
+  
+  // states the stroke and the lean standing on all of its text instead:
+  // boxDrawnStyle. Unread, 加粗 and 倾斜 stood unpressed on a paragraph this
+  // writer had stroked or leaned where it stands, and the press meant to
+  
+  const sourceFacesBold = (sourceInkFaces.length > 0 &&
+    (sourceAppearance ?? []).filter((run) => run.text.trim()).every(runReadsBold)) || boxDrawnStyle?.bold === true;
   // A slant drawn by leaning the text matrix (a synthetic italic, as a
   // paragraph's write leans a box where it stands in a face the PDF has no
   // italic of) reads italic as an italic face does: read by the face alone,
   // 倾斜 stood unpressed on a line this writer had leaned, and a press meant
   
   const runReadsItalic = (run: Parameters<typeof nativeTextDrawnRunStyle>[0]) => nativeTextDrawnRunStyle(run).italic;
-  const sourceRunsItalic = nativeTextDrawnRunsStyle(sourceAppearance).italic;
+  const sourceRunsItalic = nativeTextDrawnRunsStyle(sourceAppearance).italic || boxDrawnStyle?.italic === true;
   // (Leaned, in a face that is no italic: the draft leans it too.)
   const sourceRunsLeaned = sourceRunsItalic &&
     (sourceAppearance ?? []).filter((run) => run.text.trim()).every((run) => !faceReadsItalic(run.font));
@@ -2565,10 +2732,14 @@ function PdfNativeListTextInlineEditor({
   const detachBoxFormat = onDetachRowFormat ?? (alignedRetype || propertyParagraph ? onDetachParagraphFormat : undefined);
   const boxFormatPreview = useMemo(() => {
     if ((properties !== null && !alignedRetype && !propertyParagraph) || !boxRowFormat || !applyBoxFormat) return null;
+    // A scanned line's own rules are drawn beside its words as they stand:
+    // no paragraph of it is set again, and its draft shows them meanwhile.
+    if (coverLaneLine && pdfNativeCoverRulesAsk(boxRowFormat)) return null;
     const typed = replacementText !== originalText;
     return Object.freeze({ asked: typed ? rowFormatWithParts(boxRowFormat, partFormats) : boxRowFormat,
       ...(typed ? { typedText: replacementText } : {}) });
-  }, [properties, alignedRetype, propertyParagraph, boxRowFormat, applyBoxFormat, replacementText, originalText, partFormats]);
+  }, [properties, alignedRetype, propertyParagraph, boxRowFormat, applyBoxFormat, replacementText, originalText, partFormats,
+    coverLaneLine]);
   const previewDraftKey = useMemo(
     () => JSON.stringify(paragraphFrameRequest === null
       ? [replacementText, properties, paragraphChanges, ...(boxFormatPreview ? [boxFormatPreview.asked] : [])]
@@ -5062,7 +5233,10 @@ function PdfNativeListTextInlineEditor({
   // native writer first; when that writer refuses it (a run its new spacing
   
   // like any other refusal instead of leaving the refusal on screen.
+  
+  // would draw those words. A format its page does not take is said so.)
   const refusalFallbackEligible =
+    !wordsUnread &&
     !layoutFallbackForced &&
     previewError !== null &&
     nativeRefusalDraftKey === previewDraftKey &&
@@ -6110,7 +6284,7 @@ function PdfNativeListTextInlineEditor({
   // change shows the draft at once on the surface already prepared; the
   // proof only decides whether it can be saved.
   // A Live Preview is drawn in the draft, over the prepared clean surface.
-  const formatPreviewShown = shownFormatPreview !== null && editingSurfaceStatus === "ready";
+  const formatPreviewShown = shownFormatPreview !== null && editingSurfaceStatus === "ready" && !wordsUnread;
   const showsCandidate = !formatPreviewShown && draftDirty && !layoutFallbackActive && !layoutAngleChanged &&
     exactPreviewIsCurrent && publishedPreviewCanvasRef.current !== null;
   // A block only moved shows its own ink in the moved frame, over the clean
@@ -6158,13 +6332,16 @@ function PdfNativeListTextInlineEditor({
   // there the line's own ink is covered on the page itself (the typing
   // cover) and the draft is shown over it, both in one frame.
   const typingCoverLine = `${initialLayout?.box.id ?? ""}\n${originalText}`;
-  const typingCoverWanted = editingSurfaceStatus === "pending" && moveStartFrame === null && !formatPreviewShown &&
+  const typingCoverWanted = !wordsUnread && editingSurfaceStatus === "pending" && moveStartFrame === null && !formatPreviewShown &&
     !managedLayoutTypography && Boolean(initialLayout) && !initialLayout?.promoted && !openedInFallbackLane &&
     !initialLayout?.sourceInkCover && !layoutAngleChanged && (replacementText !== originalText || partLookPending);
   const typingCoverShown = typingCoverWanted && !showsCandidate && typingCover !== null &&
     typingCover.line === typingCoverLine && typingCoverLoaded === typingCover.url;
+  // (A line of words not read as drawn keeps its ink through a format
+  // pressed on it: the format shows once its exact candidate is drawn, or
+  // the page it was written on.)
   const showsSource = !moveLiftOnSurface && !formatPreviewShown &&
-    (editingSurfaceStatus !== "ready" || (!draftDirty && !partLookPending));
+    (wordsUnread || editingSurfaceStatus !== "ready" || (!draftDirty && !partLookPending));
   /** Draws the lifted block where it was dropped on the clean surface (an
    * exact lift only), marks the surface as carrying it, and answers how to
    * take it back off (a refused write keeps the editor open on the
@@ -6234,7 +6411,7 @@ function PdfNativeListTextInlineEditor({
   // the draft on the page while it is written: hidden, the frame stood
   
   // 「整个文本框的内容直接消失了」).
-  const visualDraftVisible = (editingSurfaceStatus === "ready" || typingCoverShown) &&
+  const visualDraftVisible = !wordsUnread && (editingSurfaceStatus === "ready" || typingCoverShown) &&
     (!submitting || layoutFallbackActive || layoutAngleChanged || draftMoved || publishedPreviewCanvasRef.current === null) &&
     // (Over the typing cover the page itself is what is under the draft.)
     (!showsSource || typingCoverShown) && !showsCandidate && !moveLiftShown;
@@ -6769,10 +6946,34 @@ function PdfNativeListTextInlineEditor({
     add(rules.strikethrough, rules.strikethroughRange, { strike: true });
     return ranges;
   }, [coverSurfaceShown, displayedInputValue.length, nativeTextDecorations]);
-  const draftLookRanges = useMemo(() => embeddedDraftRanges.reduce(
+  // A scanned line's own rules on its draft: the ones standing beside its
+  // invisible words (the cover the line is edited on paints over them) and
+  // the ones pressed this session, each over the ones before it.
+  const coverRuleDraftRanges = useMemo((): readonly PdfTextDraftFormatPreview[] => {
+    if (!coverRulesLane || !coverRulesProven) return NO_COVER_RULE_DRAFT_RANGES;
+    const display = (offset: number) => activeInputLayout ? pdfNativeTextInputDisplayOffset(activeInputLayout, offset) : offset;
+    const ranges: PdfTextDraftFormatPreview[] = [];
+    for (const style of PDF_NATIVE_COVER_RULE_STYLES) {
+      const add = (range: Readonly<{ start: number; end: number }>, on: boolean) => {
+        const start = display(range.start), end = display(range.end);
+        if (end > start) {
+          ranges.push({ start, end, css: {}, band: false, decoration: style === "underline" ? { underline: on } : { strike: on } });
+        }
+      };
+      for (const stretch of coverRulesProven[style]) add(stretch, true);
+      for (const part of partFormats) {
+        const on = part[style];
+        if (on !== undefined) add(part, on);
+      }
+    }
+    return ranges.length ? ranges : NO_COVER_RULE_DRAFT_RANGES;
+  }, [coverRulesLane, coverRulesProven, partFormats, activeInputLayout]);
+  const draftLookRanges = useMemo(() => coverRuleDraftRanges.reduce(
     (ranges, range) => mergePdfTextDraftRanges(ranges, range),
-    nativeRuleRanges.reduce((ranges, range) => mergePdfTextDraftRanges(ranges, range), sourceFaceRanges)),
-  [embeddedDraftRanges, nativeRuleRanges, sourceFaceRanges]);
+    embeddedDraftRanges.reduce(
+      (ranges, range) => mergePdfTextDraftRanges(ranges, range),
+      nativeRuleRanges.reduce((ranges, range) => mergePdfTextDraftRanges(ranges, range), sourceFaceRanges))),
+  [coverRuleDraftRanges, embeddedDraftRanges, nativeRuleRanges, sourceFaceRanges]);
 
   useLayoutEffect(() => {
     const draft = visualDraftElementRef.current;
@@ -8934,6 +9135,12 @@ function PdfNativeListTextInlineEditor({
     const pageHost = inlineEditorHost?.closest<HTMLElement>(".pdf-viewer__page[data-page-number]");
     if (!pageHost) return;
     setPendingMoveBy(null);
+    // (A line of words not read as drawn is not carried: beginLayoutDrag.)
+    if (wordsUnread) {
+      pendingMoveByRef.current = null;
+      type3WordsSayRef.current(true);
+      return;
+    }
     const size = resolveOverlayCoordinateSize(pageHost.getBoundingClientRect(), {
       width: pageWidthPixels,
       height: pageHeightPixels,
@@ -8947,11 +9154,20 @@ function PdfNativeListTextInlineEditor({
     if (moved) setProperties(moved);
     else setManualLayoutDirty(true);
   }, [pendingMoveBy, effectiveLayoutRect, busy, submitting, preparationPending, inlineEditorHost,
-    pageWidthPixels, pageHeightPixels, propertyOverride, groupDraftWithScale, propertyDraftWithMove]);
+    pageWidthPixels, pageHeightPixels, propertyOverride, groupDraftWithScale, propertyDraftWithMove, wordsUnread]);
 
   const beginLayoutDrag = useCallback(
     (mode: "rotate" | "move" | ResizeHandle, event: ReactPointerEvent<HTMLElement>) => {
       if (!effectiveLayoutRect || busy || submitting) return;
+      // A line of words not read as drawn stays where it stands: carried,
+      // resized or turned it is set again, or made a text box, from words
+      // that are not the page's.
+      if (wordsUnread) {
+        event.preventDefault();
+        event.stopPropagation();
+        type3WordsSayRef.current(true);
+        return;
+      }
       setFinishRequested(null);
       const pageHost = inlineEditorHost?.closest<HTMLElement>(
         ".pdf-viewer__page[data-page-number]",
@@ -8990,7 +9206,7 @@ function PdfNativeListTextInlineEditor({
       event.currentTarget.setPointerCapture?.(event.pointerId);
     },
     [busy, effectiveLayoutRect, inlineEditorHost, layoutAngle, submitting, pageWidthPixels, pageHeightPixels,
-      nativeTurnable, properties, propertyProof, groupTurnable, groupBaseline, setFinishRequested],
+      nativeTurnable, properties, propertyProof, groupTurnable, groupBaseline, setFinishRequested, wordsUnread],
   );
 
   // A press on the body of a block selected as an object becomes a move of
@@ -9057,6 +9273,15 @@ function PdfNativeListTextInlineEditor({
   const handleLayoutControlKeyDown = useCallback(
     (mode: "rotate" | "move" | ResizeHandle, event: ReactKeyboardEvent<HTMLElement>) => {
       if (busy || submitting || !effectiveLayoutRect) return;
+      // (A line of words not read as drawn stays where it stands:
+      // beginLayoutDrag. An arrow moves nothing and says nothing.)
+      if (wordsUnread) {
+        if (event.key.startsWith("Arrow")) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
       const step = event.shiftKey ? 0.01 : 0.0025;
       if (mode === "rotate") {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -9129,7 +9354,7 @@ function PdfNativeListTextInlineEditor({
     },
     [busy, effectiveLayoutRect, submitting, propertyDraftWithMove, groupDraftWithScale,
       propertyOverride, layoutContentHeightFor, nativeResizeDraft, nativeTurnable, properties, propertyProof,
-      requestNativeRewrap, holdRewrapWidth],
+      requestNativeRewrap, holdRewrapWidth, wordsUnread],
   );
 
   // The side handle dragged to a width (pdf.text.rewrap_original through the
@@ -9137,7 +9362,7 @@ function PdfNativeListTextInlineEditor({
   resizeWidthRef.current = (widthFraction: number) => {
     // Only where the reader could drag it: the frame shown on the page, no
     // draft finishing, the line upright.
-    if (busy || submitting || finishRequested !== null || !effectiveLayoutRect || !ownsInlineHost ||
+    if (busy || submitting || finishRequested !== null || !effectiveLayoutRect || !ownsInlineHost || wordsUnread ||
       !(widthFraction > 0) || Math.abs(normalizeBoxAngle(layoutAngle)) > 0.01) return "refused";
     const start = effectiveLayoutRect;
     const dx = widthFraction - start.width;
@@ -9576,15 +9801,26 @@ function PdfNativeListTextInlineEditor({
   useEffect(() => {
     if (nativeCaretGeometry === null) measureLayoutRef.current?.();
   }, [nativeCaretGeometry]);
-  // Keys pressed on a Type3 line are told why they write nothing, and any
-  // typed while its proof was on the way are taken back when it comes.
+  // Keys pressed on a line whose words are fixed (a Type3 face; words the
+  // reader did not read as the page draws them) are told why they write
+  // nothing, and any typed while its proof was on the way are taken back
+  // when it comes.
+  const initialLayoutType3 = Boolean(initialLayout?.type3Text);
+  const wordsFixed = initialLayoutType3 ? "type3" as const : wordsUnread ? "unread" as const : null;
+  const wordsFixedNotice = wordsFixed === "unread"
+    ? translate("pdf.nativeTextEdit.unreadWordsNotEditable")
+    : translate("pdf.nativeTextEdit.type3WordsNotEditable");
+  const wordsFixedNoticeId = wordsFixed === "unread"
+    ? "pdf-native-list-text-edit-words-fixed" : "pdf-native-list-text-edit-type3";
   const type3NoticeAtRef = useRef(0);
-  const type3WordsSayRef = useRef(() => {});
-  type3WordsSayRef.current = () => {
+  // (Keys are told once in a while, as they come one after another; a frame
+  // pulled or a block carried is told each time.)
+  const type3WordsSayRef = useRef<(each?: boolean) => void>(() => {});
+  type3WordsSayRef.current = (each = false) => {
     const now = Date.now();
-    if (now - type3NoticeAtRef.current < 4000) return;
+    if (!each && now - type3NoticeAtRef.current < 4000) return;
     type3NoticeAtRef.current = now;
-    toast({ description: translate("pdf.nativeTextEdit.type3WordsNotEditable") });
+    toast({ description: wordsFixedNotice });
   };
   const type3TypedBackRef = useRef(() => {});
   type3TypedBackRef.current = () => {
@@ -9593,14 +9829,24 @@ function PdfNativeListTextInlineEditor({
     userTextInputStartedRef.current = false;
     type3WordsSayRef.current();
   };
-  const initialLayoutType3 = Boolean(initialLayout?.type3Text);
   useEffect(() => {
-    if (!initialLayoutType3) return;
+    if (wordsFixed === null) return;
     type3TypedBackRef.current();
+    // Only what would change the words is told so: a character typed,
+    // Backspace, Delete, Enter, an input method's key, a paste, a cut. A
+    // chord (select all, copy), an arrow, Tab, Escape and a modifier pressed
+    // alone change nothing and are told nothing -- select all, pressed to
+    
+    
+    // script made is no KeyboardEvent of this window, and was taken for a
+    // paste.)
     const attempted = (event: Event) => {
       if (event.target !== inputRef.current) return;
-      if (event instanceof KeyboardEvent && (event.metaKey || event.ctrlKey || event.altKey ||
-        (event.key.length !== 1 && !["Backspace", "Delete", "Enter", "Process"].includes(event.key)))) return;
+      if (event.type === "keydown") {
+        const { key, metaKey, ctrlKey, altKey } = event as KeyboardEvent;
+        if (metaKey || ctrlKey || altKey || typeof key !== "string" ||
+          (key.length !== 1 && !["Backspace", "Delete", "Enter", "Process"].includes(key))) return;
+      }
       type3WordsSayRef.current();
     };
     window.addEventListener("keydown", attempted, true);
@@ -9611,7 +9857,7 @@ function PdfNativeListTextInlineEditor({
       window.removeEventListener("paste", attempted, true);
       window.removeEventListener("cut", attempted, true);
     };
-  }, [initialLayoutType3]);
+  }, [wordsFixed]);
   // Optimistic activation: the provisional session (proof still pending, no
   // error) accepts typing immediately; adoption preserves the typed text
   // (userTextInputStartedRef) and only the save waits for the proof. That
@@ -9739,9 +9985,10 @@ function PdfNativeListTextInlineEditor({
       // there silently swallowed the first key of an edit.
       // A block selected as an object with 键盘输入触发编辑 unticked takes no
       // typing (nor an input method's) until the caret is put in.
-      // A Type3 face's words stay; the input still selects the part a format
-      // is set on (a read-only input also takes no input method).
-      readOnly={inputReadOnly || initialLayoutType3 || (objectSelected && !keyboardInputStartsEditing)}
+      // A Type3 face's words stay (and words the reader did not read as
+      // drawn); the input still selects the part a format is set on (a
+      // read-only input also takes no input method).
+      readOnly={inputReadOnly || wordsFixed !== null || (objectSelected && !keyboardInputStartsEditing)}
       aria-busy={preparationPending && !initialLayout?.promoted}
       data-testid="pdf-native-list-text-edit-input"
       // Drawn on the page's glyphs, its selection is painted by the source
@@ -9755,7 +10002,7 @@ function PdfNativeListTextInlineEditor({
       aria-invalid={displayedError || previewError ? true : undefined}
       aria-describedby={[
         "pdf-native-list-text-edit-geometry",
-        initialLayoutType3 ? "pdf-native-list-text-edit-type3" : null,
+        wordsFixed !== null ? wordsFixedNoticeId : null,
         displayedError ? "pdf-native-list-text-edit-error" : null,
         effectiveApplyDisabledReason && !displayedError && !submitting
           ? "pdf-native-list-text-edit-disabled-reason"
@@ -10647,8 +10894,11 @@ function PdfNativeListTextInlineEditor({
   // show stroked in its own fill colour in place, the state in force put
   // back after it (text-group-move.ts). A group drawn in bold faces has no
   // regular one to go back to, as a run's bold face has none here.
+  // (Not a line that holds a Type3 glyph: the group's write strokes every
+  // show knowing nothing of its face. Its weight is its paragraph's, the
+  
   const groupBoldBaseline = !propertyProof && !managedLayoutTypography && !openedInFallbackLane &&
-    !initialLayout?.promoted ? nativeGroupMoveProof?.baseline.syntheticBold : undefined;
+    !initialLayout?.promoted && !initialLayoutType3 ? nativeGroupMoveProof?.baseline.syntheticBold : undefined;
   const groupInkRuns = (sourceAppearance ?? []).filter((run) => run.text.trim());
   const groupBoldFaces = groupInkRuns.length > 0 && groupInkRuns.every((run) => run.font.bold);
   const groupBold = groupBoldBaseline !== undefined && paragraphChanges === null
@@ -10841,16 +11091,16 @@ function PdfNativeListTextInlineEditor({
       "select", "exit",
       ...(onHandTool ? (["hand"] as const) : []),
       ...(onInsertText ? (["insertText"] as const) : []),
-      ...(formulaConversionLatex && !inputReadOnly && !initialLayoutType3
+      ...(formulaConversionLatex && !inputReadOnly && wordsFixed === null
         ? (["convertKind"] as const) : []),
       // A setting of the device, not of this line: always at hand.
       "keyboardInput",
       // 插入符号 types into the line: while it takes typing.
-      ...(!inputReadOnly && !initialLayoutType3 ? (["insertSymbol"] as const) : []),
+      ...(!inputReadOnly && wordsFixed === null ? (["insertSymbol"] as const) : []),
       // 更改大小写 retypes the words: wherever typing is taken.
-      ...(!inputReadOnly && !initialLayoutType3 ? (["changeCase"] as const) : []),
+      ...(!inputReadOnly && wordsFixed === null ? (["changeCase"] as const) : []),
       // 项目符号 / 编号 write their markers as typing: wherever typing is taken.
-      ...(!inputReadOnly && !initialLayoutType3 ? (["bullets", "numbering"] as const) : []),
+      ...(!inputReadOnly && wordsFixed === null ? (["bullets", "numbering"] as const) : []),
     ],
     {
       // (Never 「预览中」: the preview drawn again as one types is no state
@@ -10883,11 +11133,26 @@ function PdfNativeListTextInlineEditor({
   );
   // A Type3 face's glyph procedures ignore the rendering mode a weight is
   // drawn with, and no other face is known to hold its glyphs; its words stay.
+  // Where the Type3 glyphs of the box are pictures all (a colour emoji among
+  // words of ordinary faces: the proof's reading, type3PicturesOnly) the
+  // weight is the words' and is asked of the page as any box's -- a picture
+  // has none to take. (Until the proof says so the weight stays refused: a
+  // press made meanwhile is held and answered when it comes.)
+  // A line of words the reader did not read as the page draws them takes
+  // what is written where its text stands -- a stroked weight, a lean, a
+  // rule, a colour, on the whole of it -- and nothing that would set its
+  // words again, carry them off or make a text box of them: each of those
+  // says why (a face, a size, a script, a spacing, an alignment, a turn, a
+  // delete, the format painter's copy of all of them).
   const nativeCapabilities: typeof capabilitiesOfLine = initialLayoutType3 ? Object.freeze({ ...capabilitiesOfLine,
-    bold: Object.freeze({ enabled: false, reason: type3Unavailable }),
+    ...(type3PicturesOnly && !propertyProof ? {} : { bold: Object.freeze({ enabled: false, reason: type3Unavailable }) }),
     fontFamily: Object.freeze({ enabled: false, reason: type3Unavailable }),
     delete: Object.freeze({ enabled: false, reason: translate("pdf.nativeTextEdit.type3WordsNotEditable") }),
-  }) : capabilitiesOfLine;
+  }) : wordsFixed === "unread" ? Object.freeze(Object.fromEntries(
+    (Object.keys(capabilitiesOfLine) as (keyof typeof capabilitiesOfLine)[]).map((control) => [control,
+      WORDS_UNREAD_KEPT_CONTROLS.has(control) ? capabilitiesOfLine[control]
+        : Object.freeze({ enabled: false, reason: wordsFixedNotice })]),
+  ) as typeof capabilitiesOfLine) : capabilitiesOfLine;
   // The selection's part of the run, when the run has formats of its own
   // parts (else the run's own format is the part's).
   const partialFields = partialRange && properties?.segments?.length ? partialFormatOf(partialRange) : null;
@@ -11195,6 +11460,17 @@ function PdfNativeListTextInlineEditor({
       nativeRibbonModel.fontFamilyMixed = false;
     }
   }
+  // A scanned line's own rules: the ones standing beside its invisible
+  // words with the ones pressed this session set over them, so a line left
+  // underlined reads pressed when it is opened again and a second press
+  // takes the rule off.
+  if (coverRulesLane && coverRulesProven) {
+    const over = partialRange ?? (caretAt !== null ? { start: caretAt, end: caretAt } : null);
+    nativeRibbonModel.underline = pdfNativeCoverRulePressed(
+      coverRulesProven.underline, partFormats, "underline", over, replacementText);
+    nativeRibbonModel.strikethrough = pdfNativeCoverRulePressed(
+      coverRulesProven.strikethrough, partFormats, "strikethrough", over, replacementText);
+  }
   // The size the ribbon shows before any proof is the reader's (readerPointSize):
   
   // for it until the proof (it pressed before the proof, into a refusal).
@@ -11355,6 +11631,11 @@ function PdfNativeListTextInlineEditor({
     }
     toast({ description: translate("pdf.nativeTextEdit.formatNotApplied") });
   };
+  /** A rule pressed on a scanned line while the window still reads whether
+   * the page takes it beside the line's invisible words (coverRulesWaiting):
+   * held until it answers, then the page's own rule or the text box's. */
+  const coverRuleHeld = (action: PdfTextEditingContextRibbonAction) => (coverRulesWaiting || standingRulesWaiting) &&
+    action.type === "toggle" && (action.control === "underline" || action.control === "strikethrough");
   const handleRibbonAction = (action: PdfTextEditingContextRibbonAction) => {
     // A font, size or colour chosen from a list leaves the focus on the page
     // as the list closes: the line gets the keyboard back with the same
@@ -11384,7 +11665,7 @@ function PdfNativeListTextInlineEditor({
     // its proof lands too: before it, the writer has nothing to delete.
     // A press while the line's own write or a check runs is held the same way
     // and runs once it is done: the controls never go grey under the reader.
-    if ((formatProofPending || propertyControlsBusy) && control && nativeTextRibbonPressHeld(control) &&
+    if ((formatProofPending || propertyControlsBusy || coverRuleHeld(action)) && control && nativeTextRibbonPressHeld(control) &&
       (control !== "delete" || onDeleteTextObject)) {
       // The press shows on the draft and the buttons at once (partFormats);
       // its write runs when the proof lands.
@@ -11438,7 +11719,7 @@ function PdfNativeListTextInlineEditor({
     
     const pressed = action.type === "toggle" && NATIVE_TEXT_TOGGLE_CONTROLS.has(action.control)
       ? displayedRibbonModel[action.control as NativeTextToggleControl] !== true : undefined;
-    if ((formatProofPending || propertyControlsBusy) && control &&
+    if ((formatProofPending || propertyControlsBusy || coverRuleHeld(action)) && control &&
       nativeTextRibbonPressHeld(control as PdfTextEditingControl)) {
       const partsBefore = recordPartFormat(action);
       queueRibbonCommand(action, { ...(pressed === undefined ? {} : { pressed }), ...(partsBefore ? { partsBefore } : {}) });
@@ -11479,6 +11760,73 @@ function PdfNativeListTextInlineEditor({
   /** Runs that say nothing of their own are no runs. */
   const settledManagedRuns = (runs: PdfTextStyleRun[] | undefined): PdfTextStyleRun[] | null =>
     runs && runs.some((run) => Object.keys(run).some((key) => key !== "text")) ? runs : null;
+  /**
+   * A scanned line becomes its text box (a character format pressed on it,
+   * words typed into it, its box moved) with its rules: the ones standing in
+   * the page beside its invisible words are what the box starts under
+   * (nothing of them is a change to write), the ones pressed this session
+   * are the box's formats from here on, and the page's own rule is not
+   * written. Returns what the box starts under. Null, nothing changed: a
+   * part of the line under a rule of its own is text the box's run writer
+   * cannot draw -- the caller says so.
+   */
+  const coverRulesIntoBox = (press: boolean): Readonly<{
+    underline: boolean; strikethrough: boolean; runs: PdfTextStyleRun[] | null;
+  }> | null => {
+    const pressed = partFormatsRef.current;
+    const base = coverRulesProven
+      ? pdfNativeCoverRulesCarry(coverRulesProven, originalText, NO_PART_FORMATS, originalText) : null;
+    const session = pdfNativeCoverRulesPressed(pressed)
+      ? pdfNativeCoverRulesCarry(coverRulesProven, originalText, pressed, replacementText) ?? NO_COVER_RULES_CARRY : null;
+    // (Pressed and taken off again, the line's rules are the ones standing.)
+    const full = session && (replacementText !== originalText ||
+      JSON.stringify(session) !== JSON.stringify(base ?? NO_COVER_RULES_CARRY)) ? session : null;
+    if ((base?.parts.length || full?.parts.length) && !pdfTextBoxDrawnRunsPortable([{
+      text: replacementText, font: "sans", bold: false, italic: false, underline: false, strikethrough: false,
+      fontSize: 0, color: "#000000",
+    }])) return null;
+    const runsOf = (carry: PdfNativeCoverRulesCarry | null, text: string): PdfTextStyleRun[] | null => {
+      let runs: PdfTextStyleRun[] | undefined;
+      for (const piece of carry?.parts ?? []) {
+        runs = patchPdfTextStyleRunsRange(runs ?? [{ text }], text, piece.start, piece.end, {
+          ...(piece.underline ? { underline: true } : {}), ...(piece.strikethrough ? { strikethrough: true } : {}) });
+      }
+      return settledManagedRuns(runs);
+    };
+    const baseRuns = runsOf(base, originalText);
+    const start = { underline: Boolean(base?.whole.underline), strikethrough: Boolean(base?.whole.strikethrough),
+      runs: baseRuns };
+    if (full) {
+      // One step of the box's undo when a press made the box: Cmd+Z takes
+      // the press back, then the rules pressed before it.
+      if (press && replacementText === originalText) {
+        const history = managedFormatHistoryRef.current;
+        history.undo.push({ override: layoutTypographyOverride, runs: { text: replacementText, runs: baseRuns } });
+        if (history.undo.length > 100) history.undo.shift();
+        history.redo = [];
+      }
+      const underline = Boolean(full.whole.underline), strikethrough = Boolean(full.whole.strikethrough);
+      if (underline !== start.underline || strikethrough !== start.strikethrough) {
+        setLayoutTypographyOverride((current) => ({ ...current,
+          ...(underline !== start.underline ? { underline } : {}),
+          ...(strikethrough !== start.strikethrough ? { strikethrough } : {}) }));
+      }
+      setManagedRunsState({ text: replacementText, runs: runsOf(full, replacementText) });
+    } else {
+      setManagedRunsState({ text: originalText, runs: baseRuns });
+    }
+    if (pressed.length) {
+      partFormatsRef.current = NO_PART_FORMATS;
+      setPartFormats(NO_PART_FORMATS);
+    }
+    // The presses are the box's steps now, not the line's.
+    const steps = formatHistoryRef.current;
+    steps.past = [];
+    steps.future = [];
+    steps.log = steps.log.filter((entry) => entry !== "format");
+    steps.redoLog = steps.redoLog.filter((entry) => entry !== "format");
+    return start;
+  };
   /** A whole-box format: the runs stop stating it, so all of the text takes it. */
   const dropManagedRunFields = (fields: Partial<Omit<PdfTextStyleRun, "text" | "displayFontFamily">>) => {
     if (!managedRuns) return;
@@ -11738,6 +12086,41 @@ function PdfNativeListTextInlineEditor({
       setProperties(withPartRules(properties, partFormatsRef.current));
       return;
     }
+    // A rule pressed on a scanned line the window proves a rule is written
+    // beside (coverRulesLane) is the page's own: recorded on the characters
+    // it is pressed on (the selection, else the whole line) and asked of the
+    // page when the line is left (rowFormat: rule parts of the box's text,
+    // which the window writes beside the invisible words). The scanned
+    // words stay the scan's; no text box is made and none is announced.
+    if (coverRulesLane && coverRulesProven && action.type === "toggle" &&
+      (action.control === "underline" || action.control === "strikethrough")) {
+      const style = action.control;
+      const on = want(style);
+      const range = partialTextRange() ?? { start: 0, end: replacementText.length };
+      const partsBefore = partFormatsRef.current;
+      const next = applyPdfTextPartFormat(partsBefore, range, { [style]: on });
+      const history = formatHistoryRef.current;
+      history.past.push(Object.freeze({ parts: partsBefore, properties: propertyOverride, rowFormat,
+        queued: queuedRibbonActionsRef.current.length }));
+      if (history.past.length > 200) history.past.shift();
+      history.log.push("format");
+      history.future = [];
+      history.redoLog = [];
+      partFormatsRef.current = next;
+      setPartFormats(next);
+      // Asked only while the presses leave the line under other rules than
+      // the ones standing: pressed and taken off again, nothing is written.
+      const changed = PDF_NATIVE_COVER_RULE_STYLES.some((each) =>
+        JSON.stringify(pdfNativeCoverRuleStretches(coverRulesProven[each], next, each, replacementText)) !==
+        JSON.stringify(pdfNativeCoverRuleStretches(coverRulesProven[each], NO_PART_FORMATS, each, replacementText)));
+      const others = rowFormatWithoutCoverRules(rowFormat);
+      const segments = changed ? pdfNativeCoverRuleSegments(next) : [];
+      setRowFormat(segments.length
+        ? Object.freeze({ ...(others ?? {}), segments: Object.freeze([...(others?.segments ?? []), ...segments]) })
+        : others);
+      markPdfTextLatency("lane.cover-rule", { style, on, part: range.end - range.start < replacementText.length });
+      return;
+    }
     // A scanned line (coverLaneLine: nothing of it is drawn, so no row of it
     // can take a format in the page's text) takes a character format where
     // its typing is written: as the text box over the scanned words, which
@@ -11771,13 +12154,38 @@ function PdfNativeListTextInlineEditor({
         else refusePartPress();
         return;
       }
+      // A press made before the line was known to be a scan's (held for its
+      // proof) was recorded on the draft as a line's press is (partFormats):
+      // the box takes that press itself below, queued, and the presses held
+      // behind it run as the box's own after it -- so what the box starts
+      // under is the draft as it stood before this press. Carried with it,
+      // a 下划线 pressed before the line had opened was the box's rule
+      // already and the queued press took it off again: the button read
+      // unpressed, nothing was written and nothing was said
+      
+      const recordedBefore = pressPartsBeforeRef.current;
+      if (recordedBefore && recordedBefore !== partFormatsRef.current) {
+        partFormatsRef.current = recordedBefore;
+        setPartFormats(recordedBefore);
+      }
+      pressPartsBeforeRef.current = null;
+      // Its own rules, the page's until now, go with it into the box: a
+      // rule pressed before this format is the box's underline, never lost.
+      const carried = coverRulesIntoBox(true);
+      if (!carried) {
+        toast({ description: translate("pdf.nativeTextEdit.formatNotApplied") });
+        return;
+      }
       markPdfTextLatency("lane.text-box", { action: action.type, cover: true, part: Boolean(part) });
       if (propertyOverride && !propertyProof) setProperties(null);
       // What the line's rows were asked before (rowFormat, which no row of
       // an invisible line can take): its alignment is the box's from here;
       // anything else is said as not applied now, as leaving would say it.
-      if (rowFormat) {
-        const { alignment, ...rest } = rowFormat;
+      // (Its rule parts were the line's own rules: carried just above.)
+      const rowsAsked = rowFormatWithoutCoverRules(rowFormat);
+      if (rowFormat) setRowFormat(null);
+      if (rowsAsked) {
+        const { alignment, ...rest } = rowsAsked;
         if (alignment === "left" || alignment === "center" || alignment === "right") {
           setLayoutTypographyOverride((current) => ({ alignment, ...current }));
         } else if (alignment === "justify") {
@@ -11786,10 +12194,10 @@ function PdfNativeListTextInlineEditor({
         if (Object.keys(rest).length > 0 || alignment === "distribute") {
           toast({ description: translate("pdf.nativeTextEdit.formatNotApplied") });
         }
-        setRowFormat(null);
       }
-      // The box starts in the weight and slant the buttons show for the line.
-      setCoverBoxStyle({ bold: Boolean(currentBold), italic: Boolean(currentItalic) });
+      // The box starts in the weight and slant the buttons show for the line
+      // and under the rules standing beside it.
+      setCoverBoxStyle({ bold: Boolean(currentBold), italic: Boolean(currentItalic), ...carried });
       queueRibbonCommand(action, pressedArg === undefined ? undefined : { pressed: pressedArg });
       return;
     }
@@ -12389,6 +12797,18 @@ function PdfNativeListTextInlineEditor({
       }));
       return "draft";
     }
+    // Onto a line whose words are fixed: what is written where its text
+    // stands, and nothing of the rest (a size or a paragraph setting painted
+    // with it refused the whole format).
+    if (!properties && wordsUnread && onApplyRowFormat) {
+      setRowFormat((current) => ({
+        ...(current ?? {}),
+        bold: format.bold, italic: format.italic,
+        ...(format.color ? { color: format.color.toLowerCase() } : {}),
+        underline: format.underline, strikethrough: format.strikethrough,
+      }));
+      return "draft";
+    }
     // Onto a paragraph of several rows: written by the paragraph rewrite when
     // it is left, with its settings (the face stays the paragraph's own: a
     // family its page may not hold refused the whole format).
@@ -12454,12 +12874,58 @@ function PdfNativeListTextInlineEditor({
     capabilities: typeof nativeCapabilities;
     model: typeof nativeRibbonModel;
     run: (action: PdfTextEditingContextRibbonAction, pressed?: boolean) => void;
+    /** Whether the page draws this rule under (through) the whole box. */
+    ruled: (style: "underline" | "strikethrough") => boolean;
+    /** Whether the page draws the whole of a box that states no one run's
+     * format bold already: its group's weight, or every run of it in a bold
+     * face or stroked (read off its proof, not off this session's draft). */
+    drawnBold: boolean;
   }> | null>(null);
-  latestRibbonRef.current = { capabilities: nativeCapabilities, model: laneRibbonModel, run: handleRibbonActionImpl };
+  latestRibbonRef.current = { capabilities: nativeCapabilities, model: laneRibbonModel, run: handleRibbonActionImpl,
+    ruled: (style) => nativeDecorations[style] === true,
+    drawnBold: !propertyProof && !managedLayoutTypography && (groupBoldBaseline === true || sourceFacesBold) };
   const queuedRefusalRef = useRef<string | null>(null);
+  // An opening refused for good may be taken over a moment later by another
+  // (the window opens the run under the press of a paragraph refused whole):
+  // the presses held are then that opening's to answer, by its proof. They
+  // wait for it that moment; an editor closed under them meanwhile hands
+  // them over (onHeldRibbonActionsLeft) or answers them as it goes.
+  const [refusedOpeningSettled, setRefusedOpeningSettled] = useState(false);
+  const heldForTakeover = (preparationFailed && !refusedOpeningSettled) || heldRibbonActionsTakenOver;
+  useEffect(() => {
+    if (!preparationFailed) { setRefusedOpeningSettled(false); return; }
+    const timer = window.setTimeout(() => setRefusedOpeningSettled(true), NATIVE_TEXT_REFUSED_OPENING_TAKEOVER_MS);
+    return () => window.clearTimeout(timer);
+  }, [preparationFailed]);
+  const heldPressesLeaveRef = useRef<() => void>(() => {});
+  heldPressesLeaveRef.current = () => {
+    const held = queuedRibbonActionsRef.current;
+    if (held.length === 0) return;
+    const { carried, left } = nativeTextHeldPressesCarriedOver(held);
+    const taken = carried.length > 0 && onHeldRibbonActionsLeft?.(carried) === true;
+    // (Closed with its proof still on the way and nothing taking it over:
+    // the presses go with the editor, as they always did.)
+    if (!taken && !heldForTakeover) return;
+    const refused = taken ? left : held;
+    if (refused.length === 0) return;
+    const control = nativeTextRibbonActionControl(refused[0].action);
+    const reason = (control ? latestRibbonRef.current?.capabilities[control]?.reason : null) ?? error ?? ribbonLabels.unavailable;
+    toast({ description: translate("pdf.nativeTextEdit.queuedFormatRefused", { reason }) });
+  };
+  useEffect(() => {
+    const carried = takeHeldRibbonActions?.();
+    if (carried?.length) {
+      setQueuedRibbonActions((queue) => carried.reduce(queueNativeTextRibbonAction, [] as readonly QueuedNativeTextRibbonAction[])
+        .concat(queue));
+    }
+    return () => heldPressesLeaveRef.current();
+  // Once, as the editor opens; and as it closes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     const latest = latestRibbonRef.current;
-    if (queuedRibbonActions.length === 0 || formatProofPending || propertyControlsBusy || composing || !latest) return;
+    if (queuedRibbonActions.length === 0 || formatProofPending || propertyControlsBusy || composing || coverRulesWaiting ||
+      standingRulesWaiting || heldForTakeover || !latest) return;
     const [next, ...rest] = queuedRibbonActions;
     setQueuedRibbonActions(rest);
     const control = nativeTextRibbonActionControl(next.action);
@@ -12477,15 +12943,74 @@ function PdfNativeListTextInlineEditor({
         (field.selectionStart !== next.range.start || field.selectionEnd !== next.range.end)) {
         try { field.setSelectionRange(next.range.start, next.range.end); } catch { /* detached */ }
       }
-      pressPartsBeforeRef.current = next.partsBefore ?? null;
-      latest.run(next.action, next.pressed);
+      // (A press handed on from a refused box is recorded on this one now, as
+      // a press made on it is: the draft wears it and the buttons read it.)
+      pressPartsBeforeRef.current = next.carried ? recordPartFormat(next.action) : next.partsBefore ?? null;
+      // (A press that turns out to take a format off is recorded again as
+      // that: the draft wore it as put on, and its button read pressed.)
+      const recordedAsOff = () => {
+        if (next.partsBefore) { partFormatsRef.current = next.partsBefore; setPartFormats(next.partsBefore); }
+        pressPartsBeforeRef.current = recordPartFormat(next.action);
+      };
+      // A rule asked of the whole box while its rules were not read yet (the
+      // button read unpressed for want of them), of a box the page turns out
+      // to rule already: the press takes the rule off, as it does once the
+      // button reads pressed. Asked again, the rule was written a second
+      
+      const rule = next.action.type === "toggle" &&
+        (next.action.control === "underline" || next.action.control === "strikethrough") ? next.action.control : null;
+      const wholeBox = !next.range || next.range.start === next.range.end ||
+        (next.range.start === 0 && next.range.end === next.range.value.length);
+      const ruleComesOff = Boolean(rule && next.pressed === true && wholeBox && latest.ruled(rule));
+      if (ruleComesOff) recordedAsOff();
+      latest.run(next.action, ruleComesOff ? false : next.pressed);
+    } else if (next.action.type === "toggle" && next.action.control === "bold" && next.pressed === true && latest.drawnBold &&
+      (!next.range || next.range.start === next.range.end || (next.range.start === 0 && next.range.end === next.range.value.length))) {
+      // The same of a weight: asked of the whole box before its proof, of a
+      // box the proof says the page draws bold already. Left as "set bold",
+      // the press did nothing and said nothing, where pressed a moment later
+      // it takes the weight off.
+      if (next.partsBefore) { partFormatsRef.current = next.partsBefore; setPartFormats(next.partsBefore); }
+      pressPartsBeforeRef.current = recordPartFormat(next.action);
+      latest.run(next.action, false);
     }
     if (rest.length === 0 && queuedRefusalRef.current !== null) {
       const reason = queuedRefusalRef.current;
       queuedRefusalRef.current = null;
       toast({ description: translate("pdf.nativeTextEdit.queuedFormatRefused", { reason }) });
     }
-  }, [queuedRibbonActions, formatProofPending, propertyControlsBusy, composing, translate, ribbonLabels.unavailable]);
+  }, [queuedRibbonActions, formatProofPending, propertyControlsBusy, composing, coverRulesWaiting, standingRulesWaiting,
+    heldForTakeover, translate, ribbonLabels.unavailable]);
+  // A scanned line under a rule of the page's own (standing beside it, or
+  // pressed this session) that words are then typed into, or whose box is
+  // moved, is its text box from there (typing over a scan is written so):
+  // the box takes the rule with it (coverRulesIntoBox). A rule the box
+  // cannot carry is taken off the draft and said, never left asked of a
+  // page whose words are no longer under it.
+  const coverRulesPressedNow = pdfNativeCoverRulesPressed(partFormats);
+  useEffect(() => {
+    if (!coverLaneLine || coverBoxStyle !== null || composing || coverRulesWaiting) return;
+    if (replacementText === originalText && !manualLayoutDirty && paragraphFrameRequest === null) return;
+    const standing = coverRulesProven !== null &&
+      (coverRulesProven.underline.length > 0 || coverRulesProven.strikethrough.length > 0);
+    if (!coverRulesPressedNow && !standing) return;
+    const carried = textBoxTakeoverEligible ? coverRulesIntoBox(false) : null;
+    if (carried) {
+      const rows = rowFormatWithoutCoverRules(rowFormat);
+      if (rows !== rowFormat) setRowFormat(rows);
+      setCoverBoxStyle({ bold: Boolean(currentBold), italic: Boolean(currentItalic), ...carried });
+      markPdfTextLatency("lane.text-box", { action: "cover-rules", cover: true, part: false });
+      return;
+    }
+    if (!coverRulesPressedNow) return;
+    partFormatsRef.current = NO_PART_FORMATS;
+    setPartFormats(NO_PART_FORMATS);
+    setRowFormat(rowFormatWithoutCoverRules(rowFormat));
+    // (Every word deleted, the line goes with its rules: nothing to say.)
+    if (replacementText.trim()) toast({ description: translate("pdf.nativeTextEdit.formatNotApplied") });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the line stops being the scan's own; the rest is this render's
+  }, [coverLaneLine, coverBoxStyle, composing, coverRulesWaiting, replacementText, originalText, manualLayoutDirty,
+    paragraphFrameRequest, coverRulesProven, coverRulesPressedNow, textBoxTakeoverEligible]);
   // A finish asked for while commands were held runs on the draft they made.
   useEffect(() => {
     if (!finishAfterQueuedActions || queuedRibbonActions.length > 0 || moveAwaitingProof || resizeAwaitingProof ||
@@ -12703,15 +13228,17 @@ function PdfNativeListTextInlineEditor({
 
 
 
+
 }
-      {initialLayoutType3 && !displayedError ? (
+      {wordsFixed !== null && !displayedError ? (
         <span
-          id="pdf-native-list-text-edit-type3"
+          id={wordsFixedNoticeId}
           role="status"
-          data-testid="pdf-native-list-text-edit-type3-notice"
+          data-testid={wordsFixed === "type3" ? "pdf-native-list-text-edit-type3-notice"
+            : "pdf-native-list-text-edit-words-fixed-notice"}
           className="basis-full rounded border border-amber-400/40 bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
         >
-          {translate("pdf.nativeTextEdit.type3WordsNotEditable")}
+          {wordsFixedNotice}
         </span>
       ) : null}
       {displayedError ? (
@@ -12725,7 +13252,7 @@ function PdfNativeListTextInlineEditor({
         </span>
       ) : null}
     </>
-  ), [displayedError, effectiveApplyDisabledReason, geometryNotice, initialLayoutType3, manualLayoutChanged,
+  ), [displayedError, effectiveApplyDisabledReason, geometryNotice, wordsFixed, wordsFixedNotice, wordsFixedNoticeId, manualLayoutChanged,
     openedInFallbackLane, refusalFallbackEligible, submitting, translate]);
   const shownRibbonStatus = useDeferredValue(ribbonStatus);
   // Live Preview (components/office-ribbon/officeFormatPreview.tsx): the
@@ -13531,7 +14058,10 @@ function PdfNativeListTextInlineEditor({
               data-native-move={nativeMoveSupported ? "true" : "false"}
               aria-label={translate("pdf.nativeTextEdit.moveTextBox")}
               title={translate("pdf.nativeTextEdit.moveTextBoxHint")}
-              onPointerDown={(event) => beginLayoutDrag("move", event)}
+              // (A line of words not read as drawn: a press on its frame
+              // says why it stays only once the pointer carries it, as a
+              // press on its body does; a click there is told nothing.)
+              onPointerDown={(event) => (wordsUnread ? pressSelectedBlock(event) : beginLayoutDrag("move", event))}
               onKeyDown={(event) => {
                 if (!leaveOnEscape(event)) handleLayoutControlKeyDown("move", event);
               }}

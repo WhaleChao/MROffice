@@ -860,7 +860,15 @@ export function spreadsheetChartLiveFromStoredCells(
   const display = (owner: SpreadsheetChartStoredSheet) => (row: number, col: number): string => {
     const cell = cellOf(owner, row, col);
     if (!cell) return "";
-    return typeof cell.display === "string" ? cell.display : String(cell.value ?? "");
+    if (typeof cell.display === "string") return cell.display;
+    if (cell.formula) {
+      // A formula's text is not what it shows: with no stamped display, its
+      // stamped result (R454-X07: category labels =+C8+B10-B9 read as their
+      // text on load, and an untouched save read the charts as changed).
+      const cached = cell.chartValueCache?.value;
+      return typeof cached === "number" && Number.isFinite(cached) ? String(cached) : "";
+    }
+    return String(cell.value ?? "");
   };
   const numeric = (owner: SpreadsheetChartStoredSheet) => (row: number, col: number): string => {
     const cell = cellOf(owner, row, col);
@@ -974,6 +982,18 @@ export function waterfallPointKindsOver(
   return categories.map((name) => byName.get(name)?.shift() ?? "value");
 }
 
+/** A series whose name the file does not state (`nameUnstated`, the default
+ *  "Series n" the reader gave it) keeps saying so while the name the cells
+ *  give it is still that one. */
+function seriesNameUnstatedOver(
+  series: { name?: unknown; nameUnstated?: true },
+  own: { name?: unknown; nameUnstated?: true },
+): { nameUnstated: true } | null {
+  return own.nameUnstated === true && series.nameUnstated === undefined && series.name === own.name
+    ? { nameUnstated: true }
+    : null;
+}
+
 function withModelSeriesRoles(model: ChartBlockAttrsV2, data: ChartBlockAttrsV2["data"]): ChartBlockAttrsV2["data"] {
   // A waterfall's totals (Set as Total, `cx:subtotals`) are the model's,
   // point by point: the cells hold the amounts only. Refreshed from them, an
@@ -998,9 +1018,30 @@ function withModelSeriesRoles(model: ChartBlockAttrsV2, data: ChartBlockAttrsV2[
         const axis = own.axis !== undefined ? { axis: own.axis } : {};
         const numberFormat =
           own.numberFormat !== undefined && series.numberFormat === undefined ? { numberFormat: own.numberFormat } : {};
-        return own.axis === undefined && !("numberFormat" in numberFormat) ? series : { ...series, ...axis, ...numberFormat };
+        const unstated = seriesNameUnstatedOver(series, own);
+        return own.axis === undefined && !("numberFormat" in numberFormat) && !unstated
+          ? series
+          : { ...series, ...axis, ...numberFormat, ...unstated };
       }),
     };
+  }
+  if (model.data.kind === "sample" && data.kind === "sample") {
+    // A statistical chart (box & whisker, histogram, Pareto) names each
+    // series by a `_xlchart.v1.N` workbook name its part states, which the
+    // cells cannot resolve: re-read, the name fell to "Series n" and every
+    // save of a workbook with such a chart read as a change to it (window
+    // load audit, xlsx-rounds R453-X15 "proportion_alive"). The model's name
+    // stands where the cells give only the default.
+    const stated = model.data.series;
+    if (stated.length !== data.series.length) return data;
+    let kept = false;
+    const series = data.series.map((entry, index) => {
+      const own = stated[index];
+      if (entry.name !== `Series ${index + 1}` || !own || own.name === entry.name) return entry;
+      kept = true;
+      return { ...entry, name: own.name };
+    });
+    return kept ? { ...data, series } : data;
   }
   if (model.data.kind !== "category" || data.kind !== "category") return data;
   const stated = model.data.series;
@@ -1012,13 +1053,23 @@ function withModelSeriesRoles(model: ChartBlockAttrsV2, data: ChartBlockAttrsV2[
       const { xValues: _liveX, ...rest } = series;
       // A combination's scatter X values (`comboSeriesXValuesOver`).
       const xValues = comboSeriesXValuesOver(series, own);
+      // The values' source format and a name the file does not state are the
+      // model's too: the cells re-read neither. Refreshed away, every save of
+      // a workbook with such a chart (R450-X03: 23 pie series, "0%") read as
+      
+      const numberFormat =
+        own.numberFormat !== undefined && series.numberFormat === undefined ? { numberFormat: own.numberFormat } : {};
+      const unstated = seriesNameUnstatedOver(series, own);
       return own.renderAs === undefined && own.axis === undefined && !xValues && !_liveX
+        && !("numberFormat" in numberFormat) && !unstated
         ? series
         : {
             ...rest,
             ...(own.renderAs !== undefined ? { renderAs: own.renderAs } : {}),
             ...(own.axis !== undefined ? { axis: own.axis } : {}),
             ...(xValues ? { xValues } : {}),
+            ...numberFormat,
+            ...unstated,
           };
     }),
   };

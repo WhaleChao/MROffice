@@ -902,6 +902,11 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  /* Excel sets every full-width punctuation mark at its full width, beside
+     another or not; the browser's default closes two that meet by half an em
+     (spreadsheetCellCss engineTextCss says the same on each cell; this
+     reaches the grid's canvases and the sheet's drawn objects). */
+  text-spacing-trim: space-all;
 }
 
 /* Format or Animation Painter armed: PowerPoint's pointer over the slide is

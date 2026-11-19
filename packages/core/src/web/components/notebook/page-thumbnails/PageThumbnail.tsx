@@ -227,6 +227,39 @@ function loadSource(page: PageThumbnailPage): Promise<ThumbnailSource | null> {
   return promise;
 }
 
+/** Whether a source draws the page itself (not the format's icon). */
+function drawsPage(source: ThumbnailSource | null | undefined): boolean {
+  if (!source) return false;
+  if (source.kind === "pdf") return Boolean(source.image);
+  if (source.kind === "presentation") return Boolean(source.slide);
+  return true;
+}
+
+/**
+ * What this tab holds for a page at its version: its picture, nothing to
+ * draw (an empty deck, a PDF that would not render, a read that failed), or
+ * nothing yet.
+ */
+export function pageThumbnailStatus(page: PageThumbnailPage): "picture" | "blank" | "none" {
+  const key = keyOf(page);
+  if (!cache.has(key)) return "none";
+  return drawsPage(cache.get(key)) ? "picture" : "blank";
+}
+
+/**
+ * Reads what a page's thumbnail draws into this tab's cache, so a
+ * PageThumbnail of it then draws at once (no editor is mounted for it).
+ * Resolves true when there is a picture of the page.
+ */
+export async function loadPageThumbnail(page: PageThumbnailPage): Promise<boolean> {
+  const source = cache.has(keyOf(page)) ? cache.get(keyOf(page)) : await loadSource(page);
+  if (source?.kind === "presentation" && source.slide) {
+    // the deck's own slide renderer, so the slide draws with the picture
+    await import("@mrnote/slides/web/components/notebook/contents/PresentationWindow.tsx").catch(() => null);
+  }
+  return drawsPage(source);
+}
+
 /* ----------------------------------------------------------- rendering */
 
 /** A Word drawing, by the editor's own painter (loaded only when drawn). */
@@ -509,8 +542,9 @@ export function PageThumbnail({
   className,
 }: {
   page: PageThumbnailPage;
-  /** stage: the gallery's; card: a preview column's; strip: a strip tile's. */
-  variant: "stage" | "card" | "strip";
+  /** stage: the gallery's; card: a preview column's; strip: a strip tile's;
+   *  dock: a side strip's file picture (DockThumbnail). */
+  variant: "stage" | "card" | "strip" | "dock";
   className?: string;
 }) {
   const key = keyOf(page);

@@ -30,6 +30,7 @@ import {
   type SpreadsheetChartStoredSheet,
   type SpreadsheetChartV2Live,
 } from "./chart-v2-model";
+import { chartVisiblePointIndices, projectChartVisibilityRows } from "./chart-visibility";
 import { matchingChartValueCache, type ChartValueCache } from "./chart-value-cache";
 import { normalizeDataTables, normalizeTableColumnNames, type DataTable } from "./data-table";
 import { cellPictureEntries } from "./cell-picture";
@@ -1220,6 +1221,27 @@ export function withSheetChartModels<S extends ChartModelSheet>(
     const matches = sheets.filter((item) => item.name.toLowerCase() === name.toLowerCase());
     return matches.length === 1 ? matches[0].id : undefined;
   };
+  // A chart that plots visible cells only (c:plotVisOnly) holds the points of
+  // its visible rows, as Excel caches them and the import reads them: the
+  // stored cells of its hidden rows are not read into its data. R455-X01:
+  // Graphs' two charts over rows 174-181 and 233-245 hidden read 91 points
+  // where the file holds 70, and an untouched save was a changed one. Only a
+  // projection chartVisiblePointIndices resolves for the data (any chart
+  // type, one mask over aligned vectors of one sheet, a filtered sheet not);
+  // one it cannot resolve reads every point as before.
+  const visiblePoints = (like: SpreadsheetChartLike, live: SpreadsheetChartV2Live | null) => {
+    const rows = live?.rows;
+    if (!live || !rows || rows.length < 2 || live.headerRow !== true) return live;
+    const projection = chartVisiblePointIndices(
+      like as Parameters<typeof chartVisiblePointIndices>[0],
+      sheets as unknown as Parameters<typeof chartVisiblePointIndices>[1],
+      rows.length - 1,
+      undefined,
+      "data",
+    );
+    if (projection.state !== "resolved" || projection.sourcePointIndices.length === rows.length - 1) return live;
+    return { ...live, rows: projectChartVisibilityRows(rows, projection) };
+  };
   const reconcile = <T extends object>(record: T): T => {
     const like = record as unknown as SpreadsheetChartLike;
     // A PivotChart's cache is its PivotTable's report as it is now, so what
@@ -1232,7 +1254,7 @@ export function withSheetChartModels<S extends ChartModelSheet>(
           like,
           pivotSource
             ? (pivotChartLive?.(pivotSource) ?? null)
-            : spreadsheetChartLiveFromStoredCells(like, own, stored),
+            : visiblePoints(like, spreadsheetChartLiveFromStoredCells(like, own, stored)),
           { sheetIdByName },
         ),
       ) as unknown as T;

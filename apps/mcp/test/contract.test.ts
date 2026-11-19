@@ -48,8 +48,8 @@ function services(engine?: Partial<Engine>): Services {
   return { config, store: new DocumentStore(config.dataDir), engine: { ...none, ...engine }, renderer };
 }
 
-async function connect(svc: Services, views: boolean, listAll = true): Promise<Client> {
-  const server = createServer(svc, { listAll });
+async function connect(svc: Services, views: boolean, listAll = true, owner?: string): Promise<Client> {
+  const server = createServer(svc, { listAll, owner });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await server.connect(serverSide);
   const capabilities = views ? { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [RESOURCE_MIME_TYPE] } } } : {};
@@ -142,6 +142,26 @@ test("one person's machine lists every document; a shared server lists only the 
   assert.equal(text(await other.callTool({ name: "list_documents", arguments: {} })), "No documents yet.");
   assert.match(text(await first.callTool({ name: "list_documents", arguments: {} })), /Mine/);
   assert.match(text(await (await connect(svc, true)).callTool({ name: "list_documents", arguments: {} })), /Mine/);
+});
+
+test("a signed-in server keeps each account's documents to that account, across its sessions, for its retention time", async () => {
+  const svc = services();
+  const alice = await connect(svc, true, false, "user-a");
+  const made = await alice.callTool({ name: "create_document", arguments: { title: "Alice's", content: "# Hers" } });
+  const id = (made.structuredContent as { document: { id: string } }).document.id;
+  // Alice's next session (a reconnect, a new chat) still has it; Bob reaches nothing of hers, even by id
+  assert.match(text(await (await connect(svc, true, false, "user-a")).callTool({ name: "list_documents", arguments: {} })), /Alice's/);
+  const bob = await connect(svc, true, false, "user-b");
+  assert.equal(text(await bob.callTool({ name: "list_documents", arguments: {} })), "No documents yet.");
+  for (const [name, args] of [["get_document", { id }], ["export_document", { id, format: "md" }], ["render_page", { id }], ["update_document", { id, content: "x" }], ["widget_save", { id, name: "x.html", base64: "eA==" }]] as const) {
+    const answer = await bob.callTool({ name, arguments: args });
+    assert.equal(answer.isError, true, name);
+    assert.match(text(answer), /No document/, name);
+  }
+  assert.equal(svc.store.get(id).current.rev, 1);
+  // documents nobody saved for the retention time go
+  assert.equal(svc.store.prune(24 * 3600_000, Date.now() + 2 * 24 * 3600_000), 1);
+  assert.equal(text(await alice.callTool({ name: "list_documents", arguments: {} })), "No documents yet.");
 });
 
 test("open_document never fetches from this machine or a private network", async () => {

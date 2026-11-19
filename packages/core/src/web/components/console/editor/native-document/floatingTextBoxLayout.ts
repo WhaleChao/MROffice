@@ -257,6 +257,36 @@ function cellGeometry(cell: HTMLElement): FloatPageGeometry | null {
  */
 export const FLOAT_PAGE_FROM_CELL_ATTR = "data-float-page-from-cell";
 
+/**
+ * What the float pass wrote on a wrapper to place it out of the flow: its
+ * styles, its page room, its both-sides and shadow specs. A shape's node view
+ * that is no longer floating clears them (`clearFloatLayoutState`): the pass
+ * only visits floating wrappers, so nothing else ever would.
+ *
+ * ProseMirror hands a node view the next node of its type at its place in the
+ * document (`update`), floating or not. An In Line with Text rule drawn by a
+ * view that had held a floating shape kept that shape's `position: absolute`,
+ * its both-sides mark and its page room for good, half a pixel of the page
+ * below it gone (float.docx sheet 7, a 0.05 pt wps rule before "7. Ressourcen
+ * ..."): whether it did turned on which view the page's moves had handed it,
+ * so one opening laid the page out one way and the next another.
+ */
+const FLOAT_LAYOUT_WRAPPER_STYLES = ["position", "left", "top", "float", "clear", "margin", "margin-top", "shape-outside"] as const;
+
+export function clearFloatLayoutState(wrapper: HTMLElement): void {
+  const attributes = [
+    FLOAT_BOTH_SIDES_ATTR,
+    FLOAT_PAGE_ROOM_ATTR,
+    FLOAT_WRAP_DISTANCES_ATTR,
+    FLOAT_SHADOW_SPEC_ATTR,
+    FLOAT_PAGE_FROM_CELL_ATTR,
+    FLOAT_OVERHANG_ATTR,
+  ];
+  for (const name of attributes) if (wrapper.hasAttribute(name)) wrapper.removeAttribute(name);
+  for (const property of FLOAT_LAYOUT_WRAPPER_STYLES) if (wrapper.style.getPropertyValue(property)) wrapper.style.removeProperty(property);
+  if (wrapper.getAttribute("style") === "") wrapper.removeAttribute("style");
+}
+
 function markFloatPageFromCell(wrapper: HTMLElement, fromCell: boolean): void {
   // Written only when it changes: every pass writing it marked the sheet changed.
   if (wrapper.hasAttribute(FLOAT_PAGE_FROM_CELL_ATTR) !== fromCell) {

@@ -298,7 +298,10 @@ export interface PdfNativeTextRuleStanding {
  */
 /** The most rule blocks one text object stands beside: a paragraph set again
  * draws a rule for each ruled run before (after) its one text object. */
-const MAX_STACKED_RULES = 64;
+// (A text object that draws several paragraphs stands beside the rules of
+// each: a format written by state where the text stands leaves its shows in
+// the text object the page drew them in.)
+const MAX_STACKED_RULES = 1024;
 
 export function pdfNativeTextRuleStandingAt(
   streamBytes: Uint8Array,

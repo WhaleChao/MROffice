@@ -167,6 +167,12 @@ export interface SmartArtNativeConvertRequest extends SmartArtLayoutDefinitionFi
    */
   colorsId?: string | null;
   colorTheme?: Partial<SmartArtColorTheme> | null;
+  /**
+   * The diagram's file theme lists (`nativeSmartArtView.hostTheme`): what its
+   * quick style's `a:fillRef` / `a:effectRef` draw when `colorTheme` brings
+   * none of its own (a cache-less diagram printed on the server, TRIAGE S2b).
+   */
+  hostTheme?: unknown;
   /** The author's hand changes the projection read off the data part (checked by the engine). */
   customizations?: unknown;
   /** The graphic's own 3-D Rotation (`nativeSmartArtView.graphicScene3d`), checked by the engine. */

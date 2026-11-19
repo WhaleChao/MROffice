@@ -102,7 +102,7 @@ import { OFFICE_HIT_BOX_ATTRIBUTE, officeHitBandProps, officePaintIsNone } from 
 import { LIGHTING_FILTER_LAYER, OfficeShapeEffectsFrame } from "@mrnote/core/web/components/office-ribbon/OfficeShapeEffectsFrame.tsx";
 import { normalizeOfficeLineSketch, officeEffectsUnderGroupCamera, officeShapeEffectsPaint, officeShapeSilhouetteAlpha, officeSketchSeed } from "@mrnote/core/web/lib/office-shape-effects-paint.ts";
 import { presentationShapeEffects } from "../../../../lib/presentation-shape-effects";
-import { smartArtContourStroke, smartArtShape3dFilter } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
+import { smartArtBevelOutline, smartArtContourStroke, smartArtShape3dFilter } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
 import { legacyLineSlopeFlipsHorizontally } from "@mrnote/core/web/lib/presentation-connectors.ts";
 import {
   blockClaimsNativeGroup,
@@ -634,6 +634,7 @@ function PresentationShapeGraphicBody({
             scene3d={block.scene3d}
             faceSpan={smartArtFaceSpan}
             silhouette={smartArtRimSilhouette}
+            outline={smartArtBevelOutline(normalizeShapeKind(block.shape), block as { rotation?: unknown; flipH?: unknown; flipV?: unknown })}
           />
         ) : null}
         {grad && style.fillGradient?.path?.kind === "rect" ? (

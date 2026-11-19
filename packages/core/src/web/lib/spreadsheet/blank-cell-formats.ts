@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { nearestKnownCellMap } from "./cell-map-lineage";
+import { isMaterializedLineStyleBlank } from "./line-styles";
 /**
  * Formatted blank cells stored as rectangular ranges (`sheet.blankCellFormats`).
  *
@@ -406,9 +407,14 @@ interface TemplateMemo {
 
 const templateMemo = new WeakMap<object, TemplateMemo>();
 
-/** The group identity of a formatted blank, or null for any other cell. */
+
+
+
+
+
+
 function blankTemplateKey(cell: unknown): string | null {
-  if (!isRecord(cell)) return null;
+  if (!isRecord(cell) || isMaterializedLineStyleBlank(cell)) return null;
   const keys = Object.keys(cell);
   const memo = templateMemo.get(cell);
   if (

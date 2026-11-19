@@ -184,3 +184,24 @@ export function pdfNativeTextRuleGeometryOfRange<
     advance: geometry.advance * (range.to - range.from),
   }) as unknown as G;
 }
+
+/**
+ * The rules a box's own proof states under (through) all of its text, as the
+ * editor's rules: a box of several shows or lines states no one run's rule,
+ * and its proof reads them as its paragraph's write does (`textRules`). They
+ * come with the proof -- nothing more is read for them -- so the buttons of
+ * such a box read pressed from the moment it opens: read a moment later, a
+ * press made in that moment asked for a rule the box already had. Null for a
+ * proof that states one run's format (its rule is read beside that run) or
+ * no rule.
+ */
+export function pdfNativeBoxTextRuleDecorations(proof: Readonly<{
+  properties: unknown;
+  textRules?: Readonly<{ underline?: true; strikethrough?: true }>;
+}> | null | undefined): PdfNativeTextRuleDecorations | null {
+  if (!proof || proof.properties || !proof.textRules || (!proof.textRules.underline && !proof.textRules.strikethrough)) return null;
+  return pdfNativeTextRuleDecorations({
+    underline: proof.textRules.underline ? PDF_NATIVE_TEXT_RULE_WHOLE : null,
+    strikethrough: proof.textRules.strikethrough ? PDF_NATIVE_TEXT_RULE_WHOLE : null,
+  });
+}

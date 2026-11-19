@@ -1326,7 +1326,22 @@ export function headerFooterRunsForSegment(
       out.push({ ...run, text });
     }
   }
-  if (out.map((run) => run.text).join("") !== plain) return undefined;
+  const spelled = out.map((run) => run.text).join("");
+  if (spelled !== plain) {
+    // The runs spell the section but for the control characters a run's
+    // text is cleaned of and the plain text keeps (a carriage return a file
+    // ends its line with: " OFFICIAL-SENSITIVE#\r"): each run takes its own
+    // stretch of the plain text, so the two say the same and the fonts stay.
+    // Dropped, every sheet of such a workbook lost its header's fonts at the
+    
+    if (spelled.length !== plain.length || spelled !== plain.replace(HEADER_FOOTER_CONTROL_CHARS_RE, " ")) return undefined;
+    let at = 0;
+    for (let index = 0; index < out.length; index += 1) {
+      const run = out[index]!;
+      out[index] = { ...run, text: plain.slice(at, at + run.text.length) };
+      at += run.text.length;
+    }
+  }
   return out.some(headerFooterRunHasFormat) ? out : undefined;
 }
 

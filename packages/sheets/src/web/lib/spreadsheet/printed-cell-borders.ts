@@ -24,6 +24,23 @@ export const PRINTED_GRID_INSET_PT = 4 * PRINT_DOT_PT;
  * for it and leaves more than the eight dots spare (lookwin p91-lw: every
  * line 0.45-0.5 pt right of and below ours at 50-100%; centred, as far left
  * of and above). The API's writer (`centred_x` / `centred_y`) is the same. */
+/**
+ * How far right of its left margin a printed sheet starts so as to stand no
+ * nearer the paper's left edge than eight printer dots, points: Windows Excel
+ * prints a left margin of 0, 0.005 or 0.01 in where one of 8 dots (0.96 pt)
+ * does, and 0.02 in (12 dots) where it says. The top margin has no such
+ * floor, and the room Fit To fits in is the stated margins' (lookwin p189-lw,
+ * p190-lw; R47-X14, left margin 0: every page printed 8 dots left of
+ * Excel's). A centred block (`room`, `block` and `centred` as
+ * printedGridOffset takes them) is centred in what is left of the width, half
+ * as far right (R48-X01 and R77-X23, margins 0 and centred: 4 dots). The
+ * API's writer the same (notebooks.py PRINTED_LEFT_EDGE_FLOOR_PT).
+ */
+export function printedLeftEdgeFloor(marginLeftPt: number, room: number, block: number, centred: boolean): number {
+  const floor = Math.max(0, 8 * PRINT_DOT_PT - marginLeftPt);
+  return centred && room - block > 2 * PRINTED_GRID_INSET_PT ? floor / 2 : floor;
+}
+
 export function printedGridOffset(room: number, block: number, centred: boolean): number {
   return centred && room - block > 2 * PRINTED_GRID_INSET_PT ? (room - block) / 2 - PRINTED_GRID_INSET_PT : PRINTED_GRID_INSET_PT;
 }

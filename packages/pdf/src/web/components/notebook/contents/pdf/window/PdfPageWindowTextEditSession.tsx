@@ -18,6 +18,7 @@ import {
 import { pdfNativeListTextTargetKey } from "./nativeTextHistory";
 import { nativeRetainedParagraph } from "../../../../../lib/pdf/native-indent-chain";
 import type { PdfNativeTextRuleDecorations } from "../../../../../lib/pdf/native-text-rule-range";
+import type { PdfNativeCoverRules } from "../../../../../lib/pdf/native-cover-rules";
 import type {
   PdfNativeListTextSelectionEvidence,
   PdfNativeListTextSelectionProof,
@@ -134,6 +135,10 @@ export interface PdfPageWindowTextEditSessionModel {
   prepareNativeListTextCandidatePreview: (replacementText: string, propertyDraft: PdfNativeTextPropertyDraft | null, pageHost: HTMLElement, signal: AbortSignal, paragraphChanges?: PdfNativeParagraphPropertyChanges | undefined, paragraphFrame?: PdfNativeParagraphFrameRequest) => Promise<HTMLCanvasElement | null>;
   nativeTextCommitDecision: Readonly<{ enabled: boolean; reasonKey: string | null; reasonLabel: string | null; }>;
   nativeTextDecorations: PdfNativeTextRuleDecorations | undefined;
+  /** The rules beside the open run are still being read (the editor's standingRulesPending). */
+  nativeTextStandingRulesPending: boolean;
+  /** A scanned line's rules beside its invisible words: read, or proved. */
+  nativeCoverRules: PdfNativeCoverRules | undefined;
   executeNativeTextCommitKeepingRules: (replacementText: string, propertyDraft: PdfNativeTextPropertyDraft | null, layoutDraft?: Readonly<{ id: string; page: number; x: number; y: number; width: number; height: number; angle: number; originX: number; originY: number; originWidth: number; originHeight: number; pageWidthPx: number; pageHeightPx: number; fontSize: number; fontFamily?: string | undefined; sourceFontName?: string | undefined; bold: boolean; italic: boolean; color: string; align: "left" | "center" | "right"; underline?: boolean | undefined; strikethrough?: boolean | undefined; justify?: boolean | undefined; characterSpacing?: number | undefined; wordSpacing?: number | undefined; horizontalScale?: number | undefined; }> | null | undefined, paragraphChanges?: PdfNativeParagraphPropertyChanges | undefined, paragraphFrame?: PdfNativeParagraphFrameRequest) => Promise<boolean>;
   pdfFontPickerLabels: { browse: string; search: string; searchPlaceholder: string; recent: string; pinned: string; officeFonts: string; allFonts: string; pin: string; unpin: string; available: string; missing: string; unverified: string; browseUnsupported: string; browseDenied: string; browseFailed: string; noResults: string; variants: string; mixed: string; };
   nativeParagraphJustifiable: boolean;
@@ -218,6 +223,8 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
     prepareNativeListTextCandidatePreview,
     nativeTextCommitDecision,
     nativeTextDecorations,
+    nativeTextStandingRulesPending,
+    nativeCoverRules,
     executeNativeTextCommitKeepingRules,
     pdfFontPickerLabels,
     nativeParagraphJustifiable,
@@ -312,6 +319,8 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
         nativeListTextDialogProofRef.current?.move ?? null}
       nativeGroupMoveProof={nativeListTextDialogProofRef.current?.groupMove ?? null}
       sourceAppearance={nativeListTextDialogProofRef.current?.sourceAppearance}
+      boxDrawnStyle={nativeListTextDialogProofRef.current?.drawnStyle}
+      type3PicturesOnly={nativeListTextDialogProofRef.current?.type3Pictures === true}
       // Until the proof lands, the glyphs read from the loaded page: the
       // caret is drawn on them from the first moment, not the textarea's.
       sourceGeometry={(() => {
@@ -395,6 +404,8 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
       onApply={applyAsCommitted}
       onDeleteTextObject={commitNativeTextObjectDelete}
       {...(nativeTextDecorations ? { nativeTextDecorations } : {})}
+      standingRulesPending={nativeTextStandingRulesPending}
+      {...(nativeCoverRules ? { nativeCoverRules } : {})}
       // The indent earlier saves wrote into this run (native-indent-chain).
       {...(() => {
         const retained = nativeRetainedParagraph(

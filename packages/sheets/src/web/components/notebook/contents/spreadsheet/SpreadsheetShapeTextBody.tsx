@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { stackPrimaryFamily } from "@mrnote/core/web/lib/office-fonts/hangul-em.ts";
 import { ptToPx } from "@mrnote/core/web/lib/office-units.ts";
 import { OFFICE_SCENE_LABEL_LINE_SPACING } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import { OfficeTextWarpMarker } from "@mrnote/core/web/components/office-text-warp/OfficeTextWarpMarker.tsx";
@@ -14,6 +15,7 @@ import { OFFICE_HIT_TEXT_ATTRIBUTE } from "@mrnote/core/web/components/office-ri
 import { officeShapeTextFontCss } from "@mrnote/core/web/lib/office-shape-text-font.ts";
 import { officeTextPaintCss } from "@mrnote/core/web/lib/office-text-paint.ts";
 import { spreadsheetShapeFontStack } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { officeSymbolMarker } from "../../../../lib/spreadsheet/office-symbol-fonts";
 import { cellTextRunCss, cellTextRunsInRange } from "@mrnote/core/web/lib/presentation-cell-rich-text.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-runs.ts";
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -87,7 +89,7 @@ export function spreadsheetShapeEastAsianLine(fontStack: string): number | null 
  */
 export function spreadsheetShapeSingleLine(shape: SpreadsheetShapeStyle, framed = false): number {
   if (framed || shape.smartArtStyle !== undefined) return SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
-  const face = shape.textFontFamily?.split(",")[0]?.trim().replace(/^["']|["']$/g, "");
+  const face = shape.textFontFamily ? stackPrimaryFamily(shape.textFontFamily) : undefined;
   if (!face || !normalizeOfficeTextLayout(shape.textLayout)?.bodyPr) return SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT;
   const metrics = wordGridFontLineMetrics(face);
   const line = metrics ? metrics.box + metrics.lineGap : NaN;
@@ -188,6 +190,33 @@ export function spreadsheetShapeTextPaintCss(
 }
 
 /**
+ * Each paragraph's own font size, CSS px: the largest its runs state, where
+ * every run of the paragraph states one (else undefined: the label's size).
+ * Excel steps a paragraph's lines by its own text's size; a paragraph block
+ * left at the label's size stands every line of smaller runs on the label's
+ * taller line box (R452-X59's notes: 10 pt paragraphs in a 12 pt label drew
+ * 15.9 pt apart where Windows Excel's stand 13.2, 40 pt down a page).
+ * For the label's own words, or words typed over them in as many paragraphs;
+ * null otherwise.
+ */
+function shapeParagraphRunSizes(shape: SpreadsheetShapeStyle, text: string): (number | undefined)[] | null {
+  const own = shape.text ?? "";
+  const runs = runsSpelling(shape.textRuns, own);
+  if (!runs) return null;
+  const sizes: (number | undefined)[] = [];
+  let start = 0;
+  for (const paragraph of own.split("\n")) {
+    const end = start + paragraph.length;
+    const stated = cellTextRunsInRange(runs, { start, end }).map((run) => run.style?.fontSize);
+    sizes.push(stated.length > 0 && stated.every((size): size is number => typeof size === "number" && size > 0)
+      ? Math.max(...(stated as number[]))
+      : undefined);
+    start = end + 1;
+  }
+  return text === own || text.split("\n").length === sizes.length ? sizes : null;
+}
+
+/**
  * Whether a label draws lines one flow cannot: a marker, a margin or a
  * line's own alignment (a package's bullets and paragraphs).
  */
@@ -222,11 +251,13 @@ export function spreadsheetShapeEditorParagraphs(
   );
   const ownAlign = shapeOwnAlign(shape);
   const fontSize = shapeTextSize(shape);
-  return officeTextLayoutLines(text, layout).map((line) => {
-    const css = shapeTextLineCss(line, ownAlign ?? (textBox ? "left" : "center"), ownAlign, fontSize, spreadsheetShapeSingleLine(shape));
+  const runSizes = shapeParagraphRunSizes(shape, text);
+  return officeTextLayoutLines(text, layout).map((line, index) => {
+    const css = shapeTextLineCss(line, ownAlign ?? (textBox ? "left" : "center"), ownAlign, runSizes?.[index] ?? fontSize, spreadsheetShapeSingleLine(shape));
+    if (runSizes?.[index] !== undefined && runSizes[index] !== fontSize) css.block.fontSize = `${runSizes[index]}px`;
     return {
       block: css.block,
-      ...(line.marker !== null ? { marker: { text: line.marker, css: css.marker } } : {}),
+      ...(line.marker !== null ? { marker: { text: shapeLineMarkerText(line), css: css.marker } } : {}),
     };
   });
 }
@@ -434,6 +465,7 @@ export function SpreadsheetShapeTextBody({
         });
       })()
     : null;
+  const paragraphRunSizes = drawsLayout ? shapeParagraphRunSizes(shape, text) : null;
   const content: ReactNode = drawsLayout ? (
       <span
         data-spreadsheet-shape-text="layout"
@@ -451,6 +483,7 @@ export function SpreadsheetShapeTextBody({
             fallbackAlign={ownAlign ?? (textBox ? "left" : "center")}
             ownAlign={ownAlign}
             fontSize={fontSize}
+            runSize={paragraphRunSizes?.[index]}
             single={single}
             words={
               lineRuns?.[index]?.length
@@ -559,6 +592,17 @@ const CSS_ALIGN: Readonly<Record<string, "left" | "center" | "right" | "justify"
     distribute: "justify",
   };
 
+/**
+ * A line's marker as the sheet draws it: a bullet set in a symbol face
+ * (`a:buFont` Symbol or Wingdings) is the symbol its code stands for, drawn
+ * in the body's own font, as Excel prints it; any other marker as written
+ * (lookwin R452-X59).
+ */
+function shapeLineMarkerText(line: OfficeTextLine): string {
+  if (line.marker === null) return "";
+  return officeSymbolMarker(line.markerTypeface, line.marker) ?? line.marker;
+}
+
 /** Whether a line states its own paragraph spacing. */
 function lineSpaced(line: OfficeTextLine): boolean {
   return line.lineSpacing !== undefined || Boolean(line.spaceBeforePx) || Boolean(line.spaceAfterPx);
@@ -621,11 +665,14 @@ function ShapeTextLine({
   fallbackAlign,
   ownAlign,
   fontSize,
+  runSize,
   words,
   eastAsianLine = null,
   single = SPREADSHEET_SHAPE_TEXT_LINE_HEIGHT,
 }: {
   line: OfficeTextLine;
+  /** The paragraph's own font size (shapeParagraphRunSizes), when its runs state one. */
+  runSize?: number;
   /** Office's East Asian line, per em, for a line holding East Asian text;
    * 0 for a Latin line in such a body (it keeps the 1.2 line); null when
    * the body has none (the line keeps its own CSS). */
@@ -639,7 +686,8 @@ function ShapeTextLine({
   /** The body's single line, per em (`spreadsheetShapeSingleLine`). */
   single?: number;
 }) {
-  const css = shapeTextLineCss(line, fallbackAlign, ownAlign, fontSize, single);
+  const css = shapeTextLineCss(line, fallbackAlign, ownAlign, runSize ?? fontSize, single);
+  if (runSize !== undefined && runSize !== fontSize) css.block.fontSize = `${runSize}px`;
   if (eastAsianLine !== null) {
     css.block.lineHeight = Math.max(single, eastAsianLine) * (line.lineSpacing ?? 1);
   }
@@ -647,7 +695,7 @@ function ShapeTextLine({
     <span data-spreadsheet-shape-line={line.marker === null ? "plain" : "marked"} style={css.block}>
       {line.marker !== null ? (
         <span aria-hidden="true" style={css.marker}>
-          {line.marker}
+          {shapeLineMarkerText(line)}
         </span>
       ) : null}
       {words ?? (line.text || "\u200b")}

@@ -16,6 +16,7 @@ import {
   computePageBreakLines,
   normalizePrintSettings,
   paginateSheet,
+  printPageSparePoints,
   printedColumnPoints,
   printedRowPoints,
   parseA1Range,
@@ -247,6 +248,38 @@ export function printedCellWidensRange(cell: { value?: unknown; formula?: unknow
   const border = Boolean(style.border) || Boolean(style.borderEdges) || Boolean(style.borderTop || style.borderBottom || style.borderLeft || style.borderRight);
   const valued = (typeof cell.value === "string" && cell.value !== "") || (typeof cell.formula === "string" && cell.formula !== "");
   return valued || fill || border || Boolean(style.pattern) || Boolean(style.gradientFill);
+}
+
+/**
+ * The blanks that widen the printed range though they only show their row's
+ * or column's format: those painted with it (a fill or a border,
+ * printedCellWidensRange) inside the range the file's own cells occupy
+ * (`occupied`, the import's occupiedExtent). Excel's used range is that
+ * range, and it prints the line's paint across it; the same format past it
+ * is the line's alone and prints nothing (RO046, R105-X05). The API's writer
+ * counts the same (sheet_extent). R453-X52: every column filled white and
+ * K5 a cell of its own carrying a font; Excel prints A:G, then the white
+ * H:K on a second page. `own` is `cells` less the blanks a line format
+ * fully describes (compactLineStyleCells).
+ */
+export function printedOccupiedLineBlanks(
+  cells: Readonly<Record<string, unknown>>,
+  own: Readonly<Record<string, unknown>>,
+  occupied: unknown,
+): string[] {
+  const extent = occupied && typeof occupied === "object" ? occupied as { rows?: unknown; cols?: unknown } : null;
+  const rows = typeof extent?.rows === "number" ? extent.rows : 0;
+  const cols = typeof extent?.cols === "number" ? extent.cols : 0;
+  if (!(rows > 0) || !(cols > 0) || cells === own) return [];
+  const keys: string[] = [];
+  for (const key in cells) {
+    if (key in own) continue;
+    const separator = key.indexOf(":");
+    if (separator <= 0 || !(Number(key.slice(0, separator)) < rows) || !(Number(key.slice(separator + 1)) < cols)) continue;
+    const cell = cells[key];
+    if (cell && typeof cell === "object" && printedCellWidensRange(cell as { value?: unknown; formula?: unknown; style?: Record<string, unknown> })) keys.push(key);
+  }
+  return keys;
 }
 
 /**
@@ -797,19 +830,36 @@ function resolveContentScale(
     return Math.max(0.1, Math.min(4, scaling.percent / 100));
   }
   const input = fitTitlesTwice(pageInput, titlesTwice);
+  // A column (row) wider (taller) than the page is a page of its own at any
+  // scale, so the page count alone never asks Fit To to shrink it: Windows
+  // Excel shrinks until it fits the page (R450-X05's Contents, a 188.6-wide
+  // column A fitted 1 x 1, prints at 46 %; the API's writer fits the whole
+  // columns too). Its widest one, judged at its printed width.
+  const widest = (sizes: readonly number[] | undefined, fallback: number) => {
+    let most = fallback;
+    for (const size of sizes ?? []) if (Number.isFinite(size) && size > most) most = size;
+    return most;
+  };
+  const widestCol = widest(input.colSizes, input.colWidth);
+  const tallestRow = widest(input.rowSizes, input.rowHeight);
+  const spare = printPageSparePoints(scaling);
+  const colFits = (scale: number) =>
+    printedColumnPoints(widestCol, scale) + (input.headingWidth ?? 0) * scale <= input.dataAreaWidth - spare + 1e-6;
+  const rowFits = (scale: number) =>
+    printedRowPoints(tallestRow, scale) + (input.headingHeight ?? 0) * scale <= input.dataAreaHeight - spare + 1e-6;
   const fits = (scale: number) => {
     const result = pageCountAtScale(input, scale);
     if (scaling.kind === "fitToWidth") {
-      return result.pagination.colRanges.length <= Math.max(1, scaling.pages);
+      return result.pagination.colRanges.length <= Math.max(1, scaling.pages) && colFits(scale);
     }
     if ("pages" in scaling) {
-      return result.pageCount <= Math.max(1, scaling.pages);
+      return result.pageCount <= Math.max(1, scaling.pages) && colFits(scale) && rowFits(scale);
     }
     return (
       (scaling.widthPages === 0 ||
-        result.pagination.colRanges.length <= scaling.widthPages) &&
+        (result.pagination.colRanges.length <= scaling.widthPages && colFits(scale))) &&
       (scaling.heightPages === 0 ||
-        result.pagination.rowRanges.length <= scaling.heightPages)
+        (result.pagination.rowRanges.length <= scaling.heightPages && rowFits(scale)))
     );
   };
   // Excel Fit To shrinks only, and its print scale remains within 10–400%.

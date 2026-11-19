@@ -138,6 +138,15 @@ export interface SmartArtTextShape3d {
  * writers turn into `a:lin ang="5400000"` (SMARTART-STYLES.md §2). Stating it
  * in DrawingML degrees here wrote a left→right gradient into every file.
  */
+/**
+ * A path gradient's shading (`a:path@path`) and focus box (`a:fillToRect`
+ * insets, 1/1000 %), as the shared paint states it (`OfficeShapeGradient.path`).
+ */
+export interface SmartArtGradientPath {
+  kind: "circle" | "rect" | "shape";
+  fillToRect?: { l?: number; t?: number; r?: number; b?: number };
+}
+
 export interface SmartArtFillGradient {
   /** The style tables' ramps are 180; a host theme's own fill style states its own (`theme-effects`). */
   angle: number;
@@ -145,6 +154,12 @@ export interface SmartArtFillGradient {
   /** `a:lin@scaled` and `a:gradFill@rotWithShape` as the host theme's fill style states them. */
   scaled?: boolean;
   rotWithShape?: boolean;
+  
+
+
+
+
+  path?: SmartArtGradientPath;
 }
 
 /**
@@ -281,12 +296,23 @@ export function smartArtGradientOfficePaint(gradient: SmartArtFillGradient): {
   stops: { position: number; color: string }[];
   scaled?: boolean;
   rotWithShape?: boolean;
+  path?: SmartArtGradientPath;
 } {
   return {
     angle: smartArtGradientCanvasCompanions(gradient).gradientAngle,
     stops: gradient.stops.map((stop) => ({ ...stop })),
     ...(gradient.scaled !== undefined ? { scaled: gradient.scaled } : {}),
     ...(gradient.rotWithShape !== undefined ? { rotWithShape: gradient.rotWithShape } : {}),
+    // A path gradient keeps its shading and focus (the host paint draws and
+    // writes `a:path`; the angle beside it is dropped there).
+    ...(gradient.path
+      ? {
+          path: {
+            kind: gradient.path.kind,
+            ...(gradient.path.fillToRect ? { fillToRect: { ...gradient.path.fillToRect } } : {}),
+          },
+        }
+      : {}),
   };
 }
 

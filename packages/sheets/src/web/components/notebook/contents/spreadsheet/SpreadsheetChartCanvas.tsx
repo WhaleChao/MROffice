@@ -678,13 +678,19 @@ function SpreadsheetChartCanvasDrawn({
                   if (dataTable) setTablePicture(picture);
                 }}
               >
-                {/* Until its first picture: the editors' loading card, not a
-                    blank chart area. */}
+                {
+
+
+
+
+
+}
                 <div
                   data-testid="spreadsheet-chart-loading"
+                  data-chart-loading-idle={active ? undefined : "true"}
                   style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}
                 >
-                  <EditorLoadingState kind="dashboard" compact label={t("block.chart.v2.loading")} announce={false} />
+                  {active ? <EditorLoadingState kind="dashboard" compact label={t("block.chart.v2.loading")} announce={false} /> : null}
                 </div>
               </OfficeChartPicture>
             </div>

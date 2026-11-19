@@ -561,6 +561,38 @@ export interface CollaborativeTextEdit {
    * [start, end) / `insert` is the covering one. Written place by place, not
    * as the covering splice, so the letters between keep their identity. */
   splices?: readonly TextSplice[];
+  /**
+   * An edit placed by its words, not typed (an AI rewrite and its undo,
+   * TRIAGE 49): written only where every one of its splices keeps its place
+   * over what a collaborator changed since `base`; one that falls on such a
+   * change is never merged by comparing texts -- the room keeps its words and
+   * the writer is told (`onAmbiguousText`), whatever it would choose.
+   */
+  strict?: boolean;
+}
+
+/**
+ * `splices` of `base` moved onto `onto`, a text a collaborator changed from
+ * `base` (each kept against the characters around it, as a key typed on
+ * `base` is carried); null when any of them falls on that change, or where
+ * the change's place is a guess near it (TRIAGE 47, 49).
+ */
+export function rebaseTextSplices(base: string, splices: readonly TextSplice[], onto: string): TextSplice[] | null {
+  if (onto === base) return splices.map((splice) => ({ ...splice }));
+  // A change at the very edge of a word the rewrite writes is a change of
+  // that word ("brown" -> "brownish" against "brown" -> "red"): kept apart,
+  // it would make a word of the two ("redish").
+  const peer = textSplice(base, onto);
+  const wordy = (char: string | undefined) => char !== undefined && /[\p{L}\p{M}\p{N}_]/u.test(char);
+  for (const splice of splices) {
+    const touchesEnd = peer.start === splice.end &&
+      (wordy(base[splice.end - 1]) || wordy(splice.insert.slice(-1))) && (wordy(peer.insert[0]) || wordy(base[peer.end]));
+    const touchesStart = peer.end === splice.start &&
+      (wordy(base[splice.start]) || wordy(splice.insert[0])) && (wordy(peer.insert.slice(-1)) || wordy(base[peer.start - 1]));
+    if (touchesEnd || touchesStart) return null;
+  }
+  const moved = splices.map((splice) => rebaseTextEdit({ base, ...splice }, onto));
+  return moved.every((splice): splice is TextSplice => splice !== null) ? moved : null;
 }
 
 /**
@@ -669,7 +701,7 @@ export function collaborativeTextEditsFor(
   root: Y.Map<unknown>,
   noted: ReadonlyArray<CollaborativeTextEdit & { path: readonly string[] }>,
 ): Map<Y.Text, CollaborativeTextEdit> | undefined {
-  const chains = new Map<Y.Text, { base: string; text: string; edits: TextSplice[] } | null>();
+  const chains = new Map<Y.Text, { base: string; text: string; edits: TextSplice[]; own?: readonly TextSplice[]; strict: boolean } | null>();
   for (const { path, ...edit } of noted) {
     const text = collaborativeTextAt(root, path);
     if (!text) continue;
@@ -677,21 +709,28 @@ export function collaborativeTextEditsFor(
     const chain = chains.get(text);
     if (chain === null) continue;
     const step = { start: edit.start, end: edit.end, insert: edit.insert };
-    if (chain === undefined) chains.set(text, { base: edit.base, text: applyCollaborativeTextEdit(edit), edits: [step] });
-    else if (chain.text === edit.base) { chain.text = applyCollaborativeTextEdit(edit); chain.edits.push(step); }
-    else chains.set(text, null);
+    if (chain === undefined) {
+      chains.set(text, { base: edit.base, text: applyCollaborativeTextEdit(edit), edits: [step], own: edit.splices, strict: edit.strict === true });
+    } else if (chain.text === edit.base) {
+      chain.text = applyCollaborativeTextEdit(edit); chain.edits.push(step); chain.own = undefined;
+      chain.strict ||= edit.strict === true;
+    } else chains.set(text, null);
   }
   let out: Map<Y.Text, CollaborativeTextEdit> | undefined;
   for (const [text, chain] of chains) {
     if (!chain) continue;
     // Where each key was typed, not where a comparison of the two texts
     // would put them (TRIAGE 47).
-    const splices = composeTextEditChain(chain.base, chain.edits);
+    // One edit placed by its words keeps them as it gave them (an AI
+    // rewrite's word splices, TRIAGE 49); a chain of keys is composed.
+    const splices = chain.own && chain.edits.length === 1 ? [...chain.own] : composeTextEditChain(chain.base, chain.edits);
     if (!splices || splices.length === 0) continue;
     const first = splices[0], last = splices[splices.length - 1];
     const start = first.start, end = last.end;
     const insert = chain.text.slice(start, chain.text.length - (chain.base.length - end));
-    (out ??= new Map()).set(text, { base: chain.base, start, end, insert, ...(splices.length > 1 ? { splices } : {}) });
+    (out ??= new Map()).set(text, {
+      base: chain.base, start, end, insert, ...(splices.length > 1 ? { splices } : {}), ...(chain.strict ? { strict: true } : {}),
+    });
   }
   return out;
 }
@@ -1405,6 +1444,9 @@ export function resolveCollaborativeTextAnchor(text: Y.Text, anchor: Y.RelativeP
 
 /** The edits `applyJsonDelta` writes exactly, by the room text they edit. */
 let exactTextEdits: ReadonlyMap<Y.Text, CollaborativeTextEdit> | null = null;
+/** Strict edits (`CollaborativeTextEdit.strict`) refused so far: a refused
+ * text's formatting is not written either (it is measured from its words). */
+let strictTextRefusals = 0;
 /** A text `applyTextDelta` could not merge (`mergeText3` null), told to the writer. */
 export interface AmbiguousTextWrite {
   /** The text as the room holds it (kept as it is). */
@@ -2861,11 +2903,15 @@ function applyFormattedText(
     // Keys are inserted with the formatting they are to have (see insertFormatting).
     const outerFormatting = insertFormatting;
     insertFormatting = wanted;
+    const refusedBefore = strictTextRefusals;
     try {
       if (applyTextDelta(block, COLLABORATIVE_TEXT_KEY, text, nextText, previousText)) touched = true;
     } finally {
       insertFormatting = outerFormatting;
     }
+    // Its words refused (a strict edit over a collaborator's change): the room
+    // keeps them with their formatting.
+    if (strictTextRefusals !== refusedBefore) return { owned, touched };
     // An edit typed on a text the room had moved past (see applyTextDelta):
     // the formatting is measured from that text, and the author's earlier
     // formatting is not known of it -- the author's characters are written
@@ -3468,6 +3514,19 @@ function applyTextDelta(
     if (room === next) {
       // The editor's text is the room's: every character of it was drawn.
       undrawnTextItems?.drawn(current);
+      return false;
+    }
+    if (edit?.strict && ownTextEdit(edit, next)) {
+      // Placed by its words (TRIAGE 49): each splice where it stands over a
+      // collaborator's change since its base, or nothing at all.
+      const typed = edit.splices ?? [edit];
+      const moved = rebaseTextSplices(edit.base, typed, room);
+      if (moved) {
+        undrawnTextItems?.drawn(current);
+        return writeSplices(current, moved, spliceTargets(typed));
+      }
+      ambiguousTextHandler?.({ room, mine: next, base: edit.base });
+      strictTextRefusals += 1;
       return false;
     }
     if (edit && room === previous && validTextEdit(edit, previous, next)) {

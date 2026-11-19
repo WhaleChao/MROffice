@@ -677,6 +677,13 @@ export function paintTextWarpSurface(canvas: HTMLCanvasElement, options: TextWar
       }
     }
   }
+  // The canvas's own turn from the last paint comes off too: it is placed
+  // and measured level, then turned again below.
+  if (canvas.hasAttribute(TEXT_WARP_TURNED_ATTRIBUTE)) {
+    canvas.style.transform = "";
+    canvas.style.transformOrigin = "";
+    canvas.removeAttribute(TEXT_WARP_TURNED_ATTRIBUTE);
+  }
   try {
     const painted = paintTextWarpSurfaceUnturned(canvas, options);
     // A canvas outside the turned element (a body frame's, laid over its
@@ -695,10 +702,6 @@ export function paintTextWarpSurface(canvas: HTMLCanvasElement, options: TextWar
       canvas.style.transformOrigin = `${(at.left + at.width / 2 - origin.left) / zoom}px ${(at.top + at.height / 2 - origin.top) / zoom}px`;
       canvas.style.transform = turns;
       canvas.setAttribute(TEXT_WARP_TURNED_ATTRIBUTE, "");
-    } else if (canvas.hasAttribute(TEXT_WARP_TURNED_ATTRIBUTE)) {
-      canvas.style.transform = "";
-      canvas.style.transformOrigin = "";
-      canvas.removeAttribute(TEXT_WARP_TURNED_ATTRIBUTE);
     }
     return painted;
   } finally {

@@ -944,6 +944,17 @@ const InlineMath = Node.create<InlineMathOptions>({
         parseHTML: () => null,
         renderHTML: () => ({}),
       },
+      // The side Word sets this display equation at: its own justification
+      // (`m:oMathParaPr/m:jc`, else the document's `m:defJc`), which the file
+      // states apart from its paragraph's alignment and Word alone follows.
+      // Only a reading that knows it states it ("left" / "right" / "center");
+      // a page read before states none and keeps its centred equation.
+      mathJustification: {
+        default: null,
+        keepOnSplit: false,
+        parseHTML: () => null,
+        renderHTML: () => ({}),
+      },
     };
   },
 

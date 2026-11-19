@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { firstLayoutHoldsFaces } from "./paged/coldFirstLayout";
 import { isWordLineMultiple, ptToPx } from "../../../../lib/office-units";
 import { createBackgroundLane, requestLaneFrame } from "../../../../lib/background-work";
 import { deferWhileSurfaceGlides } from "./surfaceGlide";
@@ -2574,6 +2575,9 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
         };
         const schedule = () => {
           if (!win || destroyed || holdForSourceFonts() || frame !== null || !hasProjectionWork()) return;
+          // The first layout waits for the document's faces: measured once
+          // they are in, at the ledger's flush (coldFirstLayout).
+          if (firstLayoutHoldsFaces(view.dom, schedule, "auto-line-spacing")) return;
           writeDocumentLayoutStatus(view.dom, DOCUMENT_AUTO_LINE_SPACING_PENDING, "true", view);
           // Flushable: the page ledger asks for the measurement in the frame
           // of the keystroke (`mrn-layout-metrics-flush`), so the page it
@@ -2665,6 +2669,7 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
             pendingMeasure = () => measure(true);
             frame = requestLaneFrame(measureLane, () => {
               pendingMeasure = null;
+              if (firstLayoutHoldsFaces(view.dom, () => { frame = null; schedule(); }, "auto-line-spacing")) return;
               measure();
             }, win);
           };

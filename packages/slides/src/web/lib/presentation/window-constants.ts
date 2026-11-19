@@ -60,6 +60,13 @@ export const EQUATION_BOX_FIT_COMMIT = "equation-box-fit";
 
 export const TABLE_FRAME_FIT_COMMIT = "table-frame-fit";
 
+
+
+
+
+export const FIT_QUIET_MS = 1_500;
+export const FIT_QUIET_POLL_MS = 250;
+
 /** A text box's frame following its words (Resize shape to fit text,
  * `presentation-text-fit`): part of the edit that changed the words, never an
  * undo step of its own. */

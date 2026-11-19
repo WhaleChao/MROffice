@@ -1028,7 +1028,12 @@ async function downloadPageExportFile(given: PageExportRequest): Promise<PageExp
 
 async function downloadPlainPageExport(request: PageExportRequest): Promise<PageExportDownloadLosses> {
   if (request.fillableForm && request.format === "pdf") return downloadFillablePdfExport(request);
-  const response = await requestPageExport(request, "link");
+  // An embedded editor reads the file itself: a link it navigated to would,
+  // refused or expired, put the storage provider's error page in place of
+  // the editor in the partner's page, and the host may take the file as bytes
+  // (lib/embed/frame-downloads).
+  const embedded = (globalThis as Record<string, unknown>).__mroEmbedSessionSignedIn === true;
+  const response = await requestPageExport(request, embedded ? "bytes" : "link");
   const losses = pageExportDownloadLosses(response.headers);
   const extension = FORMAT_EXTENSION[request.format];
   const fallback = `page-export.${extension}`;

@@ -480,7 +480,7 @@ export function PresentationTextVisualContents({
   const buildParagraphs =
     paragraphs ??
     ((paragraphPlay || blockSpacesParagraphs) && block.text.includes("\n")
-      ? paragraphBuildRows(block.text, flatRuns)
+      ? paragraphBuildRows(block.text, flatRuns, undefined, block)
       : undefined);
   // The text engine's drawing (`PresentationEngineTextBody`): an imported
   // body at rest, on the surfaces that ask for it, laid out line by line as
@@ -491,7 +491,7 @@ export function PresentationTextVisualContents({
   // Planned on every drawing, as the browser-flowed rows are: the body's
   // layout above is too, and the engine's measurements are cached by text.
   const engineRows = (() => {
-    const rows = buildParagraphs ?? (block.text ? paragraphBuildRows(block.text, flatRuns, (block as { endLatinFace?: unknown }).endLatinFace) : null);
+    const rows = buildParagraphs ?? (block.text ? paragraphBuildRows(block.text, flatRuns, (block as { endLatinFace?: unknown }).endLatinFace, block) : null);
     if (!rows || !rows.length) return null;
     return planPresentationParagraphRows({
       paragraphs: rows,

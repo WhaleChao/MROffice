@@ -45,7 +45,7 @@ interface BandTabState {
   lost: boolean;
 }
 
-const bandTabLayoutKey = new PluginKey<BandTabState>("bandTabLayout");
+export const bandTabLayoutKey = new PluginKey<BandTabState>("bandTabLayout");
 
 interface TabbedLine {
   /** Document positions of the line's tab characters. */
@@ -148,6 +148,11 @@ const HOLDS_TAB = new SheetFact((node) => node.isText && (node.text ?? "").inclu
 
 /** The document's tabbed lines as read for layout: their tabs and the text
  * each tab aligns (exported for tests). */
+/** The tab widths of `view`'s tabbed lines as one pass reads them (tests). */
+export function measureTabsForTest(view: EditorView): ReturnType<typeof measure> {
+  return measure(view);
+}
+
 export function tabbedLinesForTest(doc: PmNode): Pick<TabbedLine, "tabs" | "segments" | "contentStart" | "contentEnd">[] {
   return tabbedLines(doc).map(({ tabs, segments, contentStart, contentEnd }) => ({ tabs, segments, contentStart, contentEnd }));
 }
@@ -521,6 +526,52 @@ export function settledRound(rounds: TabRounds | null, block: PmNode | null | un
   return narrowest ? { ...narrowest.tabs, wrapped: false } : tabs;
 }
 
+/** Off with `window.__docsTabsUnjustifiedOff = true`: tabs read where a
+ * justified line draws them, as before. */
+function tabsUnjustifiedOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabsUnjustifiedOff?: boolean }).__docsTabsUnjustifiedOff === true;
+}
+
+/**
+ * Lay the justified paragraphs among `lines` out unjustified while their tabs
+ * are read, by a rule in the document's head (no mutation inside the editor:
+ * its observers see nothing). Returns the rule's element to remove, or null.
+ *
+ * Word sets a line's tabs before it justifies the line: where a tab stands is
+ * the width of the text before it, not that text stretched. Read off a
+ * justified line, a tab's place moved with the stretch of the spaces before it,
+ * the stretch with the line's slack, and the slack with the tab's own width: a
+ * paragraph whose first line held one word more or less with each width had no
+ * widths that held (R282-D25: " <Tab><Tab>Ο προϋπολογισμός...", 47 px and 63 px
+ * in turn, two lines and three), and the count of settling passes chose
+ * between them, so one opening laid the page out on two lines and the next on
+ * three. Read unjustified, the widths depend on the text alone. The browser
+ * breaks the line before it justifies it, so the breaks are the ones these
+ * widths give.
+ */
+function unjustifyTabbedBlocks(view: EditorView, lines: readonly TabbedLine[]): HTMLStyleElement | null {
+  const doc = view.dom.ownerDocument;
+  const win = doc.defaultView;
+  if (!win || tabsUnjustifiedOff()) return null;
+  const selectors = new Set<string>();
+  for (const line of lines) {
+    const block = view.nodeDOM(line.blockPos);
+    if (!(block instanceof HTMLElement)) continue;
+    const id = block.getAttribute("data-block-id");
+    if (!id) continue;
+    const align = win.getComputedStyle(block).textAlign;
+    if (align !== "justify") continue;
+    const escaped = typeof win.CSS?.escape === "function" ? win.CSS.escape(id) : id.replace(/["\\]/g, "\\$&");
+    selectors.add(`[data-block-id="${escaped}"]`);
+  }
+  if (!selectors.size) return null;
+  const style = doc.createElement("style");
+  style.setAttribute("data-band-tabs-unjustified", "");
+  style.textContent = `${[...selectors].join(",")} { text-align: start !important; text-align-last: start !important; }`;
+  (doc.head ?? doc.documentElement).appendChild(style);
+  return style;
+}
+
 function measure(view: EditorView, rounds: TabRounds | null = null): { set: DecorationSet; key: string; wrapped: boolean; deferred: boolean; firstRead: boolean } | null {
   const root = view.dom as HTMLElement;
   const width = root.offsetWidth;
@@ -738,6 +789,7 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
     // line is kept too).
     const keptLines: [number, number][] = [];
     const laidTabs: { tab: number; pen: number; advance: number; leader: ReturnType<typeof wordTabLeader> }[] = [];
+    let movedTo: number | null = null;
     for (const [index, tab] of line.tabs.entries()) {
       // A tab after the Shift+Enter that ended the kept line stands on a
       // line of its own again.
@@ -749,7 +801,15 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       // and a pen read there took it to the line's first stop again -- the
       // tab after a right stop's text went back to that stop, repeated its
       // leader and pushed the rest onto a second line for good (WUA 171).
-      if (wraps && overFrom === null) {
+      // (A tab right after the one before, nothing between them, stands
+      // where that one ends: read off the page, its place moved with where
+      // the browser had drawn it -- at the end of the first line or at the
+      // start of the next, by the widths the pass before gave -- and the two
+      // widths it went to in turn each put it at the other place (R282-D25's
+      // second tab, 47.5 px and 96 px).)
+      const followsTab = !tabsUnjustifiedOff() && index > 0 && segments[index]!.widthPx === 0 &&
+        tab !== line.contentStart && !lineEndsBefore(view.state.doc, tab);
+      if (wraps && overFrom === null && !followsTab) {
         const startsLine =
           tab === line.contentStart || lineEndsBefore(view.state.doc, tab);
         pen = (view.coordsAtPos(tab, startsLine ? 1 : -1).left - origin) / scale;
@@ -861,6 +921,7 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
         // a picture after a stop 0.6 pt short of the margin takes the tab to
         // the next line). A box that wide does not fit what is left here, so
         // it is drawn there.
+        movedTo = line.indentLeftPx;
         advance = wordTabAdvanceAt({
           penPx: line.indentLeftPx,
           next: segments[index + 1],
@@ -879,7 +940,9 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       // hold them, so nothing is dispatched.
       lineKeys.push(`${index}:${advance}:${leader}`);
       laidTabs.push({ tab, pen, advance, leader });
-      pen += advance + segments[index + 1].widthPx;
+      // A tab Word starts the next line with ends from that line's start.
+      pen = (movedTo !== null && !tabsUnjustifiedOff() ? movedTo : pen) + advance + segments[index + 1].widthPx;
+      movedTo = null;
     }
     for (const { tab, pen: at, advance, leader } of laidTabs) {
       if (keptLines.some(([from, to]) => tab >= from && tab < to)) {
@@ -933,31 +996,39 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
   let deferred = false;
   let firstRead = false;
   const restore = !tabRestoreOff();
-  for (const [lineIndex, line] of tabbedLines(view.state.doc).entries()) {
-    const place = memo ? tabLinePlace(view, root, line) : null;
-    let result = place ? keptLineTabs(memo!, place, memoAt) : undefined;
-    if (!result && horizon && place && !horizon.has(place.sheet)) {
-      deferred = true;
-      keys.push(`${lineIndex}:deferred`);
-      const kept = installed!.find(line.contentStart, line.contentEnd);
-      const remembered = kept.length || !restore ? undefined : rememberedTabsByContent(root, lineContentKey(view.state.doc, line), memoAt);
-      if (remembered) {
-        for (const item of remembered.decorations) decorations.push(tabDecoration(line.blockPos, item));
-      } else decorations.push(...kept);
-      continue;
+  const lines = tabbedLines(view.state.doc);
+  // Taken off before anything paints (the rule is removed below, in this task).
+  let unjustified: HTMLStyleElement | null | undefined;
+  try {
+    for (const [lineIndex, line] of lines.entries()) {
+      const place = memo ? tabLinePlace(view, root, line) : null;
+      let result = place ? keptLineTabs(memo!, place, memoAt) : undefined;
+      if (!result && horizon && place && !horizon.has(place.sheet)) {
+        deferred = true;
+        keys.push(`${lineIndex}:deferred`);
+        const kept = installed!.find(line.contentStart, line.contentEnd);
+        const remembered = kept.length || !restore ? undefined : rememberedTabsByContent(root, lineContentKey(view.state.doc, line), memoAt);
+        if (remembered) {
+          for (const item of remembered.decorations) decorations.push(tabDecoration(line.blockPos, item));
+        } else decorations.push(...kept);
+        continue;
+      }
+      if (!result) {
+        const block = place?.block ?? view.state.doc.nodeAt(line.blockPos);
+        // A paragraph read for the first time (a page the horizon just reached):
+        // its settling has passes of its own to come.
+        if (rounds && block && !rounds.has(block)) firstRead = true;
+        if (unjustified === undefined) unjustified = unjustifyTabbedBlocks(view, lines);
+        result = settledRound(rounds, block, measureLine(line));
+        if (place) keepLineTabs(memo!, place, memoAt, result);
+        if (restore) rememberTabsByContent(root, lineContentKey(view.state.doc, line), memoAt, result);
+      }
+      for (const key of result.keys) keys.push(`${lineIndex}:${key}`);
+      for (const item of result.decorations) decorations.push(tabDecoration(line.blockPos, item));
+      if (result.wrapped) wrapped = true;
     }
-    if (!result) {
-      const block = place?.block ?? view.state.doc.nodeAt(line.blockPos);
-      // A paragraph read for the first time (a page the horizon just reached):
-      // its settling has passes of its own to come.
-      if (rounds && block && !rounds.has(block)) firstRead = true;
-      result = settledRound(rounds, block, measureLine(line));
-      if (place) keepLineTabs(memo!, place, memoAt, result);
-      if (restore) rememberTabsByContent(root, lineContentKey(view.state.doc, line), memoAt, result);
-    }
-    for (const key of result.keys) keys.push(`${lineIndex}:${key}`);
-    for (const item of result.decorations) decorations.push(tabDecoration(line.blockPos, item));
-    if (result.wrapped) wrapped = true;
+  } finally {
+    unjustified?.remove();
   }
   return { set: DecorationSet.create(view.state.doc, decorations), key: keys.join("|"), wrapped, deferred, firstRead };
 }

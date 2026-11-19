@@ -306,6 +306,11 @@ export const spreadsheetCellSchema = z
     
     
     hyperlinkInArea: z.boolean().optional(),
+    // The cell's own link is listed in the file after a link the sheet holds
+    // over a large area that covers it (`hyperlinkAreas`): the place follows,
+    // edits and copies the area's, the first over it (reading 950,
+    // xlsxHyperlinkUnderArea; Windows Excel, xlsx-rounds probe/n35-p948).
+    hyperlinkUnderArea: z.literal(true).optional(),
     // The link over several cells beneath this cell's own (the file lists the
     // cell's first): a sort that takes the cell's own away leaves this one on
     // the place (xlsxHyperlinkAreaUnder, R294-X08). Its address is checked as
@@ -2456,6 +2461,39 @@ export const spreadsheetSheetSchema = z
     // Reading 945: the hidden default is the file's own run of hidden rows,
     // not zeroHeight; a row delete brings shown rows in at the grid's end.
     rowsHiddenByFileRun: z.literal(true).optional(),
+    
+    // large areas (a whole row, A7:XFD7), held as ranges of the sheet instead
+    // of on each cell, in the file's order. A cell under one states only a
+    // link of its own; the link a place follows is its cell's own, else the
+    // first range over it.
+    // The address is checked as a cell's `hyperlink` is.
+    hyperlinkAreas: z
+      .array(
+        z
+          .object({
+            range: z
+              .object({
+                r1: z.number().int().min(0).max(MAX_RANGE_ROW),
+                c1: z.number().int().min(0).max(MAX_RANGE_COL),
+                r2: z.number().int().min(0).max(MAX_RANGE_ROW),
+                c2: z.number().int().min(0).max(MAX_RANGE_COL),
+              })
+              .strict(),
+            hyperlink: z
+              .string()
+              .min(1)
+              .max(65_530)
+              .refine(
+                (value) =>
+                  sanitizeHyperlink(value) !== null || parseInternalLink(value) !== null || parseNamedLink(value) !== null,
+              ),
+            hyperlinkTooltip: z.string().max(255).optional(),
+            hyperlinkDisplay: z.string().max(65_530).optional(),
+          })
+          .strict(),
+      )
+      .max(10_000)
+      .optional(),
     // Named ranges (Excel/WPS parity): per-sheet defined names that formulas may
     // use in place of a cell/range reference (e.g. =SUM(Sales)). Each entry maps
     // a name to an A1 reference string ("B2" or "B2:B10"). Optional so existing

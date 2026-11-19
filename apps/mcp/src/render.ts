@@ -53,16 +53,46 @@ export class HeadlessEditor implements Renderer {
     );
   }
 
+  /** Callers waiting for one of the renderConcurrency slots. */
+  private readonly queue: (() => void)[] = [];
+  private drawing = 0;
+
+  private async slot(): Promise<() => void> {
+    if (this.drawing >= Math.max(1, this.config.renderConcurrency)) await new Promise<void>((resolve) => this.queue.push(resolve));
+    this.drawing += 1;
+    return () => {
+      this.drawing -= 1;
+      this.queue.shift()?.();
+    };
+  }
+
   private async withPage<T>(doc: StoredDocument, width: number, run: (page: Page) => Promise<T>): Promise<T> {
+    const release = await this.slot();
+    try {
+      return await this.drawPage(doc, width, run);
+    } finally {
+      release();
+    }
+  }
+
+  private async drawPage<T>(doc: StoredDocument, width: number, run: (page: Page) => Promise<T>): Promise<T> {
     if (this.idle) clearTimeout(this.idle);
     this.busy += 1;
     if (!this.browser) {
       this.browser = this.launch();
       this.browser.catch(() => (this.browser = null));
     }
-    const browser = await this.browser;
-    const context = await browser.newContext({ viewport: { width, height: 1400 }, deviceScaleFactor: 1 });
-    const page = await context.newPage();
+    let context: import("playwright-core").BrowserContext;
+    let page: Page;
+    try {
+      const browser = await this.browser;
+      context = await browser.newContext({ viewport: { width, height: 1400 }, deviceScaleFactor: 1 });
+      page = await context.newPage();
+    } catch (error) {
+      // no browser: nothing to draw with, and nothing busy
+      this.busy -= 1;
+      throw error;
+    }
     try {
       const url = `${this.config.publicUrl}/_mcp/view/${doc.id}?t=${encodeURIComponent(doc.token)}&render=1&rev=${doc.current.rev}`;
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60_000 });

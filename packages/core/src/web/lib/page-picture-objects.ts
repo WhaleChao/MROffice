@@ -26,6 +26,7 @@
  * saved as its token and the server copies the picture into this page.
  */
 
+import { EMBED_PICTURE_TICKET_PARAM, embedPictureTicket } from "./embed/picture-ticket";
 import { activeMountWorkspaceId, mountWorkspaceFor } from "./workspace-mounts";
 
 export const PICTURE_OBJECT_TOKEN_PREFIX = "mrai-picture:";
@@ -79,9 +80,14 @@ export function pagePictureUrl(
   workspaceId: string | null = null,
 ): string {
   const base = `/api/v1/pages/${encodeURIComponent(pageId)}/pictures/${sha}`;
+  const query: string[] = [];
   // A mounted shared notebook lives in its host's workspace; an <img> sends
   // no header, so the host is named in the query (the API reads either).
-  return workspaceId ? `${base}?workspace_id=${encodeURIComponent(workspaceId)}` : base;
+  if (workspaceId) query.push(`workspace_id=${encodeURIComponent(workspaceId)}`);
+  // An embedded editor's session, for the same reason (lib/embed/picture-ticket).
+  const ticket = embedPictureTicket();
+  if (ticket) query.push(`${EMBED_PICTURE_TICKET_PARAM}=${encodeURIComponent(ticket)}`);
+  return query.length ? `${base}?${query.join("&")}` : base;
 }
 
 /**

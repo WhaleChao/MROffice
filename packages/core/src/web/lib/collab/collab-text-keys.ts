@@ -158,6 +158,10 @@ export class CollaborativeTextKeys {
    * written (the caller publishes it as before).
    */
   write(doc: Y.Doc, origin: unknown, edit: CollaborativeTextKey): CollaborativeTextKeyWrite {
+    // An edit placed by its words (an AI rewrite, TRIAGE 49) is not a key: it
+    // is never carried over a collaborator's change as one splice. The
+    // publication writes each of its words where it still stands, or none.
+    if (edit.strict) return { outcome: "strict" };
     const key = edit.path.join("\u0000");
     const containerPath = edit.path.slice(0, -1);
     const text = collaborativeTextAt(this.root, edit.path);

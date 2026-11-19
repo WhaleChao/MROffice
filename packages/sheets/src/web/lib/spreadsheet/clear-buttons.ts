@@ -25,6 +25,13 @@ import { clearRulesForClearAll, normalizeRules, type ValidationRule } from "@mrn
 import type { DataTable } from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
 import { shiftFormula } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
 import { MAX_GRID_COLUMNS, MAX_GRID_ROWS } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
+import {
+  cellsWithoutLaidAreaLinks,
+  laidAreaLinksAround,
+  laidAreaLinksOver,
+  sheetWithoutHyperlinkAreasAround,
+  sheetWithoutHyperlinkAreasOver,
+} from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 import { lineStyleAt, patchLineStyles } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import { cellsAfterMergesRemoved, normalizeMerges, rangeHasMerge, removeMergesInRange, type MergeSpan } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
 import { whatIfTablePartRefused, whatIfTablesAfterOverwrite } from "@mrnote/core/web/lib/spreadsheet/what-if-table-definition.ts";
@@ -36,6 +43,8 @@ export interface ClearButtonSheet extends CellButtonsSheet {
   validations?: ValidationRule[];
   /** What-If Data Tables, checked where they are read (what-if-table-definition). */
   whatIfTables?: unknown;
+  /** Links held over large areas (reading 948), read where they are used (hyperlink-areas). */
+  hyperlinkAreas?: unknown;
 }
 
 export interface ClearButtonContext {
@@ -172,7 +181,26 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
     lineStylesCleared = next !== candidate;
     return next;
   };
-  const lineCleared = clearLineStyles(sheet);
+  // Remove Hyperlinks and Clear Hyperlinks delete every link that meets the
+  // selection: one the sheet holds over a large area goes whole (Windows
+  // Excel, xlsx-rounds probe/n35-p948/a pa1, pa6, pa9).
+  // Clear All and Clear Contents (the Delete key) on cells inside such a
+  // link delete it whole too; Clear Formats leaves it (pb6, pb7, pb8, pb11).
+  const areaLinksCleared =
+    variant === "hyperlinks" || variant === "removeHyperlinks"
+      ? sheetWithoutHyperlinkAreasOver(sheet, range)
+      : variant === "all" || variant === "contents"
+        ? sheetWithoutHyperlinkAreasAround(sheet, range)
+        : sheet;
+  // A link laid over a small area on its cells goes whole the same way
+  // (the probes' own area is A1:C8), off the cells outside the selection too.
+  const laidLinksCleared =
+    variant === "hyperlinks" || variant === "removeHyperlinks"
+      ? laidAreaLinksOver(sheet.cells, range)
+      : variant === "all" || variant === "contents"
+        ? laidAreaLinksAround(sheet.cells, range)
+        : new Set<number>();
+  const lineCleared = clearLineStyles(areaLinksCleared);
   // A cleared cell of a line that keeps its format holds the default
   // format as its own, so it does not read the line's again (B255).
   if (clearsFormats && (lineCleared.rowStyles || lineCleared.columnStyles)) {
@@ -192,6 +220,8 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
     !clearedMerges &&
     !validationClear.changed &&
     !lineStylesCleared &&
+    areaLinksCleared === sheet &&
+    laidLinksCleared.size === 0 &&
     !clearedTables &&
     !whatIfTablesLeft
   ) {
@@ -201,7 +231,10 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
   // Cell styles, conditional formats, merges and validation are persisted
   // facets of one Excel Clear command. Build one sheet so history/autosave
   // never expose a state in which only half of the command has landed.
-  const nextSheet: S = { ...lineCleared, cells: nextCells };
+  const nextSheet: S = {
+    ...lineCleared,
+    cells: cellsWithoutLaidAreaLinks(nextCells, laidLinksCleared, range, "unlinked"),
+  };
   if (clearedTables) nextSheet.dataTables = clearedTables;
   if (whatIfTablesLeft) {
     if (whatIfTablesLeft.length > 0) nextSheet.whatIfTables = whatIfTablesLeft;

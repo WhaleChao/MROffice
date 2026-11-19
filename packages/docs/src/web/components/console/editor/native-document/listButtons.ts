@@ -180,6 +180,77 @@ export function runNumberingLibraryButton(
   );
 }
 
+/** The ordered lists standing right before and after the selection's blocks,
+ * which the list toggle joins them to (see keepNewListApart). */
+interface OrderedNeighbours {
+  /** Items of the list before; null when no ordered list stands there. */
+  before: number | null;
+  /** The list after: its attributes and its items; null when none. */
+  after: { attrs: Record<string, unknown>; items: number } | null;
+  /** The selection's blocks, each of which becomes an item. */
+  count: number;
+}
+
+function orderedNeighbours(state: EditorState): OrderedNeighbours | null {
+  const range = state.selection.$from.blockRange(state.selection.$to);
+  if (!range) return null;
+  const prev = range.startIndex > 0 ? range.parent.child(range.startIndex - 1) : null;
+  const next = range.endIndex < range.parent.childCount ? range.parent.child(range.endIndex) : null;
+  const before = prev?.type.name === "orderedList" ? prev.childCount : null;
+  const after = next?.type.name === "orderedList" ? { attrs: next.attrs, items: next.childCount } : null;
+  if (before === null && after === null) return null;
+  return { before, after, count: range.endIndex - range.startIndex };
+}
+
+/**
+ * Paragraphs given a number format of their own are a new list: Word's
+ * Define New Number Format (Multilevel List, List Style) on a paragraph
+ * beside a numbered list numbers that paragraph alone and leaves the list
+ * as it is. The list toggle joins the new list to the ordered lists it
+ * touches, so the definition then went to the whole joined list (corpus
+ * R473-D86: "notificación" joined the "¿Qué recurso…" list after it, which
+ * took the new format and its 36 pt indent). The lists the toggle joined
+ * are parted again: the one before keeps its attributes, the one after
+ * gets its own back, and the new items stand in a list of their own.
+ */
+function keepNewListApart(tr: Transaction, neighbours: OrderedNeighbours): void {
+  const $pos = tr.selection.$from;
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    const list = $pos.node(depth);
+    if (list.type.name !== "orderedList") continue;
+    const lead = neighbours.before ?? 0;
+    const tail = neighbours.after?.items ?? 0;
+    // Only the shape the toggle's joins leave: anything else is not theirs.
+    if (list.childCount !== lead + neighbours.count + tail) return;
+    const listPos = $pos.before(depth);
+    let fresh: Record<string, unknown>;
+    try {
+      fresh = list.type.create(null).attrs;
+    } catch {
+      return;
+    }
+    const sizeOf = (items: number) => {
+      let size = 0;
+      for (let index = 0; index < items; index += 1) size += list.child(index).nodeSize;
+      return size;
+    };
+    // The later cut first, so the earlier positions stand.
+    if (neighbours.after) {
+      const cut = listPos + 1 + sizeOf(lead + neighbours.count);
+      tr.split(cut, 1);
+      tr.setNodeMarkup(cut + 1, undefined, neighbours.after.attrs);
+    }
+    let own = listPos;
+    if (lead > 0) {
+      const cut = listPos + 1 + sizeOf(lead);
+      tr.split(cut, 1);
+      own = cut + 1;
+    }
+    tr.setNodeMarkup(own, undefined, fresh);
+    return;
+  }
+}
+
 /**
  * OK of the list dialogs (Define New Bullet / Number Format / Multilevel List
  * / List Style, Set Numbering Value) in one Undo step. Word's list commands
@@ -205,8 +276,19 @@ export function runListDialogResult(
       ? runListChain(chain.setBulletListStyle(result.galleryStyle))
       : runListChain(chain.setBulletListGlyph(result.glyph, result.font, result.align));
   }
+  // (Read before the toggle: what it will join the new list to.)
+  const neighbours = !headings && !inOrdered ? orderedNeighbours(state) : null;
+  const toggleNewList = () => {
+    chain.toggleOrderedList();
+    if (neighbours) {
+      chain.command(({ tr }) => {
+        keepNewListApart(tr, neighbours);
+        return true;
+      });
+    }
+  };
   if (result.kind === "defineNumber") {
-    if (!inOrdered) chain.toggleOrderedList();
+    if (!inOrdered) toggleNewList();
     chain.setOrderedListDefinition(result.definition);
     // The dialog's Start at is written for headings too, as Set
     
@@ -215,7 +297,7 @@ export function runListDialogResult(
     return runListChain(chain);
   }
   if (result.kind === "defineMultilevel") {
-    if (!inOrdered) chain.toggleOrderedList();
+    if (!inOrdered) toggleNewList();
     return runListChain(chain.setOrderedListDefinition(result.definition));
   }
   if (result.kind === "defineListStyle") {
@@ -225,7 +307,7 @@ export function runListDialogResult(
       ...existing.filter((style) => style.name !== result.name),
       { id, name: result.name, definition: result.definition },
     ]);
-    if (!inOrdered) chain.toggleOrderedList();
+    if (!inOrdered) toggleNewList();
     return runListChain(chain.setOrderedListDefinition(result.definition, { styleId: id }));
   }
   return runListChain(chain.setListNumberingValue(result.mode, result.value));

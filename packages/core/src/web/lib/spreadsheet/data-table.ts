@@ -607,8 +607,16 @@ export function normalizeDataTableColumns(
     if (!entry || typeof entry !== "object") return null;
     const value = entry as Record<string, unknown>;
     const id = Number(value.id);
-    const name = typeof value.name === "string" ? value.name.trim() : "";
-    const folded = name.toLowerCase();
+    // The name as it is stored, a space at either end included: a table
+    // column is named by its header cell's text, and Excel keeps "Note " as
+    // it stands. Trimmed when the window opened the workbook, the column
+    // read as renamed and the next save rewrote the table's part, its name
+    
+    // "All Disablement Pensioners ", R450-X05 "Note ", R454-X01). Names are
+    // still told apart as a structured reference reads them, trimmed.
+    const stored = typeof value.name === "string" ? value.name : "";
+    const name = stored.trim() === "" ? "" : stored;
+    const folded = name.trim().toLowerCase();
     if (
       !Number.isInteger(id) ||
       id <= 0 ||

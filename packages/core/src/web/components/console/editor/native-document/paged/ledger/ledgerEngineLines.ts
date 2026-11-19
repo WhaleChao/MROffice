@@ -15,6 +15,7 @@
  * about falls back on its own, and `window.__docsLedgerEngine` says which.
  */
 import type { Node as PmNode } from "@tiptap/pm/model";
+import type { EditorView } from "@tiptap/pm/view";
 import { layoutDocsBlockLines, type DocsBlockLayout, type DocsLineRule } from "../../../../../../lib/text-engine/docs-block-layout";
 import { docsEngineLineStarts, normalizeStarts, readDocsParagraph, type DocsTabStopsInput } from "../../../../../../lib/text-engine/docs-lines";
 import { normalizeTabStops, withHangingIndentStop } from "../../../../../../lib/document-tabstops";
@@ -77,6 +78,38 @@ export function docsBlockLineRule(node: PmNode, element: HTMLElement): DocsLineR
   if ((rule === "exact" || rule === "atLeast") && points > 0) return { kind: rule, px: (points * 4) / 3 };
   const style = element.ownerDocument.defaultView?.getComputedStyle(element);
   return { kind: "multiple", value: Number.parseFloat(style?.getPropertyValue("--doc-line-factor") ?? "") || 1 };
+}
+
+/** Where a row starts in an element's text: a text node and an offset in it. */
+export interface EngineRowStart {
+  readonly node: Text;
+  readonly offset: number;
+}
+
+/**
+ * The engine's rows of a paragraph's two pieces laid out as one (`copy`, the
+ * off-screen copy the ledger reads a page seam from): where each row starts.
+ * Null: the engine does not lay this paragraph out, the browser's own rows
+ * are the answer. Undefined: it cannot say now (a face still loading, a float
+ * beside the paragraph, automatic hyphenation), and nobody else can either.
+ */
+export type EngineJoinedRows = (
+  view: EditorView,
+  head: { readonly node: PmNode; readonly dom: HTMLElement },
+  tail: { readonly node: PmNode; readonly dom: HTMLElement },
+  copy: HTMLElement,
+) => readonly EngineRowStart[] | null | undefined;
+
+let joinedRowsReader: EngineJoinedRows | null = null;
+
+/** The line-break plugin lends the ledger its reading (documentEngineLineBreaks). */
+export function setEngineJoinedRows(reader: EngineJoinedRows | null): void {
+  joinedRowsReader = reader;
+}
+
+/** The engine's rows of a joined copy (EngineJoinedRows); null with no engine. */
+export function engineJoinedRows(...args: Parameters<EngineJoinedRows>): ReturnType<EngineJoinedRows> {
+  return joinedRowsReader ? joinedRowsReader(...args) : null;
 }
 
 /** What the engine's line pass laid this block out as. */

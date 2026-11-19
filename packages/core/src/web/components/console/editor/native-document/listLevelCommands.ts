@@ -49,9 +49,10 @@
 
 import { Extension, getNodeType, type CommandProps, type Editor } from "@tiptap/core";
 import type { Node as PmNode, NodeType, ResolvedPos } from "@tiptap/pm/model";
-import { sinkListItem as sinkListItemCommand } from "@tiptap/pm/schema-list";
-import type { EditorState, Selection } from "@tiptap/pm/state";
-import { canJoin } from "@tiptap/pm/transform";
+import { Fragment, NodeRange, Slice } from "@tiptap/pm/model";
+import { liftListItem as liftListItemCommand, sinkListItem as sinkListItemCommand } from "@tiptap/pm/schema-list";
+import type { EditorState, Selection, Transaction } from "@tiptap/pm/state";
+import { canJoin, liftTarget, ReplaceAroundStep } from "@tiptap/pm/transform";
 
 import { explicitOrderedListLevel } from "./listDefinitionMarkers";
 import { normalizeListDefinition, type ListDefinition } from "./listLevelDefinition";
@@ -251,7 +252,7 @@ function listTab(editor: Editor, shift: boolean): boolean {
   // list moves, as Increase / Decrease Indent does there (listWholeIndent).
   if (editor.commands.command(({ state, tr }) => indentWholeList(state, tr, shift ? -1 : 1)))
     return true;
-  if (shift) editor.commands.liftListItem(item);
+  if (shift) editor.commands.command(({ state, dispatch }) => liftListItemKeepingLists(getNodeType(item, state.schema))(state, dispatch));
   else editor.commands.sinkListItem(item);
   return true;
 }
@@ -275,3 +276,52 @@ export const DocumentListLevelKeys = Extension.create({
 });
 
 export default DocumentListLevels;
+
+
+/** Two lists the same apart from their identity: one list continuing. */
+function sameListAttrs(a: PmNode, b: PmNode): boolean {
+  if (a.type !== b.type) return false;
+  const keys = new Set([...Object.keys(a.attrs), ...Object.keys(b.attrs)]);
+  keys.delete("block_id");
+  return [...keys].every((key) => JSON.stringify(a.attrs[key] ?? null) === JSON.stringify(b.attrs[key] ?? null));
+}
+
+/**
+ * Decrease Indent / Shift+Tab on list items, as Word does it: only the items
+ * move up a level. ProseMirror's `liftListItem` makes the items after them
+ * children of the last lifted item (their level does not change), and then
+ * JOINS that copy of their list into the list the lifted item already ends
+ * with -- a deeper level of its own (corpus R474-D95 E14: an item lifted out
+ * of a Wingdings ilvl 2 list, the items after it went into its ilvl 3 child
+ * list, lost their list and were written a new numbering). Two lists that
+ * differ in anything but their identity stay two, as their paragraphs' levels
+ * do in Word; the rest is ProseMirror's own command.
+ */
+export function liftListItemKeepingLists(itemType: NodeType) {
+  return (state: EditorState, dispatch?: (tr: Transaction) => void): boolean => {
+    const { $from, $to } = state.selection;
+    const range = $from.blockRange($to, (node) => node.childCount > 0 && node.firstChild!.type === itemType);
+    if (!range || !dispatch || $from.node(range.depth - 1).type !== itemType) {
+      return liftListItemCommand(itemType)(state, dispatch);
+    }
+    const tr = state.tr;
+    const end = range.end;
+    const endOfList = range.$to.end(range.depth);
+    let lifted = range;
+    if (end < endOfList) {
+      tr.step(new ReplaceAroundStep(end - 1, endOfList, end, endOfList,
+        new Slice(Fragment.from(itemType.create(null, range.parent.copy())), 1, 0), 1, true));
+      lifted = new NodeRange(tr.doc.resolve(range.$from.pos), tr.doc.resolve(endOfList), range.depth);
+    }
+    const target = liftTarget(lifted);
+    if (target == null) return false;
+    tr.lift(lifted, target);
+    const $after = tr.doc.resolve(tr.mapping.map(end, -1) - 1);
+    if (canJoin(tr.doc, $after.pos) && $after.nodeBefore && $after.nodeAfter &&
+        sameListAttrs($after.nodeBefore, $after.nodeAfter)) {
+      tr.join($after.pos);
+    }
+    dispatch(tr.scrollIntoView());
+    return true;
+  };
+}

@@ -63,6 +63,11 @@ export const MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL =
 
 export const MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE =
   "This text's font names glyphs it draws as spaces, so the text read from it is not the text on the page; it cannot be set again without losing them." as const;
+/** How the refusal of a command on a line whose words are fixed begins
+ * (PdfNativeListTextSelectionProof.wordsFixed; text-format-plan's
+ * fixedWordsRefusal): the window knows the refusal by it, and makes no text
+ * box of a line refused so. */
+export const MRAI_NATIVE_TEXT_WORDS_FIXED_REFUSAL = "This text's words are fixed" as const;
 export const MRAI_NATIVE_LIST_TEXT_SCHEMA_VERSION =
   "mrai.pdf-native-text.replace.v4" as const;
 export const MRAI_NATIVE_OUTLINE_ACTION = "native.outline.mutate" as const;

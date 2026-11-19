@@ -76,6 +76,9 @@ export interface WorkspaceCodeFixFileEdit {
   path: string;
   before: string;
   after: string;
+  /** The edits of `before`, sorted and disjoint, that make `after`: written
+   * at these places, never re-found by comparing the two texts. */
+  changes: BufferEdit[];
 }
 
 /** One compiler-backed completion item returned from an authorized project. */
@@ -151,7 +154,9 @@ export function materializeWorkspaceCodeFixAction(
         edit.insert +
         after.slice(edit.to);
     }
-    if (after !== before) materialized.push({ path, before, after });
+    if (after !== before) {
+      materialized.push({ path, before, after, changes: edits.slice() });
+    }
   }
   return materialized.length > 0 ? materialized : null;
 }

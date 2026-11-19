@@ -497,6 +497,21 @@ export function presentationPreviewNearestOffset(
   textLength: number,
   paragraphs?: readonly SlideParagraphWithRuns[],
 ): number | null {
+  return presentationPreviewNearestPlace(root, clientX, clientY, textLength, paragraphs)?.offset ?? null;
+}
+
+/**
+ * `presentationPreviewNearestOffset`'s place with how far the point is from
+ * the character it is beside, in screen pixels: 0 when the point is on a
+ * character's drawn box (on the words).
+ */
+function presentationPreviewNearestPlace(
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+  textLength: number,
+  paragraphs?: readonly SlideParagraphWithRuns[],
+): { offset: number; distance: number } | null {
   const doc = root.ownerDocument;
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const range = doc.createRange();
@@ -523,10 +538,13 @@ export function presentationPreviewNearestOffset(
     }
   }
   if (!best) return null;
-  return Math.max(
-    0,
-    Math.min(textLength, Math.trunc(presentationPreviewPointOffset(root, best.node, best.offset, paragraphs))),
-  );
+  return {
+    offset: Math.max(
+      0,
+      Math.min(textLength, Math.trunc(presentationPreviewPointOffset(root, best.node, best.offset, paragraphs))),
+    ),
+    distance: best.distance,
+  };
 }
 
 /** Whether `element`, or an ancestor of it up to `top`, is drawn through a 3-D transform or a perspective. */
@@ -605,6 +623,43 @@ export function presentationDoubleClickWord(text: string, offset: number): [numb
   if (probe < lineStart) return [at, at];
   const [start, end] = wordAround(text, probe);
   return [Math.max(lineStart, start), Math.min(lineEnd, Math.max(end, probe + 1))];
+}
+
+/**
+ * What a double click at (`clientX`, `clientY`) that opens a shape's words
+ * selects in them, read from the words drawn at rest in `host` before they
+ * open: on a word, that word (`presentationDoubleClickWord`); anywhere else in
+ * the frame (under the last line, beside a short one, in the insets), a caret
+ * at the nearest place, the nearest line's character closest to the
+ * pointer's x, as PowerPoint puts it. `text` is the words' flat text
+ * (paragraphs joined by "\n"). `selectWord` false (a single click on the
+ * selected shape): a caret on the words too. Null when nothing is drawn to
+ * measure.
+ */
+export function presentationShapeWordsDoubleClickRange(
+  host: HTMLElement,
+  target: EventTarget | null,
+  clientX: number,
+  clientY: number,
+  text: string,
+  selectWord = true,
+): [number, number] | null {
+  const root = host.querySelector<HTMLElement>('[data-testid="presentation-shape-text"]') ?? host;
+  // Words the text engine drew (SVG) answer from its own lines; a press on
+  // one of its glyphs is on the words.
+  const engine = officeTextOffsetAtPoint(host, clientX, clientY);
+  const place =
+    engine !== null
+      ? {
+          offset: engine,
+          distance: target instanceof Element && root.contains(target) && target.closest("text, tspan") ? 0 : Infinity,
+        }
+      : presentationPreviewNearestPlace(root, clientX, clientY, text.length);
+  if (place === null) return null;
+  const offset = Math.max(0, Math.min(text.length, place.offset));
+  // On the words: the point is on a character's drawn box.
+  const onWords = place.distance === 0;
+  return onWords && selectWord ? presentationDoubleClickWord(text, offset) : [offset, offset];
 }
 
 /**

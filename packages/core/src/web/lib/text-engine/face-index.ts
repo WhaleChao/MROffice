@@ -18,6 +18,7 @@
  * local names, and the measurer checks them once against the browser
  * (verify.ts) before trusting the served file's widths for them.
  */
+import { isExcelCutFamily } from "../office-fonts/excel-cut-families";
 import { fontFaceDescriptors, fontFaceSource, notedFontFaceCount, notedFontFaces, type NotedFontFace } from "../font-face-declarations";
 
 export interface FaceDeclaration {
@@ -68,6 +69,14 @@ export function splitFamilyList(stack: string): string[] {
   }
   if (current.trim()) out.push(normalizeFamily(current));
   return out;
+}
+
+/** The family a stack names first, normalized: the face its text asks for.
+ * A sheet's cut family in front of its face (excel-cut-families.ts) is
+ * passed over -- what is kept by face is kept under the face's own name. */
+export function leadingFamily(stack: string): string {
+  const families = splitFamilyList(stack);
+  return families.find((family) => !isExcelCutFamily(family)) ?? families[0] ?? "";
 }
 
 export const GENERIC_FAMILIES: ReadonlySet<string> = new Set([

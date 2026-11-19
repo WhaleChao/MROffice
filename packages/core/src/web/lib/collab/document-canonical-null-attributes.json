@@ -410,6 +410,7 @@
       "fontSize",
       "mathAlignedLines",
       "mathDisplay",
+      "mathJustification",
       "mathStyle",
       "runStyle",
       "trackObjectDeletion",

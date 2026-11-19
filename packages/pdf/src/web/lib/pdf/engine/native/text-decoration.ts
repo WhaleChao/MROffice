@@ -278,8 +278,10 @@ function transformAt(source: string, offset: number): readonly number[] | null {
  * one item may span several whole objects -- LibreOffice and Word write a
  * link or a bold word in an object of its own -- and its rule is placed from
  * the first run's paint, so the objects have to be drawn in one transform.
+ * (Exported for the reader of a scanned line's rules, invisible-text-rule.ts,
+ * which asks it of stream bytes it already holds.)
  */
-function decorationAnchor(
+export function decorationAnchor(
   source: string,
   run: Readonly<{ start: number; end: number }>,
   style: PdfNativeTextDecorationStyle,

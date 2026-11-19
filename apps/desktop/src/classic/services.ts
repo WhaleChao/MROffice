@@ -221,6 +221,13 @@ export function apiEnv(
    * each read in a process of its own while the API imports itself, for
    * their import to take (app/desktop/launch_preread.py). */
   readAhead: readonly string[] = [],
+  /** What the shell already knows as it starts the API (both handed over
+   * here instead of by a call once it answers, each a round trip at the
+   * busiest moment of a launch, ahead of the window's own requests):
+   * `signedIn`, whether it has a sign-in to hand over (none: the API starts
+   * signed out and holds no request for it); `localFiles`, the documents the
+   * launch opens with the tokens the shell named them by (./local-files.ts). */
+  atStart: { signedIn: boolean; localFiles?: readonly { path: string; token: string }[] } = { signedIn: true },
 ): NodeJS.ProcessEnv {
   const data = dataDir();
   const opening = openingDocuments && !background;
@@ -279,10 +286,16 @@ export function apiEnv(
     // memory. The server's 5-minute idle drop made a save after a pause read
     // a long document again (MS-OI29500: ~3 minutes).
     MRAI_DOCX_INCREMENTAL_IDLE_SECONDS: "86400",
-    // The shell hands over the sign-in beside its first window, not before
-    // it: the API holds the window's requests until it has (apps/api
-    // app/desktop/account_gate.py).
-    MRAI_DESKTOP_ACCOUNT_PUSH: "1",
+    // A sign-in is handed over beside the first window, not before it: the
+    // API holds the window's requests until it has (apps/api
+    // app/desktop/account_gate.py). None: the API is told so now and starts
+    // signed out (app/desktop/runtime.py), and nothing is held or handed
+    // over (the gate and the shell's DELETE were 0.1 s of every signed-out
+    
+    ...(atStart.signedIn ? { MRAI_DESKTOP_ACCOUNT_PUSH: "1" } : { MRAI_DESKTOP_ACCOUNT_AT_START: "signed-out" }),
+    // The launch's documents, registered by the API as it starts (apps/api
+    // app/desktop/local_files.py), under the tokens the shell gives the window.
+    ...(atStart.localFiles?.length ? { MRAI_DESKTOP_LOCAL_FILES: JSON.stringify(atStart.localFiles) } : {}),
     PYTHONDONTWRITEBYTECODE: "1",
     PYTHONNOUSERSITE: "1",
     PYTHONUNBUFFERED: "1",
@@ -351,6 +364,36 @@ export function webEnv(where: Layout, launch: Launch, firstPage?: string, warmPa
   };
 }
 
+/**
+ * What a launch learns only once the app is ready (the documents macOS hands
+ * it, a start in the background, the sign-in): the names of the services'
+ * environment that carry it. Services started before (``startService``'s
+ * ``lateEnv``) are given these then; the API and the web server take only
+ * these names from the late line.
+ */
+export const API_LATE_ENV = [
+  "IMPORT_CONVERSION_ZYGOTE_ENABLED",
+  "MRAI_DESKTOP_OPENING_FILE",
+  "MRAI_DESKTOP_OPENING_PATHS",
+  "MRAI_DESKTOP_LOCAL_FILES",
+  "MRAI_DESKTOP_ACCOUNT_PUSH",
+  "MRAI_DESKTOP_ACCOUNT_AT_START",
+  "MRAI_DESKTOP_LAUNCH_CACHE_KEY",
+] as const;
+export const WEB_LATE_ENV = ["MRAI_DESKTOP_FIRST_PAGE", "MRAI_DESKTOP_WARM_PAGES", "MRAI_DESKTOP_LAUNCH_CACHE"] as const;
+
+/** ``env`` split into what goes at the spawn and what (``names``) comes late. */
+export function splitLateEnv(env: NodeJS.ProcessEnv, names: readonly string[]): { now: NodeJS.ProcessEnv; late: NodeJS.ProcessEnv } {
+  const now: NodeJS.ProcessEnv = {};
+  const late: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (value === undefined) continue;
+    if (names.includes(name)) late[name] = value;
+    else now[name] = value;
+  }
+  return { now, late };
+}
+
 export interface Service {
   readonly name: string;
   readonly child: ChildProcess;
@@ -375,18 +418,36 @@ export function startService(
     timeoutMs: number;
     /** Told the process as soon as it is spawned. */
     onSpawn?: (child: ChildProcess) => void;
+    /**
+     * Started before the shell knows all of its environment: the rest comes
+     * as one JSON line on its stdin once this resolves (EOF, nothing taken,
+     * if it rejects); the service reads it before it uses any of it
+     * (MRAI_DESKTOP_LATE_ENV=stdin: apps/api app/desktop/serve.py,
+     * apps/web desktop-server.mjs).
+     */
+    lateEnv?: Promise<NodeJS.ProcessEnv>;
   },
 ): Promise<Service> {
   const out = openServiceLog(serviceLogs(), name);
   const log = out.file;
+  const { lateEnv } = options;
   const child = spawn(command, args, {
     cwd: options.cwd,
-    env: options.env,
-    stdio: ["ignore", "pipe", "pipe"],
+    env: lateEnv ? { ...options.env, MRAI_DESKTOP_LATE_ENV: "stdin" } : options.env,
+    stdio: [lateEnv ? "pipe" : "ignore", "pipe", "pipe"],
     windowsHide: true,
     // Its own process group on POSIX, so stopping it stops what it started.
     detached: process.platform !== "win32",
   });
+  if (lateEnv && child.stdin) {
+    const stdin = child.stdin;
+    // A service that ended first: its closed pipe is not this process's error.
+    stdin.on("error", () => undefined);
+    void lateEnv.then(
+      (late) => stdin.end(`${JSON.stringify(late)}\n`),
+      () => stdin.end(),
+    );
+  }
   options.onSpawn?.(child);
   return new Promise((resolve, reject) => {
     let settled = false;

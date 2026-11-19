@@ -2468,6 +2468,31 @@ html[data-reduce-motion] .wm-empty-state-page {
   height: 100%;
 }
 
+/* A page's window, once its picture is ready (DockThumbnail): the page on
+   its little stack is the tile, with no box around it, as on a Mac's Dock. */
+.wm-tray-tile:has(> .wm-tray-thumb[data-state="picture"]) {
+  width: 46px;
+  height: 50px;
+  overflow: visible;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* a slide or a sheet as wide as the box, its corner glyph included, stays
+   inside a 46px tile (the rail's tray clips at the tile's edge) */
+.wm-tray-thumb {
+  --dock-box: 40px;
+}
+
+@media (hover: hover) {
+  .wm-tray-tile:has(> .wm-tray-thumb[data-state="picture"]):hover {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--console-accent, #0d9488) 8%, transparent);
+    box-shadow: none;
+  }
+}
+
 .wm-tray-tile[data-restore-refused="true"] {
   opacity: 0.7;
 }

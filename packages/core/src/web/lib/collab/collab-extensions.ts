@@ -28,6 +28,9 @@ import { initProseMirrorDoc, yCursorPlugin, yUndoPluginKey, yCursorPluginKey, yS
 import type { JSONContent } from "@tiptap/core";
 import type { Awareness } from "y-protocols/awareness";
 import { Plugin, type Transaction } from "@tiptap/pm/state";
+import type { Node as PMNode } from "@tiptap/pm/model";
+import { Mapping, type StepMap } from "@tiptap/pm/transform";
+import { installPositionalTextWrites, mappingTextRunPlaces, withTextRunPlaces } from "./y-text-run-write";
 import * as Y from "yjs";
 import type { CollabSession } from "./collab-provider";
 import { installBranchSafeHistory } from "./branch-safe-undo";
@@ -135,9 +138,52 @@ const InitializedCollaboration = Collaboration.extend({
         mapping: initial.mapping,
       };
     }
-    return [...(this.parent?.() ?? []), whiteboardCreationHistoryGuard()];
+    return [...(this.parent?.() ?? []), whiteboardCreationHistoryGuard(), positionalTextWrites()];
   },
 });
+
+/**
+ * The legacy room binding writes each key where it was typed and with its
+ * formatting (y-text-run-write, TRIAGE 47): the steps since the document the
+ * room last agreed with are kept, and each binding write is given them.
+ */
+function positionalTextWrites() {
+  // The view's document as the room holds it, and the steps since.
+  const tracker: { base: PMNode | null; maps: StepMap[]; doc: PMNode | null } = { base: null, maps: [], doc: null };
+  const agree = (doc: PMNode) => { tracker.base = doc; tracker.maps = []; tracker.doc = doc; };
+  return new Plugin({
+    state: {
+      init: (_config, state) => { agree(state.doc); return null; },
+      apply: (tr, value, oldState, newState) => {
+        const sync = tr.getMeta(ySyncPluginKey) as { isChangeOrigin?: boolean } | undefined;
+        // The room's own content rendered into the view (a collaborator's
+        // change, Undo/Redo): the view is the room's again.
+        if (sync?.isChangeOrigin) agree(newState.doc);
+        else {
+          if (tracker.doc !== oldState.doc) tracker.base = null;
+          if (tr.docChanged) tracker.maps.push(...tr.mapping.maps);
+          tracker.doc = newState.doc;
+        }
+        return value;
+      },
+    },
+    view(view) {
+      const binding = ySyncPluginKey.getState(view.state)?.binding as
+        | { mapping: Map<unknown, unknown>; isOMark: Map<unknown, boolean>; _prosemirrorChanged: (doc: PMNode) => void }
+        | undefined;
+      if (!binding) return {};
+      installPositionalTextWrites(binding);
+      const write = binding._prosemirrorChanged;
+      binding._prosemirrorChanged = function positionalWrite(doc: PMNode) {
+        const places = tracker.base && tracker.doc === doc && tracker.maps.length > 0
+          ? mappingTextRunPlaces(doc, new Mapping(tracker.maps)) : null;
+        withTextRunPlaces(places, () => write.call(binding, doc));
+        agree(doc);
+      };
+      return { destroy() { if (binding._prosemirrorChanged !== write) binding._prosemirrorChanged = write; } };
+    },
+  });
+}
 
 export interface CollabExtensionOptions {
   session: CollabSession;

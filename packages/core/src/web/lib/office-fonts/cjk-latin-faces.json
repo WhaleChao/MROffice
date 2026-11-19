@@ -20,6 +20,16 @@
   "dotum": {
    "400": "dotum-400.woff2"
   },
+  "excel-yu-gothic": {
+   "400": "excel-yu-gothic-400.woff2",
+   "700": "excel-yu-gothic-700.woff2"
+  },
+  "excel-yu-gothic-light": {
+   "400": "excel-yu-gothic-light-400.woff2"
+  },
+  "excel-yu-gothic-medium": {
+   "400": "excel-yu-gothic-medium-400.woff2"
+  },
   "fangsong": {
    "400": "fangsong-400.woff2"
   },
@@ -272,6 +282,9 @@
   "dengxian-light": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401,U+040D-040E,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "dfkai-sb": "U+0020-007E,U+00A0,U+00B7,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "dotum": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "excel-yu-gothic": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "excel-yu-gothic-light": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
+  "excel-yu-gothic-medium": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "fangsong": "U+0020-007E,U+00A4,U+00A7-00A8,U+00B0-00B1,U+00B7,U+00D7,U+00E0-00E1,U+00E8-00EA,U+00EC-00ED,U+00F2-00F3,U+00F7,U+00F9-00FA,U+00FC,U+0391-03A1,U+03A3-03A9,U+03B1-03C1,U+03C3-03C9,U+0401,U+0410-044F,U+0451,U+2013-2014,U+2018-2019,U+201C-201D,U+2026",
   "gulim": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "heiti-sc": "U+0020-007E,U+00A1-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-040C,U+040E-044F,U+0451-045C,U+045E-045F,U+0490-0491,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
@@ -312,6 +325,11 @@
   "yu-mincho": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "yu-mincho-demibold": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026",
   "yu-mincho-light": "U+0020-007E,U+00A0-00FF,U+0386,U+0388-038A,U+038C,U+038E-03A1,U+03A3-03CE,U+0401-044F,U+0451-045C,U+045E-045F,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026"
+ },
+ "recuts": {
+  "yu-gothic": "excel-yu-gothic",
+  "yu-gothic-light": "excel-yu-gothic-light",
+  "yu-gothic-medium": "excel-yu-gothic-medium"
  },
  "server": {
   "apple-sd-gothic-neo": {
@@ -357,6 +375,28 @@
     "400": "metric-clones/ttf/cjk-latin/dotum-400.ttf.gz"
    },
    "source": "noto-sans-kr"
+  },
+  "excel-yu-gothic": {
+   "family": "MRAI-Metric-ExcelYuGothic",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/excel-yu-gothic-400.ttf.gz",
+    "700": "metric-clones/ttf/cjk-latin/excel-yu-gothic-700.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "excel-yu-gothic-light": {
+   "family": "MRAI-Metric-ExcelYuGothicLight",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/excel-yu-gothic-light-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
+  },
+  "excel-yu-gothic-medium": {
+   "family": "MRAI-Metric-ExcelYuGothicMedium",
+   "files": {
+    "400": "metric-clones/ttf/cjk-latin/excel-yu-gothic-medium-400.ttf.gz"
+   },
+   "source": "noto-sans-jp"
   },
   "fangsong": {
    "family": "MRAI-Metric-FangSong",

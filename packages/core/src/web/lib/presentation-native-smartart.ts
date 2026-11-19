@@ -802,6 +802,14 @@ export function readNativeSmartArtGroup(
       return null;
     original.set(p.modelId, { text: p.text, level: p.level });
   }
+  // A connector's own words (a flowchart's "yes" / "no", reading row 1017,
+  // TRIAGE S11) stand apart from the text channel: drawn as the file draws
+  // them, not typed into here, so the diagram's points still are.
+  const apart = new Set(
+    Array.isArray(receipt.labelsApart)
+      ? receipt.labelsApart.filter((id): id is string => pointId(id))
+      : [],
+  );
   const current = new Map<string, string>();
   for (const block of members) {
     const s = record(block.source),
@@ -817,6 +825,8 @@ export function readNativeSmartArtGroup(
     if (view.role !== "text") continue;
     let values = textSlots(block);
     const ids = view.dataPointIds;
+    if (apart.size && Array.isArray(ids) && ids.length && ids.every((id) => typeof id === "string" && apart.has(id)))
+      continue;
     // One point of several paragraphs drawn in one member: its text is the
     // member's paragraphs, line by line (the save's text channel maps it row
     

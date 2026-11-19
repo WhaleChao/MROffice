@@ -50,6 +50,23 @@ export function pdfReaderRefusalText(
   return generic;
 }
 
+
+
+
+
+
+
+
+
+
+export function pdfReaderRefusalReasonText(
+  message: string,
+  t: (key: string) => string,
+  said: string = pdfReaderRefusalText(message, t),
+): string {
+  return said === t("pdf.editRefusedGeneric") ? t("pdf.viewer.textUsesFontPdfContent") : said;
+}
+
 /** Test seam. */
 export function resetPdfReaderRefusalReportsForTests(): void {
   lastReported.clear();

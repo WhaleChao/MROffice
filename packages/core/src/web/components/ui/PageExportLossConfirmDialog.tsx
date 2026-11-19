@@ -147,6 +147,10 @@ const PAGE_EXPORT_LOSS_MESSAGE_KEYS: Readonly<Record<string, string>> =
     // (`office_conversion.ppt_export_loss_codes`), asked before it is written.
     ppt_export_smartart_as_shapes:
       "toolbar.exportLossCode.ppt_export_smartart_as_shapes",
+    // A deck's PDF: a cache-less SmartArt the engine did not lay out printed
+    // as its dashed frame (`smartart_absent_scene`, TRIAGE S2f).
+    presentation_smartart_not_laid_out_in_pdf:
+      "toolbar.exportLossCode.presentation_smartart_not_laid_out_in_pdf",
     ppt_export_shape_effects_dropped:
       "toolbar.exportLossCode.ppt_export_shape_effects_dropped",
     ppt_export_media_not_embedded:

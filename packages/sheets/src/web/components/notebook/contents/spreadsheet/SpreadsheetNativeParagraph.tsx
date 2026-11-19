@@ -4,13 +4,13 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { layoutNativeText, layoutNativeTextBatch, nativeTextLayoutIsKnown, nativeTextTouchedBy, resolveRelativePartFontSizes, type NativeTextLayoutRequest, nativeTextFontLead, nativeParagraphLineStyle, nativeParagraphLinePitch, measureNativeLineAdvance, nativeTextAlignmentOffset, nativeStrutBaselinePx, nativeLinesWithoutHangingSpaces, type NativeTextAlignmentBox, type NativeTextPart, type NativeTextLine } from "../../../../lib/spreadsheet/native-text-layout";
 import { nativeTextLayoutQuantum, nativeTypographyGeneration, resolveSpreadsheetTextStyle, subscribeNativeTypography } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { fontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
 import { cellWrappedBottomJustifyContent, cellWrappedMiddleJustifyContent, distributedLineUnits } from "@mrnote/core/web/lib/spreadsheet/cell-format.ts";
-import { officeKeptWrappedLines, officePrintedBaselineShiftPx } from "../../../../lib/spreadsheet/office-wrapped-bottom";
+import { officeKeptWrappedLines, officePrintedBaselineShiftPx, officePrintedBaselineSnapPx } from "../../../../lib/spreadsheet/office-wrapped-bottom";
 import { SpreadsheetNativeTextParts, spreadsheetNativeTextPaint } from "./SpreadsheetNativeText";
 
 /** A paragraph whose lines the commit's batch has yet to lay out. */
@@ -38,10 +38,19 @@ function requestNativeTextLayout(request:NativeTextLayoutRequest,done:()=>void):
   return()=>{batchListeners.delete(done)};
 }
 
+/** A printed link's anchor: the text's own colour and no line of its own
+ * (the cell's underline, where it has one, is its cell's). */
+export const PRINTED_LINK_STYLE:CSSProperties={color:"inherit",textDecoration:"none",cursor:"inherit"};
 const noTypographySubscription=()=>()=>{};
 const noTypographyGeneration=()=>0;
-export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false,spread,distributed=false,officeBaseline,officePrintedPage,officeWrap}: {
+export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,layoutWidth,alignmentBox,boxStyle,drawSingleRun=false,spread,distributed=false,officeBaseline,officePrintedPage,officeWrap,linkHref}: {
   parts:readonly NativeTextPart[];style:CSSProperties;dpi:number;scale?:number;wrap?:boolean;layoutWidth?:number;alignmentBox?:NativeTextAlignmentBox;
+  /** Printed, the address the cell's link goes to: each line's text is an
+   * anchor in its own line, which the printed PDF carries as a link over
+   * that line's text (Excel's Save As PDF writes one a printed line,
+   * xlsx-rounds XC-204). The anchor is an inline box in the line's own font
+   * and colour: nothing moves and nothing is drawn for it. */
+  linkHref?:string;
   /** Vertical Justify / Distributed: the lines spread over the paragraph's
    * box, which fills the cell (the page's text box; lookwin probe p22). Lines
    * taller than the box keep to its top, as Excel prints them. */
@@ -197,8 +206,13 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
   // Printed, each placed line moves onto Excel's whole printer dot.
   const lineShift=(index:number)=>officePrintedPage&&strut!==undefined&&firstBaseline!==undefined&&(index===0||pitch!==undefined)
     ?officePrintedBaselineShiftPx(officePrintedPage.top+firstBaseline+index*(pitch??0),officePrintedPage.dotPx):undefined;
+  // Printed, each placed line stands on the whole pixel its shift counts from
+  // (officePrintedBaselineSnapPx): the first by the paragraph's place, the
+  // others by their own tops.
+  const lineSnap=(index:number)=>lineShift(index)!==undefined&&officePrintedPage&&firstBaseline!==undefined
+    ?officePrintedBaselineSnapPx(officePrintedPage.top+firstBaseline+index*(pitch??0)):0;
   const paragraphStyle:CSSProperties={...boxStyle,display:"block",width:"100%",minWidth:0,...(fixedLines?{position:"relative",height:lineHeight*scale*lines.length}:{}),
-    ...(strut!==undefined&&firstBaseline!==undefined?{marginTop:firstBaseline-strut,flex:"none",
+    ...(strut!==undefined&&firstBaseline!==undefined?{marginTop:firstBaseline-strut+lineSnap(0),flex:"none",
       ...(!fixedLines&&lines?.length===1&&lineShift(0)!==undefined?{transform:`translateY(${lineShift(0)}px)`}:{})}:{}),
     ...(spreading?{display:"flex",flexDirection:"column",justifyContent:spread,height:"100%"}:{}),
     // Wrapped lines not placed yet (their layout still pending, or no fixed
@@ -215,6 +229,7 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
   // alignment offset, no line break to carry): the paragraph and its line are
   // two blocks of the same box, so one element draws both. Most cells on a
   // sheet are this, and the grid mounts one node less for each.
+  const linked=(node:ReactNode)=>linkHref?<a href={linkHref} data-spreadsheet-printed-link="" tabIndex={-1} style={PRINTED_LINK_STYLE}>{node}</a>:node;
   const only=lines?.length===1&&!fixedLines&&shown?.offsets[0]===undefined&&!lines[0].hardBreak&&!distributed?lines[0]:undefined;
   if(only){
     const lineStyle={...paragraphStyle,...nativeParagraphLineStyle(only,style,scale,dpi,lineHeight)};
@@ -226,9 +241,9 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
       const lead=nativeTextFontLead(run);
       const paint=spreadsheetNativeTextPaint({text:run.text,style:resolveSpreadsheetTextStyle({...style,...run.style},lead,dpi),dpi,scale,advanceOffset:0,fontLeadingText:lead,partStyle:run.style});
       if(paint.style.fontFamily===lineStyle.fontFamily&&paint.style.fontSize===lineStyle.fontSize&&paint.style.fontStyle===lineStyle.fontStyle&&paint.style.fontWeight===undefined)
-        return <span ref={ref} data-spreadsheet-native-paragraph="" data-native-text-line="" data-spreadsheet-native-text="" style={{...lineStyle,...paint.style}}>{paint.children}</span>;
+        return <span ref={ref} data-spreadsheet-native-paragraph="" data-native-text-line="" data-spreadsheet-native-text="" style={{...lineStyle,...paint.style}}>{linked(paint.children)}</span>;
     }
-    return <span ref={ref} data-spreadsheet-native-paragraph="" data-native-text-line="" style={lineStyle}>{paintParts(only.parts)}</span>;
+    return <span ref={ref} data-spreadsheet-native-paragraph="" data-native-text-line="" style={lineStyle}>{linked(paintParts(only.parts))}</span>;
   }
   // Distributed: each line's units at their places, the gaps between them
   // equal (or the line centred, or at the start where it overfills).
@@ -255,12 +270,12 @@ export function SpreadsheetNativeParagraph({parts,style,dpi,scale=1,wrap=true,la
       const terminal=resolveSpreadsheetTextStyle({...style,...line.breakStyle},"",dpi);
       const offset=shown?.offsets[index];
       const shift=fixedLines?lineShift(index):undefined;
-      return <span key={index} data-native-text-line="" style={{...(shift!==undefined?{transform:`translateY(${shift}px)`}:{}),...nativeParagraphLineStyle(line,style,scale,dpi,lineHeight),...(fixedLines?{position:"absolute",top:index*lineHeight*scale,left:offset??0,width:"100%",...(offset!==undefined?{textAlign:"left"}:{})}:offset!==undefined?{textAlign:"left",position:"relative",left:offset}:{}),
+      return <span key={index} data-native-text-line="" style={{...(shift!==undefined?{transform:`translateY(${shift}px)`}:{}),...nativeParagraphLineStyle(line,style,scale,dpi,lineHeight),...(fixedLines?{position:"absolute",top:index*lineHeight*scale+(index?lineSnap(index)-lineSnap(0):0),left:offset??0,width:"100%",...(offset!==undefined?{textAlign:"left"}:{})}:offset!==undefined?{textAlign:"left",position:"relative",left:offset}:{}),
         ...(spreading?{flex:"none",...(lineHeight!==undefined?{height:lineHeight*scale}:{})}:{}),
         ...(distributedRoom!==undefined?{textAlign:"left"}:{})}}>
-        {distributedLine(line)??paintParts(line.parts)}
+        {linked(distributedLine(line)??paintParts(line.parts))}
         {line.hardBreak?<><span style={{fontFamily:terminal.fontFamily,fontWeight:terminal.fontWeight,fontStyle:terminal.fontStyle,fontSize:typeof terminal.fontSize==="number"?terminal.fontSize*scale:terminal.fontSize,lineHeight:lineHeight===undefined?undefined:0}}/><span style={{display:"none"}}>{line.hardBreak}</span></>:null}
       </span>;
-    }):paintParts(parts)}
+    }):linked(paintParts(parts))}
   </span>;
 }

@@ -6,6 +6,7 @@
  */
 import { useMemo } from "react";
 import { normalizeNativeGrid } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { officeApplicationStandardPrintScale } from "../../../../lib/spreadsheet/office-print-metrics";
 import { resolveSpreadsheetNativeGrid } from "../../../../lib/spreadsheet/row-column-buttons";
 import { nativeGridFontForLocale, nativeGridLatinLocale, type SpreadsheetThemeFontSet } from "@mrnote/core/web/lib/spreadsheet/workbook-theme.ts";
 
@@ -26,7 +27,11 @@ import { nativeGridFontForLocale, nativeGridLatinLocale, type SpreadsheetThemeFo
 
 
 
-export function useSpreadsheetNativeGrid(raw: unknown, widths: Record<string, number> | undefined, defaultWidth: number | undefined, themeId?: string, bodyFamily?: string, headingFamily?: string, localeFonts?: SpreadsheetThemeFontSet, locale?: string) {
+export function useSpreadsheetNativeGrid(raw: unknown, widths: Record<string, number> | undefined, defaultWidth: number | undefined, themeId?: string, bodyFamily?: string, headingFamily?: string, localeFonts?: SpreadsheetThemeFontSet, locale?: string,
+  // The sheet prints in the application's standard font's printer metrics
+  // (officePrintsInApplicationStandardFont): the print scale alone changes,
+  // the screen grid keeps the workbook's own pixels.
+  applicationStandardPrint = false) {
   const grid = useMemo(() => normalizeNativeGrid(raw), [raw]);
   // The grid font as the UI's language draws it: Chinese Excel counts a
   // theme-bound Normal font's columns in the theme's Hans face (X-329).
@@ -37,7 +42,10 @@ export function useSpreadsheetNativeGrid(raw: unknown, widths: Record<string, nu
   // the workbook's rows (X-329).
   const localeRows = Boolean(locale && nativeGridLatinLocale(locale));
   return useMemo(
-    () => resolveSpreadsheetNativeGrid(grid, widths, defaultWidth, themeId, bodyFamily, headingFamily, localeFamily, localeRows),
-    [grid, widths, defaultWidth, themeId, bodyFamily, headingFamily, localeFamily, localeRows],
+    () => {
+      const resolved = resolveSpreadsheetNativeGrid(grid, widths, defaultWidth, themeId, bodyFamily, headingFamily, localeFamily, localeRows);
+      return resolved && applicationStandardPrint ? { ...resolved, printScale: officeApplicationStandardPrintScale() } : resolved;
+    },
+    [grid, widths, defaultWidth, themeId, bodyFamily, headingFamily, localeFamily, localeRows, applicationStandardPrint],
   );
 }

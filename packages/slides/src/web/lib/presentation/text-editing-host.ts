@@ -182,7 +182,8 @@ const DISSOLVABLE_TEXT_BOX_KEYS: ReadonlySet<string> = new Set([
 
 /**
  * The style Insert > Text Box writes on a new box (`textBoxBlock`): its 18 pt
- * size (PPT-G011), and the vertical box's writing mode. A box still wearing
+ * size (PPT-G011), the vertical box's writing mode, and the double-clicked
+ * box's Word wrap off. A box still wearing
  * exactly that is the creation shape; any other style is the user's.
  */
 function isCreationTextBoxStyle(style: unknown, inPoints: boolean): boolean {
@@ -193,7 +194,10 @@ function isCreationTextBoxStyle(style: unknown, inPoints: boolean): boolean {
     Object.keys(record).every(
       (key) =>
         key === "fontSize" ||
-        (key === "writingMode" && record.writingMode === "vertical-rl"),
+        (key === "writingMode" && record.writingMode === "vertical-rl") ||
+        // A double click on the empty slide's box does not wrap: it grows
+        // with its words (PowerPoint: Word wrap off, Resize shape to fit).
+        (key === "textWrap" && record.textWrap === false),
     )
   );
 }

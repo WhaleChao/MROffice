@@ -17,7 +17,7 @@ import type { Engine } from "./engine.ts";
 import { FORMATS, csvWorkbook, documentMarkdown, extensionOf, htmlToMarkdown, markdownToHtml, parseMrdoc, safeFileName, stem, workbookCsv } from "./formats.ts";
 import { fetchDocumentUrl } from "./fetch-url.ts";
 import type { Renderer } from "./render.ts";
-import type { DocumentStore, StoredDocument } from "./store.ts";
+import { DocumentNotFound, type DocumentStore, type StoredDocument } from "./store.ts";
 import { editorCsp, editorPage } from "./widget.ts";
 
 export const VIEW_URI = "ui://mroffice/editor.html";
@@ -113,12 +113,28 @@ export interface ServerOptions {
    * own machine: stdio, loopback HTTP). A server reached by many people lists
    * only the documents this connection made: ids are not to be handed out. */
   readonly listAll?: boolean;
+  /** A server people sign in to: the caller's MR Office account. Documents
+   * this connection makes are theirs, and every tool reaches only that
+   * account's documents (an id of someone else's is "no such document"). */
+  readonly owner?: string;
 }
 
 export function createServer(services: Services, options: ServerOptions = {}): McpServer {
   const { config, store, engine, renderer } = services;
-  const listAll = options.listAll ?? true;
+  const owner = options.owner;
+  const listAll = (options.listAll ?? true) && !owner;
   const made = new Set<string>();
+  /** A document this connection may use: on a signed-in server, its owner's only. */
+  const own = (id: string, rev?: number): StoredDocument => {
+    const doc = store.get(id, rev);
+    if (owner && doc.owner !== owner) throw new DocumentNotFound(id);
+    return doc;
+  };
+  const created = (doc: StoredDocument): StoredDocument => {
+    made.add(doc.id);
+    if (owner) store.capOwner(owner, config.maxDocumentsPerPerson);
+    return doc;
+  };
   const server = new McpServer(
     { name: "mroffice", title: "MR Office", version: VERSION, websiteUrl: config.webAppUrl },
     {
@@ -199,15 +215,16 @@ export function createServer(services: Services, options: ServerOptions = {}): M
         const name = safeFileName(title);
         const doc =
           kind === "spreadsheet"
-            ? store.create({ format: "csv", title: name, name: `${name}.csv`, bytes: new TextEncoder().encode(content), by: "model" })
+            ? store.create({ format: "csv", title: name, name: `${name}.csv`, bytes: new TextEncoder().encode(content), by: "model", owner })
             : store.create({
                 format: format ?? (engine.available ? "docx" : "md"),
                 title: name,
                 name: `${name}.html`,
                 bytes: new TextEncoder().encode(markdownToHtml(content, name)),
                 by: "model",
+                owner,
               });
-        made.add(doc.id);
+        created(doc);
         return await shown(doc, "Created");
       } catch (error) {
         return errorResult(error);
@@ -255,8 +272,8 @@ export function createServer(services: Services, options: ServerOptions = {}): M
           editorBytes = imported.bytes;
           losses = imported.losses;
         }
-        const doc = store.create({ format: extension === "markdown" ? "md" : extension, title: stem(fileName), name: editorName, bytes: editorBytes, by: "model", importLosses: losses });
-        made.add(doc.id);
+        const doc = store.create({ format: extension === "markdown" ? "md" : extension, title: stem(fileName), name: editorName, bytes: editorBytes, by: "model", importLosses: losses, owner });
+        created(doc);
         return await shown(doc, "Opened");
       } catch (error) {
         return errorResult(error);
@@ -282,7 +299,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     },
     async ({ id, content, expected_revision }) => {
       try {
-        const doc = store.get(id);
+        const doc = own(id);
         const { kind } = documentText(doc);
         if (kind !== "document" && kind !== "spreadsheet") throw new Error(`A ${kind} is changed in the editor, not by replacing its content.`);
         const saved =
@@ -308,7 +325,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     },
     async ({ id, include_file }) => {
       try {
-        const doc = store.get(id);
+        const doc = own(id);
         const { text, kind } = documentText(doc);
         const header = `"${doc.title}" (document ${doc.id}, ${kind}), revision ${doc.current.rev}, last saved by ${doc.current.by === "person" ? "the person in the editor" : "you"} at ${doc.current.at}.`;
         const content: ContentBlock[] = [{ type: "text", text: `${header}\n\n${text}` }];
@@ -335,7 +352,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     },
     async ({ id, page }) => {
       try {
-        const doc = store.get(id);
+        const doc = own(id);
         const png = await renderer.render(doc, page);
         return {
           content: [
@@ -362,7 +379,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     },
     async ({ id, format }) => {
       try {
-        const doc = store.get(id);
+        const doc = own(id);
         const file = await exportFile(services, doc, format ?? doc.format);
         const link = fileUrl(config, doc, file.format);
         return {
@@ -382,12 +399,14 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     "list_documents",
     {
       title: "List documents",
-      description: "The documents created or opened with this server, newest first.",
+      description:
+        `The documents created or opened with this server${owner ? " with your MR Office account" : ""}, newest first.` +
+        (config.retentionDays ? ` Each is kept ${config.retentionDays} days after its last save; export what you keep.` : ""),
       inputSchema: {},
       annotations: { title: "List documents", readOnlyHint: true, openWorldHint: false },
     },
     async () => {
-      const documents = store.list().filter((meta) => listAll || made.has(meta.id)).map((meta) => ({ id: meta.id, title: meta.title, format: meta.format, revisions: meta.revisions.length, lastEditedBy: meta.revisions.at(-1)?.by }));
+      const documents = store.list().filter((meta) => listAll || (owner ? meta.owner === owner : made.has(meta.id))).map((meta) => ({ id: meta.id, title: meta.title, format: meta.format, revisions: meta.revisions.length, lastEditedBy: meta.revisions.at(-1)?.by }));
       return {
         content: [{ type: "text", text: documents.length ? documents.map((doc) => `${doc.id}  ${doc.title} (${doc.format}, revision ${doc.revisions}, last by ${doc.lastEditedBy})`).join("\n") : "No documents yet." }],
         structuredContent: { documents },
@@ -462,7 +481,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
     },
     async ({ id }) => {
       try {
-        const doc = store.get(id);
+        const doc = own(id);
         return {
           content: [{ type: "text", text: `Loaded ${doc.current.name}` }],
           structuredContent: { id: doc.id, title: doc.title, format: doc.format, name: doc.current.name, rev: doc.current.rev, by: doc.current.by, base64: Buffer.from(doc.bytes).toString("base64"), viewUrl: viewUrl(config, doc) },
@@ -487,6 +506,7 @@ export function createServer(services: Services, options: ServerOptions = {}): M
       try {
         const bytes = new Uint8Array(Buffer.from(base64, "base64"));
         if (bytes.byteLength > config.maxFileBytes) throw new Error("The document is larger than this server keeps.");
+        own(id);
         const saved = store.save(id, { name: safeFileName(name), bytes, by: "person", baseRev });
         return { content: [{ type: "text", text: `Saved revision ${saved.current.rev}` }], structuredContent: { rev: saved.current.rev, name: saved.current.name } };
       } catch (error) {

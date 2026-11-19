@@ -7,11 +7,15 @@ import type { EditorView } from "@tiptap/pm/view";
 import { newFontFacesOf } from "../../../../lib/font-face-news";
 import { editorFontFamilies, facesUsedBy, fontFamilyNames, loadedFaceRanges, textDrawsCodePointIn } from "./paged/ledger/ledgerFontRanges";
 import { sheetsOf } from "./paged/sheetMeasureMemo";
+import { coldFirstLayout } from "./paged/coldFirstLayout";
 
 type FaceLike = { family?: string; unicodeRange?: string };
 
 export function projectionFontNewsOn(view: EditorView): boolean {
-  return (view.dom.ownerDocument.defaultView as (Window & { __docsProjectionFontNews?: boolean }) | null)?.__docsProjectionFontNews === true;
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsProjectionFontNews?: boolean }) | null;
+  if (win?.__docsProjectionFontNews === true) return true;
+  // The cold first layout reads a late face only where it draws (coldFirstLayout).
+  return win?.__docsProjectionFontNews !== false && coldFirstLayout(win)?.fontNews === true;
 }
 
 /** "all": the whole document; "none": nothing; else the sheets and the

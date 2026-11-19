@@ -6,6 +6,7 @@
 import * as Y from "yjs";
 import type { Node as ProseMirrorNode, Schema } from "@tiptap/pm/model";
 import { updateYFragment } from "@tiptap/y-tiptap";
+import { installPositionalTextWrites } from "./y-text-run-write";
 import { reconcileRootByIdentity } from "./y-root-reconcile";
 import { holdsUndefined, jsonCleanYValue } from "./y-json-values";
 
@@ -138,6 +139,8 @@ export function updateCanonicalYFragment(
   doc: Y.Doc, fragment: Y.XmlFragment, node: ProseMirrorNode,
   meta: Parameters<typeof updateYFragment>[3],
 ) {
+  // Each key where it was typed and with its formatting (y-text-run-write).
+  installPositionalTextWrites(meta as unknown as Parameters<typeof installPositionalTextWrites>[0]);
   watchChanges(doc);
   const foreign = foreignAttributeElements.get(doc);
   const kept: Array<[Y.XmlElement, Record<string, unknown>, Y.XmlFragment | Y.XmlElement | null, number]> = [];

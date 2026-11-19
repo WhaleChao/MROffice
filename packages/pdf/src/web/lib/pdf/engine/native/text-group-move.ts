@@ -2684,7 +2684,7 @@ async function probeGroup(
     ? await readGroupBoldFaces(sourceBytes, pageNumber, showFonts) : null;
   const bold = modes.every((mode, index) => mode === 2 || (faces?.[index] ?? false));
   try {
-    deriveMraiNativeTextGroupMoveRewrite({
+    const weighed = deriveMraiNativeTextGroupMoveRewrite({
       ...input,
       transform: { a: 1, d: 1, e: 0, f: 0 },
       bold: { on: !bold },
@@ -2693,6 +2693,14 @@ async function probeGroup(
           mraiNativeTextGroupExtGStateNames([...input.prefix, input.source])),
       }),
     });
+    // The group's weight is written with every byte from its first show to
+    // its last (planResolvedGroupMove): a paragraph a browser set glyph by
+    // glyph is more than one edit carries, and its weight was offered here,
+    // pressed, and refused when it was planned ("This move rewrites more of
+    // the page than one edit may.": pdf-walk-1000 0294, 107 KB). Not offered,
+    // the weight is the box's paragraph's, which writes it by state where
+    // the text stands.
+    if (weighed.replacement.length > MAX_GROUP_REPLACEMENT_BYTES) return Object.freeze({});
   } catch (error) {
     if (!(error instanceof PdfNativeTransactionError)) throw error;
     return Object.freeze({});

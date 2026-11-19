@@ -3,7 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { offerOpenWhenAllowed } from "./download-file";
+import { downloadBlobFile, offerOpenWhenAllowed, startDownloadWhenAllowed } from "./download-file";
 
 /**
  * Hand a finished PDF to the browser's print dialog.
@@ -86,6 +86,19 @@ export function printPdfBlob(blob: Blob, options: PrintPdfOptions = {}): Promise
       if (activeFrame?.frame === frame) {
         window.clearTimeout(activeFrame.timer);
         activeFrame = null;
+      }
+      if ((globalThis as Record<string, unknown>).__mroEmbedSessionSignedIn === true) {
+        // An embedded editor (a frame in a partner's page): a tab opened on
+        // this frame's object URL is a page of another site's storage
+        // partition, which the browser may not open, and a pop-up no tap
+        // opened is refused anyway. The PDF is saved instead (or offered as
+        // Save), for the person to print, and the host hears of it
+        // (lib/embed/frame-downloads).
+        const name = options.name?.toLowerCase().endsWith(".pdf") ? options.name : `${options.name || "print"}.pdf`;
+        startDownloadWhenAllowed(name, () => downloadBlobFile(name, pdf));
+        window.setTimeout(() => URL.revokeObjectURL(url), PRINT_FRAME_LIFETIME_MS);
+        settle("tab");
+        return;
       }
       settle(openInTab(url, options.name));
     };

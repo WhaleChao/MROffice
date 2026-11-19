@@ -176,6 +176,10 @@ export function pdfNativeKeptTextBlockOfRecord(entry: unknown): PdfNativeKeptTex
   if (fidelity.positionedRestore === true ||
     ["paragraphRewrite", "positionedLines", "positionedRunGroup", "consolidatedRuns"]
       .some((key) => Boolean(record(fidelity[key])?.history))) return null;
+  // A format written where the text stands, by state alone, sets no block:
+  // every show of the paragraph is where the page drew it (mirror of the
+  // server's _pdf_kept_text_block_of_record).
+  if (record(fidelity.paragraphRewrite)?.inPlace === true) return null;
   const items = Array.isArray(selection?.items) && selection.items.length ? selection.items : [selection?.item];
   // Where the box's first item stands after the write: a move adds its
   // vector, a group move maps it (x' = a x + e, y' = d y + f).
@@ -258,6 +262,10 @@ export function pdfNativeWrittenBoxBlockOfRecord(entry: unknown): PdfNativeKeptT
   if (fidelity.positionedRestore === true ||
     ["paragraphRewrite", "positionedLines", "positionedRunGroup", "consolidatedRuns"]
       .some((key) => Boolean(record(fidelity[key])?.history))) return null;
+  // A format written where the text stands, by state alone, sets no block:
+  // every show of the paragraph is where the page drew it (mirror of the
+  // server's _pdf_kept_text_block_of_record).
+  if (record(fidelity.paragraphRewrite)?.inPlace === true) return null;
   const items = Array.isArray(selection?.items) && selection.items.length ? selection.items : [selection?.item];
   if (!items.every((item) => record(item) && typeof record(item)!.str === "string" && itemOrigin(item))) return null;
   // Only a write of the whole box names it: a word of a line set apart, named

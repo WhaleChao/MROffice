@@ -42,6 +42,21 @@ import { MRAI_NATIVE_PARAGRAPH_REWRITE_SCHEMA_VERSION, readMraiNativeParagraphRe
 import { MRAI_NATIVE_REORDERED_TEXT_MESSAGE, pdfTextHasRightToLeftRun } from "./reader-order";
 import { PDF_SOURCE_NAME } from "./pdf-source-name";
 import { pdfNativeSyntheticBoldStrokeWidth } from "../../native-synthetic-style";
+import {
+  MRAI_NATIVE_STANDING_STATE_UNKNOWN_MESSAGE,
+  applyStandingEdits,
+  mraiNativeStandingBytesAreStateOrRules,
+  mraiNativeStandingBytesCutAShow,
+  normalizeStandingEdits,
+  planStandingStateEdits,
+  standingEditPieces,
+  standingShowCuts,
+  standingStateTraceDiffers,
+  standingStrokeSpelling,
+  walkStandingStream,
+  type StandingEdit,
+  type StandingTarget,
+} from "./standing-state-edit";
 import { pdfNativeStreamHoldsTextRule, pdfNativeTextRuleBlock, pdfNativeTextRuleBlockEnds, pdfNativeTextRuleBlocksBeside, pdfNativeTextRuleStandingAt } from "./text-rule-block";
 import { pdfNativeTextRuleRangeIsWhole } from "../../native-text-rule-range";
 export { MRAI_NATIVE_PARAGRAPH_REWRITE_SCHEMA_VERSION, readMraiNativeParagraphRewriteEvidence };
@@ -57,6 +72,7 @@ import {
   mraiNativeEmptyChunkForm,
   mraiNativeEmptyShowPenForm,
   mraiNativeEmptyShowsForm,
+  mraiNativeContentTokens,
   mraiNativeShowOperatorsIn,
   mraiNativeTextAfterShowIsPlacedAfresh,
 } from "./text-object-delete";
@@ -161,6 +177,13 @@ export interface PdfNativeParagraphRewriteEvidence {
   }> | null;
   /** Set on an exact byte restore of the named rewrite. */
   readonly history?: Readonly<{ originTransactionId: string; direction: "undo" | "redo" }>;
+  /** A format written into the stream by state alone, where the text stands
+   * (planFormatByStateWhereTextStands): `shows` are the paragraph's shows,
+   * none of them emptied or drawn again -- no pen, no block, no bytes of the
+   * source carried. The record names what it writes as pieces of its span:
+   * the span itself, whole and in order, and between its ranges only state
+   * operators and rules (standing-state-edit.ts). */
+  readonly inPlace?: true;
 }
 
 /** A paragraph's frame as the reader resized it: the right edge, as an x of
@@ -220,6 +243,15 @@ export interface MraiNativeParagraphRewriteFont {
   /** The face's base font name, its subset tag left off; what tells a bold
    * or italic face of the paragraph from its regular one. */
   readonly faceName?: string;
+  /** The codes whose glyph name no name list reads (read as the code itself):
+   * what the reader reads for them is not known. A format written by state
+   * counts them as glyphs no character is named for. */
+  readonly nameUnreadCodes?: ReadonlySet<number>;
+  /** A Type3 face every painted glyph of which is a picture that says its
+   * own colours (`d0`: a colour emoji a browser prints as an image). Such a
+   * glyph has no weight to take: a weight asked of the text around it is
+   * written on that text, and the picture is drawn again as it stands. */
+  readonly type3Pictures?: true;
 }
 
 /** How a face is set, as its name says: bold (any heavier weight) and
@@ -327,13 +359,18 @@ export interface MraiNativeParagraphRewriteFormats {
 /** What a caller resolves the formats with once the paragraph is read: the
  * proof the write starts from (the objects it adds are numbered after its
  * own) and whether the paragraph is page content. */
-export type MraiNativeParagraphRewriteFormatsResolver = (context: Readonly<{
+export type MraiNativeParagraphRewriteFormatsResolver = ((context: Readonly<{
   request: PdfNativeListTextReplacementPlan["request"];
   /** The proof of the paragraph's first item (its font's page). */
   evidence: PdfNativeListTextReplacementPlan["evidence"];
   pageContent: boolean;
   text: string;
-}>) => Promise<MraiNativeParagraphRewriteFormats>;
+}>) => Promise<MraiNativeParagraphRewriteFormats>) & Readonly<{
+  
+
+
+  stateOnly?: boolean;
+}>;
 
 /** One show of the stream, as the surgical planner's walk reads it. */
 export interface MraiNativeParagraphRewriteShow {
@@ -358,6 +395,12 @@ export interface MraiNativeParagraphRewriteShow {
   readonly segmentCodeCounts: readonly number[];
   readonly segmentAdjustments: readonly number[];
   readonly leadingKerningAdvance: number;
+  /** The show stands under an /ActualText: the reader shows that text in
+   * place of its glyphs (naming a cluster of characters, or all of it). */
+  readonly underActualText?: true;
+  readonly underActualTextCluster?: true;
+  /** The clip box the show is drawn under, when one was read. */
+  readonly clipBox?: readonly [number, number, number, number] | null;
 }
 
 /**
@@ -419,6 +462,9 @@ export interface MraiNativeParagraphRewriteKernel {
   /** The numbers a show's `TJ` puts before its first glyph and after its
    * last, in thousandths of the size (the pen moves by them too). */
   showEdgeAdjustments(raw: string): number | null;
+  /** Whether the clip a show is drawn under cuts through its ink (the item
+   * proof's own check, for a show no item proof reached). */
+  showCutByClip(show: MraiNativeParagraphRewriteShow, font: MraiNativeParagraphRewriteFont): boolean;
   /** The current bytes of one content stream, for a history restore. */
   inspectStream(target: Readonly<{ objectNumber: number; generation: number }>): Promise<Readonly<{
     identity: PdfNativeContentStreamTransactionRequest["identity"];
@@ -428,7 +474,43 @@ export interface MraiNativeParagraphRewriteKernel {
   }>>;
   /** One object as it stands now, as a precondition. */
   pinObject(target: Readonly<{ objectNumber: number; generation: number }>): Promise<PdfNativeObjectPrecondition>;
+  /** The page's own content streams as a format written where the text
+   * stands reads them (readParagraphWhereItStands): no item of the selection
+   * is proved, so nothing here depends on the order the reader gives its
+   * characters in. Absent where the caller reads no page. */
+  standingPageStreams?(
+    selection: PdfNativeListTextSelectionEvidence,
+  ): Promise<readonly MraiNativeParagraphRewriteStandingStream[]>;
+  /** The paint state a stream of the page starts in, for a format written
+   * into it by state (standing-state-edit.ts): the page's streams drawn
+   * before it, and the line width each graphics state dictionary the page
+   * names sets (null: none; a name left out: not stated plainly). Null
+   * where the stream is not one of the page's own. */
+  standingStreamContext?(
+    selection: PdfNativeListTextSelectionEvidence,
+    plan: PdfNativeListTextReplacementPlan,
+  ): Promise<Readonly<{
+    prefix: readonly string[];
+    lineWidths(names: readonly string[]): Promise<ReadonlyMap<string, string | null>>;
+  }> | null>;
 }
+
+/**
+ * One content stream of the selection's page, for a format written where the
+ * text stands: a plan that names the stream (what `readStream` and
+ * `readShows` take), every font of the page's resources that could be
+ * proven, by its resource name, and the plan the write is carried by once
+ * the shows it draws again are known -- it pins the fonts they are drawn in
+ * and describes the paragraph by the first of them.
+ */
+export type MraiNativeParagraphRewriteStandingStream = Readonly<{
+  plan: PdfNativeListTextReplacementPlan;
+  fonts: ReadonlyMap<string, MraiNativeParagraphRewriteFont>;
+  firstPlan(
+    fontNames: readonly string[],
+    first: Readonly<{ fontName: string; fontSize: number }>,
+  ): Promise<PdfNativeListTextReplacementPlan>;
+}>;
 
 const LATIN1 = LATIN1_EXACT;
 
@@ -682,6 +764,18 @@ interface OwnedShow {
    * underline: a thin filled rectangle of its own colour): taken away with
    * the run and drawn again under its characters where they go. */
   readonly linkRule?: ParagraphLinkRule;
+  /** It draws glyphs and no character of the text: every one of them is a
+   * glyph its font only calls white space (MraiNativeParagraphRewriteFont
+   * .inkedBlankCodes: the marks an Urdu face stands over its letters), which
+   * the reader reads as a blank. Owned by where it stands and among which
+   * shows it is drawn, by the one read that owns such a show
+   * (readParagraphWhereItStands). */
+  readonly readsBlank?: true;
+  /** How far above its line's baseline a rule under it runs, where that is
+   * not its `rise`: a show the page stands off the baseline by where it
+   * places it (the letters of a Nastaleeq word step up along the line) is
+   * ruled on the line, with the shows beside it (readParagraphWhereItStands). */
+  readonly ruleRise?: number;
 }
 
 interface ParagraphLayout {
@@ -761,6 +855,17 @@ interface ReadParagraph {
   /** The paragraph's own line step, when `layout` is set at one the reader
    * asked for (paragraphAtRequestedLineStep). */
   readonly sourceLineStep?: number;
+  /** Read where it stands with glyphs its fonts name no character for
+   * (readParagraphWhereItStands, `unnamedGlyphs`): on a line that holds one,
+   * how many characters a show draws is not known, and `characterShows` says
+   * of such a line's characters only which line they are on (all of them are
+   * dealt to its first show). Every show of the paragraph is asked the same
+   * look, and its rules are read show by show. */
+  readonly unreadGlyphs?: true;
+  /** Written around the block where it is set inside the text object of the
+   * paragraph's last show, which is ended before it and begun again after it
+   * (standingBlockSplit). */
+  readonly blockWrap?: Readonly<{ before: string; after: string }>;
   /** The factor its shows are scaled by, when set at the reader's size
    * (paragraphAtRequestedSize). */
   readonly sizeScale?: number;
@@ -786,6 +891,11 @@ interface ReadParagraph {
   /** What the paragraph's lines leave between their words, as a share of
    * the line's size; null where no line of it has a gap to measure. */
   readonly gapRatio: number | null;
+  /** Why this tier's measure cannot set the paragraph anew, where the read
+   * went on without it (readParagraph's `standing`): a format that moves no
+   * glyph draws every show again by the array the page drew it with, and
+   * needs none of the measure; anything that sets a line refuses with this. */
+  readonly measureRefusal?: string;
   /** By character of the paragraph's text: a blank standing between two shows
    * on one line (a TeX line's words and formulas are each their own), what the
    * line leaves there, along it. */
@@ -1036,6 +1146,133 @@ async function itemsAsTheirShows(
 }
 
 /**
+ * The rules drawn under (through) a paragraph's shows, read as its shows'
+ * own formats (readParagraph's; its comments are on the lines below): this
+ * writer's rules beside the shows' text objects, marked on the shows they
+ * rule whole (`shows` is updated in place) and returned by character where
+ * one rules part of a show, and the rules another writer drew under them.
+ * `rules` are the spans taken away with the text. `characterShows` may be
+ * empty: no rule under part of a show is then read as the paragraph's.
+ */
+function paragraphOwnRules(input: Readonly<{
+  streamBytes: Uint8Array;
+  source: string;
+  shows: OwnedShow[];
+  basis: readonly [number, number, number, number];
+  blockMatrix: Matrix;
+  lineBaselines: readonly number[];
+  paragraphCharacters: readonly string[];
+  characterShows: readonly number[];
+}>): { rules: Readonly<{ start: number; end: number }>[];
+  ruledCharacters: Map<number, { underline?: true; strikethrough?: true }> } {
+  const { streamBytes, source, shows, basis, blockMatrix, lineBaselines, paragraphCharacters, characterShows } = input;
+  const beside = paragraphRuleSpansOnItsLines(streamBytes, source, shows, basis, lineBaselines);
+  const matched = new Map<number, { underline?: true; strikethrough?: true }>();
+  const ruledCharacters = new Map<number, { underline?: true; strikethrough?: true }>();
+  const ruledAt = new Set<number>();
+  // Where a rule under a show runs, across the lines.
+  const ruleAcross = (owned: OwnedShow) =>
+    owned.ruleRise !== undefined ? lineBaselines[owned.line] + owned.ruleRise : owned.v + owned.rise;
+  for (const [index, owned] of shows.entries()) {
+    if (!beside.length || !owned.inked || !(owned.inked.end > owned.inked.start) ||
+      !owned.show.graphicsMatrix.every((value, at) => Math.abs(value - blockMatrix[at]) <= 1e-9)) continue;
+    const object = enclosingTextObject(source, owned.start);
+    const across = ruleAcross(owned);
+    const geometry = { textMatrix: [basis[0], basis[1], basis[2], basis[3],
+      owned.inked.start * basis[0] + across * basis[2], owned.inked.start * basis[1] + across * basis[3]] as
+      [number, number, number, number, number, number],
+    fontSize: owned.size, advance: owned.inked.end - owned.inked.start, color: owned.color };
+    for (const style of ["underline", "strikethrough"] as const) {
+      let standing: ReturnType<typeof pdfNativeTextRuleStandingAt> = null;
+      try {
+        standing = pdfNativeTextRuleStandingAt(streamBytes, style === "underline" ? object.start : object.end,
+          style, geometry);
+      } catch { standing = null; }
+      if (!standing || ruledAt.has(standing.start)) continue;
+      if (pdfNativeTextRuleRangeIsWhole(standing.range)) {
+        ruledAt.add(standing.start);
+        matched.set(index, { ...matched.get(index), [style]: true });
+        continue;
+      }
+      // Its characters by where the source inks them, one to one (no
+      // ligature); the blanks between them are under it too.
+      const own = paragraphCharacters.flatMap((character, at) =>
+        characterShows[at] === index && !isBlank(character) ? [at] : []);
+      if (own.length !== owned.ink.length) continue;
+      const from = owned.inked.start + standing.range.from * geometry.advance;
+      const to = owned.inked.start + standing.range.to * geometry.advance;
+      const under = own.filter((_, at) => {
+        const middle = (owned.ink[at][0] + owned.ink[at][1]) / 2;
+        return middle >= from && middle <= to;
+      });
+      if (!under.length) continue;
+      ruledAt.add(standing.start);
+      for (let at = under[0]; at <= under.at(-1)!; at += 1) {
+        ruledCharacters.set(at, { ...ruledCharacters.get(at), [style]: true });
+      }
+    }
+  }
+  // A rule under consecutive runs of one line is one rule (setParagraph draws
+  // it from where the first is inked to where the last is): the rule of
+  // every run it runs under, whole. Read run by run it was no run's, the
+  // paragraph then owned none of its rules (all or none), and an underline
+  // set on a line of several runs -- a line drawn again show by show where it
+  // stands, a title's words in two faces -- could not be taken off again,
+  // nor go with its words.
+  if (beside.length && !beside.every((rule) => ruledAt.has(rule.start))) {
+    const determinant = basis[0] * basis[3] - basis[1] * basis[2];
+    const along = (point: readonly [number, number]) => (point[0] * basis[3] - point[1] * basis[2]) / determinant;
+    const ruled = shows.flatMap((owned, index) => owned.inked && owned.inked.end > owned.inked.start &&
+      owned.show.graphicsMatrix.every((value, at) => Math.abs(value - blockMatrix[at]) <= 1e-9) ? [{ index, owned, inked: owned.inked }] : []);
+    for (const rule of beside) {
+      if (ruledAt.has(rule.start) || !(Math.abs(determinant) > 1e-12)) continue;
+      const ends = pdfNativeTextRuleBlockEnds(streamBytes.slice(rule.start, rule.end));
+      if (!ends) continue;
+      const from = along(ends.from), to = along(ends.to);
+      const near = (left: number, right: number) => Math.abs(left - right) <= 1e-3 + 1e-4 * Math.abs(to - from);
+      for (const first of ruled) {
+        if (ruledAt.has(rule.start)) break;
+        if (!near(first.inked.start, from)) continue;
+        // The runs of its line the rule runs under, from this one on.
+        const under = ruled.filter((entry) => entry.owned.line === first.owned.line &&
+          entry.inked.start >= from - 1e-3 && entry.inked.end <= to + 1e-3 + 1e-4 * Math.abs(to - from));
+        if (under.length < 2 || !under.some((entry) => near(entry.inked.end, to)) ||
+          under.some((entry) => entry.owned.size !== first.owned.size ||
+            Math.abs(ruleAcross(entry.owned) - ruleAcross(first.owned)) > 1e-6 ||
+            JSON.stringify(entry.owned.color) !== JSON.stringify(first.owned.color) ||
+            enclosingTextObject(source, entry.owned.start).start !== enclosingTextObject(source, first.owned.start).start)) continue;
+        const object = enclosingTextObject(source, first.owned.start);
+        const across = ruleAcross(first.owned);
+        const geometry = { textMatrix: [basis[0], basis[1], basis[2], basis[3],
+          from * basis[0] + across * basis[2], from * basis[1] + across * basis[3]] as
+          [number, number, number, number, number, number],
+        fontSize: first.owned.size, advance: to - from, color: first.owned.color };
+        for (const style of ["underline", "strikethrough"] as const) {
+          let standing: ReturnType<typeof pdfNativeTextRuleStandingAt> = null;
+          try {
+            standing = pdfNativeTextRuleStandingAt(streamBytes, style === "underline" ? object.start : object.end, style, geometry);
+          } catch { standing = null; }
+          if (!standing || standing.start !== rule.start || !pdfNativeTextRuleRangeIsWhole(standing.range)) continue;
+          ruledAt.add(rule.start);
+          for (const entry of under) matched.set(entry.index, { ...matched.get(entry.index), [style]: true });
+          break;
+        }
+      }
+    }
+  }
+  const ownRules = beside.length && beside.every((rule) => ruledAt.has(rule.start)) ? beside : [];
+  if (!ownRules.length) ruledCharacters.clear();
+  if (ownRules.length) for (const [index, marks] of matched) shows[index] = Object.freeze({ ...shows[index], ...marks });
+  // And the rules another writer drew under them (a web print's links).
+  const linked = paragraphLinkRules({ source, shows, basis, blockMatrix, skip: beside,
+    lineSizes: lineBaselines.map((_, line) => Math.max(0, ...shows.filter((show) => show.line === line)
+      .map((show) => show.size))) });
+  if (linked) for (const [index, linkRule] of linked.marks) shows[index] = Object.freeze({ ...shows[index], linkRule });
+  const rules = [...ownRules, ...(linked?.spans ?? [])].sort((left, right) => left.start - right.start);
+  return { rules, ruledCharacters };
+}
+
+/**
  * The paragraph a selection names, read and owned: every reader item proved
  * alone, the shows those proofs name, where each is on the page and how it is
  * set, and the paragraph's original layout.
@@ -1043,7 +1280,13 @@ async function itemsAsTheirShows(
 async function readParagraph(
   kernel: MraiNativeParagraphRewriteKernel,
   named: PdfNativeListTextSelectionEvidence,
+  /** The edit keeps the text and asks formats only (planMraiNativeParagraphRewrite):
+   * what only the measure needs is not refused here but handed on as
+   * `measureRefusal`, for setParagraph to refuse with once the formats turn
+   * out to set a line after all. Ownership is read as strictly either way. */
+  standing = false,
 ): Promise<ReadParagraph> {
+  let measureRefusal: string | undefined;
   const selection = kernel.exactSelection(named);
   let items = selection.items ?? [selection.item];
   if (items.length < 1 || items.length > 256) refuse("Paragraph rewrite item count is unsupported.");
@@ -1265,12 +1508,17 @@ async function readParagraph(
     // ends, as it drops the kerning inside a line. One the source draws
     // anywhere else -- past a number of its array, or opening a show of its
     // own -- would come off the glyph it is drawn over, and the "≠" would be
-    // a slash beside an "=". (Mirror of the replay's owned shows.)
+    // a slash beside an "=". (Mirror of the replay's owned shows.) Drawn again
+    // where it stands, by its own array, the mark stays over what it is drawn
+    
+    // an underline and a bold of a TeX paragraph holding one "≠").
     for (const [index, glyph] of glyphs.entries()) {
       if (glyph.text === undefined || !PDFJS_ZERO_WIDTH_DIACRITIC.test(glyph.text)) continue;
       if (partial && !(index * font.codeUnitBytes >= partial.codeStart && index * font.codeUnitBytes < partial.codeEnd)) continue;
       if (index === 0 || Math.abs(glyph.start - glyphs[index - 1].end) > 1e-9 * show.fontSize) {
-        refuse("A mark of this paragraph is drawn off the glyph the rewrite would set it after.");
+        const message = "A mark of this paragraph is drawn off the glyph the rewrite would set it after.";
+        if (!standing) refuse(message);
+        measureRefusal ??= message;
       }
     }
     const linear = linearOf(show);
@@ -1545,106 +1793,8 @@ async function readParagraph(
   // Only where every such rule beside the paragraph's text objects is one
   // of its runs' (all or none: an undo finds them again by their place,
   // paragraphRuleSpans).
-  const beside = paragraphRuleSpans(streamBytes, source, shows);
-  const matched = new Map<number, { underline?: true; strikethrough?: true }>();
-  const ruledCharacters = new Map<number, { underline?: true; strikethrough?: true }>();
-  const ruledAt = new Set<number>();
-  for (const [index, owned] of shows.entries()) {
-    if (!beside.length || !owned.inked || !(owned.inked.end > owned.inked.start) ||
-      !owned.show.graphicsMatrix.every((value, at) => Math.abs(value - blockMatrix[at]) <= 1e-9)) continue;
-    const object = enclosingTextObject(source, owned.start);
-    const across = owned.v + owned.rise;
-    const geometry = { textMatrix: [basis[0], basis[1], basis[2], basis[3],
-      owned.inked.start * basis[0] + across * basis[2], owned.inked.start * basis[1] + across * basis[3]] as
-      [number, number, number, number, number, number],
-    fontSize: owned.size, advance: owned.inked.end - owned.inked.start, color: owned.color };
-    for (const style of ["underline", "strikethrough"] as const) {
-      let standing: ReturnType<typeof pdfNativeTextRuleStandingAt> = null;
-      try {
-        standing = pdfNativeTextRuleStandingAt(streamBytes, style === "underline" ? object.start : object.end,
-          style, geometry);
-      } catch { standing = null; }
-      if (!standing || ruledAt.has(standing.start)) continue;
-      if (pdfNativeTextRuleRangeIsWhole(standing.range)) {
-        ruledAt.add(standing.start);
-        matched.set(index, { ...matched.get(index), [style]: true });
-        continue;
-      }
-      // Its characters by where the source inks them, one to one (no
-      // ligature); the blanks between them are under it too.
-      const own = paragraphCharacters.flatMap((character, at) =>
-        characterShows[at] === index && !isBlank(character) ? [at] : []);
-      if (own.length !== owned.ink.length) continue;
-      const from = owned.inked.start + standing.range.from * geometry.advance;
-      const to = owned.inked.start + standing.range.to * geometry.advance;
-      const under = own.filter((_, at) => {
-        const middle = (owned.ink[at][0] + owned.ink[at][1]) / 2;
-        return middle >= from && middle <= to;
-      });
-      if (!under.length) continue;
-      ruledAt.add(standing.start);
-      for (let at = under[0]; at <= under.at(-1)!; at += 1) {
-        ruledCharacters.set(at, { ...ruledCharacters.get(at), [style]: true });
-      }
-    }
-  }
-  // A rule under consecutive runs of one line is one rule (setParagraph draws
-  // it from where the first is inked to where the last is): the rule of
-  // every run it runs under, whole. Read run by run it was no run's, the
-  // paragraph then owned none of its rules (all or none), and an underline
-  // set on a line of several runs -- a line drawn again show by show where it
-  // stands, a title's words in two faces -- could not be taken off again,
-  // nor go with its words.
-  if (beside.length && !beside.every((rule) => ruledAt.has(rule.start))) {
-    const determinant = basis[0] * basis[3] - basis[1] * basis[2];
-    const along = (point: readonly [number, number]) => (point[0] * basis[3] - point[1] * basis[2]) / determinant;
-    const ruled = shows.flatMap((owned, index) => owned.inked && owned.inked.end > owned.inked.start &&
-      owned.show.graphicsMatrix.every((value, at) => Math.abs(value - blockMatrix[at]) <= 1e-9) ? [{ index, owned, inked: owned.inked }] : []);
-    for (const rule of beside) {
-      if (ruledAt.has(rule.start) || !(Math.abs(determinant) > 1e-12)) continue;
-      const ends = pdfNativeTextRuleBlockEnds(streamBytes.slice(rule.start, rule.end));
-      if (!ends) continue;
-      const from = along(ends.from), to = along(ends.to);
-      const near = (left: number, right: number) => Math.abs(left - right) <= 1e-3 + 1e-4 * Math.abs(to - from);
-      for (const first of ruled) {
-        if (ruledAt.has(rule.start)) break;
-        if (!near(first.inked.start, from)) continue;
-        // The runs of its line the rule runs under, from this one on.
-        const under = ruled.filter((entry) => entry.owned.line === first.owned.line &&
-          entry.inked.start >= from - 1e-3 && entry.inked.end <= to + 1e-3 + 1e-4 * Math.abs(to - from));
-        if (under.length < 2 || !under.some((entry) => near(entry.inked.end, to)) ||
-          under.some((entry) => entry.owned.size !== first.owned.size ||
-            Math.abs(entry.owned.v + entry.owned.rise - (first.owned.v + first.owned.rise)) > 1e-6 ||
-            JSON.stringify(entry.owned.color) !== JSON.stringify(first.owned.color) ||
-            enclosingTextObject(source, entry.owned.start).start !== enclosingTextObject(source, first.owned.start).start)) continue;
-        const object = enclosingTextObject(source, first.owned.start);
-        const across = first.owned.v + first.owned.rise;
-        const geometry = { textMatrix: [basis[0], basis[1], basis[2], basis[3],
-          from * basis[0] + across * basis[2], from * basis[1] + across * basis[3]] as
-          [number, number, number, number, number, number],
-        fontSize: first.owned.size, advance: to - from, color: first.owned.color };
-        for (const style of ["underline", "strikethrough"] as const) {
-          let standing: ReturnType<typeof pdfNativeTextRuleStandingAt> = null;
-          try {
-            standing = pdfNativeTextRuleStandingAt(streamBytes, style === "underline" ? object.start : object.end, style, geometry);
-          } catch { standing = null; }
-          if (!standing || standing.start !== rule.start || !pdfNativeTextRuleRangeIsWhole(standing.range)) continue;
-          ruledAt.add(rule.start);
-          for (const entry of under) matched.set(entry.index, { ...matched.get(entry.index), [style]: true });
-          break;
-        }
-      }
-    }
-  }
-  const ownRules = beside.length && beside.every((rule) => ruledAt.has(rule.start)) ? beside : [];
-  if (!ownRules.length) ruledCharacters.clear();
-  if (ownRules.length) for (const [index, marks] of matched) shows[index] = Object.freeze({ ...shows[index], ...marks });
-  // And the rules another writer drew under them (a web print's links).
-  const linked = paragraphLinkRules({ source, shows, basis, blockMatrix, skip: beside,
-    lineSizes: lineBaselines.map((_, line) => Math.max(0, ...shows.filter((show) => show.line === line)
-      .map((show) => show.size))) });
-  if (linked) for (const [index, linkRule] of linked.marks) shows[index] = Object.freeze({ ...shows[index], linkRule });
-  const rules = [...ownRules, ...(linked?.spans ?? [])].sort((left, right) => left.start - right.start);
+  const { rules, ruledCharacters } = paragraphOwnRules({ streamBytes, source, shows, basis, blockMatrix, lineBaselines,
+    paragraphCharacters, characterShows });
   // Each line's rise is kept against its line's baseline.
   for (const [index, show] of shows.entries()) {
     shows[index] = Object.freeze({ ...show, rise: show.v + show.rise - lineBaselines[show.line] });
@@ -1733,8 +1883,20 @@ async function readParagraph(
       rise: show.rise, slant: show.slant, color: show.color, twin: show.twin, syntheticBold: show.stroked });
   };
   const lineSizes = lineExtents.map((_, line) => Math.max(...shows.filter((show) => show.line === line).map((show) => show.size)));
-  const gapRatio = paragraphGapRatio(kernel, selection.item.str, characterShows, shows, styleOf, lineExtents, lineSizes,
-    blankRuns);
+  // What the lines leave between their words is measured by setting the
+  // words again in their fonts: a word the page draws with a glyph its font
+  // gives no single reading (a subset's ligature, its letters nowhere else in
+  // it) cannot be set, and neither can a line of it -- but it can be drawn
+  
+  // paragraph was refused for a width no lean needs).
+  let gapRatio: number | null = null;
+  try {
+    gapRatio = paragraphGapRatio(kernel, selection.item.str, characterShows, shows, styleOf, lineExtents, lineSizes,
+      blankRuns);
+  } catch (error) {
+    if (!standing || !(error instanceof PdfNativeTransactionError)) throw error;
+    measureRefusal ??= error.message;
+  }
   const keptGaps = new Map<number, number>();
   const characterInk = new Map<number, readonly [number, number]>();
   {
@@ -1918,6 +2080,7 @@ async function readParagraph(
     pins: Object.freeze([...pins.values()]),
     allShows, twins: Object.freeze(twins), twinKeys, fonts, fontOrder: Object.freeze(fontOrder), preferred, gapRatio, keptGaps,
     blankRuns, characterInk, stacked, stackedUnread,
+    ...(measureRefusal !== undefined ? { measureRefusal } : {}),
     characterRules: ruledCharacters,
     unreadGaps: Object.freeze(unreadGaps),
     unreadGapWidths: Object.freeze(unreadGapWidths),
@@ -1992,6 +2155,12 @@ function blockInsertion(input: Readonly<{
   return end;
 }
 
+/** The refusal of a paragraph whose own shows are more bytes than one edit
+ * writes (PARAGRAPH_REWRITE_MAX_REPLACEMENT_BYTES): a format on it, and words
+ * typed into it, are not written. */
+export const MRAI_NATIVE_PARAGRAPH_TOO_LARGE_MESSAGE =
+  "The paragraph is drawn show by show in more bytes than one edit can write again.";
+
 /** The message of the edit gates' third admission check for a copy of the
  * text left behind (list-text-fidelity's MRAI_NATIVE_DUPLICATE_SHOWS_MESSAGE;
  * this module is imported by that one, never the other way round). */
@@ -2030,6 +2199,16 @@ function refuseGlyphsReadAsBlanks(paragraph: ReadParagraph): void {
   if (paragraph.shows.some((own) => drawsGlyphReadAsBlank(own.show, own.font))) {
     refuse(MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE);
   }
+  refuseGlyphsReadAsBlanksBesideLines(paragraph);
+}
+
+/** The second of those two: a show the paragraph does not own, made of such
+ * glyphs, on a line of it. (A format written where the text stands asks this
+ * alone: it sets no text again, so the glyphs its own shows draw are not
+ * lost, and readParagraphWhereItStands owns the shows of them that stand
+ * with its lines.) */
+function refuseGlyphsReadAsBlanksBesideLines(paragraph: ReadParagraph): void {
+  if (![...paragraph.fonts.values()].some((font) => font.inkedBlankCodes?.size)) return;
   const { basis, blockMatrix, layout } = paragraph;
   const toBlock = invertMatrix(blockMatrix);
   const owned = new Set([...paragraph.shows.map((show) => `${show.start}:${show.end}`), ...paragraph.twinKeys]);
@@ -2042,7 +2221,8 @@ function refuseGlyphsReadAsBlanks(paragraph: ReadParagraph): void {
     // On a line of the paragraph, as far off its baseline as the reader
     // still reads a glyph on it, within two sizes of its frame.
     if (along < layout.frameLeft - reach || along > layout.frameRight + reach) continue;
-    if (paragraph.shows.some((own) => Math.abs(across - own.v) <= PDFJS_VERTICAL_SHIFT_RATIO * Math.max(own.size, show.fontSize))) {
+    if (paragraph.shows.some((own) => !own.readsBlank &&
+      Math.abs(across - own.v) <= PDFJS_VERTICAL_SHIFT_RATIO * Math.max(own.size, show.fontSize))) {
       refuse(MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE);
     }
   }
@@ -3070,6 +3250,19 @@ function setParagraphWhereItStands(
     return { fontName: owned.show.fontName, font: owned.font, syntheticBold: owned.stroked, slant: owned.slant };
   });
   const near = (left: number, right: number) => Math.abs(left - right) <= 1e-6 * Math.max(1, Math.abs(left), Math.abs(right));
+  // What a show is drawn as, asked a format (or none) of.
+  const lookOf = (owned: OwnedShow, format: (typeof asked)[number] | null,
+    ruled: Readonly<{ underline?: true; strikethrough?: true }> | undefined): CharacterLook => Object.freeze({
+    color: format?.color ?? owned.color,
+    bold: format?.syntheticBold ?? owned.stroked,
+    slant: format?.slant ?? owned.slant,
+    underline: format?.underline ?? Boolean(owned.underline || ruled?.underline),
+    strikethrough: format?.strikethrough ?? Boolean(owned.strikethrough || ruled?.strikethrough),
+    // An underline asked (or taken off) is this writer's: a link's own rule goes with it.
+    linkRule: format?.underline !== undefined ? null : owned.linkRule ?? null,
+    // A fake-bold pass is the source show's own second drawing: not drawn where a weight is asked.
+    twin: format?.syntheticBold !== undefined ? null : owned.twin,
+  });
   const looks: CharacterLook[] = [];
   for (const [index] of text.entries()) {
     const owned = showOf(index);
@@ -3080,19 +3273,24 @@ function setParagraphWhereItStands(
         (format.riseEm !== undefined && !near(format.riseEm * size, owned.rise)) ||
         (format.characterSpacingEm !== undefined && !near(format.characterSpacingEm * size, owned.characterSpacing))) return null;
     }
-    const ruled = paragraph.characterRules.get(index);
-    looks.push(Object.freeze({
-      color: format?.color ?? owned.color,
-      bold: format?.syntheticBold ?? owned.stroked,
-      slant: format?.slant ?? owned.slant,
-      underline: format?.underline ?? Boolean(owned.underline || ruled?.underline),
-      strikethrough: format?.strikethrough ?? Boolean(owned.strikethrough || ruled?.strikethrough),
-      // An underline asked (or taken off) is this writer's: a link's own rule goes with it.
-      linkRule: format?.underline !== undefined ? null : owned.linkRule ?? null,
-      // A fake-bold pass is the source show's own second drawing: not drawn where a weight is asked.
-      twin: format?.syntheticBold !== undefined ? null : owned.twin,
-    }));
+    looks.push(lookOf(owned, format, paragraph.characterRules.get(index)));
   }
+  // A show of glyphs the reader reads as blanks (OwnedShow.readsBlank) draws
+  // no character of the text, so none is asked a format for it: it goes with
+  // its line, in what is asked of the character drawn before it there (of the
+  // first after it, where it is drawn first). Left as it stood, a line made
+  // bold or red kept the marks over its letters thin and black.
+  const lookBeside = (owner: number, line: number): CharacterLook | null => {
+    let before: number | null = null, after: number | null = null;
+    for (const [index, character] of text.entries()) {
+      const at = paragraph.characterShows[index];
+      if (isBlank(character) || shows[at].line !== line || at === owner) continue;
+      if (at < owner) before = index;
+      else if (after === null) after = index;
+    }
+    const beside = before ?? after;
+    return beside === null ? null : lookOf(shows[owner], asked[beside] ?? null, undefined);
+  };
   // From here the edit is of this kind: written where it stands, or not.
   const cannot = (): never => refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
   const opening = text.findIndex((character) => !isBlank(character));
@@ -3115,6 +3313,83 @@ function setParagraphWhereItStands(
     const extent = layout.lineExtents[line];
     lines.push(Object.freeze({ start: lineFirst[line], end, inkEnd, inkWidth: extent.right - extent.left }));
   }
+  // The characters each show draws, in the text.
+  const showCharacters = new Map<number, number[]>();
+  for (const [index] of text.entries()) {
+    const owner = paragraph.characterShows[index];
+    const own = showCharacters.get(owner);
+    if (own) own.push(index);
+    else showCharacters.set(owner, [index]);
+  }
+  const piecesOf = (owner: number, owned: OwnedShow): readonly StandingPiece[] => {
+    const { show, font } = owned;
+    const unit = font.codeUnitBytes;
+    const from = owned.partial?.codeStart ?? 0, to = owned.partial?.codeEnd ?? show.codes.length;
+    const inked = (showCharacters.get(owner) ?? []).filter((index) => !isBlank(text[index]));
+    // The stretches of its characters drawn in one look.
+    const runs: { first: number; last: number; look: CharacterLook }[] = [];
+    for (const [at, index] of inked.entries()) {
+      const last = runs.at(-1);
+      if (last && lookKey(last.look) === lookKey(looks[index])) last.last = at;
+      else runs.push({ first: at, last: at, look: looks[index] });
+    }
+    // Each stretch's codes of the show, where its ink starts and ends, and
+    // its first and last character.
+    const pieces: StandingPiece[] = [];
+    if (runs.length <= 1) {
+      pieces.push({ from, to, look: runs[0]?.look ?? (owned.readsBlank || paragraph.unreadGlyphs ? lookBeside(owner, owned.line) : null),
+        ink: owned.inked ? [owned.inked.start, owned.inked.end] : null,
+        characters: inked.length ? [inked[0], inked.at(-1)!] : null });
+    } else {
+      // The glyph that draws each of its characters: one each, or a
+      // ligature's glyph its letters (as readParagraph reads a stack).
+      const drawn = showGlyphs(kernel, show, font).flatMap((glyph, index) =>
+        !/^\s*$/u.test(glyph.text ?? "x") && index * unit >= from && index * unit < to ? [{ glyph, index }] : []);
+      if (drawn.length !== owned.ink.length) cannot();
+      const counts = drawn.length === inked.length ? drawn.map(() => 1)
+        : drawn.map(({ glyph }) => characters(kernel.normalizeUnicode(glyph.text ?? "x"))
+          .filter((character) => !isReaderBlank(character)).length);
+      if (counts.some((count) => count < 1) || counts.reduce((sum, count) => sum + count, 0) !== inked.length) cannot();
+      const glyphOf: { at: number; first: boolean }[] = [];
+      for (const [at, count] of counts.entries()) for (let part = 0; part < count; part += 1) glyphOf.push({ at, first: part === 0 });
+      for (const [order, run] of runs.entries()) {
+        // (A look that changes inside a ligature divides a glyph.)
+        if (!glyphOf[run.first].first) cannot();
+        const next = runs[order + 1];
+        const lastGlyph = next ? glyphOf[next.first].at - 1 : drawn.length - 1;
+        pieces.push({ from: order === 0 ? from : drawn[glyphOf[run.first].at].index * unit,
+          to: next ? drawn[glyphOf[next.first].at].index * unit : to, look: run.look,
+          ink: [owned.ink[glyphOf[run.first].at][0], owned.ink[lastGlyph][1]], characters: [inked[run.first], inked[run.last]] });
+      }
+    }
+    return pieces;
+  };
+  return drawParagraphWhereItStands(kernel, paragraph, lines, piecesOf,
+    (after, before) => text.slice(after + 1, before).some(isBlank));
+}
+
+/** A stretch of a source show drawn again in one look: its codes of the show,
+ * the look (null: the show's own, no rule), where its ink starts and ends
+ * along the line, and its first and last character of the text (null where
+ * the reader's characters are not what places it). */
+type StandingPiece = Readonly<{ from: number; to: number; look: CharacterLook | null; ink: readonly [number, number] | null;
+  characters: readonly [number, number] | null }>;
+
+/**
+ * The block that draws a paragraph again where it stands
+ * (setParagraphWhereItStands): each show's pieces by the page's own array,
+ * placed where the page placed them, in each piece's look; a rule under or
+ * through consecutive pieces of one size, rise and colour.
+ */
+function drawParagraphWhereItStands(
+  kernel: MraiNativeParagraphRewriteKernel,
+  paragraph: Pick<ReadParagraph, "basis" | "blockMatrix" | "layout" | "shows" | "lineBaselines" | "unreadGlyphs">,
+  lines: readonly SetLine[],
+  piecesOf: (owner: number, owned: OwnedShow) => readonly StandingPiece[],
+  /** Whether the text holds a blank between two of its characters. */
+  blankBetween: (after: number, before: number) => boolean,
+): ReturnType<typeof setParagraph> {
+  const { layout, shows } = paragraph;
   const [b0, b1, b2, b3] = paragraph.basis;
   let block = "q BT\n0 Tw 0 Tr\n";
   const state: { font: string | null; size: number | null; spacing: number | null; scale: number | null; rise: number | null;
@@ -3167,14 +3442,153 @@ function setParagraphWhereItStands(
   const underlineRules: string[] = [];
   const strikeRules: string[] = [];
   const linkRules: string[] = [];
-  // The characters each show draws, in the text.
-  const showCharacters = new Map<number, number[]>();
-  for (const [index] of text.entries()) {
-    const owner = paragraph.characterShows[index];
-    const own = showCharacters.get(owner);
-    if (own) own.push(index);
-    else showCharacters.set(owner, [index]);
-  }
+  // What a lean changes of how the page reads back. In a leaned frame the
+  // reader measures a glyph against the visible glyph before it in each one's
+  // own frame (pdf.js compareWithLastPosition: applyInverseRotation divides
+  // both of a point's coordinates by the frame's length ALONG the line), and
+  // ends its line where the two then stand further apart across the line
+  // than the item is high (half that, drawn back from it). Ending its line
+  // there, it reads no space there either -- and the editor's boxes join
+  // what stands on one baseline as it comes. So where two glyphs of a line
+  // the reader read a space between come to stand a line apart to it, the
+  // box opens again with that space gone:
+  //   - upright, a line whose shows are set at more than one width (pdfTeX's
+  //     font expansion: `1.02 0 0 1 ... Tm` beside `1 0 0 1 ... Tm`) reads as
+  //     one line; leaned, each change of width between two words read as a
+  //     line end, «aboutRe bω= 3πjm/2, wherer0is» (pdf-walk-1000 0676);
+  //   - a justified heading's two words set five sizes apart stand, leaned,
+  //     more than a line apart in the reader's frame (the lean times the
+  //     gap), «EXPRESSEMPLOYMENT» (0444).
+  // Such a lean is a write that reads back otherwise: refused. A line end
+  // the reader comes to see where it read no space -- a footnote mark set
+  // against its word in a frame of another width (0527) -- changes no text
+  // and no row of the box, and is no reason to refuse.
+  const blockMatrix = paragraph.blockMatrix;
+  const onPage = (u: number, across: number) => applyMatrix(blockMatrix, u * b0 + across * b2, u * b1 + across * b3);
+  type ReaderFrame = readonly [number, number, number, number];
+  const readerFrame = (owned: OwnedShow, slant: number): ReaderFrame => {
+    const along = owned.size * (owned.horizontalScale / 100);
+    const [ax, ay] = [b0 * along, b1 * along];
+    const [ux, uy] = [(b2 + slant * b0) * owned.size, (b3 + slant * b1) * owned.size];
+    return [ax * blockMatrix[0] + ay * blockMatrix[2], ax * blockMatrix[1] + ay * blockMatrix[3],
+      ux * blockMatrix[0] + uy * blockMatrix[2], ux * blockMatrix[1] + uy * blockMatrix[3]];
+  };
+  const readerEndsLine = (last: ReaderFrame, from: readonly [number, number], current: ReaderFrame,
+    to: readonly [number, number]): boolean => {
+    const tiny = 1e-9 * Math.hypot(...current);
+    const zero = (value: number) => Math.abs(value) <= tiny;
+    let [x, y] = to, [lastX, lastY] = from;
+    if (!zero(current[0]) && zero(current[1]) && zero(current[2])) {
+      if (current[0] < 0) [x, y, lastX, lastY] = [-x, -y, -lastX, -lastY];
+    } else if (!zero(current[1]) && zero(current[0]) && zero(current[3])) {
+      if (current[1] > 0) [x, y, lastX, lastY] = [y, x, lastY, lastX];
+      else [x, y, lastX, lastY] = [-y, -x, -lastY, -lastX];
+    } else {
+      const scale = Math.hypot(current[0], current[1]), lastScale = Math.hypot(last[0], last[1]);
+      [x, y] = [(current[0] * x + current[1] * y) / scale, (current[2] * x + current[3] * y) / scale];
+      [lastX, lastY] = [(last[0] * lastX + last[1] * lastY) / lastScale, (last[2] * lastX + last[3] * lastY) / lastScale];
+    }
+    const drawnBack = x - lastX < PDFJS_NEGATIVE_SPACE_FACTOR * Math.hypot(last[0], last[1]);
+    return Math.abs(y - lastY) > (drawnBack ? 0.5 : 1) * Math.hypot(last[2], last[3]);
+  };
+  // Where a show draws white space between its inked glyphs (`before`: by
+  // inked glyph, ahead of it since the inked glyph before), before the first
+  // and after the last. Null where its glyphs cannot be told as its ink was
+  // read: then white space is taken to stand everywhere.
+  const blanksOf = new Map<OwnedShow, Readonly<{ before: readonly boolean[]; leading: boolean; trailing: boolean }> | null>();
+  const blanks = (owned: OwnedShow) => {
+    if (blanksOf.has(owned)) return blanksOf.get(owned)!;
+    let read: Readonly<{ before: readonly boolean[]; leading: boolean; trailing: boolean }> | null = null;
+    try {
+      const unit = owned.font.codeUnitBytes;
+      const own = showGlyphs(kernel, owned.show, owned.font).filter((_, index) => !owned.partial ||
+        (index * unit >= owned.partial.codeStart && index * unit < owned.partial.codeEnd));
+      for (const marks of [false, true]) {
+        const inks = own.map((glyph) => !/^\s*$/u.test(glyph.text ?? "x") ||
+          (marks && Boolean(owned.font.inkedBlankCodes?.has(glyph.code))));
+        if (inks.filter(Boolean).length !== owned.ink.length) continue;
+        const before: boolean[] = [];
+        let blank = false;
+        for (const inked of inks) {
+          if (inked) {
+            before.push(blank);
+            blank = false;
+          } else blank = true;
+        }
+        read = Object.freeze({ before: Object.freeze(before), leading: before[0] === true, trailing: blank });
+        break;
+      }
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+    }
+    blanksOf.set(owned, read);
+    return read;
+  };
+  // Whether the reader reads a space between two glyphs of a line it reads
+  // on from one another: a white-space glyph drawn between them, or a gap of
+  // its tracking bound or more, at the size of the glyph before (taken a
+  // tenth under it: what stands at the bound is read either way).
+  const readsSpace = (gap: number, owned: OwnedShow, blank: boolean) => blank ||
+    gap >= 0.9 * PDFJS_TRACKING_SPACE_FACTOR * owned.size *
+      (owned.show.horizontalScale !== 0 ? owned.horizontalScale / owned.show.horizontalScale : 1);
+  // Where the reader ends its line between two glyphs only because their
+  // matrix leans, the boxes read the space back themselves (the box reader's
+  // itemAfterSkewedFrameLineEnd: the item after stands on the item before's
+  // baseline, in its size, its tracking bound or more further on -- taken a
+  // tenth over the bound here, in the leaned item's own measure, since what
+  // stands at the bound is read either way). Only between two glyphs that are
+  // each a character of the text with a width of its own: a mark of no width
+  // (the stroke of TeX's ≠, drawn over the sign after it) is no end of an
+  // item the reader measures a gap from, and a paragraph that holds glyphs
+  // its font names no character for keeps every such gap a spacer.
+  const spaceReadBack = (gap: number, before: OwnedShow, beforeGlyph: number, after: OwnedShow, afterGlyph: number,
+    slant: number) => {
+    if (paragraph.unreadGlyphs || before.readsBlank || after.readsBlank) return false;
+    const [left, right] = [before.ink[beforeGlyph], after.ink[afterGlyph]];
+    if (!left || !right || !(left[1] - left[0] > 1e-6) || !(right[1] - right[0] > 1e-6)) return false;
+    if (Math.abs(before.size - after.size) > 1e-6 * Math.max(1, before.size) || Math.abs(before.rise - after.rise) > 1e-6) return false;
+    return gap >= 1.1 * PDFJS_TRACKING_SPACE_FACTOR * before.size * Math.hypot(1, slant);
+  };
+  // The stretch drawn before, on this line or the one above, and whether a
+  // show of white space alone was drawn since.
+  let leanedBefore: Readonly<{ owned: OwnedShow; slant: number; end: number; across: number; last: number }> | null = null;
+  let blankSince = false;
+  const refuseLeanReadOtherwise = (owned: OwnedShow, slant: number, ink: readonly [number, number], across: number) => {
+    const changed = slant !== owned.slant;
+    const last = leanedBefore;
+    const own = blanks(owned);
+    // (Its inked glyphs of this stretch, as the show's.)
+    const first = owned.ink.findIndex(([start]) => start >= ink[0] - 1e-9);
+    const inside = owned.ink.flatMap(([start, end], index) => start >= ink[0] - 1e-9 && end <= ink[1] + 1e-9 ? [index] : []);
+    if (last && slant !== 0 && slant === last.slant && (changed || last.slant !== last.owned.slant)) {
+      const from = onPage(last.end, last.across), to = onPage(ink[0], across);
+      if (readerEndsLine(readerFrame(last.owned, last.owned.slant), from, readerFrame(owned, owned.slant), to) !==
+        readerEndsLine(readerFrame(last.owned, slant), from, readerFrame(owned, slant), to)) {
+        const lastBlanks = blanks(last.owned);
+        const blank = blankSince || !own || !lastBlanks || first < 0 ||
+          (first === 0 ? own.leading : own.before[first]) ||
+          (last.last === last.owned.ink.length - 1 ? lastBlanks.trailing : lastBlanks.before[last.last + 1] ?? true);
+        if (readsSpace(ink[0] - last.end, last.owned, blank) &&
+          !(first >= 0 && Math.abs(across - last.across) <= 1e-6 &&
+            spaceReadBack(ink[0] - last.end, last.owned, last.last, owned, first, slant))) refuse(MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL);
+      }
+    }
+    // (And from glyph to glyph inside it: a gap its array opens.)
+    if (slant !== 0 && changed) {
+      const [was, now] = [readerFrame(owned, owned.slant), readerFrame(owned, slant)];
+      for (let at = 1; at < inside.length; at += 1) {
+        const [before, glyph] = [owned.ink[inside[at - 1]], owned.ink[inside[at]]];
+        const from = onPage(before[1], across), to = onPage(glyph[0], across);
+        if (readerEndsLine(was, from, was, to) !== readerEndsLine(now, from, now, to) &&
+          readsSpace(glyph[0] - before[1], owned, !own || own.before[inside[at]] !== false) &&
+          !spaceReadBack(glyph[0] - before[1], owned, inside[at - 1], owned, inside[at], slant)) {
+          refuse(MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL);
+        }
+      }
+    }
+    leanedBefore = { owned, slant, end: ink[1], across, last: inside.at(-1) ?? owned.ink.length - 1 };
+    blankSince = false;
+  };
   for (let line = 0; line < layout.lineCount; line += 1) {
     const v = paragraph.lineBaselines[line];
     // The rules, as setParagraph draws a line's: one rule under consecutive
@@ -3231,50 +3645,11 @@ function setParagraphWhereItStands(
     let before: Readonly<{ end: number; slant: number; changed: boolean; size: number; last: number }> | null = null;
     for (const [owner, owned] of shows.entries()) {
       if (owned.line !== line) continue;
-      const { show, font } = owned;
-      const unit = font.codeUnitBytes;
-      const from = owned.partial?.codeStart ?? 0, to = owned.partial?.codeEnd ?? show.codes.length;
-      const inked = (showCharacters.get(owner) ?? []).filter((index) => !isBlank(text[index]));
-      // The stretches of its characters drawn in one look.
-      const runs: { first: number; last: number; look: CharacterLook }[] = [];
-      for (const [at, index] of inked.entries()) {
-        const last = runs.at(-1);
-        if (last && lookKey(last.look) === lookKey(looks[index])) last.last = at;
-        else runs.push({ first: at, last: at, look: looks[index] });
-      }
-      // Each stretch's codes of the show, where its ink starts and ends, and
-      // its first and last character.
-      const pieces: { from: number; to: number; look: CharacterLook | null; ink: readonly [number, number] | null;
-        characters: readonly [number, number] | null }[] = [];
-      if (runs.length <= 1) {
-        pieces.push({ from, to, look: runs[0]?.look ?? null, ink: owned.inked ? [owned.inked.start, owned.inked.end] : null,
-          characters: inked.length ? [inked[0], inked.at(-1)!] : null });
-      } else {
-        // The glyph that draws each of its characters: one each, or a
-        // ligature's glyph its letters (as readParagraph reads a stack).
-        const drawn = showGlyphs(kernel, show, font).flatMap((glyph, index) =>
-          !/^\s*$/u.test(glyph.text ?? "x") && index * unit >= from && index * unit < to ? [{ glyph, index }] : []);
-        if (drawn.length !== owned.ink.length) cannot();
-        const counts = drawn.length === inked.length ? drawn.map(() => 1)
-          : drawn.map(({ glyph }) => characters(kernel.normalizeUnicode(glyph.text ?? "x"))
-            .filter((character) => !isReaderBlank(character)).length);
-        if (counts.some((count) => count < 1) || counts.reduce((sum, count) => sum + count, 0) !== inked.length) cannot();
-        const glyphOf: { at: number; first: boolean }[] = [];
-        for (const [at, count] of counts.entries()) for (let part = 0; part < count; part += 1) glyphOf.push({ at, first: part === 0 });
-        for (const [order, run] of runs.entries()) {
-          // (A look that changes inside a ligature divides a glyph.)
-          if (!glyphOf[run.first].first) cannot();
-          const next = runs[order + 1];
-          const lastGlyph = next ? glyphOf[next.first].at - 1 : drawn.length - 1;
-          pieces.push({ from: order === 0 ? from : drawn[glyphOf[run.first].at].index * unit,
-            to: next ? drawn[glyphOf[next.first].at].index * unit : to, look: run.look,
-            ink: [owned.ink[glyphOf[run.first].at][0], owned.ink[lastGlyph][1]], characters: [inked[run.first], inked[run.last]] });
-        }
-      }
-      for (const { from: start, to: stop, look, ink, characters: drawnCharacters } of pieces) {
+      const { show } = owned;
+      for (const { from: start, to: stop, look, ink, characters: drawnCharacters } of piecesOf(owner, owned)) {
         const piece = sourceShowPiece(kernel, paragraph, owned, start, stop);
         if (!piece) {
-          if (ink) cannot();
+          if (ink) refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
           continue;
         }
         const slant = look?.slant ?? owned.slant;
@@ -3293,10 +3668,12 @@ function setParagraphWhereItStands(
             drawnCharacters[0] > before.last) {
             const gap = ink[0] - before.end;
             const reads = gap >= PDFJS_TRACKING_SPACE_FACTOR * before.size && gap <= READER_FOLDED_SPACE_MAX_EM * before.size;
-            if (reads !== text.slice(before.last + 1, drawnCharacters[0]).some(isBlank)) refuse(MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL);
+            if (reads !== blankBetween(before.last, drawnCharacters[0])) refuse(MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL);
           }
           before = { end: ink[1], slant, changed: slant !== owned.slant, size: owned.size, last: drawnCharacters[1] };
         }
+        if (ink && ink[1] > ink[0]) refuseLeanReadOtherwise(owned, slant, ink, v + owned.rise);
+        else if (!ink) blankSince = true;
         const style: CharacterStyle = Object.freeze({ ...piece.style, slant, color: look?.color ?? owned.color,
           syntheticBold: look?.bold ?? owned.stroked });
         // A raised glyph stands along the leaned up axis: placed back by what
@@ -3309,9 +3686,11 @@ function setParagraphWhereItStands(
         fontsUsed.add(show.fontName);
         const twin = look ? look.twin : owned.twin;
         if (twin) twins.push({ place: place(twin[0], twin[1]), style, word: piece.word, array: piece.array });
-        if (look) {
-          ruleRun(look, { size: owned.size, rise: owned.rise, color: style.color, linkRule: look.linkRule }, ink ? ink[0] : null,
-            ink ? ink[1] : 0);
+        // (A glyph of no width the reader reads as a blank -- a mark over a
+        // letter -- is neither ruled nor an end of the rule under its line.)
+        if (look && !(owned.readsBlank && !(ink && ink[1] > ink[0]))) {
+          ruleRun(look, { size: owned.size, rise: owned.ruleRise ?? owned.rise, color: style.color, linkRule: look.linkRule },
+            ink ? ink[0] : null, ink ? ink[1] : 0);
         }
       }
     }
@@ -3395,7 +3774,11 @@ function setParagraph(
     if (formats?.characters.some((format, index) => {
       if (!format) return false;
       const owner = paragraph.shows[paragraph.characterShows[index]];
-      return Boolean(owner && type3Show(owner)) && (format.syntheticBold === true ||
+      // (A face of pictures -- colour emoji -- has no weight to take: the
+      // weight is the words' around it, as a word processor sets bold text
+      // that holds an emoji. Drawn under the stroke with them, a picture is
+      // drawn as it was: the mode does not reach a Type3 procedure.)
+      return Boolean(owner && type3Show(owner)) && ((format.syntheticBold === true && !owner.font.type3Pictures) ||
         (format.face !== undefined && format.face.resourceName !== owner.show.fontName));
     })) refuse(MRAI_NATIVE_TYPE3_FORMAT_MESSAGE);
   }
@@ -3423,6 +3806,8 @@ function setParagraph(
     const standing = setParagraphWhereItStands(kernel, paragraph, typedLines, formats);
     if (standing) return standing;
   }
+  // Set by the measure from here on: what the read left to it is refused now.
+  if (paragraph.measureRefusal !== undefined) refuse(paragraph.measureRefusal);
   // The substitute face reads back like any font of the paragraph: the block
   // names it, and the read-back finds it by that name.
   if (substitute) {
@@ -5839,6 +6224,45 @@ function paragraphRuleSpans(
   return [...spans.values()].sort((left, right) => left.start - right.start);
 }
 
+/**
+ * This writer's rule blocks beside a paragraph's text objects that stand on
+ * the paragraph's own lines. A text object may draw more than one paragraph
+ * (a TeX page is one, or a few), and a rule of each stands beside it: a rule
+ * under a line of another paragraph is none of this one's, and is neither
+ * taken away with it nor a reason to own none of its own (paragraphOwnRules
+ * owns all of them or none). A rule is on a line where its near edge runs
+ * within the line's height of its baseline (an underline a little under it,
+ * a strikethrough a third of a size over it, a raised or lowered run's with
+ * the run) along a stretch the line's ink covers. One that cannot be read is
+ * taken as the paragraph's, as every rule there was before.
+ */
+function paragraphRuleSpansOnItsLines(
+  streamBytes: Uint8Array,
+  source: string,
+  shows: readonly OwnedShow[],
+  basis: readonly [number, number, number, number],
+  lineBaselines: readonly number[],
+): Readonly<{ start: number; end: number }>[] {
+  const lines = lineBaselines.map((baseline, line) => {
+    const inked = shows.filter((show) => show.line === line && show.inked);
+    return inked.length ? { baseline, left: Math.min(...inked.map((show) => show.inked!.start)),
+      right: Math.max(...inked.map((show) => show.inked!.end)), size: Math.max(...inked.map((show) => show.size)) } : null;
+  });
+  return paragraphRuleSpans(streamBytes, source, shows).filter((rule) => {
+    const ends = pdfNativeTextRuleBlockEnds(streamBytes.slice(rule.start, rule.end));
+    if (!ends) return true;
+    const from = ends.from[0] * basis[0] + ends.from[1] * basis[1], to = ends.to[0] * basis[0] + ends.to[1] * basis[1];
+    const across = ends.from[0] * basis[2] + ends.from[1] * basis[3];
+    return lines.some((line) => line !== null &&
+      across - line.baseline >= -RULE_ON_LINE_BELOW_EM * line.size && across - line.baseline <= RULE_ON_LINE_ABOVE_EM * line.size &&
+      Math.max(from, to) > line.left && Math.min(from, to) < line.right);
+  });
+}
+/** How far under and over a line's baseline a rule of the line may run, in
+ * shares of the line's largest size. */
+const RULE_ON_LINE_BELOW_EM = 0.5;
+const RULE_ON_LINE_ABOVE_EM = 0.75;
+
 const PDF_NUMBER = String.raw`-?(?:\d+\.?\d*|\.\d+)`;
 /** A rule as a typesetter draws it: a stroked line, or a filled rectangle. */
 const STROKED_RULE = new RegExp(String.raw`q\s+${PDF_NUMBER}\s+w\s+(${PDF_NUMBER})\s+(${PDF_NUMBER})\s+m\s+${PDF_NUMBER}\s+${PDF_NUMBER}\s+l\s+S\s+Q`, "gu");
@@ -5906,6 +6330,8 @@ function rewrittenSpan(
   /** Written into the source between the shows: where another show or a rule
    * stands in a gap the edit moved, what moves it (absolute offsets). */
   insertions: readonly Readonly<{ at: number; text: string }>[] = [],
+  /** What ends the text object the block is set in, and begins it again. */
+  wrap?: Readonly<{ before: string; after: string }>,
 ): Uint8Array {
   const penOf = new Map(pens.map((pen) => [`${pen.start}:${pen.end}`, pen]));
   const owned = new Set(shows.map((show) => `${show.start - spanStart}:${show.end - spanStart}`));
@@ -5952,7 +6378,8 @@ function rewrittenSpan(
   // journal could keep it by, and the paragraph came back in pieces, one of
   
   return block
-    ? Uint8Array.from([...asciiBytes(out), 0x0a, ...MRAI_NATIVE_BOX_MARK_OPEN, ...block, ...MRAI_NATIVE_BOX_MARK_CLOSE])
+    ? Uint8Array.from([...asciiBytes(out + (wrap?.before ?? "")), 0x0a, ...MRAI_NATIVE_BOX_MARK_OPEN, ...block,
+      ...MRAI_NATIVE_BOX_MARK_CLOSE, ...asciiBytes(wrap?.after ?? "")])
     : asciiBytes(out);
 }
 
@@ -5969,12 +6396,19 @@ async function paragraphEvidence(
   const emptied = [...paragraph.shows.map((show) => ({ start: show.start, end: show.end })), ...paragraph.twins]
     .sort((left, right) => left.start - right.start);
   const replacement = rewrittenSpan(source.slice(spanStart, insertion), spanStart, emptied,
-    paragraph.pens, set?.bytes ?? null, paragraph.rules, set?.carried ?? []);
+    paragraph.pens, set?.bytes ?? null, paragraph.rules, set?.carried ?? [], paragraph.blockWrap);
   // One edit writes at most as many bytes as a transaction carries; a
   // paragraph whose shows lie that far apart in its stream (a drawing set
   // between the lines of a CAD label) is left to the routes after this one.
   if (replacement.length > PARAGRAPH_REWRITE_MAX_REPLACEMENT_BYTES) {
-    refuse("The paragraph's shows lie too far apart in their stream for one edit to rewrite.");
+    // Said as it is: other drawing stands between its shows, or the
+    // paragraph itself is drawn in that many bytes (a browser's print sets a
+    // line glyph by glyph, a show and a matrix each: 1,923 shows and 79 KB
+    // for one paragraph of pdf-walk-1000 0952, 179 KB to draw again).
+    const apart = paragraph.shows.some((show, index) => index > 0 &&
+      show.start - paragraph.shows[index - 1].end > BLOCK_INSERTION_REACH_BYTES);
+    refuse(apart ? "The paragraph's shows lie too far apart in their stream for one edit to rewrite."
+      : MRAI_NATIVE_PARAGRAPH_TOO_LARGE_MESSAGE);
   }
   const sha256 = await sha256PdfBytes(originalBytes);
   const originalCodes = paragraph.shows.flatMap((show) => [...show.show.codes]);
@@ -6069,8 +6503,14 @@ async function paragraphEvidence(
 function paragraphTextRules(paragraph: ReadParagraph): Readonly<{ underline?: true; strikethrough?: true }> | null {
   const text = characters(paragraph.selection.item.str);
   const inked = text.flatMap((character, index) => isBlank(character) ? [] : [index]);
-  const ruled = (style: "underline" | "strikethrough") => inked.length > 0 && inked.every((index) =>
-    paragraph.shows[paragraph.characterShows[index]]?.[style] === true || paragraph.characterRules.get(index)?.[style] === true);
+  // (Read with glyphs no character is named for: which show draws a
+  // character is not known, and its rules are those under every show of it
+  // that takes one -- ReadParagraph.unreadGlyphs.)
+  const ruledShows = paragraph.shows.filter((show) => show.inked && show.inked.end > show.inked.start && !show.readsBlank);
+  const ruled = (style: "underline" | "strikethrough") => paragraph.unreadGlyphs
+    ? ruledShows.length > 0 && ruledShows.every((show) => show[style] === true)
+    : inked.length > 0 && inked.every((index) =>
+      paragraph.shows[paragraph.characterShows[index]]?.[style] === true || paragraph.characterRules.get(index)?.[style] === true);
   const underline = ruled("underline"), strikethrough = ruled("strikethrough");
   return underline || strikethrough
     ? Object.freeze({ ...(underline ? { underline: true as const } : {}), ...(strikethrough ? { strikethrough: true as const } : {}) })
@@ -6092,10 +6532,1661 @@ export async function readMraiNativeParagraphTextRules(
 ): Promise<Readonly<{ underline?: true; strikethrough?: true }> | null> {
   try {
     if (!pdfNativeStreamHoldsTextRule((await kernel.readStream(plan)).streamBytes)) return null;
-    return paragraphTextRules(await readParagraph(kernel, selection));
+    // Read as the write that draws them reads it: the rules of a paragraph
+    // set where it stands are under its text whatever the rewrite's own
+    // measure of that text would refuse.
+    let rules: ReturnType<typeof paragraphTextRules> = null;
+    try {
+      rules = paragraphTextRules(await readParagraph(kernel, selection, true));
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+    }
+    // (Or the rules a format written by state drew beside its text objects.)
+    return rules ?? rulesOfLook(await readStandingStateLook(kernel, selection));
   } catch (error) {
     if (!(error instanceof PdfNativeTransactionError)) throw error;
     return null;
+  }
+}
+
+function rulesOfLook(look: MraiNativeStandingTextLook | null): Readonly<{ underline?: true; strikethrough?: true }> | null {
+  return look && (look.underline || look.strikethrough)
+    ? Object.freeze({ ...(look.underline ? { underline: true as const } : {}), ...(look.strikethrough ? { strikethrough: true as const } : {}) })
+    : null;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+export async function readMraiNativeParagraphStandingLook(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+): Promise<Readonly<{
+  textRules: Readonly<{ underline?: true; strikethrough?: true }> | null;
+  syntheticBold: boolean;
+  slanted: boolean;
+}> | null> {
+  try {
+    const paragraph = await readParagraph(kernel, selection, true);
+    const text = characters(paragraph.selection.item.str);
+    const inked = text.flatMap((character, index) => isBlank(character) ? [] : [index]);
+    const every = (test: (show: OwnedShow) => boolean) => inked.length > 0 && inked.every((index) => {
+      const show = paragraph.shows[paragraph.characterShows[index]];
+      return show !== undefined && test(show);
+    });
+    const textRules = paragraphTextRules(paragraph) ??
+      // (A paragraph too large to draw again takes its rules by state: read there.)
+      (pdfNativeStreamHoldsTextRule(paragraph.streamBytes) ? rulesOfLook(await readStandingStateLook(kernel, selection)) : null);
+    return Object.freeze({
+      textRules,
+      syntheticBold: every((show) => show.stroked),
+      slanted: every((show) => show.slant !== 0),
+    });
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    
+    // state alone, and is read the same way (planFormatByStateWhereTextStands).
+    const byState = async () => {
+      const look = await readStandingStateLook(kernel, selection);
+      return look && Object.freeze({ textRules: rulesOfLook(look), syntheticBold: look.syntheticBold === true,
+        slanted: look.slanted === true });
+    };
+    // A box no item proof reads whole (a TeX paragraph's unnamed symbols)
+    // takes those formats by its shows alone, and is read the same way
+    // (planFormatWhereUnprovedTextStands).
+    if (!standsUnproved(kernel, selection, error)) return byState();
+    try {
+      const paragraph = await readParagraphWhereItStands(kernel, selection, true);
+      const inked = paragraph.shows.filter((show) => show.inked);
+      return Object.freeze({
+        textRules: paragraphTextRules(paragraph),
+        syntheticBold: inked.length > 0 && inked.every((show) => show.stroked),
+        slanted: inked.length > 0 && inked.every((show) => show.slant !== 0),
+      });
+    } catch (placedError) {
+      if (!(placedError instanceof PdfNativeTransactionError)) throw placedError;
+      return byState();
+    }
+  }
+}
+
+
+
+
+
+function standsUnproved(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+  refusal: PdfNativeTransactionError,
+): boolean {
+  return Boolean(kernel.standingPageStreams) && /^Reader item \d+ of the paragraph does not prove alone: /u.test(refusal.message) &&
+    !pdfTextHasRightToLeftRun(selection.item.str);
+}
+
+/**
+ * The refusal of a format asked of the whole of a box whose text the reader
+ * shows in another order than the page draws it (right-to-left script), where
+ * the page's own shows cannot be proven to be that box and nothing else. The
+ * reason follows it in brackets.
+ */
+export const MRAI_NATIVE_STANDING_FORMAT_REFUSAL =
+  "This text is shown in another order than the page draws it, and its drawn text could not be proven to be all of this box and nothing else; the format was not applied.";
+
+/** The refusal of a format asked of such a box that every show of it is
+ * drawn in already: nothing is written. */
+export const MRAI_NATIVE_STANDING_FORMAT_UNCHANGED_REFUSAL =
+  "This text is drawn in the format asked already; nothing was written.";
+
+function refuseStanding(reason: string): never {
+  return refuse(`${MRAI_NATIVE_STANDING_FORMAT_REFUSAL} (${reason})`);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function standingBlockSplit(
+  source: string,
+  object: Readonly<{ start: number; end: number }>,
+  lastShowEnd: number,
+): Readonly<{ at: number; lineMatrix: Matrix }> | null {
+  const tokens = mraiNativeContentTokens(source, object.start + 2, object.end - 2);
+  if (!tokens) return null;
+  const number = (text: string) => /^[+-]?(?:\d+\.?\d*|\.\d+)$/u.test(text) ? Number(text) : null;
+  let depth = 0;
+  let line: Matrix | null = [1, 0, 0, 1, 0, 0];
+  let operands: string[] = [];
+  let at: number | null = null;
+  for (const token of tokens) {
+    const text = source.slice(token.start, token.end);
+    if (!token.operator) {
+      operands.push(text);
+      continue;
+    }
+    const taken = operands;
+    operands = [];
+    if (at !== null) {
+      // Other text after the cut: the object is worth cutting.
+      if ((text === "Tj" || text === "TJ" || text === "'" || text === '"') &&
+        !/^(?:\(\)|<>|\[\s*\])$/u.test(taken.at(-1) ?? "")) return line ? Object.freeze({ at, lineMatrix: line }) : null;
+      continue;
+    }
+    if (token.start >= lastShowEnd) {
+      if (text !== "EMC" || depth < 1) return null;
+      depth -= 1;
+      if (depth === 0) at = token.end;
+      continue;
+    }
+    if (text === "BDC" || text === "BMC") depth += 1;
+    else if (text === "EMC") {
+      depth -= 1;
+      if (depth < 0) return null;
+    } else if (text === "Tm") {
+      const values = taken.map(number);
+      line = values.length === 6 && values.every((value) => value !== null) ? values as unknown as Matrix : null;
+    } else if (text === "Td" || text === "TD") {
+      const values = taken.map(number);
+      line = line && values.length === 2 && values[0] !== null && values[1] !== null
+        ? [line[0], line[1], line[2], line[3], values[0] * line[0] + values[1] * line[2] + line[4],
+          values[0] * line[1] + values[1] * line[3] + line[5]]
+        : null;
+    } else if (text === "T*" || text === "'" || text === '"') line = null;
+    if (token.end === lastShowEnd && depth === 0) at = token.end;
+  }
+  return null;
+}
+
+/** How far across a reader item's baseline a show of it may stand, as a share
+ * of the item's height: the reader keeps a glyph on the item's line while it
+ * steps no further than PDFJS_VERTICAL_SHIFT_RATIO of it. */
+const STANDING_ACROSS_EM = 0.3;
+/** How far past an item's ends along its line the middle of a glyph of it
+ * may be (a mark of no width standing at its very end). */
+const STANDING_ALONG_EM = 0.1;
+
+
+
+
+const STANDING_MARK_BELOW_EM = 0.45;
+const STANDING_MARK_ABOVE_EM = 1.25;
+
+/**
+ * A box read for a format written where its text stands, without the reader's
+ * character order: what readParagraph answers, for a box of right-to-left (or
+ * mixed) text, which the reader shows in logical order and the page draws in
+ * visual order -- no item of it is proved alone, and none of its characters
+ * is told to be a particular glyph.
+ *
+ * The box owns the shows of the page's own content whose inked glyphs all
+ * stand in a reader item of the box (by the item's own place, direction and
+ * width on the page, each glyph by its middle), line by line; and it owns
+ * them only where, on every line, the characters those shows draw are the
+ * line's characters as the reader read them -- the same characters as often,
+ * in whatever order. A show that stands partly in the box, a show in a font
+ * the page does not prove, text under a replacement text, shows of more than
+ * one stream, or a line whose characters differ: refused, nothing is read.
+ *
+ * A glyph the font only calls white space (inkedBlankCodes) is ink here like
+ * any other: the reader reads a blank of it and no item holds it, so no count
+ * of characters proves it, and it is owned by its place alone -- in a reader
+ * item of the box like every glyph, or, a show of nothing else that the page
+ * stands off the baseline (the mark over a letter of an Urdu face), within
+ * the reach of an item's line AND drawn between two shows the box owns.
+ * Drawn at the edge of the box's shows it is neither proven the box's nor
+ * another's: refused. Drawn among other text it is that text's.
+ *
+ * `characterShows` is then dealt by count, not by identity: each line's
+ * characters go to that line's shows in the order both stand in, as many to
+ * a show as it draws. It says which LINE and which SHOW COUNT a character
+ * belongs to and nothing else, which is all a format that gives every
+ * character the same change needs (setParagraphWhereItStands draws each show
+ * whole, by its own operands, at its own place). Nothing that tells one
+ * character from another may be read from it: the caller writes no text and
+ * no format of a part with what this returns.
+ */
+async function readParagraphWhereItStands(
+  kernel: MraiNativeParagraphRewriteKernel,
+  named: PdfNativeListTextSelectionEvidence,
+  /** The box may hold glyphs its fonts name no character for (a TeX
+   * paragraph's symbols): see planFormatWhereUnprovedTextStands. Such a glyph
+   * is owned by its place like every other, and counted, not read: a line
+   * that holds some draws every character its named glyphs read as, and the
+   * reader reads no more characters beside them than those glyphs could be
+   * (UNNAMED_GLYPH_MAX_CHARACTERS each). What the item proofs this read does
+   * without would have refused is then asked here: a show cut by its clip,
+   * a glyph drawn twice in one place, text the box does not hold standing on
+   * a line of it. */
+  unnamedGlyphs = false,
+  /** Read for a format written by state alone (planFormatByStateWhereTextStands):
+   * no show is emptied, drawn again or moved among the others, so what only
+   * a redrawn block needs is not asked -- that the box's shows stand one
+   * after another in the stream with no other text between them, under one
+   * clip, each cut by none, with the text after each placed afresh. A glyph
+   * the page draws again at the same place (a fake bold's passes) is the
+   * box's with the first, and counted once. */
+  inPlace = false,
+): Promise<ReadParagraph> {
+  const streamsOf = kernel.standingPageStreams;
+  if (!streamsOf) return refuse(MRAI_NATIVE_REORDERED_TEXT_MESSAGE);
+  const selection = kernel.exactSelection(named);
+  const items = selection.items ?? [selection.item];
+  if (items.length < 1 || items.length > 256) refuse("Paragraph rewrite item count is unsupported.");
+  const lineIndexes = kernel.visualLineIndexes(items);
+  const originalText = selection.items ? summarizePdfNativeSelectionItems(items) : selection.item.str;
+  if (originalText !== selection.item.str || selection.startOffset !== 0 ||
+    selection.endOffset !== selection.item.str.length) {
+    refuse("Paragraph rewrite needs the whole paragraph's text.");
+  }
+  const text = characters(originalText);
+  const lineCount = Math.max(...lineIndexes) + 1;
+  const inkedOf = (value: string) => characters(value).filter((character) => !isReaderBlank(character));
+  const sameCharacters = (left: readonly string[], right: readonly string[]) => {
+    if (left.length !== right.length) return false;
+    const a = [...left].sort(), b = [...right].sort();
+    return a.every((character, index) => character === b[index]);
+  };
+  // Each line's characters in the box's text: the text is its items line by
+  // line, so the text of the lines up to one is where that line ends.
+  const lineEnds: number[] = [];
+  for (let line = 0; line < lineCount; line += 1) {
+    const count = lineIndexes.filter((index) => index <= line).length;
+    const head = items.slice(0, count);
+    if (!lineIndexes.slice(0, count).includes(line) || lineIndexes.slice(0, count).some((index) => index > line)) {
+      refuseStanding("its lines are not read one after another");
+    }
+    let end = text.length;
+    if (line < lineCount - 1) {
+      const headLines = kernel.visualLineIndexes(head);
+      const prefix = selection.items ? summarizePdfNativeSelectionItems(head) : originalText;
+      if (headLines.length !== count || headLines.some((index, at) => index !== lineIndexes[at]) ||
+        !originalText.startsWith(prefix)) refuseStanding("its lines cannot be told apart in its text");
+      end = characters(prefix).length;
+    }
+    const start = lineEnds[line - 1] ?? 0;
+    if (!sameCharacters(text.slice(start, end).filter((character) => !isReaderBlank(character)),
+      items.flatMap((item, index) => lineIndexes[index] === line ? inkedOf(item.str) : []))) {
+      refuseStanding("its lines cannot be told apart in its text");
+    }
+    lineEnds.push(end);
+  }
+  // Where the reader stands each item on the page.
+  const rects = items.flatMap((item, index) => {
+    if (!inkedOf(item.str).length) return [];
+    const [a, b, c, d, e, f] = item.transform;
+    const length = Math.hypot(a, b), height = Math.hypot(c, d);
+    if (!(length > 0) || !(height > 0) || !(item.width >= 0)) refuseStanding("an item of it has no place on the page");
+    // (`up`: which side of its baseline its glyphs stand on.)
+    return [{ item: index, line: lineIndexes[index], x: e, y: f, ux: a / length, uy: b / length, up: a * d - b * c < 0 ? -1 : 1,
+      width: item.width, height }];
+  });
+  const rectAt = (x: number, y: number) => {
+    let best: { item: number; line: number; across: number } | null = null;
+    for (const rect of rects) {
+      const dx = x - rect.x, dy = y - rect.y;
+      const along = dx * rect.ux + dy * rect.uy, across = Math.abs(dy * rect.ux - dx * rect.uy);
+      if (along < -STANDING_ALONG_EM * rect.height || along > rect.width + STANDING_ALONG_EM * rect.height ||
+        across > STANDING_ACROSS_EM * rect.height) continue;
+      if (!best || across < best.across) best = { item: rect.item, line: rect.line, across };
+    }
+    return best;
+  };
+  // The items within whose line's reach a point stands (a mark's): along the
+  // item's baseline and square to it, however the item's glyphs lean.
+  const reachAt = (x: number, y: number) => rects.filter((rect) => {
+    const dx = x - rect.x, dy = y - rect.y;
+    const along = dx * rect.ux + dy * rect.uy, up = (dy * rect.ux - dx * rect.uy) * rect.up;
+    return along >= -STANDING_ALONG_EM * rect.height && along <= rect.width + STANDING_ALONG_EM * rect.height &&
+      up >= -STANDING_MARK_BELOW_EM * rect.height && up <= STANDING_MARK_ABOVE_EM * rect.height;
+  });
+  const readsBlank = (glyph: Readonly<{ text: string | undefined }>) => /^\s*$/u.test(glyph.text ?? "x");
+  type Found = Readonly<{ show: MraiNativeParagraphRewriteShow; font: MraiNativeParagraphRewriteFont; item: number; line: number;
+    glyphs: ReturnType<typeof showGlyphs>;
+    /** It inks, and every glyph it inks is one the reader reads as a blank. */
+    marks: boolean;
+    /** The range of its codes the box holds, where the show draws other
+     * text too (in place only): `glyphs` are that range's. */
+    partial?: Readonly<{ codeStart: number; codeEnd: number }> }>;
+  const streams = await streamsOf(selection);
+  const held: { stream: MraiNativeParagraphRewriteStandingStream; streamBytes: Uint8Array; pageContent: boolean;
+    allShows: readonly MraiNativeParagraphRewriteShow[]; found: Found[]; strays: number }[] = [];
+  const unread: string[] = [];
+  for (const stream of streams) {
+    let streamBytes: Uint8Array, pageContent: boolean, allShows: readonly MraiNativeParagraphRewriteShow[];
+    try {
+      ({ streamBytes, pageContent } = await kernel.readStream(stream.plan));
+      allShows = kernel.readShows(streamBytes, stream.plan, stream.fonts);
+    } catch (error) {
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+      unread.push(error.message);
+      continue;
+    }
+    const found: Found[] = [];
+    const raised: { show: MraiNativeParagraphRewriteShow; font: MraiNativeParagraphRewriteFont;
+      glyphs: ReturnType<typeof showGlyphs>; near: readonly (typeof rects)[number][] }[] = [];
+    for (const show of allShows) {
+      if (show.codes.length === 0) continue;
+      const matrix = composeMatrix(show.textMatrix, show.graphicsMatrix);
+      const font = stream.fonts.get(show.fontName);
+      let glyphs: ReturnType<typeof showGlyphs> | null = null;
+      if (font && !show.vertical) {
+        try {
+          glyphs = showGlyphs(kernel, show, font);
+        } catch (error) {
+          if (!(error instanceof PdfNativeTransactionError)) throw error;
+        }
+      }
+      const scale = show.horizontalScale / 100;
+      const inked = glyphs?.filter((glyph) => !readsBlank(glyph) || Boolean(font?.inkedBlankCodes?.has(glyph.code))) ?? null;
+      const marks = Boolean(inked?.length) && inked!.every(readsBlank);
+      // What of it the box is asked for: the middle of each glyph it inks;
+      // its origin where it inks none, or its glyphs cannot be measured.
+      const points = inked?.length
+        ? inked.map((glyph) => applyMatrix(matrix, ((glyph.start + glyph.end) / 2) * scale, show.textRise))
+        : [applyMatrix(matrix, 0, show.textRise)];
+      const places = points.map(([x, y]) => rectAt(x, y));
+      const inside = places.flatMap((place) => place ? [place] : []);
+      if (!inside.length) {
+        // (Marks stood off the baseline: the box's where they are drawn
+        // among its shows, which is known once those are -- below.)
+        if (marks && font && glyphs && show.text !== null) {
+          const reaches = points.map(([x, y]) => reachAt(x, y));
+          const near = reaches[0].filter((rect) => reaches.every((reach) => reach.some((other) => other.line === rect.line)));
+          if (near.length) raised.push({ show, font, glyphs, near });
+        }
+        continue;
+      }
+      // (White space the box's lines hold, or that stands at their ends: its
+      // own where it stands on one of them, and no ink either way.)
+      if (inked && !inked.length) {
+        if (font && glyphs && show.text !== null) found.push({ show, font, item: inside[0].item, line: inside[0].line, glyphs, marks });
+        continue;
+      }
+      if (!font || !glyphs || !inked) return refuseStanding(`text of it is drawn in a font the page does not prove, /${show.fontName}`);
+      // (A show that holds a glyph its font names no character for reads as
+      // no text either: told from one under a replacement text by its mark.)
+      if (show.text === null && (!unnamedGlyphs || show.underActualText || show.underActualTextCluster ||
+        !glyphs.some((glyph) => glyph.text === undefined))) {
+        refuse("A show of this paragraph stands under a replacement text.");
+      }
+      if (inside.length !== places.length || inside.some((place) => place.line !== inside[0].line)) {
+        // In place, a show that draws the end of one of the box's lines and
+        // then other text (a table row set as one `TJ`, a line and the page
+        // number after it) is the box's in the one stretch of its glyphs
+        // that stands in the box: the format is written on that stretch, the
+        // show cut in two where it ends (standingShowCuts). Anything else --
+        // glyphs of it on two lines of the box, glyphs of other text between
+        // the box's -- is refused as it was.
+        const first = places.findIndex((place) => place !== null);
+        const last = places.length - 1 - [...places].reverse().findIndex((place) => place !== null);
+        if (!inPlace || !/^T[jJ]/u.test(show.operatorKind) || inside.some((place) => place.line !== inside[0].line) ||
+          places.slice(first, last + 1).some((place) => place === null)) {
+          refuseStanding("a show of it also draws text outside it");
+        }
+        const at = (glyph: (typeof glyphs)[number]) => glyphs.indexOf(glyph) * font.codeUnitBytes;
+        const partial = Object.freeze({ codeStart: at(inked[first]), codeEnd: at(inked[last]) + font.codeUnitBytes });
+        found.push({ show, font, item: inside[0].item, line: inside[0].line, marks, partial,
+          glyphs: glyphs.slice(partial.codeStart / font.codeUnitBytes, partial.codeEnd / font.codeUnitBytes) });
+        continue;
+      }
+      found.push({ show, font, item: inside[0].item, line: inside[0].line, glyphs, marks });
+    }
+    // The marks stood off the baseline, each by the shows it is drawn between
+    // (other such marks aside): two of the box's, and it is the box's, on the
+    // line of the one before it where it stands within that line's reach;
+    // two of other text, and it is that text's; one of each, and it is not
+    // known whose.
+    let strays = 0;
+    if (raised.length) {
+      const inOrder = allShows.filter((show) => show.codes.length > 0).sort((left, right) => left.start - right.start);
+      const order = new Map(inOrder.map((show, index) => [show, index] as const));
+      const ownOf = new Map(found.map((own) => [own.show, own] as const));
+      const apart = new Set(raised.map((entry) => entry.show));
+      for (const entry of raised) {
+        let before = order.get(entry.show)! - 1, after = before + 2;
+        while (before >= 0 && apart.has(inOrder[before])) before -= 1;
+        while (after < inOrder.length && apart.has(inOrder[after])) after += 1;
+        const [previous, next] = [ownOf.get(inOrder[before]), ownOf.get(inOrder[after])];
+        if (!previous && !next) continue;
+        const place = previous && next
+          ? entry.near.find((rect) => rect.line === previous.line) ?? entry.near.find((rect) => rect.line === next.line) : undefined;
+        if (!place) {
+          strays += 1;
+          continue;
+        }
+        found.push({ show: entry.show, font: entry.font, item: place.item, line: place.line, glyphs: entry.glyphs, marks: true });
+      }
+    }
+    held.push({ stream, streamBytes, pageContent, allShows, found, strays });
+  }
+  const holding = held.filter((entry) => entry.found.some((own) => own.glyphs.some((glyph) => !readsBlank(glyph))));
+  if (holding.length !== 1) {
+    return refuseStanding(holding.length ? "its text is drawn by more than one content stream"
+      : `no text of the page's own content stands where it does${unread.length ? `: ${unread[0]}` : ""}`);
+  }
+  const { stream, streamBytes, pageContent, allShows } = holding[0];
+  if (holding[0].strays > 0) {
+    refuseStanding("a glyph the reader reads as a blank stands on a line of it, and is not drawn among its shows");
+  }
+  const found = [...holding[0].found].sort((left, right) => left.show.start - right.show.start);
+  // The block draws its shows again one after another, in the order the page
+  // draws them: so the reader must come to each of them from the show it came
+  // to it from before, or it reads the box otherwise with no glyph of it
+  // moved. Text that is not the box's drawn between two shows of it would be
+  // taken out from between them (pdf-walk-1000 0339: a mark raised off the
+  // line, held by no item of the box, stood between a blank and the word
+  // after it; without it the reader read that blank as a space and the word
+  // as two), and lines drawn in another order than they stand would change
+  // places.
+  const ownShows = new Set(found.map((own) => own.show));
+  const [firstStart, lastStart] = [found[0].show.start, found.at(-1)!.show.start];
+  if (!inPlace && allShows.some((show) => show.codes.length > 0 && show.start > firstStart && show.start < lastStart && !ownShows.has(show))) {
+    refuseStanding("other text is drawn between its shows");
+  }
+  if (!inPlace && found.some((own, index) => index > 0 && own.line < found[index - 1].line)) {
+    refuseStanding("its lines are not drawn one after another");
+  }
+  // (In place: the passes a page draws a glyph again by, a hair from the first.)
+  const repeated = new Set<string>();
+  if (inPlace) {
+    const drawnAt = new Map<string, (readonly [number, number, number])[]>();
+    for (const [index, own] of found.entries()) {
+      const matrix = composeMatrix(own.show.textMatrix, own.show.graphicsMatrix), scale = own.show.horizontalScale / 100;
+      const reach = DUPLICATE_GLYPH_REACH_EM * own.show.fontSize * Math.hypot(matrix[0], matrix[1]);
+      for (const [at, glyph] of own.glyphs.entries()) {
+        if (readsBlank(glyph)) continue;
+        const [x, y] = applyMatrix(matrix, glyph.start * scale, own.show.textRise);
+        const key = `${own.show.fontName}:${glyph.code}`;
+        const list = drawnAt.get(key) ?? [];
+        if (list.some(([ox, oy, oreach]) => Math.hypot(ox - x, oy - y) <= Math.max(reach, oreach))) repeated.add(`${index}:${at}`);
+        else list.push([x, y, reach]);
+        drawnAt.set(key, list);
+      }
+    }
+  }
+  // The characters each show draws, as the reader reads a glyph's.
+  // (In place, a glyph whose name no list reads is one no character is known for.)
+  const unnamed = (own: Found, glyph: Readonly<{ code: number; text: string | undefined }>) =>
+    glyph.text === undefined || (inPlace && unnamedGlyphs && Boolean(own.font.nameUnreadCodes?.has(glyph.code)) && !readsBlank(glyph));
+  const drawnOf = (own: Found, index: number) => own.glyphs.flatMap((glyph, at) => {
+    if (repeated.has(`${index}:${at}`)) return [];
+    if (unnamed(own, glyph)) return unnamedGlyphs ? [] : refuseStanding("a glyph of it names no character");
+    return inkedOf(kernel.normalizeUnicode(glyph.text!));
+  });
+  const drawn = found.map(drawnOf);
+  // The lines that hold a glyph no character is named for, and how many.
+  const unnamedOnLine = Array.from({ length: lineCount }, (_, line) => found.reduce((sum, own, index) =>
+    own.line === line ? sum + own.glyphs.filter((glyph, at) => unnamed(own, glyph) && !repeated.has(`${index}:${at}`)).length : sum, 0));
+  for (let line = 0; line < lineCount; line += 1) {
+    const read = text.slice(lineEnds[line - 1] ?? 0, lineEnds[line]).filter((character) => !isReaderBlank(character));
+    const named = found.flatMap((own, index) => own.line === line ? drawn[index] : []);
+    if (unnamedOnLine[line] > 0) {
+      // Every character its named glyphs draw is read on the line, and what
+      // the reader reads beside them is no more than its unnamed glyphs could be.
+      const left = new Map<string, number>();
+      for (const character of read) left.set(character, (left.get(character) ?? 0) + 1);
+      const held = named.every((character) => {
+        const count = left.get(character) ?? 0;
+        left.set(character, count - 1);
+        return count > 0;
+      });
+      if (!held || read.length - named.length > UNNAMED_GLYPH_MAX_CHARACTERS * unnamedOnLine[line]) {
+        refuseStanding(`the page does not draw line ${line + 1} of it with the characters it reads as`);
+      }
+    } else if (!sameCharacters(read, named)) {
+      refuseStanding(`the page does not draw line ${line + 1} of it with the characters it reads as`);
+    }
+  }
+  if (unnamedGlyphs) {
+    if (!inPlace) refuseShowsNoItemProofWouldOwn(kernel, found, allShows, stream.fonts);
+    // The block draws every show again at one place of the stream, under the
+    // clip in force there (its last show's): a show drawn under another clip
+    // would be cut by one that was never its own.
+    const clipOf = (show: MraiNativeParagraphRewriteShow) => JSON.stringify(show.clipBox ?? null);
+    if (!inPlace && found.some((own) => clipOf(own.show) !== clipOf(found.at(-1)!.show))) {
+      refuseStanding("its shows are drawn under more than one clip");
+    }
+    // Each reader item of the box is what the reader reads of those shows:
+    // a glyph of them starts where it starts and one ends where it ends
+    // (the reader's blanks at its ends aside), as the proof of an item alone
+    // finds its show. Items that stand anywhere else are not the page's own,
+    // whatever shows their place takes in. (A glyph may stand in two items:
+    // an accent's and the letter's it is drawn over.)
+    const drawnGlyphs = found.flatMap((own) => {
+      const matrix = composeMatrix(own.show.textMatrix, own.show.graphicsMatrix), scale = own.show.horizontalScale / 100;
+      return own.glyphs.flatMap((glyph) => readsBlank(glyph) && !own.font.inkedBlankCodes?.has(glyph.code) ? [] : [{
+        start: applyMatrix(matrix, glyph.start * scale, own.show.textRise),
+        end: applyMatrix(matrix, glyph.end * scale, own.show.textRise),
+      }]);
+    });
+    for (const rect of rects) {
+      const along = ([x, y]: readonly [number, number]) => (x - rect.x) * rect.ux + (y - rect.y) * rect.uy;
+      const across = ([x, y]: readonly [number, number]) => Math.abs((y - rect.y) * rect.ux - (x - rect.x) * rect.uy);
+      const tolerance = Math.max(STANDING_ITEM_END_POINTS, STANDING_ITEM_END_EM * rect.height);
+      const on = drawnGlyphs.filter((glyph) => across(glyph.start) <= tolerance);
+      const read = characters(items[rect.item].str);
+      if ((!isReaderBlank(read[0]) && !on.some((glyph) => Math.abs(Math.min(along(glyph.start), along(glyph.end))) <= tolerance)) ||
+        (!isReaderBlank(read.at(-1)!) &&
+          !on.some((glyph) => Math.abs(Math.max(along(glyph.start), along(glyph.end)) - rect.width) <= tolerance))) {
+        refuseStanding("an item of it does not stand where the page draws its glyphs");
+      }
+    }
+  }
+  // Its shows, each as the block draws it again (readParagraph's geometry).
+  const blockMatrix = found.at(-1)!.show.graphicsMatrix;
+  const toBlock = invertMatrix(blockMatrix);
+  const linearOf = (show: MraiNativeParagraphRewriteShow) =>
+    composeMatrix(composeMatrix(show.textMatrix, show.graphicsMatrix), toBlock);
+  const head = found.find((own) => own.glyphs.some((glyph) => !/^\s*$/u.test(glyph.text ?? "x")))!;
+  const first = linearOf(head.show);
+  const alongLength = Math.hypot(first[0], first[1]), acrossLength = Math.hypot(first[2], first[3]);
+  if (!(alongLength > 0) || !(acrossLength > 0)) refuse("The paragraph's text space is degenerate.");
+  const firstSlanted = Math.abs(first[0] * first[2] + first[1] * first[3]) > 1e-6 * alongLength * acrossLength;
+  const firstHand = Math.sign(first[0] * first[3] - first[1] * first[2]);
+  const basis: readonly [number, number, number, number] = Object.freeze(firstSlanted
+    ? [first[0] / alongLength, first[1] / alongLength, (-firstHand * first[1]) / alongLength, (firstHand * first[0]) / alongLength] as const
+    : [first[0] / alongLength, first[1] / alongLength, first[2] / acrossLength, first[3] / acrossLength] as const);
+  if (Math.abs(basis[0] * basis[2] + basis[1] * basis[3]) > 1e-6 || firstHand === 0 ||
+    Math.sign(basis[0] * basis[3] - basis[1] * basis[2]) !== firstHand ||
+    firstHand * (blockMatrix[0] * blockMatrix[3] - blockMatrix[1] * blockMatrix[2]) <= 0) {
+    refuse("The paragraph's text is mirrored.");
+  }
+  const shows: OwnedShow[] = [];
+  for (const own of found) {
+    const { show, font, glyphs } = own;
+    if (show.vertical) refuse("Paragraph rewrite does not support vertical text.");
+    if (show.renderingMode !== 0 && show.renderingMode !== 2) refuse("A show of this paragraph is not drawn filled.");
+    if (!show.deviceColorKnown) refuse("A show of this paragraph is drawn in a colour that cannot be read.");
+    const linear = linearOf(show);
+    const along = Math.hypot(linear[0], linear[1]), fullAcross = Math.hypot(linear[2], linear[3]);
+    if (!(along > 0) || !(fullAcross > 0) ||
+      Math.abs(linear[0] * basis[1] - linear[1] * basis[0]) > 1e-6 * along ||
+      linear[0] * basis[0] + linear[1] * basis[1] <= 0 || linear[2] * basis[2] + linear[3] * basis[3] <= 0) {
+      refuse("The paragraph's shows are not drawn along one direction.");
+    }
+    const leaning = Math.abs(linear[2] * basis[3] - linear[3] * basis[2]) > 1e-6 * fullAcross;
+    const across = leaning ? linear[2] * basis[2] + linear[3] * basis[3] : fullAcross;
+    const slant = leaning ? (linear[2] * basis[0] + linear[3] * basis[1]) / across : 0;
+    const [x, y] = applyMatrix(toBlock, ...applyMatrix(show.graphicsMatrix, ...applyMatrix(show.textMatrix, 0, 0)));
+    const u = x * basis[0] + y * basis[1], v = x * basis[2] + y * basis[3];
+    const scale = (show.horizontalScale / 100) * along;
+    const inkedGlyphs = glyphs.filter((glyph) => !readsBlank(glyph) || Boolean(font.inkedBlankCodes?.has(glyph.code)));
+    // (Its ink from where it starts furthest back to where it ends furthest
+    // on, whichever way its array steps along the line: a producer of
+    // right-to-left text may draw a show's glyphs from the right.)
+    const ink = Object.freeze(inkedGlyphs.map((glyph) =>
+      Object.freeze([u + Math.min(glyph.start, glyph.end) * scale, u + Math.max(glyph.start, glyph.end) * scale] as const)));
+    const inked = ink.length
+      ? Object.freeze({ start: Math.min(...ink.map(([start]) => start)), end: Math.max(...ink.map(([, end]) => end)),
+        count: ink.length })
+      : null;
+    shows.push(Object.freeze({
+      start: show.start, end: show.end, show, font, item: own.item, line: own.line, leaf: null,
+      size: show.fontSize * across, characterSpacing: show.characterSpacing * across,
+      horizontalScale: show.horizontalScale * (along / across), rise: show.textRise * across,
+      slant, color: show.deviceColor, u, v, inked, ink, partial: own.partial ?? null, twin: null, stroked: show.renderingMode === 2,
+      // (Ruled on its line, wherever the page stands it across it: a word's
+      // letters stepped up along the line are under one rule with it.)
+      ruleRise: show.textRise * across, ...(own.marks ? { readsBlank: true as const } : {}),
+    }));
+  }
+  // Its lines (readParagraph's): each on the baseline most of its glyphs
+  // stand on (the letters of a Nastaleeq word step up from it, one show
+  // each), the glyphs the reader reads as blanks aside.
+  const lineBaselines: number[] = [];
+  const lineExtents: { left: number; right: number }[] = [];
+  for (let line = 0; line < lineCount; line += 1) {
+    const inked = shows.filter((show) => show.line === line && show.inked);
+    const letters = inked.filter((show) => !show.readsBlank);
+    if (!letters.length) refuse("A line of the paragraph draws nothing.");
+    const level = letters.filter((show) => Math.abs(show.rise) <= LAYOUT_TOLERANCE);
+    const standing = new Map<number, { across: number; count: number }>();
+    for (const show of level.length ? level : letters) {
+      const across = show.v + show.rise, key = Math.round(across * 1e4);
+      const there = standing.get(key);
+      if (there) there.count += show.inked!.count;
+      else standing.set(key, { across, count: show.inked!.count });
+    }
+    lineBaselines.push([...standing.values()].reduce((best, entry) => entry.count > best.count ? entry : best).across);
+    lineExtents.push({ left: Math.min(...inked.map((show) => show.inked!.start)),
+      right: Math.max(...inked.map((show) => show.inked!.end)) });
+  }
+  for (let line = 1; line < lineCount; line += 1) {
+    if (!(lineBaselines[line - 1] - lineBaselines[line] > LAYOUT_TOLERANCE)) {
+      refuse("The paragraph's lines do not run down its column.");
+    }
+  }
+  const bodySize = shows.filter((show) => show.inked && !show.readsBlank)
+    .reduce((best, show) => show.inked!.count > best.inked!.count ? show : best).size;
+  const reach = lineBaselines.map((baseline, line) => lineReachOf(shows.filter((show) => show.line === line && show.inked && !show.readsBlank)
+    .map((show) => ({ size: show.size, rise: show.v + show.rise - baseline })), bodySize));
+  const steps = lineBaselines.slice(1).map((baseline, index) => (lineBaselines[index] - baseline) /
+    (1 + (reach[index + 1].above + reach[index].below) / bodySize)).sort((a, b) => a - b);
+  const middle = Math.floor(steps.length / 2);
+  const lineStep = steps.length === 0 ? SINGLE_LINE_STEP_EM * bodySize
+    : steps.length % 2 === 1 ? steps[middle] : (steps[middle - 1] + steps[middle]) / 2;
+  const firstBaseline = lineBaselines[0] + firstLineLeading(lineStep, bodySize) * reach[0].above;
+  const firstLeft = lineExtents[0].left;
+  const restLeft = lineCount > 1 ? Math.min(...lineExtents.slice(1).map((extent) => extent.left)) : firstLeft;
+  const frameLeft = Math.min(firstLeft, restLeft);
+  const frameRight = Math.max(...lineExtents.map((extent) => extent.right));
+  const alignment = paragraphAlignment(lineExtents, frameRight, restLeft);
+  // Its characters dealt to its shows: line by line, as many to a show as it
+  // draws (see above: by count, never by which character is which glyph).
+  const owners: (number | null)[] = text.map(() => null);
+  for (let line = 0; line < lineCount; line += 1) {
+    const own = text.flatMap((character, index) =>
+      index >= (lineEnds[line - 1] ?? 0) && index < lineEnds[line] && !isBlank(character) ? [index] : []);
+    // (A show of glyphs the reader reads as blanks draws none of them.)
+    const lineShows = shows.flatMap((show, index) => show.line === line && show.inked && drawn[index].length ? [index] : []);
+    if (unnamedOnLine[line] > 0) {
+      // (How many characters each show draws is not known: the line's first
+      // inked show stands for the line; see ReadParagraph.unreadGlyphs.)
+      const first = shows.findIndex((show) => show.line === line && show.inked);
+      for (const index of own) owners[index] = first;
+      continue;
+    }
+    let next = 0;
+    for (const [order, index] of lineShows.entries()) {
+      const count = order === lineShows.length - 1 ? own.length - next : drawn[index].length;
+      if (count < 1 || next + count > own.length) refuseStanding("a show of it draws no character it reads as");
+      for (let at = 0; at < count; at += 1) owners[own[next + at]] = index;
+      next += count;
+    }
+  }
+  const opening = owners.find((owner) => owner !== null);
+  if (opening === undefined || opening === null) return refuse("The paragraph draws no character.");
+  let previous: number = opening;
+  const characterShows = Object.freeze(owners.map((owner) => {
+    if (owner !== null) previous = owner;
+    return owner ?? previous;
+  }));
+  // Its rules: those drawn under (through) whole shows of it only (no
+  // character of it is told from another, so none is read as ruled alone).
+  const source = LATIN1.decode(streamBytes);
+  // (In place: its rules stand beside each text object of it, and are read there -- standingRuleGroups.)
+  const { rules } = inPlace ? { rules: [] } : paragraphOwnRules({ streamBytes, source, shows, basis, blockMatrix, lineBaselines,
+    paragraphCharacters: [], characterShows: [] });
+  for (const [index, show] of shows.entries()) {
+    shows[index] = Object.freeze({ ...show, rise: show.v + show.rise - lineBaselines[show.line] });
+  }
+  // No show of it is emptied to a pen (that is measured from a proof of the
+  // show alone): the text after each must be placed afresh.
+  const ownedKeys = new Set(shows.map((show) => `${show.start}:${show.end}`));
+  for (const owned of shows) {
+    const object = enclosingTextObject(source, owned.start);
+    const objectShows = mraiNativeShowOperatorsIn(source, object.start + 2, object.end - 2);
+    if (!objectShows) return refuse("A text object of this paragraph cannot be read show by show.");
+    let deletedEnd = owned.end;
+    for (const other of objectShows) {
+      if (other.start < owned.end) continue;
+      if (!ownedKeys.has(`${other.start}:${other.end}`)) break;
+      deletedEnd = other.end;
+    }
+    if (!inPlace && !mraiNativeTextAfterShowIsPlacedAfresh(source, owned.end, deletedEnd, object.end)) {
+      refuse("The text after a show of this paragraph draws on from where it ends.");
+    }
+  }
+  if (unnamedGlyphs) {
+    // Text the box does not hold, standing on a line of it between the
+    // line's ends: left as it was beside text in a new look, the line would
+    // read as formatted in part. (Where it stands is all that is asked.)
+    for (const show of allShows) {
+      if (show.codes.length === 0 || ownShows.has(show)) continue;
+      const font = stream.fonts.get(show.fontName);
+      let glyphs: ReturnType<typeof showGlyphs> | null = null;
+      if (font && !show.vertical) {
+        try {
+          glyphs = showGlyphs(kernel, show, font);
+        } catch (error) {
+          if (!(error instanceof PdfNativeTransactionError)) throw error;
+        }
+      }
+      const inked = glyphs?.filter((glyph) => !readsBlank(glyph) || Boolean(font?.inkedBlankCodes?.has(glyph.code))) ?? null;
+      if (inked && !inked.length) continue;
+      const linear = linearOf(show), scale = show.horizontalScale / 100;
+      const points = inked ? inked.map((glyph) => applyMatrix(linear, ((glyph.start + glyph.end) / 2) * scale, show.textRise))
+        : [applyMatrix(linear, 0, show.textRise)];
+      for (const [x, y] of points) {
+        const u = x * basis[0] + y * basis[1], v = x * basis[2] + y * basis[3];
+        if (lineBaselines.some((baseline, line) => u > lineExtents[line].left && u < lineExtents[line].right &&
+          v - baseline > -UNNAMED_LINE_BELOW_EM * bodySize && v - baseline < UNNAMED_LINE_ABOVE_EM * bodySize)) {
+          refuseStanding("text it does not hold stands on a line of it");
+        }
+      }
+    }
+  }
+  const fontOrder: string[] = [];
+  for (const show of shows) if (!fontOrder.includes(show.show.fontName)) fontOrder.push(show.show.fontName);
+  const firstPlan = await stream.firstPlan(fontOrder, { fontName: head.show.fontName, fontSize: head.show.fontSize });
+  const again = await kernel.readStream(firstPlan);
+  if (!bytesEqual(again.streamBytes, streamBytes)) return refuseStanding("its content stream changed while it was read");
+  const spanStart = Math.min(shows[0].start, ...rules.map((rule) => rule.start));
+  const lastObject = enclosingTextObject(source, shows.at(-1)!.start);
+  const split = rules.length || inPlace ? null : standingBlockSplit(source, lastObject, shows.at(-1)!.end);
+  return Object.freeze({
+    selection, items, plans: Object.freeze(items.map(() => null)), firstPlan, streamBytes, source, pageContent,
+    shows: Object.freeze(shows), characterShows, basis, blockMatrix,
+    layout: Object.freeze({ alignment, frameLeft, frameRight, firstLeft, restLeft, firstBaseline, lineStep, lineCount,
+      lineExtents: Object.freeze(lineExtents), bodySize, ...(reach[0].above > 0 ? { firstReach: reach[0].above } : {}) }),
+    lineBaselines: Object.freeze([...lineBaselines]),
+    pens: Object.freeze([]),
+    spanStart,
+    rules: Object.freeze(rules.map((rule) => Object.freeze(rule))),
+    insertion: inPlace ? shows.at(-1)!.end : split ? split.at : Math.max(blockInsertion({ source, allShows, toBlock, basis, blockMatrix, bodySize,
+      spanStart, objectEnd: lastObject.end }), ...rules.map((rule) => rule.end)),
+    ...(split ? { blockWrap: Object.freeze({ before: "\nET",
+      after: `BT\n${split.lineMatrix.map((value) => formatNumber(value)).join(" ")} Tm\n` }) } : {}),
+    pins: firstPlan.request.untouchedObjects ?? Object.freeze([]),
+    allShows, twins: Object.freeze([]), twinKeys: new Set<string>(), fonts: stream.fonts, fontOrder: Object.freeze(fontOrder),
+    preferred: new Map(fontOrder.map((name) => [name, NO_PREFERRED_CODES])), gapRatio: null,
+    keptGaps: new Map(), blankRuns: new Map(), characterInk: new Map(), stacked: new Map(), stackedUnread: false,
+    characterRules: new Map(), unreadGaps: Object.freeze([]), unreadGapWidths: Object.freeze([]),
+    ...(unnamedOnLine.some((count) => count > 0) ? { unreadGlyphs: true as const } : {}),
+  });
+}
+
+/** How far from a reader item's ends the glyphs it holds may start and end
+ * (itemsAsTheirShows' tolerance: half a point, a twentieth of its size). */
+const STANDING_ITEM_END_POINTS = 0.5;
+const STANDING_ITEM_END_EM = 0.05;
+
+/** How many characters the reader may read for one glyph its font names no
+ * character for (it reads the font program's own name for it: a ligature's
+ * letters at most). */
+const UNNAMED_GLYPH_MAX_CHARACTERS = 4;
+/** How far below and above a line's baseline text counts as standing on the
+ * line, as shares of the body size (readParagraphWhereItStands, `unnamedGlyphs`). */
+const UNNAMED_LINE_BELOW_EM = 0.25;
+const UNNAMED_LINE_ABOVE_EM = 0.75;
+
+/** The item proof's refusal of a show its clip cuts through (list-text-fidelity's
+ * MRAI_NATIVE_CLIPPED_SHOW_MESSAGE; named here, as DUPLICATE_SHOWS_MESSAGE is). */
+const CLIPPED_SHOW_MESSAGE =
+  "The selected text is drawn under a clip that cuts through its glyphs; the reader shows what the page does not.";
+
+/**
+ * What the proof of a reader item alone refuses of the show it names, asked
+ * of the shows a box owns by their place with no item of it proved
+ * (readParagraphWhereItStands, `unnamedGlyphs`): a show whose clip cuts
+ * through its ink (the reader shows what the page does not), and a glyph the
+ * page draws twice in one place (a format on one of the two would leave the
+ * other under it, or over it).
+ */
+function refuseShowsNoItemProofWouldOwn(
+  kernel: MraiNativeParagraphRewriteKernel,
+  found: readonly Readonly<{ show: MraiNativeParagraphRewriteShow; font: MraiNativeParagraphRewriteFont;
+    glyphs: ReturnType<typeof showGlyphs> }>[],
+  allShows: readonly MraiNativeParagraphRewriteShow[],
+  fonts: ReadonlyMap<string, MraiNativeParagraphRewriteFont>,
+): void {
+  for (const own of found) if (kernel.showCutByClip(own.show, own.font)) refuse(CLIPPED_SHOW_MESSAGE);
+  // Every inked glyph of the stream, by its font and code: where it starts.
+  const inks = (glyph: Readonly<{ text: string | undefined }>) => !/^\s*$/u.test(glyph.text ?? "x");
+  const drawn = new Map<string, { x: number; y: number; show: MraiNativeParagraphRewriteShow; at: number }[]>();
+  const owned = new Map(found.map((own) => [own.show, own.glyphs] as const));
+  for (const show of allShows) {
+    if (show.codes.length === 0 || show.vertical) continue;
+    const font = fonts.get(show.fontName);
+    let glyphs = owned.get(show) ?? null;
+    if (!glyphs && font) {
+      try {
+        glyphs = showGlyphs(kernel, show, font);
+      } catch (error) {
+        if (!(error instanceof PdfNativeTransactionError)) throw error;
+      }
+    }
+    if (!glyphs) continue;
+    const matrix = composeMatrix(show.textMatrix, show.graphicsMatrix), scale = show.horizontalScale / 100;
+    for (const [at, glyph] of glyphs.entries()) {
+      if (!inks(glyph)) continue;
+      const [x, y] = applyMatrix(matrix, glyph.start * scale, show.textRise);
+      const key = `${show.fontName}:${glyph.code}`;
+      const list = drawn.get(key);
+      if (list) list.push({ x, y, show, at });
+      else drawn.set(key, [{ x, y, show, at }]);
+    }
+  }
+  for (const own of found) {
+    const matrix = composeMatrix(own.show.textMatrix, own.show.graphicsMatrix), scale = own.show.horizontalScale / 100;
+    const reach = DUPLICATE_GLYPH_REACH_EM * own.show.fontSize * Math.hypot(matrix[0], matrix[1]);
+    for (const [at, glyph] of own.glyphs.entries()) {
+      if (!inks(glyph)) continue;
+      const [x, y] = applyMatrix(matrix, glyph.start * scale, own.show.textRise);
+      if ((drawn.get(`${own.show.fontName}:${glyph.code}`) ?? []).some((other) => (other.show !== own.show || other.at !== at) &&
+        Math.hypot(other.x - x, other.y - y) <= reach)) refuse(DUPLICATE_SHOWS_MESSAGE);
+    }
+  }
+}
+
+/** How near one another two drawings of one glyph are one glyph drawn twice,
+ * as a share of its size (a fake bold's second pass stands a twentieth off). */
+const DUPLICATE_GLYPH_REACH_EM = 0.1;
+
+/**
+ * The last check of a format written where the text stands: the stream as
+ * the write leaves it is read again, and every glyph the page drew is drawn
+ * still -- the same code of the same font, from the same point to the same
+ * point (0.01 pt), at the same size -- and no other. One that is not: nothing
+ * is written.
+ */
+function refuseMovedGlyphs(
+  kernel: MraiNativeParagraphRewriteKernel,
+  paragraph: ReadParagraph,
+  replacement: Uint8Array,
+): void {
+  const { streamBytes, spanStart, insertion } = paragraph;
+  const candidate = new Uint8Array(streamBytes.length - (insertion - spanStart) + replacement.length);
+  candidate.set(streamBytes.subarray(0, spanStart));
+  candidate.set(replacement, spanStart);
+  candidate.set(streamBytes.subarray(insertion), spanStart + replacement.length);
+  const cannot = (): never => refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
+  type Drawn = { x0: number; y0: number; x1: number; y1: number; area: number; taken: boolean };
+  const glyphsOf = (shows: readonly MraiNativeParagraphRewriteShow[]) => {
+    const byKey = new Map<string, Drawn[]>();
+    let count = 0;
+    for (const show of shows) {
+      if (show.codes.length === 0) continue;
+      const matrix = composeMatrix(show.textMatrix, show.graphicsMatrix);
+      const font = paragraph.fonts.get(show.fontName);
+      const scale = show.horizontalScale / 100;
+      const area = (matrix[0] * matrix[3] - matrix[1] * matrix[2]) * show.fontSize * show.fontSize * scale;
+      const add = (key: string, from: number, to: number) => {
+        const [x0, y0] = applyMatrix(matrix, from, show.textRise), [x1, y1] = applyMatrix(matrix, to, show.textRise);
+        const list = byKey.get(key);
+        const entry = { x0, y0, x1, y1, area, taken: false };
+        if (list) list.push(entry);
+        else byKey.set(key, [entry]);
+        count += 1;
+      };
+      // (A show in a font the page does not prove is no show of the
+      // paragraph: it stands as one piece, by its bytes.)
+      if (!font || show.vertical) add(`?${show.fontName}:${hexCodes(show.codes)}`, 0, 0);
+      else for (const glyph of showGlyphs(kernel, show, font)) add(`${show.fontName}:${glyph.code}`, glyph.start * scale, glyph.end * scale);
+    }
+    return { byKey, count };
+  };
+  let before: ReturnType<typeof glyphsOf>, after: ReturnType<typeof glyphsOf>;
+  try {
+    before = glyphsOf(paragraph.allShows);
+    after = glyphsOf(kernel.readShows(candidate, paragraph.firstPlan, paragraph.fonts));
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    return cannot();
+  }
+  if (before.count !== after.count) cannot();
+  for (const [key, list] of before.byKey) {
+    const others = after.byKey.get(key);
+    if (!others || others.length !== list.length) return cannot();
+    for (const glyph of list) {
+      const same = others.find((other) => !other.taken &&
+        Math.abs(other.x0 - glyph.x0) <= STANDING_GLYPH_TOLERANCE && Math.abs(other.y0 - glyph.y0) <= STANDING_GLYPH_TOLERANCE &&
+        Math.abs(other.x1 - glyph.x1) <= STANDING_GLYPH_TOLERANCE && Math.abs(other.y1 - glyph.y1) <= STANDING_GLYPH_TOLERANCE &&
+        Math.abs(other.area - glyph.area) <= 1e-4 * Math.max(1, Math.abs(glyph.area)));
+      if (!same) return cannot();
+      same.taken = true;
+    }
+  }
+}
+
+/** How far a glyph of a format-only edit may stand from where it stood, in
+ * points: past it, nothing is written. */
+const STANDING_GLYPH_TOLERANCE = 0.01;
+
+/** The formats a character may be asked of where the text stands unread in
+ * its order: those that move no glyph and need no character told from another. */
+const STANDING_FORMAT_FIELDS: ReadonlySet<string> = new Set(["color", "syntheticBold", "slant", "underline", "strikethrough"]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function planFormatWhereUnprovedTextStands(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+  resolveFormats: MraiNativeParagraphRewriteFormatsResolver,
+  refusal: PdfNativeTransactionError,
+): Promise<PdfNativeListTextReplacementPlan> {
+  let paragraph: ReadParagraph;
+  try {
+    paragraph = await readParagraphWhereItStands(kernel, selection, true);
+    refuseGlyphsReadAsBlanksBesideLines(paragraph);
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    // (Said as the page is: drawn twice, or cut by its clip.)
+    if (error.message === DUPLICATE_SHOWS_MESSAGE || error.message === CLIPPED_SHOW_MESSAGE) throw error;
+    throw refusal;
+  }
+  const text = paragraph.selection.item.str;
+  const formats = await resolveFormats({ request: paragraph.firstPlan.request, evidence: paragraph.firstPlan.evidence,
+    pageContent: paragraph.pageContent, text });
+  const asked = formats.characters[0] ?? null;
+  const key = JSON.stringify(asked);
+  if (formats.characters.length !== characters(text).length || !asked ||
+    formats.characters.some((format) => JSON.stringify(format ?? null) !== key) ||
+    Object.entries(asked).some(([field, value]) => value !== undefined && !STANDING_FORMAT_FIELDS.has(field)) ||
+    formats.alignment !== undefined || formats.leftIndent || formats.lineStep !== undefined ||
+    formats.firstLineIndent !== undefined) {
+    throw refusal;
+  }
+  const inked = paragraph.shows.filter((show) => show.inked);
+  // A stroke draws no weight on a Type3 glyph (`Tr` does not reach its
+  // procedure): said as that is, nothing written.
+  if (asked.syntheticBold === true && inked.some((show) => show.font.simpleSubtype === "Type3" &&
+    !show.font.type3Pictures && !show.stroked)) refuse(MRAI_NATIVE_TYPE3_FORMAT_MESSAGE);
+  const sameColor = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+  if (!inked.some((show) =>
+    (asked.color !== undefined && !sameColor(asked.color, show.color)) ||
+    (asked.syntheticBold !== undefined && asked.syntheticBold !== show.stroked) ||
+    (asked.slant !== undefined && asked.slant !== show.slant) ||
+    (show.inked!.end > show.inked!.start && asked.underline !== undefined && asked.underline !== (show.underline === true)) ||
+    (show.inked!.end > show.inked!.start && asked.strikethrough !== undefined &&
+      asked.strikethrough !== (show.strikethrough === true)))) {
+    refuse(MRAI_NATIVE_STANDING_FORMAT_UNCHANGED_REFUSAL);
+  }
+  if (asked.slant !== undefined) refuseLeanReadAsOtherRows(paragraph, asked.slant);
+  const set = setParagraphWhereItStands(kernel, paragraph, [text], formats);
+  if (!set) throw refusal;
+  const { request, evidence } = await paragraphEvidence(paragraph, text, set);
+  refuseMovedGlyphs(kernel, paragraph, request.replacement);
+  return Object.freeze({ request, evidence, properties: null });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function refuseLeanReadAsOtherRows(paragraph: ReadParagraph, slant: number): void {
+  const shows = paragraph.shows.filter((show) => show.inked);
+  const baseline = (show: OwnedShow) => paragraph.lineBaselines[show.line] + show.rise;
+  const heights = (show: OwnedShow) => [show.size * Math.hypot(1, show.slant), show.size * Math.hypot(1, slant)] as const;
+  // Whether a distance lies on one side of a share of the height as it
+  // stands and on the other as leaned (what stands at the bound, within half
+  // a hundredth, is taken to cross it).
+  const crosses = (distance: number, was: number, now: number) =>
+    was !== now && distance > Math.min(was, now) * 0.995 && distance <= Math.max(was, now) * 1.005;
+  for (const [index, show] of shows.entries()) {
+    const [was, now] = heights(show);
+    const next = shows[index + 1];
+    if (next) {
+      const [nextWas, nextNow] = heights(next);
+      if (crosses(Math.abs(baseline(next) - baseline(show)), READER_LINE_APART_SHARE * Math.max(was, nextWas),
+        READER_LINE_APART_SHARE * Math.max(now, nextNow))) refuse(MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL);
+    }
+    for (const other of shows.slice(index + 1)) {
+      if (other.line !== show.line || Math.min(other.inked!.end, show.inked!.end) <= Math.max(other.inked!.start, show.inked!.start)) continue;
+      const [otherWas, otherNow] = heights(other);
+      if (!crosses(Math.abs(baseline(other) - baseline(show)), PDFJS_VERTICAL_SHIFT_RATIO * Math.min(was, otherWas),
+        PDFJS_VERTICAL_SHIFT_RATIO * Math.min(now, otherNow))) continue;
+      // Stacked or not, the two read in one order where the page draws the
+      // shows that overlap there in the order they stand along the line (a
+      // tilde after a word and a space, set a little right of its letter,
+      // stands from that space on: «only eO(n)» either way). Only a run of
+      // them drawn in another order reads otherwise (the same tilde opening
+      // its line).
+      const along = shows.filter((entry) => entry.line === show.line).sort((left, right) =>
+        left.inked!.start - right.inked!.start || left.start - right.start);
+      let from = along.indexOf(show), to = from;
+      for (let grown = true; grown;) {
+        grown = false;
+        const reach = Math.max(...along.slice(from, to + 1).map((entry) => entry.inked!.end));
+        const low = Math.min(...along.slice(from, to + 1).map((entry) => entry.inked!.start));
+        if (to + 1 < along.length && along[to + 1].inked!.start < reach) { to += 1; grown = true; }
+        if (from > 0 && along[from - 1].inked!.end > low) { from -= 1; grown = true; }
+      }
+      // (Where an item stands along the line to the boxes: where its show
+      // starts, or -- the reader's space before it folded into it -- where
+      // the show drawn before it on the line ends.)
+      const place = (entry: OwnedShow) => {
+        const before = shows[shows.indexOf(entry) - 1];
+        return before && before.line === entry.line &&
+          entry.inked!.start - before.inked!.end >= PDFJS_TRACKING_SPACE_FACTOR * before.size
+          ? before.inked!.end : entry.inked!.start;
+      };
+      const run = along.slice(from, to + 1).sort((left, right) => place(left) - place(right) || left.start - right.start);
+      if (run.some((entry, at) => at > 0 && entry.start < run[at - 1].start)) refuse(MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL);
+    }
+  }
+}
+
+/** How far off the baseline of the item before it, as a share of the taller
+ * of the two, an item starts a line of its own (selectionVisualLineIndexes). */
+const READER_LINE_APART_SHARE = 0.55;
+
+/** The refusal of a rule that would be drawn under a clip that cuts it, or
+ * one this writer cannot read: the box would read as ruled and show none. */
+export const MRAI_NATIVE_STANDING_RULE_CLIP_MESSAGE =
+  "This text is drawn under a clip that a rule under or through it would be cut by, or that cannot be read; the rule was not drawn.";
+
+/** The most pieces one edit's replacement is written as (the transaction's
+ * MAX_REPLACEMENT_PIECES; the server's _MAX_REPLACEMENT_PIECES). */
+const STANDING_MAX_PIECES = 8192;
+
+type StandingRuleGroup = Readonly<{
+  line: number;
+  /** The text object the group's shows are drawn in: its rules stand against it. */
+  object: Readonly<{ start: number; end: number }>;
+  /** Its first show along the line: its size, baseline and colour are the rule's. */
+  body: OwnedShow;
+  geometry(color?: PdfNativeDeviceColor): Parameters<typeof pdfNativeTextRuleBlock>[0];
+}>;
+
+/**
+ * Where the rules of a box read where it stands are drawn and read: one under
+ * (through) each run of its shows that stand one after another along a line
+ * in one text object at one size, on one baseline and in one colour, from
+ * where the first of them is inked to where the last is -- the rule the
+ * paragraph rewrite draws under such shows and reads back as theirs
+ * (paragraphOwnRules), so a paragraph ruled here and set again later takes
+ * its rules with it. It stands beside that text object (pdfNativeTextRuleBlock:
+ * an underline ends at its `BT`, a strikethrough starts after its `ET`), in
+ * the user space and under the clip the text object is drawn in. Shows a hair
+ * off one another's baseline (the passes of a fake bold) are one run, ruled
+ * on the first's.
+ */
+function standingRuleGroups(paragraph: ReadParagraph): readonly StandingRuleGroup[] {
+  const { source, shows, basis, blockMatrix, lineBaselines } = paragraph;
+  const groups: { key: string; object: Readonly<{ start: number; end: number }>; shows: OwnedShow[] }[] = [];
+  const ruled = shows.filter((show) => show.inked && show.inked.end > show.inked.start && !show.readsBlank);
+  for (let line = 0; line < lineBaselines.length; line += 1) {
+    const along = ruled.filter((show) => show.line === line).sort((left, right) =>
+      left.inked!.start - right.inked!.start || left.start - right.start);
+    let open: (typeof groups)[number] | null = null;
+    for (const show of along) {
+      const object = enclosingTextObject(source, show.start);
+      // (Its baseline: the line's own where it stands within a twentieth of its size of it.)
+      const baseline = lineBaselines[line] + show.rise;
+      const level = Math.abs(show.rise) <= STANDING_RULE_BASELINE_EM * show.size ? "line" : String(Math.round(baseline * 1e6));
+      const key = JSON.stringify([object.start, Math.round(show.size * 1e6), level, show.color]);
+      if (open && open.key === key) open.shows.push(show);
+      else {
+        open = { key, object: Object.freeze({ start: object.start, end: object.end }), shows: [show] };
+        groups.push(open);
+      }
+    }
+  }
+  return Object.freeze(groups.map(({ object, shows: own }) => {
+    const body = own[0];
+    const left = Math.min(...own.map((show) => show.inked!.start)), right = Math.max(...own.map((show) => show.inked!.end));
+    // (As the paragraph rewrite reads a rule's run: on its first show's own baseline.)
+    const across = lineBaselines[body.line] + body.rise;
+    const inBlock: Matrix = [basis[0], basis[1], basis[2], basis[3],
+      left * basis[0] + across * basis[2], left * basis[1] + across * basis[3]];
+    const space = body.show.graphicsMatrix;
+    const textMatrix = space.every((value, at) => Math.abs(value - blockMatrix[at]) <= 1e-9) ? inBlock
+      : composeMatrix(composeMatrix(inBlock, blockMatrix), invertMatrix(space));
+    return Object.freeze({ line: body.line, object, body,
+      geometry: (color?: PdfNativeDeviceColor) => ({ textMatrix: textMatrix as [number, number, number, number, number, number],
+        fontSize: body.size, advance: right - left, color: color ?? body.color }) });
+  }));
+}
+
+/** How far off its line's baseline a show may stand and be ruled with the
+ * shows on it, as a share of its size. */
+const STANDING_RULE_BASELINE_EM = 0.05;
+
+/** The rule of a style standing whole under (through) a group, or null. */
+function standingRuleOf(streamBytes: Uint8Array, group: StandingRuleGroup, style: "underline" | "strikethrough",
+  edges: Readonly<{ start: number; end: number }> = group.object, color?: PdfNativeDeviceColor) {
+  let standing: ReturnType<typeof pdfNativeTextRuleStandingAt> = null;
+  try {
+    standing = pdfNativeTextRuleStandingAt(streamBytes, style === "underline" ? edges.start : edges.end, style, group.geometry(color));
+  } catch { standing = null; }
+  return standing && pdfNativeTextRuleRangeIsWhole(standing.range) ? standing : null;
+}
+
+/** How a box read where it stands is drawn: stroked, leaned, ruled. */
+function standingLookOfParagraph(paragraph: ReadParagraph): MraiNativeStandingTextLook {
+  const inked = paragraph.shows.filter((show) => show.inked);
+  const groups = standingRuleGroups(paragraph);
+  const ruled = (style: "underline" | "strikethrough") => groups.length > 0 &&
+    groups.every((group) => standingRuleOf(paragraph.streamBytes, group, style) !== null);
+  return Object.freeze({
+    ...(inked.length > 0 && inked.every((show) => show.stroked) ? { syntheticBold: true as const } : {}),
+    ...(inked.length > 0 && inked.every((show) => show.slant !== 0) ? { slanted: true as const } : {}),
+    ...(ruled("underline") ? { underline: true as const } : {}),
+    ...(ruled("strikethrough") ? { strikethrough: true as const } : {}),
+  });
+}
+
+/** A box read for a format written by state (readParagraphWhereItStands, in
+ * place), or null where it is not read so. */
+async function readParagraphForStateFormat(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+  /** Told why the box is not read so. */
+  why?: (refusal: PdfNativeTransactionError) => void,
+): Promise<ReadParagraph | null> {
+  if (!kernel.standingPageStreams || !kernel.standingStreamContext) return null;
+  try {
+    const paragraph = await readParagraphWhereItStands(kernel, selection, !pdfTextHasRightToLeftRun(selection.item.str), true);
+    refuseGlyphsReadAsBlanksBesideLines(paragraph);
+    return paragraph;
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    why?.(error);
+    return null;
+  }
+}
+
+ 
+async function readStandingStateLook(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+): Promise<MraiNativeStandingTextLook | null> {
+  const paragraph = await readParagraphForStateFormat(kernel, selection);
+  return paragraph ? standingLookOfParagraph(paragraph) : null;
+}
+
+
+
+
+function refusalOfRedrawOnly(message: string): boolean {
+  return message === MRAI_NATIVE_PARAGRAPH_TOO_LARGE_MESSAGE ||
+    message.startsWith("The paragraph's shows lie too far apart in their stream") ||
+    message.startsWith(MRAI_NATIVE_STANDING_FORMAT_REFUSAL) ||
+    /^Reader item \d+ of the paragraph does not prove alone: /u.test(message) ||
+    message === DUPLICATE_SHOWS_MESSAGE || message === CLIPPED_SHOW_MESSAGE;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function planFormatByStateWhereTextStands(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+  resolveFormats: MraiNativeParagraphRewriteFormatsResolver,
+  refusal: PdfNativeTransactionError,
+  
+
+
+  first = false,
+): Promise<PdfNativeListTextReplacementPlan> {
+  // (Refused by both for want of the same proof -- that the page's shows are
+  // this box and nothing else -- the reason said is this read's: what stood in
+  // the way of drawing the box again does not stand in the way here.)
+  let unread: PdfNativeTransactionError | null = null;
+  const paragraph = await readParagraphForStateFormat(kernel, selection, (error) => { unread = error; });
+  if (!paragraph) {
+    const own = unread as PdfNativeTransactionError | null;
+    throw own && own.message.startsWith(MRAI_NATIVE_STANDING_FORMAT_REFUSAL) &&
+      refusal.message.startsWith(MRAI_NATIVE_STANDING_FORMAT_REFUSAL) ? own : refusal;
+  }
+  const context = await kernel.standingStreamContext!(selection, paragraph.firstPlan);
+  if (!context) throw refusal;
+  const text = paragraph.selection.item.str;
+  const formats = await resolveFormats({ request: paragraph.firstPlan.request, evidence: paragraph.firstPlan.evidence,
+    pageContent: paragraph.pageContent, text });
+  const asked = formats.characters[0] ?? null;
+  const key = JSON.stringify(asked);
+  if (formats.characters.length !== characters(text).length || !asked ||
+    formats.characters.some((format) => JSON.stringify(format ?? null) !== key) ||
+    Object.entries(asked).some(([field, value]) => value !== undefined && !STANDING_FORMAT_FIELDS.has(field)) ||
+    asked.slant !== undefined || formats.alignment !== undefined || formats.leftIndent || formats.lineStep !== undefined ||
+    formats.firstLineIndent !== undefined) {
+    throw refusal;
+  }
+  const { source, streamBytes } = paragraph;
+  const inked = paragraph.shows.filter((show) => show.inked);
+  if (asked.syntheticBold === true && inked.some((show) => show.font.simpleSubtype === "Type3" &&
+    !show.font.type3Pictures && !show.stroked)) refuse(MRAI_NATIVE_TYPE3_FORMAT_MESSAGE);
+  // The stream's paint state, as the page's content before it leaves it.
+  const names = new Set<string>();
+  for (const stream of [...context.prefix, source]) {
+    for (const match of stream.matchAll(/(\/[^\x00\t\n\f\r /<>[\]()%{}]+)[\x00\t\n\f\r ]+gs(?![A-Za-z0-9*'"])/gu)) names.add(match[1]);
+  }
+  const lineWidths = await context.lineWidths([...names]);
+  const walked = (stream: string) => walkStandingStream({ source: stream, prefix: context.prefix,
+    inherits: !paragraph.pageContent, lineWidths });
+  const walk = walked(source);
+  const byEnd = new Map(walk.shows.map((show) => [show.end, show] as const));
+  // What each show of the box is asked to stand under.
+  const sameColor = (left: PdfNativeDeviceColor, right: PdfNativeDeviceColor) => JSON.stringify(left) === JSON.stringify(right);
+  const targets = new Map<number, StandingTarget>();
+  const drawnAs = new Map<number, Readonly<{ mode: number; color: PdfNativeDeviceColor }>>();
+  // A show the box holds a stretch of: cut in two where the stretch starts
+  // and ends, the state written between the pieces (standingShowCuts).
+  const cutEdits: StandingEdit[] = [];
+  const cutOnly: StandingEdit[] = [];
+  const cutTargets: { owned: OwnedShow; target: StandingTarget; pieces: number; own: number }[] = [];
+  for (const owned of paragraph.shows) {
+    const standing = byEnd.get(owned.end);
+    if (!standing || standing.start !== owned.start) throw refusal;
+    const target: { -readonly [K in keyof StandingTarget]: StandingTarget[K] } = {};
+    let fill = standing.state.fill;
+    const recolored = asked.color !== undefined && !sameColor(asked.color, owned.color);
+    if (recolored) {
+      fill = colorOperator(asked.color!);
+      target.fill = fill;
+    }
+    const stroked = standing.state.tr === "2";
+    if (asked.syntheticBold === true && !stroked) {
+      if (fill === null) return refuse(MRAI_NATIVE_STANDING_STATE_UNKNOWN_MESSAGE);
+      const matrix = owned.show.textMatrix;
+      const width = pdfNativeSyntheticBoldStrokeWidth(Math.abs(owned.show.fontSize), [matrix[0], matrix[1], matrix[2], matrix[3]]);
+      if (!(width > 0)) throw refusal;
+      target.tr = "2";
+      target.w = `${formatNumber(width)} w`;
+      target.stroke = standingStrokeSpelling(fill);
+    } else if (asked.syntheticBold === false && stroked) {
+      target.tr = "0";
+      target.w = "free";
+      target.stroke = "free";
+    } else if (stroked && recolored && standing.state.fill !== null &&
+      standing.state.stroke === standingStrokeSpelling(standing.state.fill)) {
+      // (A stroke in the fill's colour is this writer's weight: it keeps the text's colour.)
+      target.stroke = standingStrokeSpelling(fill!);
+    }
+    if (owned.partial && Object.keys(target).length) {
+      const length = owned.show.codes.length;
+      const { codeStart, codeEnd } = owned.partial;
+      const cuts = standingShowCuts(source, owned, [...(codeStart > 0 ? [codeStart] : []), ...(codeEnd < length ? [codeEnd] : [])]);
+      if (!cuts) throw refusal;
+      // (Its own state before and after: what stands at the show.)
+      const set: string[] = [], put: string[] = [];
+      for (const kind of ["tr", "w", "stroke", "fill"] as const) {
+        const asked = target[kind];
+        if (asked === undefined || asked === "free" || asked === standing.state[kind]) continue;
+        const back = standing.state[kind];
+        if (back === null) return refuse(MRAI_NATIVE_STANDING_STATE_UNKNOWN_MESSAGE);
+        set.push(kind === "tr" ? `${asked} Tr` : asked);
+        put.push(kind === "tr" ? `${back} Tr` : back);
+      }
+      if (set.length) {
+        const [head, tail] = [codeStart > 0 ? cuts[0] : null, codeEnd < length ? cuts.at(-1)! : null];
+        if (head) {
+          cutEdits.push({ start: head.offset, end: head.offset, text: `${head.close} ${set.join(" ")} ${head.open}` });
+          cutOnly.push({ start: head.offset, end: head.offset, text: `${head.close} ${head.open}` });
+        } else cutEdits.push({ start: owned.start, end: owned.start, text: `${set.join(" ")} ` });
+        if (tail) {
+          cutEdits.push({ start: tail.offset, end: tail.offset, text: `${tail.close} ${put.join(" ")} ${tail.open}` });
+          cutOnly.push({ start: tail.offset, end: tail.offset, text: `${tail.close} ${tail.open}` });
+        } else cutEdits.push({ start: owned.end, end: owned.end, text: ` ${put.join(" ")}` });
+        cutTargets.push({ owned, target: Object.freeze(target), pieces: 1 + (head ? 1 : 0) + (tail ? 1 : 0), own: head ? 1 : 0 });
+      }
+    } else if (Object.keys(target).length) targets.set(owned.end, Object.freeze(target));
+    drawnAs.set(owned.end, Object.freeze({
+      mode: asked.syntheticBold === undefined ? owned.show.renderingMode : asked.syntheticBold ? 2 : 0,
+      color: asked.color ?? owned.color }));
+  }
+  const stateEdits = normalizeStandingEdits([...(targets.size ? planStandingStateEdits(walk, targets) : []), ...cutEdits]);
+  if (stateEdits.length) {
+    // Read against the stream with its shows cut and nothing else written
+    // (a cut writes no state): the same shows in the same order, each of the
+    // box's -- a cut show's own piece among them -- under what was asked.
+    const cut = walked(applyStandingEdits(source, normalizeStandingEdits(cutOnly)));
+    const expected = new Map<number, StandingTarget>();
+    const pieceOf = new Map(cutTargets.map((entry) => [entry.owned.end, entry] as const));
+    let order = 0;
+    for (const show of walk.shows) {
+      const entry = pieceOf.get(show.end);
+      const target = entry ? entry.target : targets.get(show.end);
+      const at = cut.shows[order + (entry?.own ?? 0)];
+      if (!at) return refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
+      if (target) expected.set(at.end, target);
+      order += entry?.pieces ?? 1;
+    }
+    if (order !== cut.shows.length || cut.paints.length !== walk.paints.length + (cut.shows.length - walk.shows.length)) {
+      refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
+    }
+    const differs = standingStateTraceDiffers(cut, walked(applyStandingEdits(source, stateEdits)), expected);
+    if (differs) refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
+  }
+  // Its rules: beside each text object of each line, in the text's colour.
+  const groups = standingRuleGroups(paragraph);
+  if (first) {
+    
+    // again read one (a later edit of its words is theirs). They own a
+    // paragraph's rules only where every rule standing on its lines is one of
+    // its runs' (paragraphOwnRules), and take a link's own underline away
+    // with a rule asked: so every rule standing on the box's lines must be
+    // one read here, and no other writer's rule may stand under a box a
+    // rule is asked of.
+    const standing = new Set(groups.flatMap((group) => (["underline", "strikethrough"] as const).flatMap((style) =>
+      standingRuleOf(streamBytes, group, style)?.start ?? [])));
+    const beside = paragraphRuleSpansOnItsLines(streamBytes, source, paragraph.shows, paragraph.basis, paragraph.lineBaselines);
+    if (beside.some((rule) => !standing.has(rule.start))) throw refusal;
+    if (asked.underline !== undefined || asked.strikethrough !== undefined || (asked.color !== undefined && beside.length)) {
+      
+      if (paragraph.shows.some((show) => !show.show.graphicsMatrix.every((value, at) =>
+        Math.abs(value - paragraph.blockMatrix[at]) <= 1e-9))) throw refusal;
+      const linked = paragraphLinkRules({ source, shows: paragraph.shows, basis: paragraph.basis, blockMatrix: paragraph.blockMatrix,
+        skip: beside, lineSizes: paragraph.lineBaselines.map((_, line) => Math.max(0, ...paragraph.shows
+          .filter((show) => show.line === line).map((show) => show.size))) });
+      if (linked && linked.marks.size > 0) throw refusal;
+    }
+  }
+  const ruleEdits: StandingEdit[] = [];
+  const ruledAfter: { group: StandingRuleGroup; style: "underline" | "strikethrough"; on: boolean }[] = [];
+  for (const group of groups) {
+    for (const style of ["underline", "strikethrough"] as const) {
+      const standing = standingRuleOf(streamBytes, group, style);
+      const on = asked[style] ?? standing !== null;
+      const recolored = asked.color !== undefined && !sameColor(asked.color, group.body.color);
+      ruledAfter.push({ group, style, on });
+      if (on === (standing !== null) && !(on && recolored)) continue;
+      if (standing) ruleEdits.push({ start: standing.start, end: standing.end, text: "" });
+      if (!on) continue;
+      const block = LATIN1.decode(pdfNativeTextRuleBlock(group.geometry(asked.color), style));
+      // Drawn in the user space and under the clip of the text object it stands against.
+      const at = byEnd.get(group.body.end)!;
+      const space = group.body.show.graphicsMatrix;
+      const numbers = [...block.matchAll(/-?\d+(?:\.\d+)?/gu)].map((match) => Number(match[0])).slice(-8);
+      if (at.clip === "unknown" || numbers.length !== 8 ||
+        !space.every((value, index) => Math.abs(value - at.ctm[index]) <= 1e-6 * Math.max(1, Math.abs(value)))) {
+        refuse(MRAI_NATIVE_STANDING_RULE_CLIP_MESSAGE);
+      }
+      const clip = at.clip;
+      if (clip) {
+        // The clip may cut the rule where it cuts the text over it -- along
+        // the line (a printer driver draws a line again in every band it
+        // crosses, each time under that band's clip: each pass takes its own
+        // rule, cut as its glyphs are) -- and nowhere across it: a rule
+        // outside the clip's height would be read as drawn and show nothing.
+        const corners = [0, 2, 4, 6].map((corner) => applyMatrix(at.ctm, numbers[corner], numbers[corner + 1]));
+        const xs = corners.map((point) => point[0]), ys = corners.map((point) => point[1]);
+        const level = Math.abs(corners[0][1] - corners[1][1]) <= 0.01, upright = Math.abs(corners[0][0] - corners[1][0]) <= 0.01;
+        const insideAcross = level ? Math.min(...ys) >= clip[1] - 0.01 && Math.max(...ys) <= clip[3] + 0.01
+          : upright ? Math.min(...xs) >= clip[0] - 0.01 && Math.max(...xs) <= clip[2] + 0.01
+            : corners.every(([x, y]) => x >= clip[0] - 0.01 && x <= clip[2] + 0.01 && y >= clip[1] - 0.01 && y <= clip[3] + 0.01);
+        const shows = Math.max(...xs) > clip[0] && Math.min(...xs) < clip[2] && Math.max(...ys) > clip[1] && Math.min(...ys) < clip[3];
+        if (!insideAcross || !shows) refuse(MRAI_NATIVE_STANDING_RULE_CLIP_MESSAGE);
+      }
+      const edge = style === "underline" ? group.object.start : group.object.end;
+      ruleEdits.push({ start: edge, end: edge, text: block });
+    }
+  }
+  const edits = normalizeStandingEdits([...stateEdits, ...ruleEdits]);
+  if (!edits.length) refuse(MRAI_NATIVE_STANDING_FORMAT_UNCHANGED_REFUSAL);
+  // (The span keeps a byte of its own: one that only took a rule away, or
+  // only wrote one, is written as a piece of the stream beside it.)
+  let spanStart = edits[0].start, spanEnd = edits.at(-1)!.end;
+  if (!standingEditPieces(edits, spanStart, spanEnd).some((piece) => "spanStart" in piece)) {
+    if (spanEnd < source.length) spanEnd += 1;
+    else if (spanStart > 0) spanStart -= 1;
+    else throw refusal;
+  }
+  // (What the record's own check holds it to: state operators and rules written, and nothing else taken away.)
+  if (edits.some((edit) => !(mraiNativeStandingBytesAreStateOrRules(edit.text) || mraiNativeStandingBytesCutAShow(edit.text)) ||
+    !mraiNativeStandingBytesAreStateOrRules(source.slice(edit.start, edit.end)))) refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
+  const pieces = standingEditPieces(edits, spanStart, spanEnd);
+  const written = edits.reduce((sum, edit) => sum + edit.text.length, 0);
+  if (written > PARAGRAPH_REWRITE_MAX_REPLACEMENT_BYTES || pieces.length > STANDING_MAX_PIECES) {
+    refuse(MRAI_NATIVE_PARAGRAPH_TOO_LARGE_MESSAGE);
+  }
+  const candidate = applyStandingEdits(source, edits);
+  const replacement = asciiBytes(candidate.slice(spanStart, candidate.length - (source.length - spanEnd)));
+  const cannot = (): never => refuse(MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL);
+  // Read again: every glyph where it was; the box's shows drawn as asked and
+  // no other show otherwise; each rule where it was drawn, and none left.
+  refuseMovedGlyphs(kernel, { ...paragraph, spanStart, insertion: spanEnd }, replacement);
+  const candidateBytes = asciiBytes(candidate);
+  const after = kernel.readShows(candidateBytes, paragraph.firstPlan, paragraph.fonts);
+  // (Glyph by glyph, in the order the stream draws them: a show cut in two
+  // draws the same glyphs in the same order.)
+  const stretchOf = new Map(paragraph.shows.map((show) => [show.end, show.partial] as const));
+  const drawnOf = (shows: readonly MraiNativeParagraphRewriteShow[], expected: boolean) => shows.flatMap((show) => {
+    const unit = paragraph.fonts.get(show.fontName)?.codeUnitBytes ?? 0;
+    const count = unit ? Math.floor(show.codes.length / unit) : 1;
+    const want = expected ? drawnAs.get(show.end) : undefined;
+    const stretch = expected ? stretchOf.get(show.end) : undefined;
+    return Array.from({ length: count }, (_, glyph) => {
+      const own = want && (!stretch || !unit || (glyph * unit >= stretch.codeStart && glyph * unit < stretch.codeEnd)) ? want : undefined;
+      return `${own?.mode ?? show.renderingMode}|${show.deviceColorKnown ? JSON.stringify(own?.color ?? show.deviceColor) : "?"}`;
+    });
+  });
+  const [wanted, got] = [drawnOf(paragraph.allShows, true), drawnOf(after, false)];
+  if (wanted.length !== got.length || wanted.some((value, glyph) => value !== got[glyph])) cannot();
+  const moved = (offset: number, inclusive: boolean) => offset + edits.reduce((sum, edit) =>
+    edit.end < offset || (edit.end === offset && (inclusive || edit.start < edit.end)) ? sum + edit.text.length - (edit.end - edit.start) : sum, 0);
+  for (const { group, style, on } of ruledAfter) {
+    const edges = { start: moved(group.object.start, true), end: moved(group.object.end, false) };
+    if ((standingRuleOf(candidateBytes, group, style, edges, asked.color) !== null) !== on) cannot();
+  }
+  
+  // describe one, with no block, no pen and no source bytes.
+  const sha256 = await sha256PdfBytes(streamBytes.slice(spanStart, spanEnd));
+  const codes = paragraph.shows.flatMap((show) => [...show.show.codes]);
+  const { layout, firstPlan } = paragraph;
+  const advance = layout.lineExtents.reduce((sum, extent) => sum + (extent.right - extent.left), 0);
+  const rewrite: PdfNativeParagraphRewriteEvidence = Object.freeze({
+    schemaVersion: MRAI_NATIVE_PARAGRAPH_REWRITE_SCHEMA_VERSION,
+    target: Object.freeze({ objectNumber: firstPlan.request.identity.objectNumber, generation: firstPlan.request.identity.generation }),
+    items: Object.freeze(paragraph.plans.map((plan) => plan?.evidence ?? null)),
+    shows: Object.freeze(paragraph.shows.map((show) => Object.freeze({ start: show.start, end: show.end }))),
+    pens: Object.freeze([]),
+    originalBytes: Object.freeze([]),
+    pins: Object.freeze(paragraph.pins.map((pin) => Object.freeze({ objectNumber: pin.objectNumber, generation: pin.generation, role: pin.role }))),
+    block: null,
+    inPlace: true as const,
+  });
+  const evidence: PdfNativeListTextFidelityEvidence = Object.freeze({
+    ...firstPlan.evidence,
+    schemaVersion: PARAGRAPH_TEXT_SCHEMA_VERSION,
+    layoutKind: "paragraph-line" as const,
+    selection: paragraph.selection,
+    wrapping: "fixed-frame-multiline" as const,
+    linePlan: null,
+    listAnchor: null,
+    originalText: text,
+    originalDisplayText: text,
+    replacementText: text,
+    replacementDisplayText: text,
+    originalCodeBytes: Object.freeze(codes),
+    replacementCodeBytes: Object.freeze(codes),
+    textX: layout.firstLeft,
+    baseline: layout.firstBaseline,
+    lineSpacing: layout.lineStep,
+    originalAdvance: advance,
+    replacementAdvance: advance,
+    textOperatorSpan: Object.freeze({ start: spanStart, end: spanEnd, sha256 }),
+    paragraphRewrite: rewrite,
+  });
+  const request: PdfNativeContentStreamTransactionRequest = Object.freeze({
+    identity: firstPlan.request.identity,
+    expectedObjectSha256: firstPlan.request.expectedObjectSha256,
+    expectedStreamSha256: firstPlan.request.expectedStreamSha256,
+    operatorSpan: Object.freeze({ start: spanStart, end: spanEnd, expectedSha256: sha256 }),
+    replacement,
+    replacementPieces: pieces,
+    untouchedObjects: paragraph.pins,
+    ...(firstPlan.request.pageContentConsolidation ? { pageContentConsolidation: firstPlan.request.pageContentConsolidation } : {}),
+  });
+  return Object.freeze({ request, evidence, properties: null });
+}
+
+/**
+ * A format asked of the WHOLE of a box of right-to-left (or mixed) text, its
+ * text unchanged: written where the text stands (readParagraphWhereItStands,
+ * setParagraphWhereItStands), every show of the box drawn again by its own
+ * operands at its own place in the look asked. Every character must be asked
+ * the same change, and only one that moves no glyph: a part of the box, a
+ * face, a size, a script, a spacing, an alignment keep the refusal of text
+ * the reader reorders (which character of the reader's text a glyph is, this
+ * tier does not know). What is written is read again glyph by glyph
+ * (refuseMovedGlyphs).
+ */
+async function planFormatWhereReorderedTextStands(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+  resolveFormats: MraiNativeParagraphRewriteFormatsResolver,
+): Promise<PdfNativeListTextReplacementPlan> {
+  const paragraph = await readParagraphWhereItStands(kernel, selection);
+  // (No text is set again: a glyph the reader reads as a blank is drawn again
+  // with the show that draws it. One the box does not own, on a line of it,
+  // would stay as it was beside text in a new look.)
+  refuseGlyphsReadAsBlanksBesideLines(paragraph);
+  const text = paragraph.selection.item.str;
+  const formats = await resolveFormats({ request: paragraph.firstPlan.request, evidence: paragraph.firstPlan.evidence,
+    pageContent: paragraph.pageContent, text });
+  const asked = formats.characters[0] ?? null;
+  const key = JSON.stringify(asked);
+  if (formats.characters.length !== characters(text).length || !asked ||
+    formats.characters.some((format) => JSON.stringify(format ?? null) !== key) ||
+    Object.entries(asked).some(([field, value]) => value !== undefined && !STANDING_FORMAT_FIELDS.has(field)) ||
+    formats.alignment !== undefined || formats.leftIndent || formats.lineStep !== undefined ||
+    formats.firstLineIndent !== undefined) {
+    refuse(MRAI_NATIVE_REORDERED_TEXT_MESSAGE);
+  }
+  // Asked what every show of it is drawn as already: nothing to write (the
+  // block would draw the same page again), and said so.
+  const sameColor = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+  if (!paragraph.shows.some((show) => show.inked &&
+    ((asked.color !== undefined && !sameColor(asked.color, show.color)) ||
+      (asked.syntheticBold !== undefined && asked.syntheticBold !== show.stroked) ||
+      (asked.slant !== undefined && asked.slant !== show.slant) ||
+      // (A glyph of no width takes no rule: readParagraphWhereItStands.)
+      (show.inked.end > show.inked.start && asked.underline !== undefined && asked.underline !== (show.underline === true)) ||
+      (show.inked.end > show.inked.start && asked.strikethrough !== undefined &&
+        asked.strikethrough !== (show.strikethrough === true))))) {
+    refuse(MRAI_NATIVE_STANDING_FORMAT_UNCHANGED_REFUSAL);
+  }
+  const set = setParagraphWhereItStands(kernel, paragraph, [text], formats);
+  if (!set) return refuse(MRAI_NATIVE_REORDERED_TEXT_MESSAGE);
+  const { request, evidence } = await paragraphEvidence(paragraph, text, set);
+  refuseMovedGlyphs(kernel, paragraph, request.replacement);
+  return Object.freeze({ request, evidence, properties: null });
+}
+
+
+
+
+
+
+
+
+
+
+
+export async function readMraiNativeStandingTextLook(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+): Promise<MraiNativeStandingTextLook | null> {
+  if (!kernel.standingPageStreams || !pdfTextHasRightToLeftRun(selection.item.str)) return null;
+  try {
+    const paragraph = await readParagraphWhereItStands(kernel, selection);
+    const inked = paragraph.shows.filter((show) => show.inked);
+    if (!inked.length) return null;
+    const rules = paragraphTextRules(paragraph);
+    return Object.freeze({
+      ...(inked.every((show) => show.stroked) ? { syntheticBold: true as const } : {}),
+      ...(inked.every((show) => show.slant !== 0) ? { slanted: true as const } : {}),
+      ...(rules ?? {}),
+    });
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    
+    return readStandingStateLook(kernel, selection);
+  }
+}
+
+/** The look of a box read where its text stands (readMraiNativeStandingTextLook). */
+export type MraiNativeStandingTextLook = Readonly<{
+  syntheticBold?: true;
+  slanted?: true;
+  underline?: true;
+  strikethrough?: true;
+}>;
+
+/**
+ * Whether a box that holds Type3 glyphs holds none but pictures: every show
+ * of it drawn in a Type3 face is drawn in a face of pictures (the font's
+ * `type3Pictures`, read by the kernel's resolveFont). It is the test the
+ * writers of a weight make of such a box (setParagraph's Type3 refusal,
+ * planFormatByStateWhereTextStands): a weight asked of it is written on its
+ * words, the pictures drawn as they stand. False where a show of it is drawn
+ * in a Type3 face of letters -- a weight is refused there -- and where it
+ * holds no Type3 glyph at all.
+ */
+function paragraphHoldsType3PicturesOnly(paragraph: ReadParagraph): boolean {
+  const type3 = paragraph.shows.filter((show) => show.font.simpleSubtype === "Type3");
+  return type3.length > 0 && type3.every((show) => show.font.type3Pictures === true);
+}
+
+
+
+
+
+
+
+export async function readMraiNativeParagraphType3PicturesOnly(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+): Promise<boolean> {
+  try {
+    return paragraphHoldsType3PicturesOnly(await readParagraph(kernel, selection, true));
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    const standing = await readParagraphForStateFormat(kernel, selection);
+    return standing !== null && paragraphHoldsType3PicturesOnly(standing);
   }
 }
 
@@ -6120,6 +8211,7 @@ export async function proveMraiNativeParagraphRewriteOwnership(
       properties: null,
       ...(sourceAppearance.length ? { sourceAppearance: Object.freeze(sourceAppearance) } : {}),
       ...(textRules ? { textRules } : {}),
+      ...(paragraphHoldsType3PicturesOnly(paragraph) ? { type3Pictures: true as const } : {}),
     }),
     blankingRequest: request,
   });
@@ -6271,6 +8363,56 @@ export async function planMraiNativeParagraphRewrite(
   selection: PdfNativeListTextSelectionEvidence,
   replacementText: string,
   substitute?: MraiNativeParagraphRewriteSubstitute,
+  frame?: MraiNativeParagraphRewriteFrame,
+  resolveFormats?: MraiNativeParagraphRewriteFormatsResolver,
+  rowEdit?: MraiNativeParagraphRowEdit,
+): Promise<PdfNativeListTextReplacementPlan & Readonly<{ substitute?: Readonly<{ resourceName: string; text: string }> }>> {
+  // A colour, a stroked weight or a rule asked of the whole box with its
+  // text as it stands is written by state alone where that is proven
+  // (planFormatByStateWhereTextStands, asked first): no show is emptied or
+  // drawn again, so nothing of the page is drawn in another order than it
+  // was. A block that draws the paragraph again stands after the text
+  // object it was drawn in, and the reader then comes to its text after
+  // whatever that object drew next: the paragraph read the same, and the
+  // boxes beside it were grouped otherwise on about one page in seven
+  
+  const standing = Boolean(resolveFormats) && replacementText === selection.item.str && frame === undefined &&
+    !substitute && !rowEdit && replacementText.length <= 2_000;
+  if (standing && resolveFormats!.stateOnly && kernel.standingPageStreams && kernel.standingStreamContext) {
+    try {
+      return await planFormatByStateWhereTextStands(kernel, selection, resolveFormats!,
+        new PdfNativeTransactionError("unsupported-document", MRAI_NATIVE_PARAGRAPH_FORMAT_IN_PLACE_REFUSAL), true);
+    } catch (error) {
+      
+      if (!(error instanceof PdfNativeTransactionError)) throw error;
+      // Proven, and the box is drawn as asked already -- every show of it
+      // under the weight and colour, every rule standing: that is the answer.
+      
+      // that changed nothing the reader sees and set the run apart from its
+      // paragraph (下划线 asked again of an underlined run of pdf-walk-1000
+      // 0294: 1.5 KB written, the page's three boxes read as seven).
+      if (error.message === MRAI_NATIVE_STANDING_FORMAT_UNCHANGED_REFUSAL) throw error;
+    }
+  }
+  try {
+    return await planParagraphRewriteDrawnAgain(kernel, selection, replacementText, substitute, frame, resolveFormats, rowEdit);
+  } catch (error) {
+    // A format of the whole box with its text as it stands, refused only
+    // because the box cannot be drawn again whole: written by state alone
+    // (which refuses with this refusal whatever is not that). Every other
+    // edit keeps its refusal.
+    if (!(error instanceof PdfNativeTransactionError) || !standing || !refusalOfRedrawOnly(error.message)) throw error;
+    return planFormatByStateWhereTextStands(kernel, selection, resolveFormats!, error);
+  }
+}
+
+
+
+async function planParagraphRewriteDrawnAgain(
+  kernel: MraiNativeParagraphRewriteKernel,
+  selection: PdfNativeListTextSelectionEvidence,
+  replacementText: string,
+  substitute?: MraiNativeParagraphRewriteSubstitute,
   /** The frame the reader resized the paragraph to: its text re-wraps in it,
    * whether or not the text changed. */
   frame?: MraiNativeParagraphRewriteFrame,
@@ -6294,9 +8436,29 @@ export async function planMraiNativeParagraphRewrite(
   
   // drawn order or refuse it; this one has no drawn order to keep.
   if (pdfTextHasRightToLeftRun(replacementText) || pdfTextHasRightToLeftRun(selection.item.str)) {
-    refuse(MRAI_NATIVE_REORDERED_TEXT_MESSAGE);
+    // A format that moves no glyph, asked of the whole box with its text as
+    // it stands, sets nothing from the reader's string: it is written where
+    // the text stands, by the page's own shows (planFormatWhereReorderedTextStands,
+    // which refuses whatever is not that). Everything else stays refused.
+    if (replacementText !== selection.item.str || !resolveFormats || frame !== undefined || substitute || rowEdit ||
+      !kernel.standingPageStreams) refuse(MRAI_NATIVE_REORDERED_TEXT_MESSAGE);
+    return planFormatWhereReorderedTextStands(kernel, selection, resolveFormats!);
   }
-  const read = await readParagraph(kernel, selection);
+  // Formats asked of text that stays may move no glyph of it, and then draw
+  // it where it stands (setParagraphWhereItStands): read for that.
+  const standing = replacementText === selection.item.str && Boolean(resolveFormats) &&
+    frame === undefined && !substitute && !rowEdit;
+  let read: ReadParagraph;
+  try {
+    read = await readParagraph(kernel, selection, standing);
+  } catch (error) {
+    // No reader item proof reads the box whole: such a format needs none
+    // (planFormatWhereUnprovedTextStands, which refuses with this refusal
+    // whatever is not that).
+    if (!standing || !resolveFormats || !(error instanceof PdfNativeTransactionError) ||
+      !standsUnproved(kernel, selection, error)) throw error;
+    return planFormatWhereUnprovedTextStands(kernel, selection, resolveFormats, error);
+  }
   refuseGlyphsReadAsBlanks(read);
   const framed = frame?.right !== undefined ? paragraphInRequestedFrame(kernel, read, { right: frame.right }) : read;
   const spaced = frame?.lineStep !== undefined ? paragraphAtRequestedLineStep(framed, frame.lineStep) : framed;

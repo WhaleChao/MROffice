@@ -1204,6 +1204,77 @@ function splitRowAtTableCells(
   return parts;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function itemAfterSkewedFrameLineEnd(
+  previous: PdfNativeListTextSelectionItemEvidence,
+  next: PdfNativeListTextSelectionItemEvidence,
+  last: number,
+  emptyLineEnds: ReadonlySet<number> | undefined,
+): PdfNativeListTextSelectionItemEvidence | null {
+  const first = rawSourceItemIndexes(next)[0];
+  const lineEnded = (previous.hasEOL && first === last + 1) ||
+    (!previous.hasEOL && first === last + 2 && emptyLineEnds?.has(last + 1) === true);
+  if (
+    !lineEnded || !(previous.height > 0) || !(next.height > 0) ||
+    UNNAMED_CODE_CHARACTER.test(previous.str) || !/\S$/u.test(previous.str) || !/^\S/u.test(next.str)
+  ) {
+    return null;
+  }
+  const [a0, a1, a2, a3, ax, ay] = previous.transform;
+  const [b0, b1, b2, b3, bx, by] = next.transform;
+  // Both run along the page's x axis, one way, in one size; the reader
+  // compared in a frame that is not the page's (the next run's matrix leans).
+  if (
+    Math.abs(a1) > PDFJS_SPLIT_SPACE_TOLERANCE || Math.abs(b1) > PDFJS_SPLIT_SPACE_TOLERANCE ||
+    !(a0 > 0) || !(b0 > 0) || b2 === 0 ||
+    Math.abs(a3 - b3) > PDFJS_SPLIT_SPACE_TOLERANCE ||
+    Math.abs(by - ay) > PDFJS_SPLIT_SPACE_TOLERANCE
+  ) {
+    return null;
+  }
+  // The pen after the item before and the origin of the item after, each
+  // through its own matrix: the reader ended the line because these lie a
+  // line apart, and for no other reason.
+  const penX = ax + previous.width;
+  const lastAcross = (a2 * penX + a3 * ay) / a0;
+  const nextAcross = (b2 * bx + b3 * by) / b0;
+  if (!(Math.abs(nextAcross - lastAcross) > previous.height)) return null;
+  const gap = bx - penX;
+  if (!(gap >= PDFJS_TRACKING_SPACE_EM * Math.hypot(a2, a3))) return null;
+  return Object.freeze({
+    ...next,
+    str: ` ${next.str}`,
+    transform: Object.freeze([b0, b1, b2, b3, penX, by]) as PdfNativeListTextSelectionItemEvidence["transform"],
+    width: gap + next.width,
+    sourceItemIndexes: Object.freeze([...rawSourceItemIndexes(next)]),
+  });
+}
+
 /**
  * pdf.js reads a gap between two of its items as a space and reports it as a
  * white-space item of its own wherever it has no item to write the space
@@ -1226,8 +1297,9 @@ function lineWithReaderGapSpaces(
   line: NativeVisualLine,
   spacers: readonly ProjectedNativeItem[],
   viewport: PdfViewportLike,
+  emptyLineEnds?: ReadonlySet<number>,
 ): NativeVisualLine {
-  if (line.kind !== "text" || line.items.length < 2 || spacers.length === 0) return line;
+  if (line.kind !== "text" || line.items.length < 2) return line;
   const spacerAt = new Map(spacers.map((spacer) => [spacer.evidence.itemIndex, spacer]));
   let changed = false;
   const items = line.items.map((after, index) => {
@@ -1237,6 +1309,13 @@ function lineWithReaderGapSpaces(
     const spacer = spacerAt.get(last + 1)?.evidence;
     const previous = before.evidence;
     const next = after.evidence;
+    const leaned = spacer ? null : itemAfterSkewedFrameLineEnd(previous, next, last, emptyLineEnds);
+    if (leaned) {
+      const projectedLean = projectNativeItem(leaned, viewport, after.visualFontKey, false);
+      if (!projectedLean) return after;
+      changed = true;
+      return projectedLean;
+    }
     if (
       !spacer ||
       rawSourceItemIndexes(next)[0] !== last + 2 ||
@@ -2136,19 +2215,28 @@ function sourceContiguousParagraphs(
   });
 }
 
-/**
- * A paragraph's text is one field of the record that edits it, and bounded
- * (PDF_NATIVE_MAX_ITEM_TEXT_LENGTH). A paragraph past that bound -- a table
- * of contents read as one paragraph of seventy entries -- is cut at line
- * boundaries into paragraphs that fit, each edited on its own; text never
- * moves across a cut. A single line past the bound is left as it is.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 function paragraphsWithinTextLimit(
   paragraph: MutableParagraph,
+  stated: (line: NativeVisualLine) => NativeVisualLine,
 ): readonly MutableParagraph[] {
   const textOf = (lines: readonly NativeVisualLine[]) =>
     summarizePdfNativeSelectionItems(
-      lines.flatMap((line) => line.items.map((item) => item.evidence)),
+      lines.flatMap((line) => stated(line).items.map((item) => item.evidence)),
     ).length;
   if (textOf(paragraph.lines) <= PDF_NATIVE_MAX_ITEM_TEXT_LENGTH) {
     return [paragraph];
@@ -2355,11 +2443,21 @@ function markedBoxParagraph(lines: readonly NativeVisualLine[]): readonly Mutabl
   }];
 }
 
-/** A box's rows in the order the page draws its items: a row ends where
- * the reader ended its line, or where the next item starts back at the left
- * and lower down (a line set under it). Within a row, a sum's limits and a
- * script stay with the line they are set in. */
-function sourceOrderRows(items: readonly ProjectedNativeItem[]): NativeVisualLine[] | null {
+
+
+
+
+
+
+
+
+
+
+
+
+
+function sourceOrderRows(items: readonly ProjectedNativeItem[],
+  emptyLineEnds?: ReadonlySet<number>): NativeVisualLine[] | null {
   const ordered = [...items].sort((left, right) => left.evidence.itemIndex - right.evidence.itemIndex);
   const rows: ProjectedNativeItem[][] = [];
   for (const item of ordered) {
@@ -2371,7 +2469,10 @@ function sourceOrderRows(items: readonly ProjectedNativeItem[]): NativeVisualLin
     const body = row ? Math.max(...row.map((entry) => entry.fontSize)) : 0;
     const bodyBaseline = row ? Math.max(...row.filter((entry) => entry.fontSize >= body * 0.95)
       .map((entry) => entry.baselineBlock)) : 0;
+    const lineEnded = previous !== undefined && emptyLineEnds !== undefined &&
+      emptyLineEnds.has((rawSourceItemIndexes(previous.evidence).at(-1) ?? previous.evidence.itemIndex) + 1);
     if (!row || !previous || previous.evidence.hasEOL ||
+      (lineEnded && item.baselineBlock - bodyBaseline > size * 0.5) ||
       (item.inlineStart < previous.inlineStart - size * 0.5 && item.baselineBlock - bodyBaseline > size * 0.5)) {
       rows.push([item]);
     } else {
@@ -2884,7 +2985,7 @@ export function nativeParagraphEditBoxes(
         // around: alone, "n=1" was cut from the line it was set in).
         const own = new Set(part);
         const fromPage = paragraphOfItems(pageLines().filter((line) => line.items.some((item) => own.has(item))), own);
-        const candidates = [sourceOrderRows(part), fromPage?.lines ?? null, visualLines(part)]
+        const candidates = [sourceOrderRows(part, input.emptyLineEnds), fromPage?.lines ?? null, visualLines(part)]
           .map((lines) => lines?.length ? markedBoxParagraph(lines) : null);
         // The rows that read in the order the page draws them, as a write sets
         // a box (a paragraph set again draws its text in its own order); else
@@ -2909,7 +3010,8 @@ export function nativeParagraphEditBoxes(
       return visualParagraphs(visualLines(part))
         .flatMap((paragraph) => sourceContiguousParagraphs(paragraph, projected));
     }),
-  ].flatMap(paragraphsWithinTextLimit);
+  ].flatMap((paragraph) => paragraphsWithinTextLimit(paragraph,
+    (line) => lineWithReaderGapSpaces(line, spacers, input.viewport, input.emptyLineEnds)));
   const boxes = paragraphs.map((grouped) => {
     // A turned line set with character or word spacing and a horizontal
     // scale: the reader splits its one show into pieces, and the scale makes
@@ -2927,7 +3029,7 @@ export function nativeParagraphEditBoxes(
       : {
           ...grouped,
           lines: grouped.lines.map((line) =>
-            lineWithReaderGapSpaces(line, spacers, input.viewport),
+            lineWithReaderGapSpaces(line, spacers, input.viewport, input.emptyLineEnds),
           ),
         };
     const lineOfItem = new Map(

@@ -135,9 +135,18 @@ export function clearRangeContents<T extends BlockClearCell>(
       const existing = next[key];
       if (!existing) continue; // already empty -> nothing to clear
       // Build the cleared cell: blank value, NO formula, but every other field
-      // (style/comment/hyperlink/span/lock) preserved.
+      // (style/comment/span/lock) preserved.
       const cleared = { ...existing, value: "", kind: "text" } as T;
       delete (cleared as Record<string, unknown>).formula;
+      // The cell's link goes with its contents, as under Clear All: Windows
+      // Excel's Clear Contents (the Delete key) deletes the hyperlink of a
+      // cleared cell and keeps it under Clear Formats (xlsx-rounds
+      // probe/n35-p948/a pd3, pd4, pd5; CRITERIA XC-202). The link's blue and
+      // underline are the cell's format and stay.
+      const hadLink = (existing as Record<string, unknown>).hyperlink !== undefined;
+      delete (cleared as Record<string, unknown>).hyperlink;
+      delete (cleared as Record<string, unknown>).hyperlinkTooltip;
+      delete (cleared as Record<string, unknown>).hyperlinkDisplay;
       // A picture placed in the cell is its content (Place in Cell).
       delete (cleared as Record<string, unknown>).picture;
       delete (cleared as Record<string, unknown>).display;
@@ -159,7 +168,7 @@ export function clearRangeContents<T extends BlockClearCell>(
       if (cellHasMetadata(cleared)) {
         // Only count a real change when the cell actually differs (a cell that
         // was already blank with metadata but no formula is unchanged).
-        if (existing.value !== "" || existing.formula !== undefined) {
+        if (existing.value !== "" || existing.formula !== undefined || hadLink) {
           changed = true;
         }
         next[key] = cleared;
@@ -177,8 +186,8 @@ export function clearRangeContents<T extends BlockClearCell>(
  * The six Excel/WPS "Clear" variants (the Home > Clear submenu). `contents`
  * matches the Delete key (`clearRangeContents`); the others strip ONE facet of a
  * cell and leave the rest:
- *  - contents:    value + formula (keep style / comment / hyperlink / merge /
- *                 lock / validation)
+ *  - contents:    value + formula + the cell's hyperlink (keep style /
+ *                 comment / merge / lock / validation)
  *  - formats:     the whole cell format: style + numberFormat, the merge and
  *                 the Locked flag (keep value / formula / comment / link /
  *                 validation)

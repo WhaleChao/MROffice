@@ -16,7 +16,8 @@ import { MappablePosition, getUpdatedPosition as mapCorePosition, type Editor, t
 import { Fragment, Slice, type Node as ProseMirrorNode, type Schema } from "@tiptap/pm/model";
 import { AllSelection, NodeSelection, Plugin, Selection, TextSelection, type EditorState, type Transaction } from "@tiptap/pm/state";
 import { CellSelection } from "@tiptap/pm/tables";
-import { AttrStep, DocAttrStep, Mapping, ReplaceStep, type Step } from "@tiptap/pm/transform";
+import { AttrStep, DocAttrStep, Mapping, ReplaceStep, type Step, type StepMap } from "@tiptap/pm/transform";
+import { mappingChangedRange, mappingTextRunPlaces, withTextRunPlaces, type TextRunPlaces } from "./y-text-run-write";
 import type { EditorView } from "@tiptap/pm/view";
 import { initProseMirrorDoc, relativePositionToAbsolutePosition, yCursorPluginKey, ySyncPluginKey, yUndoPluginKey, yXmlFragmentToProsemirrorJSON } from "@tiptap/y-tiptap";
 import { COLLABORATIVE_DOCUMENT_ATTRS_MAP, COLLABORATIVE_DOCUMENT_ATTRS_REMOTE_META, publishCollaborativeDocumentAttrs, readCollaborativeDocumentAttrs } from "../../components/console/editor/native-document/collaborationDocumentAttrs";
@@ -30,7 +31,7 @@ import { createCaretChangeFilter } from "./ink-presence";
 import { MAX_DRAWN_CARETS, PeerCaretOverlay, type PeerCaret } from "./peer-caret-overlay";
 import { canonicalDocumentJson, canonicalDocumentSchema, canonicalReadBlocksOf, canonicalReadRepairOf, firstUnreadableNodePath, passesThroughCanonicalRead, isBareTopLevelInlineNode, parseCanonicalDocumentJson, projectPagedDocument, withoutBareTopLevelInlineNodes, withoutUnsetPaginationRuntimeAttributes, wrapCanonicalDocument } from "./paged-document-projection";
 import { reportClientError } from "../errors/report-beacon";
-import { PROVISIONAL_PAGES_MIN_BLOCKS } from "../../components/console/editor/native-document/paged/provisionalPages";
+import { provisionalPagesMinBlocks } from "../../components/console/editor/native-document/paged/provisionalPages";
 import { markRestoredLayout } from "../../components/console/editor/native-document/paged/restoredLayoutMark";
 import { forgetOpenedProjectionContent, paginationProjectionRefusal, rememberOpenedProjectionContent, restorePaginationProjection } from "../../components/console/editor/native-document/paged/paginationProjectionReceipt";
 import { withProjectionJsonMemo } from "../../components/console/editor/native-document/paged/projectionJsonMemo";
@@ -323,6 +324,9 @@ interface BridgeState {
    * personal history, never left view-only. */
   savedWithoutHistory: boolean;
   textEdit: CanonicalTextEdit | null;
+  /** The view steps of the batch (each key's place, y-text-run-write); null
+   * when the batch also took a room update. */
+  batchMaps: StepMap[] | null;
   sceneChange: boolean;
   /** A transaction of the batch closed the history group (closeHistory). */
   closesHistory: boolean;
@@ -661,7 +665,7 @@ export class PagedDocumentBridge {
       new Plugin<BridgeState>({
         key: ySyncPluginKey,
         state: {
-          init: () => ({ doc: options.session.ydoc, type: this.fragment, binding, bridge: this, changed: false, layoutOnly: true, historical: false, trustedHydration: false, trustedPublication: false, savedWithoutHistory: false, textEdit: null, sceneChange: false, closesHistory: false, awaitsFollowUp: false, followUp: false, replacesDocument: false, authoredFrom: null, authoredTo: null, keepsCaret: true }),
+          init: () => ({ doc: options.session.ydoc, type: this.fragment, binding, bridge: this, changed: false, layoutOnly: true, historical: false, trustedHydration: false, trustedPublication: false, savedWithoutHistory: false, textEdit: null, batchMaps: [], sceneChange: false, closesHistory: false, awaitsFollowUp: false, followUp: false, replacesDocument: false, authoredFrom: null, authoredTo: null, keepsCaret: true }),
           apply: (tr, previous, oldState) => {
             if (tr.docChanged) this.noteDerivation(oldState.doc, tr);
             if (tr.docChanged && this.compositionHold && !tr.getMeta(PAGED_CANONICAL_REMOTE_META)) this.noteHeldComposition(tr);
@@ -702,6 +706,10 @@ export class PagedDocumentBridge {
               keepsCaret: (startsBatch || previous.keepsCaret) &&
                 (!tr.docChanged || remote || insertsAwayFromCaret(tr, oldState.selection)),
               textEdit,
+              batchMaps: remote && tr.docChanged ? null
+                : startsBatch ? (tr.docChanged ? [...tr.mapping.maps] : [])
+                : previous.batchMaps === null ? null
+                : tr.docChanged ? [...previous.batchMaps, ...tr.mapping.maps] : previous.batchMaps,
               sceneChange: (!startsBatch && previous.sceneChange) || (!remote && tr.getMeta(WHITEBOARD_SCENE_META) === true),
               closesHistory: (!startsBatch && previous.closesHistory) || (!remote && tr.getMeta(CLOSE_HISTORY_META) === true),
               awaitsFollowUp: (!startsBatch && previous.awaitsFollowUp) || (!remote && tr.getMeta(PAGED_AWAITS_FOLLOW_UP_META) === true),
@@ -1197,22 +1205,45 @@ export class PagedDocumentBridge {
     } catch { return null; }
   }
 
-  private applyTextEdit(edit: CanonicalTextEdit) {
-    if (this.consumedTextEdits.has(edit)) return;
-    this.consumedTextEdits.add(edit);
+  /** Where the step of `edit` was typed in the room: its splice of the
+   * XmlText it is in, written there (with the inserted letters' formatting)
+   * when the room's text there is still what it removed. Preserving the
+   * actual insertion boundary matters: a whole-string prefix diff can borrow
+   * another author's matching letter, making personal Undo remove part of
+   * that peer's subsequently typed text, or interleave two words (TRIAGE 47). */
+  private textEditPlaces(edit: CanonicalTextEdit): TextRunPlaces | null {
+    if (this.consumedTextEdits.has(edit)) return null;
     const doc = this.options.session.ydoc;
-    const from = Y.createAbsolutePositionFromRelativePosition(edit.from, doc);
-    const to = Y.createAbsolutePositionFromRelativePosition(edit.to, doc);
-    if (!from || !to || from.type !== to.type || !(from.type instanceof Y.XmlText) || to.index < from.index) return;
-    const runs: Array<{insert: unknown}> = from.type.toDelta();
-    if (runs.some(run => typeof run.insert !== "string")) return;
-    const text = runs.map(run => run.insert).join("");
-    if (text.slice(from.index, to.index) !== edit.removed) return;
-    // Preserve the actual insertion boundary before reconciling marks/structure.
-    // A whole-string prefix diff can borrow another author's matching prefix,
-    // making personal Undo remove part of that peer's subsequently typed text.
-    if (to.index > from.index) from.type.delete(from.index, to.index - from.index);
-    if (edit.inserted) from.type.insert(from.index, edit.inserted);
+    return {
+      splice: (text) => {
+        if (this.consumedTextEdits.has(edit)) return null;
+        const from = Y.createAbsolutePositionFromRelativePosition(edit.from, doc);
+        const to = Y.createAbsolutePositionFromRelativePosition(edit.to, doc);
+        if (!from || !to || from.type !== text || to.type !== text || to.index < from.index) return null;
+        const runs: Array<{insert: unknown}> = text.toDelta();
+        if (runs.some(run => typeof run.insert !== "string")) return null;
+        if (runs.map(run => run.insert).join("").slice(from.index, to.index) !== edit.removed) return null;
+        this.consumedTextEdits.add(edit);
+        return { start: from.index, remove: to.index - from.index, insert: edit.inserted };
+      },
+    };
+  }
+
+  /** Where the batch's keys were typed, read off its view steps (`maps`, from
+   * `before` to `after`) through the two documents' position maps. */
+  private batchPlaces(before: ProseMirrorNode, after: ProseMirrorNode, maps: readonly StepMap[]): TextRunPlaces | null {
+    try {
+      const mapping = new Mapping(maps.slice());
+      const inverse = mapping.invert();
+      const old = this.positionMap(before), now = this.positionMap(after);
+      const back = (position: number, assoc: -1 | 1) => {
+        const local = now.toLocal(position, assoc);
+        return local === null ? null : old.toCanonical(inverse.map(local, assoc), assoc);
+      };
+      const local = mappingChangedRange(mapping, after.content.size);
+      const from = local ? now.toCanonical(local.from, -1) : null, to = local ? now.toCanonical(local.to, 1) : null;
+      return mappingTextRunPlaces(now.canonical, mapping, back, from !== null && to !== null && from <= to ? { from, to } : null);
+    } catch { return null; }
   }
 
   private relativeRoomPosition(position: number): Y.RelativePosition {
@@ -1567,9 +1598,12 @@ export class PagedDocumentBridge {
           this.undoManager.captureTimeout = gap >= 0 && gap < TYPING_RUN_GAP_MS ? Number.POSITIVE_INFINITY : 0;
         }
         try {
+          // Each key where it was typed and with its formatting: the one
+          // step's room positions, else the batch's steps (y-text-run-write).
+          const places = state.textEdit ? this.textEditPlaces(state.textEdit)
+            : state.batchMaps?.length ? this.batchPlaces(previous.doc, view.state.doc, state.batchMaps) : null;
           this.options.session.ydoc.transact(() => {
-            if (state.textEdit) this.applyTextEdit(state.textEdit);
-            updateCanonicalYFragment(this.options.session.ydoc, this.fragment, projected, this.meta);
+            withTextRunPlaces(places, () => updateCanonicalYFragment(this.options.session.ydoc, this.fragment, projected, this.meta));
           }, seed ? this.seedOrigin : state.historical ? this.localOrigin : this.nonHistoryOrigin);
         } finally {
           this.undoManager.captureTimeout = captureTimeout;
@@ -1963,7 +1997,7 @@ export class PagedDocumentBridge {
       // show. The wrapped document opens as provisional sheets instead, which
       // the page ledger composes progressively (provisionalPages).
       const bulkFill = map.canonical.childCount <= 1 && map.canonical.textContent === "" &&
-        this.canonical.childCount >= PROVISIONAL_PAGES_MIN_BLOCKS;
+        this.canonical.childCount >= provisionalPagesMinBlocks();
       // The kept layout the fill would open on has not come in yet: the
       // fill waits for it (the page's read now answers before the rows of a
       // long document do, and the fill laid it out cold).

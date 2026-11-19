@@ -33,10 +33,14 @@ import {
   findMatches,
   FindReplacementWorkspaceTooLargeError,
   MAX_FIND_REPLACEMENT_MATCHES,
-  replaceAll,
+  replaceAllWithEdits,
   type FindOptions,
   type Match,
 } from "./find-replace";
+import {
+  invertCodeTextChanges,
+  type CodeTextChange,
+} from "./code-text-changes";
 
 /** A buffer to search: a code cell or an open document, with a display label. */
 export interface SearchBuffer {
@@ -229,6 +233,10 @@ export interface ReplaceInFilesResult {
   changes: Map<string, string>;
   /** Total number of replacements made across all buffers. */
   count: number;
+  /** Map of bufferId -> the replaced matches of its text (sorted, disjoint),
+   * so a shared text is written at the matches' places, not re-found by
+   * comparing the old and new text (code-text-changes). */
+  edits?: Map<string, CodeTextChange[]>;
 }
 
 export const FIND_IN_FILES_UNDO_CODE_UNIT_LIMIT = 32 * 1024 * 1024;
@@ -240,6 +248,8 @@ export interface ReplaceInFilesUndoEntry {
   before: string;
   /** Exact text written by the workspace replacement. */
   after: string;
+  /** The replacement's edits of `before`, when known. */
+  edits?: readonly CodeTextChange[];
 }
 
 export interface ReplaceInFilesUndoSnapshot {
@@ -249,6 +259,9 @@ export interface ReplaceInFilesUndoSnapshot {
 export interface UndoReplaceInFilesResult {
   /** Original text to write back, keyed by the still-open buffer id. */
   changes: Map<string, string>;
+  /** The edits of each restored buffer's live text that write it back, at
+   * the replaced matches' places, when the replacement's edits are known. */
+  edits?: Map<string, CodeTextChange[]>;
   /** Buffers restored because their text still matched the replacement result. */
   restoredBufferCount: number;
   /** Closed or subsequently edited buffers deliberately left untouched. */
@@ -277,7 +290,11 @@ export function createReplaceInFilesUndoSnapshot(
     if (after === undefined || after === buffer.text) continue;
     retainedCodeUnits += buffer.text.length;
     if (retainedCodeUnits > safeLimit) return null;
-    entries.set(buffer.id, { before: buffer.text, after });
+    const edits = result.edits?.get(buffer.id);
+    entries.set(
+      buffer.id,
+      edits ? { before: buffer.text, after, edits } : { before: buffer.text, after },
+    );
   }
   return entries.size > 0 ? { entries } : null;
 }
@@ -295,16 +312,21 @@ export function undoReplaceInFiles(
 ): UndoReplaceInFilesResult {
   const liveById = new Map(buffers.map((buffer) => [buffer.id, buffer.text]));
   const changes = new Map<string, string>();
+  const edits = new Map<string, CodeTextChange[]>();
   let skippedBufferCount = 0;
   for (const [bufferId, entry] of snapshot.entries) {
     if (liveById.get(bufferId) === entry.after) {
       changes.set(bufferId, entry.before);
+      if (entry.edits) {
+        edits.set(bufferId, invertCodeTextChanges(entry.before, entry.edits));
+      }
     } else {
       skippedBufferCount += 1;
     }
   }
   return {
     changes,
+    edits,
     restoredBufferCount: changes.size,
     skippedBufferCount,
   };
@@ -326,7 +348,7 @@ export function replaceInFiles(
   opts: FindOptions = {},
   maxChangedCodeUnits = FIND_IN_FILES_REPLACEMENT_RESULT_CODE_UNIT_LIMIT,
 ): ReplaceInFilesResult {
-  if (!query) return { changes: new Map(), count: 0 };
+  if (!query) return { changes: new Map(), count: 0, edits: new Map() };
   const safeResultLimit = Number.isFinite(maxChangedCodeUnits)
     ? Math.max(
         0,
@@ -337,11 +359,12 @@ export function replaceInFiles(
       )
     : FIND_IN_FILES_REPLACEMENT_RESULT_CODE_UNIT_LIMIT;
   const changes = new Map<string, string>();
+  const edits = new Map<string, CodeTextChange[]>();
   let count = 0;
   let changedCodeUnits = 0;
   for (const buffer of buffers) {
     const text = buffer.text ?? "";
-    const result = replaceAll(
+    const result = replaceAllWithEdits(
       text,
       query,
       replacement,
@@ -355,6 +378,7 @@ export function replaceInFiles(
       throw new FindReplacementWorkspaceTooLargeError();
     }
     changes.set(buffer.id, result.text);
+    edits.set(buffer.id, result.edits);
   }
-  return { changes, count };
+  return { changes, count, edits };
 }

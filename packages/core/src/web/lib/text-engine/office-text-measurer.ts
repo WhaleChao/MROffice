@@ -3,7 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
-import { splitFamilyList } from "./face-index";
+import { leadingFamily, splitFamilyList } from "./face-index";
 import { officeFontMetricMatchesWidths, officeFontSubstitution } from "../office-fonts/substitutes";
 import { measureText, resolveFace, textEngineEpoch, type EngineFont } from "./measure";
 import type { OfficeFaceVerticals, OfficeMeasureAnswer, OfficeMeasuredGrapheme, OfficeTextFont, OfficeTextMeasurer } from "./office-text-body";
@@ -47,11 +47,24 @@ const SYNTHETIC_BOLD_EM_BY_FAMILY: ReadonlyMap<string, number> = new Map([
   
   ["dfkai-sb", 0],
   ["標楷體", 0],
+  // Families named for a weight, which Windows has with no bold face (windows-family-styles.json), emboldened at
+  // their regular advances, no GDI step at any size: each grapheme of the ",Bold" font in Windows PowerPoint's own
+  
+  
+  
+  
+  ["open sans semibold", 0],
+  ["montserrat semibold", 0],
+  ["oswald semibold", 0],
+  ["poppins semibold", 0],
+  ["nunito sans semibold", 0],
+  ["dosis semibold", 0],
+  ["berlin sans fb demi", 0],
 ]);
 
 /** The extra advance (pt) PowerPoint for Windows gives a grapheme of `stack`'s face set in a bold it synthesizes. */
 export function powerPointSyntheticBoldExtraPt(stack: string, sizePt: number): number {
-  const family = (splitFamilyList(stack)[0] ?? "").trim().replace(/^["']|["']$/g, "").toLowerCase();
+  const family = leadingFamily(stack).trim().replace(/^["']|["']$/g, "").toLowerCase();
   const em = SYNTHETIC_BOLD_EM_BY_FAMILY.get(family);
   if (em !== undefined) return em * sizePt;
   return sizePt >= SYNTHETIC_BOLD_STEP_FROM_PT ? SYNTHETIC_BOLD_STEP_PT : 0;
@@ -164,13 +177,13 @@ const OFFICE_EXTERNAL_LEADING: Readonly<Record<string, number>> = {
  * of the Office file's, so its win box stays the estimate.
  */
 function drawnByOtherDesign(stack: string): boolean {
-  const metric = officeFontSubstitution(splitFamilyList(stack)[0] ?? "")?.metric;
+  const metric = officeFontSubstitution(leadingFamily(stack))?.metric;
   return metric !== undefined && !officeFontMetricMatchesWidths(metric);
 }
 
 /** The Office file's win box in ems, when the family's stand-in does not carry it. */
 export function officeWinBox(stack: string, weight: number): { ascent: number; descent: number } | null {
-  const family = splitFamilyList(stack)[0] ?? "";
+  const family = leadingFamily(stack);
   const office = officeFontSubstitution(family)?.office;
   const plain = family.trim().replace(/^["']|["']$/g, "").trim();
   // A full-width spelling (ＭＳ Ｐゴシック) is the same family.
@@ -216,7 +229,7 @@ export const pageOfficeTextMeasurer: OfficeTextMeasurer = {
       // External leading: the Office file's where known, else the served
       // file's -- its typo line gap where it lays in its typo box, else what
       // its hhea line stands beyond its win box.
-      const known = OFFICE_EXTERNAL_LEADING[(splitFamilyList(font.stack)[0] ?? "").trim().toLowerCase()];
+      const known = OFFICE_EXTERNAL_LEADING[leadingFamily(font.stack).trim().toLowerCase()];
       const hheaLine = (metrics.hhea.ascender - metrics.hhea.descender + metrics.hhea.lineGap) * unit;
       const lineGap = known !== undefined
         ? known

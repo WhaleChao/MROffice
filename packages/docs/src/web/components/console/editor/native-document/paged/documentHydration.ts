@@ -20,6 +20,8 @@ import { serializeWhiteboardScenes } from "@mrnote/core/web/components/console/e
 import { withLegacyChartsOnV2, withoutInactiveChartUnionAttrs } from "@mrnote/core/web/components/console/editor/native-document/chartUnionAttrs.ts";
 import { hydrateStoredPageBlocks as hydratePagedDocumentBlocks } from "@mrnote/core/web/components/console/editor/native-document/paged/pageBlockExtension.ts";
 import { INITIAL_PAGINATION_SETTLING_ATTR } from "@mrnote/core/web/components/console/editor/native-document/paged/pageRebalanceExtension.ts";
+import { PAGE_LEDGER_BACKGROUND_ATTR } from "@mrnote/core/web/components/console/editor/native-document/documentLayoutStatus.ts";
+import { coldFirstLayoutOn } from "@mrnote/core/web/components/console/editor/native-document/paged/coldFirstLayout.ts";
 import { authorizeDocumentShellImportMutation, trustReadOnlyDocumentMutation, type DocumentShellImportAuthorityToken } from "@mrnote/core/web/components/console/editor/native-document/readOnlyTransactionAuthority.ts";
 import { flattenPagedDocumentForStorage } from "@mrnote/core/web/components/console/editor/native-document/paged/serialization.ts";
 import { captureSavedPaginationProjection } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
@@ -410,10 +412,17 @@ export function normalizeDocumentContentForSave(
   // over the whole document, under the pen (lib/ink-writing-session
   // inkLayoutUnsettled). The records come with the save that follows once
   // the writing has settled (schedulePaginationSettle).
+  // Under the cold first layout a document of a few pages is shown while its
+  // later pages are still laid out (the ledger's background): those pages
+  // are provisional, and a distribution stamped from them would hand the
+  // server's exporters page breaks no layout made (coldFirstLayout). The
+  // save after the background has finished stamps the real one.
+  const paginationDom = editorDom(paginationEditor);
   const paginationSettled = !deferPagination &&
-    editorDom(paginationEditor)?.hasAttribute(
+    paginationDom?.hasAttribute(
       INITIAL_PAGINATION_SETTLING_ATTR,
-    ) !== true;
+    ) !== true &&
+    !(coldFirstLayoutOn(paginationDom?.ownerDocument.defaultView) && paginationDom?.hasAttribute(PAGE_LEDGER_BACKGROUND_ATTR));
   // One serialization memo for the receipt capture and the flatten: they
   // read the same (unmutated) subtrees many times over.
   const stamped = withProjectionJsonMemo(() =>

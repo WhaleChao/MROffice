@@ -6,7 +6,7 @@
 import { hangingMarginTabTarget } from "../document-tabstops";
 
 import { eastAsianMarkLine, eastAsianMeasuredFirstBaselineEm } from "./east-asian-lines";
-import { splitFamilyList } from "./face-index";
+import { leadingFamily } from "./face-index";
 import { KINSOKU_EAST_ASIAN, type KinsokuList } from "./kinsoku";
 import {
   powerPointHangs,
@@ -741,18 +741,14 @@ function lineVerticals(
 
 /** The Windows-measured first baseline (em) of the East Asian face leading `stack`, if it has one. */
 function eastAsianFirstBaselineEm(stack: string): number | undefined {
-  for (const family of splitFamilyList(stack)) {
-    const measured = eastAsianMeasuredFirstBaselineEm(family.trim().replace(/^["']|["']$/g, ""));
-    if (measured !== undefined) return measured;
-    // Only the face that leads: a later family is a fallback's.
-    return undefined;
-  }
-  return undefined;
+  // Only the face that leads: a later family is a fallback's.
+  const family = leadingFamily(stack);
+  return family ? eastAsianMeasuredFirstBaselineEm(family.trim().replace(/^["']|["']$/g, "")) : undefined;
 }
 
 /** A stack's leading family, lowercase. */
 function primaryFamily(stack: string): string {
-  return (splitFamilyList(stack)[0] ?? "").trim().replace(/^["']|["']$/g, "").toLowerCase();
+  return leadingFamily(stack).trim().replace(/^["']|["']$/g, "").toLowerCase();
 }
 
 /** Lay a text body out. */

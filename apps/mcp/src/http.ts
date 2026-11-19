@@ -65,7 +65,19 @@ function oauthGate(services: Services) {
   const tokens = tokenGate({ apiUrl });
   const metadata = { resource, authorization_servers: [apiUrl], scopes_supported: ["office.convert", "account.read"], bearer_methods_supported: ["header"], resource_name: "MR Office" };
   const challenge = (error?: string) => `Bearer resource_metadata="${metadataUrl}", scope="office.convert account.read"${error ? `, error="${error}"` : ""}`;
-  return { metadata, challenge, check: (token: string) => tokens.check(token) };
+  // MCP clients of the specification's first authorization revision look
+  // for the authorization server's metadata on the MCP host itself: answer
+  // MR Office's own (its issuer and endpoints stay https://mroffice.ai),
+  // kept 5 minutes.
+  let asMetadata: { body: unknown; until: number } | null = null;
+  const authorizationServer = async (): Promise<unknown> => {
+    if (asMetadata && asMetadata.until > Date.now()) return asMetadata.body;
+    const response = await fetch(`${apiUrl}/.well-known/oauth-authorization-server`, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) throw Object.assign(new Error("MR Office's sign-in could not be reached"), { status: 503 });
+    asMetadata = { body: await response.json(), until: Date.now() + 300_000 };
+    return asMetadata.body;
+  };
+  return { metadata, challenge, authorizationServer, check: (token: string) => tokens.check(token) };
 }
 
 function bearerOf(request: IncomingMessage): string | null {
@@ -80,12 +92,16 @@ export function startHttp(services: Services): Promise<Server> {
   const gate = config.auth === "oauth" ? oauthGate(services) : null;
   /** The latest token each hosted session sent. */
   const sessionTokens = new Map<string, string>();
+  /** The MR Office account each hosted session belongs to: a later request
+   * on the session must carry a token of the same account. */
+  const sessionOwners = new Map<string, string>();
   const local = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(config.publicUrl);
   const distRoot = config.editorDist ? resolve(config.editorDist) : null;
 
   async function handleMcp(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const sessionId = request.headers["mcp-session-id"];
     let token: string | null = null;
+    let subject: string | undefined;
     if (gate) {
       token = bearerOf(request);
       const checked = token ? await gate.check(token) : null;
@@ -98,7 +114,14 @@ export function startHttp(services: Services): Promise<Server> {
         send(response, 401, { error: "invalid_token", error_description: "Sign in to MR Office." }, { "www-authenticate": gate.challenge(token ? "invalid_token" : undefined) });
         return;
       }
-      if (typeof sessionId === "string" && sessions.has(sessionId)) sessionTokens.set(sessionId, token);
+      subject = checked.sub;
+      if (typeof sessionId === "string" && sessions.has(sessionId)) {
+        if (sessionOwners.get(sessionId) !== subject) {
+          send(response, 403, { error: "invalid_token", error_description: "This session belongs to another MR Office account." });
+          return;
+        }
+        sessionTokens.set(sessionId, token);
+      }
     }
     let transport = typeof sessionId === "string" ? sessions.get(sessionId) : undefined;
     let body: unknown;
@@ -112,6 +135,7 @@ export function startHttp(services: Services): Promise<Server> {
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id: string): void => {
           sessions.set(id, created);
+          if (subject) sessionOwners.set(id, subject);
         },
         // a page on another site must not drive a server on this machine
         ...(local ? { enableDnsRebindingProtection: true, allowedHosts: [`127.0.0.1:${config.port}`, `localhost:${config.port}`] } : {}),
@@ -120,6 +144,7 @@ export function startHttp(services: Services): Promise<Server> {
         if (created.sessionId) {
           sessions.delete(created.sessionId);
           sessionTokens.delete(created.sessionId);
+          sessionOwners.delete(created.sessionId);
         }
       };
       let sessionServices = services;
@@ -134,7 +159,7 @@ export function startHttp(services: Services): Promise<Server> {
         })(created.onclose);
       }
       // a server reached from elsewhere does not list one person's documents to another
-      await createServer(sessionServices, { listAll: local }).connect(created);
+      await createServer(sessionServices, { listAll: local, owner: subject }).connect(created);
       transport = created;
     }
     await transport!.handleRequest(request, response, body);
@@ -186,9 +211,13 @@ export function startHttp(services: Services): Promise<Server> {
     const url = new URL(request.url ?? "/", config.publicUrl);
     try {
       if (url.pathname === "/mcp") return await handleMcp(request, response);
-      if (url.pathname === "/_mcp/health") return send(response, 200, { ok: true, documents: store.list().length });
+      // a liveness answer only: a shared server says nothing about what it holds
+      if (url.pathname === "/_mcp/health") return send(response, 200, local ? { ok: true, documents: store.list().length } : { ok: true });
       if (gate && (url.pathname === "/.well-known/oauth-protected-resource" || url.pathname === "/.well-known/oauth-protected-resource/mcp")) {
         return send(response, 200, gate.metadata, { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
+      }
+      if (gate && url.pathname === "/.well-known/oauth-authorization-server") {
+        return send(response, 200, await gate.authorizationServer(), { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" });
       }
       let match = url.pathname.match(/^\/_mcp\/view\/([a-z0-9]{12})$/);
       if (match) {
@@ -216,6 +245,21 @@ export function startHttp(services: Services): Promise<Server> {
       else response.end();
     }
   });
+  if (config.retentionDays) {
+    // a hosted server's documents are working copies: the ones nobody saved
+    // for retentionDays go, checked hourly
+    const maxAge = config.retentionDays * 24 * 3600_000;
+    const sweep = () => {
+      try {
+        const removed = store.prune(maxAge);
+        if (removed) process.stderr.write(`[mroffice-mcp] removed ${removed} document(s) unsaved for ${config.retentionDays} days\n`);
+      } catch (error) {
+        process.stderr.write(`[mroffice-mcp] retention sweep failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      }
+    };
+    sweep();
+    setInterval(sweep, 3600_000).unref();
+  }
   return new Promise((resolveListen, reject) => {
     server.once("error", reject);
     server.listen(config.port, config.listenHost, () => resolveListen(server));

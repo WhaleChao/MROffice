@@ -19,7 +19,7 @@ import { inkEffectSvgPlan } from "@mrnote/core/web/lib/office-ink-effects.ts";
 import { documentInkEffectPaint, documentInkPencilFilter, documentInkPencilSeed, inkStrokeEndPaint, inkStrokeTipsAlongPathData, inkStrokeTipsPathData, type DocumentInkFilter } from "@mrnote/core/web/lib/document-ink.ts";
 import { PresentationNativeShapeGraphic } from "@mrnote/slides/web/components/notebook/contents/presentation/PresentationNativeShapeGraphic.tsx";
 import { MAX_NATIVE_SMARTART_TEXT_LENGTH, spreadsheetNativeSmartArtMemberGeometry, spreadsheetNativeSmartArtShapeKey, type NativeSmartArtMember, type SpreadsheetNativeSmartArtShapeTransform } from "../../../../lib/spreadsheet/native-smartart";
-import { smartArtContourStroke, smartArtShape3dFilter } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
+import { smartArtBevelOutline, smartArtContourStroke, smartArtShape3dFilter } from "@mrnote/core/web/lib/office-smartart/canvas-3d.ts";
 import { OfficeSmartArtBevelFilter, officeSmartArtBevelFilterRef, officeSmartArtNeedsShapeFilter } from "@mrnote/core/web/components/office-ribbon/OfficeSmartArtBevelFilter.tsx";
 import { handleOfficeShapeTextKey, OfficeShapeTextField, type OfficeShapeTextFieldElement } from "@mrnote/core/web/components/office-ribbon/OfficeShapeTextField.tsx";
 import { smartArtGradientCanvasCompanions } from "@mrnote/core/web/lib/office-smartart/styles-model.ts";
@@ -605,6 +605,7 @@ export function SpreadsheetShapeView({
               shape3d={drawn3d}
               scene3d={drawnScene3d}
               faceSpan={smartArtFaceSpan}
+              outline={smartArtBevelOutline(shape.kind, { rotation, flipH, flipV })}
             />
           </defs>
         </svg>

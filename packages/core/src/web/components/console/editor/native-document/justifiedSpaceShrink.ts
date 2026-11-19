@@ -36,6 +36,7 @@
  * that no longer stays on the line loses the narrowing. Paint and line
  * breaking only: nothing is saved.
  */
+import { firstLayoutHoldsFaces } from "./paged/coldFirstLayout";
 import { engineDeclinedBlock, textblockOfElement } from "./engineDeclinedBlocks";
 import { Extension } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
@@ -535,6 +536,7 @@ export const JustifiedSpaceShrink = Extension.create({
           const MAX_ROUNDS = 64;
           const run = () => {
             frame = null;
+            if (!flushing && firstLayoutHoldsFaces(view.dom, schedule, "justified-shrink")) return;
             if (!flushing) markPending(false);
             if (!view.dom.isConnected) {
               // A view made before its editor is in the page (the window
@@ -707,6 +709,9 @@ export const JustifiedSpaceShrink = Extension.create({
               wanted = true;
               return;
             }
+            // The first layout waits for the document's faces: measured once
+            // they are in, at the ledger's flush (coldFirstLayout).
+            if (frame === null && firstLayoutHoldsFaces(view.dom, schedule, "justified-shrink")) return;
             if (hasWork()) markPending(true);
             if (frame !== null) return;
             frame = win.requestAnimationFrame(run);

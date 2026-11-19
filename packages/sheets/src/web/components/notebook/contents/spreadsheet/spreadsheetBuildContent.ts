@@ -94,11 +94,13 @@ function sheetInItsLoadedSpelling<S extends object>(out: S, live: SheetModel | u
   const pivot = asLoadedSpelling(live.pivot);
   const morePivots = live.morePivots?.map(asLoadedSpelling);
   const conditionalFormats = asLoadedSpelling(live.conditionalFormats);
+  const sortState = asLoadedSpelling(live.sortState);
   return {
     ...out,
     ...(pivot !== live.pivot ? { pivot } : {}),
     ...(morePivots?.some((item, index) => item !== live.morePivots?.[index]) ? { morePivots } : {}),
     ...(conditionalFormats !== live.conditionalFormats ? { conditionalFormats } : {}),
+    ...(sortState !== live.sortState && (out as { sortState?: unknown }).sortState === live.sortState ? { sortState } : {}),
   };
 }
 

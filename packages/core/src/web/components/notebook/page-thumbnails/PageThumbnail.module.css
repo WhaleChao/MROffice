@@ -36,6 +36,19 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
+/* A side strip's file picture (DockThumbnail): fits a --dock-box square,
+   as tall as it for a portrait page, as wide as it for a slide or a sheet.
+   The width is given, as for the strip, since the holder shrink-wraps. */
+.frame[data-variant="dock"] {
+  width: min(
+    var(--dock-box, 46px),
+    calc(var(--dock-box, 46px) * var(--thumb-aspect, 0.7071))
+  );
+  max-width: none;
+  height: auto;
+  border-radius: 3px;
+}
+
 .frame[data-state="ready"] {
   animation: thumbIn 240ms ease-out;
 }

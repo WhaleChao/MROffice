@@ -17,6 +17,9 @@
  * of that name. Read-only: nothing here touches the page.
  */
 import { apiGet } from "@mrnote/core/web/lib/api.ts";
+import { noteFontFaceSource } from "@mrnote/core/web/lib/font-face-declarations.ts";
+import { officeFontSubstitution } from "@mrnote/core/web/lib/office-fonts/substitutes.ts";
+import { windowsOfficeInstalled } from "@mrnote/core/web/lib/office-fonts/windows-office-faces.ts";
 
 export type PresentationEmbeddedFontRole = "regular" | "bold" | "italic" | "boldItalic";
 
@@ -96,9 +99,20 @@ export function presentationEmbeddedFamily(typeface: string, digests: readonly s
   return `MRAI-Deck-${hash.toString(16).padStart(8, "0")}`;
 }
 
-/** The CSS family list a typeface draws with: the deck's face, then its own name. */
+/**
+ * The CSS family list a typeface draws with: the deck's face, then its own
+ * name -- except for a face Windows or Office installs, which PowerPoint for
+ * Windows draws in the machine's own copy whatever the deck embeds (Calibri
+ * 6.27 over the deck's 6.23 in Windows' PDFs, `windowsOfficeInstalled`): its
+ * own name first, which the page draws in its served stand-in or metric
+ * clone, and the deck's copy after it for a character that lacks. A face the
+ * page serves nothing for keeps the deck's copy first. A cloud face is drawn
+ * from the deck's copy, as a machine that has not fetched it draws it.
+ */
 export function presentationEmbeddedFamilyCss(alias: string, typeface: string): string {
-  return `"${alias}", "${typeface}"`;
+  return windowsOfficeInstalled(typeface) && officeFontSubstitution(typeface)?.substitutes.length
+    ? `"${typeface}", "${alias}"`
+    : `"${alias}", "${typeface}"`;
 }
 
 /** A face handed by address that could not be drawn (not answered, or not the
@@ -108,6 +122,30 @@ function noteFaceByAddressFailed(row: EmbeddedFontRow): void {
   if (row.url === undefined || typeof window === "undefined") return;
   const held = window as { __MRAI_DECK_PRINT_FACES_FAILED?: number };
   held.__MRAI_DECK_PRINT_FACES_FAILED = (held.__MRAI_DECK_PRINT_FACES_FAILED ?? 0) + 1;
+}
+
+
+
+
+
+
+
+
+
+function faceSourceAddress(row: EmbeddedFontRow, buffer: ArrayBuffer): string | null {
+  if (row.url !== undefined) return row.url;
+  if (typeof URL === "undefined" || typeof URL.createObjectURL !== "function" || typeof Blob === "undefined") return null;
+  return URL.createObjectURL(new Blob([buffer], { type: "font/ttf" }));
+}
+
+/** Add `face` to the document and note it, with the descriptors it was built with, for the text engine. */
+function addNotedFace(face: FontFace, address: string | null, family: string, built: Readonly<Record<string, string>>): void {
+  document.fonts.add(face);
+  if (address === null) return;
+  noteFontFaceSource(face, `url(${JSON.stringify(address)}) format("truetype")`, built, {
+    doc: document,
+    declared: { family, ...built },
+  });
 }
 
 function registerFace(alias: string, row: EmbeddedFontRow): Promise<boolean> {
@@ -124,13 +162,16 @@ function registerFace(alias: string, row: EmbeddedFontRow): Promise<boolean> {
         noteFaceByAddressFailed(row);
         return false;
       }
-      const face = new FontFace(alias, buffer, {
+      // The address is made before the face takes the bytes.
+      const address = faceSourceAddress(row, buffer);
+      const built = {
         weight: row.role === "bold" || row.role === "boldItalic" ? "700" : "400",
         style: row.role === "italic" || row.role === "boldItalic" ? "italic" : "normal",
         unicodeRange: row.unicodeRange,
-      });
+      };
+      const face = new FontFace(alias, buffer, built);
       await face.load();
-      document.fonts.add(face);
+      addNotedFace(face, address, alias, built);
       return true;
     })().catch(() => false);
     loadedFaces.set(key, loaded);
@@ -162,8 +203,13 @@ function registerSentinel(alias: string, style: "normal" | "italic", row: Embedd
   if (!loaded) {
     loaded = (async () => {
       if (typeof FontFace === "undefined" || typeof document === "undefined") return false;
-      const face = new FontFace(alias, await faceBytes(row), { weight: "400", style, unicodeRange: "U+FFFF" });
-      document.fonts.add(face);
+      const buffer = await faceBytes(row);
+      const address = faceSourceAddress(row, buffer);
+      const built = { weight: "400", style, unicodeRange: "U+FFFF" };
+      // Noted as well: the engine, like CSS matching, then picks this face
+      // (which covers nothing) for a regular run and passes to the next
+      // family, rather than the family's bold face.
+      addNotedFace(new FontFace(alias, buffer, built), address, alias, built);
       return true;
     })().catch(() => false);
     loadedFaces.set(key, loaded);

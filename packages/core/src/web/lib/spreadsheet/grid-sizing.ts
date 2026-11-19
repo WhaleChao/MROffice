@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { stackPrimaryFamily } from "../office-fonts/hangul-em";
 import { ptToPx, pxToPt } from "../office-units";
 import OFFICE_DIGIT_ADVANCES from "./office-digit-advances.json";
 import OFFICE_DIGIT_WHOLE_EM from "./office-digit-whole-em.json";
@@ -1304,7 +1305,7 @@ export function setLineSizes(
  * one the tables do not know.
  */
 export function stackedTextLetterSpacing(fontFamily: unknown, fontSizePx: unknown): string {
-  const family = typeof fontFamily === "string" ? fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim() : "";
+  const family = typeof fontFamily === "string" ? stackPrimaryFamily(fontFamily) : "";
   const size = typeof fontSizePx === "number" ? fontSizePx : Number.parseFloat(String(fontSizePx ?? ""));
   if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return "calc(1lh - 1em)";
   return `${Math.max(0, officeRowHeight({ family, sizePt: size * 0.75 }) - size)}px`;

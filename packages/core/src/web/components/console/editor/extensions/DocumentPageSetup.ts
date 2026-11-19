@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { firstLayoutHoldsFaces } from "../native-document/paged/coldFirstLayout";
 import { editsStayInsideTextblocks } from "../native-document/textblockOnlyEdits";
 import { SheetFact } from "../../../../lib/editor/sheet-facts";
 import { PX_PER_PT } from "../../../../lib/office-units";
@@ -4352,6 +4353,9 @@ function wordCjkSpacingProjectionPlugin(waitForSourceFontPlan = false): Plugin<W
       };
       const schedule = () => {
         if (destroyed || holdForSourceFonts()) return;
+        // The first layout waits for the document's faces: measured once
+        // they are in, at the ledger's flush (coldFirstLayout).
+        if (!frame && firstLayoutHoldsFaces(view.dom, schedule, "cjk-spacing")) return;
         // Deferred measurement of one block must not suspend typography for
         // later document moves. Delete/insert page transfers can drop mapped
         // inline decorations, so rebuild the already measurable blocks before
@@ -4446,6 +4450,7 @@ function wordCjkSpacingProjectionPlugin(waitForSourceFontPlan = false): Plugin<W
         pendingMeasure = measure;
         frame = requestLaneFrame(measureLane, () => {
           pendingMeasure = null;
+          if (firstLayoutHoldsFaces(view.dom, () => { frame = null; schedule(); }, "cjk-spacing")) return;
           measure();
         });
       };

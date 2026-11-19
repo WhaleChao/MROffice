@@ -51,6 +51,7 @@ import { loadBundledPage } from "../bundled-page";
 import { FocusOrder } from "../document-target";
 import {
   linkOriginal,
+  nameLocalFilesAtStart,
   originalOf,
   pageOfUnchangedFile,
   pathOfToken,
@@ -111,9 +112,12 @@ import {
   prepareLaunch,
   profileFile,
   type Service,
+  API_LATE_ENV,
+  splitLateEnv,
   startService,
   stopService,
   stopServiceGracefully,
+  WEB_LATE_ENV,
   webEnv,
 } from "./services";
 import { printerEnabled, startPrinter } from "./printer";
@@ -1335,69 +1339,125 @@ async function withStableWebPort(fresh: Launch, remembered: number): Promise<Lau
 let apiStarted: Promise<void> = Promise.resolve();
 let apiStarting: Promise<Service> | null = null;
 
-/** Both services started; resolves once the web server serves. */
-async function startServices(onSpawned?: () => void): Promise<void> {
-  const remembered = rememberedWebPort();
-  launch = await withStableWebPort(await prepareLaunch(remembered), remembered);
-  // The first screen's data kept at the last quit, when the database is as
-  // the API left it then (./launch-cache.ts): checked before the API opens it.
-  const cacheKey = launchCacheKey(app.getVersion(), where.webDir, PRODUCT.id, account?.email ?? null);
-  const launchCache = usableLaunchCache(dataDir(), cacheKey);
-  // Both at once: the web server needs nothing of the API to start, and the
-  // API's import is most of a launch (seconds the web server used to wait).
-  apiStarting = startService(
-    "api",
-    where.python,
-    // app/desktop/serve.py: the Windows stand-ins first, then uvicorn; it
-    // ends itself when this process does, even after a crash.
-    ["-m", "app.desktop.serve", "--host", "127.0.0.1", "--port", String(launch.apiPort), "--parent-pid", String(process.pid)],
-    {
-      cwd: where.apiDir,
-      env: {
-        ...apiEnv(where, launch, startedInBackground(), pendingAtLaunch.length > 0, documentsToImport(pendingAtLaunch)),
-        MRAI_DESKTOP_LAUNCH_CACHE_KEY: cacheKey,
+/**
+ * Both services started. ``known`` resolves at the app's ready, once what
+ * the launch learns then is set (the documents macOS hands it, a start in the
+ * background, the sign-in; the single-instance lock held), or rejects when
+ * this launch quits instead. ``early``: they are spawned now, with what is
+ * known before the app is ready, and given the rest at its ready
+ * (``startService``'s ``lateEnv``); else spawned at the ready with all of it.
+ * ``spawned`` resolves once both are spawned and the app is ready;
+ * ``webReady`` once the web server serves.
+ */
+function startServices(known: Promise<void>, early: boolean): { spawned: Promise<void>; webReady: Promise<void> } {
+  let spawnedResolve: () => void = () => undefined;
+  let spawnedReject: (error: unknown) => void = () => undefined;
+  const spawned = new Promise<void>((resolve, reject) => {
+    spawnedResolve = resolve;
+    spawnedReject = reject;
+  });
+  spawned.catch(() => undefined);
+  const webReady = (async () => {
+    const remembered = rememberedWebPort();
+    launch = await withStableWebPort(await prepareLaunch(remembered), remembered);
+    const at = launch;
+    const facts = known.then(() => {
+      // The first screen's data kept at the last quit, when the database is
+      // as the API left it then (./launch-cache.ts): checked before the API
+      // opens it (an API spawned early reads this first: serve.py).
+      const cacheKey = launchCacheKey(app.getVersion(), where.webDir, PRODUCT.id, account?.email ?? null);
+      const launchCache = usableLaunchCache(dataDir(), cacheKey);
+      // Signed out: the API is told so as it starts, and nothing is handed
+      // over once it answers (apiEnv). A sign-in made later is pushed as always.
+      const signedIn = account !== null;
+      return {
+        signedIn,
+        api: {
+          ...apiEnv(where, at, startedInBackground(), pendingAtLaunch.length > 0, documentsToImport(pendingAtLaunch), {
+            signedIn,
+            localFiles: nameLocalFilesAtStart(pendingAtLaunch.filter((document) => fs.existsSync(document))),
+          }),
+          MRAI_DESKTOP_LAUNCH_CACHE_KEY: cacheKey,
+        },
+        web: {
+          // A document double-clicked to start the app opens the open route.
+          // Then a notebook's page, which both lead to (the remembered
+          // notebook, ../../web/lib/desktop-landing.ts): its server code
+          // loaded before the window asks for it. Any id: the page is drawn
+          // in the window.
+          ...webEnv(where, at, pendingAtLaunch.length ? OPEN_ROUTE : HOME_ROUTE, [NOTEBOOK_WARM_ROUTE]),
+          ...(launchCache ? { MRAI_DESKTOP_LAUNCH_CACHE: launchCache } : {}),
+        },
+      };
+    });
+    facts.catch(() => undefined);
+    // Spawned at the ready: everything is known by then.
+    const ready = early ? null : await facts;
+    const children: Service[] = [];
+    // Both at once: the web server needs nothing of the API to start, and
+    // the API's import is most of a launch (seconds the web server used to wait).
+    apiStarting = startService(
+      "api",
+      where.python,
+      // app/desktop/serve.py: the Windows stand-ins first, then uvicorn; it
+      // ends itself when this process does, even after a crash.
+      ["-m", "app.desktop.serve", "--host", "127.0.0.1", "--port", String(at.apiPort), "--parent-pid", String(process.pid)],
+      {
+        cwd: where.apiDir,
+        env: ready ? ready.api : splitLateEnv(apiEnv(where, at), API_LATE_ENV).now,
+        ...(ready ? {} : { lateEnv: facts.then((known) => splitLateEnv(known.api, API_LATE_ENV).late) }),
+        ready: { url: `${at.apiOrigin}/health` },
+        timeoutMs: 300_000,
+        onSpawn: (child) => children.push({ name: "api", child, log: "" }),
       },
-      ready: { url: `${launch.apiOrigin}/health` },
-      timeoutMs: 300_000,
-    },
-  );
-  const webEntry = path.join(where.webDir, "desktop-server.mjs");
-  const webPort = launch.webPort;
-  const webStarting = startService("web", where.node, [webEntry], {
-    cwd: where.webDir,
-    // A document double-clicked to start the app opens the open route.
-    // Then a notebook's page, which both lead to (the remembered notebook,
-    // ../../web/lib/desktop-landing.ts): its server code loaded before the
-    // window asks for it. Any id: the page is drawn in the window.
-    env: {
-      ...webEnv(where, launch, pendingAtLaunch.length ? OPEN_ROUTE : HOME_ROUTE, [NOTEBOOK_WARM_ROUTE]),
-      ...(launchCache ? { MRAI_DESKTOP_LAUNCH_CACHE: launchCache } : {}),
-    },
-    ready: /mrai-desktop-web ready/,
-    timeoutMs: where.development ? 600_000 : 180_000,
-    onSpawn: (child) => recordWebServer(child.pid, webPort),
-  });
-  // Both processes are on their way: what the shell does next (the window)
-  // no longer holds them up.
-  onSpawned?.();
-  apiStarted = apiStarting.then((service) => {
-    api = service;
-    watchService(service);
-    markApiUp();
-    // Not awaited: the API holds the windows' requests until it is answered
-    // (pushAccountToApi).
-    void pushAccountToApi(false);
-  });
-  // Handled where the launch goes on (whenReady), once the window is made.
-  apiStarted.catch(() => undefined);
-  try {
-    web = await webStarting;
-  } catch (error) {
-    // The API is stopped with the launch.
-    void apiStarting.then(stopService, () => undefined);
-    throw error;
-  }
-  watchService(web);
+    );
+    const webEntry = path.join(where.webDir, "desktop-server.mjs");
+    const webStarting = startService("web", where.node, [webEntry], {
+      cwd: where.webDir,
+      env: ready ? ready.web : splitLateEnv(webEnv(where, at, undefined, [NOTEBOOK_WARM_ROUTE]), WEB_LATE_ENV).now,
+      ...(ready ? {} : { lateEnv: facts.then((known) => splitLateEnv(known.web, WEB_LATE_ENV).late) }),
+      ready: /mrai-desktop-web ready/,
+      timeoutMs: where.development ? 600_000 : 180_000,
+      onSpawn: (child) => {
+        children.push({ name: "web", child, log: "" });
+        recordWebServer(child.pid, at.webPort);
+      },
+    });
+    apiStarting.catch(() => undefined);
+    let signedInAtStart: boolean;
+    try {
+      ({ signedIn: signedInAtStart } = ready ?? (await facts));
+    } catch (error) {
+      // This launch quits instead (another copy of the app runs): what it
+      // spawned early goes at once.
+      for (const service of children) stopService(service);
+      spawnedReject(error);
+      throw error;
+    }
+    // Both processes are on their way and the app is ready: what the shell
+    // does next (the window) no longer holds them up.
+    spawnedResolve();
+    apiStarted = apiStarting.then((service) => {
+      api = service;
+      watchService(service);
+      markApiUp();
+      // Not awaited: the API holds the windows' requests until it is answered
+      // (pushAccountToApi). Signed out at its start, it was told so then.
+      if (signedInAtStart) void pushAccountToApi(false);
+    });
+    // Handled where the launch goes on (whenReady), once the window is made.
+    apiStarted.catch(() => undefined);
+    try {
+      web = await webStarting;
+    } catch (error) {
+      // The API is stopped with the launch.
+      void apiStarting.then(stopService, () => undefined);
+      throw error;
+    }
+    watchService(web);
+  })();
+  webReady.catch((error) => spawnedReject(error));
+  return { spawned, webReady };
 }
 
 function watchService(service: Service): void {
@@ -1634,6 +1694,30 @@ function pinOfficeSurface(ses: Session): void {
     if (!BrowserWindow.getAllWindows().some((window) => window !== splash)) createWindow(HOME_ROUTE);
   });
 
+  // macOS: the services are spawned now, as this code loads, not at the
+  
+  // the API's import, most of a launch, waiting behind it. What only the
+  // ready brings (the documents macOS hands over just before it, a start in
+  // the background, the sign-in) reaches them then (startServices' late
+  // environment), before either uses any of it. Windows (a second launch
+  // for every document opened while the app runs, which must not start
+  // services of its own): at the ready, as before.
+  let knownResolve: () => void = () => undefined;
+  let knownReject: (error: unknown) => void = () => undefined;
+  const known = new Promise<void>((resolve, reject) => {
+    knownResolve = resolve;
+    knownReject = reject;
+  });
+  known.catch(() => undefined);
+  let services: ReturnType<typeof startServices> | null = null;
+  if (process.platform === "darwin") {
+    // Its logs folder named now (the default one), before the ready, which
+    // would have named it: the services' logs go there.
+    if (!testData) app.setAppLogsPath();
+    where = layout();
+    services = startServices(known, true);
+  }
+
   void app.whenReady().then(async () => {
     // One app per data folder: the lock lives in it, so another copy of the
     // app on the disk (an older one, the other processor's build, a mounted
@@ -1643,15 +1727,12 @@ function pinOfficeSurface(ses: Session): void {
     // launch passes them to the first and quits, instead of opening a second
     // app on the same notebooks.
     if (!app.requestSingleInstanceLock({ documents: pendingAtLaunch, links: linksAtLaunch })) {
+      // Services spawned early end with this launch.
+      knownReject(new Error("another copy of the app runs"));
       app.quit();
       return;
     }
-    where = layout();
-    // A packed app's Dock and window icons come from its bundle
-    // (build/classic/icon.icns, .ico); an unpacked run shows Classic's too.
-    if (!app.isPackaged && process.platform === "darwin" && fs.existsSync(path.join(__dirname, "..", "..", PRODUCT.iconDir, "icon.png"))) {
-      app.dock?.setIcon(path.join(__dirname, "..", "..", PRODUCT.iconDir, "icon.png"));
-    }
+    if (!services) where = layout();
     console.log(`[classic] starting ${PRODUCT.id} (${where.development ? "development" : "packaged layout"}, data in ${app.getPath("userData")})`);
     account = readAccount();
     // An unpackaged build only (automated checks, or a developer trying the
@@ -1690,7 +1771,10 @@ function pinOfficeSurface(ses: Session): void {
     // first launch): the splash, and the window once the web server serves,
     // as before.
     let early: ReturnType<typeof earlyWindow> = null;
-    const servicesStarting = startServices(() => {
+    knownResolve();
+    services ??= startServices(known, false);
+    const servicesStarting = services.webReady;
+    void services.spawned.then(() => {
       if (background) return;
       try {
         early = earlyWindow();
@@ -1698,7 +1782,14 @@ function pinOfficeSurface(ses: Session): void {
         console.error(`[classic] no instant view: ${error instanceof Error ? error.message : error}`);
       }
       if (!early) showSplash();
-    });
+      // A packed app's Dock and window icons come from its bundle
+      // (build/classic/icon.icns, .ico); an unpacked run shows Classic's too,
+      // set once the services are on their way: 0.12-0.15 s of the main
+      // thread, which an unpacked launch's timing spent ahead of them.
+      if (!app.isPackaged && process.platform === "darwin" && fs.existsSync(path.join(__dirname, "..", "..", PRODUCT.iconDir, "icon.png"))) {
+        app.dock?.setIcon(path.join(__dirname, "..", "..", PRODUCT.iconDir, "icon.png"));
+      }
+    }, () => undefined);
     let failed = false;
     const couldNotStart = async (error: unknown): Promise<void> => {
       if (failed) return;

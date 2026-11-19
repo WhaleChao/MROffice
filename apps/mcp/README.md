@@ -20,9 +20,9 @@ on `127.0.0.1`; only the editor's code (scripts, styles, fonts) loads from
 `https://demo.mroffice.ai`, the build of the editors in this repository.
 
 Word, Excel and PowerPoint files go through MR Office's Office engine as the
-person's own MR Office account: `npx -y @mroffice/mcp login` (or the
-`sign_in` tool) signs in with OAuth 2.1 and PKCE in the browser;
-`logout` revokes it.
+person's own MR Office account: the first one opens the sign-in page in the
+browser by itself (OAuth 2.1 with PKCE; `npx -y mroffice-mcp login` signs in
+ahead, `logout` revokes it).
 
 ## Requirements
 
@@ -32,10 +32,11 @@ person's own MR Office account: `npx -y @mroffice/mcp login` (or the
 
 ## Use it from an AI app
 
-Any MCP client that starts local (stdio) servers runs it with:
+Any MCP client that starts local (stdio) servers runs it with one command,
+no settings needed:
 
 ```
-npx -y @mroffice/mcp --stdio
+npx -y mroffice-mcp
 ```
 
 Most clients take a JSON entry of this shape in their MCP settings:
@@ -45,18 +46,22 @@ Most clients take a JSON entry of this shape in their MCP settings:
   "mcpServers": {
     "mroffice": {
       "command": "npx",
-      "args": ["-y", "@mroffice/mcp", "--stdio"]
+      "args": ["-y", "mroffice-mcp"]
     }
   }
 }
 ```
 
-Install instructions for specific apps: <https://www.npmjs.com/package/@mroffice/mcp>.
+Clients that connect to remote MCP servers can use the hosted server instead,
+with nothing installed: `https://mcp.mroffice.ai/mcp` (the client signs the
+person in to MR Office with OAuth).
+
+Install instructions for specific apps: <https://mroffice.ai/developers/mcp>.
 
 ### Over HTTP
 
 ```sh
-npx -y @mroffice/mcp --http          # MCP endpoint at http://127.0.0.1:3410/mcp
+npx -y mroffice-mcp --http           # MCP endpoint at http://127.0.0.1:3410/mcp
 ```
 
 To serve it to others, set `MROFFICE_MCP_LISTEN_HOST`, `MROFFICE_MCP_PUBLIC_URL`
@@ -70,7 +75,7 @@ the address can use it.
 cd apps/mcp
 npm ci
 npm test
-node src/cli.ts --stdio     # Node 22.18+ runs the TypeScript directly
+node src/cli.ts             # stdio; Node 22.18+ runs the TypeScript directly
 npm run build               # dist/, what the npm package runs
 ```
 
@@ -98,6 +103,10 @@ npm run build               # dist/, what the npm package runs
 | `MROFFICE_MCP_LISTEN_HOST` | `127.0.0.1` | The address the HTTP side listens on |
 | `MROFFICE_MCP_MAX_FILE_BYTES` | `20971520` | Largest file a tool accepts |
 | `MROFFICE_MCP_UI_DOMAIN` | – | A stable sandbox domain for the inline view, when an app asks for one |
+| `MROFFICE_MCP_AUTH` | `none` | `oauth`: a shared `--http` server that takes only callers signed in to MR Office; each account sees only its own documents |
+| `MROFFICE_MCP_RETENTION_DAYS` | – | Remove documents nobody saved for this many days |
+| `MROFFICE_MCP_MAX_DOCUMENTS_PER_PERSON` | `200` | With `oauth`: the most documents one account keeps (oldest go first) |
+| `MROFFICE_MCP_RENDER_CONCURRENCY` | `2` | Pages the headless editor draws at once |
 
 ## License
 

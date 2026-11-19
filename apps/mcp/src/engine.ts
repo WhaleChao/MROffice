@@ -171,8 +171,8 @@ class AccountEngine extends ApiEngine {
   }
 
   protected async credentials(refresh: boolean): Promise<Record<string, string>> {
-    const token = await this.account.accessToken(refresh);
-    if (!token) throw new NotSignedIn("Word, Excel and PowerPoint files");
+    // the first Office file signs the person in: the browser opens by itself
+    const token = await this.account.accessTokenOrSignIn("Word, Excel and PowerPoint files", undefined, refresh);
     return { authorization: `Bearer ${token}` };
   }
 }

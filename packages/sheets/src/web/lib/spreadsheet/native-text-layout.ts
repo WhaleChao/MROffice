@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { stackPrimaryFamily } from "@mrnote/core/web/lib/office-fonts/hangul-em.ts";
 import type { CSSProperties } from "react";
 import { clampNativeAutomaticRowHeight, nativeTextAdvances, nativeTextPrinterDpi, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { OFFICE_PRINT_DPI, officePrintedRowDots } from "./office-print-metrics";
@@ -120,7 +121,7 @@ export function windowsNativeLinePitch(parts: readonly NativeTextPart[], style: 
   let pitch = 0;
   for (const part of parts.length ? parts : [{ text: "" }]) {
     const merged = { ...style, ...part.style };
-    const family = typeof merged.fontFamily === "string" ? merged.fontFamily.split(",")[0]?.trim().replace(/^["']|["']$/g, "").trim() : "";
+    const family = typeof merged.fontFamily === "string" ? stackPrimaryFamily(merged.fontFamily) : "";
     const size = typeof merged.fontSize === "number" ? merged.fontSize : Number.NaN;
     if (!family || !(size > 0) || !officeRowMetricsKnown(family, size * 0.75)) return undefined;
     // Printed, a line is the printer's line of its face, whatever the sheet's
@@ -553,6 +554,8 @@ function buildNativeTextProbe(parts: readonly NativeTextPart[], style: CSSProper
     position:"fixed", left:"0", top:"0", visibility:"hidden", pointerEvents:"none",
     contain:"layout style paint", width:`${width*scale}px`, whiteSpace:"pre-wrap",
     overflowWrap:"anywhere", lineHeight:"normal", textAlign:"left", border:"0", padding:"0", margin:"0",
+    // Full-width punctuation marks that meet keep their widths, as the cell draws them (engineTextCss).
+    textSpacingTrim:"space-all",
   });
   const atoms: NativeTextAtom[] = [];
   const mark = () => {

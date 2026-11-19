@@ -340,6 +340,21 @@ export function nativeTextBoxFormatDrawnStyle(input: Readonly<{
   });
 }
 
+/**
+ * Whether what a box's format asks of its face is a weight or a slant set and
+ * nothing taken off or changed: what a stroke and a lean draw on the text's
+ * own face where it stands, when no face of the family takes it (the page
+ * window's last try of a box format). A style taken off is not: a face that
+ * is bold or italic itself has nothing drawn to take off, and a write that
+ * changed nothing would read as applied.
+ */
+export function nativeTextBoxFormatSetsStyleOnly(
+  asked: Readonly<{ family?: string; bold?: boolean; italic?: boolean }>,
+): boolean {
+  return asked.family === undefined && asked.bold !== false && asked.italic !== false &&
+    (asked.bold === true || asked.italic === true);
+}
+
 /** Whether a PDF font is the editor's default text face, the bundled Noto
  * Sans SC (a subset tag before its name or not). */
 export function isNativeTextDefaultFace(baseFont: string | undefined): boolean {

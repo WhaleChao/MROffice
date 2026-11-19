@@ -26,6 +26,13 @@ import { canBecomeCheckboxCell, checkboxSeedValue } from "./checkbox";
 import { spreadsheetCellIsFormula } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import { sanitizeHyperlink } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
 import { replaceAll as replaceAllCells, type FindReplaceOptions } from "./find-replace";
+import {
+  linkOverPlace,
+  sheetWithHyperlinkAreaEdited,
+  sheetWithLaidAreaLinkEdited,
+  sheetWithoutHyperlinkAreasOver,
+  sheetWithoutLaidAreaLinksOver,
+} from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 import { firstReferencedCell, inheritedNumberFormat } from "@mrnote/core/web/lib/spreadsheet/formula-result-format.ts";
 import type { AutoSumFn, AutoSumTarget } from "./grid-ops";
 import {
@@ -35,6 +42,8 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/sheet-interactions.ts";
 
 type Rect = { r1: number; c1: number; r2: number; c2: number };
+
+export { hyperlinkAreaAt, type SpreadsheetHyperlinkArea } from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 
 export interface CellHyperlinkDetails {
   displayText?: string;
@@ -84,6 +93,12 @@ export function withHyperlinkCellStyle(
  * passes the theme's `hyperlinkColor`; editing an existing link leaves the
  * cell's look alone. Clearing prunes a now-metadata-less, valueless cell so
  * the no-link path stays byte-identical.
+ *
+ * Under a link the sheet holds over a large area (`hyperlinkAreas`, reading
+ * 948) the command acts as Excel's does (xlsx-rounds probe/n35-p948/a):
+ * clearing deletes every link over the cell, the area's whole; a new address
+ * goes to the first link over the cell, the whole area's when the cell has
+ * no link of its own before it.
  */
 export function updateCellHyperlink<S extends CellButtonsSheet>(
   sheet: S,
@@ -101,6 +116,39 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
     value: String(previous.value || ""),
     kind: previous.kind || cellKind(String(previous.value || "")),
   };
+  const areas = (sheet as { hyperlinkAreas?: unknown }).hyperlinkAreas;
+  if (href && linkOverPlace(previous, areas, row, col)?.area) {
+    // The area's link is the first over the cell: its address and ScreenTip
+    // change, over the whole area. The text shown is the cell's own content,
+    // written only where the person changed it.
+    const edited = sheetWithHyperlinkAreaEdited(
+      sheet,
+      row,
+      col,
+      href,
+      details ? normalizeHyperlinkDetail(details.tooltip) : undefined,
+    );
+    const shown = details?.displayText === undefined ? "" : normalizeHyperlinkDetail(details.displayText);
+    if (!shown || shown === nextCell.value || spreadsheetCellIsFormula(nextCell)) return edited;
+    return updateCellValue(edited, row, col, shown);
+  }
+  if (href) {
+    // The same where the area's link is laid on its cells (a small area):
+    // the link the cell shows is the area's, and every cell that shows it
+    // takes the new address.
+    const edited = sheetWithLaidAreaLinkEdited(
+      sheet,
+      row,
+      col,
+      href,
+      details ? normalizeHyperlinkDetail(details.tooltip) : undefined,
+    );
+    if (edited !== sheet) {
+      const shown = details?.displayText === undefined ? "" : normalizeHyperlinkDetail(details.displayText);
+      if (!shown || shown === nextCell.value || spreadsheetCellIsFormula(nextCell)) return edited;
+      return updateCellValue(edited, row, col, shown);
+    }
+  }
   if (href) {
     if (!previous.hyperlink && hyperlinkColor) {
       nextCell.style = withHyperlinkCellStyle(previous.style, hyperlinkColor);
@@ -115,6 +163,7 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
       delete (nextCell as { hyperlinkInArea?: boolean }).hyperlinkInArea;
       delete (nextCell as { hyperlinkRank?: number }).hyperlinkRank;
       delete (nextCell as { hyperlinkOwnUnder?: unknown }).hyperlinkOwnUnder;
+      delete (nextCell as { hyperlinkUnderArea?: boolean }).hyperlinkUnderArea;
     }
     nextCell.hyperlink = href;
     if (details) {
@@ -174,11 +223,19 @@ export function updateCellHyperlink<S extends CellButtonsSheet>(
     delete (nextCell as { hyperlinkInArea?: boolean }).hyperlinkInArea;
     delete (nextCell as { hyperlinkRank?: number }).hyperlinkRank;
     delete (nextCell as { hyperlinkOwnUnder?: unknown }).hyperlinkOwnUnder;
+    delete (nextCell as { hyperlinkUnderArea?: boolean }).hyperlinkUnderArea;
     if (nextCell.value || hasCellMetadata(nextCell)) {
       nextCells[key] = nextCell;
     } else {
       delete nextCells[key];
     }
+    // Every link over the cell goes, an area's whole.
+    const place = { r1: row, c1: col, r2: row, c2: col };
+    return sheetWithoutLaidAreaLinksOver(
+      sheet,
+      sheetWithoutHyperlinkAreasOver({ ...sheet, cells: nextCells }, place),
+      place,
+    );
   }
   return { ...sheet, cells: nextCells };
 }

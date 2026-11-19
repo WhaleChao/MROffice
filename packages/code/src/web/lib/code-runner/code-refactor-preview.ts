@@ -3,6 +3,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import type { CodeTextChange } from "./code-text-changes";
+
 const MAX_REFACTOR_DESCRIPTION_CHARS = 512;
 const MAX_REFACTOR_TARGETS = 32;
 const MAX_REFACTOR_SOURCE_BYTES = 256 * 1024;
@@ -21,6 +23,8 @@ export interface CodeRefactorPreviewChange {
   readonly language: string;
   readonly before: string;
   readonly after: string;
+  /** The edits of `before` that make `after`, written at their places. */
+  readonly changes?: readonly CodeTextChange[];
 }
 
 export interface CodeRefactorPreviewPlan {
@@ -53,6 +57,7 @@ export interface CodeRefactorPreviewInput {
     readonly bufferId: string;
     readonly before: string;
     readonly after: string;
+    readonly changes?: readonly CodeTextChange[];
   }>;
   readonly targets: readonly CodeRefactorTargetSnapshot[];
 }
@@ -173,6 +178,7 @@ export function buildCodeRefactorPreviewPlan(
         language: target.language,
         before: edit.before,
         after: edit.after,
+        changes: edit.changes,
       }),
     );
   }

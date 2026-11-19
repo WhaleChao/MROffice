@@ -9,7 +9,9 @@ import type {
   PdfNativeListTextSelectionEvidence,
   PdfNativeListTextSelectionItemEvidence,
   PdfNativeListTextSelectionProof,
+  PdfNativeTextWordsFixedReason,
 } from "./engine/native/list-text-fidelity";
+import { pdfTextHasRightToLeftRun } from "./engine/native/reader-order";
 
 export const PDF_FALLBACK_TEXT_SCHEMA_VERSION = "mrai.pdf-source-text-fallback.v1" as const;
 
@@ -356,6 +358,12 @@ interface FontInfo {
    * shows letters, so a box drawn from the reader's text cannot stand in for
    * the line they are on. */
   readonly inkedBlankCodes?: ReadonlySet<number>;
+  /** The codes its ToUnicode reads as right-to-left letters, and those it
+   * reads as several of them (readMraiNativeRightToLeftLetterCodes): the
+   * reader turns the letters of such a glyph round. */
+  readonly rightToLeftLetterCodes?: Readonly<{ letters: ReadonlySet<number>; several: ReadonlySet<number> }>;
+  /** Its /BaseFont (what a diagnosis names it by). */
+  readonly name?: string;
 }
 
 interface StreamRef { readonly objectNumber: number; readonly generation: number }
@@ -371,6 +379,8 @@ interface ShowRecord {
   readonly mode: number;
   /** Per code: center in page space, text direction, and whether it inks. */
   readonly glyphs: readonly Readonly<{ x: number; y: number; ux: number; uy: number; ink: boolean;
+    /** Its character code in the show's font. */
+    code: number;
     /** The reader reads it as a blank and it draws (FontInfo.inkedBlankCodes). */
     readAsBlank?: boolean;
     
@@ -534,9 +544,21 @@ async function readFont(lib: PdfLib, doc: import("pdf-lib").PDFDocument, value: 
         } catch { inkedBlankCodes = null; }
       }
     }
+    const named = get(dict, "BaseFont");
+    // (Two-byte codes: what the reader reads each as is asked by the code.)
+    let rightToLeftLetterCodes: FontInfo["rightToLeftLetterCodes"] | null = null;
+    const table = get(dict, "ToUnicode");
+    if (codeWidth === 2 && table instanceof lib.PDFRawStream) {
+      try {
+        const { readMraiNativeRightToLeftLetterCodes } = await import("./engine/native/list-text-fidelity");
+        rightToLeftLetterCodes = readMraiNativeRightToLeftLetterCodes(lib.decodePDFRawStream(table).decode(), 2);
+      } catch { rightToLeftLetterCodes = null; }
+    }
     return { kind: "type0", codeLength, vertical, codeWidth,
       width: (code) => (identity ? widths.get(code) ?? defaultWidth : defaultWidth),
-      ...(inkedBlankCodes?.size ? { inkedBlankCodes } : {}) };
+      ...(inkedBlankCodes?.size ? { inkedBlankCodes } : {}),
+      ...(rightToLeftLetterCodes ? { rightToLeftLetterCodes } : {}),
+      ...(named instanceof lib.PDFName ? { name: named.decodeText() } : {}) };
   }
   const firstChar = numberOf(lib, get(dict, "FirstChar"), 0);
   const widthsValue = get(dict, "Widths");
@@ -557,6 +579,14 @@ async function readFont(lib: PdfLib, doc: import("pdf-lib").PDFDocument, value: 
   // A standard-14 face named without /Widths is measured by its own AFM
   // metrics (pdf-lib carries them), through its encoding and /Differences.
   const standard = widthList ? null : standardFontMetrics(lib, baseName, get(dict, "Encoding"), resolveEntry);
+  let rightToLeftLetterCodes: FontInfo["rightToLeftLetterCodes"] | null = null;
+  const table = get(dict, "ToUnicode");
+  if (table instanceof lib.PDFRawStream) {
+    try {
+      const { readMraiNativeRightToLeftLetterCodes } = await import("./engine/native/list-text-fidelity");
+      rightToLeftLetterCodes = readMraiNativeRightToLeftLetterCodes(lib.decodePDFRawStream(table).decode(), 1);
+    } catch { rightToLeftLetterCodes = null; }
+  }
   return { kind: "simple", codeLength: () => 1, vertical: false, codeWidth: 1,
     width: (code) => {
       const width = widthList?.[code - firstChar];
@@ -565,7 +595,9 @@ async function readFont(lib: PdfLib, doc: import("pdf-lib").PDFDocument, value: 
       const measured = standard?.(code);
       if (measured !== undefined) return measured;
       return monospace ? 0.6 : code === 32 ? 0.25 : 0.52;
-    } };
+    },
+    ...(rightToLeftLetterCodes ? { rightToLeftLetterCodes } : {}),
+    ...(baseFont instanceof lib.PDFName ? { name: baseFont.decodeText() } : {}) };
 }
 
 function standardFontMetrics(
@@ -701,7 +733,7 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
           const first = operands[0] ?? token;
           const font = state.fontInfo ?? missingFont;
           const size = state.size, th = state.tz / 100;
-          const glyphs: { x: number; y: number; ux: number; uy: number; ink: boolean; size: number; readAsBlank?: boolean }[] = [];
+          const glyphs: { x: number; y: number; ux: number; uy: number; ink: boolean; code: number; size: number; readAsBlank?: boolean }[] = [];
           const elements = op === "TJ"
             ? operands.filter((entry) => entry.kind === "num" || entry.kind === "str" || entry.kind === "hex")
             : operands.filter((entry) => entry.kind === "str" || entry.kind === "hex").slice(-1);
@@ -723,14 +755,14 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
                 const ty = -(1 * size) + state.tc + space;
                 const [x, y] = apply(m, 0, state.ts + ty / 2);
                 const len = Math.hypot(m[0], m[1]) || 1;
-                glyphs.push({ x, y, ux: m[0] / len, uy: m[1] / len, ink: true, size: size * Math.hypot(m[2], m[3]),
+                glyphs.push({ x, y, ux: m[0] / len, uy: m[1] / len, ink: true, code, size: size * Math.hypot(m[2], m[3]),
                   ...(font.inkedBlankCodes?.has(code) ? { readAsBlank: true } : {}) });
                 tm = multiply([1, 0, 0, 1, 0, ty], tm);
               } else {
                 const tx = (w0 * size + state.tc + space) * th;
                 const [x, y] = apply(m, (w0 * size * th) / 2, state.ts + 0.3 * size);
                 const len = Math.hypot(m[0], m[1]) || 1;
-                glyphs.push({ x, y, ux: m[0] / len, uy: m[1] / len, size: size * Math.hypot(m[2], m[3]),
+                glyphs.push({ x, y, ux: m[0] / len, uy: m[1] / len, code, size: size * Math.hypot(m[2], m[3]),
                   ink: !(font.kind === "simple" && length === 1 && code === 32),
                   ...(font.inkedBlankCodes?.has(code) ? { readAsBlank: true } : {}) });
                 tm = multiply([1, 0, 0, 1, tx, 0], tm);
@@ -884,9 +916,12 @@ function sizedLike(items: readonly PdfNativeListTextSelectionItemEvidence[]) {
 
 
 function readAsBlankOnLines(reading: PageReading, items: readonly PdfNativeListTextSelectionItemEvidence[],
-  taken?: (show: ShowRecord, code: number) => boolean): boolean {
+  taken?: (show: ShowRecord, code: number) => boolean,
+  /** How far about each item a glyph is asked for (itemRegion's slack): the
+   * room a box made of the line may come to cover, or a line's own reach. */
+  slack = 3, alongSlack = 2): boolean {
   const sized = sizedLike(items);
-  const lineRegions = items.map((item) => itemRegion(item, 3, 2));
+  const lineRegions = items.map((item) => itemRegion(item, slack, alongSlack));
   return reading.shows.some((show) => Boolean(show.font.inkedBlankCodes) && show.mode !== 3 && show.mode !== 7 &&
     show.glyphs.some((glyph, code) => Boolean(glyph.readAsBlank) && (Boolean(taken?.(show, code)) ||
       lineRegions.some((inside, at) => Boolean(inside?.(glyph.x, glyph.y, glyph.ux, glyph.uy)) && sized(show, glyph, at)))));
@@ -982,6 +1017,145 @@ export async function pdfTextLinesDrawGlyphsReadAsBlanks(input: {
     ? readPage(input.sourceBytes, input.selection.pageNumber)
     : pageReading(input.sourceBytes, input.selection.pageNumber));
   return readAsBlankOnLines(reading, boxItems(input.selection));
+}
+
+/**
+ * Why the words of a box are fixed (PdfNativeListTextSelectionProof.wordsFixed)
+ * where the page draws a glyph the reader read as a blank on or near its
+ * lines -- the reading pdfTextLinesDrawGlyphsReadAsBlanks answers, which no
+ * line may be made a text box against -- and null where it draws none.
+ * "glyphs-read-as-blanks": such a glyph stands on a line of the box itself
+ * (within a line's own reach: the dots over and under its letters).
+ * "glyphs-read-as-blanks-near": only on the lines around it, which a box
+ * made of it and grown over them would paint over.
+ */
+export async function pdfTextLinesWordsFixedReason(input: {
+  sourceBytes: Uint8Array;
+  selection: PdfNativeListTextSelectionEvidence;
+}): Promise<PdfNativeTextWordsFixedReason | null> {
+  const reading = await pageReading(input.sourceBytes, input.selection.pageNumber);
+  const items = boxItems(input.selection);
+  if (!readAsBlankOnLines(reading, items)) return null;
+  return readAsBlankOnLines(reading, items, undefined, 1, 0.2) ? "glyphs-read-as-blanks" : "glyphs-read-as-blanks-near";
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const REORDERED_LETTERS_SHARE = 0.25;
+const REORDERED_LETTERS_FEWEST = 20;
+
+const READ_REORDERED_FONTS = new WeakMap<PageReading, ReadonlySet<FontInfo>>();
+
+/** The fonts of a page whose lines the reader reads as other words than the
+ * page shows (REORDERED_LETTERS_SHARE). */
+function fontsReadReordered(reading: PageReading): ReadonlySet<FontInfo> {
+  const known = READ_REORDERED_FONTS.get(reading);
+  if (known) return known;
+  const drawn = new Map<FontInfo, { letters: number; several: number }>();
+  for (const show of reading.shows) {
+    const codes = show.font.rightToLeftLetterCodes;
+    if (!codes || show.mode === 3 || show.mode === 7) continue;
+    let use = drawn.get(show.font);
+    if (!use) { use = { letters: 0, several: 0 }; drawn.set(show.font, use); }
+    for (const glyph of show.glyphs) {
+      if (codes.letters.has(glyph.code)) use.letters += 1;
+      if (codes.several.has(glyph.code)) use.several += 1;
+    }
+  }
+  const fonts = new Set<FontInfo>();
+  for (const [font, use] of drawn) {
+    if (use.letters >= REORDERED_LETTERS_FEWEST && use.several >= REORDERED_LETTERS_SHARE * use.letters) fonts.add(font);
+  }
+  READ_REORDERED_FONTS.set(reading, fonts);
+  return fonts;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export async function pdfRightToLeftLinesReadReordered(input: {
+  sourceBytes: Uint8Array;
+  selection: PdfNativeListTextSelectionEvidence;
+}): Promise<boolean> {
+  // (Its own text, as the reader read it: a colon beside such a line, whose
+  // box a letter of the line stands in, is no line of right-to-left text.)
+  if (!pdfTextHasRightToLeftRun(input.selection.item.str)) return false;
+  const reading = await pageReading(input.sourceBytes, input.selection.pageNumber);
+  const fonts = fontsReadReordered(reading);
+  if (!fonts.size) return false;
+  const items = boxItems(input.selection);
+  const regions = items.map((item) => itemRegion(item));
+  const sized = sizedLike(items);
+  let letters = 0, reordered = 0;
+  for (const show of reading.shows) {
+    const codes = show.font.rightToLeftLetterCodes;
+    if (!codes || show.mode === 3 || show.mode === 7) continue;
+    for (const glyph of show.glyphs) {
+      if (!codes.letters.has(glyph.code) ||
+        !regions.some((inside, at) => Boolean(inside?.(glyph.x, glyph.y, glyph.ux, glyph.uy)) && sized(show, glyph, at))) continue;
+      letters += 1;
+      if (fonts.has(show.font)) reordered += 1;
+    }
+  }
+  return letters > 0 && reordered * 2 > letters;
+}
+
+
+
+
+
+
+
+
+
+
+
+export async function pdfRightToLeftLineWordsFixedReason(input: {
+  sourceBytes: Uint8Array;
+  selection: PdfNativeListTextSelectionEvidence;
+}): Promise<PdfNativeTextWordsFixedReason | null> {
+  if (!pdfTextHasRightToLeftRun(input.selection.item.str)) return null;
+  return await pdfTextLinesWordsFixedReason(input) ??
+    (await pdfRightToLeftLinesReadReordered(input) ? "letters-read-reordered" : null);
 }
 
 /** What the page content draws of a box, as pieces to hide by span. */
@@ -1312,13 +1486,32 @@ export async function isPdfFallbackTextHidden(
 
 
 
+
+
+
+
+
+
+
 export async function preparePdfFallbackTextOpen(input: {
   sourceBytes: Uint8Array;
   selection: PdfNativeListTextSelectionEvidence;
   /** False skips the page painted without the box (a probe needs no surface). */
   blank?: boolean;
 }): Promise<{ proof: PdfNativeListTextSelectionProof; blankedSource: Uint8Array | null }> {
-  const data = await locatePdfFallbackText(input);
+  let data: PdfFallbackTextProofData;
+  try {
+    data = await locatePdfFallbackText(input);
+  } catch (error) {
+    if (!(error instanceof PdfFallbackTextRefusal) || error.code !== "glyphs-read-as-blanks") throw error;
+    return { proof: await pdfWordsFixedTextProof(input, await pdfTextLinesWordsFixedReason(input) ?? undefined),
+      blankedSource: null };
+  }
+  
+  // words than the page shows: its box would be a line of other letters.)
+  if (await pdfRightToLeftLinesReadReordered(input)) {
+    return { proof: await pdfWordsFixedTextProof(input, "letters-read-reordered"), blankedSource: null };
+  }
   return {
     proof: pdfFallbackTextProof(data, input.selection),
     blankedSource: input.blank === false ? null
@@ -1331,24 +1524,77 @@ export function pdfFallbackTextProof(
   selection: PdfNativeListTextSelectionEvidence,
 ): PdfNativeListTextSelectionProof {
   const first = data.pieces[0];
+  return Object.freeze({
+    ...proofOfNoRun(selection, { object: first.object, generation: first.generation, start: first.start, end: first.end,
+      sha256: first.sha256 }, data.fontSize, data.renderingMode),
+    fallbackText: data,
+  });
+}
+
+/** A proof that states no run: the box as the reader read it, and where its
+ * first show stands in the page's content. */
+function proofOfNoRun(
+  selection: PdfNativeListTextSelectionEvidence,
+  first: Readonly<{ object: number; generation: number; start: number; end: number; sha256: string }>,
+  fontSize: number,
+  renderingMode?: number,
+) {
   const items = selection.items?.length ? selection.items : [selection.item];
   const baselines = items.map((item) => item.transform[5]);
-  const lineSpacing = baselines.length > 1 ? Math.abs(baselines[0] - baselines[1]) : data.fontSize * 1.2;
-  return Object.freeze({
+  const lineSpacing = baselines.length > 1 ? Math.abs(baselines[0] - baselines[1]) : fontSize * 1.2;
+  const text = selectionText(selection);
+  return {
     target: Object.freeze({ objectNumber: first.object, generation: first.generation }),
     evidence: Object.freeze({
       schemaVersion: PDF_FALLBACK_TEXT_SCHEMA_VERSION,
       layoutKind: "paragraph-line",
-      originalText: data.displayText,
-      originalDisplayText: data.displayText,
+      originalText: text,
+      originalDisplayText: text,
       selection,
-      fontSize: data.fontSize,
+      fontSize,
       lineSpacing,
       textOperatorSpan: Object.freeze({ start: first.start, end: first.end, sha256: first.sha256 }),
-      ...(data.renderingMode !== undefined ? { renderingMode: data.renderingMode } : {}),
+      ...(renderingMode !== undefined ? { renderingMode } : {}),
     }) as unknown as PdfNativeListTextSelectionProof["evidence"],
     properties: null,
-    fallbackText: data,
+  };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export async function pdfWordsFixedTextProof(input: {
+  sourceBytes: Uint8Array;
+  selection: PdfNativeListTextSelectionEvidence;
+}, reason: PdfNativeTextWordsFixedReason = "glyphs-read-as-blanks"): Promise<PdfNativeListTextSelectionProof> {
+  const { selection } = input;
+  const reading = await pageReading(input.sourceBytes, selection.pageNumber);
+  const items = boxItems(selection);
+  const regions = items.map((item) => itemRegion(item));
+  const sized = sizedLike(items);
+  // The first show, in the page's order, that inks in the box.
+  const first = reading.shows.find((show) => show.mode !== 3 && show.mode !== 7 && show.glyphs.some((glyph) =>
+    glyph.ink && regions.some((inside, at) => Boolean(inside?.(glyph.x, glyph.y, glyph.ux, glyph.uy)) && sized(show, glyph, at))));
+  if (!first) return fail("not-found", PDF_FALLBACK_NOT_FOUND_MESSAGE);
+  if (first.font.kind === "type3") fail("type3", PDF_FALLBACK_TYPE3_MESSAGE);
+  const stream = reading.streams.get(first.key);
+  if (!stream) return fail("not-found", PDF_FALLBACK_NOT_FOUND_MESSAGE);
+  const fontSize = Math.max(...items.map((item) => Math.hypot(item.transform[2], item.transform[3]) || item.height), 1);
+  return Object.freeze({
+    ...proofOfNoRun(selection, { object: first.ref.objectNumber, generation: first.ref.generation, start: first.start,
+      end: first.end, sha256: await sha256(stream.data.subarray(first.start, first.end)) }, fontSize),
+    wordsFixed: reason,
   });
 }
 
@@ -1356,5 +1602,8 @@ export function pdfFallbackTextProof(
 export async function readPdfFallbackShowsForDiagnosis(sourceBytes: Uint8Array, pageNumber: number) {
   const reading = await readPage(sourceBytes, pageNumber);
   return reading.shows.map((show) => ({ key: show.key, start: show.start, end: show.end, font: show.font.kind,
-    mode: show.mode, glyphs: show.glyphs }));
+    mode: show.mode, glyphs: show.glyphs, fontName: show.font.name ?? null,
+    fontInkedBlankCodes: show.font.inkedBlankCodes?.size ?? 0,
+    letters: show.font.rightToLeftLetterCodes ? show.glyphs.filter((glyph) => show.font.rightToLeftLetterCodes!.letters.has(glyph.code)).length : 0,
+    several: show.font.rightToLeftLetterCodes ? show.glyphs.filter((glyph) => show.font.rightToLeftLetterCodes!.several.has(glyph.code)).length : 0 }));
 }

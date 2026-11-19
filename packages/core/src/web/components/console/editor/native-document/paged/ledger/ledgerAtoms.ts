@@ -43,6 +43,7 @@ import {
   SPLIT_CONTINUATION_ATTR,
   SPLIT_CONTINUES_ATTR,
 } from "../blockSplitting";
+import { joinedTextRebreak, renderedTextTailHeightPx } from "../renderedTextHead";
 import { isClosedBoxRowSlicedAtomType, isRowSliceTail, isRowSlicedAtomType, rowSliceRange } from "../atomRowSlices";
 import { isOverTallTextNode } from "../pageSpanExtension";
 import { HEAD_PIECE_OVERRUN_PX, PAGE_EDGE_FIRST_ATTR, PAGE_EDGE_LAST_ATTR } from "../paginationProjectionKeys";
@@ -89,7 +90,7 @@ import { isNonPrintingEmptyTailBlock } from "../../sourceHardBreakTail";
 import { trailingAutoLeadingCreditPx, trailingAutoLeadingCreditUnlaidPx } from "../pageEdgeLeading";
 import { textEngineEnabled } from "../../../../../../lib/text-engine/flags";
 import { HOLLOW_SHEET_ATTR } from "../pageSheetView";
-import { countEngineCut, engineBlockHeightPx, engineBlockLineCount, engineCutCompare, engineTextCut, unlaidEngineBlock, unlaidEngineList, unlaidEngineKatexMathBlock, unlaidEngineMathBlock, unlaidEnginePicture, unlaidEngineReason, unlaidEngineTable, unlaidEngineTableRows, unlaidEngineTextCut, freezeEngineLineStarts } from "./ledgerEngineLines";
+import { countEngineCut, engineBlockHeightPx, engineBlockLineCount, engineCutCompare, engineTextCut, unlaidEngineBlock, unlaidEngineList, unlaidEngineKatexMathBlock, unlaidEngineMathBlock, unlaidEnginePicture, unlaidEngineReason, unlaidEngineTable, unlaidEngineTableRows, unlaidEngineTextCut, freezeEngineLineStarts, engineJoinedRows } from "./ledgerEngineLines";
 import { collapseMargins, collapsedInnerMarginPx, type AuthoredMarginPx } from "../marginCollapse";
 import { paginationLayoutRect, paginationLayoutScale } from "../paginationGeometry";
 import { BAND_RUN_RIDE_ATTR, BAND_RUN_ROOM_ATTR, FLOAT_PAGE_ROOM_ATTR } from "../../../../../../lib/office-float-anchor";
@@ -2327,16 +2328,31 @@ export function planTextHeadWithNotes(
   notes: readonly TextAtomNote[],
   chromePx: number,
   planHead: (reservedPx: number) => (LedgerCut & { payload: TextCutPayload }) | null,
+  /** Where the fragment and its cuts stand in the block's text, when the
+   * caller can say for more than a cut made inside a fragment
+   * (`payload.logicalOffset`): `cutOffset` for a cut at an existing seam
+   * (null: not known), `fromOffset` where the fragment being cut starts (the
+   * notes before it are on the pages before). Absent: as before. */
+  where: { cutOffset?: (cut: LedgerCut) => number | null; fromOffset?: number; pageChromePx?: number; sayNotes?: boolean } = {},
 ): LedgerCut | null {
-  const reservationOf = (selected: readonly TextAtomNote[]) =>
-    selected.length ? selected.reduce((sum, note) => sum + note.heightPx, 0) + chromePx : 0;
+  const fromOffset = where.fromOffset ?? 0;
+  if (fromOffset > 0) notes = notes.filter((note) => note.logicalOffset >= fromOffset);
+  // (`pageChromePx`: the note area's chrome this page has paid already; the
+  // tail's page pays its own.)
+  const headChromePx = Math.max(0, chromePx - Math.max(0, where.pageChromePx ?? 0));
+  const reservationOf = (selected: readonly TextAtomNote[], chrome = headChromePx) =>
+    selected.length ? selected.reduce((sum, note) => sum + note.heightPx, 0) + chrome : 0;
   const totalPx = reservationOf(notes);
   if (!(totalPx > 0)) return planHead(0);
   const flexOf = (selected: readonly TextAtomNote[]) =>
     selected.reduce((sum, note) => sum + (note.flexPx ?? 0), 0);
   const charge = (cut: LedgerCut & { payload: TextCutPayload }) => {
-    const head = notes.filter((note) => note.logicalOffset < cut.payload.logicalOffset);
-    const tail = notes.filter((note) => note.logicalOffset >= cut.payload.logicalOffset);
+    // (A cut at an existing seam states no offset of its own: compared with
+    // `undefined`, no note was the head's nor the tail's, and the seam's two
+    // sides were charged no notes at all.)
+    const at = Number.isFinite(cut.payload.logicalOffset) ? cut.payload.logicalOffset : where.cutOffset?.(cut) ?? Number.NaN;
+    const head = notes.filter((note) => note.logicalOffset < at);
+    const tail = notes.filter((note) => note.logicalOffset >= at);
     const headPx = reservationOf(head);
     const headNoteFlexPx = flexOf(head);
     const tailNoteFlexPx = flexOf(tail);
@@ -2345,9 +2361,10 @@ export function planTextHeadWithNotes(
       charged: {
         ...cut,
         headHeightPx: cut.headHeightPx + headPx,
-        tailHeightPx: cut.tailHeightPx + reservationOf(tail),
+        tailHeightPx: cut.tailHeightPx + reservationOf(tail, chromePx),
         ...(headNoteFlexPx > 0 ? { headNoteFlexPx } : {}),
         ...(tailNoteFlexPx > 0 ? { tailNoteFlexPx } : {}),
+        ...(where.sayNotes && Number.isFinite(at) ? { headNotesPx: headPx, tailNotesPx: reservationOf(tail, chromePx) } : {}),
       } as LedgerCut,
     };
   };
@@ -2483,9 +2500,59 @@ function planTextHead(
     })),
   );
   const chromePx = Math.max(0, ...block.parts.map((part) => part.noteChromePx));
-  return planTextHeadWithNotes(notes, chromePx, (reservedPx) =>
-    planTextHeadOnce(view, block, { ...request, availablePx: request.availablePx - reservedPx }, reservedPx) as (LedgerCut & { payload: TextCutPayload }) | null,
-  );
+  const plan = (reservedPx: number) =>
+    planTextHeadOnce(view, block, { ...request, availablePx: request.availablePx - reservedPx }, reservedPx) as (LedgerCut & { payload: TextCutPayload }) | null;
+  if (seamNotesUncharged(view)) return planTextHeadWithNotes(notes, chromePx, plan);
+  // A cut at a seam the block already has falls where that seam's tail
+  // starts, and a fragment that continues from a cut starts there: the notes
+  // on either side are charged as for a cut made now. Charged no notes, a
+  // paragraph whose tail holds references stood above a note area the page
+  // had no room for (corpus R480-D03 page 2: the next paragraph's rows drawn
+  // 63 px into the notes), and every key near the seam above planned the
+  // page with the notes, the pass after without them: five pages there and
+  // back.
+  const seamOffset = (payload: unknown): number | null => {
+    const at = payload as { partIndex?: unknown; boundary?: unknown; logicalOffset?: unknown } | null;
+    if (!at) return null;
+    if (typeof at.logicalOffset === "number" && Number.isFinite(at.logicalOffset)) return at.logicalOffset;
+    if (at.boundary !== true || !Number.isInteger(at.partIndex)) return null;
+    const tailPart = (at.partIndex as number) + 1;
+    return tailPart < block.parts.length ? contentOffsetBefore(block, tailPart) : null;
+  };
+  return planTextHeadWithNotes(notes, chromePx, plan, {
+    cutOffset: (cut) => seamOffset(cut.payload),
+    fromOffset: request.from ? seamOffset(request.from.payload) ?? 0 : 0,
+    // One note area a page: a head under notes the page already holds adds
+    // its rows, not a second separator (the cut says which side holds notes,
+    // so the page knows whether it has paid: ledgerCut `notesBelow`).
+    pageChromePx: request.pageNoteChromePx ?? 0,
+    sayNotes: true,
+  });
+}
+
+/** `window.__docsSeamNotesUncharged = true`: a cut at an existing seam is
+ * charged no notes, and a continued fragment all of its block's, as before
+ * (an A/B of one build). */
+function seamNotesUncharged(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsSeamNotesUncharged?: boolean }) | null)?.__docsSeamNotesUncharged === true;
+}
+
+/**
+ * The notes a text block's fragments from `partIndex` on hold, as a cut there
+ * charges its tail (their minimum rows and the note area's chrome): what a
+ * page that opens with that continuation pays besides the fragments' rows.
+ */
+export function textTailNotesPx(block: LogicalBlock, partIndex: number): number {
+  if (block.kind !== "text") return 0;
+  let rows = 0;
+  let chrome = 0;
+  for (let index = partIndex; index < block.parts.length; index += 1) {
+    const part = block.parts[index];
+    if (!part.notes.length) continue;
+    for (const note of part.notes) rows += note.minPx;
+    chrome = Math.max(chrome, part.noteChromePx);
+  }
+  return rows > 0 ? rows + chrome : 0;
 }
 
 function planTextHeadOnce(
@@ -2503,12 +2570,23 @@ function planTextHeadOnce(
   let remaining = request.availablePx;
   let headHeight = 0;
   const startPart = from ? from.partIndex : (chained ?? 0);
+  // The whole block was judged with no page-bottom credit (notes stand
+  // below it on this page): its head is judged so too. Judged with the
+  // credit, a paragraph a hair over the room left "fitted" here and was
+  // answered "fits whole" -- to a caller that had just found it does not,
+  // and moved it on whole (corpus R380-D22 page 1: 303.6 px against 302.4
+  // left above the notes, the paragraph sent to page 2 and 300 px left
+  // blank; Word cuts it there). `window.__docsOracleCreditAlways = true`
+  // gives the credit as before.
+  const noCredit = request.noFootCredit === true &&
+    (view.dom.ownerDocument.defaultView as (Window & { __docsOracleCreditAlways?: boolean }) | null)?.__docsOracleCreditAlways !== true;
+  const creditOf = (part: LedgerPart): number => (noCredit ? 0 : part.creditPx);
   const tracing = oracleTraceEnabled();
   const visited: string[] = [];
   const trace = (failedPart: number, result: LedgerCut | null, why: string) => {
     if (!tracing) return;
     traceOracle({
-      atom: block.index, kind: "text", why, visited,
+      atom: block.index, kind: "text", why, visited, ...(noCredit ? { noCredit } : {}),
       parts: block.parts.map((p) => Math.round(p.heightPx * 100) / 100),
       credits: block.parts.map((p) => Math.round(p.creditPx * 100) / 100),
       availablePx: Math.round(request.availablePx * 100) / 100, reservedPx: Math.round(reservedPx * 100) / 100, startPart, minLines,
@@ -2535,7 +2613,7 @@ function planTextHeadOnce(
       ? gridRows.reduce((sum, row) => sum + row.heightPx, 0)
       : part.heightPx - fromTop;
     if (tracing) visited.push(`part ${partIndex}: ${Math.round(partRemaining * 100) / 100} - credit ${Math.round(part.creditPx * 100) / 100} vs ${Math.round(remaining * 100) / 100}`);
-    if (partRemaining - part.creditPx <= remaining + (gridRows ? LINE_GRID_FIT_TOLERANCE_PX : 1e-6)) {
+    if (partRemaining - creditOf(part) <= remaining + (gridRows ? LINE_GRID_FIT_TOLERANCE_PX : 1e-6)) {
       // An edit at a page seam of this paragraph (a space deleted or typed
       // where the head ends or the tail starts): the head's last row and the
       // tail's first row were laid out apart, so neither shows where the
@@ -2548,6 +2626,22 @@ function planTextHeadOnce(
       const nextPart = block.parts[partIndex + 1];
       if (nextPart && nextPart.sheet !== part.sheet && !nextPart.columnSeamBefore && block.editedSeams?.has(partIndex + 1)) {
         const rows = measureTextLineBoxes(part.dom).filter((row) => row.top >= fromTop - 0.5);
+        // Where the seam belongs is read from the two pieces laid out as one,
+        // off-screen, and the cut is made there in this pass: nothing is drawn
+        // on the way (seamRebreakCut).
+        const rebreak = fromTop <= 0 && !gridRows && (rows.length >= minLines || partIndex > startPart)
+          ? seamRebreakCut(view, block, partIndex, rows, headHeight + partRemaining, minLines)
+          : null;
+        if (rebreak === "stands") {
+          // The joined text breaks where the seam is: nothing to cut again.
+          remaining -= partRemaining;
+          headHeight += partRemaining;
+          continue;
+        }
+        if (rebreak) {
+          trace(partIndex, rebreak, "edited-seam-rebreak");
+          return rebreak;
+        }
         const lastTop = rows.length >= 2 ? rows[rows.length - 1].top : null;
         if (lastTop !== null && lastTop > fromTop + 1) {
           const recut = planTextHeadOnce(
@@ -2602,7 +2696,7 @@ function planTextHeadOnce(
       // made a head that did not fit the page: the next pass moved the paragraph
       // on whole and the one after cut it again, every page after it with it.
       gridHeadEdgePx = bottomEdgePx(part.dom);
-      while (kept < gridRows.length && cost + gridRows[kept].heightPx + gridHeadEdgePx - Math.max(0, part.creditPx) <= remaining + LINE_GRID_FIT_TOLERANCE_PX) {
+      while (kept < gridRows.length && cost + gridRows[kept].heightPx + gridHeadEdgePx - Math.max(0, creditOf(part)) <= remaining + LINE_GRID_FIT_TOLERANCE_PX) {
         cost += gridRows[kept].heightPx;
         kept += 1;
       }
@@ -2623,7 +2717,12 @@ function planTextHeadOnce(
     // decide; glyph boxes (or the whole block's credit) only propose a row,
     // and a head kept by them failed the fragment rule on the next pass,
     // which moved the text back.
-    const cutContext = { rowsBefore, rowsAfter, footCreditPx: part.creditPx };
+    // (The rendered head that confirms the row has a credit of its own: it
+    // is told too, or a row kept by that credit made a head the next pass,
+    // judging the fragment with none, cut back -- R380-D22 page 3, a row
+    // 25.3 px tall kept in 19 px, the page 874 px for 867, one layout and
+    // the other on every key.)
+    const cutContext = { rowsBefore, rowsAfter, footCreditPx: creditOf(part), ...(noCredit ? { noFootCredit: true } : {}) };
     const pageCut = () => gridRowsToKeep !== null
       ? planTextCutByChars(part.dom, cutBudgetPx, minLines, false, gridRowsToKeep, { rowsBefore, rowsAfter, formulasOpenRows: true })
       : planTextCutByChars(part.dom, cutBudgetPx, minLines, true, null, cutContext);
@@ -2711,7 +2810,19 @@ function planTextHeadOnce(
       key: `text:${logicalOffset}`,
       payload: { logicalOffset, partIndex, rowTop: cut.rowTop } satisfies TextCutPayload,
       headHeightPx: headHeight + gridHeadEdgePx,
-      tailHeightPx: Math.max(0, totalHeight - headAbsolute),
+      // What the next page is charged. Where fragments follow the one cut,
+      // what the cut leaves of it joins them and their rows flow again: the
+      // tail as it will stand, laid out before it exists. A block cut for
+      // the first time keeps its rows: its height less the head's (and so a
+      // document laid out for the first time pays nothing for this). On a
+      // line grid too: the copy is drawn on the grid's slots as the
+      // fragment will be, and the slots' arithmetic charged the row a typed
+      // character pushed out of the head a slot of its own though the tail's
+      // first row took it up (corpus R481-D06, East Asian text on a grid:
+      // the next page planned a row short, the pass after a row back, on
+      // every key in the head's last row). `window.__docsGridTailArithmetic
+      // = true` keeps the slots' arithmetic on a grid (A/B).
+      tailHeightPx: ((gridRows && gridTailArithmetic(view)) || partIndex + 1 >= block.parts.length ? null : measuredTailHeightPx(view, block, partIndex, cutPos)) ?? Math.max(0, totalHeight - headAbsolute),
     };
     trace(partIndex, result, `cut:${Math.round(cut.rowTop * 100) / 100}`);
     return result;
@@ -2719,6 +2830,105 @@ function planTextHeadOnce(
   // Everything remaining fits — the caller should have placed it whole.
   trace(-1, null, "all-fits");
   return null;
+}
+
+function gridTailArithmetic(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsGridTailArithmetic?: boolean }) | null)?.__docsGridTailArithmetic === true;
+}
+
+/**
+ * The height of the tail a cut at `cutPos` inside part `partIndex` leaves,
+ * laid out off-screen (renderedTextTailHeightPx): what the next page is
+ * charged. Null where it is not read so (a hollow fragment, a position the
+ * page cannot place, columns): the caller's arithmetic stands.
+ * `window.__docsRenderedTailOff = true` is the arithmetic throughout (A/B).
+ */
+function measuredTailHeightPx(view: EditorView, block: LogicalBlock, partIndex: number, cutPos: number): number | null {
+  const win = view.dom.ownerDocument.defaultView as (Window & { __docsRenderedTailOff?: boolean }) | null;
+  if (win?.__docsRenderedTailOff === true) return null;
+  if (block.parts.some((part, index) => index >= partIndex && part.hollow)) return null;
+  try {
+    const at = view.domAtPos(cutPos, 1);
+    return renderedTextTailHeightPx(block.parts.map((part) => part.dom), partIndex, at.node, at.offset);
+  } catch {
+    return null;
+  }
+}
+
+/** `window.__docsSeamRebreakOnePassOff = true`: a stale seam is cut before
+ * the head's last row and taken back a pass later, as before (an A/B). */
+function seamRebreakOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsSeamRebreakOnePassOff?: boolean }) | null)?.__docsSeamRebreakOnePassOff === true;
+}
+
+/**
+ * The cut a stale page seam of a paragraph is replaced by, in one pass.
+ *
+ * A seam the rows no longer break at (an edit beside it, a line pulled up
+ * since the cut was made) used to be cut again in two passes: before the
+ * head's last row, so that row was laid out with the tail, then back to the
+ * rows that fit. The pass between drew the row on the next page, and every
+ * page after it moved and came back with it (a key typed in a row above a
+ * seam: the three pages after it re-cut twice each). Here the two pieces are
+ * laid out as one off-screen (joinedTextRebreak) and the cut goes straight
+ * to where the joined text starts its next row: the page keeps the rows the
+ * head has, the tail keeps its widow floor.
+ *
+ * `"stands"`: the joined text breaks at the seam. Null: not read so (columns,
+ * anything but plain text in the two pieces, the floor not kept, a cut the
+ * page refused), and the seam is cut again the old way.
+ */
+function seamRebreakCut(
+  view: EditorView,
+  block: LogicalBlock,
+  partIndex: number,
+  rows: readonly { top: number }[],
+  headHeightPx: number,
+  minLines: number,
+): LedgerCut | "stands" | null {
+  if (seamRebreakOff(view)) return null;
+  const part = block.parts[partIndex];
+  const next = block.parts[partIndex + 1];
+  if (!next || part.hollow || next.hollow) return null;
+  // The widow floor counts the paragraph's rows: those of the pieces after
+  // the tail are the next pages' already.
+  let later = 0;
+  for (let index = partIndex + 2; index < block.parts.length && later < minLines; index += 1) {
+    later += engineBlockLineCount(block.parts[index].node) ?? measureTextLineBoxes(block.parts[index].dom).length;
+  }
+  const need = Math.max(1, minLines - later);
+  let read: ReturnType<typeof joinedTextRebreak>;
+  try {
+    read = joinedTextRebreak(part.dom, next.dom, need, (copy) => engineJoinedRows(view, part, next, copy));
+  } catch {
+    return null;
+  }
+  if (!read || read.rowsAfter < need) return null;
+  let cutPos: number;
+  try {
+    cutPos = view.posAtDOM(read.node, read.offset);
+  } catch {
+    return null;
+  }
+  const own = read.side === "head" ? part : next;
+  const ownIndex = read.side === "head" ? partIndex : partIndex + 1;
+  const from = own.pos + 1;
+  const to = own.pos + own.node.nodeSize - 1;
+  if (read.side === "tail" && cutPos <= from) return "stands";
+  if (cutPos <= from || cutPos >= to) return null;
+  const logicalOffset = contentOffsetBefore(block, ownIndex) + (cutPos - from);
+  if (ledgerCutRefused(view, `${block.index}+text:${logicalOffset}`)) return null;
+  // (A cut in the head leaves its last row's start where it is: the word a
+  // join made too long for the row goes on, the rows above stay.)
+  const lastRowTop = rows.length > 0 ? rows[rows.length - 1].top : 0;
+  return {
+    kind: "text",
+    key: `text:${logicalOffset}`,
+    payload: { logicalOffset, partIndex: ownIndex, rowTop: read.side === "head" ? lastRowTop : 0 } satisfies TextCutPayload,
+    headHeightPx,
+    tailHeightPx: measuredTailHeightPx(view, block, ownIndex, cutPos) ??
+      (read.side === "head" ? Math.max(0, part.heightPx - lastRowTop) : 0) + partHeightsAfter(block, partIndex),
+  };
 }
 
 /** Height of parts `startPart..partIndex-1` rendered joined on one page:
@@ -3674,6 +3884,8 @@ function splitRequestKey(block: LogicalBlock, request: LedgerSplitRequest): stri
     r(request.availablePx),
     r(request.fullCapacityPx),
     request.pageEmpty ? 1 : 0,
+    r(request.pageNoteChromePx ?? 0),
+    request.noFootCredit ? 1 : 0,
     request.from ? `${request.from.key}@${r(request.from.headHeightPx)}` : "-",
     r(atom.heightPx),
     r(atom.spaceBeforePx),

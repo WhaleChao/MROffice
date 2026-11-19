@@ -287,7 +287,11 @@ export function parseInternalLink(raw: unknown): InternalLinkTarget | null {
  * apart, as a link resolves): a link's target is its text, so a rename leaves
  * them on the old name. */
 export function internalLinksToSheet(
-  sheets: ReadonlyArray<{ readonly cells?: Readonly<Record<string, { hyperlink?: unknown } | null | undefined>> }>,
+  sheets: ReadonlyArray<{
+    readonly cells?: Readonly<Record<string, { hyperlink?: unknown } | null | undefined>>;
+    /** Links held over large areas (reading 948): each one a link. */
+    readonly hyperlinkAreas?: unknown;
+  }>,
   sheetName: string,
 ): number {
   const wanted = sheetName.toLowerCase();
@@ -295,6 +299,11 @@ export function internalLinksToSheet(
   for (const sheet of sheets) {
     for (const cell of Object.values(sheet.cells ?? {})) {
       if (parseInternalLink(cell?.hyperlink)?.sheetName.toLowerCase() === wanted) count += 1;
+    }
+    const areas: unknown[] = Array.isArray(sheet.hyperlinkAreas) ? sheet.hyperlinkAreas : [];
+    for (const area of areas) {
+      const link = (area as { hyperlink?: unknown } | null | undefined)?.hyperlink;
+      if (parseInternalLink(link)?.sheetName.toLowerCase() === wanted) count += 1;
     }
   }
   return count;

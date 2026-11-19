@@ -26,6 +26,7 @@ import {
   isSavedPageHotCacheScopeCurrent,
 } from "@mrnote/core/web/lib/saved-page-hot-cache.ts";
 import { subscribeAuthState } from "@mrnote/core/web/lib/auth-state.ts";
+import { excelCutFamilyFace, isExcelCutFamily } from "@mrnote/core/web/lib/office-fonts/excel-cut-families.ts";
 import { spreadsheetFontStack, type NativeGridFont } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 
 export function spreadsheetFontStackWithAssets(
@@ -50,9 +51,12 @@ export function spreadsheetFontFamilyWithAssets(
   if (!family || !aliases || !Object.keys(aliases).length) return family;
   return family
     .split(",")
-    .map((token) => {
+    .flatMap((token) => {
+      // A face the workbook brings its own file of is drawn in that file: the
+      // sheet's cut family of its stand-in (excel-cut-families.ts) steps aside.
+      if (isExcelCutFamily(token)) return aliases[excelCutFamilyFace(token).toLocaleLowerCase()] ? [] : [token];
       const alias = aliases[officePrimaryFontFamily(token).toLocaleLowerCase()];
-      return alias ? `"${alias}"` : token;
+      return [alias ? `"${alias}"` : token];
     })
     .join(",");
 }

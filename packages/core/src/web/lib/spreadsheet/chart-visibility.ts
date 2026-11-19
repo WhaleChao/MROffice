@@ -33,7 +33,11 @@ const sheetFiltered = (sheet: Sheet) =>
  * them, when the caller has them: a filter that hides no row of the chart's
  * data then changes nothing (user audit S-018 blanked a chart over a table
  * filtered far below it). A filtered sheet without them stays unresolved. */
-export function chartVisiblePointIndices(chart: { chartVisibility?: unknown; chartType?: unknown; type?: unknown; seriesRefs?: unknown; secondaryAxisSeries?: unknown; sliceStyles?: unknown; chartFormat?: unknown }, sheets: readonly Sheet[], count: number, filterHiddenRows?: (sheetName: string) => ReadonlySet<number> | undefined): ChartVisibilityProjection {
+export function chartVisiblePointIndices(chart: { chartVisibility?: unknown; chartType?: unknown; type?: unknown; seriesRefs?: unknown; secondaryAxisSeries?: unknown; sliceStyles?: unknown; chartFormat?: unknown }, sheets: readonly Sheet[], count: number, filterHiddenRows?: (sheetName: string) => ReadonlySet<number> | undefined,
+  /** "data": the points a chart's data holds (the cache Excel writes), not
+   *  its drawing: every chart type and axis takes the same mask -- the grid's
+   *  drawing resolves column and bar charts only. */
+  purpose: "drawing" | "data" = "drawing"): ChartVisibilityProjection {
   const policy = normalizeChartVisibility(chart.chartVisibility);
   const refs = normalizeChartSeriesRefs(chart.seriesRefs);
   const resolved: ChartVisibilityProjection = { state: "resolved", sourcePointIndices: Array.from({ length: count }, (_, index) => index), sourceSeriesIndices: (refs ?? []).map((_, index) => index) };
@@ -96,7 +100,8 @@ export function chartVisiblePointIndices(chart: { chartVisibility?: unknown; cha
   if (!masks.some(mask => mask.some(Boolean))) return resolved;
   if (!policy || policy.state !== "known") return { state: "unavailable", reason: "chart_visibility_unknown" };
   const format = chart.chartFormat && typeof chart.chartFormat === "object" ? chart.chartFormat as Record<string, unknown> : undefined;
-  if (!["column", "bar"].includes(String(chart.chartType ?? chart.type)) || nonempty(chart.secondaryAxisSeries) || nonempty(chart.sliceStyles) || nonempty(format?.sliceStyles) || refs.some(ref => ref.axis === "secondary" || ref.xValues || ref.implicitX || ref.bubbleSizes)) return { state: "unsupported", reason: "chart_visibility_geometry_unsupported" };
+  const drawable = purpose === "data" || (["column", "bar"].includes(String(chart.chartType ?? chart.type)) && !nonempty(chart.secondaryAxisSeries) && !refs.some(ref => ref.axis === "secondary"));
+  if (!drawable || nonempty(chart.sliceStyles) || nonempty(format?.sliceStyles) || refs.some(ref => ref.xValues || ref.implicitX || ref.bubbleSizes)) return { state: "unsupported", reason: "chart_visibility_geometry_unsupported" };
   // A chart whose series name no categories plots its points as 1, 2, ...:
   // Excel numbers the visible ones afresh (C09_plotVisOnly: rows 6-7 hidden,
   // the categories read 1, 2; X-103). Some series with categories and some

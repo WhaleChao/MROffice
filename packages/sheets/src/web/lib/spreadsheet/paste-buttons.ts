@@ -58,6 +58,12 @@ import {
   type MergeSpan,
 } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
 import { tableCellRole, type DataTable } from "@mrnote/core/web/lib/spreadsheet/data-table.ts";
+import {
+  laidAreaLinksAround,
+  sheetWithLinksFilled,
+  sheetWithoutHyperlinkAreasAround,
+  sheetWithoutLaidAreaLinksAround,
+} from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 import { mergeRectTouchesTable } from "./merge-buttons";
 import {
   richClipboardCellIsBlank,
@@ -167,6 +173,12 @@ export interface PasteGridOptions {
    * while the destination's own note and hyperlink stay.
    */
   fillContentAndFormats?: boolean;
+  /**
+   * Fill Down / Up / Right / Left: the side the source row or column lies on.
+   * Where the sheet holds links over large areas the filled cells' links are
+   * the fill's own matter (hyperlink-areas, CRITERIA XC-199).
+   */
+  fillLinksFrom?: "down" | "up" | "right" | "left";
   /**
    * A paste whose first row lies directly below a table grows the table to
    * take it (Table AutoExpansion, planTablePasteExpansion).
@@ -742,6 +754,23 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
   // part of a data table."): a paste over all of them, or a Cut of all of
   // them, replaces the table's values and ends the table.
   const destinationRect = { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC };
+  // The area links this paste deletes whole (it lies inside them; see the
+  // end): a copied cell whose link is one of them takes the link beneath it
+  // instead (Windows Excel, probe/n39-linkmore x6, CRITERIA XC-206 C 11).
+  const pasteInsideAreas = Boolean(clipboardCells) && options.fillContentAndFormats !== true && !options.fillLinksFrom && !options.movedFrom;
+  const areaRangesGone = pasteInsideAreas
+    ? (Array.isArray((sheet as { hyperlinkAreas?: unknown }).hyperlinkAreas)
+        ? ((sheet as { hyperlinkAreas?: unknown[] }).hyperlinkAreas ?? [])
+        : []
+      )
+        .map((area) => (area as { range?: { r1: number; c1: number; r2: number; c2: number } } | null)?.range)
+        .filter((range): range is { r1: number; c1: number; r2: number; c2: number } =>
+          Boolean(range) && range!.r1 <= destinationRect.r1 && range!.r2 >= destinationRect.r2 &&
+          range!.c1 <= destinationRect.c1 && range!.c2 >= destinationRect.c2)
+    : [];
+  const laidRanksGone = pasteInsideAreas
+    ? laidAreaLinksAround((sheet as { cells?: Record<string, object | undefined> }).cells, destinationRect)
+    : new Set<number>();
   writeLineBlanksIn(sheet as unknown as Parameters<typeof writeLineBlanksIn>[0], destinationRect);
   const movedSourceRect = options.movedFrom && !options.movedFrom.fromSheet ? options.movedFrom.range : null;
   if (
@@ -1144,13 +1173,24 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
             })
           : undefined;
         if (copiedPhonetic) replaced.phonetic = copiedPhonetic;
-        if (source?.hyperlink && !keepNotesAndLinks) {
-          replaced.hyperlink = source.hyperlink;
-          if (source.hyperlinkTooltip) {
-            replaced.hyperlinkTooltip = source.hyperlinkTooltip;
+        const from = source?.hyperlinkFrom;
+        const fromGone = Boolean(
+          from &&
+            from.sheetId === sheet.id &&
+            ((from.rank !== undefined && laidRanksGone.has(from.rank)) ||
+              (from.range &&
+                areaRangesGone.some((range) =>
+                  range.r1 === from.range!.r1 && range.c1 === from.range!.c1 &&
+                  range.r2 === from.range!.r2 && range.c2 === from.range!.c2))),
+        );
+        const pastedLink = fromGone ? from?.beneath : source;
+        if (source?.hyperlink && pastedLink?.hyperlink && !keepNotesAndLinks) {
+          replaced.hyperlink = pastedLink.hyperlink;
+          if (pastedLink.hyperlinkTooltip) {
+            replaced.hyperlinkTooltip = pastedLink.hyperlinkTooltip;
           }
-          if (source.hyperlinkDisplay) {
-            replaced.hyperlinkDisplay = source.hyperlinkDisplay;
+          if (pastedLink.hyperlinkDisplay) {
+            replaced.hyperlinkDisplay = pastedLink.hyperlinkDisplay;
           }
         }
         if (source?.comment && !keepNotesAndLinks) {
@@ -1448,9 +1488,31 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
         };
       })()
     : undefined;
+  // Cells pasted inside a link the sheet holds over a large area delete that
+  // whole link, as the paste replaces a cell's own; a paste reaching past the
+  // area leaves it (Windows Excel, xlsx-rounds probe/n35-p948 p2a, p2e).
+  const filledFrom = options.fillLinksFrom;
+  const pastedSheet = filledFrom
+    ? sheetWithLinksFilled(sheet, nextSheet, { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC }, (row, col) =>
+        filledFrom === "down"
+          ? { row: baseRow - 1, col }
+          : filledFrom === "up"
+            ? { row: maxR + 1, col }
+            : filledFrom === "right"
+              ? { row, col: baseCol - 1 }
+              : { row, col: maxC + 1 },
+      )
+    : clipboardCells && options.fillContentAndFormats !== true
+      ? sheetWithoutLaidAreaLinksAround(
+          sheet,
+          sheetWithoutHyperlinkAreasAround(nextSheet, { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC }),
+          { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC },
+          "own",
+        )
+      : nextSheet;
   return {
     ok: true,
-    sheet: nextSheet,
+    sheet: pastedSheet,
     expansion,
     ...(followOtherSheets ? { followOtherSheets } : {}),
     destination: { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC },

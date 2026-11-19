@@ -9,6 +9,7 @@ import {
   sha256PdfBytes,
 } from "./engine/native/content-stream-transaction";
 import { isMraiNativeSourceTextShowWindow, type PdfNativeListTextSelectionProof } from "./engine/native/list-text-fidelity";
+import { MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE } from "./engine/native/vocabulary";
 import {
   durableSourceTextProof,
   normalizedText,
@@ -34,6 +35,12 @@ export async function bindPdfSourceTextBox(input: {
   // for one show window (version 1) is no reason to keep the reader's text
   // out (docs/pdf/edit-gates.md). Version 1 remains only for a box the
   // span reading cannot find, when its native proof names one show window.
+  // A box whose words are fixed is bound to no text box: the reader's words
+  // are not what the page draws of it (the proof's wordsFixed).
+  if (input.proof.wordsFixed) {
+    const { PdfFallbackTextRefusal } = await import("./source-text-fallback");
+    throw new PdfFallbackTextRefusal("glyphs-read-as-blanks", MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE);
+  }
   const selection = input.proof.evidence.selection;
   const wholeBox = !selection || normalizedText(input.proof.evidence.originalDisplayText) ===
     normalizedText(selection.item.str);

@@ -24,7 +24,7 @@ import { officeTransformedHex } from "../office-color-transform";
 import { officeEffectGalleryScheme } from "../office-theme-catalog";
 import { emuToPx } from "../office-units";
 import { child, childrenNamed, descendants, parseXml, type XmlElement } from "./ms-engine/xml";
-import type { SmartArtFillGradient, SmartArtShapeShadow } from "./styles-model";
+import type { SmartArtFillGradient, SmartArtGradientPath, SmartArtShapeShadow } from "./styles-model";
 
 /** One entry per `a:effectStyle`, in order: its outer shadow, or null for none. */
 export type SmartArtThemeEffectShadows = readonly (SmartArtShapeShadow | null)[];
@@ -98,14 +98,17 @@ export function smartArtThemeEffectShadows(
   );
 }
 
-/**
- * One theme fill style (`a:fillStyleLst`, in order) as a quick style's
- * `a:fillRef idx` draws it on a shape's own colour: solid, or a linear
- * gradient whose stops transform that colour (`phClr`), with the file's own
- * angle, `scaled` and `rotWithShape`. null for a fill this reader does not
- * model (a picture, a pattern, a path gradient, a stop with a member the
- * colour transform cannot apply): the style's own table draws that one.
- */
+
+
+
+
+
+
+
+
+
+
+
 export type SmartArtThemeFillStyle =
   | { readonly kind: "solid" }
   | {
@@ -115,6 +118,8 @@ export type SmartArtThemeFillStyle =
       readonly stops: readonly { readonly position: number; readonly mods: readonly (readonly [string, number])[] }[];
       readonly scaled?: boolean;
       readonly rotWithShape?: boolean;
+      /** A path gradient's shading and focus box; its `angle` is then unused (90). */
+      readonly path?: SmartArtGradientPath;
     }
   | null;
 
@@ -128,12 +133,35 @@ function booleanAttr(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
+const PATH_KINDS = new Set(["circle", "rect", "shape"]);
+const RECT_EDGES = ["l", "t", "r", "b"] as const;
+
+/** `a:path` as the shared paint states it (`OfficeShapeGradient.path`), or null when unreadable. */
+function pathOf(element: XmlElement): SmartArtGradientPath | null {
+  const kind = element.attrs.path ?? "";
+  if (!PATH_KINDS.has(kind)) return null;
+  const toRect = child(element, "fillToRect");
+  if (!toRect) return { kind: kind as SmartArtGradientPath["kind"] };
+  const rect: { l?: number; t?: number; r?: number; b?: number } = {};
+  for (const edge of RECT_EDGES) {
+    const raw = toRect.attrs[edge];
+    if (raw === undefined) continue;
+    const value = Number(raw);
+    if (!Number.isInteger(value) || Math.abs(value) > 1_000_000) return null;
+    rect[edge] = value;
+  }
+  return { kind: kind as SmartArtGradientPath["kind"], fillToRect: rect };
+}
+
 function fillStyleOf(fill: XmlElement): SmartArtThemeFillStyle {
   if (fill.name === "solidFill") return { kind: "solid" };
   if (fill.name !== "gradFill") return null;
   const list = child(fill, "gsLst");
   const linear = child(fill, "lin");
-  if (!list || child(fill, "path") || child(fill, "tileRect")) return null;
+  const pathElement = child(fill, "path");
+  if (!list || child(fill, "tileRect") || (pathElement && linear)) return null;
+  const path = pathElement ? pathOf(pathElement) : undefined;
+  if (path === null) return null;
   const stops: { position: number; mods: (readonly [string, number])[] }[] = [];
   for (const stop of childrenNamed(list, "gs")) {
     const position = Number(stop.attrs.pos ?? "");
@@ -159,6 +187,7 @@ function fillStyleOf(fill: XmlElement): SmartArtThemeFillStyle {
     stops,
     ...(scaled !== undefined ? { scaled } : {}),
     ...(rotWithShape !== undefined ? { rotWithShape } : {}),
+    ...(path ? { path } : {}),
   };
 }
 
@@ -209,6 +238,7 @@ export function smartArtThemeFillGradient(
     // `rotWithShape="1"` fill style, as every SmartArt drawing in the corpus
     // does; the drawing part repeats what Word wrote.
     rotWithShape: false,
+    ...(style.path ? { path: { ...style.path, ...(style.path.fillToRect ? { fillToRect: { ...style.path.fillToRect } } : {}) } } : {}),
   };
 }
 

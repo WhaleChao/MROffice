@@ -42,10 +42,19 @@ interface Metadata {
 }
 
 export class NotSignedIn extends Error {
-  constructor(what: string) {
-    super(`${what} needs your MR Office account. Call the sign_in tool (or run \`npx -y @mroffice/mcp login\` in a terminal), allow it in the browser, then try again.`);
+  constructor(what: string, signInUrl?: string) {
+    super(
+      signInUrl
+        ? `${what} needs your MR Office account. MR Office's sign-in page is open in your browser (or open ${signInUrl}); allow it there, then try again.`
+        : `${what} needs your MR Office account. Call the sign_in tool (or run \`npx -y mroffice-mcp login\` in a terminal), allow it in the browser, then try again.`,
+    );
   }
 }
+
+/** How long a tool call that needs the account waits for a sign-in it
+ * started itself: under the usual tool timeout of the apps (about a minute),
+ * so the app hears "allow it in the browser" rather than a timeout. */
+export const FIRST_USE_SIGN_IN_WAIT_MS = 45_000;
 
 function configDir(): string {
   const base = process.env.MROFFICE_MCP_CONFIG_DIR || join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "mroffice-mcp");
@@ -135,7 +144,7 @@ export class Account {
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
         token_endpoint_auth_method: "none",
-        software_id: "@mroffice/mcp",
+        software_id: "mroffice-mcp",
       }),
       signal: AbortSignal.timeout(15_000),
     });
@@ -267,6 +276,21 @@ export class Account {
       })().finally(() => (this.refreshing = null));
     }
     return (await this.refreshing).accessToken;
+  }
+
+  /** A valid access token; when this machine is not signed in yet, the
+   * sign-in starts by itself (the browser opens on MR Office's consent page)
+   * and the call waits up to `waitMs` for the person to allow it. */
+  async accessTokenOrSignIn(what: string, waitMs = FIRST_USE_SIGN_IN_WAIT_MS, force = false): Promise<string> {
+    const token = await this.accessToken(force).catch((error) => {
+      if (error instanceof NotSignedIn) return null;
+      throw error;
+    });
+    if (token) return token;
+    const { url, done } = await this.startLogin(true);
+    const signed = await Promise.race([done, new Promise<null>((resolve) => setTimeout(resolve, waitMs, null).unref?.())]).catch(() => null);
+    if (!signed) throw new NotSignedIn(what, url);
+    return signed.accessToken;
   }
 
   forget(): void {

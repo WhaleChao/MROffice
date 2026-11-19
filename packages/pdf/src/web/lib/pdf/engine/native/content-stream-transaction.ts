@@ -102,7 +102,9 @@ const PDF_NAME_TOKEN = /^[\x21-\x22\x24\x26\x27\x2a-\x2e\x30-\x3b\x3d\x3f-\x5a\x
 const MAX_REPLACEMENT_BYTES = 64 * 1024;
 // A replacement written as pieces names ranges of the span it replaces
 // instead of carrying those bytes again; its own bytes keep the bound above.
-const MAX_REPLACEMENT_PIECES = 64;
+// (A format written by state where a paragraph's text stands is a piece or
+// two for each run of its shows: a table's cells, a line set glyph by glyph.)
+const MAX_REPLACEMENT_PIECES = 8192;
 const MAX_DECODED_STREAM_BYTES = 64 * 1024 * 1024;
 /** A page's whole drawing, read as one scan. A cover illustration runs to
  * hundreds of thousands of operands (an annual report's front page is two

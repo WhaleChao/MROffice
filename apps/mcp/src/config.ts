@@ -39,10 +39,22 @@ export interface Config {
   readonly auth: "none" | "oauth";
   /** open_document may fetch from loopback and private addresses (local development only). */
   readonly allowPrivateUrls: boolean;
+  /** Documents nobody saved for this many days are removed (null: kept). */
+  readonly retentionDays: number | null;
+  /** On a server people sign in to: the most documents one account keeps
+   * (its oldest go first). */
+  readonly maxDocumentsPerPerson: number;
+  /** Pages the headless editor draws at once. */
+  readonly renderConcurrency: number;
 }
 
 function trimSlash(value: string): string {
   return value.replace(/\/+$/, "");
+}
+
+function positive(value: string | undefined): number | undefined {
+  const number = Number(value);
+  return value && Number.isFinite(number) && number > 0 ? number : undefined;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -81,5 +93,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxFileBytes: Number(env.MROFFICE_MCP_MAX_FILE_BYTES || 20 * 1024 * 1024),
     allowPrivateUrls: env.MROFFICE_MCP_ALLOW_PRIVATE_URLS === "1",
     auth,
+    retentionDays: positive(env.MROFFICE_MCP_RETENTION_DAYS) ?? null,
+    maxDocumentsPerPerson: positive(env.MROFFICE_MCP_MAX_DOCUMENTS_PER_PERSON) ?? 200,
+    renderConcurrency: positive(env.MROFFICE_MCP_RENDER_CONCURRENCY) ?? 2,
   };
 }

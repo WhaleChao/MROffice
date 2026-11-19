@@ -20,9 +20,20 @@ export function isFileTransferPath(path: string, method: string): boolean {
   return patterns.some((route) => route.methods.includes(method.toUpperCase()) && route.pattern.test(path));
 }
 
+/** The global mark of an embedded editor's frame (lib/auth-state
+ * EMBED_SIGNED_IN_GLOBAL), read without importing that module. */
+const EMBED_SESSION_GLOBAL = "__mroEmbedSessionSignedIn";
+
 export function getFileTransferOrigin(): string | null {
   const raw = process.env.NEXT_PUBLIC_FILE_TRANSFER_ORIGIN?.trim();
   if (!raw) return null;
+  // An embedded editor in a partner's page: the file host's gate wants this
+  // site's own gate and account cookies, which a page on another site never
+  // sends, and its credential is a header the file host's edge does not
+  // admit. Its transfers go to the API on the page's own origin, with that
+  // header (lib/embed/frame-auth), and the API hands it stored files as the
+  // provider's signed links (app/services/private_download_delivery.py).
+  if ((globalThis as Record<string, unknown>)[EMBED_SESSION_GLOBAL] === true) return null;
   const file = new URL(raw);
   // The file host is files.<canonical host>. A page on a configured alias
   // (cn.mr-note.com) pairs with that same canonical file host, so the

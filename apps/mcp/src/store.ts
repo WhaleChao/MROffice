@@ -8,7 +8,7 @@
 // new revision, by the model (a tool) or by the person (the editor).
 
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 export type Author = "model" | "person";
@@ -33,6 +33,10 @@ export interface DocumentMeta {
   readonly revisions: readonly Revision[];
   /** Losses the Office engine reported reading the original. */
   readonly importLosses?: readonly string[];
+  /** On a server many people sign in to: the MR Office account (the
+   * token's subject) the document belongs to. Only that account's sessions
+   * see it; a link's secret still opens it in a browser. */
+  readonly owner?: string;
 }
 
 export interface StoredDocument extends DocumentMeta {
@@ -66,7 +70,7 @@ export class DocumentStore {
     renameSync(`${path}.tmp`, path);
   }
 
-  create(input: { format: string; title: string; name: string; bytes: Uint8Array; by: Author; importLosses?: readonly string[] }): StoredDocument {
+  create(input: { format: string; title: string; name: string; bytes: Uint8Array; by: Author; importLosses?: readonly string[]; owner?: string }): StoredDocument {
     const id = newId();
     mkdirSync(this.folder(id), { recursive: true });
     const now = new Date().toISOString();
@@ -78,6 +82,7 @@ export class DocumentStore {
       createdAt: now,
       revisions: [],
       ...(input.importLosses?.length ? { importLosses: input.importLosses } : {}),
+      ...(input.owner ? { owner: input.owner } : {}),
     };
     this.writeMeta(meta);
     return this.save(id, { name: input.name, bytes: input.bytes, by: input.by });
@@ -118,9 +123,45 @@ export class DocumentStore {
 
   list(): DocumentMeta[] {
     return readdirSync(this.dir)
-      .filter((entry) => ID.test(entry) && existsSync(join(this.dir, entry, "meta.json")))
-      .map((entry) => this.meta(entry))
+      .filter((entry) => ID.test(entry))
+      .flatMap((entry) => {
+        try {
+          return [this.meta(entry)];
+        } catch {
+          // being removed (or not finished being created) meanwhile
+          return [];
+        }
+      })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  /** Removes a document and all its revisions. */
+  remove(id: string): void {
+    rmSync(this.folder(id), { recursive: true, force: true });
+  }
+
+  /** Removes the documents nobody saved for `maxAgeMs` (a hosted server's
+   * documents are working copies: the person exports what they keep).
+   * Returns how many went. */
+  prune(maxAgeMs: number, now = Date.now()): number {
+    let removed = 0;
+    for (const meta of this.list()) {
+      const last = Date.parse(meta.revisions.at(-1)?.at ?? meta.createdAt);
+      if (Number.isFinite(last) && now - last > maxAgeMs) {
+        this.remove(meta.id);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  /** Keeps at most `max` documents per account, removing the ones saved
+   * longest ago first. */
+  capOwner(owner: string, max: number): void {
+    const own = this.list()
+      .filter((meta) => meta.owner === owner)
+      .sort((a, b) => (b.revisions.at(-1)?.at ?? b.createdAt).localeCompare(a.revisions.at(-1)?.at ?? a.createdAt));
+    for (const meta of own.slice(max)) this.remove(meta.id);
   }
 
   /** The link secret matches (constant time). */

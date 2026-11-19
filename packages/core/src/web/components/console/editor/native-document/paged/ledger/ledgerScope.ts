@@ -33,7 +33,12 @@
  */
 import type { EditorView } from "@tiptap/pm/view";
 import { textEngineEnabled } from "../../../../../../lib/text-engine/flags";
-import { boundaryCut, existingSeamKey, type LedgerBuild, type LogicalBlock } from "./ledgerAtoms";
+import { boundaryCut, existingSeamKey, textTailNotesPx, type LedgerBuild, type LogicalBlock } from "./ledgerAtoms";
+
+/** `window.__docsSeamNotesUncharged = true` (ledgerAtoms.planTextHead): as before. */
+function seamNotesUnchargedSwitch(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsSeamNotesUncharged?: boolean }).__docsSeamNotesUncharged === true;
+}
 import type {
   LedgerCut,
   LedgerCutOptions,
@@ -195,7 +200,10 @@ export function resolvePassScope(
     const cut = boundaryCut(opening.block, opening.partIndex);
     if (cut) {
       block = opening.block;
-      from = cut;
+      // The page pays the notes its opening continuation holds, as a plan
+      // that made the cut charges them (planTextHead).
+      const notesPx = seamNotesUnchargedSwitch() ? 0 : textTailNotesPx(opening.block, opening.partIndex);
+      from = seamNotesUnchargedSwitch() ? cut : { ...cut, tailHeightPx: cut.tailHeightPx + notesPx, ...(opening.block.kind === "text" ? { tailNotesPx: notesPx } : {}) };
       break;
     }
     let earlier = opening.block.parts[0].sheet;

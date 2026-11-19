@@ -3,6 +3,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import OFFICE_APPLICATION_STANDARD_FONT_TABLE from "./office-application-standard-font.json";
 import OFFICE_DIGIT_ADVANCES from "@mrnote/core/web/lib/spreadsheet/office-digit-advances.json";
 import OFFICE_DIGIT_WHOLE_EM from "@mrnote/core/web/lib/spreadsheet/office-digit-whole-em.json";
 import OFFICE_PRINT_METRICS from "./office-print-metrics.json";
@@ -193,6 +194,56 @@ export function officePrintScale(
     x: printedDigit / (DOTS_PER_SCREEN_PIXEL * screenDigit),
     y: printedRow / (DOTS_PER_SCREEN_PIXEL * screenRow),
   };
+}
+
+/**
+ * The application's standard font (office-application-standard-font.json, the
+ * API's office_application_standard_font): 宋体 11 as the zh-CN Windows Excel
+ * the prints are measured on has it; an en-US Excel's is unproven. The one
+ * place that names it.
+ */
+export const OFFICE_APPLICATION_STANDARD_FONT: { readonly family: string; readonly sizePt: number } = Object.freeze({
+  family: OFFICE_APPLICATION_STANDARD_FONT_TABLE.family,
+  sizePt: OFFICE_APPLICATION_STANDARD_FONT_TABLE.sizePt,
+});
+
+/**
+ * The printer's scale of a grid laid out in the application's standard font,
+ * in place of officePrintScale of the workbook's Normal font: 宋体 11's
+ * 46 / (6.25 x 8) and 113 / (6.25 x 18). The screen grid keeps the workbook's
+ * own pixels; only the print takes this scale. The API's
+ * office_application_standard_print_scale.
+ */
+export function officeApplicationStandardPrintScale(): OfficePrintScale {
+  return officePrintScale(OFFICE_APPLICATION_STANDARD_FONT);
+}
+
+/** The printSettings fields only a worksheet's own <pageSetup> element gives
+ * (the API's _PAGE_SETUP_PRINT_FIELDS). */
+const PAGE_SETUP_PRINT_FIELDS = ["orientation", "paperSize", "paperSizeNativeId", "printerResolution", "printerSettingsPart",
+  "pageOrder", "blackAndWhite", "draft", "printCellComments", "printErrorsAs", "firstPageNumber", "copies", "scaling"] as const;
+
+/**
+ * Whether Windows Excel's File > Print lays `sheet`'s grid out in the
+ * application's standard font's metrics (officeApplicationStandardPrintScale)
+ * instead of the workbook's Normal font's: a worksheet that states no
+ * <pageSetup>, in a workbook that holds a chart sheet, hidden or not (lookwin
+ * p192-lw; R452-X03's first sheet, 3 column bands where the Normal font's
+ * scale gave 4). A worksheet with any <pageSetup> prints as ever, and so does
+ * every worksheet of a workbook whose charts all stand on worksheets. The
+ * API's office_prints_in_application_standard_font with print_route.
+ */
+export function officePrintsInApplicationStandardFont(
+  sheet: { readonly chartSheet?: unknown; readonly printSettings?: unknown } | undefined,
+  sheets: readonly { readonly chartSheet?: unknown }[] | undefined,
+): boolean {
+  if (!sheet || sheet.chartSheet === true || !sheets) return false;
+  const settings = sheet.printSettings;
+  if (settings && typeof settings === "object") {
+    const stated = settings as Readonly<Record<string, unknown>>;
+    if (PAGE_SETUP_PRINT_FIELDS.some((field) => stated[field] !== undefined && stated[field] !== null)) return false;
+  }
+  return sheets.some((other) => other.chartSheet === true);
 }
 
 /**

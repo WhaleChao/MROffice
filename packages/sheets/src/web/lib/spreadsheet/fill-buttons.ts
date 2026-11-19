@@ -68,6 +68,7 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
 import { MAX_GRID_COLUMNS, MAX_GRID_ROWS } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import { computeEdgeFill, type EdgeFillDirection } from "./grid-ops";
+import { sheetWithLinksFilled } from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 import { normalizeMerges, rangeHasMerge, type MergeSpan } from "@mrnote/core/web/lib/spreadsheet/merge-cells.ts";
 import {
   clipboardScalarFromValue,
@@ -624,9 +625,44 @@ export function autoFilledSheet<
     if (whatIfTablesLeft.length > 0) filledSheet.whatIfTables = whatIfTablesLeft;
     else delete filledSheet.whatIfTables;
   }
+  // Where the sheet holds links over large areas, the filled cells' links
+  // are the fill's own matter (hyperlink-areas, CRITERIA XC-199). Fill
+  // Formatting Only and Fill Without Formatting carry no link.
+  const sourceRows = src.r2 - src.r1 + 1;
+  const sourceCols = src.c2 - src.c1 + 1;
+  const linkedSheet =
+    mode === "formats" || mode === "values"
+      ? filledSheet
+      : sheetWithLinksFilled(
+          sheet,
+          filledSheet,
+          vertical
+            ? {
+                r1: extent > 0 ? src.r2 + 1 : src.r1 + extent,
+                r2: extent > 0 ? src.r2 + extent : src.r1 - 1,
+                c1: src.c1,
+                c2: src.c2,
+              }
+            : {
+                r1: src.r1,
+                r2: src.r2,
+                c1: extent > 0 ? src.c2 + 1 : src.c1 + extent,
+                c2: extent > 0 ? src.c2 + extent : src.c1 - 1,
+              },
+          (row, col) =>
+            vertical
+              ? {
+                  row: extent > 0 ? src.r1 + ((row - src.r2 - 1) % sourceRows) : src.r2 - ((src.r1 - 1 - row) % sourceRows),
+                  col,
+                }
+              : {
+                  row,
+                  col: extent > 0 ? src.c1 + ((col - src.c2 - 1) % sourceCols) : src.c2 - ((src.c1 - 1 - col) % sourceCols),
+                },
+        );
   return {
     ok: true,
-    sheet: filledSheet,
+    sheet: linkedSheet,
     choice:
       mode === "toggle"
         ? copies ? "series" : "copy"
@@ -739,7 +775,7 @@ export function edgeFillRequest(
     // put the heading in B5 and B6, which never show and did not save).
     // A merged cell the fill's range cuts refuses it, as Excel does
     // (`refuseMergesCutIn`, R423-X56 WALK1).
-    options: { fillContentAndFormats: true, refuseValuesUnderMerges: true, refuseMergesCutIn: { ...sel } },
+    options: { fillContentAndFormats: true, fillLinksFrom: direction, refuseValuesUnderMerges: true, refuseMergesCutIn: { ...sel } },
   };
 }
 

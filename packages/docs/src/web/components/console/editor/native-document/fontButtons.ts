@@ -8,6 +8,7 @@ import type { EditorState, Transaction } from "@tiptap/pm/state";
 import {
   DOUBLE_STRIKE_MARK,
   normalizeFontFamily,
+  normalizeTextColor,
 } from "@mrnote/core/web/components/console/editor/extensions/TextStyling.ts";
 import {
   OPEN_TYPE_FEATURES_MARK,
@@ -227,8 +228,15 @@ export function setDocumentDefaultFont(
     changed = true;
   }
   if (defaults.color !== undefined) {
-    tr.setDocAttribute("defaultTextColor", defaults.color);
-    changed = true;
+    // Stored as the canonical lowercase #rrggbb every colour is, which the
+    // document's export gate holds it to: a command given "#00B050" stored
+    // it as given, and every full export of the page was refused (corpus
+    // R483-D99 WALK1, invalid_native_value).
+    const color = defaults.color === null ? null : normalizeTextColor(defaults.color);
+    if (defaults.color === null || color !== null) {
+      tr.setDocAttribute("defaultTextColor", color);
+      changed = true;
+    }
   }
   return changed;
 }

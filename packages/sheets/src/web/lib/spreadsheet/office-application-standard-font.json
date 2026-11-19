@@ -1,0 +1,5 @@
+{
+ "_source": "The application's standard font, as Windows Excel 16.0.20527 (zh-CN) has it: 宋体 11 (Excel Options > General > 'Use this as the default font'; Application.StandardFont / StandardFontSize). Windows Excel lays a worksheet's printed grid out in this font's printer metrics, not the workbook's Normal font's, where the worksheet states no <pageSetup> and the workbook holds a chart sheet (lookwin probe p192-lw, 2026-11-19, 25 workbooks: every column 46/8 printer dots a screen pixel and every row floor(px x 113/18 + 1/8) dots, whatever the Normal font -- Calibri 11/14, Arial 10, Times New Roman 12, Verdana 10, 等线 11 -- and point for point what a 宋体 11 workbook prints without a chart sheet). Measured on a zh-CN Excel only: an en-US Excel's standard font is most likely Calibri 11 (unproven, no second machine); a product that follows another region's Excel changes this one table. The font's own printed row and digit are office_print_metrics.json's. Read by office-print-metrics.ts (the API keeps an identical copy, office_application_standard_font.json).",
+ "family": "宋体",
+ "sizePt": 11
+}

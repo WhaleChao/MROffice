@@ -7,6 +7,7 @@
  */
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useRef,
@@ -14,13 +15,25 @@ import {
 } from "react";
 import PdfNativeListTextEditDialog, {
   type PdfNativeListTextEditDialogProps,
+  type QueuedNativeTextRibbonAction,
 } from "./PdfNativeListTextEditDialog";
 import { markPdfTextLatency } from "../../../../lib/pdf/text-edit-latency";
 
 type Opening = Pick<
   PdfNativeListTextEditDialogProps,
   "originalText" | "initialLayout" | "initialCaretOffset" | "initialDraftText"
-> & { sessionKey: string };
+> & {
+  sessionKey: string;
+  /** The session key of the opening this one takes over: an opening refused
+   * a moment ago (a paragraph refused whole) of which this one is a part (the
+   * run under the press). The presses held for that opening are held for
+   * this one, and answered by its proof. */
+  continues?: string;
+};
+
+/** How long an editor named as taken over holds its presses for the editor
+ * that takes it over to open; left standing that long, it answers them. */
+const TAKEOVER_PATIENCE_MS = 5_000;
 
 export interface PdfNativeTextEditSessionHandle {
   begin: (opening: Opening) => void;
@@ -50,10 +63,36 @@ const PdfNativeTextEditSessionHost = forwardRef<
   const openingRef = useRef<(Opening & { scopeKey: string; failure?: string }) | null>(null);
   const liveScopeRef = useRef({ scopeKey, open: props.open });
   useLayoutEffect(() => { liveScopeRef.current = { scopeKey, open: props.open }; }, [scopeKey, props.open]);
+  // The presses held for a refused opening that the opening begun over it
+  // takes (Opening.continues): named by `takeover` as that opening begins,
+  // left here by the refused editor as it closes, taken by the new one as it
+  // opens. The refused editor is whichever is shown: the provisional one, or
+  // -- a moment after its first paint, and so for all but the first frames
+  // of a proof that takes seconds -- the window's own editor that adopted it
+  // (`open`, under the window's `sessionKey`). The takeover was read off the
+  // provisional opening alone, which the adoption had long cleared: the
+  // presses of every refused paragraph were answered by the refusal after
+  
+  const [takeover, setTakeover] = useState<{ from: string; to: string } | null>(null);
+  const takeoverRef = useRef<{ from: string; to: string } | null>(null);
+  const heldPressesRef = useRef<{ to: string; actions: readonly QueuedNativeTextRibbonAction[] } | null>(null);
+  const editorKeyRef = useRef<string | null>(null);
+  const nameTakeover = (next: { from: string; to: string } | null) => { takeoverRef.current = next; setTakeover(next); };
+  useEffect(() => {
+    if (!takeover) return;
+    const timer = window.setTimeout(() => { if (takeoverRef.current === takeover) nameTakeover(null); }, TAKEOVER_PATIENCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [takeover]);
   useImperativeHandle(
     ref,
     () => ({
-      begin: (next) => { const value = { ...next, scopeKey }; openingRef.current = value; setOpening(value); },
+      begin: (next) => {
+        const shown = editorKeyRef.current;
+        nameTakeover(next.continues !== undefined && shown === next.continues && shown !== next.sessionKey
+          ? { from: shown, to: next.sessionKey } : null);
+        heldPressesRef.current = null;
+        const value = { ...next, scopeKey }; openingRef.current = value; setOpening(value);
+      },
       fail: (message) => {
         const current = openingRef.current;
         if (!current) return;
@@ -72,6 +111,9 @@ const PdfNativeTextEditSessionHost = forwardRef<
 
   const provisional =
     !props.open && opening?.scopeKey === scopeKey ? opening : null;
+  /** The key of the editor shown: the provisional opening's, or the window's own. */
+  const editorKey = provisional?.sessionKey ?? sessionKey;
+  useLayoutEffect(() => { editorKeyRef.current = props.open || provisional ? editorKey : null; });
   // (Development: an editor given another key while open is a new editor --
   // its caret and keys start again -- and says which key moved.)
   const shownKeyRef = useRef<string | null>(null);
@@ -108,6 +150,20 @@ const PdfNativeTextEditSessionHost = forwardRef<
             onApply: rejectUnpreparedWrite,
           }
         : {})}
+      heldRibbonActionsTakenOver={takeover !== null && takeover.from === editorKey}
+      onHeldRibbonActionsLeft={(actions: readonly QueuedNativeTextRibbonAction[]) => {
+        const named = takeoverRef.current;
+        if (!named || named.from !== editorKey) return false;
+        heldPressesRef.current = { to: named.to, actions };
+        return true;
+      }}
+      takeHeldRibbonActions={() => {
+        const held = heldPressesRef.current;
+        if (!held || held.to !== editorKey) return null;
+        heldPressesRef.current = null;
+        nameTakeover(null);
+        return held.actions;
+      }}
       key={provisional?.sessionKey ?? sessionKey}
     />
   );

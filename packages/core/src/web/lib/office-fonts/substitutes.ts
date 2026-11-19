@@ -18,6 +18,7 @@
 // mapping (the faces and their descriptors), to a guest's.
 import generated from "./substitutes.generated.json";
 import cjkLatinFaces from "./cjk-latin-faces.json";
+import { excelCutFamilyOf, excelCutRangeIsEastAsian, isExcelCutFamily } from "./excel-cut-families";
 import { HANGUL_EM_PREFIX, hangulEmFamilyOf, stackPrimaryFamily } from "./hangul-em";
 import powerPointTable from "./powerpoint-substitutes.json";
 import { notedFontFaces, noteFamilyRegistration, noteFontFaceSource, type DeclaredFontFace } from "../font-face-declarations";
@@ -710,10 +711,27 @@ function nearestSlices(registry: Registry, substitute: string, weight: number, i
 }
 
 /**
+ * Whether a style-named family ("Poppins SemiBold", "Roboto Condensed
+ * Light") is drawn bold by emboldening its regular. Named for a
+ * weight other than regular or bold, it is a family of its own whose one
+ * style is that weight (its regular, and an italic): Windows lists every such
+ * family it has with no bold face beside it (windows-family-styles.json: 163
+ * of 163 on the truth machine), and Office emboldens the regular, at the
+ * regular's advances (PowerPoint's PDF: "Poppins SemiBold,Bold").
+ */
+export function styledFamilyEmboldensRegular(styled: Pick<StyledFamily, "weight">): boolean {
+  // Heavier than bold (ExtraBold, Black, Heavy: 800 and up), Windows draws the face as it is: no bold run of one in
+  // its PDFs is emboldened (Lato Black, Poppins ExtraBold, Roboto Black ...), and its bold stays the heavy cut.
+  return styled.weight !== 400 && styled.weight !== 700 && styled.weight < 800;
+}
+
+/**
  * A style-named family ("Poppins Medium") as a family of its own: its regular
- * drawn by the base family's face at the named weight, its bold by the next
- * heavier one -- what the producer's own font file of that name holds. The
- * real face is tried first through local().
+ * drawn by the base family's face at the named weight. Its bold is that
+ * regular emboldened where the family has no bold face
+ * (styledFamilyEmboldensRegular: no bold face is declared, and the browser
+ * synthesizes it), else the next heavier cut. The real face is tried first
+ * through local().
  */
 function registerStyledAlias(doc: Document, registry: Registry, family: string, base: string, styled: StyledFamily) {
   const local = `local("${family.replace(/["\\]/g, "\\$&")}")`;
@@ -722,7 +740,8 @@ function registerStyledAlias(doc: Document, registry: Registry, family: string, 
   const substitute = registry.families[base]?.[0]?.substitute ?? (registry.substitutes[base] ? base : undefined);
   if (!substitute) return;
   registerSubstitute(doc, registry, substitute);
-  for (const [aliasWeight, weight] of [[400, styled.weight], [700, heavier]] as const) {
+  const styles = styledFamilyEmboldensRegular(styled) ? [[400, styled.weight]] as const : [[400, styled.weight], [700, heavier]] as const;
+  for (const [aliasWeight, weight] of styles) {
     for (const [sliceWeight, , out, range] of nearestSlices(registry, substitute, weight, styled.italic)) {
       addFace(doc, family, aliasWeight, styled.italic ? 1 : 0, [local, `url(${PUBLIC_PREFIX}${out}) format("woff2")`], range === null ? undefined : registry.ranges[range], undefined, undefined, sliceWeight);
     }
@@ -786,6 +805,62 @@ export function ensureOfficeAliasFamily(
 }
 
 /**
+ * `alias`: the faces the document's own stylesheets declare for `families`
+ * (in that order: a later family's face is tried first where both hold a
+ * character, as CSS tries a family's faces), each declared again for the part
+ * of its unicode-range inside `ranges` alone -- a family that draws those
+ * characters and lets every other fall through to the stack's next face.
+ * Registered once per document, when the rules are there to read (a sheet
+ * not yet loaded is read on the next call).
+ */
+export function ensureOfficeRangedAliasFamily(
+  alias: string,
+  families: readonly string[],
+  ranges: readonly (readonly [number, number])[],
+  doc: Document | undefined = typeof document === "undefined" ? undefined : document,
+): void {
+  if (!doc?.fonts || typeof FontFace === "undefined") return;
+  let done = aliasFamilies.get(doc);
+  if (!done) aliasFamilies.set(doc, (done = new Set()));
+  if (done.has(alias)) return;
+  const wanted = families.map(normalize);
+  const rules: { family: number; weight: number; italic: 0 | 1; src: string; range: string }[] = [];
+  for (const sheet of Array.from(doc.styleSheets)) {
+    let list: CSSRuleList;
+    try {
+      list = sheet.cssRules;
+    } catch {
+      continue; // another origin's sheet
+    }
+    for (const rule of Array.from(list)) {
+      if (!(typeof CSSFontFaceRule !== "undefined" && rule instanceof CSSFontFaceRule)) continue;
+      const family = wanted.indexOf(normalize(rule.style.getPropertyValue("font-family")));
+      const src = rule.style.getPropertyValue("src");
+      if (family < 0 || !src) continue;
+      const own = parseUnicodeRange(rule.style.getPropertyValue("unicode-range")) ?? [[0, 0x10ffff]];
+      const kept: string[] = [];
+      for (const [a, b] of own) {
+        for (const [c, d] of ranges) {
+          const lo = Math.max(a, c), hi = Math.min(b, d);
+          if (lo <= hi) kept.push(lo === hi ? `U+${lo.toString(16).toUpperCase()}` : `U+${lo.toString(16).toUpperCase()}-${hi.toString(16).toUpperCase()}`);
+        }
+      }
+      if (!kept.length) continue;
+      const weight = rule.style.getPropertyValue("font-weight").trim() === "bold" ? 700 : Number.parseInt(rule.style.getPropertyValue("font-weight"), 10) || 400;
+      const italic = /italic|oblique/.test(rule.style.getPropertyValue("font-style")) ? 1 : 0;
+      rules.push({ family, weight, italic, src, range: kept.join(", ") });
+    }
+  }
+  if (!rules.length) return;
+  done.add(alias);
+  const settle = noteFamilyRegistration(alias);
+  for (const rule of rules.sort((x, y) => x.family - y.family)) {
+    addFace(doc, alias, rule.weight, rule.italic, [rule.src], rule.range);
+  }
+  afterFacesDeclared(settle);
+}
+
+/**
  * One script's letters in a served face at a size of its own: `alias` is the
  * slices of `face` that hold `letter`, declared for `range` alone and set at
  * `sizeAdjust` (regular and bold, as the face serves them). A family placed
@@ -827,6 +902,76 @@ export function ensureOfficeScaledScriptFamily(
       done.delete(alias);
       registrationGeneration += 1;
     });
+}
+
+/**
+ * A sheet's cut family for `face` (excel-cut-families.ts): the faces the
+ * registry declares for `face` -- the same local() names first, the same line
+ * overrides, the same slices' ranges -- declared again under the family's own
+ * name at the weight Windows Excel's ink weighs (the slices are variable:
+ * one holding East Asian characters is set to the `cjk` weight, any other
+ * to the `latin`), and the face's recut Latin clone over them. A face Windows has no bold of gets no bold
+ * face: its bold is its regular emboldened, as Excel prints it. Nothing of
+ * `face`'s own family changes. Until the registry has answered and the faces
+ * are in the document the text engine waits for the family
+ * (`noteFamilyRegistration`), as it does for `face`; a registry that cannot
+ * be had leaves the family undeclared, and the stack's next family -- `face`
+ * -- draws, as before.
+ */
+export function ensureExcelCutFamily(
+  face: string | null | undefined,
+  doc: Document | undefined = typeof document === "undefined" ? undefined : document,
+): void {
+  const cut = excelCutFamilyOf(face);
+  if (!cut || !doc?.fonts || typeof FontFace === "undefined") return;
+  let done = aliasFamilies.get(doc);
+  if (!done) aliasFamilies.set(doc, (done = new Set()));
+  const aliasKey = normalize(cut.alias);
+  if (done.has(aliasKey)) return;
+  done.add(aliasKey);
+  const key = normalize(cut.face);
+  const again = () => {
+    done.delete(aliasKey);
+    registrationGeneration += 1;
+  };
+  const settle = noteFamilyRegistration(cut.alias);
+  void trackRegistration(loadOfficeDataParts("font-registry", [key])
+    .then((served) => {
+      const registry = served as Registry | undefined;
+      const name = registry ? registryIndexOf(registry).get(key) : undefined;
+      const families = registry && name ? registry.families[name] : undefined;
+      if (!registry || !families?.length) {
+        // Not answered yet (no connection, refused): a later call asks again.
+        if (!registry || (officeDataObtainable("font-registry") && !officeDataPartKnown("font-registry", key))) again();
+        return;
+      }
+      const clones = new Set<string>();
+      for (const { substitute, faces } of families) {
+        const slices = registry.substitutes[substitute] ?? [];
+        for (const [weight, italic, subWeight, subItalic, locals, overrides, sizeAdjust] of faces) {
+          const style = weight >= 600 ? cut.bold : cut.regular;
+          // A stand-in scaled to Word's widths is declared apart from its
+          // local() face (ensureOfficeFontFaces); no measured face is one.
+          if (!style || sizeAdjust) continue;
+          const localSources = locals.map((local) => `local("${local.replace(/["\\]/g, "\\$&")}")`);
+          for (const [sliceWeight, sliceItalic, out, range] of slices) {
+            if (sliceWeight !== subWeight || sliceItalic !== subItalic) continue;
+            const sliceRange = range === null ? undefined : registry.ranges[range];
+            const drawn = excelCutRangeIsEastAsian(parseUnicodeRange(sliceRange)) ? style.cjk : style.latin;
+            addFace(doc, cut.alias, weight, italic, [...localSources, `url(${PUBLIC_PREFIX}${out}) format("woff2")`], sliceRange, undefined, overrides ?? undefined, drawn);
+          }
+          // The face's Latin at the Office face's advances, after the slices
+          // it overrides for those characters.
+          const file = cut.latin[weight >= 600 ? "700" : "400"];
+          const id = `${weight}/${italic}`;
+          if (!file || clones.has(id)) continue;
+          clones.add(id);
+          addFace(doc, cut.alias, weight, italic, [...localSources, `url(${CJK_LATIN_PREFIX}${file}) format("woff2")`], cut.latinRange ?? CJK_LATIN_RANGE, undefined, overrides ?? undefined);
+        }
+      }
+    })
+    .catch(again)
+    .finally(() => afterFacesDeclared(settle)), `registry ${cut.alias}`);
 }
 
 /** By family (normalized): the regular face's Word line (ascent + descent +
@@ -923,7 +1068,8 @@ export function ensureOfficeFontFaces(
 ): void {
   if (!family || !doc?.fonts || typeof FontFace === "undefined") return;
   const key = normalize(family);
-  if (!key) return;
+  // A sheet's cut family is declared with its face (ensureExcelCutFamily), not asked of the registry.
+  if (!key || isExcelCutFamily(key)) return;
   let names = registeredNames.get(doc);
   if (!names) registeredNames.set(doc, (names = new Set()));
   if (names.has(key)) return;

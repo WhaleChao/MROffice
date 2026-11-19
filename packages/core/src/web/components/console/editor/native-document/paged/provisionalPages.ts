@@ -22,9 +22,17 @@
  */
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { estimatedPageSizes } from "./provisionalEstimate";
+import { coldFirstLayout } from "./coldFirstLayout";
 
 /** Below this many top-level blocks a document opens as one sheet. */
 export const PROVISIONAL_PAGES_MIN_BLOCKS = 160;
+
+/** The fewest blocks a document opens on provisional sheets with: any
+ * document of more than a page under the cold first layout (coldFirstLayout),
+ * a long one otherwise. */
+export function provisionalPagesMinBlocks(): number {
+  return coldFirstLayout()?.minBlocks ?? PROVISIONAL_PAGES_MIN_BLOCKS;
+}
 /** Estimated lines a provisional sheet holds: under a typical page's 40-46,
  * so a sheet rarely holds more than one page (each sheet is laid out only
  * when the background reaches it or the reader scrolls to it). */
@@ -82,7 +90,7 @@ function endsPage(node: WeighableNode): boolean {
  * short enough to open as one sheet.
  */
 export function provisionalPageSizes(blocks: readonly WeighableNode[]): number[] | null {
-  if (blocks.length < PROVISIONAL_PAGES_MIN_BLOCKS) return null;
+  if (blocks.length < provisionalPagesMinBlocks()) return null;
   const sizes = lineCountSizes(blocks);
   return sizes && sizes.length > 1 ? sizes : null;
 }
@@ -196,7 +204,7 @@ function headEstimated(estimated: readonly number[], lineCount: (from: number) =
 
 /** Provisional sheet sizes of a flat stored (JSON) block list. */
 export function provisionalPageSizesForJson(blocks: readonly unknown[], attrs?: Record<string, unknown> | null): number[] | null {
-  if (blocks.length < PROVISIONAL_PAGES_MIN_BLOCKS) return null;
+  if (blocks.length < provisionalPagesMinBlocks()) return null;
   const chosen = estimateChosen();
   const weighed = () => blocks.map((block) => fromJson((block ?? {}) as JsonLike));
   if (chosen !== "none") {
@@ -213,7 +221,7 @@ export function provisionalPageSizesForJson(blocks: readonly unknown[], attrs?: 
 
 /** Provisional sheet sizes of a flat ProseMirror block list. */
 export function provisionalPageSizesForNodes(blocks: readonly PmNode[], attrs?: Record<string, unknown> | null): number[] | null {
-  if (blocks.length < PROVISIONAL_PAGES_MIN_BLOCKS) return null;
+  if (blocks.length < provisionalPagesMinBlocks()) return null;
   const chosen = estimateChosen();
   if (chosen !== "none") {
     const estimated = estimatedPageSizes(blocks.map((block) => block.toJSON() as Parameters<typeof estimatedPageSizes>[0][number]), attrs);

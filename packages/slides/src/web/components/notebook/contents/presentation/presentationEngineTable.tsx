@@ -62,7 +62,7 @@ import { logicalCellPositions, tableLogicalWidth } from "@mrnote/core/web/lib/pr
 import { asRecord } from "@mrnote/core/web/lib/presentation/deck-model.ts";
 import { isImportedPptxBlock } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import type { TextRun } from "@mrnote/core/web/lib/presentation-point-runs.ts";
-import { PRESENTATION_TEXT_ENGINE_ATTRIBUTE, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
+import { ENGINE_SVG_STYLE, PRESENTATION_TEXT_ENGINE_ATTRIBUTE, PresentationTextEngineSurfaceContext } from "./PresentationEngineTextBody";
 
 const PT_PER_PX = 0.75;
 const EMU_PER_PX = 9_525;
@@ -497,7 +497,7 @@ export function PresentationEngineTableCellText({ cell }: { cell: EngineTableCel
       // (P2-cell: Arial 10 pt in a 40 pt row 14 pt down, not 14.06 by its descent).
       style={{ position: "relative", width: "100%", height: Math.round(cellLinesBottomPt(layout) * PX_PER_PT * 1000) / 1000 }}
     >
-      <svg style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", overflow: "visible" }}>{nodes}</svg>
+      <svg style={ENGINE_SVG_STYLE}>{nodes}</svg>
     </div>
   );
 }
@@ -585,7 +585,7 @@ function PresentationEngineVerticalCellText({
         height: Math.round(vertical.lengthPt * PX_PER_PT * 1000) / 1000,
       }}
     >
-      <svg style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", overflow: "visible" }}>{nodes}</svg>
+      <svg style={ENGINE_SVG_STYLE}>{nodes}</svg>
     </div>
   );
 }

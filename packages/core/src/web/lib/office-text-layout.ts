@@ -289,6 +289,10 @@ export interface OfficeTextLine {
   markerScale?: number;
   /** `a:buSzPts` in points, when stated (an ABSOLUTE size, not a multiple). */
   markerSizePt?: number;
+  /** `a:buFont@typeface`, when the marker is the package's own character
+   * (`a:buChar`) and names the face it is drawn in: a symbol face's code
+   * means nothing without it. Hosts that draw the marker as given ignore it. */
+  markerTypeface?: string;
   /** The paragraph's line spacing multiple, when stated (single otherwise). */
   lineSpacing?: number;
   /** The paragraph's Line Spacing > Exactly, in points, when stated. */
@@ -368,6 +372,9 @@ export function officeTextLayoutLines(
         line.markerScale = row.nativeBullet.sizePct / 100_000;
       } else if (row.nativeBullet.sizePts !== undefined) {
         line.markerSizePt = row.nativeBullet.sizePts / 100;
+      }
+      if (row.bullet === "bullet" && row.nativeBullet.char !== undefined && row.nativeBullet.typeface !== undefined) {
+        line.markerTypeface = row.nativeBullet.typeface;
       }
     }
     return line;

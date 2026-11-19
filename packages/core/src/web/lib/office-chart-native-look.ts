@@ -186,6 +186,15 @@ export interface ChartNativeLook {
    * Windows PowerPoint draws them (`source.windowsBarDepth`): Depth % of
    * base taken along the categories, which run up a bar chart. Display only. */
   windowsBarDepth?: boolean;
+  /** A deck's chart whose plot area placed by hand gives way as Windows
+   * PowerPoint gives it way (`source.windowsInnerPlot`, `OFFICE_WINDOWS_INNER_PLOT`):
+   * kept while the axes' labels and names fit, moved only as far as they
+   * need, its right edge kept. Display only. */
+  windowsInnerPlot?: boolean;
+  /** A deck's chart whose hidden value axis gives a placed plot no room, and
+   * whose High labels take theirs on the far side, as Windows PowerPoint lays
+   * it out (`source.windowsHiddenAxisRoom`, `OFFICE_WINDOWS_AXIS_ROOM`). Display only. */
+  windowsHiddenAxisRoom?: boolean;
   /** The text insets (pt) the chart's data labels' box states
    * (`c:dLbls/c:txPr/a:bodyPr`, the import's `source.dataLabelInsets`,
    * reading row 821); absent is DrawingML's 7.2 / 3.6pt. Display only. */
@@ -539,6 +548,8 @@ export function normalizeChartNativeLook(raw: unknown): ChartNativeLook | undefi
   if (raw.windowsLegendSlots === true) result.windowsLegendSlots = true;
   if (raw.windowsPlotGeometry === true) result.windowsPlotGeometry = true;
   if (raw.windowsBarDepth === true) result.windowsBarDepth = true;
+  if (raw.windowsInnerPlot === true) result.windowsInnerPlot = true;
+  if (raw.windowsHiddenAxisRoom === true) result.windowsHiddenAxisRoom = true;
   const insets = chartLabelInsets(raw.dataLabelInsets);
   if (insets) result.dataLabelInsets = insets;
   const builtInStyle = normalizeChartNativeLookBuiltInStyle(raw.builtInStyle);

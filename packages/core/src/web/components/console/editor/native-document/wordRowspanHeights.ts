@@ -242,7 +242,14 @@ function keptText(state: RowspanState, except: ReadonlySet<HTMLTableElement>): s
  * Runs where the page ledger projects Word's table widths, before rows are
  * measured.
  */
-export function projectWordRowspanHeights(view: EditorView): HTMLTableElement[] {
+export function projectWordRowspanHeights(
+  view: EditorView,
+  /** The last sheet the page ledger measures this pass (the cold first
+   * layout's progressive passes): a table with no fragment up to it keeps
+   * what it was given and is measured by the pass that reaches it, as its
+   * widths are (projectWordAutofitTables). Null: every table. */
+  measureThroughSheet: number | null = null,
+): HTMLTableElement[] {
   const win = view.dom.ownerDocument.defaultView;
   if (!win || view.isDestroyed) return [];
   const state = stateOf(view);
@@ -259,6 +266,7 @@ export function projectWordRowspanHeights(view: EditorView): HTMLTableElement[] 
   s.passes += 1;
   const fonts = loadedFontsKey(view.dom.ownerDocument);
   const live = new Set<HTMLTableElement>();
+  const waiting = new Set<HTMLTableElement>();
   const targets: Target[] = [];
   for (const cell of Array.from(view.dom.querySelectorAll<HTMLTableCellElement>("td[rowspan], th[rowspan]"))) {
     if (cell.rowSpan <= 1) continue;
@@ -276,8 +284,28 @@ export function projectWordRowspanHeights(view: EditorView): HTMLTableElement[] 
       parent = parent.parentElement?.closest("table") ?? null;
     }
   }
+  // (Under a horizon a table none of whose fragments the pass measures
+  // waits: its merged rows are stated when a pass reaches its page.)
+  if (measureThroughSheet !== null && Number.isFinite(measureThroughSheet)) {
+    const sheetIndex = new Map<Element, number>();
+    let at = 0;
+    for (const child of Array.from(view.dom.children)) {
+      if (child.matches("article[data-page-sheet]")) sheetIndex.set(child, at++);
+    }
+    const reached = (table: HTMLTableElement) => {
+      const index = sheetIndex.get(table.closest("article[data-page-sheet]") as Element);
+      return index === undefined || index <= measureThroughSheet;
+    };
+    for (const table of Array.from(live)) {
+      if (reached(table)) continue;
+      live.delete(table);
+      // What it was given stands meanwhile.
+      if (state.kept.has(table)) waiting.add(table);
+    }
+  }
   let changed = false;
   for (const [table, kept] of Array.from(state.kept)) {
+    if (waiting.has(table)) continue;
     if (!live.has(table) || outer.has(table) || !table.isConnected) {
       state.kept.delete(table);
       if (kept.rules.length && table.isConnected) restated.add(table);

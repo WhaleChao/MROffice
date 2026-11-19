@@ -20,7 +20,28 @@ export function subscribeCookieChanges(onChange: () => void): () => void {
     window.removeEventListener(CLIENT_COOKIE_CHANGED_EVENT, onChange);
 }
 
+/**
+ * The embedded editor (lib/embed/frame-auth): the cookies the site's code
+ * reads that a partner's page cannot hold -- the workspace the frame works
+ * in, the session's page-cache principal -- given by the frame's session and
+ * kept in this frame's memory only. Empty everywhere else.
+ */
+const COOKIE_OVERRIDES_GLOBAL = "__mroEmbedCookieOverrides";
+// On globalThis: every copy of this module (one per chunk that bundles it)
+// reads the same overrides.
+const cookieOverrides: Map<string, string> = ((globalThis as Record<string, unknown>)[COOKIE_OVERRIDES_GLOBAL] as
+  | Map<string, string>
+  | undefined) ?? new Map<string, string>();
+(globalThis as Record<string, unknown>)[COOKIE_OVERRIDES_GLOBAL] = cookieOverrides;
+
+export function setCookieOverride(name: string, value: string): void {
+  cookieOverrides.set(name, value);
+  emitCookieChange();
+}
+
 export function readCookie(name: string): string | null {
+  const override = cookieOverrides.get(name);
+  if (override !== undefined) return override;
   if (typeof document === "undefined") return null;
   const match = document.cookie
     .split(";")

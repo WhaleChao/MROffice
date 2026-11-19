@@ -2272,7 +2272,120 @@ function renderNumberFormat(
     return renderFractionSection(Math.abs(value), sec, autoMinus);
   }
 
+  // A section that only states a colour or a condition is General, and one
+  // that says General among its literals writes the value there (Windows
+  // Excel, xlsx-rounds probe n39-emptysection pf1: 5 under [Red] is "5", -5
+  // under 0;[Red] is "5" -- a negative section states its own sign -- and -5
+  // under General;[Red]-General is "-5", where the word itself was printed).
+  const general = sectionWritingGeneral(section);
+  if (general) return `${autoMinus ? "-" : ""}${general.before}${drawnGeneralNumber(Math.abs(value))}${general.after}`;
+
   return renderNumberSection(Math.abs(value), section, autoMinus);
+}
+
+/** The characters Excel shows as they are without quotes. */
+const UNQUOTED_LITERAL_RE = /[$\-+/():!^&'~{}<>= ]/;
+
+/** The literals around the General a section writes its value with: the
+ * word General among literals only, or nothing but colours and conditions
+ * (General by itself). Null for any other section -- one with a digit place,
+ * a text place, or literals alone. */
+function sectionWritingGeneral(section: string): { before: string; after: string } | null {
+  let before = "";
+  let after = "";
+  let said = false;
+  let bracketed = false;
+  const emit = (text: string) => {
+    if (said) after += text; else before += text;
+  };
+  for (let i = 0; i < section.length; i++) {
+    const ch = section[i]!;
+    if (ch === '"') {
+      const end = section.indexOf('"', i + 1);
+      emit(section.slice(i + 1, end < 0 ? section.length : end));
+      i = end < 0 ? section.length : end;
+    } else if (ch === "\\") {
+      if (i + 1 < section.length) emit(section[++i]!);
+    } else if (ch === "[") {
+      const end = section.indexOf("]", i + 1);
+      const inner = section.slice(i + 1, end < 0 ? section.length : end);
+      if (inner.startsWith("$")) {
+        const symbol = inner.slice(1).split("-")[0] ?? "";
+        if (symbol) emit(symbol);
+      } else bracketed = true;
+      i = end < 0 ? section.length : end;
+    } else if (ch === "_") {
+      emit(" ");
+      if (i + 1 < section.length) i++;
+    } else if (ch === "*") {
+      if (i + 1 < section.length) i++;
+    } else if (!said && section.slice(i, i + 7).toLowerCase() === "general") {
+      said = true;
+      i += 6;
+    } else if (UNQUOTED_LITERAL_RE.test(ch)) {
+      emit(ch);
+    } else {
+      return null;
+    }
+  }
+  if (said) return { before, after };
+  return bracketed && before.trim() === "" ? { before: "", after: "" } : null;
+}
+
+/** The `_x` reserves a format's text section sets around `@` (its fourth
+ * section, or the one holding `@`), when the section is only reserves and
+ * `@` (Accounting's `_-@_-` / `_(@_)`, `@_)`): the characters reserved
+ * before the text and after it. Windows Excel prints an unwrapped text that
+ * far in from its sides, each reserve its character's width; a wrapped one
+ * takes each reserve as a space, those after the text hanging (lookwin
+ * p175-lw; the API's _text_section_reserves). */
+export function textSectionReserves(format: string | undefined | null): { before: string; after: string } | undefined {
+  if (!format || !format.includes("@") || !format.includes("_") || format.length > 4096) return undefined;
+  const sections: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let i = 0; i < format.length; i += 1) {
+    const ch = format[i]!;
+    if (ch === "\\" && i + 1 < format.length) { current += ch + format[i + 1]; i += 1; continue; }
+    if (ch === '"') quoted = !quoted;
+    if (ch === ";" && !quoted) { sections.push(current); current = ""; continue; }
+    current += ch;
+  }
+  sections.push(current);
+  const text = sections.length >= 4 ? sections[3] : sections.find((section) => section.replace(/"[^"]*"|\\./g, "").includes("@"));
+  if (text === undefined) return undefined;
+  let before = "";
+  let after = "";
+  let seen = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]!;
+    if (ch === "_" && i + 1 < text.length) {
+      const reserved = String.fromCodePoint(text.codePointAt(i + 1)!);
+      if (seen) after += reserved; else before += reserved;
+      i += reserved.length;
+    } else if (ch === "_") {
+      // A stored code is trimmed: zh-CN and Japanese Accounting's closing
+      // `_ ` arrives as a lone `_`, still the reserved space (renderTextSection).
+      if (seen) after += " "; else before += " ";
+    } else if (ch === "@" && !seen) seen = true;
+    else return undefined;
+  }
+  return seen && (before || after) ? { before, after } : undefined;
+}
+
+/** `display` -- a text as its format's text section shows it, each `_x` a
+ * space (applyTextFormat) -- without those spaces, for a caller that sets the
+ * reserves itself (textSectionReserves): set in by the reserves AND shown
+ * with their spaces, a text stood twice as far in (lookwin R361-X03, the
+ * Japanese Accounting `_ @_ `: every "：" 2.0 pt right of Windows Excel's in
+ * the print page, its right-aligned "-" 1.4 pt left). */
+export function textWithoutSectionReserves(display: string, reserves: { before: string; after: string }): string {
+  const lead = " ".repeat([...reserves.before].length);
+  const tail = " ".repeat([...reserves.after].length);
+  let text = display;
+  if (lead && text.startsWith(lead)) text = text.slice(lead.length);
+  if (tail && text.endsWith(tail) && text.length >= tail.length) text = text.slice(0, text.length - tail.length);
+  return text;
 }
 
 export type NumberFormatLayoutPart =

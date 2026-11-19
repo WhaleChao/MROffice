@@ -37,7 +37,9 @@ import { pageOfficeTextMeasurer } from "@mrnote/core/web/lib/text-engine/office-
 import { powerPointLineLanguage } from "@mrnote/core/web/lib/text-engine/powerpoint-east-asian.ts";
 import { OFFICE_TEXT_HIT_ATTRIBUTE, registerOfficeTextHitMap } from "@mrnote/core/web/lib/text-engine/office-text-hit.ts";
 import { OFFICE_TEXT_MARKER_ATTRIBUTE } from "@mrnote/core/web/lib/presentation/math-atom.ts";
-import { onTextEngineChange, textEngineEpoch } from "@mrnote/core/web/lib/text-engine/measure.ts";
+import { onTextEngineChange, resolveFace, textEngineEpoch } from "@mrnote/core/web/lib/text-engine/measure.ts";
+import { splitFamilyList } from "@mrnote/core/web/lib/text-engine/face-index.ts";
+import { ensureOfficeFauxBoldProbe, OFFICE_FAUX_BOLD_STROKE_WIDTH } from "@mrnote/core/web/lib/office-fonts/faux-bold.ts";
 import { officeUnderline } from "@mrnote/core/web/lib/text-engine/office-underline.ts";
 import {
   OFFICE_TEXT_OUTLINE_COLOR,
@@ -56,6 +58,7 @@ import { normalizePresentationTabStops } from "../../../../lib/presentation-tab-
 import { PRESENTATION_SCRIPT_SCALE, runStyleCss, type PresentationFontSizeUnit } from "../../../../lib/presentation/text-layout-css";
 import { POWERPOINT_MISSING_SCRIPT_FAMILY, type PresentationFontAliases } from "@mrnote/core/web/lib/presentation-font-faces.ts";
 import { presentationDisplayRuns, PresentationSlideNumberContext } from "./PresentationRunsText";
+import type { ParagraphEastAsianLines } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 import type { PresentationParagraphRowPlan } from "./presentationParagraphRows";
 import { PresentationFontAliasesContext } from "./usePresentationFontFaces";
 
@@ -205,20 +208,28 @@ export function presentationEngineBodyInput(args: {
     if (tabStops.some((stop) => stop.align !== "left")) throw new Unsupported("aligned tab stop");
     const paragraphs: OfficeParagraphInput[] = [];
     const rowRuns: TextRun[][] = [];
-    const kerningOf = (index: number): number | null => {
-      const value = Array.isArray(args.kerning) ? args.kerning[index] : args.kerning;
+    // A row's own receipts (readings row 1009) go with it through edits; a
+    // body whose rows carry none reads the body's, row by row number.
+    const rowsCarryKerning = rows.some((row) => row.nativeKerning !== undefined);
+    const rowsCarryEastAsianLines = rows.some((row) => row.nativeEastAsianLines !== undefined);
+    const kerningOf = (row: PresentationParagraphRowPlan): number | null => {
+      const value = rowsCarryKerning
+        ? row.nativeKerning
+        : Array.isArray(args.kerning) ? args.kerning[row.index] : args.kerning;
       return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
     };
     // A body imported under readings row 1001: each run breaks by its own
     // language (its `lang` / `altLang`, else what its row inherits) and the
     // row hangs punctuation unless it resolves `hangingPunct` 0.
-    const eastAsianLines =
+    const bodyEastAsianLines =
       args.eastAsianLines && typeof args.eastAsianLines === "object" && !Array.isArray(args.eastAsianLines)
         ? (args.eastAsianLines as Record<string, unknown>)
         : null;
-    const eastAsianRow = (key: string, index: number): unknown => {
-      const value = eastAsianLines?.[key];
-      return Array.isArray(value) ? value[index] : value;
+    const eastAsianLines = rowsCarryEastAsianLines || bodyEastAsianLines !== null;
+    const eastAsianRow = (key: keyof ParagraphEastAsianLines, row: PresentationParagraphRowPlan): unknown => {
+      if (rowsCarryEastAsianLines) return row.nativeEastAsianLines?.[key];
+      const value = bodyEastAsianLines?.[key];
+      return Array.isArray(value) ? value[row.index] : value;
     };
     // A row with no words of its own (an empty paragraph, a marker's face
     // nobody states) takes the face the body's words are in, as its end
@@ -232,7 +243,7 @@ export function presentationEngineBodyInput(args: {
     })();
     for (const row of rows) {
       if (row.dir === "rtl") throw new Unsupported("right-to-left row");
-      const kernFrom = kerningOf(row.index);
+      const kernFrom = kerningOf(row);
       const rowStyle = row.rowTextStyle;
       const bodyFontPx = need(cssPx(bodyStyle.fontSize ?? 24, 16), "body size");
       const rowFontPx = need(cssPx(rowStyle.fontSize ?? bodyStyle.fontSize ?? 24, bodyFontPx), "row size");
@@ -275,8 +286,8 @@ export function presentationEngineBodyInput(args: {
           ...(eastAsianLines
             ? {
                 lineLanguage: powerPointLineLanguage(
-                  run.style?.proofingLanguage ?? eastAsianRow("lang", row.index),
-                  run.style?.alternateLanguage ?? eastAsianRow("altLang", row.index),
+                  run.style?.proofingLanguage ?? eastAsianRow("lang", row),
+                  run.style?.alternateLanguage ?? eastAsianRow("altLang", row),
                 ),
               }
             : {}),
@@ -351,9 +362,9 @@ export function presentationEngineBodyInput(args: {
         ...(eastAsianLines
           ? {
               powerPointEastAsian: {
-                hangingPunct: eastAsianRow("hangingPunct", row.index) !== false,
-                ...(eastAsianRow("latinLnBrk", row.index) === true ? { latinLineBreak: true } : {}),
-                ...(eastAsianRow("eaLnBrk", row.index) === false ? { eastAsianRules: false } : {}),
+                hangingPunct: eastAsianRow("hangingPunct", row) !== false,
+                ...(eastAsianRow("latinLnBrk", row) === true ? { latinLineBreak: true } : {}),
+                ...(eastAsianRow("eaLnBrk", row) === false ? { eastAsianRules: false } : {}),
               },
             }
           : {}),
@@ -506,6 +517,26 @@ export function svgTextPaint(css: CSSProperties, colorOverride: string | undefin
   return out;
 }
 
+/**
+ * The faux-bold stroke of a run the engine measured in a bold it synthesizes
+ * (no declared face of the weight: Calibri Light, Open Sans SemiBold, 宋体
+ * b="1"): Windows draws such a bold as the regular emboldened, and Chrome on
+ * macOS synthesizes none, so the run is stroked in its fill at
+ * --office-faux-bold-stroke (lib/office-fonts/faux-bold: measured once, 0
+ * wherever the browser emboldens it itself). Empty for any other run.
+ */
+export function engineFauxBoldPaint(
+  measured: { readonly stack: string; readonly weight: number; readonly italic: boolean },
+  codePoint: number,
+  fill: CSSProperties["fill"] | undefined,
+): CSSProperties {
+  if (measured.weight < 600) return {};
+  const face = resolveFace(splitFamilyList(measured.stack), measured.weight, measured.italic, codePoint, true);
+  if (typeof face !== "object" || !face.syntheticBold) return {};
+  ensureOfficeFauxBoldProbe();
+  return { stroke: (fill ?? "currentColor") as CSSProperties["stroke"], strokeWidth: OFFICE_FAUX_BOLD_STROKE_WIDTH, strokeLinejoin: "round" };
+}
+
 /** A run's Office outline as its CSS states it (office-text-outline-css.ts). */
 function outlineOf(css: CSSProperties): { color: string; widthPt: number; stroke: OfficeTextOutlineStroke } | null {
   const record = css as Record<string, unknown>;
@@ -523,6 +554,30 @@ const SVG_TEXT_STYLE: CSSProperties = {
   fontVariantLigatures: "none",
   letterSpacing: 0,
   wordSpacing: 0,
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const ENGINE_SVG_STYLE: CSSProperties = {
+  position: "absolute",
+  left: 0,
+  top: 0,
+  width: "100%",
+  height: "100%",
+  overflow: "visible",
+  direction: "ltr",
 };
 
 /** Positions in CSS px, at most 1/1000 px apart from the engine's. */
@@ -701,6 +756,14 @@ const PresentationEngineLine = memo(
       }
       const glyphs = segment.glyphs.filter((glyph) => glyph.text !== "\n");
       const shown = (text: string) => (caps ? text.toUpperCase() : text);
+      // A bold the engine measured as synthesized (no declared face of the
+      // weight: Calibri Light, Open Sans SemiBold, 宋体 b="1"), where the
+      // browser synthesizes none (Chrome on macOS): the faux-bold stroke
+      // (lib/office-fonts/faux-bold), 0 wherever the browser emboldens it.
+      const firstCode = glyphs.find((glyph) => glyph.text.trim())?.text.codePointAt(0);
+      if (measured && paint.stroke === undefined && firstCode !== undefined) {
+        Object.assign(paint, engineFauxBoldPaint(measured, firstCode, paint.fill ?? rowPaint.fill));
+      }
       // Office's outline: one stroke along each glyph's merged outline,
       // centred and round, over the fill, at the engine's own positions;
       // the text's SVG stroke stands in until every glyph's is kept.
@@ -895,7 +958,7 @@ export function PresentationEngineTextBody({
     >
       <svg
         data-testid="presentation-engine-text-svg"
-        style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", overflow: "visible" }}
+        style={ENGINE_SVG_STYLE}
       >
         {nodes}
       </svg>

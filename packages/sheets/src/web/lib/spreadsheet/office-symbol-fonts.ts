@@ -48,3 +48,29 @@ export function officeSymbolText(family: string | null | undefined, text: string
     return code >= 0x20 && code <= 0xff ? codes[hex(code)] ?? character : character;
   }).join("");
 }
+
+/**
+ * A text box's bullet as it is drawn: `a:buChar`'s character set in
+ * `a:buFont`'s face. In a legacy symbol face the character is the symbol its
+ * code stands for (Symbol's U+F0B7 the round bullet, Wingdings' U+F0A7 the
+ * small square), and the page draws that symbol in the body's own font: no
+ * substitute stands under the marker, so every code is mapped, and a symbol
+ * code of a face without a table (Wingdings 2, Webdings) is a plain bullet
+ * rather than the private-use box (lookwin R452-X59: the Notes box's twenty
+ * Symbol bullets printed as boxes on taller lines). Undefined when the
+ * character is drawn as written.
+ */
+export function officeSymbolMarker(family: string | null | undefined, text: string): string | undefined {
+  if (!family || !text) return undefined;
+  const codes = table.faces[keyOf(family)];
+  const privateUse = (character: string) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code >= 0xf020 && code <= 0xf0ff;
+  };
+  if (!codes) return [...text].some(privateUse) ? [...text].map((character) => privateUse(character) ? "\u2022" : character).join("") : undefined;
+  const mapped = [...text].map((character) => {
+    const code = codeOf(character);
+    return code >= 0x20 && code <= 0xff ? codes[hex(code)] ?? (privateUse(character) ? "\u2022" : character) : character;
+  }).join("");
+  return mapped === text ? undefined : mapped;
+}

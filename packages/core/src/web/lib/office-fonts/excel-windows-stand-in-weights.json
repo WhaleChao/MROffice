@@ -1,0 +1,32 @@
+{
+ "_source": "The cut (wght) of its stand-in, Noto Sans JP, that weighs what Windows Excel prints a Yu Gothic face in, where that is not the cut the font catalog names (the catalog is Word's and PowerPoint's too and stays as it is). Read off the font programs Excel embeds in its own PDFs (xlsx-rounds/lookwin probes p181-lw, every face regular and bold at 9 and 11 pt, and R449-X75's YuGothic-Medium; 2026-11-18): the ink of the same glyphs rendered at 256 px, the stand-in's variable wght bisected to equal ink, Han and kana ('cjk') and digits and Latin ('latin') apart. Per face, lower case: 'regular' and, where Windows has a bold face of it, 'bold' (a face without one is its regular emboldened, as Excel prints it: 游ゴシック Medium + bold is YuGothic-Medium stroked); each {cjk, latin: the equal-ink wght; cjkCut, latinCut: the served static cut (300, 400, 500, 700) nearest in ink, what the API's writer prints}. Measured wght by glyph class, kanji / kana / digit / Latin: Yu Gothic Regular 259 / 273 / 309 / 309 (catalog cut 400: 1.56x Excel's ink on Han), Bold 559 / 528 / 619 / 628 (700), Medium 328 / 328 / 365 / 359 (500: 1.50x), Light 109 / 128 / 140 / 134 (300: 1.47x), UI Regular 328 / 340 / 340 / 344, UI Bold and UI Semibold (one outline) 553 / 478 / 469 / 478, UI Semilight 253 / 309 / 303 / 309. Two rows read off the printed rows themselves (p181-lw, ink of the row ours / Excel's): Yu Gothic UI's Han in the 300 cut weighs 0.79 of Excel's and in the 400 cut 1.16, so its nearest served cut is 400, the catalog's; Yu Gothic UI Semibold + bold is the Semibold outline as it is, not emboldened (GDI emboldens a face two weight classes lighter than the bold asked for, Medium and Semilight, not a Semibold: the row emboldened weighed 1.25-1.34 of Excel's), so its 'bold' is its regular. 'names': a file's other names for a face. The web's lib/office-fonts/excel-windows-stand-in-weights.json is the same table.",
+ "substitute": "Noto Sans JP",
+ "faces": {
+  "yu gothic": {
+   "regular": {"cjk": 266, "latin": 309, "cjkCut": 300, "latinCut": 300},
+   "bold": {"cjk": 544, "latin": 624, "cjkCut": 500, "latinCut": 700}
+  },
+  "yu gothic medium": {
+   "regular": {"cjk": 328, "latin": 362, "cjkCut": 300, "latinCut": 400}
+  },
+  "yu gothic light": {
+   "regular": {"cjk": 118, "latin": 137, "cjkCut": 300, "latinCut": 300}
+  },
+  "yu gothic ui": {
+   "regular": {"cjk": 334, "latin": 342, "cjkCut": 400, "latinCut": 400},
+   "bold": {"cjk": 516, "latin": 474, "cjkCut": 500, "latinCut": 500}
+  },
+  "yu gothic ui semibold": {
+   "regular": {"cjk": 516, "latin": 474, "cjkCut": 500, "latinCut": 500},
+   "bold": {"cjk": 516, "latin": 474, "cjkCut": 500, "latinCut": 500}
+  },
+  "yu gothic ui semilight": {
+   "regular": {"cjk": 281, "latin": 306, "cjkCut": 300, "latinCut": 300}
+  }
+ },
+ "names": {
+  "游ゴシック": "yu gothic",
+  "游ゴシック medium": "yu gothic medium",
+  "游ゴシック light": "yu gothic light"
+ }
+}

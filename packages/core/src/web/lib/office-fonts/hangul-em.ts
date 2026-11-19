@@ -25,6 +25,7 @@
  *
  * `window.__officeHangulEmOff = true` leaves every stack as it was.
  */
+import { isExcelCutFamily } from "./excel-cut-families";
 import hangulEmFaces from "./hangul-em-faces.json";
 
 interface HangulEmManifest {
@@ -71,11 +72,13 @@ export function isHangulEmAlias(family: string): boolean {
   return unquote(family).toLowerCase().startsWith(ALIAS_KEY_PREFIX);
 }
 
-/** A stack's first family that is not a Hangul clone, unquoted: the family
- * the run asked for. */
+/** A stack's first family that is not a Hangul clone, nor a sheet's cut
+ * family (excel-cut-families.ts), unquoted: the family the run asked for.
+ * What is kept by face (row heights, printed lines, digit widths) is read
+ * under it. */
 export function stackPrimaryFamily(stack: string): string {
   const families = stack.split(",");
-  return unquote(families.find((family) => !isHangulEmAlias(family)) ?? families[0] ?? "");
+  return unquote(families.find((family) => !isHangulEmAlias(family) && !isExcelCutFamily(family)) ?? families[0] ?? "");
 }
 
 function hangulEmOff(): boolean {

@@ -8,7 +8,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { nativeParagraphFontStyle, nativeTextAlignmentOffset, measureNativeLineAdvance, type NativeTextAlignmentBox } from "../../../../lib/spreadsheet/native-text-layout";
 import type { NumberFormatLayoutPart } from "@mrnote/core/web/lib/spreadsheet/number-format.ts";
-import { nativeTextAdvances, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
+import { nativeTextAdvances, nativeTextPrinterDpi, resolveSpreadsheetTextStyle } from "@mrnote/core/web/lib/spreadsheet/native-typography.ts";
 import { fontMeasureStamp, spreadsheetEngineTextWidth } from "@mrnote/core/web/lib/spreadsheet/spreadsheet-text-engine.ts";
 import { withSheetZoomedFont } from "@mrnote/core/web/lib/css-zoom.ts";
 import { fontLoadReach, type FontLoadReach } from "@mrnote/core/web/lib/spreadsheet/font-load-reach.ts";
@@ -59,7 +59,8 @@ function listenForFormatFonts(): void {
 
 function measuredKey(signature: string, inherited: number, available: number): string {
   listenForFormatFonts();
-  return `${signature}\u0000${inherited}\u0000${available}\u0000${fontMeasureStamp()}`;
+  // The printer's advances are another measure of the same parts.
+  return `${signature}\u0000${inherited}\u0000${available}\u0000${fontMeasureStamp()}\u0000${nativeTextPrinterDpi()}`;
 }
 
 /** Number-format layout, shared by the normal grid and Page Layout. The
@@ -130,9 +131,16 @@ export function SpreadsheetFormattedText({ parts, style, dpi, scale = 1, wrap = 
       // Native wrapped number formatting materializes `_x` as a space.
       // Without wrapping it reserves x on the native device grid, including
       // substituted fonts. Measured across six font/size/trait combinations.
+      // Printed, Windows Excel leaves x's advance at the printer, whole
+      // dots at the printer's pixels per em, as it sets the digits beside it
+      // (lookwin p195-lw: 游ゴシック Medium 9 leaves 21 dots for `_ ` and 28
+      // for `_)`, Calibri 11 21 and 28, where the screen's 3 px and 5 px
+      // are 18.75 and 31.25: the 17 游ゴシック books' numbers printed 0.3 pt
+      // right of Excel's under `#,##0_ ` and 0.4 pt left under `#,##0_)`).
+      const reservePurpose = nativeTextPrinterDpi() ? "paint" : "measure";
       const widths = stableParts.map(part => part.kind === "text" ? measure(part.text, "paint")
         : measure(part.kind === "reserve" && stableWrap ? " " : part.character,
-          part.kind === "reserve" && !stableWrap ? "measure" : "paint"));
+          part.kind === "reserve" && !stableWrap ? reservePurpose : "paint"));
       if (!measuredOnCanvas) return;
       const used = widths.reduce((sum, width, index) => sum + (stableParts[index].kind === "fill" ? 0 : width), 0);
       // A fill is an integer count of glyphs, not a stretched CSS gap. The
