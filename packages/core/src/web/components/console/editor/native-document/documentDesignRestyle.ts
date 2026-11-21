@@ -44,6 +44,7 @@ import {
 } from "../../../../lib/office-word-style-sets";
 
 import { normalizeBuiltinParagraphStyleId } from "../extensions/DocumentFormatting";
+import { setParagraphFormatAsDocumentDefault } from "./paragraphSetAsDefault";
 import {
   normalizeFontFamily,
   normalizeFontSize,
@@ -83,7 +84,11 @@ function documentWearsDesignBase(doc: ProseMirrorNode, design: DocumentDesign | 
     // A default the document does not state is the design's.
     return doc.attrs[key] == null || (want !== null && have !== null && Math.abs(want - have) <= tolerance);
   };
+  // The body face too: a document of its own styles whose spacing and size
+  // a Paragraph Spacing choice made the design's still sets its own font.
+  const face = (value: unknown) => officePrimaryFontFamily(String(value ?? "")).trim().toLowerCase();
   return (
+    (doc.attrs.defaultFontFamily == null || face(doc.attrs.defaultFontFamily) === face(base.defaultFontFamily)) &&
     near("defaultFontSize", 0.1) &&
     near("defaultLineHeight", 0.01) &&
     near("defaultParagraphSpaceBefore", 0.05) &&
@@ -522,12 +527,32 @@ export function restyleDocumentDesign(
   previous: DocumentDesign | null,
   next: DocumentDesign,
   themeAxes?: readonly DocumentThemeAxis[],
+  paragraphSpacingOnly = false,
 ): Transaction | null {
   const doc = tr.doc;
   const base = documentDesignBase(next);
   // Word's style sets not here yet: nothing is written (the command refuses).
   if (!base) return null;
   tr.setDocAttribute("documentDesign", { ...next });
+  if (paragraphSpacingOnly && documentKeepsOwnStyles(doc)) {
+    // Design > Paragraph Spacing in a Word document: Word writes the spacing
+    // into the document's default paragraph formatting and nothing else --
+    // the theme, the fonts and every style stay. Each paragraph that takes
+    // its spacing from there (its style chain reaches Normal without a style
+    // stating it, and it states none of its own) reflows; a style's own
+    // spacing and a paragraph's direct spacing stay (Microsoft Support,
+    // "Change spacing between paragraphs"; ECMA-376 17.7.2). An imported
+    // paragraph carries its resolved spacing, so the cascade over the
+    // document's style graph tells inherited from direct, as Set As Default
+    // does (R478-D68 WALK1: the page kept 1.15 / 10 pt where the file and
+    // Word draw Double).
+    setParagraphFormatAsDocumentDefault(tr, {
+      spaceBeforePt: base.defaultParagraphSpaceBefore,
+      spaceAfterPt: base.defaultParagraphSpaceAfter,
+      lineSpacing: { rule: "multiple", multiple: Number(base.defaultLineHeight) },
+    });
+    return tr;
+  }
   if (themeAxes && documentKeepsOwnStyles(doc) && !documentWearsDesignBase(doc, previous)) {
     // An imported document keeps its own styles (styles.xml): Word's Colors,
     // Fonts, Effects and Themes change only the theme part, never the

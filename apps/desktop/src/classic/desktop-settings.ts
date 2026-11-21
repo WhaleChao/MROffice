@@ -16,6 +16,10 @@ export interface DesktopSettings {
   keepInTrayOnClose?: boolean;
   /** "Ready in the background at login", as the person set it in the menu (./prelaunch.ts); absent: never set. */
   prelaunch?: boolean;
+  /** A page that came from a file on this computer is written back to that
+   * file once its edits settle, not only on ⌘S (Settings › General);
+   * absent: on. */
+  autoSaveToOriginal?: boolean;
 }
 
 const settingsFile = () => path.join(app.getPath("userData"), "desktop-settings.json");
@@ -33,4 +37,9 @@ export function writeSettings(change: DesktopSettings): void {
   const partial = `${settingsFile()}.partial`;
   fs.writeFileSync(partial, JSON.stringify({ ...readSettings(), ...change }));
   fs.renameSync(partial, settingsFile());
+}
+
+/** Autosave to the original file (on unless the person turned it off). */
+export function autoSaveToOriginalEnabled(): boolean {
+  return readSettings().autoSaveToOriginal !== false;
 }

@@ -23,7 +23,7 @@ import { useId, useRef, type MouseEvent as ReactMouseEvent, type ReactNode } fro
 import { useOfficePatternAnchor } from "@mrnote/core/web/components/office-pattern/useOfficePatternAnchor.ts";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 import { EditorContent } from "@tiptap/react";
-import { EMPTY_DOCUMENT_DEFAULT_INDENTS } from "../paragraphSetAsDefault";
+import { EMPTY_DOCUMENT_DEFAULT_INDENTS } from "@mrnote/core/web/components/console/editor/native-document/paragraphSetAsDefault.ts";
 import { sanitizeNotePosition } from "@mrnote/core/web/components/console/editor/native-document/footnotes.ts";
 import { zoomTransform } from "@mrnote/core/web/lib/editor-zoom.ts";
 import { HandwritingCoverFace } from "@mrnote/core/web/components/notebook/HandwritingCoverFace.tsx";

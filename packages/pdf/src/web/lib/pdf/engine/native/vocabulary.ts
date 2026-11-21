@@ -61,6 +61,30 @@ export const MRAI_NATIVE_PARAGRAPH_READ_BACK_REFUSAL =
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export const MRAI_NATIVE_BOLD_FACE_KEPT_REFUSAL =
+  "This text is drawn in a bold face of its own, which nothing written where it stands makes regular; nothing was written." as const;
+
+
+
+
+
+
 export const MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE =
   "This text's font names glyphs it draws as spaces, so the text read from it is not the text on the page; it cannot be set again without losing them." as const;
 /** How the refusal of a command on a line whose words are fixed begins

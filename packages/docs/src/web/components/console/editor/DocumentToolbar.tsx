@@ -1232,7 +1232,7 @@ import {
   documentDefaultLineMultiple,
   setParagraphFormatAsDocumentDefault,
   type ParagraphDefaultFormat,
-} from "./native-document/paragraphSetAsDefault";
+} from "@mrnote/core/web/components/console/editor/native-document/paragraphSetAsDefault.ts";
 import {
   DocumentSetAsDefaultDialog,
   type DocumentSetAsDefaultKind,

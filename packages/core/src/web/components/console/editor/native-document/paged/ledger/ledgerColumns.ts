@@ -60,18 +60,77 @@ import { sheetsOf } from "../sheetMeasureMemo";
  * it. A block the ledger joined so is not cut on that sheet again until the
  * layout's inputs change (an edit, fonts, the width): the ledger's own
  * composition stands.
+ *
+ * Refused is the cut that failed, not the block: the room its column had
+ * when the projector cut it (`madeColumnCuts`), and only when the head now
+ * stands whole in the next track with that same room left behind it -- the
+ * projector's own cut did not fit the room it was made for, and would be
+ * made again. A join of pieces cut in another layout (on the first open's
+ * one long sheet, on another sheet, for a column whose room has since
+ * changed) is no such failure: refused, the block was drawn whole on that
+ * sheet for the rest of the layout while the plan cut it at the column's
+ * foot, so the page ran into a third column the sheet does not have, the
+ * verifier moved its last block on and the plan put it back (R482-D01:
+ * "In-processing" cut at 19 px on the first open's sheet, joined on page 2
+ * and never cut there again where 69 px were free; R372-D01 page 6).
  */
-const refusedColumnCuts = new WeakMap<EditorView, Set<string>>();
+const refusedColumnCuts = new WeakMap<EditorView, Map<string, number[]>>();
+/** The room (px) each block's last column cut was made for, by `blockId@sheet`. */
+const madeColumnCuts = new WeakMap<EditorView, Map<string, number>>();
+/** Rooms within this of each other are one room (the fragment rule's slack). */
+const SAME_ROOM_PX = 0.5;
 
-export function refuseColumnCuts(view: EditorView, keys: readonly string[]): void {
-  if (keys.length === 0) return;
-  let refused = refusedColumnCuts.get(view);
-  if (!refused) refusedColumnCuts.set(view, (refused = new Set()));
-  for (const key of keys) refused.add(key);
+/** A seam the ledger joined inside one sheet with both pieces in one track:
+ * `blockId@sheet`, and the room the head's track now leaves before it (the
+ * projector's split candidate for the head; null when the head fits there). */
+export interface JoinedColumnCut {
+  key: string;
+  roomPx: number | null;
+}
+
+/** `window.__dqc2RefuseAnyRoom = true` (A/B): every join in one track
+ * refuses its block on that sheet at any room, as before. */
+function refuseAnyRoom(view: EditorView): boolean {
+  const win = view.dom.ownerDocument?.defaultView as (Window & { __dqc2RefuseAnyRoom?: boolean }) | null;
+  return win?.__dqc2RefuseAnyRoom === true;
+}
+
+export function refuseColumnCuts(view: EditorView, joined: readonly JoinedColumnCut[]): void {
+  if (joined.length === 0) return;
+  const anyRoom = refuseAnyRoom(view);
+  const made = madeColumnCuts.get(view);
+  for (const { key, roomPx } of joined) {
+    let room: number;
+    if (anyRoom) room = Number.NaN;
+    else {
+      const madeFor = made?.get(key);
+      if (madeFor === undefined || roomPx === null || Math.abs(madeFor - roomPx) > SAME_ROOM_PX) continue;
+      room = madeFor;
+    }
+    let refused = refusedColumnCuts.get(view);
+    if (!refused) refusedColumnCuts.set(view, (refused = new Map()));
+    const rooms = refused.get(key) ?? [];
+    rooms.push(room);
+    refused.set(key, rooms);
+  }
+}
+
+/** Whether the projector's cut of `key` for `roomPx` was refused (NaN: at any room). */
+export function columnCutRefused(view: EditorView, key: string, roomPx: number): boolean {
+  const rooms = refusedColumnCuts.get(view)?.get(key);
+  return rooms !== undefined && rooms.some((room) => Number.isNaN(room) || Math.abs(room - roomPx) <= SAME_ROOM_PX);
+}
+
+/** The projector cut `key` for a column with `roomPx` left. */
+export function noteColumnCutMade(view: EditorView, key: string, roomPx: number): void {
+  let made = madeColumnCuts.get(view);
+  if (!made) madeColumnCuts.set(view, (made = new Map()));
+  made.set(key, roomPx);
 }
 
 export function clearRefusedColumnCuts(view: EditorView): void {
   refusedColumnCuts.delete(view);
+  madeColumnCuts.delete(view);
 }
 
 /**
@@ -88,7 +147,6 @@ export function planUnequalColumnSplit(view: EditorView, cache?: LedgerMeasureCa
     measureOutsideEditorObservation(view, () => (cache ? cache.unrecorded(apply) : apply()));
   const sheets = sheetsOf(view.dom);
   if (sheets.length !== pages.length) return null;
-  const refused = refusedColumnCuts.get(view);
   for (let sheetIndex = 0; sheetIndex < pages.length; sheetIndex += 1) {
     const sheet = sheets[sheetIndex];
     const projection = unequalColumnProjectionForSheet(sheet);
@@ -98,7 +156,8 @@ export function planUnequalColumnSplit(view: EditorView, cache?: LedgerMeasureCa
       if (candidate.blockIndex < 0 || candidate.blockIndex >= page.node.childCount) continue;
       const block = page.node.child(candidate.blockIndex);
       const blockId = block.attrs?.[MRNOTE_BLOCK_ID_ATTR];
-      if (refused && typeof blockId === "string" && refused.has(`${blockId}@${sheetIndex}`)) continue;
+      const cutKey = typeof blockId === "string" && blockId ? `${blockId}@${sheetIndex}` : null;
+      if (cutKey && columnCutRefused(view, cutKey, candidate.availablePx)) continue;
       const dom = sheetBlockElements(sheet)[candidate.blockIndex];
       if (!(dom instanceof HTMLElement)) continue;
       const isCode = isSplittableBlock(block);
@@ -162,6 +221,7 @@ export function planUnequalColumnSplit(view: EditorView, cache?: LedgerMeasureCa
         return planned !== null && applyTableColumnSplit(tr, sheetIndex, candidate.blockIndex, planned.plan, planned.cuts);
       }, writeUnobserved);
       if (!changed || !tr.docChanged) continue;
+      if (cutKey) noteColumnCutMade(view, cutKey, candidate.availablePx);
       tr.setMeta(REBALANCE_META, true);
       tr.setMeta("addToHistory", false);
       return tr;

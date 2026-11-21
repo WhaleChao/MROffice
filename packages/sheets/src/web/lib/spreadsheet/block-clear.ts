@@ -151,6 +151,9 @@ export function clearRangeContents<T extends BlockClearCell>(
       delete (cleared as Record<string, unknown>).picture;
       delete (cleared as Record<string, unknown>).display;
       delete (cleared as Record<string, unknown>).chartValueCache;
+      // The file's last value of the cleared formula goes with it (xlsx-rounds
+      // R459-X07 WALK1: cleared Google Sheets DUMMYFUNCTION cells kept it).
+      delete (cleared as Record<string, unknown>).keptResult;
       // The rich text's runs are its text: they go with it (xlsx-rounds R308-X10
       // WALK1: Clear Contents on A3:A4 left both texts' runs on the blanks).
       delete (cleared as Record<string, unknown>).runs;
@@ -249,6 +252,7 @@ function applyClearVariantToCell<T extends BlockClearCell>(
     // Drop the export display cache too — it baked the now-cleared value/format.
     delete next.display;
     delete next.chartValueCache;
+    delete next.keptResult; // the cleared formula's file value (clearRangeContents)
     // The rich text's runs are its text (clearRangeContents).
     delete next.runs;
     if (next.style && typeof next.style === "object") next.style = withRecordFontIfPlain(next as { style?: unknown }).style as typeof next.style;

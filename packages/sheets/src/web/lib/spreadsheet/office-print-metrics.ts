@@ -295,6 +295,24 @@ export function officePrintAnchorKind(
   return kind;
 }
 
+/** How far a drawing reaches on the grid before the printer's scale, for the
+ * rows and columns the printed range counts: the print scales the grid but a
+ * one-cell anchor keeps its extent (and an absolute one its place too), so on
+ * the unscaled grid they reach that much further (R457-X08: rq2's
+ * oneCellAnchor charts over Arial 10 rows printed x0.969 ran 1 pt past the
+ * rows counted and lost their second row page in each column band). */
+export function officePrintedDrawingReach(
+  frame: readonly [left: number, top: number, width: number, height: number],
+  kind: "twoCell" | "oneCell" | "absolute" | undefined,
+  scale: OfficePrintScale | undefined,
+): readonly [left: number, top: number, width: number, height: number] {
+  if (!scale || (kind !== "oneCell" && kind !== "absolute") || !(scale.x > 0) || !(scale.y > 0)
+    || (scale.x === 1 && scale.y === 1)) return frame;
+  const [left, top, width, height] = frame;
+  if (kind === "absolute") return [left / scale.x, top / scale.y, width / scale.x, height / scale.y];
+  return [left, top, width / scale.x, height / scale.y];
+}
+
 /** A drawing's frame on the printed page, in screen pixels: a two-cell anchor
  * spans its cells (both axes scale), a one-cell anchor sits at its cell but
  * keeps its own extent, an absolute anchor keeps both. */

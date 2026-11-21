@@ -128,7 +128,7 @@ export function nativeRowPixelPairMatches(metrics: NativeRowMetrics | undefined,
 
 /** Pure view projection. Retain legacy saved pixels; only a matching pair may
  * use the original point height. Never feed this projection into autosave. */
-export function resolveNativeRowHeights(metrics: NativeRowMetrics | undefined, heights: Record<string,number> | undefined, defaultHeight: number | undefined, fontRowHeight?: number) {
+export function resolveNativeRowHeights(metrics: NativeRowMetrics | undefined, heights: Record<string,number> | undefined, defaultHeight: number | undefined, fontRowHeight?: number, fontReplaced = false) {
   if (!metrics) return undefined;
   const resolved = {...heights};
   for (const [key,row] of Object.entries(metrics.rows)) if (heights?.[key] === row.pixels) resolved[key]=row.heightPt / .75;
@@ -143,7 +143,12 @@ export function resolveNativeRowHeights(metrics: NativeRowMetrics | undefined, h
   // default is Excel's own (96 dpi) keeps its rows. The API's
   // _native_print_sheet applies the same rule.
   const stated = metrics.default.heightPt / .75;
-  if (automatic && Math.abs(fontRowHeight - metrics.default.pixels) >= .5 && Math.abs(fontRowHeight - stated) >= .5) {
+  // A default on Windows' whole pixels at 96 dpi is Excel's own line for the
+  // file's own font, whatever the estimate of its face says (R464-X22's
+  // Palatino Linotype 11 columns: 16.5 pt, 22 px, where the metrics gave 21);
+  // a font a theme replaced is re-measured all the same.
+  const otherDpi = fontReplaced || Math.abs(stated - Math.round(stated)) > .01;
+  if (automatic && otherDpi && Math.abs(fontRowHeight - metrics.default.pixels) >= .5 && Math.abs(fontRowHeight - stated) >= .5) {
     for (const [key,row] of Object.entries(metrics.rows)) {
       if (row.customHeight || heights?.[key] !== row.pixels) continue;
       delete resolved[key];

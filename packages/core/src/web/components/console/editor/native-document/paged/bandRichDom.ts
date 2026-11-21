@@ -61,6 +61,7 @@ import type {
   BandFieldToken,
 } from "../headerFooter";
 import { bandFieldCachedText, formatNativeFieldNumber } from "../headerFooter";
+import { wordPositionedFrame } from "../wordFramePosition";
 import {
   normalizePositionalTab,
   normalizeTabStops,
@@ -617,6 +618,105 @@ export function keepBandObjectsOnPaper(root: ParentNode): void {
     for (const { box, value } of moves) {
       if (box.style.translate !== value) box.style.translate = value;
     }
+  }
+}
+
+/** A band cut at half its page (`clipBandsToHalfPage`): the cut, px. */
+export const BAND_HALF_PAGE_CUT_ATTR = "data-band-half-page-cut";
+
+function bandHalfPageOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBandHalfPageOff?: boolean }).__docsBandHalfPageOff === true;
+}
+
+/**
+ * Word 2010 layout (compatibility mode 14 and earlier, or none stated) grows
+ * a header or a footer to at most half the page: the band's story is laid
+ * from its first line on, and the first line that would end more than half
+ * the page height below the story's top is left out with everything after
+ * it -- not drawn, and no room taken from the body. The story's first line
+ * always stays. Word 2013 layout has no such limit. ("By default, Word will
+ * not allow a header or footer to be larger than half the total page height",
+ * Microsoft KB 197135.) Measured in Windows Word, docx-look pc1/probes/hh:
+ * an 11 pt line and then a full-width picture in one header paragraph, mode
+ * 14, header at 36 pt on a 792 pt page: the picture stays while the story is
+ * at most 396 pt tall (13.4 + 382) and goes from 399.4 pt, the body then
+ * starting under the 11 pt line; header at 72 pt, the same 396 pt; a 1008 pt
+ * page, 504 pt; mode 12 the same; a footer the same from its own top; mode
+ * 15 draws a 600 pt picture and every line. Corpus R482-D03 (mode 14): the
+ * header's 36 pt title line is followed by two pictures 367 and 468 pt tall;
+ * Word draws the title only, 10 pages, where the drawn pictures pushed every
+ * page's body down 360 pt (35 pages).
+ *
+ * Run on a laid-out band (screen and print alike) and before the band's
+ * overflow is measured; it cuts the band's root box (`max-height`, clipped)
+ * at the top of the first line past the limit. Lines are the band's own
+ * text and inline objects, not the objects placed out of its flow.
+ * `window.__docsBandHalfPageOff = true` lays every line (A/B).
+ */
+/** Whether a band under `root` is a Word 2010 layout band that is, or was,
+ * taller than half its page (cheap: a band that is not needs no watching). */
+export function bandMayPassHalfPage(root: ParentNode): boolean {
+  for (const band of Array.from(root.querySelectorAll<HTMLElement>(".sheet-band-rich[data-band-keep-on-paper]"))) {
+    if (band.hasAttribute(BAND_HALF_PAGE_CUT_ATTR)) return true;
+    const paper = band.closest<HTMLElement>(".sheet-band-box, article[data-page-sheet]");
+    if (paper && paper.offsetHeight > 0 && band.scrollHeight > paper.offsetHeight / 2) return true;
+  }
+  return false;
+}
+
+export function clipBandsToHalfPage(root: ParentNode): void {
+  const bands = Array.from(root.querySelectorAll<HTMLElement>(".sheet-band-rich[data-band-keep-on-paper]"));
+  if (root instanceof HTMLElement && root.matches(".sheet-band-rich[data-band-keep-on-paper]")) bands.unshift(root);
+  const off = bandHalfPageOff();
+  for (const band of bands) {
+    // The band's own story only: a cell's or a box's flow inside it is cut
+    // with it.
+    if (band.parentElement?.closest(".sheet-band-rich")) continue;
+    if (band.hasAttribute(BAND_HALF_PAGE_CUT_ATTR)) {
+      band.removeAttribute(BAND_HALF_PAGE_CUT_ATTR);
+      band.style.removeProperty("max-height");
+      band.style.removeProperty("overflow");
+    }
+    if (off) continue;
+    const paper = band.closest<HTMLElement>(".sheet-band-box, article[data-page-sheet]");
+    if (!paper || !(paper.offsetHeight > 0) || !(band.offsetHeight > 0)) continue;
+    const limit = paper.offsetHeight / 2;
+    if (band.scrollHeight <= limit) continue;
+    const scale = paper.getBoundingClientRect().height / paper.offsetHeight || 1;
+    const top = band.getBoundingClientRect().top;
+    const fragments: { top: number; bottom: number }[] = [];
+    const add = (rect: DOMRectReadOnly) => {
+      if (rect.height > 0) fragments.push({ top: (rect.top - top) / scale, bottom: (rect.bottom - top) / scale });
+    };
+    // An object placed out of the flow (an anchored picture, shape or frame
+    // box) is no line of the story.
+    const outOfFlow = (element: Element | null) => {
+      for (let at = element; at && at !== band; at = at.parentElement) {
+        if (at.hasAttribute(BAND_FLOAT_ATTR) || (at instanceof HTMLElement && at.style.position === "absolute")) return true;
+      }
+      return false;
+    };
+    const doc = band.ownerDocument;
+    const range = doc.createRange();
+    const walker = doc.createTreeWalker(band, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (!(node.textContent ?? "").trim() || outOfFlow(node.parentElement)) continue;
+        range.selectNodeContents(node);
+        for (const rect of Array.from(range.getClientRects())) add(rect);
+      } else if (node instanceof Element && /^(IMG|SVG|CANVAS|svg|canvas|img)$/.test(node.tagName) && !outOfFlow(node)) {
+        add(node.getBoundingClientRect());
+      }
+    }
+    fragments.sort((a, b) => a.top - b.top);
+    const past = fragments.find((fragment) => fragment.bottom > limit + 0.5);
+    if (!past) continue;
+    const cut = past.top;
+    // The story's first line stays, however tall.
+    if (!fragments.some((fragment) => fragment.bottom <= cut + 0.5)) continue;
+    band.setAttribute(BAND_HALF_PAGE_CUT_ATTR, String(Math.round(cut * 100) / 100));
+    band.style.maxHeight = `${Math.max(0, cut)}px`;
+    band.style.overflow = "clip";
   }
 }
 
@@ -1339,6 +1439,9 @@ function appendBandGroupMembers(doc: Document, box: HTMLElement, shape: BandRich
         label.style.whiteSpace = "pre";
         if (typeof member.textFill === "string" && /^#[0-9a-f]{6}$/i.test(member.textFill)) label.style.color = member.textFill;
         for (const run of runs) {
+          // Hidden words (Word's `w:vanish`) are kept in the member's text and
+          // drawn nowhere, as in the body.
+          if ((run.style as { hidden?: unknown } | undefined)?.hidden === true) continue;
           const span = doc.createElement("span");
           span.textContent = run.text;
           const style = run.style;
@@ -1399,7 +1502,8 @@ export function buildBandChart(doc: Document, chart: BandRichChart, index: numbe
   const height = Math.max(1, Math.round(ptToPx((heightEmu / EMU_PER_PT))));
   const inputs = documentChartPlanInputs(chart, null);
   const { content } = documentChartPictureContent({
-    attrs: normalizeChartBlockAttrs(chart) as unknown as ChartBlockAttrsV2,
+    // The chart's own V2 attrs (the normalizer's `attrs`), not the reading.
+    attrs: normalizeChartBlockAttrs(chart).attrs as ChartBlockAttrsV2,
     nativeLook: inputs.nativeLook,
     themeAccents: inputs.themeAccents,
     linkedValueNumberFormat: inputs.linkedValueNumberFormat,
@@ -1499,7 +1603,7 @@ function bandBorderGroupsOff(): boolean {
  * their left and right indents. Null for a line with no visible outside edge
  * or one standing out of the flow in a text frame. */
 function bandBorderBoxKey(block: BandRichBlock | undefined): string | null {
-  if (!block || block.type !== "paragraph" || block.textFrame) return null;
+  if (!block || block.type !== "paragraph" || wordPositionedFrame(block.textFrame)) return null;
   const borders = normalizeDocumentParagraphBorders(block.paragraphBorders);
   if (!borders) return null;
   const edges = (["top", "left", "bottom", "right"] as const).map((edge) =>
@@ -1619,14 +1723,17 @@ export function buildBandRichDom(
         paragraph.setAttribute(key, value);
       }
       paragraph.style.textAlign = block.align ?? "left";
-      if (block.textFrame && block.textFrame.wrap !== "notBeside") {
+      // A framePr that neither moves nor sizes the line is no frame in Word
+      // (wordFramePosition.ts; Apple Pages' w=0 h=0 frame on every line).
+      const textFrame = wordPositionedFrame(block.textFrame);
+      if (textFrame && textFrame.wrap !== "notBeside") {
         // A framed line stands out of the band's flow, at the side its frame
         // names, and the lines after it run beside it (Word's text frame;
         // corpus R21-D04's framed page number takes no line of its own).
-        const side = block.textFrame.xAlign === "right" || block.textFrame.xAlign === "outside" ? "right" : "left";
+        const side = textFrame.xAlign === "right" || textFrame.xAlign === "outside" ? "right" : "left";
         paragraph.style.float = side;
-        if (block.textFrame.w) paragraph.style.width = `${block.textFrame.w / 15}px`;
-        if (block.textFrame.hSpace) paragraph.style.setProperty(`margin-${side === "left" ? "right" : "left"}`, `${block.textFrame.hSpace / 15}px`);
+        if (textFrame.w) paragraph.style.width = `${textFrame.w / 15}px`;
+        if (textFrame.hSpace) paragraph.style.setProperty(`margin-${side === "left" ? "right" : "left"}`, `${textFrame.hSpace / 15}px`);
       }
       const runSize = bandStyleRunSizePx(context.styleDefinitions, block.docxStyleId);
       if (runSize !== null) paragraph.style.fontSize = `${Math.round(runSize * 1000) / 1000}px`;

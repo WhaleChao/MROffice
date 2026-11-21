@@ -16,6 +16,7 @@
  */
 
 import { PresentationMetafileTextLayer, metafileTextRuns } from "./PresentationMetafileTextLayer";
+import { metafileBlendLayer } from "../../../../lib/presentation/metafile-blend-layer";
 import { getApiHttpBaseUrl } from "@mrnote/core/web/lib/env.ts";
 import { smartArtPictureDisplaySrc, smartArtPictureOutputSrc } from "@mrnote/core/web/lib/office-smartart/model.ts";
 import {
@@ -1588,6 +1589,9 @@ function CroppedImageDrawing({
     (frameApart || recolorApart || fillApart ? { x: 0, y: 0, w: 1, h: 1 } : undefined);
   // An EMF's words over its render, drawn by nobody (readings row 864).
   const textRuns = metafileTextRuns(block.source);
+  // An EMF's lone SRCPAINT / SRCAND bitmap, ORed / ANDed into the slide
+  // under the picture as Windows PowerPoint applies it (readings row 1021).
+  const blendLayer = metafileBlendLayer(block);
   if (!effectiveCrop || (isIdentityCrop(effectiveCrop) && !frameApart && !recolorApart && !fillApart)) {
     const whole = (
       // eslint-disable-next-line @next/next/no-img-element
@@ -1611,10 +1615,36 @@ function CroppedImageDrawing({
         data-artistic-effect={normalizeOfficeArtisticEffect(block.artisticEffect) ?? undefined}
       />
     );
-    if (!textRuns.length || !fillParent) return whole;
+    if ((!textRuns.length && !blendLayer) || !fillParent) return whole;
     return (
       <span style={{ position: "relative", display: "block", width: "100%", height: "100%" }}>
         {whole}
+        {blendLayer ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={blendLayer.src}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: "100%",
+              height: "100%",
+              border: 0,
+              borderRadius: 0,
+              maxWidth: "none",
+              maxHeight: "none",
+              ...presentationPictureOrientationCss(block),
+              ...(contentOpacity !== undefined ? { opacity: contentOpacity } : {}),
+              mixBlendMode: blendLayer.mode,
+              pointerEvents: "none",
+            }}
+            data-testid="presentation-metafile-blend-layer"
+            data-blend-mode={blendLayer.mode}
+          />
+        ) : null}
         <PresentationMetafileTextLayer runs={textRuns} orientation={presentationPictureOrientationCss(block)} />
       </span>
     );
@@ -1687,6 +1717,29 @@ function CroppedImageDrawing({
         }}
         data-artistic-effect={normalizeOfficeArtisticEffect(block.artisticEffect) ?? undefined}
       />
+      {blendLayer ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={blendLayer.src}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          // Laid exactly where the picture's render is (its crop's box), over it.
+          style={{
+            ...(css as CSSProperties),
+            ...presentationPictureOrientationCss(block),
+            border: 0,
+            borderRadius: 0,
+            maxWidth: "none",
+            maxHeight: "none",
+            ...(contentOpacity !== undefined ? { opacity: contentOpacity } : {}),
+            mixBlendMode: blendLayer.mode,
+            pointerEvents: "none",
+          }}
+          data-testid="presentation-metafile-blend-layer"
+          data-blend-mode={blendLayer.mode}
+        />
+      ) : null}
       <PresentationMetafileTextLayer
         runs={textRuns}
         box={css as CSSProperties}

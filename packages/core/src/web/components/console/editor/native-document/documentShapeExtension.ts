@@ -116,6 +116,7 @@ import {
   type MergedShapeResult,
 } from "../../../../lib/presentation-shapes";
 import { presentationCustomPathToSvgPath } from "../../../../lib/presentation-freeform";
+import { officeCustomPathPaintedSegments, officeCustomPathSegmentFill } from "../../../../lib/office-custom-path-paints";
 import {
   officeCustomPathMergePoints,
   officeMergedShapeCustomPath,
@@ -1119,6 +1120,12 @@ function inlineEffectExtentMargin(source: unknown): string {
  * paint the shading of its run (as before; A/B). */
 function smartArtRunShadingOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsSmartArtRunShadingOff?: boolean }).__docsSmartArtRunShadingOff === true;
+}
+
+/** `window.__docsMemberTextOverflowOff = true`: a drawing member's words
+ * (not a text box) are cut at its box, as before (A/B). */
+function memberTextOverflowOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsMemberTextOverflowOff?: boolean }).__docsMemberTextOverflowOff === true;
 }
 
 /**
@@ -2211,6 +2218,27 @@ function documentRectPathGradientElement(id: string, gradient: OfficeShapeGradie
  * painter is a second reading of `preset`, `adjustments`, `customPath`, the
  * paint and the two line ends, and those drift (SHAPE-IMPORT-AUDIT.md §60).
  */
+/**
+ * The shape's picture-fill pattern (`data-picture-fill-id`), laid over the
+ * shape's whole box of `width` x `height` view units rather than over each
+ * path's own bounds: `objectBoundingBox` is per referencing element, so a
+ * preset of several filled faces otherwise squeezed the picture into each.
+ */
+function documentPictureFillOverBox(svg: SVGSVGElement, width: number, height: number): void {
+  const id = svg.dataset.pictureFillId;
+  const pattern = id ? svg.querySelector(`pattern[id="${id}"]`) : null;
+  // (A turned picture's transform is in the path's own units: left as is.)
+  if (!pattern || pattern.getAttribute("patternUnits") !== "objectBoundingBox" || pattern.hasAttribute("patternTransform")) return;
+  for (const [name, scale] of [["x", width], ["y", height], ["width", width], ["height", height]] as const) {
+    pattern.setAttribute(name, String(Number(pattern.getAttribute(name) ?? 0) * scale));
+  }
+  pattern.setAttribute("patternUnits", "userSpaceOnUse");
+  pattern.setAttribute("patternContentUnits", "userSpaceOnUse");
+  const content = svgElement("g", { transform: `scale(${width} ${height})` });
+  content.append(...Array.from(pattern.childNodes));
+  pattern.append(content);
+}
+
 function paintShapeGeometry(
   svg: SVGSVGElement,
   attrs: DocumentShapeAttrs,
@@ -2593,6 +2621,22 @@ function paintShapeGeometry(
       pixelHost.append(group);
       return;
     }
+    if (!attrs.inkTool && attrs.customPath && attrs.customPathPaints) {
+      // Paths that paint apart (`a:path@fill` / `@stroke`): each with its own
+      // fill -- none, the shape's, or that darkened or lightened -- and
+      // outlined or not, in order, as Office draws them.
+      const segments = officeCustomPathPaintedSegments(attrs.customPath, attrs.customPathPaints);
+      for (const segment of segments) {
+        strokeHost.append(svgElement("path", {
+          d: segment.d,
+          ...common,
+          fill: officeCustomPathSegmentFill(fill, segment.fill),
+          ...(segment.stroke ? {} : { stroke: "none" }),
+        }));
+      }
+      paintLineEnds(svg, segments, documentShapeLineEnds(attrs), stroke);
+      return;
+    }
     strokeHost.append(svgElement("path", { d: customPath, ...common, ...ink }));
     // An OPEN outline of the shape's own is a line and wears the ends its file
     // states; a CLOSED one takes none, exactly as Office draws it. Ink is a
@@ -2723,6 +2767,13 @@ function paintShapeGeometry(
       ...presetGeometry.paths.filter((path) => path.fill !== "none"),
       ...presetGeometry.paths.filter((path) => path.fill === "none"),
     ];
+    if (fillPicture && ordered.filter((path) => path.fill !== "none").length > 1) {
+      // A picture fills the SHAPE's box, every face showing its part of the
+      // one picture (Word's VML cube, R136-D24: the palm runs from the front
+      // face into the top and the side); laid out per path it was squeezed
+      // into each face on its own.
+      documentPictureFillOverBox(svg, viewWidth, viewHeight);
+    }
     for (const part of ordered) {
       svg.append(
         svgElement("path", {
@@ -3582,6 +3633,13 @@ function shapeTextRunSpan(run: TextRun, shape: DocumentShapeAttrs): HTMLSpanElem
   span.textContent = run.text;
   const style = run.style;
   if (!style) return span;
+  // Hidden words (Word's `w:vanish`): Word neither shows nor prints them, so
+  // the shape keeps them in its text and draws nothing for them.
+  if ((style as { hidden?: unknown }).hidden === true) {
+    span.style.display = "none";
+    span.dataset.shapeRunHidden = "true";
+    return span;
+  }
   if (style.bold !== undefined) span.style.fontWeight = style.bold ? "700" : "400";
   if (style.italic !== undefined) span.style.fontStyle = style.italic ? "italic" : "normal";
   if (style.underline !== undefined || style.strike !== undefined) {
@@ -5763,6 +5821,15 @@ function createDocumentShapeNodeView(
       // default), never cut by the `.text` rule's clip.
       if (member.smartArtRole !== undefined || documentShapeIsPreservedNativeSmartArt(current)) {
         memberText.style.overflow = "visible";
+      } else if (member.isTextBox !== true && !member.textStory && !memberTextOverflowOff()) {
+        // So are a drawing member's own words (a locked canvas's or a
+        // group's shape, `a:txBody`): DrawingML's `vertOverflow` is
+        // `overflow` unless the file says `clip`, and Windows Word draws the
+        // words past the shape (corpus R475-D26 page 5, a locked canvas's
+        // "Control 0.006% ..." labels, 20 pt in a 31.5 pt box scaled down:
+        // whole in Word, their upper half cut here). A text box (`txBox`,
+        // a Word story) keeps the clip: Word hides what does not fit in it.
+        memberText.style.overflow = "visible";
       }
       // The words' own alignment (a converted point's `algn`, Align Text):
       // the line stands at that side of the box, its lines aligned so.
@@ -5968,10 +6035,13 @@ function createDocumentShapeNodeView(
         const widthPx = Math.max(1, Math.round(ptToPx((member.widthEmu / EMU_PER_PT))));
         const heightPx = Math.max(1, Math.round(ptToPx((member.heightEmu / EMU_PER_PT))));
         try {
-          const chartAttrs = normalizeChartBlockAttrs(member.chart as Record<string, unknown>);
-          const inputs = documentChartPlanInputs(chartAttrs as never, null);
+          // The chart's own V2 attrs (the normalizer's `attrs`; handed the
+          // whole reading, the picture drew the chart model's default data,
+          // corpus R460-D40's grouped charts as "类别 1..4").
+          const chartAttrs = normalizeChartBlockAttrs(member.chart as Record<string, unknown>).attrs;
+          const inputs = documentChartPlanInputs(member.chart as Record<string, unknown>, null);
           const { content } = documentChartPictureContent({
-            attrs: chartAttrs as unknown as ChartBlockAttrsV2,
+            attrs: chartAttrs as ChartBlockAttrsV2,
             nativeLook: inputs.nativeLook,
             themeAccents: inputs.themeAccents,
             linkedValueNumberFormat: inputs.linkedValueNumberFormat,

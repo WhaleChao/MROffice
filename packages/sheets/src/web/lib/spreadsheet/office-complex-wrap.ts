@@ -101,3 +101,55 @@ export function officeWrapSpacedAt(spaced: OfficeSpacedWrap | undefined, row: nu
   if (spaced === "all") return true;
   return row > spaced[0] || (row === spaced[0] && col > spaced[1]);
 }
+
+interface NormalFontCell {
+  readonly value?: unknown;
+  readonly style?: object;
+}
+
+const NORMAL_FONT_DIFFERS = ["bold", "italic", "underline", "strikethrough", "superscript", "subscript", "color", "themeFontRole", "fontRecord"] as const;
+
+const normalWrapFirsts = new WeakMap<object, { rows: unknown; key: string; first: readonly [number, number] | undefined }>();
+
+/**
+ * The first (row, column) of a zoomed-out sheet whose wrapped cell Windows
+ * Excel fits in the Normal font itself, or undefined. A sheet opened zoomed
+ * out fits its wrapped rows by the Normal font's digit at the view's size
+ * only before that cell: it and every cell after it wrap in 100%'s room
+ * (lookwin p243/p245/p247-lw: a wrapped Normal cell -- a word, a number, in
+ * any column -- takes the zoomed room from the rows after it; an unwrapped
+ * one, a bold or coloured one, does not; R379-X18's survey headers). The
+ * API's normal_wrap_first (notebooks.py) is the same rule.
+ */
+export function officeNormalWrapFirst(sheet: { readonly cells: Readonly<Record<string, NormalFontCell | undefined>>; readonly nativeGrid?: TriggerSheet["nativeGrid"] },
+  normal: { readonly family: string; readonly sizePt: number }): readonly [number, number] | undefined {
+  const rows = sheet.nativeGrid?.rowMetrics?.rows;
+  const key = `${normal.family}\u0000${normal.sizePt}`;
+  const known = normalWrapFirsts.get(sheet.cells);
+  if (known && known.rows === rows && known.key === key) return known.first;
+  const family = normal.family.trim().toLowerCase();
+  let first: [number, number] | undefined;
+  for (const cellKey in sheet.cells) {
+    const cell = sheet.cells[cellKey];
+    if (!cell) continue;
+    const value = cell.value;
+    if (value === undefined || value === null || value === "" || (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean")) continue;
+    const style = (cell.style ?? {}) as Readonly<Record<string, unknown>>;
+    if (!cellTextWraps(style as { wrapText?: boolean; horizontalJustify?: unknown })) continue;
+    if (NORMAL_FONT_DIFFERS.some((name) => style[name] !== undefined && style[name] !== null && style[name] !== false)) continue;
+    const ownFamily = style["fontFamily"];
+    if (typeof ownFamily === "string" && ownFamily.trim() && ownFamily.trim().toLowerCase() !== family) continue;
+    const pixels = style["fontSize"];
+    const native = style["nativeFontSize"] as { pixels?: unknown; points?: unknown } | undefined;
+    const ownPoints = native && typeof native === "object" && native.pixels === pixels && typeof native.points === "number" ? native.points
+      : typeof pixels === "number" && pixels > 0 ? pixels * 0.75 : undefined;
+    if (ownPoints !== undefined && Math.abs(ownPoints - normal.sizePt) > 0.01) continue;
+    const separator = cellKey.indexOf(":");
+    const row = Number(cellKey.slice(0, separator)), col = Number(cellKey.slice(separator + 1));
+    if (!Number.isInteger(row) || !Number.isInteger(col)) continue;
+    if (rows?.[String(row)]?.customHeight === true) continue;
+    if (!first || row < first[0] || (row === first[0] && col < first[1])) first = [row, col];
+  }
+  normalWrapFirsts.set(sheet.cells, { rows, key, first });
+  return first;
+}

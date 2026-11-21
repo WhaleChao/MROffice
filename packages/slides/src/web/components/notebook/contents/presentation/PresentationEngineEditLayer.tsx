@@ -78,6 +78,7 @@ export function PresentationEngineEditLayer({
   defaultTabPx,
   kerning,
   eastAsianLines,
+  lineBox,
   widthPx,
   wrap,
   colorOverride,
@@ -100,6 +101,8 @@ export function PresentationEngineEditLayer({
   kerning?: unknown;
   /** `source.nativeEastAsianLines` (readings row 1001). */
   eastAsianLines?: unknown;
+  /** `source.nativeLineBox` (readings row 1013). */
+  lineBox?: unknown;
   widthPx: number | null;
   wrap: boolean;
   colorOverride?: string;
@@ -145,6 +148,7 @@ export function PresentationEngineEditLayer({
     defaultTabPx,
     kerning,
     eastAsianLines,
+    lineBox,
     widthPx,
     wrap,
   });
@@ -449,6 +453,7 @@ export function PresentationEngineEditOrRows({
   defaultTabPx,
   kerning,
   eastAsianLines,
+  lineBox,
   widthPx,
   wrap,
   colorOverride,
@@ -465,13 +470,15 @@ export function PresentationEngineEditOrRows({
   kerning?: unknown;
   /** `source.nativeEastAsianLines` (readings row 1001). */
   eastAsianLines?: unknown;
+  /** `source.nativeLineBox` (readings row 1013). */
+  lineBox?: unknown;
   widthPx: number | null;
   wrap: boolean;
   colorOverride?: string;
   render: (engineLineStarts: string[] | undefined) => ReactNode;
 }) {
   const engine = usePresentationEngineBody({
-    enabled, force: true, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, eastAsianLines, widthPx, wrap,
+    enabled, force: true, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, widthPx, wrap,
   });
   if (!enabled || !rows || widthPx === null) return <>{render(undefined)}</>;
   return (
@@ -486,6 +493,7 @@ export function PresentationEngineEditOrRows({
       defaultTabPx={defaultTabPx}
       kerning={kerning}
       eastAsianLines={eastAsianLines}
+      lineBox={lineBox}
       widthPx={widthPx}
       wrap={wrap}
       colorOverride={colorOverride}

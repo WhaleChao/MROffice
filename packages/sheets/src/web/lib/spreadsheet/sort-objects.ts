@@ -76,7 +76,17 @@ export function objectsAfterRowSort<O extends DrawingObjectLike>(
       // "Move but don't size" (a one-cell anchor) travels with the row its
       // top-left corner sits in, whatever rows it reaches into (Excel for Mac
       
-      // into row 6 went with row 5; xlsx-rounds R311-X12 E9).
+      // into row 6 went with row 5; xlsx-rounds R311-X12 E9) -- unless the
+      // file places it by two cell markers (an `xdr:twoCellAnchor` with
+      // editAs oneCell or absolute, as the export writes a placement chosen
+      // in Properties): then it goes by them as a Move and size one does,
+      // one reaching into a later row, even ending on its top edge, staying
+      // (Windows Excel 16.0, xlsx-rounds probe/n48-sortspan ps1-ps3, CRITERIA
+      // XC-212; R462-X01 E9: AutoShape 39 over I104:I108 went with row 104).
+      const byMarkers =
+        (object.anchor.kind === "oneCell" || object.anchor.kind === "absolute") &&
+        (object.anchor.fileMarkers === true || object.anchor.editAs === object.anchor.kind);
+      if (byMarkers && top + bounds.height > rowTop(row + 1) - epsilon) return object;
       if (object.anchor.kind !== "oneCell" && top + bounds.height > rowTop(row + 1) + epsilon) return object;
     }
     const destination = destinationOf(row);

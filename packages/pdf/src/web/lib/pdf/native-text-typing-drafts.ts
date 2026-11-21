@@ -17,6 +17,13 @@ export type PdfNativeTextTypingDraft = Readonly<{
   lineText: string;
   /** The words as the editor held them. */
   value: string;
+  
+
+
+
+
+
+  formats?: string;
   caret: Readonly<{ start: number; end: number }> | null;
   /** The line was left with these words (they were on their way into the
    * page's queue): brought back, they are finished again, not left open. */
@@ -47,6 +54,8 @@ const TAB_LOCK_PREFIX = "mrnote:pdf-typing-drafts:tab:";
 const TAKE_LOCK_PREFIX = "mrnote:pdf-typing-drafts:take:";
 const MAX_DRAFTS = 32;
 const MAX_CHARS = 32 * 1024;
+/** Of one line's formats, as kept (its JSON): past it they are not kept. */
+export const PDF_NATIVE_TEXT_TYPING_DRAFT_MAX_FORMAT_CHARS = 64 * 1024;
 
 
 
@@ -80,6 +89,8 @@ function isDraft(value: unknown): value is PdfNativeTextTypingDraft {
   const caret = draft.caret as Record<string, unknown> | null;
   return typeof draft.id === "string" && Number.isSafeInteger(draft.pageNumber) && (draft.pageNumber as number) > 0 &&
     typeof draft.lineText === "string" && typeof draft.value === "string" && typeof draft.left === "boolean" &&
+    (draft.formats === undefined || (typeof draft.formats === "string" && draft.formats.length > 0 &&
+      draft.formats.length <= PDF_NATIVE_TEXT_TYPING_DRAFT_MAX_FORMAT_CHARS)) &&
     typeof draft.keptAt === "number" && Number.isSafeInteger(draft.tries) &&
     (at === null || (typeof at === "object" && Number.isFinite(at.x) && Number.isFinite(at.y))) &&
     (caret === null || (typeof caret === "object" && Number.isSafeInteger(caret.start) && Number.isSafeInteger(caret.end)));
@@ -219,22 +230,24 @@ export function createPdfNativeTextTypingDraftTab(env: {
     };
     const store: PdfNativeTextTypingDrafts = {
       keep(input) {
-        if (!input.id || input.value.length > maxChars || input.lineText.length > maxChars) return false;
+        if (!input.id || input.value.length > maxChars || input.lineText.length > maxChars ||
+          (input.formats?.length ?? 0) > PDF_NATIVE_TEXT_TYPING_DRAFT_MAX_FORMAT_CHARS) return false;
         const existing = drafts.find((draft) => draft.id === input.id);
         if (!existing && drafts.length >= maxDrafts) return false;
         if (Number.isFinite(maxTotal)) {
           let others = 0;
-          for (const draft of drafts) if (draft !== existing) others += draft.value.length + draft.lineText.length;
-          if (others + input.value.length + input.lineText.length > maxTotal) return false;
+          for (const draft of drafts) if (draft !== existing) others += draft.value.length + draft.lineText.length + (draft.formats?.length ?? 0);
+          if (others + input.value.length + input.lineText.length + (input.formats?.length ?? 0) > maxTotal) return false;
         }
         const next: PdfNativeTextTypingDraft = Object.freeze({
           id: input.id, pageNumber: input.pageNumber,
           at: input.at ? Object.freeze({ x: input.at.x, y: input.at.y }) : existing?.at ?? null,
           lineText: input.lineText, value: input.value,
+          ...(input.formats ? { formats: input.formats } : {}),
           caret: input.caret ? Object.freeze({ start: input.caret.start, end: input.caret.end }) : null,
           left: input.left ?? false, keptAt: now(), tries: input.tries ?? existing?.tries ?? 0,
         });
-        if (existing && existing.value === next.value && existing.left === next.left && existing.lineText === next.lineText &&
+        if (existing && existing.value === next.value && existing.formats === next.formats && existing.left === next.left && existing.lineText === next.lineText &&
           existing.pageNumber === next.pageNumber && existing.caret?.start === next.caret?.start &&
           existing.caret?.end === next.caret?.end && existing.tries === next.tries && existing.at?.x === next.at?.x && existing.at?.y === next.at?.y) return true;
         drafts = [...drafts.filter((draft) => draft.id !== input.id), next];

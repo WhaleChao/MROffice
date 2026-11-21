@@ -2,32 +2,76 @@
 
 <p align="center"><sub>🌐 <a href="../README.md">English</a> · <a href="../i18n/README.en-GB.md">English (UK)</a> · <a href="../i18n/README.zh.md">简体中文</a> · <a href="../i18n/README.zh-TW.md">繁體中文</a> · <a href="../i18n/README.ja.md">日本語</a> · <a href="../i18n/README.ko.md">한국어</a> · <a href="../i18n/README.de.md">Deutsch</a> · <a href="../i18n/README.fr.md">Français</a> · <a href="../i18n/README.es.md">Español</a> · <a href="../i18n/README.es-419.md">Español (Latinoamérica)</a> · <a href="../i18n/README.pt-BR.md">Português (Brasil)</a> · <a href="../i18n/README.it.md">Italiano</a> · <a href="../i18n/README.nl.md">Nederlands</a> · <a href="../i18n/README.sv.md">Svenska</a> · <a href="../i18n/README.da.md">Dansk</a> · <a href="../i18n/README.no.md">Norsk</a> · <a href="../i18n/README.fi.md">Suomi</a> · <a href="../i18n/README.id.md">Bahasa Indonesia</a> · <a href="../i18n/README.th.md">ไทย</a> · <a href="../i18n/README.vi.md">Tiếng Việt</a></sub></p>
 
-<p align="center"><b>MR Office 的开源编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。</b></p>
+<p align="center"><b>MR Office 的开源编辑器——最接近微软 Office 的编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。</b></p>
 
-<p align="center"><a href="https://mroffice.ai/zh"><b>▶ 在线试用，无需安装</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ 从 Releases 下载 MR Office</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai"><b>▶ 在线试用</b></a> · <a href="https://mroffice.ai/office/download"><b>⬇ 下载</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/developers">🧑‍💻 开发者</a> · <a href="https://mroffice.ai/developers/embed">🧩 嵌入</a> · <a href="https://mroffice.ai/developers/mcp">🤖 AI 应用的 MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/developers/oauth">🔑 用 MR Office 登录</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
-<p align="center"><a href="https://mroffice.ai/zh"><img src="../docs/media/mr-office-demo.webp" alt="MR Office 的开源编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。" width="100%"></a></p>
+<p align="center"><a href="https://mroffice.ai"><img src="../docs/media/mr-office-demo.webp" alt="MR Office 的开源编辑器——最接近微软 Office 的编辑器：文档、表格、演示文稿、PDF、手写和代码，全部在浏览器中运行。" width="100%"></a></p>
 
 <p align="center"><a href="https://demo.mroffice.ai/media/mr-office-demo.mp4">🔊 观看 50 秒介绍视频（有声）</a></p>
 
 <table>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/docs.png" alt="文档" width="100%"></a><br><b>文档</b></td>
-<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/sheets.png" alt="表格" width="100%"></a><br><b>表格</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai"><img src="../docs/screenshots/docs.png" alt="文档" width="100%"></a><br><b>文档</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai"><img src="../docs/screenshots/sheets.png" alt="表格" width="100%"></a><br><b>表格</b></td>
 </tr>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/slides.png" alt="演示文稿" width="100%"></a><br><b>演示文稿</b></td>
-<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai"><img src="../docs/screenshots/slides.png" alt="演示文稿" width="100%"></a><br><b>演示文稿</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai"><img src="../docs/screenshots/pdf.png" alt="PDF" width="100%"></a><br><b>PDF</b></td>
 </tr>
 <tr>
-<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/ink.png" alt="手写" width="100%"></a><br><b>手写</b></td>
-<td align="center" width="50%"><a href="https://mroffice.ai/zh"><img src="../docs/screenshots/code.png" alt="代码" width="100%"></a><br><b>代码</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai"><img src="../docs/screenshots/ink.png" alt="手写" width="100%"></a><br><b>手写</b></td>
+<td align="center" width="50%"><a href="https://mroffice.ai"><img src="../docs/screenshots/code.png" alt="代码" width="100%"></a><br><b>代码</b></td>
 </tr>
 </table>
 
 MR Office 是一个集笔记、AI 和真实文件于一体的工作空间。本仓库公开它的编辑器源代码：与 MR Office 中运行的是同一套编辑器，你可以自己构建、运行和嵌入。这是开源编辑器，不是一套完整开源的 Office 套件：Microsoft Office 文件的读写由 MR Office 提供（见下文）。
+
+## 开发者
+
+开发者需要的一切都在 **[MR Office Developers](https://mroffice.ai/developers)**——自助开通，无需申请：用任意 MR Office 账号登录即可开始。
+
+### 把编辑器嵌入你的网页应用（推荐）
+
+编辑器由 MR Office 托管；你的服务器签发一个短期会话令牌，你的页面用它打开编辑器。它编辑真正的 Word、Excel、PowerPoint 和 PDF 文件（.docx、.xlsx、.pptx、.pdf），支持多人协同、上传、全部导出格式、打印，并通过签名回调把保存的文件交回你的服务器。免费：本机开发每月 1,000 次，正式域名每月 100 次，最多 2 个应用。这是托管的商业服务，你自己的应用不受本仓库 AGPL 许可证约束。
+
+1. 在你的项目文件夹里运行 `npx mroffice-embed init`（或在开发者控制台创建应用）：在浏览器里点一次“允许”，应用的密钥就写入 `.env.local` / `.env`。
+2. 你的服务器用 `mroffice-embed/server` 的 `createSessionToken` 签发会话令牌；密钥始终只在服务器上。
+3. 你的页面用 `mroffice-embed` 的 `open()` 打开编辑器（或用脚本 `https://mroffice.ai/embed/v1/embed.js`）。
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[嵌入指南](https://mroffice.ai/developers/embed) · [Markdown 版指南（给 AI 编程助手）](https://mroffice.ai/developers/embed.md) · [价格与限额](https://mroffice.ai/developers/pricing) · [开发者控制台](https://mroffice.ai/developers/console) · [在线演示](https://mroffice.ai/developers/embed/demo)
+
+### AI 应用：MCP 服务器
+
+AI 应用可以通过 MCP 服务器在真正的 MR Office 编辑器里打开、读取、编辑和导出文档：连接托管端点 `https://mcp.mroffice.ai/mcp`（用 MR Office 账号登录，无需密钥），或在自己电脑上运行 `npx -y mroffice-mcp`。源码在 `apps/mcp`。 [MCP 指南 →](https://mroffice.ai/developers/mcp)
+
+### 用 MR Office 账号登录（OAuth）
+
+MR Office 是一个 OAuth 2.1 授权服务器（PKCE、客户端 ID 元数据文档、动态注册）：你的应用可以让用户用 MR Office 账号登录，并在其允许的权限范围内操作。 [OAuth 指南 →](https://mroffice.ai/developers/oauth)
+
+### 自行部署开源编辑器
+
+本仓库的六个编辑器可以按 AGPL-3.0 集成到你自己的产品中：如果别人通过网络使用你修改过的版本，你必须向他们提供完整源代码，并保留“MR Office”署名（NOTICE.md）。它们打开自己的格式、CSV、HTML、Markdown 和 PDF；Word、Excel 和 PowerPoint 文件不在开源编辑器中（上面的托管嵌入支持）。商业许可请联系 support@mr-note.com。 [开源指南 →](https://mroffice.ai/developers/open-source)
+
+npm 包正在准备中，包名为 `mroffice-core`、`mroffice-docs`、`mroffice-sheets`、`mroffice-slides`、`mroffice-pdf`、`mroffice-ink` 和 `mroffice-code`；发布之前，请从本仓库构建编辑器（见下文）。
 
 ## 编辑器一览
 
@@ -44,7 +88,7 @@ MR Office 是一个集笔记、AI 和真实文件于一体的工作空间。本�
 
 ## 运行编辑器
 
-**▶ [在线试用，无需安装](https://mroffice.ai/zh)**
+**▶ [在线试用，无需安装](https://mroffice.ai)**
 
 六个编辑器在 `packages/` 下（`@mrnote/docs`、`sheets`、`slides`、`pdf`、`ink`、`code`，共用 `@mrnote/core`），在 `apps/playground` 中一起运行：
 
@@ -75,7 +119,7 @@ MR Office 桌面版免费，包含这些编辑器和完整服务，在你自己�
 - SmartArt 编辑
 - PDF 编辑后写回文件
 
-**[从 Releases 下载 MR Office →](https://github.com/XinaTian/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
+**[下载 MR Office（免费） →](https://mroffice.ai/office/download)**
 
 ### Word、Excel、PowerPoint 和 PDF 文件
 

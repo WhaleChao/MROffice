@@ -123,13 +123,17 @@ import {
   textFromParagraphs,
 } from "./presentation-paragraphs";
 import { rowsWithLayoutHiddenMarkers } from "./presentation-smartart-markers";
+import { fontScriptClusters } from "../components/office-ribbon/officeFontScriptSlots";
 // A cycle (that module formats runs through this one); both are only called, never read at load.
 import {
   presentationBlockWithCanonicalTextPaint,
   presentationBlockWithRunTextPaints,
 } from "./presentation-run-text-paint";
 import {
-  applyRunFormat,
+  applyFontBoxRunFormat,
+  fontBoxFaceSkipsEastAsian,
+  LATIN_TEXT_FONT_PATCH,
+  latinTextFontPatch,
   applyStylePatch,
   normalizeRuns,
   normalizeRunStyle,
@@ -1129,7 +1133,7 @@ export function formatTextBlockRunSelection(
     const nextParagraphs = paragraphs.map((paragraph, index) => {
       const range = rangeByParagraph.get(index);
       if (!range) return paragraph;
-      const formatted = applyRunFormat(
+      const formatted = applyFontBoxRunFormat(
         range.runs,
         range.from,
         range.to,
@@ -1157,7 +1161,7 @@ export function formatTextBlockRunSelection(
 
   const baseRuns = normalizeRuns(textBlock.runs) ?? runsFromText(textBlock.text);
   const [from, to] = selectedTextRange(blockId, textBlock.text, selection);
-  const formatted = applyRunFormat(baseRuns, from, to, patch);
+  const formatted = applyFontBoxRunFormat(baseRuns, from, to, patch);
   const normalized = normalizeRuns(formatted);
   if (runsDropText(normalized, formatted)) return null;
   if (runCollectionsEqual(textBlock.runs, normalized)) return null;
@@ -2138,7 +2142,7 @@ export function homeObjectBlocksWithPatch(
   let changed = false;
   const next = blocks.map((block) => {
     if (textIds.has(block.id) && (block.type === "text" || block.type === "shape")) {
-      const written = PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER.write(block as PresentationTextBlock, patch);
+      const written = homeObjectTextBlockWithPatch(block as PresentationTextBlock, patch);
       if (written === block) return block;
       changed = true;
       return written as PresentationBlock;
@@ -2162,6 +2166,36 @@ export function homeObjectBlocksWithPatch(
 }
 
 /**
+ * A selected text object's words given the object path's patch. A Latin face
+ * from the font box goes on the characters drawn from the Latin slot only,
+ * where the words hold East Asian characters: PowerPoint writes it in each
+ * run's `a:latin` and leaves `a:ea`, so those characters keep their face
+ * (TRIAGE 54, `applyFontBoxRunFormat`). The object-wide face the adapter
+ * writes would have drawn them in the Latin face too.
+ */
+function homeObjectTextBlockWithPatch(
+  block: PresentationTextBlock,
+  patch: SmartArtNodeTextFormatPatch,
+): PresentationTextBlock {
+  const face = patch.fontFamily;
+  if (
+    patch.themeFontRole || !fontBoxFaceSkipsEastAsian(patch, face)
+    || !fontScriptClusters(presentationEditableText(block)).some((cluster) => cluster.slot === "eastAsia")
+  ) {
+    return PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER.write(block, patch) as PresentationTextBlock;
+  }
+  const rest: SmartArtNodeTextFormatPatch = { ...patch };
+  delete rest.fontFamily;
+  const base = Object.keys(rest).length
+    ? (PRESENTATION_SMARTART_LABEL_TEXT_ADAPTER.write(block, rest) as PresentationTextBlock)
+    : block;
+  const facePatch: Partial<RunStyle> = { fontFamily: face };
+  return formatTextBlockRunSelection(
+    base, base.id, null, Object.hasOwn(patch, LATIN_TEXT_FONT_PATCH) ? latinTextFontPatch(facePatch) : facePatch,
+  ) ?? base;
+}
+
+/**
  * A character patch of the text path (sizes in the deck's px) as the
  * selected-object path's patch (sizes in points): what every selected
  * object's words take. Highlight and baseline shifts are run marks the
@@ -2169,6 +2203,8 @@ export function homeObjectBlocksWithPatch(
  */
 export function homeObjectPatchFromRunPatch(patch: Partial<RunStyle>): SmartArtNodeTextFormatPatch {
   return {
+    // A Latin text font box's face stays one (`latinTextFontPatch`).
+    ...(Object.hasOwn(patch, LATIN_TEXT_FONT_PATCH) ? { [LATIN_TEXT_FONT_PATCH]: true } : {}),
     ...(Object.hasOwn(patch, "fontFamily") ? { fontFamily: patch.fontFamily || undefined } : {}),
     // Theme Fonts on the whole object: the face follows the theme (reading row 438).
     ...(patch.fontFamily && (patch.themeFontRole === "heading" || patch.themeFontRole === "body")

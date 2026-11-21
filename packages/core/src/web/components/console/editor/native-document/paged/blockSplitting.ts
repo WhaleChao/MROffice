@@ -342,6 +342,27 @@ function pictureRowsBelow(dom: HTMLElement, textBottom: number, scaleY: number, 
   return tops.length;
 }
 
+/** `window.__docsCutWholeByLineBoxOff = true` (A/B): with no rendered head,
+ * a block is whole when its last glyphs fit, as before. */
+function cutWholeByLineBoxOff(win: Window | null): boolean {
+  return (win as (Window & { __docsCutWholeByLineBoxOff?: boolean }) | null)?.__docsCutWholeByLineBoxOff === true;
+}
+
+/** Bottom of the block's last line box (layout px from its top): its content
+ * box's bottom, when that lies within one line of the last glyphs' bottom
+ * (`glyphBottom`) -- below them by the leading a glyph box taller than its
+ * line gives back. Farther down stands something else (a picture row, an
+ * empty line), and the glyphs' bottom is kept. */
+function lastLineBoxBottom(dom: HTMLElement, scale: { y: number }, glyphBottom: number): number {
+  const style = getComputedStyle(dom);
+  const rect = dom.getBoundingClientRect();
+  const contentBottom = rect.height / scale.y -
+    (Number.parseFloat(style.paddingBottom) || 0) - (Number.parseFloat(style.borderBottomWidth) || 0);
+  const linePx = Number.parseFloat(style.lineHeight);
+  const pitch = Number.isFinite(linePx) && linePx > 0 ? linePx : 1.2 * (Number.parseFloat(style.fontSize) || 16);
+  return contentBottom > glyphBottom && contentBottom - glyphBottom < pitch ? contentBottom : glyphBottom;
+}
+
 export function planTextCutByChars(
   dom: HTMLElement,
   availablePx: number,
@@ -721,24 +742,41 @@ export function planTextCutByChars(
       // A row's line box may end inside the foot credit (no rendered head
       // judges it here, as in a column of a projected sheet).
       const rowSpacePx = availablePx + footCreditPx;
-      if (last.bottom <= rowSpacePx) return null; // whole block fits — no cut
-      // 2) last fitting character.
-      lo = 0;
-      let hi = total - 1;
-      while (lo < hi) {
-        const mid = (lo + hi + 1) >> 1;
-        const rect = rectAt(mid);
-        if (rect && rect.bottom <= rowSpacePx) lo = mid;
-        else hi = mid - 1;
+      if (last.bottom <= rowSpacePx) {
+        // The block is whole by its last line box, not by its last glyphs:
+        // under Auto leading the glyphs end above the box (the half-leading
+        // a glyph box taller than the line takes back). Judged by the glyphs
+        // (and the credit on top), room that the page's own rule finds a
+        // line short (the box less the credit) read as the whole block and
+        // nothing was cut, so the caller moved the paragraph on whole --
+        // corpus R432-D07 on a page of column regions: 11 lines, 206 px,
+        // last glyphs ending at 203.9, room 203.07 with 2.4 px of credit.
+        // Then every row but the last is the largest head, as where a
+        // rendered head decides.
+        const boxBottom = !measureLineBoxBottom || cutWholeByLineBoxOff(doc.defaultView) ? last.bottom : lastLineBoxBottom(dom, scale, last.bottom);
+        if (boxBottom <= rowSpacePx) return null; // whole block fits — no cut
+        const before = rowStartBefore(total);
+        if (!before || before.index <= 0) return null;
+        next = before;
+      } else {
+        // 2) last fitting character.
+        lo = 0;
+        let hi = total - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >> 1;
+          const rect = rectAt(mid);
+          if (rect && rect.bottom <= rowSpacePx) lo = mid;
+          else hi = mid - 1;
+        }
+        const fitRect = rectAt(lo);
+        if (!fitRect || fitRect.bottom > rowSpacePx) return null;
+        // 3) start of the next row: first char whose top clears the fit row.
+        next = nextRowStart(lo);
+        if (!next) return null;
+        // Picture rows before it that do not fit stay with the tail.
+        const pictures = picturesBefore(next.index);
+        if (pictures && pictures.bottom > rowSpacePx) next = { index: next.index, rect: pictures, endOfPrevious: true };
       }
-      const fitRect = rectAt(lo);
-      if (!fitRect || fitRect.bottom > rowSpacePx) return null;
-      // 3) start of the next row: first char whose top clears the fit row.
-      next = nextRowStart(lo);
-      if (!next) return null;
-      // Picture rows before it that do not fit stay with the tail.
-      const pictures = picturesBefore(next.index);
-      if (pictures && pictures.bottom > rowSpacePx) next = { index: next.index, rect: pictures, endOfPrevious: true };
     }
   }
   // 4) Word's widow/orphan control: `minLines` rows on each side. A tail

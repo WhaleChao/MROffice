@@ -4,7 +4,7 @@
 
 <p align="center"><b>MR Office のオープンソースエディター。文書、スプレッドシート、プレゼンテーション、PDF、手書き、コードがブラウザーで動きます。</b></p>
 
-<p align="center"><a href="https://mroffice.ai/ja"><b>▶ ライブデモを試す（インストール不要）</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases から MR Office をダウンロード</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/ja"><b>▶ オンラインで試す</b></a> · <a href="https://mroffice.ai/ja/office/download"><b>⬇ ダウンロード</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/ja/developers">🧑‍💻 開発者</a> · <a href="https://mroffice.ai/ja/developers/embed">🧩 埋め込み</a> · <a href="https://mroffice.ai/ja/developers/mcp">🤖 AI アプリ向け MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/ja/developers/oauth">🔑 MR Office でサインイン</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office は、ノート、AI、実際のファイルをひとつにまとめたワークスペースです。このリポジトリでは、そのエディターのソースコードを公開しています。MR Office で動いているものと同じエディターで、自分でビルド、実行、組み込みができます。これはオープンソースのエディターであり、完全なオープンソースの Office スイートではありません。Microsoft Office ファイルの読み書きは MR Office が提供します（下記参照）。
+
+## 開発者向け
+
+開発者向けのすべては **[MR Office Developers](https://mroffice.ai/ja/developers)** にあります。セルフサービスで申請は不要です。MR Office アカウントでサインインすればすぐ始められます。
+
+### Web アプリにエディターを埋め込む（推奨）
+
+エディターは MR Office がホストします。サーバーが短期間有効なセッショントークンに署名し、ページがそれでエディターを開きます。本物の Word、Excel、PowerPoint、PDF ファイル（.docx、.xlsx、.pptx、.pdf）を編集でき、共同編集、アップロード、すべてのエクスポート形式、印刷に対応し、保存したファイルは署名付きコールバックでサーバーに返されます。無料プラン：localhost での開発は月 1,000 セッション、本番ドメインは月 100 セッション、アプリは最大 2 個。ホスト型の商用サービスなので、あなたのアプリはこのリポジトリの AGPL ライセンスに縛られません。
+
+1. プロジェクトのフォルダーで `npx mroffice-embed init` を実行します（または開発者コンソールでアプリを作成）。ブラウザーで「許可」を 1 回押すと、アプリのキーが `.env.local` / `.env` に書き込まれます。
+2. サーバーは `mroffice-embed/server` の `createSessionToken` でセッショントークンを発行します。シークレットキーはサーバーの外に出ません。
+3. ページは `mroffice-embed` の `open()`（またはスクリプト `https://mroffice.ai/embed/v1/embed.js`）でエディターを開きます。
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[埋め込みガイド](https://mroffice.ai/ja/developers/embed) · [Markdown 版ガイド（AI エージェント向け）](https://mroffice.ai/developers/embed.md) · [料金と上限](https://mroffice.ai/ja/developers/pricing) · [開発者コンソール](https://mroffice.ai/ja/developers/console) · [ライブデモ](https://mroffice.ai/ja/developers/embed/demo)
+
+### AI アプリ: MCP サーバー
+
+AI アプリは MCP サーバーを通じて、本物の MR Office エディターでドキュメントを開き、読み、編集し、エクスポートできます。ホスト型エンドポイント `https://mcp.mroffice.ai/mcp`（MR Office アカウントでサインイン、キー不要）に接続するか、自分のコンピューターで `npx -y mroffice-mcp` を実行します。ソースは `apps/mcp` にあります。 [MCP ガイド →](https://mroffice.ai/ja/developers/mcp)
+
+### MR Office でサインイン（OAuth）
+
+MR Office は OAuth 2.1 認可サーバーです（PKCE、クライアント ID メタデータドキュメント、動的登録）。あなたのアプリは MR Office アカウントでユーザーをサインインさせ、許可されたスコープで操作できます。 [OAuth ガイド →](https://mroffice.ai/ja/developers/oauth)
+
+### オープンソースのエディターをセルフホストする
+
+このリポジトリの 6 つのエディターは AGPL-3.0 のもとで自社製品に組み込めます。改変版をネットワーク越しに利用させる場合は完全なソースコードを提供し、「MR Office」の表示（NOTICE.md）を残す必要があります。独自形式、CSV、HTML、Markdown、PDF を開けます。Word、Excel、PowerPoint ファイルはオープンソースのエディターには含まれません（上のホスト型埋め込みが対応）。商用ライセンスは support@mr-note.com へ。 [オープンソースガイド →](https://mroffice.ai/ja/developers/open-source)
+
+npm パッケージを `mroffice-core`、`mroffice-docs`、`mroffice-sheets`、`mroffice-slides`、`mroffice-pdf`、`mroffice-ink`、`mroffice-code` という名前で準備中です。公開までは、このリポジトリからエディターをビルドしてください（下記参照）。
 
 ## エディター
 
@@ -75,7 +119,7 @@ MR Office デスクトップ版は無料で、これらのエディターとす�
 - SmartArt の編集
 - PDF の編集内容をファイルに書き戻す
 
-**[Releases から MR Office をダウンロード →](https://github.com/XinaTian/MROffice/releases)** · [または mroffice.ai から](https://mroffice.ai)
+**[MR Office をダウンロード（無料） →](https://mroffice.ai/ja/office/download)**
 
 ### Word、Excel、PowerPoint、PDF ファイル
 

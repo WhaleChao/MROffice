@@ -229,11 +229,17 @@ export interface InstallOptions {
 
 // --- download ---------------------------------------------------------------------
 
-function partFile(pkg: LibreOfficePackage, paths: RuntimePaths): string {
+/** What `download` fetches: one pinned file (the local model's files too, ./local-model-installer.ts). */
+export type Downloadable = Pick<LibreOfficePackage, "file" | "size" | "sha256" | "urls">;
+/** Where it keeps them. */
+export type DownloadPaths = Pick<RuntimePaths, "downloads">;
+export type DownloadOptions = Pick<InstallOptions, "fetch" | "signal" | "onProgress" | "log">;
+
+function partFile(pkg: Downloadable, paths: DownloadPaths): string {
   return path.join(paths.downloads, `${pkg.file}.part`);
 }
 
-export function downloadedBytes(pkg: LibreOfficePackage, paths: RuntimePaths): number {
+export function downloadedBytes(pkg: Downloadable, paths: DownloadPaths): number {
   try {
     return Math.min(fs.statSync(partFile(pkg, paths)).size, pkg.size);
   } catch {
@@ -241,7 +247,7 @@ export function downloadedBytes(pkg: LibreOfficePackage, paths: RuntimePaths): n
   }
 }
 
-async function hashOf(file: string, signal?: AbortSignal): Promise<ReturnType<typeof createHash>> {
+export async function hashOf(file: string, signal?: AbortSignal): Promise<ReturnType<typeof createHash>> {
   const hash = createHash("sha256");
   const stream = fs.createReadStream(file, { highWaterMark: 4 << 20 });
   for await (const chunk of stream) {
@@ -258,7 +264,7 @@ async function hashOf(file: string, signal?: AbortSignal): Promise<ReturnType<ty
  * The package, downloaded (resuming a partial one), its size and SHA-256
  * checked. Each URL is tried in turn; a file that does not match is deleted.
  */
-export async function download(pkg: LibreOfficePackage, paths: RuntimePaths, options: InstallOptions = {}): Promise<string> {
+export async function download(pkg: Downloadable, paths: DownloadPaths, options: DownloadOptions = {}): Promise<string> {
   const doFetch = options.fetch ?? fetch;
   const signal = options.signal;
   const part = partFile(pkg, paths);

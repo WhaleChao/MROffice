@@ -14,17 +14,29 @@
 import * as Y from "yjs";
 
 const applying = new WeakMap<Y.Doc, Uint8Array>();
+/** How many network updates are being applied on the stack now, any document. */
+let applyingDepth = 0;
 
 /** `Y.applyUpdate`, with `payload` readable during it (`remoteUpdateBeingApplied`). */
 export function applyRemoteUpdate(doc: Y.Doc, payload: Uint8Array, origin: unknown): void {
   const outer = applying.get(doc);
   applying.set(doc, payload);
+  applyingDepth += 1;
   try {
     Y.applyUpdate(doc, payload, origin);
   } finally {
+    applyingDepth -= 1;
     if (outer) applying.set(doc, outer);
     else applying.delete(doc);
   }
+}
+
+
+
+
+
+export function remoteUpdateOnStack(): boolean {
+  return applyingDepth > 0;
 }
 
 /** The update `doc` is applying from the network now, if any. */

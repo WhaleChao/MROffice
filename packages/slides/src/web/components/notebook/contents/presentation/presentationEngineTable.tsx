@@ -56,7 +56,7 @@ import {
 import {
   TABLE_CELL_NORMAL_MARGIN_PX,
   tableCellVisualTextStyle,
-  tableStoredRowHeights,
+  importedTableRowMinimums,
 } from "../../../../lib/presentation/table-canvas-layout";
 import { logicalCellPositions, tableLogicalWidth } from "@mrnote/core/web/lib/presentation-table-merge.ts";
 import { asRecord } from "@mrnote/core/web/lib/presentation/deck-model.ts";
@@ -263,14 +263,14 @@ export function layoutPresentationEngineTable(table: PresentationTableBlock): En
     })();
     const kerning = asRecord(table.source)?.nativeKerning;
     const kernFrom = typeof kerning === "number" && kerning > 0 ? kerning : null;
-    // Each row from its stored height (`tableStoredRowHeights`: the page's, before
-    // the frame fit), a minimum its words grow (ECMA-376 21.1.3.18 `a:tr@h`),
-    // not the frame-fitted size, which spreads the frame's cached extent over
+    // Each row its stated height, a minimum its words grow (ECMA-376
+    // 21.1.3.18 `a:tr@h`; `importedTableRowMinimums`, the browser's table
     
-    // 7.2 pt apart in PowerPoint, drawn at the frame's average 6.9 pt). A row
-    // still as imported takes its exact `a:tr@h` from the source grid.
-    const stored = tableStoredRowHeights(table);
-    const storedRows = stored && stored.length === rowCount ? stored : rowHeights;
+    // 2.4 pt rows of 6 pt words, 7.2 pt apart in PowerPoint, drawn at the
+    // frame's average 6.9 pt). A row still as imported takes its exact
+    // `a:tr@h` from the source grid.
+    const stated = importedTableRowMinimums(table);
+    const storedRows = stated && stated.length === rowCount ? stated : rowHeights;
     const sourceRows = asRecord(asRecord(table.source)?.slideSizeOriginalTableGrid)?.rows;
     const heights = storedRows.map((height, index) => {
       if (typeof height !== "number" || !(height > 0)) return 0;

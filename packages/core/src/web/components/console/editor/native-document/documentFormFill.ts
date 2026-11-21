@@ -33,7 +33,7 @@ import {
   setCheckboxOrOptionState,
   type ContentControlRange,
 } from "./contentControlExtension";
-import { isDocumentFormsProtected } from "./documentProtection";
+import { effectiveDocumentProtection, isDocumentFormsProtected } from "./documentProtection";
 
 /** A control a form is filled in through (not a gallery block such as a
  *  manual table of contents, not a picture). */
@@ -217,7 +217,7 @@ export const DocumentFormFill = Extension.create({
     // Word: in a document protected for filling in forms, Tab and Shift+Tab
     // move between the fields.
     const move = (editor: Editor, direction: 1 | -1) =>
-      isDocumentFormsProtected(editor.state.doc.attrs?.documentProtection) &&
+      isDocumentFormsProtected(effectiveDocumentProtection(editor.state.doc.attrs?.documentProtection)) &&
       editor.commands.goToFormField(direction);
     return {
       Tab: ({ editor }) => move(editor, 1),

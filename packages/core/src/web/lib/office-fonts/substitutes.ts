@@ -335,11 +335,29 @@ function thaiSlice(range: string | undefined): boolean {
 const CJK_LATIN = cjkLatinFaces as {
   faces: Record<string, Record<string, string>>;
   names: Record<string, string>;
+  /** A face's recut: its advances and box, drawn at the ink of Windows' own
+   * face (scripts/build-cjk-latin-metric-fonts.py RECUTS). */
+  recuts?: Record<string, string>;
   /** By face: exactly the characters it has (ASCII, the Latin-1 the Office
    * face has, the punctuation above), so an absent one stays the stand-in's. */
   ranges?: Record<string, string>;
 };
 const CJK_LATIN_PREFIX = "/fonts/cjk-latin/";
+/**
+ * The Latin faces of a family that has a recut (游ゴシック, its Medium and
+ * Light): the recut, whose glyphs weigh what Windows' own Yu Gothic weighs.
+ * The clone drawn from the catalog's slice at full weight inked Latin and
+ * digits 1.37-1.42 times Word's (bold 1.10); the recut 1.01-1.03 (Word's PDF
+ * of docx-look/probes/cjk15 y1, its embedded YuGothic-Regular/-Medium/-Light/
+ * -Bold subsets against both, 27 characters at 256 px). Advances, cmap and
+ * box are the clone's, so no line moves. `window.__officeYuLatinRecutOff =
+ * true` asks the older reading (the clone), for an A/B of one build.
+ */
+function cjkLatinFacesOf(slug: string): Record<string, string> | undefined {
+  const recut = CJK_LATIN.recuts?.[slug];
+  const off = typeof window !== "undefined" && (window as Window & { __officeYuLatinRecutOff?: boolean }).__officeYuLatinRecutOff === true;
+  return (recut && !off ? CJK_LATIN.faces[recut] : undefined) ?? CJK_LATIN.faces[slug];
+}
 const CJK_LATIN_RANGE = "U+0020-007E,U+00A0,U+00B7,U+2013-2014,U+2018-2019,U+201C-201D,U+2022,U+2026";
 
 export const THAI_SERIF_FALLBACK_FAMILY = "Angsana New";
@@ -1148,7 +1166,7 @@ export function ensureOfficeFontFaces(
         }
       }
       const slug = CJK_LATIN.names[key] ?? CJK_LATIN.names[normalize(name)];
-      const latin = slug ? CJK_LATIN.faces[slug] : undefined;
+      const latin = slug ? cjkLatinFacesOf(slug) : undefined;
       if (latin) {
         const declared = new Set<string>();
         for (const { faces } of families) {

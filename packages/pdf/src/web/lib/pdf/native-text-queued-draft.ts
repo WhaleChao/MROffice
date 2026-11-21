@@ -66,14 +66,19 @@ export type PdfNativeTextQueuedDraft = Readonly<{
 
 
   typedAhead?: Readonly<{ text: string; caretMove: "start" | "end" | null; line: (value: string) => boolean }>;
+  /** The formats pressed in the line and not written, as its editor recorded
+   * them (lib/pdf/native-text-typing-drafts, in JSON): put back into the
+   * reopened box once the words are in it, before it is finished. */
+  formats?: string;
 }>;
 
 /** Whether the carry holds words of the reader's: a draft that is not the
- * line as it read, or keys typed ahead. Until its line takes it they are in
- * no file, no saved row and no open line, and the window says so (a line
- * given back as it was, to be opened again, holds none). */
+ * line as it read, keys typed ahead, or formats pressed on it. Until its
+ * line takes it they are in no file, no saved row and no open line, and the
+ * window says so (a line given back as it was, to be opened again, holds
+ * none). */
 export function pdfNativeTextQueuedDraftHoldsWords(carry: PdfNativeTextQueuedDraft): boolean {
-  return carry.typedAhead ? carry.typedAhead.text.length > 0 : carry.value !== carry.originalText;
+  return carry.typedAhead ? carry.typedAhead.text.length > 0 : carry.value !== carry.originalText || Boolean(carry.formats);
 }
 
 /** How long a late carry stays waiting for the reader to reopen its line. */

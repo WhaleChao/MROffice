@@ -413,6 +413,23 @@ export function partSheetsOfView(
   return allPartSheetsOfView(doc, owner, loaded)?.[index] ?? null;
 }
 
+/** The ids of the blocks a view holds (a block cut across sheets by its
+ * first piece's, `splitPieceRoot`), read off its sheets without serializing
+ * them: what a part coming in is checked against (document-page-parts
+ * loadNext). */
+export function viewBlockIdsOf(doc: ProseMirrorNode): Set<string> {
+  const ids = new Set<string>();
+  const note = (block: ProseMirrorNode) => {
+    const root = splitPieceRoot(block.attrs);
+    if (root !== null) ids.add(root);
+  };
+  doc.forEach((sheet) => {
+    if (sheet.type.name === "pageBlock") sheet.forEach(note);
+    else note(sheet);
+  });
+  return ids;
+}
+
 /** Every part's sheets at once (`partSheetsOfView` for each part 0..loaded), in one walk of the view. */
 export function allPartSheetsOfView(
   doc: ProseMirrorNode,

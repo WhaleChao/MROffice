@@ -5,6 +5,8 @@
  */
 import { AddMarkStep, RemoveMarkStep, type Step } from "@tiptap/pm/transform";
 
+import { embedAllowsComments } from "../../../../lib/embed/session-access";
+
 import { COMMENT_MARK_NAME } from "./comments";
 
 const COMMENT_THREADS_ATTR = "commentThreads";
@@ -23,9 +25,11 @@ export function commentOnlyLaneActive(editor: object | null | undefined): boolea
   return Boolean(editor && lanes.get(editor) === true);
 }
 
- 
+
+
+
 export function commentsWritable(editor: { isEditable?: boolean } | null | undefined): boolean {
-  return Boolean(editor && (editor.isEditable === true || commentOnlyLaneActive(editor)));
+  return Boolean(editor && (editor.isEditable === true || commentOnlyLaneActive(editor)) && embedAllowsComments());
 }
 
 function isCommentStep(step: Step): boolean {

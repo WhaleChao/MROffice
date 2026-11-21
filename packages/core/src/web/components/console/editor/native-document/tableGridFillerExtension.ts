@@ -78,6 +78,18 @@ export const documentTableGridFillerPluginKey =
 // table brings its fillers back, which is not minting one).
 const HISTORY_META = "history$";
 
+/**
+ * Harness switch (`window.__docsGridFillerVoidOff = true`, A/B): a filler's
+ * empty paragraph and margins size its row again, as before. The rule that
+ * keeps them out is CSS (note-editor.css, under
+ * `:root:not([data-docs-grid-filler-void-off])`), so the switch marks the root.
+ */
+function markGridFillerVoidOff(): void {
+  if (typeof document === "undefined") return;
+  if ((globalThis as { __docsGridFillerVoidOff?: boolean }).__docsGridFillerVoidOff !== true) return;
+  document.documentElement.setAttribute("data-docs-grid-filler-void-off", "");
+}
+
 function captureState(doc: ProseMirrorNode): GridFillerPluginState {
   const tables = findGridFillerTables(doc);
   if (tables.length === 0) {
@@ -504,6 +516,7 @@ export const DocumentTableGridFiller =
     addProseMirrorPlugins() {
       const editor = this.editor;
       const options = this.options;
+      markGridFillerVoidOff();
       const tablesOf = (state: EditorState) =>
         documentTableGridFillerPluginKey.getState(state)?.tables ??
         findGridFillerTables(state.doc);

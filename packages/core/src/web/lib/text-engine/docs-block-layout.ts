@@ -161,12 +161,18 @@ export function layoutDocsBlockLines(
     const fonts = new Map<string, EngineFont>();
     let boxed = false;
     let eastAsian = false;
+    let breakFont: EngineFont | undefined;
     for (let at = start; at < end; at += 1) {
       const piece: DocsPiece = paragraph.pieces[at];
       if (piece.kind === "box") boxed ||= (piece.advance > 0.01 && piece.text !== "\u200b") || piece.atom !== undefined || piece.lineBoxes !== undefined;
       eastAsian ||= EAST_ASIAN.test(piece.text);
       if (piece.font) fonts.set(fontKey(piece.font), piece.font);
+      breakFont ??= piece.breakFont;
     }
+    // A line of nothing but a line break stands on the break's face, as in
+    // Word (print9/probes br: an empty line between two bare breaks is the
+    // break's Cambria 12 line, 27.0 pt from the Consolas line before it).
+    if (fonts.size === 0 && breakFont) fonts.set(fontKey(breakFont), breakFont);
     const extra = index === 0 ? paragraph.firstLineStrut : undefined;
     if (eastAsian || boxed || extra) {
       const css = cssLinePx(paragraph.pieces, start, end, paragraph.strut, metricsOf, memo, extra);

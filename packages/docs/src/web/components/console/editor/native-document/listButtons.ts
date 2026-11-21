@@ -4,6 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import type { ChainedCommands } from "@tiptap/core";
+import type { Node as PmNode } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { liftTarget } from "@tiptap/pm/transform";
 import type { BulletStyleType } from "@mrnote/core/web/components/console/editor/native-document/bulletListStyle.ts";
@@ -88,13 +89,91 @@ const TYPED_MARKER_LEVEL_FORMAT = {
  * (the selection already in a bullet list) it takes the list off.
  */
 export function runBulletsButton(chain: ChainedCommands, inBulletList: boolean): boolean {
-  if (!inBulletList) {
-    chain.command(({ tr }) => {
-      stripTypedListMarkers(tr);
-      return true;
-    });
+  if (inBulletList) return runListChain(chain.toggleBulletList());
+  let beside: AdjacentLists | null = null;
+  chain.command(({ tr }) => {
+    stripTypedListMarkers(tr);
+    beside = adjacentLists(tr, "bulletList");
+    return true;
+  });
+  chain.toggleBulletList().command(({ tr }) => {
+    if (beside) keepAdjacentListsApart(tr, beside);
+    return true;
+  });
+  return runListChain(chain);
+}
+
+/** The bullet lists right before and after the selected paragraphs, as they were. */
+interface AdjacentLists {
+  depth: number;
+  items: number;
+  before: PmNode | null;
+  after: PmNode | null;
+}
+
+function adjacentLists(tr: Transaction, listName: string): AdjacentLists | null {
+  const { $from, $to } = tr.selection;
+  const range = $from.blockRange($to);
+  if (!range) return null;
+  const nodeBefore = tr.doc.resolve(range.start).nodeBefore;
+  const nodeAfter = tr.doc.resolve(range.end).nodeAfter;
+  const before = nodeBefore?.type.name === listName ? nodeBefore : null;
+  const after = nodeAfter?.type.name === listName ? nodeAfter : null;
+  if (!before && !after) return null;
+  return { depth: range.depth, items: range.endIndex - range.startIndex, before, after };
+}
+
+/** Whether two lists draw alike: the same attributes but their identity. */
+function sameLook(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  keys.delete("block_id");
+  return [...keys].every((key) => JSON.stringify(a[key] ?? null) === JSON.stringify(b[key] ?? null));
+}
+
+/**
+ * Bullets on paragraphs beside a bullet list of another look: Word gives the
+ * paragraphs a list of their own (its current bullet, a `w:numId` of their
+ * own) and the list beside them keeps its bullets, numbering and identity.
+ * ProseMirror's toggle joins any adjacent list of the same kind, and the
+ * joined list takes the first one's attributes: the paragraphs after it in a
+ * Wingdings list were drawn and saved with the new list's bullet and numbering
+ * (corpus R485-D93 E51: two untouched items went from numId 4 to 6). The
+ * joined list is split back where the lists met; lists that look alike stay
+ * joined, one list continuing.
+ */
+function keepAdjacentListsApart(tr: Transaction, beside: AdjacentLists): void {
+  const { $from } = tr.selection;
+  const depth = beside.depth + 1;
+  if ($from.depth < depth) return;
+  const list = $from.node(depth);
+  const before = beside.before;
+  const after = beside.after;
+  const listType = before?.type ?? after?.type;
+  if (!listType || list.type !== listType) return;
+  const fresh = listType.create().attrs as Record<string, unknown>;
+  const extra = list.childCount - beside.items;
+  const tookBefore =
+    !!before &&
+    (extra === before.childCount + (after?.childCount ?? 0) ||
+      (extra === before.childCount && (!after || sameLook(list.attrs, before.attrs))));
+  const tookAfter = !!after && extra === (tookBefore ? before!.childCount : 0) + after.childCount;
+  if (!tookBefore && !tookAfter) return;
+  const listPos = $from.before(depth);
+  const offsetOf = (index: number) => {
+    let offset = listPos + 1;
+    for (let i = 0; i < index; i += 1) offset += list.child(i).nodeSize;
+    return offset;
+  };
+  // The paragraphs' own list draws as a new one would; the joined node wears
+  // the first list's attributes.
+  const ownLook = tookBefore ? fresh : (list.attrs as Record<string, unknown>);
+  const firstNew = tookBefore ? before!.childCount : 0;
+  if (tookAfter && !sameLook(after!.attrs, ownLook)) {
+    tr.split(offsetOf(firstNew + beside.items), 1, [{ type: listType, attrs: after!.attrs }]);
   }
-  return runListChain(chain.toggleBulletList());
+  if (tookBefore && !sameLook(before!.attrs, ownLook)) {
+    tr.split(offsetOf(firstNew), 1, [{ type: listType, attrs: { ...fresh, block_id: null } }]);
+  }
 }
 
 /** Home > Checklist on the chain's selection (on, or off again). */

@@ -145,6 +145,12 @@ export interface OfficeParagraphInput {
    */
   readonly markLatinFace?: string;
   /**
+   * The mark's Latin face as a font (`markLatinFace` at the row's size and
+   * weight): under `windowsLineBox`, the line that holds the mark is laid by
+   * it beside its runs' faces, Latin rows too ({@link lineVerticals}).
+   */
+  readonly markLatinFont?: OfficeTextFont;
+  /**
    * The paragraph's last line ends at a line break, not at the mark (a row a
    * one-paragraph body is drawn in, split at its breaks): no line of it holds
    * the mark (`eastAsianMarkLine`).
@@ -230,6 +236,28 @@ export interface OfficeTextBodyInput {
 
 
   readonly naturalLines?: boolean;
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  readonly windowsLineBox?: boolean;
 }
 
 /** A stretch of one run on one line. */
@@ -614,7 +642,15 @@ function lineVerticals(
   eastAsian: readonly boolean[] = [],
   mark?: OfficeTextFont,
   markLatinFace?: string,
+  windows?: { readonly markFont?: OfficeTextFont },
 ): LineVerticals | { status: "pending" } {
+  // Windows' line box (`windowsLineBox`, row 1013): a text box's Latin line
+  // and the faces that set it, its mark's among them.
+  const windowsLine = windows !== undefined && !cell && !natural;
+  if (windowsLine && windows.markFont && !eastAsian.some(Boolean)) {
+    fonts = [...fonts, { ...windows.markFont, sizePt: Math.max(...fonts.map((font) => font.sizePt)) }];
+    eastAsian = [...eastAsian, false];
+  }
   let size = 0;
   // The single line's height (pt): Office's 1.2 em of the largest size, or
   // in a diagram the largest of the faces' own lines.
@@ -701,6 +737,15 @@ function lineVerticals(
     if (ideographic) ideographicLine = true;
   }
   if (pending) return { status: "pending" };
+  if (windowsLine && !ideographicLine) {
+    // The largest share above and below, shrunk together to the single line;
+    // the last line keeps the share under its baseline, not the face's
+    // descent (row 1013).
+    const fit = single + singleBelow > singleHeight + EPSILON ? singleHeight / (single + singleBelow) : 1;
+    single *= fit;
+    singleBelow *= fit;
+    descent = singleBelow;
+  }
   // A line of East Asian words beside Latin ones keeps only what the single
   // line leaves under its baseline, not the Latin face's own descent:
   
@@ -834,7 +879,8 @@ function layoutBody(input: OfficeTextBodyInput, measurer: OfficeTextMeasurer): O
       const cellRule = input.cellLines === true && paragraph.fontAlign === undefined;
       // The paragraph's last line holds its mark, set in the mark's face.
       const holdsMark = lineIndex === lineRanges.length - 1 && paragraph.endsInLineBreak !== true;
-      const verticals = lineVerticals(fonts, paragraph.lineSpacing, reduction, measurer, cellRule, input.naturalLines === true, eastAsian, holdsMark ? paragraph.endFont : undefined, holdsMark ? paragraph.markLatinFace : undefined);
+      const verticals = lineVerticals(fonts, paragraph.lineSpacing, reduction, measurer, cellRule, input.naturalLines === true, eastAsian, holdsMark ? paragraph.endFont : undefined, holdsMark ? paragraph.markLatinFace : undefined,
+        input.windowsLineBox === true ? { markFont: holdsMark ? paragraph.markLatinFont : undefined } : undefined);
       if ("status" in verticals) {
         pending = true;
         return;

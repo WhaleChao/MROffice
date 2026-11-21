@@ -4,7 +4,7 @@
 
 <p align="center"><b>ตัวแก้ไขโอเพนซอร์สของ MR Office ได้แก่ เอกสาร สเปรดชีต งานนำเสนอ PDF การเขียนด้วยมือ และโค้ด ที่ทำงานในเบราว์เซอร์</b></p>
 
-<p align="center"><a href="https://mroffice.ai/th"><b>▶ ลองใช้เดโมออนไลน์ ไม่ต้องติดตั้ง</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ ดาวน์โหลด MR Office จาก Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/th"><b>▶ ลองใช้ออนไลน์</b></a> · <a href="https://mroffice.ai/th/office/download"><b>⬇ ดาวน์โหลด</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/th/developers">🧑‍💻 นักพัฒนา</a> · <a href="https://mroffice.ai/th/developers/embed">🧩 ฝัง</a> · <a href="https://mroffice.ai/th/developers/mcp">🤖 MCP สำหรับแอป AI</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/th/developers/oauth">🔑 ลงชื่อเข้าใช้ด้วย MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office คือพื้นที่ทำงานสำหรับโน้ต AI และไฟล์จริง ที่เก็บนี้เผยแพร่ซอร์สโค้ดของตัวแก้ไข ซึ่งเป็นชุดเดียวกับที่ทำงานใน MR Office คุณสามารถบิลด์ รัน และฝังใช้งานเองได้ นี่คือตัวแก้ไขโอเพนซอร์ส ไม่ใช่ชุดโปรแกรมสำนักงานโอเพนซอร์สที่ครบถ้วน การอ่านและเขียนไฟล์ Microsoft Office ยังอยู่ใน MR Office (ดูด้านล่าง)
+
+## สำหรับนักพัฒนา
+
+ทุกอย่างสำหรับนักพัฒนาอยู่ที่ **[MR Office Developers](https://mroffice.ai/th/developers)** — บริการตนเอง ไม่ต้องสมัคร: ลงชื่อเข้าใช้ด้วยบัญชี MR Office ใดก็ได้แล้วเริ่มได้เลย
+
+### ฝังโปรแกรมแก้ไขในเว็บแอปของคุณ (แนะนำ)
+
+MR Office โฮสต์โปรแกรมแก้ไขให้ เซิร์ฟเวอร์ของคุณลงนามโทเค็นเซสชันอายุสั้น แล้วหน้าเว็บของคุณใช้เปิดโปรแกรมแก้ไข แก้ไขไฟล์ Word, Excel, PowerPoint และ PDF จริง (.docx, .xlsx, .pptx, .pdf) ได้ พร้อมการแก้ไขร่วมกัน การอัปโหลด ทุกรูปแบบการส่งออก การพิมพ์ และการบันทึกที่ส่งกลับไปยังเซิร์ฟเวอร์ของคุณผ่าน callback ที่ลงนามแล้ว แพ็กเกจฟรี: localhost 1,000 เซสชันต่อเดือน โดเมนของคุณเอง 100 เซสชันต่อเดือน สูงสุด 2 แอป เป็นบริการเชิงพาณิชย์แบบโฮสต์ แอปของคุณจึงไม่อยู่ภายใต้สัญญาอนุญาต AGPL ของรีโพนี้
+
+1. ในโฟลเดอร์ของโปรเจกต์ ให้รัน `npx mroffice-embed init` (หรือสร้างแอปในคอนโซลนักพัฒนา): คลิก "อนุญาต" ในเบราว์เซอร์ครั้งเดียว แล้วคีย์ของแอปจะถูกเขียนลงใน `.env.local` / `.env`
+2. เซิร์ฟเวอร์ของคุณสร้างโทเค็นเซสชันด้วย `createSessionToken` จาก `mroffice-embed/server` คีย์ลับไม่ออกจากเซิร์ฟเวอร์เลย
+3. หน้าเว็บของคุณเปิดโปรแกรมแก้ไขด้วย `open()` จาก `mroffice-embed` (หรือสคริปต์ `https://mroffice.ai/embed/v1/embed.js`)
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[คู่มือการฝัง](https://mroffice.ai/th/developers/embed) · [คู่มือแบบ Markdown (สำหรับเอเจนต์ AI)](https://mroffice.ai/developers/embed.md) · [ราคาและขีดจำกัด](https://mroffice.ai/th/developers/pricing) · [คอนโซลนักพัฒนา](https://mroffice.ai/th/developers/console) · [เดโมสด](https://mroffice.ai/th/developers/embed/demo)
+
+### แอป AI: เซิร์ฟเวอร์ MCP
+
+แอป AI เปิด อ่าน แก้ไข และส่งออกเอกสารในโปรแกรมแก้ไข MR Office ตัวจริงผ่านเซิร์ฟเวอร์ MCP: เชื่อมต่อเอนด์พอยต์ที่โฮสต์ `https://mcp.mroffice.ai/mcp` (ลงชื่อเข้าใช้ด้วยบัญชี MR Office ไม่ต้องใช้คีย์) หรือรัน `npx -y mroffice-mcp` บนคอมพิวเตอร์ของคุณ ซอร์สโค้ดอยู่ใน `apps/mcp` [คู่มือ MCP →](https://mroffice.ai/th/developers/mcp)
+
+### ลงชื่อเข้าใช้ด้วย MR Office (OAuth)
+
+MR Office เป็นเซิร์ฟเวอร์อนุญาต OAuth 2.1 (PKCE, เอกสารเมตาดาตาของ client ID, การลงทะเบียนแบบไดนามิก): แอปของคุณให้ผู้คนลงชื่อเข้าใช้ด้วยบัญชี MR Office และทำงานภายในขอบเขตที่พวกเขาอนุญาตได้ [คู่มือ OAuth →](https://mroffice.ai/th/developers/oauth)
+
+### โฮสต์โปรแกรมแก้ไขโอเพนซอร์สเอง
+
+โปรแกรมแก้ไขทั้งหกในรีโพนี้นำไปรวมในผลิตภัณฑ์ของคุณได้ภายใต้ AGPL-3.0: หากผู้อื่นใช้เวอร์ชันที่แก้ไขผ่านเครือข่าย คุณต้องเสนอซอร์สโค้ดฉบับสมบูรณ์ให้ และคงการระบุ "MR Office" ไว้ (NOTICE.md) โปรแกรมเหล่านี้เปิดรูปแบบของตัวเอง, CSV, HTML, Markdown และ PDF ส่วนไฟล์ Word, Excel และ PowerPoint ไม่อยู่ในโปรแกรมแก้ไขโอเพนซอร์ส (การฝังแบบโฮสต์ด้านบนรองรับ) สัญญาอนุญาตเชิงพาณิชย์ติดต่อ support@mr-note.com [คู่มือโอเพนซอร์ส →](https://mroffice.ai/th/developers/open-source)
+
+กำลังเตรียมแพ็กเกจ npm ในชื่อ `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` และ `mroffice-code` ระหว่างที่ยังไม่เผยแพร่ ให้บิลด์โปรแกรมแก้ไขจากรีโพนี้ (ดูด้านล่าง)
 
 ## ตัวแก้ไข
 
@@ -75,7 +119,7 @@ npm run desktop
 - การแก้ไข SmartArt
 - บันทึกการแก้ไข PDF กลับลงในไฟล์
 
-**[ดาวน์โหลด MR Office จาก Releases →](https://github.com/XinaTian/MROffice/releases)** · [หรือจาก mroffice.ai](https://mroffice.ai)
+**[ดาวน์โหลด MR Office (ฟรี) →](https://mroffice.ai/th/office/download)**
 
 ### ไฟล์ Word, Excel, PowerPoint และ PDF
 

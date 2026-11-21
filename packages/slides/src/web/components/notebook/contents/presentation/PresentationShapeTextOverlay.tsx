@@ -386,6 +386,7 @@ function ShapeTextOverlayDrawing({
             defaultTabPx={labelDefaultTabPx}
             kerning={asRecord(block.source)?.nativeKerning}
             eastAsianLines={asRecord(block.source)?.nativeEastAsianLines}
+            lineBox={asRecord(block.source)?.nativeLineBox}
             widthPx={editWidthEmu === null ? null : editWidthEmu / AUTOFIT_EMU_PER_PX}
             wrap={shapeTextWraps}
             colorOverride={colorOverride}
@@ -586,6 +587,9 @@ function ShapeTextOverlayDrawing({
           defaultTabPx={labelDefaultTabPx}
           kerning={asRecord(block.source)?.nativeKerning}
           eastAsianLines={asRecord(block.source)?.nativeEastAsianLines}
+          lineBox={asRecord(block.source)?.nativeLineBox}
+          markLines={asRecord(block.source)?.nativeMarkLines}
+          {...(labelParagraphs ? {} : { flatText: text, flatRuns: block.runs })}
           widthPx={engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX}
           wrap={shapeTextWraps}
           colorOverride={colorOverride}

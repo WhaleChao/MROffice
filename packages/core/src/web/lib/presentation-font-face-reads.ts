@@ -12,10 +12,11 @@
 import { withScriptFallbacks } from "./office-fonts/script-fallbacks";
 import { pageDocumentJsonEquals } from "./page-save-acknowledgement";
 import { normalizeOfficeFontFace, type OfficeFontFace, type OfficeFontRole } from "../components/office-ribbon/officeFontFace";
-import { officeFontRegistrationGeneration, officeFontSubstitution, withOfficeFontSubstitutes } from "./office-fonts/substitutes";
+import { ensureOfficeFontFaces, officeFontRegistrationGeneration, officeFontSubstitution, withOfficeFontSubstitutes } from "./office-fonts/substitutes";
 import substituteTable from "./office-fonts/substitutes.generated.json";
 import { POWERPOINT_WINDOWS_FACES, windowsOfficeFace, windowsOfficeMeasured } from "./office-fonts/windows-office-faces";
 import { withPowerPointScriptFallbacks } from "./office-fonts/powerpoint-script-fallbacks";
+import { withHangulEmFaces, withHangulFallback } from "./office-fonts/hangul-em";
 
 export type PresentationFontRequirement = {
   family: string;
@@ -276,7 +277,18 @@ function buildPresentationFontFamily(family: string, aliases: PresentationFontAl
   // Windows draws its missing Latin, Greek and Cyrillic letters in (Calibri,
   // Cambria: powerpoint-script-fallbacks.ts), ahead of the open stand-in
   
-  return withScriptFallbacks(withPowerPointScriptFallbacks(withOfficeFontSubstitutes(withPowerPointMissingFace(mapped, changed ? mapped : family, aliases))));
+  // Then each Korean Office family's Hangul at its own full em right in front
+  // of it, as Docs stacks it (hangul-em.ts): PowerPoint for Windows draws
+  
+  // 6119 syllables in MalgunGothic, 1683 in its bold, 100 in its Semilight),
+  // where the served Noto Sans KR sets 0.92, so a Korean line held 8% more.
+  // And the Hangul of a face that has none (one Windows lacks, a Latin face)
+  // in Malgun Gothic's, a full em, ahead of the script fallbacks
+  // (withHangulFallback; tp-kofont).
+  return withHangulFallback(
+    withHangulEmFaces(withScriptFallbacks(withPowerPointScriptFallbacks(withOfficeFontSubstitutes(withPowerPointMissingFace(mapped, changed ? mapped : family, aliases))))),
+    ensureOfficeFontFaces,
+  );
 }
 
 /** A stack's families with each name once (two lacked faces both became Calibri). */

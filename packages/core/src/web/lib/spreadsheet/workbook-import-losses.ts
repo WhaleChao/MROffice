@@ -71,6 +71,8 @@ const LOSS_LABELS_EN: Record<string, string> = {
     "Some row formats are over the editor's limit: they stay in the file, but here a cell typed on those rows past the used range does not take the row's format",
   xlsx_merges_not_projected:
     "Some merged cells are over the editor's limit: they stay merged in the file, but here those cells show unmerged",
+  xlsx_blank_formats_not_projected:
+    "Some formatted blank cells are over the editor's limit: their formatting stays in the file and is saved, but here those cells show without it",
   xlsx_validations_not_projected:
     "Some data validation rules are over the editor's limit: they stay in the file, but here those cells accept any entry and show no dropdown or input message",
   xlsx_autofilter_criteria_not_projected:

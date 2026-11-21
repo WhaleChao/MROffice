@@ -57,6 +57,7 @@ import {
   persistedVerticalAnchor,
   type VerticalAnchor,
 } from "./presentation-vertical-anchor";
+import { powerPointFaceName } from "./office-fonts/powerpoint-face-name";
 
 /** Six-digit hex colour, e.g. `#1a2b3c`. Matches the shape / image colour regex. */
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
@@ -249,9 +250,10 @@ export function tableCellTypefaceFromChoice(value: unknown): TableCellFontFamily
 export function tableCellFontFamilyCss(value: unknown): string | undefined {
   // A browser stack stored as the cell's face (an older Replace Fonts) names
   
+  // PowerPoint looks it up by ("Arial (Body)" is Arial: powerPointFaceName).
   const family =
-    typeof value === "string" && value.includes(",")
-      ? tableCellTypefaceFromChoice(value)
+    typeof value === "string" && /[,(]/.test(value)
+      ? tableCellTypefaceFromChoice(powerPointFaceName(value.replace(/["']/g, "")))
       : normalizeTableCellFontFamily(value);
   return family
     ? (TABLE_CELL_FONT_FAMILY_BY_TYPEFACE.get(family)?.css ??

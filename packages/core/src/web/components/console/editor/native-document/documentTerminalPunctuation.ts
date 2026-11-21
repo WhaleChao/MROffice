@@ -13,7 +13,7 @@ import { listContinuationTypography } from "./listContinuationTypography";
 import { officePrimaryFontFamily } from "../../../office-ribbon/officeTypographyCatalog";
 import {
   resolveDocumentOverflowPunctuation,
-  resolveDocumentWordWrap,
+  resolveEffectiveDocumentWordWrap,
 } from "./documentOverflowPunctuation";
 import {
   paginationTransformScale,
@@ -397,7 +397,7 @@ function terminalPunctuationContext(view: EditorView, element: HTMLElement) {
     (kinsoku != null && kinsoku !== true) ||
     adapter !== "docx" ||
     view.state.doc.attrs.characterSpacingControl !== "doNotCompress" ||
-    resolveDocumentWordWrap(
+    resolveEffectiveDocumentWordWrap(
       view.state.doc.attrs,
       displayAttrs,
       adapter,

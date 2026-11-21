@@ -2139,6 +2139,31 @@ export function wordAutoSpaceAfterLatinEm(font: string): number {
   latinAutoSpaceEms.set(font, em);
   return em;
 }
+/**
+ * Under "Balance SBCS characters and DBCS characters"
+ * (w:compat/w:balanceSingleByteDoubleByteWidth, WPS writes it) Windows Word
+ * opens a quarter em of the letter's size after a Latin letter or digit too,
+ * whatever its face: Times New Roman, Arial and Calibri at 9, 20 and 30 pt
+ * all 0.25 em, where the same package without the option opens 0.195, 0.217
+ * and 0.254 em (docx-look/probes/cjk16 a/b/c, R347-D02's settings; its header
+ * cell's "4的" 2.34 pt at 9 pt, the face's 1.8 pt wrapped 打 a line early).
+ * `window.__docsBalancedAutoSpaceOff = true` asks the older reading (the
+ * face's half average), for an A/B of one build.
+ */
+function wordBalancedAutoSpaceOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsBalancedAutoSpaceOff?: boolean }).__docsBalancedAutoSpaceOff === true;
+}
+/** The automatic space after the character before a boundary, in ems of its
+ * size: a quarter after an East Asian character or in a balanced document,
+ * else half the Latin face's average advance. */
+export function wordAutoSpaceAfterEm(
+  leftIsEastAsian: boolean,
+  font: string,
+  documentAttrs: { readonly [key: string]: unknown },
+): number {
+  if (leftIsEastAsian || (documentAttrs.wordBalanceSbcsDbcs === true && !wordBalancedAutoSpaceOff())) return WORD_CJK_AUTO_SPACE_EM;
+  return wordAutoSpaceAfterLatinEm(font);
+}
 /** The characters of one paragraph this reads. */
 const MAX_WORD_CJK_SPACING_GLYPHS = 50_000;
 /** The spacing marks of a document: what its passes carry and the editor draws.
@@ -2492,6 +2517,25 @@ interface WordGridBlockLineHeightSpec {
 interface GridBlockSpec {
   readonly block: { readonly lineHeightPx: number; readonly slots: number; readonly naturalPx?: number } | null;
   readonly runs: ReadonlyArray<{ readonly from: number; readonly to: number; readonly lineHeightPx: number; readonly slots: number }>;
+  /** Word's single line of a block every line of which is one slot (no
+   * multiple over it): the slot's room above and below it is padding. */
+  readonly oneSlotNaturalPx?: number;
+}
+
+/** A grid block whose lines are one slot each, and Word's single line of its
+ * text: the room under the text in the slot the page's foot may take
+ * (`data-docs-word-grid-natural`, pageEdgeLeading). */
+interface WordGridOneSlotNaturalSpec {
+  pos: number;
+  naturalPx: number;
+  pitchPx: number;
+}
+
+/** `window.__docsGridOneSlotFootOff = true` (A/B): a one-slot grid line hangs
+ * nothing past the page's foot, the older reading. */
+function gridOneSlotFootOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsGridOneSlotFootOff?: boolean }).__docsGridOneSlotFootOff === true;
 }
 
 const gridBlockSpecs = new WeakMap<ProseMirrorNode, { sig: string; attrs: unknown; spec: GridBlockSpec }>();
@@ -2499,13 +2543,15 @@ const gridBlockSpecs = new WeakMap<ProseMirrorNode, { sig: string; attrs: unknow
 function wordGridRunLineHeightSpecs(view: EditorView): {
   runs: WordGridRunLineHeightSpec[];
   blocks: WordGridBlockLineHeightSpec[];
+  naturals: WordGridOneSlotNaturalSpec[];
 } {
   const pitchTwips = documentLineGridPitch(view.state.doc.attrs);
   const pitchPx = pitchTwips === null ? NaN : pitchTwips / 15;
   const active = Number.isFinite(pitchPx) && pitchPx > 0;
   const runs: WordGridRunLineHeightSpec[] = [];
   const blocks: WordGridBlockLineHeightSpec[] = [];
-  if (!active) return { runs, blocks };
+  const naturals: WordGridOneSlotNaturalSpec[] = [];
+  if (!active) return { runs, blocks, naturals };
   // A section with no grid of its own sets its lines unsnapped (Word).
   const offGrid = sectionsOffLineGrid(view.state.doc);
   const faces = wordGridRunFaces(view.state.doc);
@@ -2546,7 +2592,7 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
   };
   /** One text block's grid line heights, positions from its own start. */
   const gridSpecOfBlock = (block: ProseMirrorNode, ownFactor?: number): GridBlockSpec => {
-    const out: { block: GridBlockSpec["block"]; runs: Array<{ from: number; to: number; lineHeightPx: number; slots: number }> } = { block: null, runs: [] };
+    const out: { block: GridBlockSpec["block"]; runs: Array<{ from: number; to: number; lineHeightPx: number; slots: number }>; oneSlotNaturalPx?: number } = { block: null, runs: [] };
     const factor = ownFactor ?? factorOf(block);
     if (paragraphHoldsNoText(block)) {
       // A line with no text is the paragraph mark's, in the mark's own face
@@ -2616,6 +2662,22 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       out.block = { lineHeightPx: quantized(uniform, factor), slots: uniform, ...(naturalPx !== undefined ? { naturalPx } : {}) };
       return out;
     }
+    // Every line one slot, no multiple over it: Word centres the text in the
+    // slot as in several, and keeps the page's last line while its text fits
+    // (Windows Word, docx-look/probes/vsp8, a 16.3 pt grid on A4 with 72 pt
+    // margins: 10 pt Palatino Linotype, its single line 13.49 pt, stays 1.38
+    // pt past the foot and goes on 1.68 pt past, Auto or at least 14 pt
+    // alike; 12 pt, 16.19 pt, goes on 0.08 pt past). Corpus R404-D02: page 1's
+    // 40th line went to page 2, a page more over the document.
+    if (
+      textOnly &&
+      factor <= 1 &&
+      children.length > 0 &&
+      children.every((child) => (child.slots === null || child.slots === 1) && child.naturalPx !== null && child.naturalPx > 0)
+    ) {
+      const naturalPx = Math.max(...children.map((child) => child.naturalPx as number));
+      if (naturalPx < pitchPx) out.oneSlotNaturalPx = Math.round(naturalPx * 1_000) / 1_000;
+    }
     for (const child of children) {
       if (child.slots === null) continue;
       const lineHeightPx = quantized(child.slots, factor);
@@ -2661,7 +2723,12 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
     if (spec.runs.some((run) => run.slots > 1)) {
       return { block: base, runs: spec.runs.filter((run) => run.slots > 1).map((run) => ({ ...run, lineHeightPx: line(run.slots) })) };
     }
-    return base ? { block: base, runs: [] } : null;
+    if (base) return { block: base, runs: [] };
+    // A floor within the pitch leaves the line one slot, its text centred in
+    // it by its own single line, not the floor (probes/vsp8: at least 14 pt
+    // of a 13.49 pt line hangs 1.4 pt past the foot, as Auto does).
+    if (spec.oneSlotNaturalPx !== undefined && floorPx <= pitchPx + 0.001) return { block: null, runs: [], oneSlotNaturalPx: spec.oneSlotNaturalPx };
+    return null;
   };
   // A block's specs stand while it, the grid and the document's faces do:
   // each pass of a long book read every block's runs again.
@@ -2703,6 +2770,7 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       // 13 pt here; 29 pages for 33).
       const spec = atLeastSpecOfBlock(block, inCell && !gridCellLinesOff());
       if (spec?.block) blocks.push({ pos: blockPos, lineHeightPx: spec.block.lineHeightPx, slots: spec.block.slots });
+      if (!inCell && spec?.oneSlotNaturalPx !== undefined && !gridOneSlotFootOff()) naturals.push({ pos: blockPos, naturalPx: spec.oneSlotNaturalPx, pitchPx });
       for (const run of spec?.runs ?? []) runs.push({ from: blockPos + run.from, to: blockPos + run.to, lineHeightPx: run.lineHeightPx, slots: run.slots });
       return false;
     }
@@ -2718,10 +2786,11 @@ function wordGridRunLineHeightSpecs(view: EditorView): {
       blocks.push({ pos: blockPos, lineHeightPx: quantized(1, factorOf(block)), slots: 1 });
     }
     if (spec.block) blocks.push({ pos: blockPos, lineHeightPx: spec.block.lineHeightPx, slots: spec.block.slots, ...(spec.block.naturalPx !== undefined ? { naturalPx: spec.block.naturalPx } : {}) });
+    else if (!inCell && spec.oneSlotNaturalPx !== undefined && spec.runs.every((run) => run.slots === 1) && !gridOneSlotFootOff()) naturals.push({ pos: blockPos, naturalPx: spec.oneSlotNaturalPx, pitchPx });
     for (const run of spec.runs) runs.push({ from: blockPos + run.from, to: blockPos + run.to, lineHeightPx: run.lineHeightPx, slots: run.slots });
     return false;
   });
-  return { runs, blocks };
+  return { runs, blocks, naturals };
 }
 
 function wordCjkBlockContentWidth(element: HTMLElement): {
@@ -3229,7 +3298,7 @@ function applyWordCjkAutoSpacing(
     if (!enabled) continue;
     const spacingPx = wordCjkAutoSpaceWidthOff()
       ? Math.min(left.fontSizePx, right.fontSizePx) * WORD_CJK_AUTO_SPACE_EM
-      : left.fontSizePx * (leftScript === "eastAsian" ? WORD_CJK_AUTO_SPACE_EM : wordAutoSpaceAfterLatinEm(left.font));
+      : left.fontSizePx * wordAutoSpaceAfterEm(leftScript === "eastAsian", left.font, documentAttrs);
     if (leftScript === "eastAsian") {
       right.autoSpaceBeforePx += spacingPx;
     } else {
@@ -3552,6 +3621,7 @@ export function wordCjkSpacingProjection(
     ...gridSpecs.blocks.map(
       (spec) => `gridBlock:${spec.pos}:${spec.lineHeightPx.toFixed(3)}:${spec.slots}:${spec.naturalPx ?? ""}`,
     ),
+    ...gridSpecs.naturals.map((spec) => `gridNatural:${spec.pos}:${spec.naturalPx}`),
   ].join("|");
   const gridBlockDecorations = gridSpecs.blocks.map((spec) =>
     Decoration.node(
@@ -3565,7 +3635,16 @@ export function wordCjkSpacingProjection(
       { key: "docs-word-grid-block" },
     ),
   );
-  const gridRunDecorations = [...gridBlockDecorations, ...gridRunSpecs.map((spec) =>
+  // A one-slot block's single line, for the page's foot only (no paint).
+  const gridNaturalDecorations = gridSpecs.naturals.map((spec) =>
+    Decoration.node(
+      spec.pos,
+      spec.pos + (view.state.doc.nodeAt(spec.pos)?.nodeSize ?? 0),
+      { "data-docs-word-grid-natural": String(spec.naturalPx), "data-docs-word-grid-pitch": String(Math.round(spec.pitchPx * 1_000) / 1_000) },
+      { key: "docs-word-grid-natural" },
+    ),
+  );
+  const gridRunDecorations = [...gridBlockDecorations, ...gridNaturalDecorations, ...gridRunSpecs.map((spec) =>
     Decoration.inline(
       spec.from,
       spec.to,

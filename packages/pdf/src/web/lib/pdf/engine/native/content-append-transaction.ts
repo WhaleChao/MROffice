@@ -189,6 +189,11 @@ export type PdfNativeContentAppendRequest = Readonly<
       direction: "remove";
       appendKind: PdfNativeContentAppendKind;
       span: PdfNativeContentAppendSpan;
+      /** The block as it was appended (base64, without its whitespace
+       * prefix), for a removal that may be planned again on other bytes:
+       * what it is found again by at the stream's tail where a font of
+       * another name draws it there. */
+      like?: string;
     }
 >;
 
@@ -1137,22 +1142,121 @@ export async function planPdfNativeContentAppend(
   });
 
   if (request.direction === "remove") {
-    const span = request.span;
-    if (span.end !== streamLength || span.start >= span.end) {
+    let span = request.span;
+    // On other bytes than the block was appended to -- the version another
+    // window saved first, the queue planned again on it -- the block still
+    // ends the page's drawing where that window wrote nothing after it, and
+    // starts wherever what it changed ahead of the block left it: found
+    // again there by its digest, the same bytes at the stream's tail. Held
+    // to the offsets it had, the removal was refused though nothing stood
+    // in its way, and the whole word a new text box takes its first words'
+    // block off for was never written on that version.
+    // (Found so, the line feed ahead of it is left where it is: the append
+    // sets one only where the drawing before did not end in white space,
+    // and on these bytes it may be the last byte of what that window wrote
+    // -- which its own Undo holds to a digest.)
+    const found = async (start: number) => {
+      const from = stream.streamBytes[start] === 0x0a ? start + 1 : start;
+      return Object.freeze({ start: from, end: streamLength,
+        expectedSha256: await sha256PdfBytes(stream.streamBytes.slice(from)) });
+    };
+    // Only where the block does not stand at the offsets the removal has:
+    // standing there with other drawing after it, these are the bytes it
+    // was written on (or bytes that hold them) and something was written
+    // after it -- it is not the tail, and nothing else is taken for it.
+    const moved = span.end !== streamLength && span.end > span.start && !(span.end < streamLength &&
+      (await sha256PdfBytes(stream.streamBytes.slice(span.start, span.end))) === span.expectedSha256);
+    if (moved && streamLength >= span.end - span.start) {
+      const start = streamLength - (span.end - span.start);
+      if ((await sha256PdfBytes(stream.streamBytes.slice(start))) === span.expectedSha256) span = await found(start);
+    }
+    // The block written again on those bytes by the queue before this
+    // removal (a new text box's first words, planned again after the other
+    // window's own box) draws what it drew, under a font resource of
+    // another name where that window's write took the name it had: the
+    // same bytes but for the resource names. A text block that ends the
+    // stream and is the block the removal names (`like`) in all but those
+    // names is that block. (Held to its digest alone, the first words were
+    // never taken off there, and the box was written as two.) Not where
+    // the block's own bytes stand anywhere in the stream: it is there
+    // then, with other drawing after it, and a block at the tail that
+    // draws the same is another's -- a font's subset numbers its glyphs
+    // from one, so two boxes' first letters set at one place are the same
+    // bytes but for the font's name.
+    if (moved && span.end !== streamLength && request.appendKind === "text" && request.like) {
+      const drawn = latin1(base64ToBytes(request.like));
+      if (drawn.length > 0 && drawn.length <= 262_144 && !latin1(stream.streamBytes).includes(drawn)) {
+        const name = String.raw`\/[^\x00\t\n\f\r /<>\[\]()%{}]+`;
+        const literal = (part: string) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const tail = latin1(stream.streamBytes.slice(Math.max(0, streamLength - 2 * drawn.length - 1024)));
+        const same = new RegExp(`\\n${drawn.split(new RegExp(name, "g")).map(literal).join(name)}$`).exec(tail);
+        if (same) span = await found(streamLength - same[0].length);
+      }
+    }
+    // Not the tail on these bytes: the other window wrote after the block.
+    // A block the removal names itself (`like`) is taken out where it
+    // stands when it leaves the page's drawing as it found it -- `q` to
+    // `Q` with nothing of the page's own state restored ahead of it (no
+    // `Q` before its `q`, no matrix put back): what was written after it
+    // reads no state of it. It is found by its own bytes, or by what it
+    // draws under a font of another name, and only where the stream holds
+    // one such block: two of the same bytes, or -- where its own bytes are
+    // not there -- two that draw the same, are not told apart. (Held to
+    // the tail, a new text box planned again as its first letter and the
+    // rest after it could not be taken back: the letter stood behind the
+    // other window's box for good.)
+    let standsApart = false;
+    if (span.end !== streamLength && request.appendKind === "text" && request.like) {
+      const drawn = latin1(base64ToBytes(request.like));
+      if (drawn.length > 0 && drawn.length <= 262_144 && /^q\n/u.test(drawn)) {
+        const whole = latin1(stream.streamBytes);
+        const name = String.raw`\/[^\x00\t\n\f\r /<>\[\]()%{}]+`;
+        const literal = (part: string) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        // (Its own bytes first: another box's block that draws the same at
+        // the very place stands under a font of another name.)
+        const own = whole.indexOf(drawn);
+        const places = own >= 0 && whole.indexOf(drawn, own + 1) < 0 ? [{ index: own, length: drawn.length }]
+          : own >= 0 ? []
+            : [...whole.matchAll(new RegExp(drawn.split(new RegExp(name, "g")).map(literal).join(name), "g"))]
+              .map((match) => ({ index: match.index, length: match[0].length }));
+        const at = places.length === 1 ? places[0].index : -1;
+        if (at > 0 && /[\x00\t\n\f\r ]/u.test(whole[at - 1])) {
+          span = Object.freeze({ start: at, end: at + places[0].length,
+            expectedSha256: await sha256PdfBytes(stream.streamBytes.slice(at, at + places[0].length)) });
+          standsApart = span.end !== streamLength;
+        }
+      }
+    }
+    if ((!standsApart && span.end !== streamLength) || span.start >= span.end) {
       invalid("Content removal must target the exact stream tail block.");
     }
     blockBytes = stream.streamBytes.slice(span.start, span.end);
     if ((await sha256PdfBytes(blockBytes)) !== span.expectedSha256) {
       invalid("Content removal block changed.");
     }
+    // The state the block was appended under is the page's whole drawing up
+    // to it, as the append read it above -- not the last stream's alone. A
+    // page drawn from several streams cut anywhere (the IRS's: eight streams
+    // of 7 KB, each cut inside a text object) has a last stream that opens
+    // inside `BT` and restores `q`s the streams before it saved: walked by
+    // itself it was "unbalanced", the block was never taken off, and a new
+    // text box typed and left at once stayed its first letter and the rest
+    
+    const beforeBlock = stream.streamBytes.slice(0, span.start);
     const parsedBlock = parseBlock(
       latin1(blockBytes).replace(/^\n/, ""),
       !isIdentity(
-        analyzePdfNativeContentStreamTail(stream.streamBytes.slice(0, span.start))
-          .effectiveMatrix,
+        analyzePdfNativeContentStreamTail(
+          page.drawingPrefix.length === 0
+            ? beforeBlock
+            : Uint8Array.from([...page.drawingPrefix, 0x0a, ...beforeBlock]),
+        ).effectiveMatrix,
       ),
     );
     if (!parsedBlock) invalid("Content removal span is not one appended block.");
+    if (standsApart && (parsedBlock.restoredDepth !== 0 || parsedBlock.tailCm !== null)) {
+      invalid("Content removal must target the exact stream tail block.");
+    }
     replacement = new Uint8Array();
     operatorSpan = span;
     blockStart = span.start;

@@ -157,6 +157,166 @@ function newLevelTarget(
   return { pos, from: list.type, type: list.type, attrs };
 }
 
+/** A paragraph's indents as the page states them (an imported list
+ * paragraph carries the ones its numbering level resolved to). */
+type ItemIndents = { left: unknown; firstLine: unknown };
+
+function itemIndents(item: PmNode): ItemIndents | null {
+  const paragraph = item.firstChild;
+  if (!paragraph || !paragraph.isTextblock) return null;
+  const left = paragraph.attrs.indentLeftPt ?? null;
+  const firstLine = paragraph.attrs.firstLineIndentPt ?? null;
+  return left === null && firstLine === null ? null : { left, firstLine };
+}
+
+function sameIndents(a: ItemIndents | null, b: ItemIndents | null): boolean {
+  return !!a && !!b && a.left === b.left && a.firstLine === b.firstLine;
+}
+
+/** The one pair of indents every item of `items` states, or null. */
+function sharedIndents(items: readonly PmNode[]): ItemIndents | null {
+  let shared: ItemIndents | null = null;
+  for (const item of items) {
+    const own = itemIndents(item);
+    if (!own || (shared && !sameIndents(shared, own))) return null;
+    shared = own;
+  }
+  return shared;
+}
+
+/**
+ * The indents a demotion moves the items between: the level they leave (what
+ * every other item of their list states) and the level they join (what every
+ * item of the previous item's deeper list states). An imported Word list
+ * paragraph states the indents its `w:lvl` resolved to, so an item that
+ * still states its old level's takes the new level's, as Word draws a
+ * paragraph whose `w:ilvl` changed (its own direct indent, one the level does
+ * not give, stays). Null when either is not known. PURE.
+ */
+function levelIndentsOfSink(
+  selection: Selection,
+  itemType: NodeType,
+): { from: ItemIndents; to: ItemIndents } | null {
+  const range = selection.$from.blockRange(
+    selection.$to,
+    (node) => node.childCount > 0 && node.firstChild?.type === itemType,
+  );
+  if (!range || range.startIndex === 0) return null;
+  const list = range.parent;
+  const others: PmNode[] = [];
+  list.forEach((item, _offset, index) => {
+    if (index < range.startIndex || index >= range.endIndex) others.push(item);
+  });
+  const from = sharedIndents(others);
+  const deeper = list.child(range.startIndex - 1).lastChild;
+  if (!from || !deeper || !LIST_NODE_NAMES.has(deeper.type.name)) return null;
+  const items: PmNode[] = [];
+  deeper.forEach((item) => items.push(item));
+  const to = sharedIndents(items);
+  return to && !sameIndents(from, to) ? { from, to } : null;
+}
+
+/**
+ * The indents a demotion moves an item between when the previous item has no
+ * deeper level to say what the new one looks like: the item's own sub-items
+ * do -- they are at the level it joins, in Word's flat list its siblings
+ * after the demotion (`keepWordLevels`; corpus R486-D80 E51). Null when
+ * either is not known. PURE.
+ */
+function levelIndentsOfOwnSubItems(
+  selection: Selection,
+  itemType: NodeType,
+): { from: ItemIndents; to: ItemIndents } | null {
+  const range = selection.$from.blockRange(
+    selection.$to,
+    (node) => node.childCount > 0 && node.firstChild?.type === itemType,
+  );
+  if (!range || range.startIndex === 0 || range.endIndex - range.startIndex !== 1) return null;
+  const list = range.parent;
+  const others: PmNode[] = [];
+  list.forEach((item, _offset, index) => {
+    if (index < range.startIndex || index >= range.endIndex) others.push(item);
+  });
+  const from = sharedIndents(others);
+  const inner = list.child(range.startIndex).lastChild;
+  if (!from || !inner || inner.type !== list.type) return null;
+  const items: PmNode[] = [];
+  inner.forEach((item) => items.push(item));
+  const to = sharedIndents(items);
+  return to && !sameIndents(from, to) ? { from, to } : null;
+}
+
+/**
+ * After ProseMirror's sinkListItem, what Word's flat list keeps: only the
+ * demoted paragraphs change level. ProseMirror moves each item with the
+ * deeper list it holds, so its sub-items went one level down with it; in
+ * Word they keep their `w:ilvl` and are now the demoted item's siblings
+ * (corpus R485-D87 E13: "NSIC 222" went from ilvl 1 to 2 under the demoted
+ * "RICE-PRE"). Sub-items of a list that is not the one the item joined (an
+ * other numbering at that level) stay where they are. The demoted items take
+ * the new level's indents (`levelIndentsOfSink`).
+ */
+function keepWordLevels(
+  tr: Transaction,
+  itemType: NodeType,
+  indents: { from: ItemIndents; to: ItemIndents } | null,
+): void {
+  const range = tr.selection.$from.blockRange(
+    tr.selection.$to,
+    (node) => node.childCount > 0 && node.firstChild?.type === itemType,
+  );
+  if (!range) return;
+  const list = range.parent;
+  const items: { pos: number; node: PmNode }[] = [];
+  let pos = range.start;
+  for (let index = range.startIndex; index < range.endIndex; index += 1) {
+    const node = list.child(index);
+    items.push({ pos, node });
+    pos += node.nodeSize;
+  }
+  // A list the demotion CREATED (it holds the demoted items and nothing
+  // else) inside a defined numbering is that numbering's next level -- the
+  // level a demoted item's own sub-items already are at, with no definition of
+  // their own (corpus R486-D80 E51: "...changes sharply in at least one of the
+  // following ways:" demoted, its three sub-items went to ilvl 2 with it).
+  // It takes those sub-items' list attributes, so they join it as the item's
+  // siblings, as Word keeps them at their w:ilvl.
+  let listAttrs = list;
+  const created = range.startIndex === 0 && range.endIndex === list.childCount;
+  const first = items[0]?.node.lastChild;
+  if (
+    created &&
+    first &&
+    first.type === list.type &&
+    !sameListAttrs(first, list) &&
+    !(first.type.name === "orderedList" && normalizeListDefinition(first.attrs.listDefinition)) &&
+    definedListLevelAt(tr.selection.$from, range.depth)
+  ) {
+    const listPos = range.$from.before(range.depth);
+    tr.setNodeMarkup(listPos, undefined, { ...first.attrs, block_id: list.attrs.block_id });
+    listAttrs = first;
+  }
+  for (const { pos: itemPos, node } of items.reverse()) {
+    const inner = node.lastChild;
+    if (node.childCount > 1 && inner && LIST_NODE_NAMES.has(inner.type.name) && sameListAttrs(inner, listAttrs)) {
+      const innerPos = itemPos + node.nodeSize - 1 - inner.nodeSize;
+      const $start = tr.doc.resolve(innerPos + 1);
+      const $end = tr.doc.resolve(innerPos + inner.nodeSize - 1);
+      const children = new NodeRange($start, $end, $start.depth);
+      const target = liftTarget(children);
+      if (target != null) tr.lift(children, target);
+    }
+    const paragraph = node.firstChild;
+    if (indents && paragraph?.isTextblock && sameIndents(itemIndents(node), indents.from)) {
+      tr.setNodeMarkup(itemPos + 1, undefined, {
+        ...paragraph.attrs,
+        indentLeftPt: indents.to.left,
+        firstLineIndentPt: indents.to.firstLine,
+      });
+    }
+  }
+}
+
 /** Word's list levels: nine (`w:ilvl` 0-8; [MS-OI29500] 17.9.6, Word will
  * not open a deeper one). Increase List Level and Tab stop at the ninth, as
  * in Word; the page's depth bound (40 nodes, which every exporter shares)
@@ -189,10 +349,12 @@ export const DocumentListLevels = Extension.create({
           const itemType = getNodeType(typeOrName, state.schema);
           if (listLevelAt(state.selection) >= MAX_DOCUMENT_LIST_LEVELS) return false;
           const target = newLevelTarget(state.selection, itemType);
+          const indents =
+            levelIndentsOfSink(state.selection, itemType) ?? levelIndentsOfOwnSubItems(state.selection, itemType);
           if (!sinkListItemCommand(itemType)(state, dispatch)) return false;
-          if (!dispatch || !target) return true;
-          const created = tr.doc.nodeAt(target.pos);
-          if (created?.type === target.from && created.firstChild?.type === itemType) {
+          if (!dispatch) return true;
+          const created = target ? tr.doc.nodeAt(target.pos) : null;
+          if (target && created?.type === target.from && created.firstChild?.type === itemType) {
             if (target.type === target.from) {
               tr.setNodeMarkup(target.pos, undefined, {
                 ...created.attrs,
@@ -207,6 +369,7 @@ export const DocumentListLevels = Extension.create({
                 tr.join(target.pos);
             }
           }
+          keepWordLevels(tr, itemType, indents);
           return true;
         },
     };
@@ -297,6 +460,38 @@ function sameListAttrs(a: PmNode, b: PmNode): boolean {
  * differ in anything but their identity stay two, as their paragraphs' levels
  * do in Word; the rest is ProseMirror's own command.
  */
+/**
+ * Decrease Indent on items of a nested list that states a Word level of its
+ * own deeper than the next one below its parent (an imported ilvl 3 item
+ * under an ilvl 0 one: the list's `listLevel` 3, its parent's level 0). Word
+ * changes those paragraphs' w:ilvl to one level up -- 2, still below the
+ * parent item -- and nothing moves (corpus R486-D59 E14: the item was lifted
+ * out to the top level, written ilvl 2 with a new numbering by the patch and
+ * ilvl 0 by the full export). The selected items take the list's level less
+ * one, split off into a list of their own when they are not all of it.
+ * False (nothing done) for any other list. PURE but for `tr`.
+ */
+function decreaseSkippedLevel(tr: Transaction, range: NodeRange): boolean {
+  const list = range.parent;
+  if (list.type.name !== "orderedList") return false;
+  const level = explicitOrderedListLevel(list);
+  if (level == null || range.depth < 3) return false;
+  const parent = definedListLevelAt(range.$from, range.depth - 2);
+  if (!parent || level - 1 <= parent.level) return false;
+  const listPos = range.$from.before(range.depth);
+  // Split the selected items off the list (after them first, so the
+  // positions before them stay put); a list split off is a new block.
+  if (range.endIndex < list.childCount) {
+    tr.split(range.end, 1, [{ type: list.type, attrs: { ...list.attrs, block_id: null } }]);
+  }
+  if (range.startIndex > 0) {
+    tr.split(range.start, 1, [{ type: list.type, attrs: { ...list.attrs, block_id: null, listLevel: level - 1 } }]);
+    return true;
+  }
+  tr.setNodeMarkup(listPos, undefined, { ...list.attrs, listLevel: level - 1 });
+  return true;
+}
+
 export function liftListItemKeepingLists(itemType: NodeType) {
   return (state: EditorState, dispatch?: (tr: Transaction) => void): boolean => {
     const { $from, $to } = state.selection;
@@ -305,6 +500,10 @@ export function liftListItemKeepingLists(itemType: NodeType) {
       return liftListItemCommand(itemType)(state, dispatch);
     }
     const tr = state.tr;
+    if (decreaseSkippedLevel(tr, range)) {
+      dispatch(tr.scrollIntoView());
+      return true;
+    }
     const end = range.end;
     const endOfList = range.$to.end(range.depth);
     let lifted = range;

@@ -1367,6 +1367,17 @@ body.note-editor-object-moving * {
   overflow: hidden;
 }
 
+/* A table row deleted with Track Changes on (w:trPr/w:del, trackChanges
+   ROW_DELETION_REVISION_ATTR) is gone in the views that hide deletions, as
+   Word draws Simple Markup and No Markup: the row takes no room and its
+   borders go with it (corpus R417-D03: the P2.Q1 table's deleted
+   "Control/use of income" row stood 22.5 pt tall, its last row went to the
+   next page). Collapsed, not removed: the row keeps its box (a 0 px row the
+   pages measure) and the table its columns. */
+.ProseMirror:is([data-track-changes-markup-filter="none"], [data-track-changes-markup-filter="simple"], [data-track-changes-markup-filter="insertions"]) tr[data-track-row-deletion="true"] {
+  visibility: collapse;
+}
+
 /* ...and the empty line after a line break that holds the mark alone, with
    the paragraph's space after (sectionMarkParagraph.ts). */
 .ProseMirror p[data-section-mark-after-break="true"] {
@@ -6578,6 +6589,25 @@ br[data-docx-break-run-marks] {
   width: 100%;
   height: auto;
 }
+/* Word sets a display equation by its own justification (m:oMathParaPr/m:jc,
+   else the document's m:defJc), never its paragraph's alignment: at the left
+   or the right of its line where the file states so (truth machine, DQ-L 21st
+   mathjc, 23rd mathjc-cells: in a table cell and after a line break beside
+   words too), a group with alignment points by the same side. */
+.inline-math-wrapper[data-math-display][data-math-justification="left"] {
+  text-align: left;
+}
+.inline-math-wrapper[data-math-display][data-math-justification="right"] {
+  text-align: right;
+}
+.inline-math-preview[data-math-display][data-math-justification="left"] {
+  justify-content: flex-start;
+  --word-math-centre: 0;
+}
+.inline-math-preview[data-math-display][data-math-justification="right"] {
+  justify-content: flex-end;
+  --word-math-centre: 1;
+}
 .inline-math-preview[data-math-display][data-word-math-box] {
   /* A line of its own: no words to leave it to (the rule below, for a formula
      among words, drew the next paragraph over it). */
@@ -6599,6 +6629,16 @@ br[data-docx-break-run-marks] {
 }
 .inline-math-preview[data-math-display] .katex-display {
   margin: 0;
+}
+/* An equation that is all its paragraph holds (inlineMathStandsAlone): Word's
+   display line, with the paragraph's mark beside it. The editor's trailing
+   break after the equation and the shown paragraph mark each went to a line
+   of their own under it, a line taller than Word's paragraph. */
+.ProseMirror [data-math-alone] > br.ProseMirror-trailingBreak {
+  display: none;
+}
+.ProseMirror [data-math-alone] > .mrnote-formatting-mark:is(.mrnote-formatting-mark--pilcrow, .mrnote-formatting-mark--cellEnd) {
+  position: absolute;
 }
 
 .math-block-preview[data-word-math-box]::before {
@@ -12467,6 +12507,37 @@ mark[data-highlight-color]:not([data-highlight-shading="true"]) :is([data-char-s
   display: none;
 }
 
+/* Nor does the slot hold a paragraph. The page builder fills the padded cell
+   with one empty paragraph in the Normal style, and its line (and the cell's
+   own margins) made every row with a filler at least that tall: corpus
+   R484-D54's abstract table, 9 pt text in rows that end in w:gridAfter, drew
+   each such row 12.65 pt for Word's 10.32 (Normal is 11 pt Times New Roman),
+   four rows 9.6 pt too tall and page 1 a line short. Word sizes the row by its
+   real cells alone. Off (A/B): `window.__docsGridFillerVoidOff = true`
+   (documentTableGridFiller sets `data-docs-grid-filler-void-off` on the root). */
+:root:not([data-docs-grid-filler-void-off])
+  :is(.note-editor-content, .paged-fragment, .paged-fragment__inner, .paged-measured-flow)
+  table
+  :is(td, th)[data-grid-filler="true"] {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+:root:not([data-docs-grid-filler-void-off])
+  :is(.note-editor-content, .paged-fragment, .paged-fragment__inner, .paged-measured-flow)
+  table
+  :is(td, th)[data-grid-filler="true"]
+  > * {
+  height: 0 !important;
+  min-height: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-top-width: 0 !important;
+  border-bottom-width: 0 !important;
+  overflow: hidden !important;
+}
+
 /* ============================================================
    Table of Contents (document outline)
    The node paints the way Word paints its field result: the entries are
@@ -17728,7 +17799,10 @@ span.document-auto-linebox .document-auto-line-fraction,
 .note-editor-content p[data-drop-cap="dropped"][data-document-auto-intermediates="true"] {
   line-height: var(--document-auto-line-height) !important;
 }
-.note-editor-content :is(p, h1, h2, h3, h4, h5, h6)[data-document-auto-intermediates="true"] span:not(.document-auto-linebox):not(.document-auto-line-fraction):not(.document-word-linebox):not(.document-word-line-fraction):not(span.document-auto-linebox *):not(span.document-auto-line-fraction *):not(span.document-word-linebox *):not(span.document-word-line-fraction *) {
+/* ...but an equation's KaTeX keeps its own line heights (its struts are the box
+   Word gives the formula, its stacks need theirs: InlineMath, note-editor's
+   inline-math rules); its wrapper and preview take none of the paragraph's. */
+.note-editor-content :is(p, h1, h2, h3, h4, h5, h6)[data-document-auto-intermediates="true"] span:not(.document-auto-linebox):not(.document-auto-line-fraction):not(.document-word-linebox):not(.document-word-line-fraction):not(span.document-auto-linebox *):not(span.document-auto-line-fraction *):not(span.document-word-linebox *):not(span.document-word-line-fraction *):not(.katex):not(.katex *) {
   line-height: 0 !important;
 }
 /* A raised or lowered run (`data-text-position`, Word's w:position) and the
@@ -18454,6 +18528,13 @@ span.document-auto-linebox .document-auto-line-fraction,
 .ProseMirror [data-tab-over-margin-line] {
   overflow-wrap: normal !important;
   word-break: normal !important;
+}
+/* A paragraph that is one kept line from its start to its end does not wrap
+   at all: Chromium breaks after its list number (an inline-block) by the
+   paragraph's white-space, not the kept span's (R470-D37 "2." / "Date and
+   hour:", look25/probes/markerbreak). */
+.ProseMirror [data-tab-over-margin-whole="true"] {
+  white-space: pre !important;
 }
 /* ...and its closing widgets (the paragraph mark, the editor's separator
    image) stand out of the flow: after a kept line running past the edge

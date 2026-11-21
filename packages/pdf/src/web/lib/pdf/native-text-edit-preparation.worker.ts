@@ -14,6 +14,7 @@ import {
   prepareMraiNativeTextEditingSelection,
   createMraiNativeTextReadSession,
   readMraiNativeTextStandingLook,
+  mraiNativeTextTakesFormatsWhereItStands,
   planMraiNativeListTextSelectionReplacement,
   proofFromNativeListTextPlan,
   readMraiNativeListTextStandingLook,
@@ -23,6 +24,8 @@ import {
   type PdfNativeSingleLineFitHint,
 } from "./engine/native/list-text-fidelity";
 import { pdfTextHasRightToLeftRun } from "./engine/native/reader-order";
+import { PDF_NATIVE_MAX_FIXED_FRAME_ITEMS } from "./engine/native/vocabulary";
+import { PDF_NATIVE_TEXT_NOT_A_FORMATS_BLOCK_MESSAGE } from "./text-edit/block-only-opening";
 import { inheritPdfSourceAppearance } from "./native-source-appearance";
 import { matchPdfTextSourceAppearance, pdfNativeCandidateAppearanceSelection } from "./source-text-appearance";
 import { resolveManagedTextBoxPreviewAnnotationId } from "./native-text-box-roundtrip";
@@ -61,6 +64,41 @@ export async function openPdfNativeTextInFallbackLane(
       throw new PdfNativeTransactionError("unsupported-document", error.message);
     }
     throw refusal;
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export async function proofOfParagraphAsFormatsBlock(
+  bytes: Uint8Array,
+  selection: PdfNativeTextPreparationRequest["selection"],
+): Promise<PdfNativeListTextSelectionProof | null> {
+  if ((selection.items?.length ?? 0) < 2) return null;
+  try {
+    const read = await mraiNativeTextTakesFormatsWhereItStands({ sourceBytes: bytes, selection });
+    if (!read || read.shows <= PDF_NATIVE_MAX_FIXED_FRAME_ITEMS) return null;
+    const { pdfWordsFixedTextProof } = await import("./source-text-fallback");
+    
+    // them: the window then asks the weight of it as of any box -- a line of
+    // it with an emoji on it takes Bold the same way, `type3Pictures`.)
+    return Object.freeze({ ...(await pdfWordsFixedTextProof({ sourceBytes: bytes, selection }, "too-large-to-set-again")),
+      ...read.look, ...(read.type3Pictures ? { type3Pictures: true as const } : {}) });
+  } catch {
+    return null;
   }
 }
 
@@ -105,16 +143,39 @@ export async function prepareAndZeroizePdfNativeText(
     const look = await readMraiNativeListTextStandingLook({ sourceBytes: bytes, selection: input.selection })
       .catch(() => null);
     if (look) {
-      const { underline, strikethrough, syntheticBold, slanted } = look;
+      // (A box drawn in a bold face reads bold by that face, and says the
+      // weight is the face's own: `boldFaces`, which no press takes off.)
+      const { underline, strikethrough, syntheticBold, slanted, drawnBold, boldFaces, regularFace } = look;
       proof = Object.freeze({
         ...proof,
         ...(underline || strikethrough
           ? { textRules: Object.freeze({ ...proof.textRules, ...(underline ? { underline } : {}), ...(strikethrough ? { strikethrough } : {}) }) } : {}),
-        ...(syntheticBold || slanted
-          ? { drawnStyle: Object.freeze({ ...proof.drawnStyle, ...(syntheticBold ? { bold: true as const } : {}), ...(slanted ? { italic: true as const } : {}) }) } : {}),
+        ...(syntheticBold || slanted || drawnBold || boldFaces
+          ? { drawnStyle: Object.freeze({ ...proof.drawnStyle, ...(syntheticBold || drawnBold ? { bold: true as const } : {}),
+            ...(slanted ? { italic: true as const } : {}), ...(boldFaces ? { boldFaces } : {}),
+            ...(regularFace ? { regularFace: true as const } : {}) }) } : {}),
       });
     }
     return proof;
+  };
+  // A box of right-to-left text that opens on a run's own proof (one show:
+  // a single letter between two full stops, a word a producer drew whole) and
+  // is drawn in a bold face: the proof says so the way a box of several shows
+  // does -- `boldFaces`, and `regularFace` where the engine sets the box's
+  // words again in the family's regular face -- so that its editor asks the
+  
+  // was offered there, its press set the run in a face of the proof by the
+  // run's own writer -- which places no glyph of text the reader reorders --
+  // and was refused when the box was left, while the engine sets that box
+  // regular where it stands (pdf-walk-1000 0979 pp.1-6: 15 single-letter
+  
+  const withBoldFaceLook = async (opened: PdfNativeListTextSelectionProof): Promise<PdfNativeListTextSelectionProof> => {
+    if (!opened.properties || opened.drawnStyle) return opened;
+    const look = await readMraiNativeListTextStandingLook({ sourceBytes: bytes, selection: input.selection }).catch(() => null);
+    if (!look?.boldFaces) return opened;
+    return Object.freeze({ ...opened, drawnStyle: Object.freeze({
+      ...(look.syntheticBold || look.drawnBold ? { bold: true as const } : {}), boldFaces: look.boldFaces,
+      ...(look.regularFace ? { regularFace: true as const } : {}) }) });
   };
   try {
     if (
@@ -147,6 +208,16 @@ export async function prepareAndZeroizePdfNativeText(
       } catch { /* A caret-geometry miss cannot invalidate an independently verified text candidate. */ }
       return { requestId: input.requestId, sourceSha256: input.selection.sourceSha256,
         result: { proof: proofFromNativeListTextPlan(plan), blankedSource: null, hiddenAnnotationId: null, compiled: { plan, prepared, ...(sourceGeometry?{sourceGeometry}:{}) } } };
+    }
+    if (input.formatsWhole) {
+      // The box as a block that takes formats where its text stands and no
+      
+      // of a paragraph they have refused).
+      if (input.sourceText || input.managedBoxId) throw new PdfNativeTransactionError("invalid-request", "A text box is not opened as a block of the page's own text.");
+      const block = await proofOfParagraphAsFormatsBlock(bytes, input.selection);
+      if (!block) throw new PdfNativeTransactionError("unsupported-document", PDF_NATIVE_TEXT_NOT_A_FORMATS_BLOCK_MESSAGE);
+      return { requestId: input.requestId, sourceSha256: input.selection.sourceSha256,
+        result: { proof: block, blankedSource: null, hiddenAnnotationId: null } };
     }
     const binding = input.sourceText
       ? readPdfSourceTextBoxBinding(input.sourceText)
@@ -226,7 +297,7 @@ export async function prepareAndZeroizePdfNativeText(
         result = null;
       }
       if (result) {
-        proof = result.proof;
+        proof = await withBoldFaceLook(result.proof);
         singleLineFit = result.singleLineFit;
         if (result.blankingRequest) {
           const prepared = await prepareMraiNativeContentStreamTransaction(

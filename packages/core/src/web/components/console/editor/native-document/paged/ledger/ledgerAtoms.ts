@@ -94,6 +94,7 @@ import { countEngineCut, engineBlockHeightPx, engineBlockLineCount, engineCutCom
 import { collapseMargins, collapsedInnerMarginPx, type AuthoredMarginPx } from "../marginCollapse";
 import { paginationLayoutRect, paginationLayoutScale } from "../paginationGeometry";
 import { BAND_RUN_RIDE_ATTR, BAND_RUN_ROOM_ATTR, FLOAT_PAGE_ROOM_ATTR } from "../../../../../../lib/office-float-anchor";
+import { bandBodyFloorPx } from "../bandFloatExclusion";
 import { normalizeWordCompatibilityMode } from "../../documentOverflowPunctuation";
 import { SheetMeasureMemo, querySheetsAll, sheetsOf } from "../sheetMeasureMemo";
 import { LINE_GRID_FIT_TOLERANCE_PX } from "../pageRebalance";
@@ -189,6 +190,37 @@ export function projectedFootZonesPx(
   });
 }
 
+/** A footnote first referenced on a column-projected sheet: it is charged
+ * to no block (its page's zone is held out of every column instead), so the
+ * plan needs to know where in its block the reference stands to tell which
+ * planned page holds it (ledgerFootZonePlan). */
+export interface LedgerZoneNote {
+  id: string;
+  /** Content offset of the reference in its logical block. */
+  logicalOffset: number;
+  /** The fragment holding the reference as the block stands now. */
+  partIndex: number;
+  /** The note's rows (px) and their pitch, and the zone chrome a page
+   * holding it pays once. */
+  heightPx: number;
+  pitchPx: number;
+  chromePx: number;
+}
+
+/** What the page-wide note zones of the column-projected sheets are made
+ * from, for a plan that reads each page's zone from the references it puts
+ * there rather than from where the fragments stand. */
+export interface LedgerFootZones {
+  /** Each sheet's flow capacity before its zone was taken off. */
+  baseCapacities: number[];
+  /** The sheets whose notes stand in a page-wide zone. */
+  zoneSheets: boolean[];
+  /** Each sheet's footnote columns. */
+  noteColumns: number[];
+  /** The notes by logical block, in reading order. */
+  notes: Map<number, LedgerZoneNote[]>;
+}
+
 export interface LedgerPart {
   /** On a sheet drawn hollow (pageSheetView): `dom` is the sheet, the part
    * has no DOM of its own, its measurement is the one kept by its node. */
@@ -269,8 +301,14 @@ export interface LedgerBuild {
   /** Newspaper columns per sheet (1 when not columned); `capacities` is
    * already the flow capacity across them. */
   columns: number[];
+  /** The page-wide note zones `capacities` already has taken off, as the
+   * fragments stand, and what they are made from; null when no sheet has one. */
+  footZones?: LedgerFootZones | null;
   /** Per sheet, the band tops its column region's columns end at. */
   bandTops?: (readonly (number | undefined)[] | null)[];
+  /** Per single-column sheet, whether its capacity ends at a header or footer
+   * object's top (bandBodyFloorPx): no line's Auto leading crosses into it. */
+  bandFloored?: boolean[];
   sheets: HTMLElement[];
   /** Sheets measured again in this build: anything in them changed since the
    * last one (every sheet, without a cache). */
@@ -359,6 +397,16 @@ export interface CodeCutPayload {
 export interface ContainerCutPayload {
   plan: ContainerSplitPlan;
   partIndex: number;
+  /** Where in its fragment the cut falls, from the fragment's top (px): the
+   * next cut of the same fragment is planned below it (`planContainerHeadCut`). */
+  partOffsetPx?: number;
+  /** A head planned below an earlier cut of the same fragment in the same
+   * plan (`planContainerHeadInPart`): the whole children that cut left in its
+   * head, and how many children the fragment had. Its `plan` counts from the
+   * fragment's start; once a page cut made the earlier head a fragment of its
+   * own, it is applied to the rest (`rebasedContainerPlan`). */
+  chainedAfter?: number;
+  partChildCount?: number;
 }
 export interface TableCutPayload {
   planned: ReturnType<typeof planRenderedTableFragment>;
@@ -1259,7 +1307,17 @@ export function buildLedger(
   const doc = view.state.doc;
   const pageStarters = continuousBreaksStartingPage(doc);
   const columns = sheets.map((sheet) => Math.max(1, sheetColumnCount(sheet)));
-  const capacities = sheets.map((sheet, index) => readCapacity(view, sheet) * columns[index]);
+  const bandFloored = sheets.map(() => false);
+  const capacities = sheets.map((sheet, index) => {
+    const capacity = readCapacity(view, sheet);
+    if (columns[index] > 1) return capacity * columns[index];
+    // A header or footer object with no strip beside it ends the body's text
+    // at its top (bandBodyFloorPx).
+    const floor = bandBodyFloorPx(view, index, sheet);
+    if (floor === null || !(floor < capacity)) return capacity;
+    bandFloored[index] = true;
+    return floor;
+  });
   // Fragments whose sheet is unchanged keep their measurements; a sheet with
   // any fragment to measure again changed in this pass.
   const kept = new Map<LedgerPart, LedgerFragmentMeasure>();
@@ -1381,11 +1439,14 @@ export function buildLedger(
   // column to the margin, the projector could not hold it and the two
   // cycled until pagination stalled (WUA 015: three columns, a tall table).
   const zoneSheets = sheets.map((sheet, index) => columns[index] > 1 && sheetProjectsFootZone(sheet));
-  if (footnoteReservations && zoneSheets.some(Boolean)) {
+  const footZones: LedgerFootZones | null = footnoteReservations && zoneSheets.some(Boolean)
+    ? { baseCapacities: [...capacities], zoneSheets, noteColumns: sheets.map((sheet) => sheetNoteColumns(sheet)?.count ?? 1), notes: new Map() }
+    : null;
+  if (footnoteReservations && footZones) {
     const hostSheets = logical.flatMap((block) => block.parts.map((part) => part.sheet));
     const zones = projectedFootZonesPx(sheets.length, hostSheets, footnoteReservations,
       capacities.map((capacity, index) => capacity / columns[index]),
-      sheets.map((sheet) => sheetNoteColumns(sheet)?.count ?? 1));
+      footZones.noteColumns);
     zones.forEach((zone, index) => {
       if (zoneSheets[index] && zone > 0) capacities[index] = Math.max(0, capacities[index] - zone * columns[index]);
     });
@@ -1937,6 +1998,22 @@ export function buildLedger(
       // A column-projected sheet holds its note zone out of every column's
       // capacity (projectedFootZonesPx below): its blocks carry none.
       const reservation = zoneSheets[part.sheet] ? null : footnoteReservations?.[partCursor] ?? null;
+      const zoned = footZones && zoneSheets[part.sheet] ? footnoteReservations?.[partCursor] ?? null : null;
+      if (footZones && zoned && zoned.totalPx > 0) {
+        const list = footZones.notes.get(blockOrdinal) ?? [];
+        const seen = new Set<string>();
+        part.node.descendants((child, offset) => {
+          if (child.type.name !== "footnoteRef") return true;
+          const id = child.attrs?.noteId;
+          const rowPx = typeof id === "string" ? zoned.notes.get(id) : undefined;
+          if (rowPx !== undefined && !seen.has(id)) {
+            seen.add(id);
+            list.push({ id, logicalOffset: contentOffsetBefore(block, partIndex) + offset, partIndex, heightPx: rowPx, pitchPx: zoned.pitches.get(id) ?? 0, chromePx: zoned.chromePx });
+          }
+          return true;
+        });
+        if (list.length > 0) footZones.notes.set(blockOrdinal, list);
+      }
       let reservedPx = 0;
       if (reservation && reservation.totalPx > 0) {
         const charged = new Set<string>();
@@ -2138,6 +2215,15 @@ export function buildLedger(
     const lastMeasuredSheet = (logical[firstEstimated]?.parts[0]?.sheet ?? sheets.length) - 1;
     cache?.settle(sheets.slice(0, Math.max(0, Math.min(lastMeasuredSheet, firstUnreadChainSheet))));
   }
+  // A note's zone chrome (separator and padding) is the zone's, not the
+  // note's: measured per group of notes sharing a sheet, it came out
+  // differently as the notes stood grouped differently, and the plan's zones
+  // with it (R372-D01). One value for the build: the largest measured.
+  if (footZones && footZones.notes.size > 0) {
+    let chromePx = 0;
+    for (const list of footZones.notes.values()) for (const note of list) chromePx = Math.max(chromePx, note.chromePx);
+    for (const list of footZones.notes.values()) for (const note of list) note.chromePx = chromePx;
+  }
   // Each sheet's section is that of the first block opening on it; a
   // section's page capacity is the last of its sheets' (not its first page,
   // which a title-page header may shorten).
@@ -2168,6 +2254,8 @@ export function buildLedger(
   }
   return {
     atoms, logical, capacities, sheetSections, sectionCapacities, sectionCapacityColumns, columns, sheets, changedSheets: changed, changedWhy,
+    footZones,
+    bandFloored,
     engineSheets,
     hollowMissing: [...hollowMissing],
     hollowMissingWhy,
@@ -3184,7 +3272,150 @@ function wordTableRowOptions(view: EditorView): { overPageCantSplitStands: boole
   return { overPageCantSplitStands: mode !== null && mode < 15, cellWidowControl: mode !== null && mode >= 15 };
 }
 
+/** Where a cut between whole children of a list or container falls in its
+ * fragment: the top of the first child its rest starts with, from the
+ * fragment's top (px). Null for a cut inside a child (its rest starts within
+ * a line the head does not end at; not chained). */
+function containerCutTopPx(dom: HTMLElement, plan: ContainerSplitPlan): number | null {
+  const count = plan.kind === "listItemBoundary"
+    ? plan.headItemCount
+    : plan.kind === "blockquoteBlockBoundary" || plan.kind === "calloutBlockBoundary"
+      ? plan.headBlockCount
+      : null;
+  if (count === null) return null;
+  const children = Array.from(dom.children).filter((child): child is HTMLElement => child instanceof HTMLElement);
+  const first = children[count];
+  if (!first) return null;
+  const scale = paginationLayoutScale(dom);
+  const top = paginationLayoutRect(first, scale).top - paginationLayoutRect(dom, scale).top;
+  return Number.isFinite(top) && top > 0 ? top : null;
+}
+
+function withCutTop(topPx: number | null): { partOffsetPx?: number } {
+  return topPx !== null ? { partOffsetPx: topPx } : {};
+}
+
+/** `window.__dqc2ContainerChainOff = true` (A/B): a list or container cut
+ * inside a fragment is not cut again below that cut in the same plan. */
+function containerChainOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __dqc2ContainerChainOff?: boolean }).__dqc2ContainerChainOff === true;
+}
+
+/** The whole children a cut between whole children leaves in its head
+ * (counted from its fragment's start); null for any other cut. */
+function boundaryChildCount(plan: ContainerSplitPlan): number | null {
+  return plan.kind === "listItemBoundary"
+    ? plan.headItemCount
+    : plan.kind === "blockquoteBlockBoundary" || plan.kind === "calloutBlockBoundary"
+      ? plan.headBlockCount
+      : null;
+}
+
+/** `window.__dqc2ContainerRebaseOff = true` (A/B): a chained head's plan is
+ * applied as counted from its fragment's start, as before. */
+function containerChainRebaseOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __dqc2ContainerRebaseOff?: boolean }).__dqc2ContainerRebaseOff === true;
+}
+
+/**
+ * The plan of a container cut, for the fragment it is applied to. A head
+ * planned below an earlier cut of the same fragment counts its children from
+ * that fragment's start; when the earlier cut was a page cut of the same
+ * transaction, the fragment it is applied to is that cut's rest, and the
+ * count is the rest's. Applied as counted, the head of a list cut over three
+ * pages was the whole rest, the cut refused, and the second page held the
+ * rest of the list over its foot until the next pass (a column cut is drawn
+ * by the projection, not here: its rest is the same fragment, as counted).
+ */
+export function rebasedContainerPlan(payload: ContainerCutPayload, opener: PmNode): ContainerSplitPlan | null {
+  const plan = payload.plan;
+  const after = payload.chainedAfter, total = payload.partChildCount;
+  if (!Number.isInteger(after) || !Number.isInteger(total) || after! <= 0) return plan;
+  if (opener.childCount === total) return plan;
+  if (opener.childCount !== total! - after!) return null;
+  if (plan.kind === "listItemBoundary") {
+    const count = plan.headItemCount - after!;
+    return count > 0 ? { ...plan, headItemCount: count } : null;
+  }
+  if (plan.kind === "blockquoteBlockBoundary" || plan.kind === "calloutBlockBoundary") {
+    const count = plan.headBlockCount - after!;
+    return count > 0 ? { ...plan, headBlockCount: count } : null;
+  }
+  return plan;
+}
+
+/**
+ * The next head of a list or container whose fragment was cut by this plan
+ * (a column cut, then the page's): planned in the same fragment, below the
+ * cut it starts at. Chained cuts were planned only from a seam that stands,
+ * so a list cut at the foot of a page's first column could not be cut again
+ * at the page's foot: the rest was placed whole, over the foot, and the
+ * verifier cut it where the drawn page put it -- the plan put it back on
+ * every pass and every key (R482-D01 p10: the references list, 2,388 px).
+ * Null when `from` is not such a cut (the seam walk applies) or none fits.
+ */
+export function planContainerHeadInPart(view: EditorView, block: LogicalBlock, request: LedgerSplitRequest): LedgerCut | null | undefined {
+  const from = request.from;
+  if (!from || from.kind !== "container" || containerChainOff()) return undefined;
+  const payload = from.payload as Partial<ContainerCutPayload> & { boundary?: unknown };
+  if (payload.boundary === true || !Number.isInteger(payload.partIndex) || typeof payload.partOffsetPx !== "number") return undefined;
+  const partIndex = payload.partIndex as number;
+  const part = block.parts[partIndex];
+  if (!part || part.hollow) return null;
+  const offsetPx = payload.partOffsetPx;
+  const restPx = part.heightPx - offsetPx;
+  if (restPx <= request.availablePx + 1e-6) {
+    // The rest of this fragment fits: the head goes on past its seam.
+    if (partIndex + 1 >= block.parts.length) return null;
+    const seamKey = existingSeamKey(block, partIndex);
+    if (seamKey === null) return null;
+    const atSeam: LedgerCut = {
+      kind: block.kind,
+      key: seamKey,
+      payload: { partIndex, boundary: true },
+      headHeightPx: restPx,
+      tailHeightPx: partHeightsAfter(block, partIndex),
+    };
+    const beyond = planContainerHeadCut(view, block, { ...request, from: atSeam, availablePx: request.availablePx - restPx });
+    return beyond ? { ...beyond, headHeightPx: beyond.headHeightPx + restPx } : atSeam;
+  }
+  const atPx = offsetPx + request.availablePx;
+  const plan = planContainerHead(part.dom, part.node, atPx, {
+    containerPos: part.pos,
+    freshPage: false,
+    splitTable: (dom, table, tableAvailablePx) => {
+      const planned = planRenderedTableFragment(dom, table, tableAvailablePx, request.fullCapacityPx, 0, wordTableRowOptions(view));
+      return planned ? tableFragmentPair(view.state.doc, table, planned.plan, planned.cuts) : null;
+    },
+    posAtDOM: (node, offset) => {
+      try {
+        return view.posAtDOM(node, offset);
+      } catch {
+        return null;
+      }
+    },
+  });
+  if (!plan) return null;
+  const key = `container:${containerPlanKey(block, partIndex, plan)}`;
+  // No room for one more legal piece below the cut it starts at.
+  if (key === from.key) return null;
+  const topPx = containerCutTopPx(part.dom, plan);
+  const before = payload.plan ? boundaryChildCount(payload.plan) : null;
+  const chained = before !== null && before > 0 && boundaryChildCount(plan) !== null && !containerChainRebaseOff()
+    ? { chainedAfter: before, partChildCount: part.node.childCount }
+    : {};
+  return {
+    kind: "container",
+    key,
+    payload: { plan, partIndex, ...(topPx !== null && topPx > offsetPx ? { partOffsetPx: topPx } : {}), ...chained } satisfies ContainerCutPayload,
+    headHeightPx: request.availablePx,
+    tailHeightPx: Math.max(0, part.heightPx - atPx) + partHeightsAfter(block, partIndex),
+  };
+}
+
 function planContainerHeadCut(view: EditorView, block: LogicalBlock, request: LedgerSplitRequest): LedgerCut | null {
+  const inPart = planContainerHeadInPart(view, block, request);
+  if (inPart !== undefined) return inPart;
   return walkFragments(block, request, (part, partIndex, availablePx, startPart) => {
   const plan = planContainerHead(part.dom, part.node, availablePx, {
     containerPos: part.pos,
@@ -3206,7 +3437,7 @@ function planContainerHeadCut(view: EditorView, block: LogicalBlock, request: Le
   return {
     kind: "container",
     key: `container:${containerPlanKey(block, partIndex, plan)}`,
-    payload: { plan, partIndex } satisfies ContainerCutPayload,
+    payload: { plan, partIndex, ...withCutTop(containerCutTopPx(part.dom, plan)) } satisfies ContainerCutPayload,
     headHeightPx: partHeightsBetween(block, startPart, partIndex) + availablePx,
     tailHeightPx: Math.max(0, part.heightPx - availablePx) + partHeightsAfter(block, partIndex),
   };

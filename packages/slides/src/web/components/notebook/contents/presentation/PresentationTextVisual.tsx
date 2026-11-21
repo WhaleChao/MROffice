@@ -54,7 +54,7 @@ import {
 import { normalizeNativeBulletReceipt, paragraphStatesIndent } from "@mrnote/core/web/lib/presentation-paragraphs.ts";
 import { type TextRun, normalizeRuns, runsFromText } from "@mrnote/core/web/lib/presentation-point-runs.ts";
 import { readAnchorCenter } from "@mrnote/core/web/lib/presentation-vertical-anchor.ts";
-import { measuredOfficeAnchorCenterShift, officeAnchorCenterShift } from "@mrnote/core/web/lib/office-text-layout.ts";
+import { measuredOfficeAnchorCenterShift, officeAnchorCenterLineExtents, officeAnchorCenterShift } from "@mrnote/core/web/lib/office-text-layout.ts";
 import { EMU_PER_PT, PX_PER_PT } from "@mrnote/core/web/lib/office-units.ts";
 import { normalizeColumnCount, textColumnsCss, textColumnsRowDirection } from "@mrnote/core/web/lib/presentation-text-columns.ts";
 import { blockClaimsNativeGroup, geometryNumber, isImportedPptxBlock } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
@@ -553,6 +553,10 @@ export function PresentationTextVisualContents({
     defaultTabPx: (block.style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx,
     kerning: asRecord(block.source)?.nativeKerning,
     eastAsianLines: asRecord(block.source)?.nativeEastAsianLines,
+    lineBox: asRecord(block.source)?.nativeLineBox,
+    // Row 1013: the empty lines a body ends on, in their mark's (or break's) size and face.
+    markLines: asRecord(block.source)?.nativeMarkLines,
+    ...(buildParagraphs ? {} : { flatText: block.text, flatRuns: block.runs }),
     widthPx: engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX,
     wrap: textBlockWraps(block),
     naturalLines: Boolean(asRecord(block.source)?.nativeSmartArtView),
@@ -571,6 +575,7 @@ export function PresentationTextVisualContents({
     defaultTabPx: (block.style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx,
     kerning: asRecord(block.source)?.nativeKerning,
     eastAsianLines: asRecord(block.source)?.nativeEastAsianLines,
+    lineBox: asRecord(block.source)?.nativeLineBox,
     widthPx: engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX,
     wrap: textBlockWraps(block),
     naturalLines: Boolean(asRecord(block.source)?.nativeSmartArtView),
@@ -585,7 +590,7 @@ export function PresentationTextVisualContents({
   if (engine.status === "ok" && engineRows) {
     return (
       <PresentationAutofitScaleContext.Provider value={layout.autofitScale}>
-        <PresentationAnchorCenterBounds anchorCenter={anchorCenter} shiftPx={anchorCenter ? engineAnchorCenterShiftPx(engine.layout, (engineWidthEmu ?? 0) / EMU_PER_PT) : undefined}>
+        <PresentationAnchorCenterBounds anchorCenter={anchorCenter} shiftPx={anchorCenter ? engineAnchorCenterShiftPx(engine.layout.paragraphs, engine.input.paragraphs, (engineWidthEmu ?? 0) / EMU_PER_PT) : undefined}>
           <PresentationEngineTextBody
             answer={engine}
             rows={engineRows}
@@ -618,6 +623,7 @@ export function PresentationTextVisualContents({
         defaultTabPx={(block.style as { defaultTabPx?: unknown } | undefined)?.defaultTabPx}
         kerning={asRecord(block.source)?.nativeKerning}
         eastAsianLines={asRecord(block.source)?.nativeEastAsianLines}
+        lineBox={asRecord(block.source)?.nativeLineBox}
         widthPx={engineWidthEmu === null ? null : engineWidthEmu / AUTOFIT_EMU_PER_PX}
         wrap={textBlockWraps(block)}
         colorOverride={colorOverride}
@@ -750,23 +756,19 @@ function PresentationTextPaintScope({ painted, children }: { painted: boolean; c
   );
 }
 
-/** {@link officeAnchorCenterShift} of an engine layout, in CSS px: its lines' (and markers') right edges. */
+/** {@link officeAnchorCenterShift} of an engine layout, in CSS px ({@link officeAnchorCenterLineExtents}). */
 function engineAnchorCenterShiftPx(
-  layout: { readonly paragraphs: readonly { readonly lines: readonly { readonly inkRight: number }[]; readonly marker?: { readonly x: number; readonly width: number } }[] },
+  paragraphs: Parameters<typeof officeAnchorCenterLineExtents>[0],
+  inputs: Parameters<typeof officeAnchorCenterLineExtents>[1],
   widthPt: number,
 ): number {
-  const rights: number[] = [];
-  for (const paragraph of layout.paragraphs) {
-    for (const line of paragraph.lines) rights.push(line.inkRight);
-    if (paragraph.marker) rights.push(paragraph.marker.x + paragraph.marker.width);
-  }
-  return Math.round(officeAnchorCenterShift(rights, widthPt) * PX_PER_PT * 1000) / 1000;
+  return Math.round(officeAnchorCenterShift(officeAnchorCenterLineExtents(paragraphs, inputs), widthPt) * PX_PER_PT * 1000) / 1000;
 }
 
 /**
  * The body under `a:bodyPr@anchorCtr`, moved as PowerPoint moves it
  * ({@link officeAnchorCenterShift}): laid out across the whole text area,
- * then shifted right by half the room its rightmost line leaves. `shiftPx`
+ * then moved so the box around its laid lines is centred in it. `shiftPx`
  * is the engine's own answer (its laid lines); a browser-flowed body is
  * measured after layout. A no-op when the attribute is off.
  */

@@ -399,7 +399,41 @@ function mathNodesOf(block: PmNode): PmNode[] {
   return formulas;
 }
 
+/** Harness switch (`window.__docsListKeepNextOff = true`): a list never keeps
+ * with the block after it, as before (A/B). */
+function listKeepNextOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsListKeepNextOff?: boolean }).__docsListKeepNextOff === true;
+}
+
+const KEEP_LIST_TYPES = new Set(["bulletList", "orderedList", "taskList"]);
+
+/**
+ * The paragraph a list ends with, down its last items: Word's list is only
+ * paragraphs, and the last one's "keep with next" is the list's. A list piece
+ * that goes on on the next page ends in none.
+ */
+function listLastParagraph(list: PmNode): PmNode | null {
+  let current: PmNode | null = list;
+  for (let depth = 0; current && depth < 32; depth += 1) {
+    if (current.attrs?.[SPLIT_CONTINUES_ATTR] === true) return null;
+    if (!KEEP_LIST_TYPES.has(current.type.name) && current.type.name !== "listItem" && current.type.name !== "taskItem") return current;
+    current = current.lastChild;
+  }
+  return null;
+}
+
 export function keepsFollowingBlock(node: PmNode | null): boolean {
+  // A numbered or bulleted run of "keep with next" paragraphs keeps with what
+  // follows like any other: corpus R484-D90 (Qualtrics), a question and its
+  // 90 kept answer lines open page 2 together in Word, ours broke the chain
+  // at the list and left the question on page 1; R485-D51, every paragraph
+  // kept, a numbered item cut the chain and the six paragraphs after it went
+  // with the table to page 5 (Word leaves them, the chain from page 1 being
+  // longer than a page).
+  if (node !== null && KEEP_LIST_TYPES.has(node.type.name) && !listKeepNextOff()) {
+    const last = listLastParagraph(node);
+    return last !== null && keepsFollowingBlock(last);
+  }
   return node !== null && paragraphKeepFlag(node, "keepNext") &&
     node.attrs[SPLIT_CONTINUES_ATTR] !== true && !isForcedBreakBlock(node);
 }
@@ -2889,6 +2923,33 @@ function standInLinePx(blockDom: HTMLElement, blockHeightPx: number): number {
   return cssPx(getComputedStyle(blockDom).lineHeight);
 }
 
+/** Harness switch (`window.__docsCellFirstLineByAverage = true`): a cell's
+ * first line is read as the block's height over its text lines, as before (A/B). */
+function cellFirstLineByAverage(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCellFirstLineByAverage?: boolean }).__docsCellFirstLineByAverage === true;
+}
+
+/**
+ * The first line of a cell's first block as it stands: from the block's top to
+ * where its second text line begins. Read as the block's height over its text
+ * lines, a line that draws no text -- the empty line a break at the end of
+ * "How long did it last? <w:br/>" leaves -- was shared out among the others:
+ * four lines of 9.8 pt read as 13 pt each, and a row Word breaks with 22.25 pt
+ * left moved whole up to 24 pt (probes tbl17 h5, R417 Shocks header row; Word
+ * breaks it at 22.25 in groups D and I alike). One text line is the whole
+ * block, as before.
+ */
+function cellFirstLinePx(blockDom: HTMLElement, blockHeightPx: number): number {
+  if (!cellFirstLineByAverage()) {
+    const lines = measureTextLineBoxes(blockDom);
+    if (lines.length >= 2) {
+      const pitch = lines[1].top - lines[0].top;
+      if (pitch > 0 && pitch < blockHeightPx) return pitch;
+    }
+  }
+  return standInLinePx(blockDom, blockHeightPx);
+}
+
 /**
  * How far below the top of its content box a cell aligned to its middle or
  * bottom now draws its first block; 0 for a top-aligned cell.
@@ -3065,6 +3126,28 @@ export function cellSplitSpaceAfterOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsCellSplitSpaceAfterOff?: boolean }).__docsCellSplitSpaceAfterOff === true;
 }
 
+/** Harness switch (`window.__docsCellFirstLineSpaceAfterAlways = true`): a
+ * cell's first paragraph charges its space after under its first line even
+ * when it goes on to more lines, as before (A/B). */
+function cellFirstLineSpaceAfterAlways(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCellFirstLineSpaceAfterAlways?: boolean }).__docsCellFirstLineSpaceAfterAlways === true;
+}
+
+/**
+ * What a row cut across pages needs in each cell under the cell's top edge:
+ * its first line, and the paragraph's space after when that line is the whole
+ * paragraph. Word breaks a row only where every cell keeps its first line on
+ * the page; a cell that cannot moves the whole row on (probes tbl16 h1-h3,
+ * mode 14: a one-line "Shocks (unexpected events)" with 10 pt after needs
+ * 5 + 11.27 + 10 + 5 pt and the row moves at 32 pt of room, cuts at 32.5;
+ * with a 20 pt space after under the first line of a four-line paragraph the
+ * row still cuts at 23 pt -- a line that goes on keeps no space after).
+ */
+export function cellFirstLineNeedPx(blockHeightPx: number, linePx: number, trailingPx: number): number {
+  const wholeParagraph = linePx >= blockHeightPx - 0.5;
+  return linePx + (wholeParagraph || cellFirstLineSpaceAfterAlways() ? trailingPx : 0);
+}
+
 function planTableCellCuts(
   rowDom: HTMLElement,
   rowNode: PmNode,
@@ -3136,8 +3219,8 @@ function planTableCellCuts(
         // Nothing of this cell may stay whole. Whatever the cut below turns
         // out to be, the head half paints at least one line here — a kept first
         // line or the blank stand-in of a `before` cut.
-        const linePx = standInLinePx(blockDom, rect.bottom - rect.top);
-        if (rect.top + linePx + trailingPx > contentEdge + 1e-6) return { cuts: null };
+        const linePx = cellFirstLinePx(blockDom, rect.bottom - rect.top);
+        if (rect.top + cellFirstLineNeedPx(rect.bottom - rect.top, linePx, trailingPx) > contentEdge + 1e-6) return { cuts: null };
       }
       if (rect.top >= contentEdge) {
         cut = tableCellBlockBoundary(cellNode, blockIndex);

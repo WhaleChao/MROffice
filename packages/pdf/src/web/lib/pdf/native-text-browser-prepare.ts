@@ -101,6 +101,7 @@ export async function preparePdfNativeTextInBrowser(
     managedBoxId: input.managedBoxId,
     sourceText: input.sourceText,
     ...(input.compile ? { compile: input.compile } : {}),
+    ...(input.formatsWhole ? { formatsWhole: true as const } : {}),
   } satisfies PdfNativeTextPreparationRequest;
   let response: PdfNativeTextPreparationResponse;
   try {

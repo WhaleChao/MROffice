@@ -61,8 +61,22 @@ function paragraphMarkup(node: ProseMirrorNode): ProseMirrorNode {
   // mark's too (corpus R280-D19: a tail stating 12 pt after a head stating
   // none drew its line at the top of page 2 and pushed the floating table
   // there 13.8 pt down).
+  // So is the mark's own tracked revision (`trackParagraphMark`): Enter
+  // pressed with Track Changes on inserts the mark the last piece holds
+  // (corpus R417-D03 p[329]: an inserted page break and mark after a table,
+  // Word 2010 mode; the tail drew its 14 pt line and 10 pt after at the top
+  // of page 45, and the P2.Q1 table's last row went to page 46).
   for (const key of ["source", "block_id", "anchor_id", "toc_anchor_id", "paragraphMarkMarks", "paragraphFontSize"]) delete attrs[key];
+  if (!breakTailMarkRevisionOff()) delete attrs.trackParagraphMark;
   return node.type.create(attrs, null, node.marks);
+}
+
+/** Harness switch (`window.__docsBreakTailMarkRevisionOff = true`): a piece
+ * whose paragraph mark is a tracked revision is not the same paragraph as
+ * the others, as before (A/B). */
+function breakTailMarkRevisionOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsBreakTailMarkRevisionOff?: boolean }).__docsBreakTailMarkRevisionOff === true;
 }
 
 /** A block drawn from an object inside the source paragraph `base`. */

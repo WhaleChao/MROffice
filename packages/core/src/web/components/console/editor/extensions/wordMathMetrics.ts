@@ -105,6 +105,16 @@ const OTHER: readonly [number, number] = [0.22, 0.7];
 const EAST_ASIAN_CHAR = /[ᄀ-ᇿ⺀-鿿가-힯豈-﫿＀-￯]/u;
 const INTEGRALS = new Set(["\\int", "\\iint", "\\iiint", "\\oint", "\\oiint", "\\oiiint", "∫", "∬", "∭", "∮"]);
 const SIZING = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.2, 1.44, 1.728, 2.074, 2.488];
+/** An n-ary operator's limits in a line of text: how far its superscript's
+ * baseline stands above the line's and its subscript's below (with and without
+ * a superscript), in em (Windows Word 16, probes/vsp10 m4). */
+const INLINE_NARY_SHIFTS = { sup: 0.41, sub: 0.24, subAlone: 0.2 } as const;
+const INLINE_INTEGRAL_SHIFTS = { sup: 0.61, sub: 0.41, subAlone: 0.41 } as const;
+/** `window.__docsInlineNaryOff = true` (A/B): an in-line n-ary's limits by the
+ * glyph's extents, the older reading. */
+function inlineNaryOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsInlineNaryOff?: boolean }).__docsInlineNaryOff === true;
+}
 
 /** Commands that stand for one glyph, by the character Word draws. */
 const COMMAND_CHARS: Record<string, string> = {
@@ -277,7 +287,10 @@ function operator(node: ParseNode, style: Style): Box {
     const ink = style === "display"
       ? (integral ? DISPLAY_INTEGRAL : DISPLAY_SUM)
       : (integral ? TEXT_INTEGRAL : TEXT_SUM);
-    return { a: ink[1] * s, d: ink[0] * s };
+    // In a line of text Word centres the operator nearer the math axis: ∑ 0.04 em
+    // up, ∫ 0.05 em down (probes/vsp10 m4; ∫x's line 0.26 em deep, not 0.21).
+    const shift = style === "text" && !inlineNaryOff() ? (integral ? -0.05 : 0.04) : 0;
+    return { a: (ink[1] + shift) * s, d: (ink[0] - shift) * s };
   }
   if (Array.isArray(node.body)) return row(node.body, style, true);
   return glyph(String(node.name ?? "").replace(/^\\/, ""), "upright", s);
@@ -351,6 +364,18 @@ function scripts(node: ParseNode, style: Style, upright: boolean): Box {
     !(core?.type === "leftright" && base.a <= LINE_ASCENT * s && base.d <= LINE_DESCENT * s + 0.06 * s);
   let u = sup ? Math.max(SUP_SHIFT * s, compound ? base.a - SUP_BASELINE_DROP_MAX * s : 0, sup.d + SUP_BOTTOM_MIN * s) : 0;
   let v = sub ? Math.max(SUB_SHIFT * s, compound ? base.d + SUB_BASELINE_DROP_MIN * s : 0, sub.a - SUB_TOP_MAX * s) : 0;
+  // An n-ary operator in a line of text takes its limits beside it at Word's own
+  // shifts, not by the operator glyph's extents (Windows Word 16, probes/vsp10
+  // m4, TNR 12 and Calibri 10, whatever naryLim says): sum and product 0.41 em up
+  // and 0.24 em down (0.20 alone), an integral 0.61 / 0.41. By the glyph, ∑ᵢⁿ x
+  // reached 0.37 em below the baseline and opened its line 1.5 pt (Word: 0.25 em).
+  const nary = style === "text" && baseNode?.type === "op" && baseNode.symbol === true && !limits && !inlineNaryOff()
+    ? (INTEGRALS.has(String(baseNode.name ?? "")) ? INLINE_INTEGRAL_SHIFTS : INLINE_NARY_SHIFTS)
+    : null;
+  if (nary) {
+    if (sup) u = Math.max(nary.sup * s, sup.d + SUP_BOTTOM_MIN * s);
+    if (sub) v = Math.max((sup ? nary.sub : nary.subAlone) * s, sub.a - SUB_TOP_MAX * s);
+  }
   // A superscript with a structure of its own (e^{x^2}, e^{a/b}) stands higher
   // in Word than its depth asks: e^{a/b} 19.4 pt on a 12 pt line (Word 16.86), and
   // e^{x^2} past a 16.3 pt pitch.
@@ -374,9 +399,23 @@ function scripts(node: ParseNode, style: Style, upright: boolean): Box {
   };
 }
 
+/** In a line of text Word sets a radicand no taller than this, in em, as if it
+ * were this tall: √x stands 1.06 em above the baseline (Windows Word 16,
+ * probes/vsp10 m5), where by the x-height
+ * √x was 0.99 em. Taller radicands (√2, √b, √(x+1), √(a/b)) were Word's
+ * already. √y still takes the short surd here (0.97 / 0.21 em; Word the
+ * 1.24 em one, 1.09 / 0.36): the variant slack √(x²) needs keeps it. */
+const INLINE_RADICAND_MIN_ASCENT = 0.62;
+/** `window.__docsInlineRadicandOff = true` (A/B): a radicand in a line by its
+ * ink alone, the older reading. */
+function inlineRadicandOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsInlineRadicandOff?: boolean }).__docsInlineRadicandOff === true;
+}
+
 function radical(node: ParseNode, style: Style, upright: boolean): Box {
   const s = SCALE[style];
-  const body = row(node.body, style, upright);
+  const inked = row(node.body, style, upright);
+  const body = style === "text" && !inlineRadicandOff() ? { ...inked, a: Math.max(inked.a, INLINE_RADICAND_MIN_ASCENT * s) } : inked;
   let gap = (style === "display" ? RADICAL_GAP_DISPLAY : RADICAL_GAP) * s;
   const needed = body.a + gap + RULE * s + body.d;
   const surd = SURDS.find(([d, a], index) => (d + a) * s >= needed - (index <= 1 ? RADICAL_VARIANT_SLACK * s : 0)) ??

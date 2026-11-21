@@ -35,7 +35,7 @@ import {
   wordStyleSetsAvailable,
 } from "@mrnote/core/web/lib/office-word-style-sets.ts";
 
-import { restyleDocumentDesign, type DocumentThemeAxis } from "@mrnote/core/web/components/console/editor/native-document/documentDesignRestyle.ts";
+import { documentKeepsOwnStyles, restyleDocumentDesign, type DocumentThemeAxis } from "@mrnote/core/web/components/console/editor/native-document/documentDesignRestyle.ts";
 
 /** The document's design, or Word's new document's for one that has none. */
 export function currentDocumentDesign(editor: Editor): DocumentDesign {
@@ -52,6 +52,7 @@ export function applyDocumentDesignChange(
   editor: Editor,
   change: (design: DocumentDesign) => DocumentDesign | null,
   themeAxes?: readonly DocumentThemeAxis[],
+  paragraphSpacingOnly = false,
 ): boolean {
   if (editor.isDestroyed || !editor.isEditable) return false;
   // Word's style sets (served Office data) decide every style's formatting:
@@ -65,7 +66,7 @@ export function applyDocumentDesignChange(
   const next = change(stored ?? DEFAULT_DOCUMENT_DESIGN);
   if (!next) return false;
   if (stored && documentDesignEquals(stored, next)) return false;
-  const tr = restyleDocumentDesign(closeHistory(state.tr), stored, next, themeAxes);
+  const tr = restyleDocumentDesign(closeHistory(state.tr), stored, next, themeAxes, paragraphSpacingOnly);
   if (!tr) return false;
   if (editor.isDestroyed || !editor.isEditable || editor.state !== state) return false;
   editor.view.dispatch(tr);
@@ -144,8 +145,19 @@ export function resetDocumentStyleSet(editor: Editor): boolean {
 export function applyDocumentParagraphSpacing(editor: Editor, presetId: unknown): boolean {
   const preset = documentParagraphSpacingPreset(presetId);
   if (!preset) return false;
-  return applyDocumentDesignChange(editor, (design) => ({
-    ...design,
-    paragraphSpacing: preset.id === "default" ? null : preset.id,
-  }));
+  // A Word document the Design tab never touched already draws its own
+  // spacing, which is its "Default": nothing to return to.
+  if (
+    preset.id === "default" &&
+    editor.state.doc.attrs.documentDesign == null &&
+    documentKeepsOwnStyles(editor.state.doc)
+  ) {
+    return false;
+  }
+  return applyDocumentDesignChange(
+    editor,
+    (design) => ({ ...design, paragraphSpacing: preset.id === "default" ? null : preset.id }),
+    undefined,
+    true,
+  );
 }

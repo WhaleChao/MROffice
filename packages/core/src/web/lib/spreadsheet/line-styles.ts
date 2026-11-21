@@ -161,16 +161,50 @@ export function storedColumnStyles(sheet: object): LineStyleMap | undefined {
 
 /** One past the last column carrying a format of its own (its key, or the
  * end of a run key), 0 when none does: the print's spill-tail rule takes a
- * styled column as used (lookwin p86b-lw; the server's styled_column_edge). */
+ * styled column as used (lookwin p86b-lw; the server's styled_column_edge).
+ * A `<col>` record that runs to the sheet's last column (XFD) is not counted:
+ * lookwin p222-lw, A:C and D:XFD in one style, a note ending in D prints its
+ * tail on every page (D:XFC: none); R457-X52's Intro, A:D, E and F:XFD in
+ * Arial, prints F11:F13's. The import folds neighbouring records of one style
+ * into one run, so of the run that ends at the sheet's last column only the
+ * columns up to the last one with a width of its own count (p221-lw axfd's
+ * custom-width A:C, R162-X08 Metadata's C:Z). */
 export function styledColumnEdge(sheet: object): number {
-  const stored = storedColumnStyles(sheet);
-  let edge = 0;
-  for (const key in stored ?? {}) {
-    const style = stored![key];
-    if (!style || typeof style !== "object" || !Object.keys(style).length) continue;
-    const last = Number(key.split(":").pop());
-    if (Number.isInteger(last) && last >= 0) edge = Math.max(edge, last + 1);
+  const lines = expandLineStyleRuns(storedColumnStyles(sheet)) ?? {};
+  const styled = new Map<number, LineStyle>();
+  for (const key in lines) {
+    const style = lines[key];
+    const col = Number(key);
+    if (style && typeof style === "object" && Object.keys(style).length && Number.isInteger(col) && col >= 0 && col < MAX_COLUMN_LINE_STYLES) styled.set(col, style);
   }
+  const { columnWidths, columnWidthRuns } = sheet as { columnWidths?: unknown; columnWidthRuns?: unknown };
+  const widths = new Map<number, unknown>();
+  for (const map of [columnWidthRuns, columnWidths]) {
+    if (!map || typeof map !== "object" || Array.isArray(map)) continue;
+    for (const key in map as Record<string, unknown>) {
+      const span = lineKeySpan(key, MAX_COLUMN_LINE_STYLES);
+      if (!span) continue;
+      for (let col = span[0]; col <= span[1]; col += 1) widths.set(col, (map as Record<string, unknown>)[key]);
+    }
+  }
+  // Where the run of one value that ends at the sheet's last column begins.
+  const trailingRunStart = <V,>(map: Map<number, V>, same: (left: V, right: V) => boolean) => {
+    const last = map.get(MAX_COLUMN_LINE_STYLES - 1);
+    if (last === undefined) return MAX_COLUMN_LINE_STYLES;
+    let start = MAX_COLUMN_LINE_STYLES - 1;
+    while (start > 0) {
+      const before = map.get(start - 1);
+      if (before === undefined || !same(before, last)) break;
+      start -= 1;
+    }
+    return start;
+  };
+  const widthEnd = trailingRunStart(widths, (left, right) => left === right);
+  let widthEdge = 0;
+  for (const col of widths.keys()) if (col < widthEnd) widthEdge = Math.max(widthEdge, col + 1);
+  const runStart = trailingRunStart(styled, sameLineStyle);
+  let edge = 0;
+  for (const col of styled.keys()) if (col < runStart || col < widthEdge) edge = Math.max(edge, col + 1);
   return edge;
 }
 
@@ -652,9 +686,20 @@ function derivableBlankKey(cell: LineStyledCell, field: string): boolean {
  */
 export function compactLineStyleCells<S extends LineStyledSheet>(sheet: S): S {
   if (!sheet.rowStyles && !sheet.columnStyles) return sheet;
-  let cells: Record<string, LineStyledCell> | null = null;
-  for (const key of Object.keys(sheet.cells)) {
-    const cell = sheet.cells[key];
+  const source = sheet.cells;
+  const keys = Object.keys(source);
+  // Each line format split once into its lock and its look, with the last
+  // cell style compared with it: the blanks of one line share one style object
+  // (materializeLineStyles), so a sheet's 200,000 of them compare a handful of
+  // times. Splitting and comparing per blank was most of a line edit's host
+  
+  // changed during the walk, so a style compared once compares the same.
+  const lines = new Map<LineStyle, { locked: boolean; visual: LineStyle; style: unknown; same: boolean }>();
+  let dropped: Uint8Array | null = null;
+  let droppedCount = 0;
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index]!;
+    const cell = source[key];
     if (!cell || typeof cell !== "object") continue;
     if (cell.value !== "" && cell.value !== undefined && cell.value !== null) continue;
     if (Object.keys(cell).some((field) => !derivableBlankKey(cell, field))) continue;
@@ -664,18 +709,48 @@ export function compactLineStyleCells<S extends LineStyledSheet>(sheet: S): S {
     const col = Number(key.slice(separator + 1));
     const line = lineStyleAt(sheet.rowStyles, sheet.columnStyles, row, col);
     if (!line) continue;
-    // A line's default protection is opened as the cell's own lock, not a style
-    // key (materializeLineStyles): read as a style, the unlocked rows of a
-    // template never folded back (73,000 blanks on ONS CPI's Table 37, and
-    
-    const { locked: lineLocked, ...lineVisual } = line as LineStyle & { locked?: unknown };
-    if ((cell.locked === false) !== (lineLocked === false)) continue;
-    if (!sameLineStyle(cell.style ?? {}, lineVisual)) continue;
-    cells ??= { ...sheet.cells };
-    delete cells[key];
+    let held = lines.get(line);
+    if (!held) {
+      // A line's default protection is opened as the cell's own lock, not a style
+      // key (materializeLineStyles): read as a style, the unlocked rows of a
+      // template never folded back (73,000 blanks on ONS CPI's Table 37, and
+      
+      const { locked: lineLocked, ...lineVisual } = line as LineStyle & { locked?: unknown };
+      held = { locked: lineLocked === false, visual: lineVisual, style: undefined, same: false };
+      lines.set(line, held);
+    }
+    if ((cell.locked === false) !== held.locked) continue;
+    const style = cell.style ?? NO_STYLE;
+    if (style !== held.style) {
+      held.style = style;
+      held.same = sameLineStyle(style, held.visual);
+    }
+    if (!held.same) continue;
+    dropped ??= new Uint8Array(keys.length);
+    dropped[index] = 1;
+    droppedCount += 1;
   }
-  return cells ? { ...sheet, cells } : sheet;
+  if (!dropped) return sheet;
+  // The cells kept, in their order: written afresh when most go (a copy of
+  // 200,000 cells to delete 199,000 of them), else copied and the few deleted.
+  let cells: Record<string, LineStyledCell>;
+  // (A "__proto__" key, own in a parsed map, is not assigned: the copy keeps it.)
+  if (droppedCount * 2 > keys.length && !Object.prototype.hasOwnProperty.call(source, "__proto__")) {
+    cells = {};
+    for (let index = 0; index < keys.length; index += 1) {
+      if (dropped[index] !== 1) cells[keys[index]!] = source[keys[index]!]!;
+    }
+  } else {
+    cells = { ...source };
+    for (let index = 0; index < keys.length; index += 1) {
+      if (dropped[index] === 1) delete cells[keys[index]!];
+    }
+  }
+  return { ...sheet, cells };
 }
+
+/** A blank's style when it has none: compared, never written. */
+const NO_STYLE: LineStyle = Object.freeze({}) as LineStyle;
 
 /**
  * The line format after a patch, merged the way the caller merges a cell's

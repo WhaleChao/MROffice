@@ -20,7 +20,7 @@
 
 import type { RefObject } from "react";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
-import { documentDefaultIndentCss } from "../paragraphSetAsDefault";
+import { documentDefaultIndentCss } from "@mrnote/core/web/components/console/editor/native-document/paragraphSetAsDefault.ts";
 import type { DocumentSurfaceAttrState } from "./documentSurfaceAttrs";
 import {
   DRAWING_NODE_TYPES,
@@ -69,7 +69,7 @@ import { inkLayoutSettlesInMs } from "@mrnote/core/web/lib/ink-writing-session.t
 import { bandsFirst, PAGE_BANDS_REBALANCE_REASON } from "@mrnote/core/web/components/console/editor/native-document/paged/bandsFirst.ts";
 import { publishBandOverflowSections } from "@mrnote/core/web/components/console/editor/native-document/paged/bandOverflowSections.ts";
 import { paginationBoxRelativeTo, paginationTransformScale } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationGeometry.ts";
-import { measureFooterBandOverflowBySheet, measureHeaderBandOverflow, measureHeaderBandOverflowBySheet } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
+import { clipBandsToHalfPage, measureFooterBandOverflowBySheet, measureHeaderBandOverflow, measureHeaderBandOverflowBySheet } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 import { computePhysicalPageStarts, documentEvenAndOddHeaders, endingSheetParityBreak, measureSheetSpan, sectionRestartNumbers, type PageParityBreak } from "@mrnote/core/web/components/console/editor/native-document/paged/sheetPageSpans.ts";
 import { PAGE_SPAN_META } from "@mrnote/core/web/components/console/editor/native-document/paged/pageSpanExtension.ts";
 import { SheetMeasureMemo, sheetsOf } from "@mrnote/core/web/components/console/editor/native-document/paged/sheetMeasureMemo.ts";
@@ -607,6 +607,9 @@ export function useDocumentPagedSurface(inputs: UseDocumentPagedSurfaceInputs) {
     const measure = () => {
       raf = 0;
       const overlay = wrapperRef.current?.querySelector(".sheet-band-overlay");
+      // A Word 2010 layout band grows to half its page at most: cut before it
+      // is measured, whichever of this and the band's own layout runs first.
+      if (overlay && root?.isConnected) clipBandsToHalfPage(overlay);
       const extra = root?.isConnected && overlay && sheetBandBoxes.length
         ? measureHeaderBandOverflow(overlay) : null;
       if (extra === null) {

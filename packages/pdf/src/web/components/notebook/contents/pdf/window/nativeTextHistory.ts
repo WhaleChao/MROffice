@@ -16,6 +16,7 @@ import {
 import type {
   PdfNativeTextDecorationGeometry,
 } from "../../../../../lib/pdf/native-text-decoration";
+import { pdfNativeOpenBoxTextRules, type PdfNativeTextRuleRange } from "../../../../../lib/pdf/native-text-rule-range";
 import type {
   PdfSharedStateRecord,
 } from "../../../../../lib/pdf/engine/shared-state-bridge";
@@ -658,4 +659,28 @@ export function lastPdfNativeListTextHistorySeed(
     ...((fidelity.linePlan?.schemaVersion === MRAI_NATIVE_ADAPTIVE_MULTI_RUN_LINE_PLAN_SCHEMA_VERSION || fidelity.linePlan?.schemaVersion === MRAI_NATIVE_PROJECTED_MULTI_RUN_LINE_PLAN_SCHEMA_VERSION)
       ? {textWindowOriginRecord: structuredClone(value) as PdfSharedStateRecord} : {}),
   });
+}
+
+/**
+ * The rules standing on the box a proof opened, as the window reads them for
+ * its editor: the rule beside the run where the proof gives a run's geometry
+ * (`readBeside`: the engine's readMraiNativeTextRuleBesideRun on the bytes
+ * the box was opened on; null where those bytes are not at hand), put
+ * together with what the proof itself states (pdfNativeOpenBoxTextRules).
+ * Null where the proof gives neither: nothing is read, and the editor keeps
+ * what it showed.
+ */
+export async function readPdfNativeOpenBoxTextRules(
+  proof: PdfNativeListTextSelectionProof | null,
+  readBeside: ((style: "underline" | "strikethrough", geometry: PdfNativeTextDecorationGeometry,
+    contentStream: PdfNativeIndirectObjectRef | null) => Promise<Readonly<{ range: PdfNativeTextRuleRange }> | null>) | null,
+): Promise<Readonly<{ underline: PdfNativeTextRuleRange | null; strikethrough: PdfNativeTextRuleRange | null }> | null> {
+  const geometry = pdfNativeTextDecorationGeometryFromProof(proof);
+  const stated = pdfNativeOpenBoxTextRules(proof, { underline: null, strikethrough: null });
+  if (!geometry && !stated.underline && !stated.strikethrough) return null;
+  const contentStream = proof?.sourceRun?.contentStream ?? proof?.target ?? null;
+  const beside = async (style: "underline" | "strikethrough") =>
+    geometry && readBeside ? (await readBeside(style, geometry, contentStream))?.range ?? null : null;
+  const [underline, strikethrough] = await Promise.all([beside("underline"), beside("strikethrough")]);
+  return pdfNativeOpenBoxTextRules(proof, { underline, strikethrough });
 }

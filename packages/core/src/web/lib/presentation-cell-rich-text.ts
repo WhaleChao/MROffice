@@ -25,6 +25,7 @@ import {
   presentationTextDecorationCss,
 } from "./presentation-text-decoration";
 import { officeTextPaintCss, officeTextPaintWithFontColor, type OfficeTextPaint } from "./office-text-paint";
+import { powerPointFaceName } from "./office-fonts/powerpoint-face-name";
 
 /** A run's own WordArt as CSS (none, or not a valid paint: drawn plain). */
 function cellRunTextPaintCss(style: RunStyle | undefined): CSSProperties {
@@ -505,7 +506,7 @@ function cellRunScriptSize(style: RunStyle | undefined, size: CSSProperties["fon
  * component may not import. Undefined when the run names none.
  */
 export function cellRunSymbolFontFamily(style: RunStyle | undefined): string | undefined {
-  const face = typeof style?.symbolFont === "string" && style.symbolFont ? style.symbolFont : undefined;
+  const face = typeof style?.symbolFont === "string" && style.symbolFont ? powerPointFaceName(style.symbolFont) : undefined;
   const served = face ? presentationFontFamilyWithAssets(face, EMPTY_PRESENTATION_FONT_ALIASES) : undefined;
   return served ? cssFontFamilyList(served) || undefined : undefined;
 }
@@ -601,8 +602,8 @@ export function cellTextRunCss(
     // "Mukta Vaani Regular" drawn in Calibri).
     fontFamily:
       style?.fontFamily && typeof base.fontFamily === "string" && base.fontFamily && base.fontFamily !== style.fontFamily
-        ? `${style.fontFamily}, ${base.fontFamily}`
-        : (style?.fontFamily ?? base.fontFamily),
+        ? `${powerPointFaceName(style.fontFamily)}, ${base.fontFamily}`
+        : (style?.fontFamily ? powerPointFaceName(style.fontFamily) : base.fontFamily),
     fontSize: cellRunScriptSize(style, style?.fontSize !== undefined ? `${style.fontSize}px` : base.fontSize),
     // Character spacing on these characters (points to px), as a slide's own
     // run draws it (`runStyleCss`).
@@ -649,7 +650,9 @@ export function presentationCellTextRunCss(
   }
   const own = { ...inherited, ...style }.fontFamily;
   if (typeof own !== "string" || !own) return css;
-  const served = presentationFontFamilyWithAssets(own, EMPTY_PRESENTATION_FONT_ALIASES) ?? own;
+  // The face PowerPoint looks the run's typeface up by (powerPointFaceName).
+  const face = powerPointFaceName(own);
+  const served = presentationFontFamilyWithAssets(face, EMPTY_PRESENTATION_FONT_ALIASES) ?? face;
   const cell = typeof base.fontFamily === "string" && base.fontFamily && base.fontFamily !== own ? base.fontFamily : undefined;
   return { ...css, fontFamily: presentationFontStacksJoined(served, cell) };
 }

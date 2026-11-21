@@ -46,6 +46,7 @@ import {
   engineBreakStrutOff,
   docsLineOpensWithSpace,
   DOCS_ENGINE_HYPHEN_CLASS,
+  DOCS_ENGINE_HEAD_HYPHEN_CLASS,
   docsHyphenationOff,
   hyphenPointKind,
   normalizeStarts,
@@ -56,11 +57,12 @@ import {
 } from "../../../../lib/text-engine/docs-lines";
 import type { KinsokuList } from "../../../../lib/text-engine/kinsoku";
 import { withDocsAutoHyphenation } from "../../../../lib/text-engine/docs-hyphenation";
+import { hyphenationPoints } from "../../../../lib/text-engine/hyphenation";
 import { normalizeAutoHyphenation, normalizeHyphenationOptions } from "./documentHyphenation";
 import { layoutDocsBlockLines } from "../../../../lib/text-engine/docs-block-layout";
 import { textEngineEnabled } from "../../../../lib/text-engine/flags";
 import { textEngineOn } from "../../../../lib/text-engine/page-adapter";
-import { docsBlockLineRule, noteEngineBlockLines, noteEngineTailLines, setEngineJoinedRows, type EngineRowStart } from "./paged/ledger/ledgerEngineLines";
+import { docsBlockLineRule, noteEngineBlockLines, noteEngineHeadLines, noteEngineTailLines, setEngineJoinedRows, type EngineRowStart } from "./paged/ledger/ledgerEngineLines";
 import { normalizeWordCompatibilityMode } from "./documentOverflowPunctuation";
 import { wordSetsIdeographsAsLetters, wordEastAsianLineRulesApply } from "./wordFarEastDefaults";
 import { touchedTextblockRanges } from "./touchedTextblocks";
@@ -69,8 +71,8 @@ import { DOCUMENT_ENGINE_FACES_WAITING, DOCUMENT_ENGINE_LINES_PENDING, LAYOUT_ME
 import { projectionFontReach, sheetRangesOf } from "./projectionFontNews";
 import { recordProjectedHorizon, sheetsWithinMeasureHorizon } from "./paged/measureHorizon";
 import { createEngineLineCache, familyNews, type EngineLineCache, type EngineLineKey, type FamilyNews } from "./engineLineCache";
-import { PAGE_BLOCK_NODE } from "./paged/paginationProjectionKeys";
-import { fastRangeMappingOn, mapDecorationsFast, mapRangesFast, mergeRanges } from "./fastRangeMapping";
+import { PAGE_BLOCK_NODE, SPLIT_CONTINUATION_ATTR, SPLIT_CONTINUES_ATTR } from "./paged/paginationProjectionKeys";
+import { fastRangeMappingOn, mapDecorationsFast, mapRangesFast, mergeRanges, removeDecorationsInside, removeDecorationsWithin } from "./fastRangeMapping";
 import { ENGINE_WORD_EXTRA_VAR } from "./balancedSpaces";
 import { textEngineAnswerEpoch, textEngineEpoch } from "../../../../lib/text-engine/measure";
 import { msSinceTyping, TYPING_IDLE_MS } from "../../../../lib/typing-session";
@@ -137,6 +139,9 @@ export interface Span {
    * hyphenated by the engine: the browser hyphenates none of its words by
    * itself (`hyphens: manual` over documentAutoHyphenation's `auto`). */
   manualHyphens?: true;
+  /** The head of a paragraph the page cut inside a hyphenated word ends at
+   * `from` (`from === to`): the hyphen Word draws there ("estab-"). */
+  headHyphen?: true;
 }
 
 /** Marks a paragraph the engine hyphenates (documentHyphenationRules leaves it). */
@@ -146,6 +151,17 @@ function hyphenElement(): HTMLElement {
   const span = document.createElement("span");
   span.className = DOCS_ENGINE_HYPHEN_CLASS;
   span.textContent = "\u00ad";
+  return span;
+}
+
+/** The hyphen a page cut's head ends with: drawn, and read by the engine as
+ * the last piece of its last line. */
+function headHyphenElement(): HTMLElement {
+  const span = document.createElement("span");
+  span.className = DOCS_ENGINE_HEAD_HYPHEN_CLASS;
+  span.setAttribute("aria-hidden", "true");
+  span.contentEditable = "false";
+  span.textContent = "-";
   return span;
 }
 
@@ -241,6 +257,9 @@ function decorationsFor(doc: ProseMirrorNode, spans: readonly Span[]): Decoratio
     }
     if (span.hyphen) {
       return [Decoration.widget(span.from, hyphenElement, { side: -1, key: DOCS_ENGINE_HYPHEN_CLASS, engineLine: true, ignoreSelection: true })];
+    }
+    if (span.headHyphen) {
+      return [Decoration.widget(span.from, headHyphenElement, { side: -1, key: DOCS_ENGINE_HEAD_HYPHEN_CLASS, engineLine: true, ignoreSelection: true })];
     }
     // The break ends a line and owns no line box of its own: it stands in
     // the paragraph's wrappers, which take no line height where the
@@ -428,7 +447,7 @@ export function blocksWaitingForFaces(doc: ProseMirrorNode, waiting: ReadonlySet
 }
 
 /** Counts for probes (`window.__docsEngineLineCache`). */
-interface EngineLineCacheStats { measured: number; reused: number; kept: number; missed?: Record<string, number>; seeded?: number; tails?: number; retried?: number; keptRetried?: number; disagreed?: number }
+interface EngineLineCacheStats { measured: number; reused: number; kept: number; missed?: Record<string, number>; seeded?: number; tails?: number; heads?: number; retried?: number; keptRetried?: number; disagreed?: number }
 
 function keepRetriedOff(view: EditorView): boolean {
   return (view.dom.ownerDocument.defaultView as (Window & { __docsEngineKeepRetriedOff?: boolean }) | null)?.__docsEngineKeepRetriedOff === true;
@@ -436,6 +455,10 @@ function keepRetriedOff(view: EditorView): boolean {
 
 function engineTailLinesOff(view: EditorView): boolean {
   return (view.dom.ownerDocument.defaultView as (Window & { __docsEngineTailLinesOff?: boolean }) | null)?.__docsEngineTailLinesOff === true;
+}
+
+function engineHeadLinesOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsEngineHeadLinesOff?: boolean }) | null)?.__docsEngineHeadLinesOff === true;
 }
 
 function cssPx(value: string): number {
@@ -545,6 +568,26 @@ function readBlockLines(
       if (noteEngineTailLines(node, fragment.whole, fragment.offset, docsBlockLineRule(node, element), chrome)) {
         cache.lines.store(node, key, pos, fragment.spans, fragment.families, cache.news, fragment.starts);
         if (cache.stats) cache.stats.tails = (cache.stats.tails ?? 0) + 1;
+        return { spans: fragment.spans, agrees: true };
+      }
+    }
+  }
+  // A page cut's head, likewise: the lines of the block it was cut from up to
+  // the cut. Each cut through a long paragraph made a new head that was read
+  // whole again (R461-D71's listings: a page of ~350 runs each time the
+  // ledger moved a cut), where its lines are those the whole already had.
+  // `window.__docsEngineHeadLinesOff`: read.
+  if (cache && key && !engineHeadLinesOff(view) && !element.closest("li")) {
+    const fragment = cache.lines.headOf<Span>(node, key, pos, cache.news);
+    const style = fragment ? element.ownerDocument.defaultView?.getComputedStyle(element) : null;
+    if (fragment && style) {
+      const chrome = {
+        top: cssPx(style.paddingTop) + cssPx(style.borderTopWidth),
+        bottom: cssPx(style.paddingBottom) + cssPx(style.borderBottomWidth),
+      };
+      if (noteEngineHeadLines(node, fragment.whole, node.content.size, docsBlockLineRule(node, element), chrome)) {
+        cache.lines.store(node, key, pos, fragment.spans, fragment.families, cache.news, fragment.starts);
+        if (cache.stats) cache.stats.heads = (cache.stats.heads ?? 0) + 1;
         return { spans: fragment.spans, agrees: true };
       }
     }
@@ -721,6 +764,11 @@ function engineHyphenSpans(view: EditorView, paragraph: DocsParagraph, starts: r
       spans.push({ from: after, to: after, ...blank, hyphen: true });
     } catch { /* a node outside the editor's content */ }
   }
+  const node = view.state.doc.nodeAt(pos);
+  if (node && cutInsideHyphenatedWord(view.state.doc, node, pos)) {
+    const end = pos + 1 + node.content.size;
+    spans.push({ from: end, to: end, ...blank, headHyphen: true });
+  }
   return spans;
 }
 
@@ -762,6 +810,64 @@ export function tabbedBlocksChanged(state: EditorState, previous: EditorState): 
   return ranges;
 }
 
+const TRAILING_LETTERS = /\p{L}+$/u;
+const LEADING_LETTERS = /^\p{L}+/u;
+
+/**
+ * Whether `node` (at `pos`) is the head of a paragraph the page cut on a line
+ * that ends inside a hyphenated word: Word draws that line's hyphen at the
+ * foot of the page ("estab-"), the word going on on the next ("lishment").
+ * The engine cuts only at its own line starts, so a word running on into the
+ * tail was broken at one of its points (an optional hyphen ending the head,
+ * or an automatic point of the whole word). Not for a word broken at a
+ * letter because it is longer than the line (no point there).
+ * `window.__docsHeadHyphenOff = true`: no hyphen there, as before.
+ */
+export function cutInsideHyphenatedWord(doc: ProseMirrorNode, node: ProseMirrorNode, pos: number): boolean {
+  if (node.attrs?.[SPLIT_CONTINUES_ATTR] !== true || headHyphenOff()) return false;
+  const head = node.textContent;
+  const end = pos + node.nodeSize;
+  let tail: ProseMirrorNode | null = null;
+  doc.nodesBetween(end, doc.content.size, (child, at) => {
+    if (tail) return false;
+    if (at < end) return true;
+    if (child.isTextblock) { tail = child; return false; }
+    return true;
+  });
+  const next = tail as ProseMirrorNode | null;
+  if (!next || next.attrs?.[SPLIT_CONTINUATION_ATTR] !== true) return false;
+  const opens = LEADING_LETTERS.exec(next.textContent)?.[0];
+  if (!opens) return false;
+  if (head.endsWith("\u00ad")) return true;
+  const closes = TRAILING_LETTERS.exec(head)?.[0];
+  if (!closes) return false;
+  return hyphenationPoints(closes + opens, "en-us").includes(closes.length);
+}
+
+function headHyphenOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsHeadHyphenOff?: boolean }).__docsHeadHyphenOff === true;
+}
+
+/**
+ * `set` without the spans of the blocks a pass measured (`ranges`: each
+ * block's [pos, pos + nodeSize]), which their new spans replace. Only what
+ * lies within a block is its own: a set's find also returns what touches a
+ * range, and the node decoration of the block before or after one (a
+ * hyphenated paragraph's `hyphens: manual`, its manualHyphens span) ends or
+ * starts at its edge. Measuring a block alone (a page cut's head or tail,
+ * read after each cut) took that mark off the paragraphs beside it, which
+ * nothing read again: the browser hyphenated them itself ("re-|sources" in
+ * R404-D02's paragraph above a cut, where Word fits the whole word), and the
+ * page ledger's cut, made on the engine's lines, fell a line off.
+ * `window.__docsEngineRangeTouchOff = true`: what touches goes too, as before.
+ */
+export function withoutMeasuredSpans(set: DecorationSet, ranges: ReadonlyArray<readonly [number, number]>): DecorationSet {
+  const touchOff = typeof window !== "undefined" && (window as Window & { __docsEngineRangeTouchOff?: boolean }).__docsEngineRangeTouchOff === true;
+  let out = set;
+  for (const [from, to] of ranges) out = touchOff ? removeDecorationsWithin(out, from, to) : removeDecorationsInside(out, from, to);
+  return out;
+}
+
 export const DocumentEngineLineBreaks = Extension.create({
   name: "documentEngineLineBreaks",
   addProseMirrorPlugins() {
@@ -778,7 +884,7 @@ export const DocumentEngineLineBreaks = Extension.create({
             const meta = tr.getMeta(META) as EngineLinesMeta | undefined;
             if (meta) {
               let set = previous.set;
-              for (const [from, to] of meta.ranges) set = set.remove(set.find(from, to));
+              set = withoutMeasuredSpans(set, meta.ranges);
               const added = decorationsFor(tr.doc, meta.spans);
               return { set: added.length ? set.add(tr.doc, added) : set, dirty: meta.dirty, retry: meta.retry };
             }

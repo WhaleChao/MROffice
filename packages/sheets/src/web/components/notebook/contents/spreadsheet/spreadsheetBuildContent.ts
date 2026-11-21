@@ -4,7 +4,7 @@
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
 import { spreadsheetPersistenceJson } from "@mrnote/core/web/lib/spreadsheet/persistence-json.ts";
-import { withDisplayCache, withSheetChartModels, type DisplayCacheCandidates } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
+import { withDisplayCache, withSheetChartModels, type DisplayCacheCandidates, type SpillTargetsBeyondCells } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import { workbookImportsRanges } from "@mrnote/core/web/lib/spreadsheet/external-data.ts";
 import { pivotChartReportForSave } from "../../../../lib/spreadsheet/pivot-buttons";
 import { asLoadedSpelling } from "../../../../lib/spreadsheet/loaded-spelling";
@@ -145,6 +145,10 @@ export function buildContent(
   dateSystem?: SpreadsheetDateSystem,
   /** Whether this save left a sheet as it was loaded (withDisplayCache's `resultsOnly`). */
   sheetUntouched?: (sheet: SheetModel) => boolean,
+  /** What a sheet's `cells` leave out that can block a spill (withDisplayCache's
+   * `spillTargets`): a structured tiled workbook's body is saved without its
+   * tile-owned cells (TiledSheets.spillTargets). */
+  spillTargets?: (sheet: SheetModel) => Pick<SpillTargetsBeyondCells, "cells" | "rowsKnown"> | undefined,
 ): Record<string, unknown> {
   const sheets = withFilledChartsAsPlaceholders(liveSheets);
   const date1904 = dateSystem === "1904";
@@ -184,6 +188,7 @@ export function buildContent(
     const out = withDisplayCache(s, workbook, evaluatorFor, displayCacheCandidates?.(s), {
       withholdComputed,
       resultsOnly: sheetUntouched?.(s) === true,
+      spillTargets: spillTargets?.(s),
     });
     return sheetsUnfilled ? withLoadedFormulaStamps(out, s) : out;
   });

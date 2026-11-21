@@ -1518,6 +1518,8 @@
  "presentation.smartartContext.formatReadOnly": "El formato de este gráfico SmartArt no se puede cambiar aquí.",
  "presentation.smartartContext.formatSelectShape": "Seleccione una forma del gráfico SmartArt.",
  "presentation.smartartContext.formatUnavailable": "MR Note todavía no puede aplicar esto a una sola forma de un gráfico SmartArt.",
+ "presentation.smartartContext.paneWordsNotSaved": "Algunas palabras que escribiste en el panel de texto no se guardaron. Vuelve a escribirlas.",
+ "presentation.smartartContext.paneLockedCoediting": "Otra persona está editando esta presentación. Edita este gráfico SmartArt en la diapositiva.",
  "presentation.videoMenu.mediaInOriginalFile": "Este video está almacenado en el archivo importado. Descarga la presentación para obtenerlo.",
  "presentation.videoMenu.noCaptions": "Este video no tiene subtítulos.",
  "presentation.wordArtGallery.style.16": "Trama de relleno: {c0}, Franja diagonal hacia arriba oscura; Sombra",

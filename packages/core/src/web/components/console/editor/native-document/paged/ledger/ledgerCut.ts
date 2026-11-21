@@ -121,6 +121,9 @@ interface OpenPage {
   /** Per column, the top (content coordinates) of a top-and-bottom box drawn
    * at the column's foot: the column ends there (`columnBandTopsFor`). */
   bandTopsPx?: readonly (number | undefined)[] | null;
+  /** The page's body ends at a header or footer object's top
+   * (`footCreditBlockedFor`): no Auto leading credit past it. */
+  footBand?: boolean;
 }
 
 interface SegmentPiece {
@@ -191,6 +194,20 @@ function keepChainBackUpOff(): boolean {
  * its last lines (its widow floor under widow control) for the next page. */
 const BACK_UP_SLACK_PX = 0.5;
 
+/** `window.__docsKeepBackUpCreditOff = true` (A/B): the member backed into
+ * is planned in its whole height less the slack only, as before -- room the
+ * oracle reads as the whole member (its last line's Auto leading credited,
+ * or its last row's glyphs inside the room), so no cut came of it. */
+function keepBackUpCreditOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKeepBackUpCreditOff?: boolean }).__docsKeepBackUpCreditOff === true;
+}
+
+/** `window.__docsKeepMemberCreditOff = true` (A/B): a keep chain member is
+ * read as standing whole at the foot only with no credit, as before. */
+function keepMemberCreditOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsKeepMemberCreditOff?: boolean }).__docsKeepMemberCreditOff === true;
+}
+
 export function planLedgerPages(
   atoms: readonly LedgerAtom[],
   options: LedgerCutOptions,
@@ -243,6 +260,9 @@ export function planLedgerPages(
       leadingAfterPx: closingAfterPx,
       previous: null,
       bandTopsPx: options.columnBandTopsFor?.(pageIndex()) ?? null,
+      // (Its own sheet's: a page given another section's capacity is not cut
+      // at this sheet's band.)
+      footBand: sectionCapacityPx === null && options.footCreditBlockedFor?.(pageIndex()) === true,
     };
   };
   let closingAfterPx = Math.max(0, options.start?.leadingAfterPx ?? 0);
@@ -491,7 +511,11 @@ export function planLedgerPages(
     // the footnote area above it (Word 16.86, corpus R51-D15: a double-spaced
     // line 0.15 pt into the note area of the page holding the reference moves
     // to the next page; without the footnote it stays).
-    const credit = page.notesBelow || atom.hasNotes || carryInPx > EPSILON_PX ? 0 : atom.creditPx;
+    // Nor into a header or footer object the body ends at: Word sets no line
+    // below its top (R484-D04: a tab-only paragraph fitted page 10 by 7 px of
+    // credit over the footer's top, was drawn past the foot, put back, and
+    // planned there again on every key).
+    const credit = page.notesBelow || atom.hasNotes || carryInPx > EPSILON_PX || page.footBand ? 0 : atom.creditPx;
 
     // 1b. a boundary the painted page refused stays where the verifier put it.
     if (!pageEmpty && !continuing && options.breakBefore?.has(index)) {
@@ -547,7 +571,7 @@ export function planLedgerPages(
     // column: the chain is checked there as in a column with text above.
     if ((!columnEmpty || belowAnotherSection) && !continuing && atom.keepNext && index > keepReleasedThrough) {
       const chain = keepChainExtent(atoms, index, options);
-      const chainCredit = chain.creditPx;
+      const chainCredit = page.footBand ? 0 : chain.creditPx;
       const chainFits =
         page.usedPx + gap + chain.heightPx - chainCredit <= columnEnd + EPSILON_PX;
       if (!chainFits) {
@@ -569,7 +593,16 @@ export function planLedgerPages(
             if (member > index) at += options.gapPx(atoms[member - 1], atoms[member]);
             starts.push(at);
             const memberHeight = member === index ? height : atoms[member].heightPx;
-            if (at + memberHeight <= columnEnd + EPSILON_PX) {
+            // In mode 15 a member whose last line ends inside its Auto
+            // leading credit at the foot stands whole there (the page's
+            // rule): the next member is the one that cannot start, and the
+            // back-up below cuts this one. Read as not fitting, it was
+            // asked for a head in that room, which the oracle answers
+            // "whole" (null), and the back-up began a member above it.
+            const memberCredit = backsUp && !keepMemberCreditOff() && !(page.notesBelow || atoms[member].hasNotes || carryInPx > EPSILON_PX || page.footBand)
+              ? Math.max(0, atoms[member].creditPx)
+              : 0;
+            if (at + memberHeight - memberCredit <= columnEnd + EPSILON_PX) {
               at += memberHeight;
               continue;
             }
@@ -599,7 +632,24 @@ export function planLedgerPages(
                 const candidate = atoms[back];
                 const candidateHeight = back === index ? height : candidate.heightPx;
                 if (!candidate.splittable || candidate.hidden || candidate.anchored) continue;
-                const availablePx = Math.min(columnEnd - starts[back - index], candidateHeight - BACK_UP_SLACK_PX);
+                // Room that leaves its last line out, however the oracle
+                // judges "whole": its height less a line where its pitch is
+                // known, else less its last line's Auto leading credit. A
+                // head planned in its height less 0.5 px was the whole member
+                // to the oracle -- by the credit (2.4 px), and on a page of
+                // column regions, where no rendered head is laid out, by the
+                // last row's glyph bottom (203.9 of 206 px) -- and no cut:
+                // corpus R432-D07's "Another non-chemical method" moved whole
+                // to page 2. The credit is the one its cut will be judged with
+                // (none above notes).
+                const candidateCredit = page.notesBelow || candidate.hasNotes || carryInPx > EPSILON_PX || page.footBand ? 0 : Math.max(0, candidate.creditPx);
+                const pitch = candidate.linePitchPx && candidate.linePitchPx > 0 && candidateHeight >= 2 * candidate.linePitchPx - EPSILON_PX
+                  ? candidate.linePitchPx
+                  : 0;
+                const shortOfWholePx = keepBackUpCreditOff()
+                  ? BACK_UP_SLACK_PX
+                  : Math.max(candidateCredit + BACK_UP_SLACK_PX, pitch - BACK_UP_SLACK_PX);
+                const availablePx = Math.min(columnEnd - starts[back - index], candidateHeight - shortOfWholePx);
                 if (!(availablePx > EPSILON_PX)) continue;
                 const head = options.oracle.planHead({
                   atom: candidate,
@@ -607,6 +657,7 @@ export function planLedgerPages(
                   availablePx,
                   fullCapacityPx: fragmentCapacityPx,
                   pageEmpty: false,
+                  ...(candidateCredit <= EPSILON_PX && candidate.creditPx > EPSILON_PX ? { noFootCredit: true } : {}),
                 });
                 if (!head) continue;
                 keepBackCut = { atom: back, availablePx };

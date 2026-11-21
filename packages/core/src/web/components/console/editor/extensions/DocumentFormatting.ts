@@ -71,8 +71,9 @@ import { LIST_ITEM_SPLIT_BRIDGE_ATTR } from "../native-document/paged/containerS
 import { listParagraphSpacingDecorations } from "../native-document/listParagraphSpacing";
 import { PAGE_BLOCK_NODE } from "../native-document/paged/paginationProjectionKeys";
 import { touchedRanges } from "../native-document/touchedTextblocks";
+import { decorationMapping } from "../native-document/fastRangeMapping";
 import { WORD_ZH_CN_NO_START_EXTRA, WORD_ZH_CN_NO_START_EXTRA_TEST, documentHangulWordRanges, documentKoreanWholeWordRanges, documentKinsokuAllowedBreaks, wordKinsokuList, documentHanSlashBoundaries, documentKinsokuNoStartBoundaries, documentSlashLetterBoundaries, documentSourceArrowBoundaries } from "../native-document/documentWordDelimiterBoundaries";
-import { resolveDocumentOverflowPunctuation, resolveDocumentWordWrap, wordPunctuationMayHang } from "../native-document/documentOverflowPunctuation";
+import { documentWordWrapOffInert, resolveDocumentOverflowPunctuation, resolveEffectiveDocumentWordWrap, wordPunctuationMayHang } from "../native-document/documentOverflowPunctuation";
 import { documentOwnStyleFontSizePx, documentStyleFontSizePx, paragraphHoldsNoText } from "../native-document/documentStyleFontSize";
 import { wordAutoTextAttributes } from "../native-document/wordAutoTextColor";
 import { paragraphAttributeShows, paragraphBorderEdgeOnFragment } from "../native-document/paged/fragmentRoles";
@@ -791,6 +792,20 @@ function koreanWholeWordsHangOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsKoreanWholeWordsHangOff?: boolean }).__docsKoreanWholeWordsHangOff === true;
 }
 
+/** Harness switch (`window.__docsHangulHangOff = true`): a body paragraph
+ * holding Hangul keeps break-spaces, as one holding Han or Kana does (A/B). */
+function hangulHangOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsHangulHangOff?: boolean }).__docsHangulHangOff === true;
+}
+
+/** East Asian text other than Hangul: the text whose spaced boundaries
+ * belong to the terminal punctuation and kinsoku rules. */
+function holdsNonHangulEastAsianText(text: string): boolean {
+  if (!EAST_ASIAN_TEXT.test(text)) return false;
+  if (hangulHangOff()) return true;
+  return EAST_ASIAN_TEXT.test(text.replace(/\p{Script=Hangul}/gu, ""));
+}
+
 /** Harness switch (`window.__docsKoreanWordWrapOff = true`): Latin words in
  * Korean text under w:wordWrap 0 are cut as in any other text (A/B). */
 function koreanWordWrapOff(): boolean {
@@ -1034,7 +1049,22 @@ function documentOverflowPunctuationDecorations(
     // Word's too (corpus R283-D10: "AOP 045" and its trailing blanks on two lines,
     // a line more in 34 cells; R280-D15).
     const wordTableCell = inTable && sourceAdapter === "docx";
-    const wordsMayBreak = resolveDocumentWordWrap(doc.attrs,displayAttrs,sourceAdapter,inTable,owningTableAttrs) === false;
+    // Word applies wordWrap off only from compatibility mode 14: earlier, and
+    // with no mode stated, its words wrap whole (documentWordWrapOffInert).
+    // The off the attribute draws as break-all is put back to word breaks,
+    // and the paragraph takes every rule of a wrapped one below (corpus
+    // R461-D71: its R code cut at the margin where Word wraps it at the
+    // spaces, and the line engine, which wraps at words, never agreed with
+    // the page -- 7 086 of 8 403 reads -- so each cut was probed on the DOM).
+    const effectiveWordWrap = resolveEffectiveDocumentWordWrap(doc.attrs,displayAttrs,sourceAdapter,inTable,owningTableAttrs);
+    const wordWrapInert = normalizeParagraphOnOff(block.attrs.wordWrap) === false && documentWordWrapOffInert(doc.attrs, sourceAdapter);
+    if (wordWrapInert) {
+      result.push(Decoration.node(pos, pos + block.nodeSize, {
+        "data-document-word-wrap-inert": "true",
+        style: "word-break:normal;overflow-wrap:break-word",
+      }));
+    }
+    const wordsMayBreak = effectiveWordWrap === false;
     if (wordTableCell && !wordsMayBreak) {
       if (!EAST_ASIAN_TEXT.test(block.textContent)) {
         result.push(Decoration.node(pos, pos + block.nodeSize, {
@@ -1050,7 +1080,7 @@ function documentOverflowPunctuationDecorations(
     // break-all an AutoFit table read every such cell as one letter wide
     // (corpus R287-D30: "Variable" on two lines in a 33pt column, Word's
     // 127pt). `window.__docsKoreanWordWrapOff = true`: as before (A/B).
-    if (sourceAdapter === "docx" && normalizeParagraphOnOff(block.attrs.wordWrap) === false && !koreanWordWrapOff()) {
+    if (sourceAdapter === "docx" && normalizeParagraphOnOff(block.attrs.wordWrap) === false && !wordWrapInert && !koreanWordWrapOff()) {
       const korean = documentKoreanWholeWordRanges(block, pos + 1, doc.attrs.eastAsianLanguage);
       const attrs = { "data-document-korean-whole-words": "true", style: "word-break:normal;overflow-wrap:break-word" };
       if (korean === "paragraph") {
@@ -1080,7 +1110,7 @@ function documentOverflowPunctuationDecorations(
         }, { inclusiveStart: false, inclusiveEnd: false }));
       }
     }
-    if(sourceAdapter==="docx" && resolveDocumentWordWrap(doc.attrs,displayAttrs,sourceAdapter,inTable,owningTableAttrs)===true){
+    if(sourceAdapter==="docx" && effectiveWordWrap===true){
       for (const range of documentHangulWordRanges(block, pos + 1)) {
         result.push(Decoration.inline(range.from, range.to, {
           "data-document-hangul-word": "true",
@@ -1119,14 +1149,23 @@ function documentOverflowPunctuationDecorations(
       const nativeParagraphFlow = !inTable && paragraphSource?.adapter === "docx" &&
         paragraphSource.typographyFlow === 1 && paragraphSource.fontScriptFlow === 1 &&
         /^word\/document\.xml#p\[\d+\](?:\/seg\[\d+\])?$/.test(paragraphSource.sourceAnchor ?? "");
-      if (nativeParagraphFlow && !EAST_ASIAN_TEXT.test(block.textContent)) {
+      if (nativeParagraphFlow && !holdsNonHangulEastAsianText(block.textContent)) {
         // The same rule in the body for a paragraph with no East Asian text:
         // Word charges no line-end space to its line, so a word that fits
         // without the space after it stays (mrline/line.docx: Arial 11pt
         // "...tempor incididunt " ends line 1 in Word 16 for Mac, 572px of
         // a 576px column; break-spaces moved "incididunt" down). A paragraph
-        // with Han/Kana/Hangul text keeps break-spaces: its spaced boundaries
-        // belong to the terminal punctuation and kinsoku rules.
+        // with Han/Kana text keeps break-spaces: its spaced boundaries
+        // belong to the terminal punctuation and kinsoku rules. Hangul does
+        // not keep it: Korean is set in spaced words, and Word hangs the
+        // line-end space in Korean text as in Latin (Windows Word, docx-look
+        // pc1/probes/ko: Malgun Gothic 10 pt, eight 30 pt words and seven
+        // spaces in a column 1.5 pt wider than them stand on one line, left
+        // or justified, modes 14 and 15) and in a Latin paragraph holding a
+        // Korean name (pc1/probes/kr, corpus R480-D39: "... legtöbbször az
+        // északi" fits Word's first line with "(김정은)" further on; with
+        // break-spaces "északi" went down: a line more on 19 of its full
+        // one-section pages, 59 pages for Word's 40; 41 now).
         result.push(Decoration.node(pos, pos + block.nodeSize, {
           "data-document-native-whitespace": "preserve-hang",
           style: "white-space:pre-wrap",
@@ -1329,7 +1368,7 @@ function applyDocumentFormattingDecorations(
   if (!sameContinuationTypography(listContinuationTypography(tr.before), continuationTypography)) {
     return documentFormattingDecorations(state);
   }
-  let next = previous.map(tr.mapping, tr.doc);
+  let next = previous.map(decorationMapping(tr), tr.doc);
   const blocks = touchedTopLevelBlocks(tr);
   if (blocks.size === 0) return next;
   const stale: Decoration[] = [];
@@ -1774,7 +1813,7 @@ const DocumentFormatting = Extension.create<DocumentFormattingOptions>({
             !tr.docChanged
               ? previous
               : tr.getMeta(BULK_FILL_CHUNK_META) === true
-                ? mappedThroughBulkFill(previous.map(tr.mapping, tr.doc))
+                ? mappedThroughBulkFill(previous.map(decorationMapping(tr), tr.doc))
                 : rebuildsAfterFill(previous)
                   ? documentFormattingDecorations(state)
                   : applyDocumentFormattingDecorations(tr, previous, state),

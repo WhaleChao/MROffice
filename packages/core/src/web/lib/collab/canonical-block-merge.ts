@@ -38,20 +38,87 @@ function stable(value: unknown): string {
  * inline atom with a `runStyle`, which say what that attribute says and which a
  * room does not hold (inlineAtomRunStyle draws them from it again). Two copies
  * that differ only there are one edit, not two. */
-function authored(value: unknown, key?: string): string {
+function authored(value: unknown, key?: string, identityBlind = false): string {
   if (Array.isArray(value)) {
-    const items = value.map((item) => authored(item));
+    const items = value.map((item) => authored(item, undefined, identityBlind));
     return `[${(key === "marks" ? items.sort() : items).join(",")}]`;
   }
   if (value && typeof value === "object") {
     const attrs = (value as { attrs?: Record<string, unknown> | null }).attrs;
     const marksFollowAttrs = Boolean(attrs && typeof attrs === "object" && attrs.runStyle);
     const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([name, item]) => item !== undefined && item !== null && item !== false && name !== "source" && !(marksFollowAttrs && name === "marks"))
+      .filter(([name, item]) => item !== undefined && item !== null && item !== false && name !== "source" && !(marksFollowAttrs && name === "marks") &&
+        !(identityBlind && key === "attrs" && DERIVED_IDENTITY_ATTRS.has(name)))
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-    return `{${entries.map(([name, item]) => `${JSON.stringify(name)}:${authored(item, name)}`).join(",")}}`;
+    // `attrs` that say nothing (none, or each at its null or false default)
+    // are no attrs: the live view writes a mark's `attrs: {}` where the store
+    // leaves the key out (every italic run of a Word table, R482-D04 LIVE:
+    // its tables read as edited by a whole view's draft).
+    return `{${entries.map(([name, item]) => [name, authored(item, name, identityBlind)] as const)
+      .filter(([name, text]) => !(name === "attrs" && text === "{}"))
+      .map(([name, text]) => `${JSON.stringify(name)}:${text}`).join(",")}}`;
   }
   return JSON.stringify(value ?? null);
+}
+
+/**
+ * Identities a view derives for itself and writes into a block: the anchor a
+ * heading, an outline-level paragraph or a caption is linked to, back-filled
+ * from its words after the view opens (headingAnchors, captions) and not
+ * written to the room as an edit. A block whose two sides differ only there is
+ * one block: read as an edit on both sides it was kept twice, the local copy
+ * with a new identity and no source -- corpus R470-D71: every outline-level
+ * paragraph ("Dados Preliminares", "Caracteristicas Demograficas", ...) stood
+ * twice on its page, the second without its Word line layout.
+ */
+const DERIVED_IDENTITY_ATTRS = new Set(["anchor_id"]);
+
+
+
+function identityBlindOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsMergeIdentityBlindOff?: boolean }).__docsMergeIdentityBlindOff === true;
+}
+
+/** Whether two blocks say the same thing beside their derived identities. */
+function sameBesideIdentity(left: unknown, right: unknown): boolean {
+  return !identityBlindOff() && authored(left, undefined, true) === authored(right, undefined, true);
+}
+
+/** `remote` with every derived identity it leaves empty taken from `local`
+ * (the same block beside its identities): an empty slot may be filled, a
+ * peer's identity is never replaced (as `isDocumentSaveMaintenance` reads a
+ * save). `remote` itself when there is nothing to fill. */
+function withIdentitySlotsFilled(remote: unknown, local: unknown): unknown {
+  if (Array.isArray(remote)) {
+    if (!Array.isArray(local) || local.length !== remote.length) return remote;
+    let changed = false;
+    const items = remote.map((item, index) => {
+      const next = withIdentitySlotsFilled(item, local[index]);
+      if (next !== item) changed = true;
+      return next;
+    });
+    return changed ? items : remote;
+  }
+  if (!remote || typeof remote !== "object" || !local || typeof local !== "object") return remote;
+  const node = remote as Record<string, unknown>, other = local as Record<string, unknown>;
+  let out: Record<string, unknown> | null = null;
+  const attrs = node.attrs, otherAttrs = other.attrs;
+  if (attrs && typeof attrs === "object" && otherAttrs && typeof otherAttrs === "object") {
+    let filled: Record<string, unknown> | null = null;
+    for (const name of DERIVED_IDENTITY_ATTRS) {
+      const mine = (attrs as Record<string, unknown>)[name], theirs = (otherAttrs as Record<string, unknown>)[name];
+      if ((mine === undefined || mine === null || mine === "") && typeof theirs === "string" && theirs) {
+        filled ??= { ...(attrs as Record<string, unknown>) };
+        filled[name] = theirs;
+      }
+    }
+    if (filled) out = { ...node, attrs: filled };
+  }
+  if (Array.isArray(node.content)) {
+    const content = withIdentitySlotsFilled(node.content, other.content);
+    if (content !== node.content) out = { ...(out ?? node), content };
+  }
+  return out ?? remote;
 }
 
 /** Whether two blocks say the same thing, whatever each save wrote beside it (see `authored`). */
@@ -162,10 +229,17 @@ function freshId(): string {
   return `merge-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** A conflict's copy: a new block, with an identity of its own and no claim
+ * on the element of the imported file the kept one was read from (`source`).
+ * Kept, that claim put one Word element in the document twice: the file
+ * could not be written (duplicate_docx_source_anchor), and a parts view
+ * holding it is stopped as a damaged one (document-page-parts storedAnchors). */
 function withFreshId(block: MergeBlock): MergeBlock {
   const copy = structuredClone(block);
-  if (copy.attrs && typeof copy.attrs === "object" && "block_id" in copy.attrs) {
-    (copy.attrs as Record<string, unknown>).block_id = freshId();
+  if (copy.attrs && typeof copy.attrs === "object") {
+    const attrs = copy.attrs as Record<string, unknown>;
+    if ("block_id" in attrs) attrs.block_id = freshId();
+    if (attrs.source != null) attrs.source = null;
   }
   return copy;
 }
@@ -249,7 +323,8 @@ export function mergeCanonicalBlocks(
 
   /** Whether `entry` says something `baseEntry` does not. */
   const changedFrom = (baseEntry: { text: string; block: MergeBlock } | undefined, entry: { text: string; block: MergeBlock }) =>
-    !baseEntry || (baseEntry.text !== entry.text && (!options.typedOn || authored(baseEntry.block) !== authored(entry.block)));
+    !baseEntry || (baseEntry.text !== entry.text && (!options.typedOn || authored(baseEntry.block) !== authored(entry.block)) &&
+      !sameBesideIdentity(baseEntry.block, entry.block));
   let merged: MergeBlock | null = null;
   for (const remoteEntry of remoteEntries) {
     const baseEntry = baseByKey.get(remoteEntry.key);
@@ -260,6 +335,13 @@ export function mergeCanonicalBlocks(
       // as it was. A block new in the room is kept.
       if (baseEntry && !remoteChanged) continue;
       result.push({ key: remoteEntry.key, block: remoteEntry.block });
+      continue;
+    }
+    // The same block beside the identities each view derived for itself (an
+    // anchor back-filled on one side only, or on both): one block, the
+    // room's, with an anchor only the view gave it filled in.
+    if (localEntry.text !== remoteEntry.text && sameBesideIdentity(localEntry.block, remoteEntry.block)) {
+      result.push({ key: remoteEntry.key, block: withIdentitySlotsFilled(remoteEntry.block, localEntry.block) as MergeBlock });
       continue;
     }
     const localChanged = changedFrom(baseEntry, localEntry);

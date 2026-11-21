@@ -33,6 +33,7 @@ import {
   type DelimitedImportNumberOptions,
 } from "./csv-import";
 import {
+  MAX_CONDITIONAL_FORMATS,
   normalizeRules as normalizeConditionalRules,
   planRulesForFill,
   type ConditionalFormatRule,
@@ -79,7 +80,8 @@ import {
 } from "@mrnote/core/web/lib/spreadsheet/paste-special.ts";
 import { MAX_SPARKLINES, type Sparkline } from "@mrnote/core/web/lib/spreadsheet/sparkline.ts";
 import { sparklineCopiedBy } from "@mrnote/core/web/lib/spreadsheet/sparkline-buttons.ts";
-import type { PasteGridRequest } from "./paste-buttons";
+import type { PasteGridOptions, PasteGridRequest } from "./paste-buttons";
+import { withConditionalFormatFileCopyRecorded } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
 import {
   splitColumnByDelimiters,
   splitColumnByFixedWidth,
@@ -660,9 +662,15 @@ export function autoFilledSheet<
                   col: extent > 0 ? src.c1 + ((col - src.c2 - 1) % sourceCols) : src.c2 - ((src.c1 - 1 - col) % sourceCols),
                 },
         );
+  // Past the page's bound the file's own rules over the source reach over
+  
+  const recordedSheet =
+    conditionalPlan && fillReachesFileRules(sheet.conditionalFormats)
+      ? withConditionalFormatFileCopyRecorded(linkedSheet, linkedSheet, fillFileCopy(src, filled))
+      : linkedSheet;
   return {
     ok: true,
-    sheet: linkedSheet,
+    sheet: recordedSheet,
     choice:
       mode === "toggle"
         ? copies ? "series" : "copy"
@@ -673,6 +681,72 @@ export function autoFilledSheet<
     dates: valueLines > 0 && dates,
     flashFill:
       direction === "down" && src.c1 === src.c2 && src.c1 > 0 && valueLines > 0,
+  };
+}
+
+
+
+
+
+
+export function fillReachesFileRules(rules: readonly unknown[] | undefined): boolean {
+  return Array.isArray(rules) && rules.length >= MAX_CONDITIONAL_FORMATS;
+}
+
+/** The record of a fill of `source` over `filled` (which holds it) for the
+ * write-back to reach the file's own rules over the source, as the page's
+ * reach (`withConditionalFormatFileCopyRecorded`, `fill`). */
+export function fillFileCopy(source: Rect, filled: Rect) {
+  return {
+    rect: [source.r1, source.c1, source.r2, source.c2] as [number, number, number, number],
+    at: [source.r1, source.c1] as [number, number],
+    page: true,
+    fill: [filled.r1, filled.c1, filled.r2, filled.c2] as [number, number, number, number],
+  };
+}
+
+
+
+
+
+
+
+
+export function edgeFillRulePlans(
+  request: Pick<PasteGridRequest, "baseRow" | "baseCol" | "rows">,
+  direction: EdgeFillDirection,
+  conditionalFormats: readonly ConditionalFormatRule[],
+  validations: readonly ValidationRule[],
+  bounds: { maxRow: number; maxCol: number },
+): Pick<PasteGridOptions, "conditionalFormatPlan" | "validationPlan" | "conditionalFormatFileCopy"> {
+  const destination = {
+    r1: request.baseRow,
+    c1: request.baseCol,
+    r2: request.baseRow + request.rows.length - 1,
+    c2: request.baseCol + Math.max(1, request.rows[0]?.length ?? 1) - 1,
+  };
+  const source =
+    direction === "down"
+      ? { ...destination, r1: destination.r1 - 1, r2: destination.r1 - 1 }
+      : direction === "up"
+        ? { ...destination, r1: destination.r2 + 1, r2: destination.r2 + 1 }
+        : direction === "right"
+          ? { ...destination, c1: destination.c1 - 1, c2: destination.c1 - 1 }
+          : { ...destination, c1: destination.c2 + 1, c2: destination.c2 + 1 };
+  const filled = {
+    r1: Math.min(source.r1, destination.r1),
+    c1: Math.min(source.c1, destination.c1),
+    r2: Math.max(source.r2, destination.r2),
+    c2: Math.max(source.c2, destination.c2),
+  };
+  const conditionalFormatPlan = planRulesForFill(conditionalFormats, source, filled, bounds);
+  const validationPlan = planRulesForValidationFill(validations, source, filled, shiftFormula, bounds);
+  return {
+    ...(conditionalFormatPlan ? { conditionalFormatPlan } : {}),
+    ...(validationPlan ? { validationPlan } : {}),
+    ...(conditionalFormatPlan && fillReachesFileRules(conditionalFormats)
+      ? { conditionalFormatFileCopy: { source: null, ...fillFileCopy(source, filled) } }
+      : {}),
   };
 }
 

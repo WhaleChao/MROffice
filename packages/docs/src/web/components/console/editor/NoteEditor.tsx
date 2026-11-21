@@ -207,10 +207,12 @@ import type { EvidenceQuoteLocateInput } from "@mrnote/core/web/components/conso
 import {
   isEditorEditable,
   documentProtectionAllowsSaves,
+  effectiveDocumentProtection,
   isDocumentFormsProtected,
   isDocumentPasswordLocked,
   isDocumentCommentOnlyProtected,
 } from "@mrnote/core/web/components/console/editor/native-document/documentProtection.ts";
+import { useEmbedAccess } from "@mrnote/core/web/lib/embed/use-embed-access.ts";
 import { setCommentOnlyLane } from "@mrnote/core/web/components/console/editor/native-document/commentOnlyLane.ts";
 import { editableRangesPresent } from "@mrnote/core/web/components/console/editor/native-document/rangePermissionExtension.ts";
 import {
@@ -422,6 +424,7 @@ import { mergeCanonicalBlocks, sameAuthoredBlock, sameAuthoredBody } from "@mrno
 import { documentRoomEstablished, takeDocumentRecoveryConflicts } from "@mrnote/core/web/lib/collab/collab-extensions.ts";
 import { adoptRecoveredDocumentContent, buildCollabExtensions, canonicalDocumentExplicitSaveRefusal, prepareCanonicalDocumentExplicitSave, publishCanonicalDocumentAttrs, isCanonicalDocumentHistoryTransaction, hasCanonicalDocumentAuthoringTransaction, isLegacyRoomProjectionUpdate } from "@mrnote/core/web/lib/collab/collab-extensions.ts";
 import { useDocumentCausalModel } from "./native-document/useDocumentCausalModel";
+import { registerLiveEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
 import { useEditorContinuity } from "./native-document/useEditorContinuity";
 import { mapAwarenessStates } from "@mrnote/core/web/lib/collab/collab-state.ts";
 import UserAvatar from "@mrnote/core/web/components/console/UserAvatar.tsx";
@@ -507,7 +510,7 @@ import {
   mergePagedRuntimeContinuationsJson,
 } from "@mrnote/core/web/components/console/editor/native-document/paged/serialization.ts";
 import { captureSavedPaginationProjectionInSteps, runtimeDocumentJson } from "@mrnote/core/web/__cut__/m2c7d818b46.ts";
-import { changedBlockPieces, lastMergeRefusal, mergedPartTransaction, partSheetsOfView, serializeViewParts, type PartSerializations } from "./native-document/documentPartMerge";
+import { changedBlockPieces, lastMergeRefusal, mergedPartTransaction, partSheetsOfView, serializeViewParts, viewBlockIdsOf, type PartSerializations } from "./native-document/documentPartMerge";
 import { splitPieceRoot } from "@mrnote/core/web/components/console/editor/native-document/paged/paginationProjectionKeys.ts";
 import { cachedDocsLayoutReceipt, cachedDocsLayoutSizes } from "@mrnote/core/web/lib/docs-layout-receipt-cache.ts";
 import { layoutSnapshotsAwaited, preloadLayoutSnapshots } from "@mrnote/core/web/lib/docs-layout-snapshot-store.ts";
@@ -578,6 +581,9 @@ import {
   storedFormOfBlocks,
   useDocumentPageParts,
   withPartsLoadedSince,
+  draftChangesOutsideView,
+  draftBaseInEditorForm,
+  draftBlocksChangedFrom,
   type DocumentPartRoomsView,
 } from "@mrnote/core/web/lib/document-page-parts.ts";
 import { DocumentPartsNotice } from "@mrnote/core/web/components/notebook/contents/office/DocumentPartsNotice.tsx";
@@ -805,6 +811,9 @@ function earlySnapshotFonts(): boolean {
   return typeof window === "undefined" || (window as Window & { __docsSnapshotFontsEarly?: boolean }).__docsSnapshotFontsEarly !== false;
 }
 
+function docsHandoverTraceOn(): boolean {
+  return typeof window !== "undefined" && Array.isArray((window as Window & { __docsHandoverTrace?: unknown[] }).__docsHandoverTrace);
+}
 function traceDocsHandover(entry: Record<string, unknown>): void {
   const sink = typeof window === "undefined" ? null : (window as Window & { __docsHandoverTrace?: unknown[] }).__docsHandoverTrace;
   if (Array.isArray(sink) && sink.length < 400) sink.push({ t: Math.round(performance.now()), ...entry });
@@ -2515,7 +2524,7 @@ export default function NoteEditor({
     pageSize,
     pageMargins,
     pageOrientation,
-    documentProtection,
+    documentProtection: storedDocumentProtection,
     setEditableRangesInDocument,
     customPageSize,
     customPageMargins,
@@ -2549,6 +2558,14 @@ export default function NoteEditor({
     docDefaultSpaceAfter,
     docDefaultIndents,
   } = surfaceAttrs;
+  // An embedded editor's session may lay Word's Comments, Tracked changes or
+  // Filling in forms restriction over the document (never written into it).
+  const embedAccess = useEmbedAccess();
+  const documentProtection = useMemo(
+    () => effectiveDocumentProtection(storedDocumentProtection),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the session's access is read by the call
+    [storedDocumentProtection, embedAccess],
+  );
   // Browser-native spell check (red squiggles). OFF by default — CJK prose
   // under an en spell checker is squiggle soup — and remembered per device.
   const [spellcheckOn, setSpellcheckOn] = useState(false);
@@ -5166,6 +5183,17 @@ export default function NoteEditor({
   // the first-open upgrade landing after the writer began), the editor keeps
   // the writer's caret, scroll and focus (useEditorContinuity).
   useEditorContinuity(isUsableEditor(editor) ? (editor as unknown as Editor) : null, pageId);
+  // The live editor for callers outside this component (the embedded
+  // editor's Automation API): their commands dispatch here, so Undo, the
+  // room and the autosave take them as they take typing.
+  // Registered once the page's content is in (what the loading state below
+  // waits for): a caller reads the file, never the empty page shown while it
+  // is prepared, and the embedded editor's ready waits for it.
+  const liveEditorContentIn =
+    editorHydrated && (guestMode || !autosave.loading) && documentOfficeDataSettled;
+  const liveEditor =
+    isUsableEditor(editor) && surfaceMode === "editor" && liveEditorContentIn ? (editor as unknown as Editor) : null;
+  useEffect(() => (liveEditor ? registerLiveEditor(pageId, { kind: "document", editor: liveEditor }) : undefined), [liveEditor, pageId]);
 
   // ---- A Word document held as parts (A2, lib/document-page-parts) --------
   // Its later parts are appended as the reader nears the end, and (writable)
@@ -5502,6 +5530,11 @@ export default function NoteEditor({
     return dom.getAttribute("data-pagination-initial-settling") === "true" ||
       dom.getAttribute("data-document-display-fonts") === "loading";
   }, [editor]);
+  // The block ids the view holds (a part coming in is checked against them).
+  const documentPartsViewBlockIds = useCallback((): ReadonlySet<string> | null => {
+    const doc = isUsableEditor(editor) ? (editor as unknown as { state?: { doc?: ProseMirrorNode } }).state?.doc : null;
+    return doc ? viewBlockIdsOf(doc) : null;
+  }, [editor]);
   const documentParts = useDocumentPageParts({
     pageId,
     body: documentPartsPage ? autosave.page?.content_json : null,
@@ -5516,6 +5549,7 @@ export default function NoteEditor({
     serializeForRooms: serializeDocumentForRooms,
     serializeParts: serializeDocumentParts,
     editorFormOf: editorFormOfPartBlocks,
+    viewBlockIds: documentPartsViewBlockIds,
     mergePartIntoView: mergePartBlocksIntoView,
     partRooms: documentPartRoomsView,
     storedForm: storedFormOfPartBlocks,
@@ -6892,6 +6926,8 @@ export default function NoteEditor({
   documentPartsViewIsThisReadingRef.current = documentParts.viewIsThisReading;
   const documentPartsPageRef = useRef(documentPartsPage);
   documentPartsPageRef.current = documentPartsPage;
+  const documentPartsRefuseBlocksTwiceRef = useRef(documentParts.refuseBlocksTwice);
+  documentPartsRefuseBlocksTwiceRef.current = documentParts.refuseBlocksTwice;
   const loadAllDocumentParts = useCallback(async (): Promise<boolean> => {
     // No part holds this id: the walk loads every part, then says false.
     await loadThroughPartBlock("\u0000every-part").catch(() => false);
@@ -6935,6 +6971,17 @@ export default function NoteEditor({
       baseBlocks = onlyHeld(blocksOf(serializeDocumentForParts()) ?? []);
     } else {
       baseBlocks = onlyHeld(blocksOf(base) ?? []);
+      // The body the view opened with is the stored form, the draft the live
+      // editor's: read as the editor writes it, a block nobody touched is no
+      // edit of the draft's (draftBaseInEditorForm; R482-D04 LIVE).
+      const stored = baseBlocks;
+      baseBlocks = [...draftBaseInEditorForm(baseBlocks, editorFormOfPartBlocks)];
+      if (docsHandoverTraceOn()) {
+        const asStored = draftBlocksChangedFrom(stored, draft);
+        const asEditor = draftBlocksChangedFrom(baseBlocks, draft);
+        traceDocsHandover({ step: "base-form", editorForm: baseBlocks !== stored && stored.length > 0 && baseBlocks[0] !== stored[0],
+          changedAsStored: asStored.changed, changedAsEditor: asEditor.changed, storedSample: asStored.sample, editorSample: asEditor.sample });
+      }
       const reach = documentDraftReach(baseBlocks, draft);
       traceDocsHandover({ step: "reach", ...reach });
       if (!reach.changed) return true;
@@ -6965,13 +7012,36 @@ export default function NoteEditor({
       traceDocsHandover({ step: "merge-waits-reading-parts" });
       return false;
     }
-    const view = blocksOf(serializeDocumentForParts());
+    let view = blocksOf(serializeDocumentForParts());
     if (!view) return false;
+    // A block of the document the draft changed that the view does not hold
+    // is in a part not loaded yet, or another member deleted it: merged now it
+    // goes in after the last block loaded (a change outweighs a deletion), and
+    // its part, loaded later, brings it a second time (R482-D04 LIVE: a part's
+    // 17 tables stored twice). Every part is loaded first; a draft that still
+    // meets a part not loaded waits (the caller asks again).
+    if (draftChangesOutsideView(baseBlocks, draft, view, blockIdOf) > 0 &&
+        documentPartsStateRef.current.loaded + 1 < documentPartsStateRef.current.count) {
+      traceDocsHandover({ step: "merge-loads-every-part", outside: draftChangesOutsideView(baseBlocks, draft, view, blockIdOf) });
+      if (!(await loadAllDocumentParts()) || !documentPartsViewIsThisReadingRef.current()) return false;
+      view = blocksOf(serializeDocumentForParts());
+      if (!view) return false;
+    }
     if (partialView) baseBlocks = withPartsLoadedSince(baseBlocks, draft, view, blockIdOf);
     const merged = mergeCanonicalBlocks(baseBlocks as never[], draft as never[], view as never[], { typedOn: true });
     traceDocsHandover({ step: "merge", view: view.length, merged: merged.blocks.length, conflicts: merged.conflicts, changedRemote: merged.changedRemote,
+      base: baseBlocks.length, draft: draft.length, partsLoaded: documentPartsStateRef.current.loaded, partsCount: documentPartsStateRef.current.count,
+      draftNotInView: (() => { const ids = new Set(view.map(blockIdOf)); return draft.filter((item) => !ids.has(blockIdOf(item))).length; })(),
       differ: merged.blocks.reduce<number>((count, item, index) => count + (JSON.stringify(item) === JSON.stringify(view[index]) ? 0 : 1), 0) });
     if (!merged.changedRemote) return true;
+    // A merge holding a Word element more often than the stored document is
+    // no merge of a reader's edits but blocks put in twice: refused, and the
+    // view stops (refuseBlocksTwice). Asked before the editor has them, where
+    // a paragraph put in twice still says which Word paragraph it is.
+    if (documentPartsRefuseBlocksTwiceRef.current(merged.blocks, "handover-repeated-anchors")) {
+      traceDocsHandover({ step: "merge-refused-twice" });
+      return false;
+    }
     // A merge that would take most of the view out is no merge of a reader's
     // edits but a draft that held less than its base said (see partialView):
     // refused, the draft kept (AutoRecover) rather than the book cut down.
@@ -6989,7 +7059,7 @@ export default function NoteEditor({
       setDocsConflicts(next);
     }
     return true;
-  }, [loadAllDocumentParts, loadThroughPartBlock, mergePartBlocksIntoView, pageId, serializeDocumentForParts]);
+  }, [editorFormOfPartBlocks, loadAllDocumentParts, loadThroughPartBlock, mergePartBlocksIntoView, pageId, serializeDocumentForParts]);
   // One merge at a time per kept body; the callers ask again on their timers.
   // A body merged once is merged for good: every caller asking again (the
   // set-aside retry, a second effect run, a refused draft of the same edits)

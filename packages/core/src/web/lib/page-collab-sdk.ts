@@ -245,15 +245,22 @@ function withWorkspaceHeader(
   return { ...init, headers };
 }
 
+
+
+
+
+
+
 export async function getPageCollab(
   pageId: string,
   init?: RequestInit,
   workspaceId?: string | null,
+  options?: { admission?: boolean },
 ): Promise<PageCollabState> {
   const expectedPageId = identity(pageId, "page id");
   return fromWire(
     await apiGet<unknown>(
-      `${base(pageId)}/collab`,
+      `${base(pageId)}/collab${options?.admission ? "?admission=1" : ""}`,
       withWorkspaceHeader(init, workspaceId),
     ),
     expectedPageId,

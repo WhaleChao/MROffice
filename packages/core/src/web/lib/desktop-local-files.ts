@@ -31,7 +31,13 @@ interface LocalFilesBridge {
     bytes: ArrayBuffer;
     filename: string;
     state?: string;
-  }): Promise<{ path: string; name: string } | { error: string } | null>;
+    auto?: boolean;
+  }): Promise<{ path: string; name: string } | { error: string; code?: string } | null>;
+  originalStatus?(pageId: string): Promise<DesktopOriginalStatus | null>;
+  originalAutosave?: {
+    enabled(): Promise<boolean | null>;
+    setEnabled(on: boolean): Promise<boolean | null>;
+  };
 }
 
 function bridge(): LocalFilesBridge | null {
@@ -147,18 +153,109 @@ export async function desktopOriginalOf(pageId: string): Promise<DesktopOriginal
   }
 }
 
+/** Why the shell wrote nothing (apps/desktop src/classic/original-links.ts
+ * OriginalWriteRefusal, and "autosave_off"); "failed" for any other error. */
+export type DesktopOriginalWriteCode =
+  | "not_linked"
+  | "missing"
+  | "changed_elsewhere"
+  | "backup_failed"
+  | "write_failed"
+  | "autosave_off"
+  | "failed";
+
+const WRITE_CODES = new Set<string>([
+  "not_linked",
+  "missing",
+  "changed_elsewhere",
+  "backup_failed",
+  "write_failed",
+  "autosave_off",
+]);
+
+export class DesktopOriginalWriteError extends Error {
+  readonly code: DesktopOriginalWriteCode;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "DesktopOriginalWriteError";
+    this.code = code && WRITE_CODES.has(code) ? (code as DesktopOriginalWriteCode) : "failed";
+  }
+}
+
 /** Write ``file`` over the file the page came from (asking where once when
- * there is none); the saved file's name, or null when the person cancelled. */
+ * there is none); the saved file's name, or null when the person cancelled.
+ * ``auto`` (autosave once edits settle): only the page's own linked file,
+ * while it is unchanged on disk -- never a dialog; refusals throw a
+ * {@link DesktopOriginalWriteError} naming why. */
 export async function saveDesktopOriginal(
   pageId: string,
   file: Blob,
   filename: string,
   state?: string,
+  options: { auto?: boolean } = {},
 ): Promise<{ name: string } | null> {
   const save = bridge()?.saveToOriginal;
   if (!save) return null;
-  const answer = await save({ pageId, bytes: await file.arrayBuffer(), filename, state });
+  const answer = await save({
+    pageId,
+    bytes: await file.arrayBuffer(),
+    filename,
+    state,
+    ...(options.auto ? { auto: true } : {}),
+  });
   if (!answer) return null;
-  if ("error" in answer) throw new Error(answer.error);
+  if ("error" in answer) throw new DesktopOriginalWriteError(answer.error, answer.code);
   return { name: answer.name };
+}
+
+/** What autosave asks before it exports a page (the shell's
+ * "mrai:original-status"): its file, whether that is there and as the app
+ * last saw it, and whether autosave is on. */
+export interface DesktopOriginalStatus {
+  readonly linked: boolean;
+  readonly autosave: boolean;
+  readonly name?: string;
+  readonly missing?: boolean;
+  readonly changedElsewhere?: boolean;
+  readonly savedState?: string | null;
+}
+
+/** Whether this shell can autosave pages back to their files (a shell before
+ * it answers no, and only ⌘S writes). */
+export function desktopOriginalAutosaveAvailable(): boolean {
+  const desktop = bridge();
+  return Boolean(desktop?.saveToOriginal && desktop.originalStatus);
+}
+
+export async function desktopOriginalStatus(pageId: string): Promise<DesktopOriginalStatus | null> {
+  const ask = bridge()?.originalStatus;
+  if (!ask) return null;
+  try {
+    return (await ask(pageId)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The "Auto-save to the original file" setting; null outside the desktop app. */
+export async function desktopOriginalAutosaveEnabled(): Promise<boolean | null> {
+  const setting = bridge()?.originalAutosave;
+  if (!setting) return null;
+  try {
+    const on = await setting.enabled();
+    return typeof on === "boolean" ? on : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setDesktopOriginalAutosaveEnabled(on: boolean): Promise<boolean | null> {
+  const setting = bridge()?.originalAutosave;
+  if (!setting) return null;
+  try {
+    const now = await setting.setEnabled(on);
+    return typeof now === "boolean" ? now : null;
+  } catch {
+    return null;
+  }
 }

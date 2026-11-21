@@ -1578,6 +1578,9 @@ export async function pdfWordsFixedTextProof(input: {
   sourceBytes: Uint8Array;
   selection: PdfNativeListTextSelectionEvidence;
 }, reason: PdfNativeTextWordsFixedReason = "glyphs-read-as-blanks"): Promise<PdfNativeListTextSelectionProof> {
+  // (A paragraph that opens as a block for its formats alone may begin with a
+  // picture glyph: no word of it is set by this proof, in any face.)
+  const anyFace = reason === "too-large-to-set-again";
   const { selection } = input;
   const reading = await pageReading(input.sourceBytes, selection.pageNumber);
   const items = boxItems(selection);
@@ -1587,7 +1590,7 @@ export async function pdfWordsFixedTextProof(input: {
   const first = reading.shows.find((show) => show.mode !== 3 && show.mode !== 7 && show.glyphs.some((glyph) =>
     glyph.ink && regions.some((inside, at) => Boolean(inside?.(glyph.x, glyph.y, glyph.ux, glyph.uy)) && sized(show, glyph, at))));
   if (!first) return fail("not-found", PDF_FALLBACK_NOT_FOUND_MESSAGE);
-  if (first.font.kind === "type3") fail("type3", PDF_FALLBACK_TYPE3_MESSAGE);
+  if (first.font.kind === "type3" && !anyFace) fail("type3", PDF_FALLBACK_TYPE3_MESSAGE);
   const stream = reading.streams.get(first.key);
   if (!stream) return fail("not-found", PDF_FALLBACK_NOT_FOUND_MESSAGE);
   const fontSize = Math.max(...items.map((item) => Math.hypot(item.transform[2], item.transform[3]) || item.height), 1);

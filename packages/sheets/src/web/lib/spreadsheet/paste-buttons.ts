@@ -78,6 +78,7 @@ import { planDataTableResize, type TableButtonSheet } from "./table-buttons";
 import type { TextToColumnsColumnFormat } from "@mrnote/core/web/lib/spreadsheet/text-to-columns.ts";
 import { whatIfTablePartRefused, whatIfTablesAfterOverwrite, type WhatIfTableDefinition } from "@mrnote/core/web/lib/spreadsheet/what-if-table-definition.ts";
 import { type ExcelDateSystemArg } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
+import { withConditionalFormatFileCopyRecorded, type ConditionalFormatFileCopyLayout } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
 
 type Rect = { r1: number; c1: number; r2: number; c2: number };
 
@@ -150,6 +151,20 @@ export interface PasteGridOptions {
   };
   /** Sheet-level validation planned before any cell or merge mutation. */
   validationPlan?: { rules: ValidationRule[]; changed: boolean };
+  
+
+
+
+
+
+
+
+  conditionalFormatFileCopy?: {
+    source: object | null;
+    rect: [number, number, number, number];
+    at: [number, number];
+    page: boolean;
+  } & ConditionalFormatFileCopyLayout;
   /** Text-to-Columns disposition by emitted destination-column offset. */
   textToColumnsFormats?: readonly TextToColumnsColumnFormat[];
   /**
@@ -1367,8 +1382,24 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
     mergesChanged ||
     (carriers !== null && carriers !== sheet) ||
     options.conditionalFormatPlan?.changed === true ||
-    options.validationPlan?.changed === true;
-  if (options.skipIfUnchanged && !cellsChanged && !sheetMetadataChanged) {
+    options.validationPlan?.changed === true ||
+    options.conditionalFormatFileCopy !== undefined;
+  // The cell each filled place was filled from (a fill's links, below).
+  const filledFrom = options.fillLinksFrom;
+  const filledSourceOf = (row: number, col: number) =>
+    filledFrom === "down"
+      ? { row: baseRow - 1, col }
+      : filledFrom === "up"
+        ? { row: maxR + 1, col }
+        : filledFrom === "right"
+          ? { row, col: baseCol - 1 }
+          : { row, col: maxC + 1 };
+  if (
+    options.skipIfUnchanged &&
+    !cellsChanged &&
+    !sheetMetadataChanged &&
+    !(filledFrom && fillChangesLinks(sheet, { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC }, filledSourceOf))
+  ) {
     return { ok: false, reason: "unchanged" };
   }
   const nextSheet: S = {
@@ -1416,6 +1447,11 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
       delete nextSheet.conditionalFormats;
     }
   }
+  const fileCopy = options.conditionalFormatFileCopy;
+  const recordedSheet = fileCopy
+    ? withConditionalFormatFileCopyRecorded(nextSheet, fileCopy.source ?? sheet, fileCopy)
+    : nextSheet;
+  if (recordedSheet !== nextSheet) Object.assign(nextSheet, recordedSheet);
   if (options.validationPlan) {
     const rules = [...options.validationPlan.rules, ...unreadValidations];
     if (rules.length > 0) {
@@ -1491,17 +1527,8 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
   // Cells pasted inside a link the sheet holds over a large area delete that
   // whole link, as the paste replaces a cell's own; a paste reaching past the
   // area leaves it (Windows Excel, xlsx-rounds probe/n35-p948 p2a, p2e).
-  const filledFrom = options.fillLinksFrom;
   const pastedSheet = filledFrom
-    ? sheetWithLinksFilled(sheet, nextSheet, { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC }, (row, col) =>
-        filledFrom === "down"
-          ? { row: baseRow - 1, col }
-          : filledFrom === "up"
-            ? { row: maxR + 1, col }
-            : filledFrom === "right"
-              ? { row, col: baseCol - 1 }
-              : { row, col: maxC + 1 },
-      )
+    ? sheetWithLinksFilled(sheet, nextSheet, { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC }, filledSourceOf)
     : clipboardCells && options.fillContentAndFormats !== true
       ? sheetWithoutLaidAreaLinksAround(
           sheet,
@@ -1517,4 +1544,30 @@ export function pastedGridSheet<S extends PasteButtonSheet>(
     ...(followOtherSheets ? { followOtherSheets } : {}),
     destination: { r1: baseRow, c1: baseCol, r2: maxR, c2: maxC },
   };
+}
+
+/**
+ * Whether a fill whose cells already hold what it writes still changes the
+ * sheet's links: filled inside a link over an area, Windows Excel deletes
+ * that whole link (xlsx-rounds probe/n35-p948/a pb14, pb15). R460-X06
+ * LINKFILLIN: CF2 filled down into CF3 under the link CF2:CF3, both cells
+ * the same text and format, read "unchanged" and kept the link.
+ */
+function fillChangesLinks<S extends object>(
+  sheet: S,
+  target: { r1: number; c1: number; r2: number; c2: number },
+  sourceOf: (row: number, col: number) => { row: number; col: number },
+): boolean {
+  const linked = sheetWithLinksFilled(sheet, sheet, target, sourceOf);
+  if (linked === sheet) return false;
+  const was = sheet as { cells?: Record<string, unknown>; hyperlinkAreas?: unknown };
+  const now = linked as { cells?: Record<string, unknown>; hyperlinkAreas?: unknown };
+  if (JSON.stringify(was.hyperlinkAreas ?? null) !== JSON.stringify(now.hyperlinkAreas ?? null)) return true;
+  const before = was.cells ?? {};
+  const after = now.cells ?? {};
+  if (after === before) return false;
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (before[key] !== after[key] && JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null)) return true;
+  }
+  return false;
 }

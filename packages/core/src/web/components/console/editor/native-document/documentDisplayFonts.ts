@@ -18,7 +18,7 @@ import { Plugin, PluginKey, type EditorState } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { effectiveBoldAt } from "./boldExtension";
 import { normalizeDocxBreakRunMarks } from "./documentHardBreakRunFormat";
-import { documentFontScriptRanges, documentFontDescriptor, fontFamilyWithCjkRenderFallback } from "../extensions/TextStyling";
+import { documentFontScriptRanges, documentFontDescriptor, fontFamilyWithCjkRenderFallback, withWordComplexScriptFallback } from "../extensions/TextStyling";
 import { normalizeOfficeFontFace, officeFontFaceFamily, type OfficeFontFace } from "../../../office-ribbon/officeFontFace";
 import { isEastAsianFontCodePoint } from "../../../office-ribbon/officeFontScriptSlots";
 import { officePrimaryFontFamily } from "../../../office-ribbon/officeTypographyCatalog";
@@ -399,6 +399,10 @@ function wordTablePicks(faces: readonly string[] | undefined, lacked: string): s
   return WORD_TABLE_ENTRY_PICKS.has(last.toLowerCase()) ? [last] : [lacked];
 }
 
+function lackedComplexFallbackOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsLackedComplexFallbackOff?: boolean}).__docsLackedComplexFallbackOff === true;
+}
+
 function missingFontStackOf(faces: readonly string[] | undefined, family: string): string | null {
   const lacked = wordLacksOff() ? undefined : wordWindowsLacksFace(family);
   if (lacked !== undefined) {
@@ -423,7 +427,11 @@ function missingFontStackOf(faces: readonly string[] | undefined, family: string
       seen.add(key);
       return true;
     });
-    return fontFamilyWithCjkRenderFallback(order.map(quotedFontName).join(", "));
+    // Hebrew and Arabic the first pick has none of: in the face Word sets
+    // them in behind it (Arial behind Malgun Gothic: corpus R458-D53).
+    // `window.__docsLackedComplexFallbackOff = true`: the system's (A/B).
+    const stack = fontFamilyWithCjkRenderFallback(order.map(quotedFontName).join(", "));
+    return lackedComplexFallbackOff() ? stack : withWordComplexScriptFallback(stack);
   }
   if (faces?.[0] === CHARSET_PICK_MARK) faces = faces.slice(1);
   if (!faces?.length || officeFontSubstitution(family)?.substitutes.length) return null;

@@ -77,10 +77,14 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
   /** The app quitting or this window closing: ``handler`` settles the page's
    * edits (saves sent and waited on, recovery copies written) within the time
    * given, and the app waits for it before it closes. Returns the unsubscribe. */
-  onSettleEdits: (handler: (timeoutMs: number) => Promise<unknown>) => {
+  onSettleEdits: (handler: (timeoutMs: number, extend: (ms: number) => Promise<boolean>) => Promise<unknown>) => {
     const listener = (_event: unknown, nonce: unknown, timeoutMs: unknown) => {
+      // Once: the page writing a pending autosave back to its file asks the
+      // app to wait for it (up to the app's own bound).
+      const extend = (ms: number) =>
+        ipcRenderer.invoke("mrai:edits-settle-extend", String(nonce), Number(ms)).then(Boolean, () => false);
       void Promise.resolve()
-        .then(() => handler(Number(timeoutMs) || 0))
+        .then(() => handler(Number(timeoutMs) || 0, extend))
         .catch(() => null)
         .then((result) => ipcRenderer.invoke("mrai:edits-settled", String(nonce), result ?? null));
     };
@@ -127,13 +131,62 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
   originalOf: (pageId: string) => ipcRenderer.invoke("mrai:original-of", String(pageId)),
   /** Write a page's file over the file it came from (asking where once when
    * there is none). Resolves to { path, name }, { error }, or null. */
-  saveToOriginal: (request: { pageId: string; bytes: ArrayBuffer; filename: string; state?: string }) =>
+  saveToOriginal: (request: { pageId: string; bytes: ArrayBuffer; filename: string; state?: string; auto?: boolean }) =>
     ipcRenderer.invoke("mrai:save-to-original", {
       pageId: String(request?.pageId ?? ""),
       bytes: request?.bytes,
       filename: String(request?.filename ?? ""),
       state: typeof request?.state === "string" ? request.state : undefined,
+      auto: request?.auto === true,
     }),
+  /** Whether the page is linked to a file, that file is there and unchanged
+   * since the app last saw it, and autosave is on (the autosave's check). */
+  originalStatus: (pageId: string) => ipcRenderer.invoke("mrai:original-status", String(pageId)),
+  /** Autosave to the original file: the setting, and turning it on or off. */
+  originalAutosave: {
+    enabled: () => ipcRenderer.invoke("mrai:original-autosave"),
+    setEnabled: (on: boolean) => ipcRenderer.invoke("mrai:original-autosave", Boolean(on)),
+  },
+  /** The places on this computer the sidebar shows as a folder tree
+   * (src/classic/places-ipc.ts; apps/web lib/desktop-places.ts). Every path
+   * is checked by the app: inside the home folder, no contents read. */
+  places: {
+    state: () => ipcRenderer.invoke("mrai:places-state"),
+    remember: (selected: string | null, expanded: string[]) =>
+      ipcRenderer.invoke("mrai:places-remember", selected ? String(selected) : null, Array.isArray(expanded) ? expanded.map(String) : []),
+    list: (folder: string) => ipcRenderer.invoke("mrai:places-list", String(folder)),
+    /** Watch these folders while they are shown (the set replaces the last). */
+    watch: (folders: string[]) => ipcRenderer.invoke("mrai:places-watch", Array.isArray(folders) ? folders.map(String) : []),
+    onChange: (listener: (folder: string) => void) => {
+      const handler = (_event: unknown, folder: unknown) => listener(String(folder ?? ""));
+      ipcRenderer.on("mrai:places-changed", handler);
+      return () => ipcRenderer.removeListener("mrai:places-changed", handler);
+    },
+    /** Open documents as Finder opens them (linked to their files). */
+    open: (paths: string[]) => ipcRenderer.invoke("mrai:open-local-paths", Array.isArray(paths) ? paths.map(String) : []),
+    /** The system's Open dialog, starting in ``folder``. */
+    openDialog: (folder?: string | null) => ipcRenderer.invoke("mrai:places-open-dialog", folder ? String(folder) : null),
+    reveal: (target: string) => ipcRenderer.invoke("mrai:places-reveal", String(target)),
+    createFolder: (parent: string, name: string) => ipcRenderer.invoke("mrai:places-create-folder", String(parent), String(name)),
+    /** A new page's file in ``folder``, never over another; the page is linked to it. */
+    createFile: (request: { folder: string; baseName: string; extension: string; bytes: ArrayBuffer; pageId: string; notebookId?: string; state?: string }) =>
+      ipcRenderer.invoke("mrai:places-create-file", {
+        folder: String(request?.folder ?? ""),
+        baseName: String(request?.baseName ?? ""),
+        extension: String(request?.extension ?? ""),
+        bytes: request?.bytes,
+        pageId: String(request?.pageId ?? ""),
+        notebookId: request?.notebookId ? String(request.notebookId) : undefined,
+        state: typeof request?.state === "string" ? request.state : undefined,
+      }),
+    rename: (target: string, name: string) => ipcRenderer.invoke("mrai:places-rename", String(target), String(name)),
+    trash: (target: string) => ipcRenderer.invoke("mrai:places-trash", String(target)),
+    privacySettings: () => ipcRenderer.invoke("mrai:places-privacy-settings"),
+    /** A listed document's picture (src/classic/place-thumbnails.ts): the
+     * page it became while unchanged, a small PNG data URL, or not ok. */
+    thumbnail: (target: string, size: number) =>
+      ipcRenderer.invoke("mrai:places-thumbnail", String(target), Number(size) || 0),
+  },
   /** The app's own LibreOffice (src/classic/libreoffice.ts): what it offers
    * and holds, download and enable it (resolves when done, cancelled or
    * failed), remove it, and hear when any of that changes. */
@@ -145,6 +198,25 @@ contextBridge.exposeInMainWorld("mraiDesktop", {
       const handler = () => listener();
       ipcRenderer.on("mrai:libreoffice-changed", handler);
       return () => ipcRenderer.removeListener("mrai:libreoffice-changed", handler);
+    },
+  },
+  /** The model on this computer (src/classic/local-model.ts): what is
+   * recommended and installed, download it in the background (resolves at
+   * once; follow it with status and onChange), pause, cancel, delete. */
+  localModel: {
+    status: () => ipcRenderer.invoke("mrai:local-model-status"),
+    download: (request?: { key?: string; mirror?: string }) =>
+      ipcRenderer.invoke("mrai:local-model-download", {
+        key: typeof request?.key === "string" ? request.key : undefined,
+        mirror: typeof request?.mirror === "string" ? request.mirror : undefined,
+      }),
+    pause: () => ipcRenderer.invoke("mrai:local-model-pause"),
+    cancel: () => ipcRenderer.invoke("mrai:local-model-cancel"),
+    remove: () => ipcRenderer.invoke("mrai:local-model-remove"),
+    onChange: (listener: () => void) => {
+      const handler = () => listener();
+      ipcRenderer.on("mrai:local-model-changed", handler);
+      return () => ipcRenderer.removeListener("mrai:local-model-changed", handler);
     },
   },
   /** What the AI may do on this computer (src/classic/agent-computer.ts):

@@ -21,6 +21,7 @@ import net from "node:net";
 import path from "node:path";
 import { app } from "electron";
 import { ensureLibreOfficeFonts, libreOfficeBinary } from "./libreoffice";
+import { localModelDir } from "./local-model";
 
 import { printerEnabled } from "./printer";
 import { checkerSha256, vibeCheckerEnabled } from "./vibe-checker";
@@ -310,6 +311,10 @@ export function apiEnv(
   // Automated checks of an unpacked build: "nothing installed on this
   // computer" on one that has a LibreOffice (apps/api app/desktop/libreoffice.py).
   if (!app.isPackaged && process.env.MRAI_CLASSIC_IGNORE_SYSTEM_LIBREOFFICE === "1") env.MRAI_DESKTOP_LIBREOFFICE_SYSTEM = "off";
+  // The model on this computer (local-model.ts): its folder, there or not
+  // yet. The API reads what is installed there at every use and runs the
+  // server itself (apps/api app/desktop/local_model.py).
+  env.MRAI_DESKTOP_LOCAL_MODEL_DIR = localModelDir();
   if (where.engineHostRoot) env.MRAI_ENGINE_HOST_ROOT = where.engineHostRoot;
   // The engines run on the app's own Node (a closure's node/bin/node is not
   // shipped: it would be the build machine's).

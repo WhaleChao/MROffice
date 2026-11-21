@@ -18,7 +18,7 @@
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { app } from "electron";
-import { originalLinks, writeFileAtomically } from "./original-links";
+import { originalLinks, writeFileAtomically, type OriginalLink } from "./original-links";
 import { apiUp, type Launch } from "./services";
 
 const tokensByPath = new Map<string, string>();
@@ -114,6 +114,16 @@ export function originalOf(pageId: string): string | null {
   return originalLinksStore.originalOf(pageId);
 }
 
+/** The page's link (its file, whether or not still there). */
+export function linkOf(pageId: string): OriginalLink | null {
+  return originalLinksStore.linkOf(pageId);
+}
+
+/** The page's file is as it was when it was linked or last written. */
+export function unchangedSinceLinked(pageId: string): boolean {
+  return originalLinksStore.unchangedSinceLinked(pageId);
+}
+
 /** The page body that file holds, while it is unchanged on disk. */
 export function savedStateOf(pageId: string): string | null {
   return originalLinksStore.savedStateOf(pageId);
@@ -124,6 +134,12 @@ export function savedStateOf(pageId: string): string | null {
  * copy); null when it was never opened or changed since. */
 export function pageOfUnchangedFile(filePath: string, stat: { size: number; mtimeMs: number }): { pageId: string; notebookId: string } | null {
   return originalLinksStore.pageOfUnchangedFile(filePath, stat);
+}
+
+/** A file or folder renamed on disk (the sidebar's places, ./places-ipc.ts):
+ * the links to it, or to files inside it, follow it. */
+export function followRenamedOriginals(from: readonly string[], to: string): number {
+  return originalLinksStore.followRename(from, to);
 }
 
 export { writeFileAtomically };

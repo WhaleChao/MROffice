@@ -68,14 +68,19 @@ export interface EngineLineFragment<T> {
 /** Attributes a page cut gives a block's tail and nothing else: the tail of
  * a block is drawn as the block is from its cut on, its first line without
  * the first-line indent (the continuation's text-indent: 0). */
-const TAIL_ONLY_ATTRS = new Set(["pageSplitContinuation", "pageSplitPieceOf"]);
+const TAIL_ONLY_ATTRS: ReadonlySet<string> = new Set(["pageSplitContinuation", "pageSplitPieceOf"]);
 
-function sameAttrsButTail(whole: ProseMirrorNode, tail: ProseMirrorNode): boolean {
+/** Attributes a page cut gives a block's head and nothing else: the head is
+ * drawn as the block is up to its cut, marked as continuing on the next page
+ * (its closing break's blank row hidden, as Word ends the line there). */
+const HEAD_ONLY_ATTRS: ReadonlySet<string> = new Set(["pageSplitContinues", "pageSplitPieceOf"]);
+
+function sameAttrsButTail(whole: ProseMirrorNode, tail: ProseMirrorNode, only: ReadonlySet<string> = TAIL_ONLY_ATTRS): boolean {
   const a = whole.attrs as Record<string, unknown>;
   const b = tail.attrs as Record<string, unknown>;
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   for (const key of keys) {
-    if (TAIL_ONLY_ATTRS.has(key)) continue;
+    if (only.has(key)) continue;
     const x = a[key];
     const y = b[key];
     if (x === y) continue;
@@ -148,6 +153,16 @@ export interface EngineLineCache {
    * tail (pageSplitContinuation) of the same content and attributes.
    */
   fragmentOf<T extends { from: number; to: number; tabBreak?: boolean }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): EngineLineFragment<T> | null;
+  /**
+   * The lines of a page cut's head, from the block it was cut from, when the
+   * cut fell where one of that block's lines starts: a cut changes no line
+   * before it (the head is laid out at the same width, from the same start),
+   * so the head's lines are the whole's up to there. Kept only from a block
+   * whose drawn lines agreed, measured as the head is now (key and faces),
+   * and for a head (pageSplitContinues) of the same content and attributes.
+   * `offset` is 0: the head starts where the whole does.
+   */
+  headOf<T extends { from: number; to: number; tabBreak?: boolean }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): EngineLineFragment<T> | null;
   forget(node: ProseMirrorNode): void;
   /** Why `lookup` found nothing for a block (probes): "node" (never kept),
    * or the first part of the key that differed. */
@@ -159,6 +174,9 @@ export function createEngineLineCache(): EngineLineCache {
   /** The last block stored that ends with this child (a tail keeps its
    * whole's last child: Fragment.cut keeps the children it does not cut). */
   const byLastChild = new WeakMap<ProseMirrorNode, ProseMirrorNode>();
+  /** The last block stored that starts with this child (a head keeps its
+   * whole's first child when the cut is past it). */
+  const byFirstChild = new WeakMap<ProseMirrorNode, ProseMirrorNode>();
   return {
     lookup<T extends { from: number; to: number }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): T[] | null {
       const entry = entries.get(node);
@@ -170,6 +188,8 @@ export function createEngineLineCache(): EngineLineCache {
       entries.set(node, { key, faces, spans: spans.map((span) => ({ ...span, from: span.from - pos, to: span.to - pos })), ...(starts?.length ? { starts } : {}) });
       const last = node.lastChild;
       if (starts?.length && last) byLastChild.set(last, node);
+      const first = node.firstChild;
+      if (starts?.length && first) byFirstChild.set(first, node);
     },
     fragmentOf<T extends { from: number; to: number; tabBreak?: boolean }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): EngineLineFragment<T> | null {
       if (node.attrs?.pageSplitContinuation !== true) return null;
@@ -201,6 +221,34 @@ export function createEngineLineCache(): EngineLineCache {
       return {
         whole, offset, spans,
         starts: entry.starts.filter((start) => start > offset).map((start) => start - offset),
+        families: entry.faces.map(([family]) => family),
+      };
+    },
+    headOf<T extends { from: number; to: number; tabBreak?: boolean }>(node: ProseMirrorNode, key: EngineLineKey, pos: number, news: FamilyNews): EngineLineFragment<T> | null {
+      if (node.attrs?.pageSplitContinues !== true) return null;
+      const first = node.firstChild;
+      const whole = first ? byFirstChild.get(first) : undefined;
+      if (!whole || whole === node || whole.type !== node.type) return null;
+      const entry = entries.get(whole);
+      if (!entry?.starts || !sameKey(entry.key, key) || !sameFaces(entry, news)) return null;
+      const cut = node.content.size;
+      if (cut <= 0 || cut >= whole.content.size || !entry.starts.includes(cut)) return null;
+      if (!sameAttrsButTail(whole, node, HEAD_ONLY_ATTRS) || !whole.content.cut(0, cut).eq(node.content)) return null;
+      // Spans are kept relative to the block's position: content offset c is at 1 + c.
+      const end = 1 + cut;
+      const spans: T[] = [];
+      for (const span of entry.spans) {
+        if (span.from < end && span.to > end) return null;
+        if (span.from < end) {
+          spans.push({ ...span, from: span.from + pos, to: span.to + pos } as unknown as T);
+          continue;
+        }
+        // The hyphen that ends the line before the cut is the head's.
+        if (span.from === end && (span as { hyphen?: boolean }).hyphen) spans.push({ ...span, from: span.from + pos, to: span.to + pos } as unknown as T);
+      }
+      return {
+        whole, offset: 0, spans,
+        starts: entry.starts.filter((start) => start < cut),
         families: entry.faces.map(([family]) => family),
       };
     },

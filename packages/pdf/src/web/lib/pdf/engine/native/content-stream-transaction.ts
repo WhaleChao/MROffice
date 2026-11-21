@@ -383,6 +383,34 @@ function pageFontPackageObjects(
 }
 
 
+/** The most fonts of the file one write names in a page's resources. */
+export const MAX_MRAI_NATIVE_PAGE_FONT_REFERENCES = 4;
+
+/**
+ * Fonts the file already holds, named in one page's resources so a write of
+ * that page's own text can draw in them: a bold face set again in the regular
+ * face of its family, whose subset with the glyph only another page names
+ * (pdf-walk-1000 0979 p.1, the title's «بعض»). No font object is written and
+ * none is changed. The page's effective Resources are cloned onto the page
+ * with one entry more for each font -- a new object the page then names, the
+ * way a page-local font extension installs its font -- so a dictionary the
+ * page inherits from its tree, or shares with other pages, is never edited
+ * in place. Undone, the page's object is written back as it stood.
+ */
+export interface PdfNativePageFontReferencePlan {
+  readonly pageNumber: number;
+  readonly page: PdfNativePageExtGStateInspection["page"];
+  readonly resourceOwner: PdfNativePageExtGStateInspection["resourceOwner"];
+  readonly category: PdfNativePageExtGStateInspection["category"];
+  /** The page's new Resources object: the first number the file has free. */
+  readonly resources: Readonly<{ objectNumber: number; generation: 0 }>;
+  readonly fonts: readonly Readonly<{
+    resourceName: string;
+    /** A `/Type /Font` dictionary of the file, as it stands. */
+    font: Readonly<{ objectNumber: number; generation: number; expectedObjectSha256: string }>;
+  }>[];
+}
+
 export type PdfNativeContentAppendCategory = "Font" | "XObject" | "ExtGState";
 export type PdfNativeContentAppendKind = "text" | "image" | "path";
 export type PdfNativeContentAppendDirection = "append" | "remove";
@@ -571,6 +599,9 @@ export interface PdfNativeContentStreamTransactionRequest {
   readonly pageXObjectUnmap?: PdfNativePageXObjectUnmapPlan;
   /** One verified Type0 subset installed through page-local Resources COW. */
   readonly pageFontExtensionMutation?: PdfNativePageFontExtensionMutationPlan;
+  /** Fonts the file already holds, named in the page's resources through
+   * the same clone-on-write; rides one plain write of the page's own text. */
+  readonly pageFontReference?: PdfNativePageFontReferencePlan;
   /**
    * One self-contained block appended to, or removed from, the tail of the
    * page's single content stream, with its resource installations.
@@ -891,6 +922,16 @@ export interface PdfNativePreparedPageFontExtensionMutation {
   readonly page: PdfNativePreparedIsolatedObject;
 }
 
+/** Where a page font reference's two objects stand in the candidate. */
+export interface PdfNativePreparedPageFontReference {
+  readonly fonts: readonly Readonly<{
+    resourceName: string;
+    font: Readonly<{ objectNumber: number; generation: number }>;
+  }>[];
+  readonly resources: PdfNativePreparedIsolatedObject;
+  readonly page: PdfNativePreparedIsolatedObject;
+}
+
 export interface PdfNativeReusablePageFontExtension {
   readonly sourceSha256: string;
   readonly pageNumber: number;
@@ -987,6 +1028,7 @@ export interface PdfNativePreparedContentStreamTransaction {
     resourceOwner: PdfNativePreparedIsolatedObject;
   }>;
   readonly pageFontExtensionMutation?: PdfNativePreparedPageFontExtensionMutation;
+  readonly pageFontReference?: PdfNativePreparedPageFontReference;
   readonly contentAppend?: PdfNativePreparedContentAppend;
   readonly pageContentConsolidation?: PdfNativePreparedPageContentConsolidation;
   /** Each structure element the revision writes after the content write's
@@ -7232,6 +7274,316 @@ async function formFontExtensionPlan(
     ...(additionalFontPackages ? { additionalFontPackages } : {}),
     form: formExpected,
   });
+}
+
+type PageFontReferenceAsk = Readonly<{
+  resourceName: string;
+  font: Readonly<{ objectNumber: number; generation: number }>;
+}>;
+
+/** A dictionary's entries as (key, value) texts, the white space round a
+ * value aside: what two spellings of one dictionary are compared by. */
+function dictionaryEntryTexts(dictionary: string): readonly (readonly [string, string])[] {
+  return topLevelDictionaryEntries(dictionary).map((entry) => [
+    entry.key,
+    dictionary.slice(entry.valueStart, entry.valueEnd).replace(/^[\x00\t\n\f\r ]+|[\x00\t\n\f\r ]+$/gu, ""),
+  ] as const);
+}
+
+/** `after` is `before` with the value of `key` alone another (or `key`
+ * alone put in): every other entry stands as it stood, in its order. */
+function dictionaryChangedInOneEntry(before: string, after: string, key: string): boolean {
+  const was = dictionaryEntryTexts(before);
+  const now = dictionaryEntryTexts(after);
+  return was.filter(([name]) => name === key).length <= 1 &&
+    now.filter(([name]) => name === key).length === 1 &&
+    JSON.stringify(was.filter(([name]) => name !== key)) === JSON.stringify(now.filter(([name]) => name !== key));
+}
+
+/**
+ * What a page font reference writes, derived from the source alone: the
+ * page's effective Resources as a new object, their Font category holding
+ * one entry more for each font and nothing else another, and the page
+ * naming that object, nothing else of it another. Every rule of the
+ * reference is held here, so the plan, the preparation and the reopened
+ * candidate are all judged by it:
+ *  - each font is an object the file holds now, a `/Type /Font` dictionary
+ *    (no stream), none of them the page, its resource owner or its Font
+ *    category, and none a font the page already names;
+ *  - each name is one a resource may carry, used once, and no name the
+ *    page's Font category writes (a repeated or badly spelled one too);
+ *  - the new Resources object takes the first number the file has free;
+ *  - the stream the write changes (`stream`) is one of this page's own, and
+ *    no other page draws it: a page that drew it too would select a font
+ *    it does not name.
+ */
+async function resolvePageFontReference(
+  sourceBytes: Uint8Array,
+  parsed: ParsedPdf,
+  pageNumber: number,
+  asked: readonly PageFontReferenceAsk[],
+  stream: Readonly<{ objectNumber: number; generation: number }>,
+): Promise<Readonly<{
+  plan: PdfNativePageFontReferencePlan;
+  page: PdfNativePageContentGraphInspection;
+  resourcesObject: Uint8Array;
+  revisedPage: Uint8Array;
+}>> {
+  if (!Array.isArray(asked) || asked.length < 1 || asked.length > MAX_MRAI_NATIVE_PAGE_FONT_REFERENCES) {
+    fail("invalid-request", "A page font reference names one to four fonts.");
+  }
+  const pages = await inspectMraiNativeDocumentPageGraphs(sourceBytes);
+  const page = pages[exactPositiveInteger(pageNumber, "font reference page number") - 1];
+  if (!page || page.pageNumber !== pageNumber || page.contentStreams.length < 1) {
+    fail("unsupported-document", "A page font reference requires a page with content.");
+  }
+  if (page.resourceAuthority.dictionaryKind === "absent-resources") {
+    fail("unsupported-document", "The page names no resources a font could be named in.");
+  }
+  if (
+    page.contentStreams.filter((item) => sameNativeObjectRef(item, stream)).length !== 1 ||
+    pages.some((other) => other.pageNumber !== page.pageNumber &&
+      other.contentStreams.some((item) => sameNativeObjectRef(item, stream)))
+  ) {
+    fail("unsupported-document", "Page font reference stream ownership is shared or ambiguous.");
+  }
+  const graph = await resolvePageFontGraph(sourceBytes, parsed, page);
+  const latest = latestEntries(parsed);
+  const resources = Object.freeze({
+    objectNumber: Math.max(parsed.current.size, Math.max(0, ...latest.keys()) + 1),
+    generation: 0 as const,
+  });
+  if (resources.objectNumber > 9_999_999_999) {
+    fail("unsupported-document", "Font resource object number is too large.");
+  }
+  const names = new Set<string>();
+  const targets = new Set<string>();
+  const fonts: PdfNativePageFontReferencePlan["fonts"][number][] = [];
+  for (const item of asked) {
+    assertObjectReference(item.font.objectNumber, item.font.generation);
+    const key = `${item.font.objectNumber}:${item.font.generation}`;
+    if (!PDF_RESOURCE_NAME.test(item.resourceName) || names.has(item.resourceName) || targets.has(key)) {
+      fail("invalid-request", "A page font reference names each font once, by a resource name.");
+    }
+    names.add(item.resourceName);
+    targets.add(key);
+    if (graph.names.has(item.resourceName) || graph.entries.some((entry) => entry.resourceName === item.resourceName)) {
+      fail("unsupported-document", "PDF Font resource name already exists.");
+    }
+    if (graph.entries.some((entry) => entry.inlineDictionary === undefined && sameNativeObjectRef(entry.target, item.font))) {
+      fail("unsupported-document", "The page already names the referenced font.");
+    }
+    const standing = latest.get(item.font.objectNumber);
+    if (!standing?.inUse || standing.generation !== item.font.generation) {
+      fail("precondition-mismatch", "A referenced font is not an object of the file.");
+    }
+    if (
+      sameNativeObjectRef(item.font, page.page) ||
+      sameNativeObjectRef(item.font, page.resourceAuthority.owner) ||
+      (graph.category.kind === "indirect" && sameNativeObjectRef(item.font, graph.category.target)) ||
+      page.contentStreams.some((content) => sameNativeObjectRef(content, item.font))
+    ) {
+      fail("invalid-request", "A referenced font is an object the page is written by.");
+    }
+    const object = parseIndirectObject(sourceBytes, parsed, item.font.objectNumber, item.font.generation);
+    const dictionary = object.streamBytes === null && object.streamStart === null
+      ? topLevelDictionarySource(asLatin1(object.bytes), "Referenced font")
+      : fail("unsupported-document", "A referenced font is not a font dictionary.");
+    const type = oneTopLevelDictionaryEntry(dictionary, "Type", "Referenced font Type", true);
+    if (!type || !/^\/Font$/u.test(dictionary.slice(type.valueStart, type.valueEnd).replace(/[\x00\t\n\f\r ]+/gu, ""))) {
+      fail("unsupported-document", "A referenced font is not a font dictionary.");
+    }
+    fonts.push(Object.freeze({
+      resourceName: item.resourceName,
+      font: Object.freeze({
+        objectNumber: item.font.objectNumber,
+        generation: item.font.generation,
+        expectedObjectSha256: await sha256PdfBytes(object.bytes),
+      }),
+    }));
+  }
+  let categoryDictionary = graph.categoryDictionary;
+  for (const item of fonts) {
+    categoryDictionary = rewriteDictionaryEntry(
+      categoryDictionary,
+      item.resourceName,
+      `${item.font.objectNumber} ${item.font.generation} R`,
+      "PDF Font resource name",
+    );
+  }
+  const resourcesDictionary = rewriteDictionaryEntry(
+    graph.resourcesDictionary,
+    "Font",
+    categoryDictionary,
+    "PDF Font category",
+  );
+  // Read again as written: the category holds its entries as they stood and
+  // these after them, and the Resources nothing else another.
+  const writtenCategory = oneTopLevelDictionaryEntry(resourcesDictionary, "Font", "PDF Font category");
+  if (
+    !writtenCategory ||
+    !dictionaryChangedInOneEntry(graph.resourcesDictionary, resourcesDictionary, "Font") ||
+    JSON.stringify(dictionaryEntryTexts(resourcesDictionary.slice(writtenCategory.valueStart, writtenCategory.valueEnd))) !==
+      JSON.stringify([
+        ...(graph.categoryDictionary === "<<>>" ? [] : dictionaryEntryTexts(graph.categoryDictionary)),
+        ...fonts.map((item) => [item.resourceName, `${item.font.objectNumber} ${item.font.generation} R`] as const),
+      ])
+  ) {
+    fail("unsupported-document", "The page's resources cannot take a font entry and stay as they are otherwise.");
+  }
+  const pageSource = asLatin1(graph.pageObject.bytes);
+  const revisedPageSource = rewriteDictionaryEntry(
+    pageSource,
+    "Resources",
+    `${resources.objectNumber} 0 R`,
+    "PDF page Resources",
+  );
+  const pageResources = oneTopLevelDictionaryEntry(revisedPageSource, "Resources", "PDF page Resources");
+  if (
+    !pageResources ||
+    !dictionaryChangedInOneEntry(pageSource, revisedPageSource, "Resources") ||
+    revisedPageSource.slice(pageResources.valueStart, pageResources.valueEnd).replace(/^[\x00\t\n\f\r ]+|[\x00\t\n\f\r ]+$/gu, "") !==
+      `${resources.objectNumber} 0 R`
+  ) {
+    fail("unsupported-document", "The page cannot name new resources and stay as it is otherwise.");
+  }
+  const revisedPageValue = latin1Bytes(revisedPageSource);
+  return Object.freeze({
+    plan: Object.freeze({
+      pageNumber: page.pageNumber,
+      page: Object.freeze({
+        objectNumber: page.page.objectNumber,
+        generation: page.page.generation,
+        expectedObjectSha256: await sha256PdfBytes(graph.pageObject.bytes),
+      }),
+      resourceOwner: Object.freeze({
+        objectNumber: page.resourceAuthority.owner.objectNumber,
+        generation: page.resourceAuthority.owner.generation,
+        expectedObjectSha256: await sha256PdfBytes(graph.resourceOwnerObject.bytes),
+        dictionaryKind: page.resourceAuthority.dictionaryKind,
+      }),
+      category: graph.category,
+      resources,
+      fonts: Object.freeze(fonts),
+    }),
+    page,
+    resourcesObject: latin1Bytes(`${resources.objectNumber} 0 obj\n${resourcesDictionary}\nendobj`),
+    revisedPage:
+      graph.pageObject.storage === "direct"
+        ? revisedPageValue
+        : concatBytes([
+            ascii(`${graph.pageObject.objectNumber} ${graph.pageObject.generation} obj\n`),
+            revisedPageValue,
+            ascii("\nendobj"),
+          ]),
+  });
+}
+
+/** One spelling of a reference plan, for comparing a request's with the one
+ * the source gives now. */
+function pageFontReferenceSummary(plan: PdfNativePageFontReferencePlan): string {
+  return JSON.stringify({
+    pageNumber: plan.pageNumber,
+    page: [plan.page.objectNumber, plan.page.generation, plan.page.expectedObjectSha256],
+    resourceOwner: [plan.resourceOwner.objectNumber, plan.resourceOwner.generation,
+      plan.resourceOwner.expectedObjectSha256, plan.resourceOwner.dictionaryKind],
+    category: [plan.category.kind, plan.category.expectedDictionarySha256,
+      ...(plan.category.kind === "indirect"
+        ? [plan.category.target.objectNumber, plan.category.target.generation, plan.category.target.expectedObjectSha256]
+        : [])],
+    resources: [plan.resources.objectNumber, plan.resources.generation],
+    fonts: plan.fonts.map((item) => [item.resourceName, item.font.objectNumber, item.font.generation,
+      item.font.expectedObjectSha256]),
+  });
+}
+
+/**
+ * The plan that names fonts of the file in one page's resources
+ * (PdfNativePageFontReferencePlan). Each takes a name of its own the page's
+ * Font category does not write: `MRF` and its object number, with a count
+ * after it where that name is taken.
+ */
+export async function planMraiNativePageFontReference(input: {
+  readonly sourceBytes: Uint8Array;
+  readonly pageNumber: number;
+  readonly fonts: readonly Readonly<{ objectNumber: number; generation: number }>[];
+  /** The content stream the write changes: one of the page's own that no
+   * other page draws, or the reference is refused. */
+  readonly stream: Readonly<{ objectNumber: number; generation: number }>;
+}): Promise<PdfNativePageFontReferencePlan> {
+  const parsed = parsePdf(input.sourceBytes, false);
+  const pages = await inspectMraiNativeDocumentPageGraphs(input.sourceBytes);
+  const page = pages[exactPositiveInteger(input.pageNumber, "font reference page number") - 1];
+  if (!page || page.pageNumber !== input.pageNumber) {
+    fail("invalid-request", "Selected PDF page is out of range.");
+  }
+  if (page.resourceAuthority.dictionaryKind === "absent-resources") {
+    fail("unsupported-document", "The page names no resources a font could be named in.");
+  }
+  const graph = await resolvePageFontGraph(input.sourceBytes, parsed, page);
+  const taken = new Set([...graph.names, ...graph.entries.map((entry) => entry.resourceName)]);
+  const asked = input.fonts.map((font) => {
+    const stem = `MRF${font.objectNumber}${font.generation ? `g${font.generation}` : ""}`;
+    let resourceName = stem;
+    for (let count = 2; taken.has(resourceName); count += 1) resourceName = `${stem}_${count}`;
+    taken.add(resourceName);
+    return Object.freeze({ resourceName, font });
+  });
+  return (await resolvePageFontReference(input.sourceBytes, parsed, input.pageNumber, asked, input.stream)).plan;
+}
+
+const documentFontReferences = new WeakMap<Uint8Array, Promise<readonly Readonly<{
+  font: Readonly<{ objectNumber: number; generation: number }>;
+  pages: readonly number[];
+}>[]>>();
+
+/**
+ * Every font object the file's pages name by reference in their Font
+ * resources, in the order of their object numbers, each with the pages that
+ * name it: where a face one page lacks is looked for in the rest of the
+ * file. A page whose resources cannot be read names none here. Read-only,
+ * once per source buffer.
+ */
+export function readMraiNativeDocumentFontReferences(sourceBytes: Uint8Array): Promise<readonly Readonly<{
+  font: Readonly<{ objectNumber: number; generation: number }>;
+  pages: readonly number[];
+}>[]> {
+  const known = documentFontReferences.get(sourceBytes);
+  if (known) return known;
+  const read = (async () => {
+    const parsed = parsePdf(sourceBytes, false);
+    const pages = await inspectMraiNativeDocumentPageGraphs(sourceBytes);
+    const found = new Map<string, { font: Readonly<{ objectNumber: number; generation: number }>; pages: number[] }>();
+    // (Pages that share or inherit one Resources object are read once.)
+    const byOwner = new Map<string, readonly PdfNativeReferenceDictionaryEntry[]>();
+    for (const page of pages) {
+      if (page.resourceAuthority.dictionaryKind === "absent-resources") continue;
+      const owner = `${page.resourceAuthority.owner.objectNumber}:${page.resourceAuthority.owner.generation}:${page.resourceAuthority.dictionaryKind}`;
+      let entries = byOwner.get(owner);
+      if (!entries) {
+        try {
+          entries = (await resolvePageFontGraph(sourceBytes, parsed, page)).entries;
+        } catch (error) {
+          if (!(error instanceof PdfNativeTransactionError)) throw error;
+          entries = Object.freeze([]);
+        }
+        byOwner.set(owner, entries);
+      }
+      for (const entry of entries) {
+        if (entry.inlineDictionary !== undefined) continue;
+        const key = `${entry.target.objectNumber}:${entry.target.generation}`;
+        const held = found.get(key) ?? { font: Object.freeze({ ...entry.target }), pages: [] };
+        if (held.pages.at(-1) !== page.pageNumber) held.pages.push(page.pageNumber);
+        found.set(key, held);
+      }
+    }
+    return Object.freeze([...found.values()]
+      .sort((left, right) => left.font.objectNumber - right.font.objectNumber || left.font.generation - right.font.generation)
+      .map((item) => Object.freeze({ font: item.font, pages: Object.freeze(item.pages) })));
+  })();
+  documentFontReferences.set(sourceBytes, read);
+  read.catch(() => { if (documentFontReferences.get(sourceBytes) === read) documentFontReferences.delete(sourceBytes); });
+  return read;
 }
 
 export async function inspectMraiNativeReusablePageFontExtension(input: {
@@ -16508,6 +16860,18 @@ function normalizeReplacementPieces(
 function normalizeRequest(
   request: PdfNativeContentStreamTransactionRequest,
 ): PdfNativeContentStreamTransactionRequest {
+  // A page font reference rides one plain write of the page's own text and
+  // nothing beside it: no other change of the page's resources (a font
+  // program installed in the same write among them), no joined page, no
+  // pieces, copies or rules. Said before any of those is read.
+  if (
+    request.pageFontReference &&
+    (request.pageExtGStateMutation || request.pageXObjectUnmap || request.pageFontExtensionMutation ||
+      request.formInstanceIsolation || request.contentAppend || request.pageContentConsolidation ||
+      request.replacementPieces || request.duplicateSpans || request.textRules)
+  ) {
+    fail("invalid-request", "A page font reference rides one plain write of the page's own text.");
+  }
   assertObjectReference(
     request.identity.objectNumber,
     request.identity.generation,
@@ -16608,6 +16972,7 @@ function normalizeRequest(
           mark.start < 0 || mark.end <= mark.start || mark.start > start || end > mark.end ||
           replacementPieces || duplicateSpans || textRules || request.formInstanceIsolation ||
           request.pageExtGStateMutation || request.pageXObjectUnmap || request.pageFontExtensionMutation ||
+          request.pageFontReference ||
           request.contentAppend || request.pageContentConsolidation || request.structActualText
         ) {
           fail("invalid-request", "A box mark wraps one plain write round its span.");
@@ -17064,6 +17429,79 @@ function normalizeRequest(
         : {}),
     });
   })();
+  const pageFontReference = (() => {
+    const reference = request.pageFontReference;
+    if (!reference) return undefined;
+    if (
+      !Number.isSafeInteger(reference.pageNumber) || reference.pageNumber < 1 || reference.pageNumber > 100_000 ||
+      !Array.isArray(reference.fonts) || reference.fonts.length < 1 ||
+      reference.fonts.length > MAX_MRAI_NATIVE_PAGE_FONT_REFERENCES ||
+      !Number.isSafeInteger(reference.resources?.objectNumber) || reference.resources.generation !== 0 ||
+      (reference.resourceOwner.dictionaryKind !== "nested-resources" &&
+        reference.resourceOwner.dictionaryKind !== "resource-dictionary") ||
+      (reference.category.kind !== "missing" && reference.category.kind !== "direct" &&
+        reference.category.kind !== "indirect")
+    ) {
+      fail("invalid-request", "Page font reference identity is invalid.");
+    }
+    assertObjectReference(reference.page.objectNumber, reference.page.generation);
+    assertObjectReference(reference.resourceOwner.objectNumber, reference.resourceOwner.generation);
+    assertObjectReference(reference.resources.objectNumber, 0);
+    const drawn = asLatin1(request.replacement);
+    const names = new Set<string>();
+    const fonts = reference.fonts.map((item) => {
+      assertObjectReference(item.font.objectNumber, item.font.generation);
+      if (
+        !PDF_RESOURCE_NAME.test(item.resourceName) || names.has(item.resourceName) ||
+        // (Each font named is one the write draws in: nothing is named for nothing.)
+        !new RegExp(`/${escapeRegex(item.resourceName)}[\\x00\\t\\n\\f\\r ]+[-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)[\\x00\\t\\n\\f\\r ]+Tf(?![A-Za-z0-9*'"])`, "u").test(drawn)
+      ) {
+        fail("invalid-request", "A page font reference names fonts its write draws in, each once.");
+      }
+      names.add(item.resourceName);
+      return Object.freeze({
+        resourceName: item.resourceName,
+        font: Object.freeze({
+          objectNumber: item.font.objectNumber,
+          generation: item.font.generation,
+          expectedObjectSha256: exactSha256(item.font.expectedObjectSha256, "referenced font"),
+        }),
+      });
+    });
+    return Object.freeze({
+      pageNumber: reference.pageNumber,
+      page: Object.freeze({
+        objectNumber: reference.page.objectNumber,
+        generation: reference.page.generation,
+        expectedObjectSha256: exactSha256(reference.page.expectedObjectSha256, "font reference page object"),
+      }),
+      resourceOwner: Object.freeze({
+        objectNumber: reference.resourceOwner.objectNumber,
+        generation: reference.resourceOwner.generation,
+        expectedObjectSha256: exactSha256(reference.resourceOwner.expectedObjectSha256, "font reference resource owner"),
+        dictionaryKind: reference.resourceOwner.dictionaryKind,
+      }),
+      category: reference.category.kind === "indirect"
+        ? Object.freeze({
+            kind: "indirect" as const,
+            expectedDictionarySha256: exactSha256(reference.category.expectedDictionarySha256, "Font dictionary"),
+            target: (() => {
+              assertObjectReference(reference.category.target.objectNumber, reference.category.target.generation);
+              return Object.freeze({
+                objectNumber: reference.category.target.objectNumber,
+                generation: reference.category.target.generation,
+                expectedObjectSha256: exactSha256(reference.category.target.expectedObjectSha256, "Font category object"),
+              });
+            })(),
+          })
+        : Object.freeze({
+            kind: reference.category.kind,
+            expectedDictionarySha256: exactSha256(reference.category.expectedDictionarySha256, "Font dictionary"),
+          }),
+      resources: Object.freeze({ objectNumber: reference.resources.objectNumber, generation: 0 as const }),
+      fonts: Object.freeze(fonts),
+    });
+  })();
   return Object.freeze({
     identity: Object.freeze({
       sourceSha256,
@@ -17087,6 +17525,7 @@ function normalizeRequest(
     ...(pageExtGStateMutation ? { pageExtGStateMutation } : {}),
     ...(pageXObjectUnmap ? { pageXObjectUnmap } : {}),
     ...(pageFontExtensionMutation ? { pageFontExtensionMutation } : {}),
+    ...(pageFontReference ? { pageFontReference } : {}),
     ...(contentAppend ? { contentAppend } : {}),
     ...(pageContentConsolidation ? { pageContentConsolidation } : {}),
     ...(structActualText ? { structActualText } : {}),
@@ -18602,6 +19041,83 @@ async function preparePageFontExtensionMutation(
             revision.generation === mutation.page.generation,
         )!,
       ),
+    }),
+  });
+}
+
+/**
+ * A write of the page's own text that draws in fonts the file holds and the
+ * page did not name (PdfNativePageFontReferencePlan): three objects in one
+ * revision -- the content stream, the page's Resources cloned as a new
+ * object with the entries, and the page naming it. The plan the request
+ * carries has to be the one the source gives now, to the digest.
+ */
+async function preparePageFontReference(
+  sourceBytes: Uint8Array,
+  parsed: ParsedPdf,
+  request: PdfNativeContentStreamTransactionRequest,
+  target: ParsedIndirectObject,
+  changedDecodedStream: Uint8Array,
+  changedStream: Uint8Array,
+): Promise<
+  Readonly<{
+    candidateBytes: Uint8Array;
+    changedObjectOffset: number;
+    incrementalXrefOffset: number;
+    changedObjectSha256: string;
+    changedStreamSha256: string;
+    changedDecodedStreamSha256: string;
+    pageFontReference: PdfNativePreparedPageFontReference;
+  }>
+> {
+  const reference = request.pageFontReference;
+  if (!reference) fail("invalid-request", "Page font reference is missing.");
+  const resolved = await resolvePageFontReference(sourceBytes, parsed, reference.pageNumber, reference.fonts, request.identity);
+  if (pageFontReferenceSummary(resolved.plan) !== pageFontReferenceSummary(reference)) {
+    fail("precondition-mismatch", "Page Font reference authority changed.");
+  }
+  const revisions: IncrementalObjectRevision[] = [
+    Object.freeze({
+      objectNumber: request.identity.objectNumber,
+      generation: request.identity.generation,
+      bytes: revisedContentStreamObject(sourceBytes, target, changedStream),
+    }),
+    Object.freeze({
+      objectNumber: reference.page.objectNumber,
+      generation: reference.page.generation,
+      bytes: resolved.revisedPage,
+    }),
+    Object.freeze({ ...resolved.plan.resources, bytes: resolved.resourcesObject }),
+  ].sort((left, right) => left.objectNumber - right.objectNumber || left.generation - right.generation);
+  const incremental = makeMultiObjectIncrementalRevision(sourceBytes, parsed.current, revisions, {
+    min: 3,
+    max: 3,
+    label: "Page Font reference",
+  });
+  const preparedObject = async (objectNumber: number, generation: number) => {
+    const revision = revisions.find((item) => item.objectNumber === objectNumber && item.generation === generation)!;
+    return Object.freeze({
+      objectNumber,
+      generation,
+      offset: incremental.offsets.get(`${objectNumber}:${generation}`)!,
+      sha256: await sha256PdfBytes(revision.bytes),
+    });
+  };
+  const targetPrepared = await preparedObject(request.identity.objectNumber, request.identity.generation);
+  return Object.freeze({
+    candidateBytes: incremental.candidateBytes,
+    changedObjectOffset: targetPrepared.offset,
+    incrementalXrefOffset: incremental.incrementalXrefOffset,
+    changedObjectSha256: targetPrepared.sha256,
+    changedStreamSha256: await sha256PdfBytes(changedStream),
+    changedDecodedStreamSha256: await sha256PdfBytes(changedDecodedStream),
+    pageFontReference: Object.freeze({
+      fonts: Object.freeze(reference.fonts.map((item) => Object.freeze({
+        resourceName: item.resourceName,
+        font: Object.freeze({ objectNumber: item.font.objectNumber, generation: item.font.generation }),
+      }))),
+      resources: await preparedObject(resolved.plan.resources.objectNumber, 0),
+      page: await preparedObject(reference.page.objectNumber, reference.page.generation),
     }),
   });
 }
@@ -20575,7 +21091,17 @@ async function prepareMraiNativeContentStreamTransactionOnce(
         changedStream,
       )
     : null;
-  if (consolidated && (isolated || pageExtGState || pageXObjectUnmap || contentAppend)) {
+  const pageFontReference = request.pageFontReference
+    ? await preparePageFontReference(
+        sourceBytes,
+        parsed,
+        request,
+        object,
+        changedDecodedStream,
+        changedStream,
+      )
+    : null;
+  if (consolidated && (isolated || pageExtGState || pageXObjectUnmap || contentAppend || pageFontReference)) {
     fail("invalid-request", "Page content consolidation cannot share another mutation transaction.");
   }
   // A font extension on a consolidated page writes the stream and the page
@@ -20593,7 +21119,7 @@ async function prepareMraiNativeContentStreamTransactionOnce(
     : null;
   const specialized =
     isolated ?? pageExtGState ?? pageXObjectUnmap ?? pageFontExtension ??
-    contentAppend ?? consolidation;
+    contentAppend ?? pageFontReference ?? consolidation;
   // A consolidation rides on its own preparation or on a page font
   // extension; a form font extension refuses one and carries none.
   const pageContentConsolidation =
@@ -20687,6 +21213,7 @@ async function prepareMraiNativeContentStreamTransactionOnce(
         }
       : {}),
     ...(contentAppend ? { contentAppend: contentAppend.contentAppend } : {}),
+    ...(pageFontReference ? { pageFontReference: pageFontReference.pageFontReference } : {}),
     ...(pageContentConsolidation ? { pageContentConsolidation } : {}),
     ...(structActualText ? { structActualText: structActualText.objects } : {}),
     ...(pdfaIdentification ? { pdfaIdentificationRemoval: pdfaIdentification.removal } : {}),
@@ -21090,6 +21617,92 @@ async function verifyMraiNativeContentStreamCandidateOnce(
       }
     }
   }
+  const fontReference = prepared.pageFontReference;
+  const fontReferenceRequest = prepared.request.pageFontReference;
+  if (Boolean(fontReference) !== Boolean(fontReferenceRequest)) {
+    fail("verification-failed", "Page Font reference receipt is inconsistent.");
+  }
+  if (fontReference && fontReferenceRequest) {
+    // What the source gives this reference, derived again from the source:
+    // the reopened candidate holds exactly those two objects, the page's
+    // Resources with these entries more and nothing else another, and the
+    // page naming them and nothing else of it another.
+    const expected = await resolvePageFontReference(
+      sourceBytes,
+      parsePdf(sourceBytes, false),
+      fontReferenceRequest.pageNumber,
+      fontReferenceRequest.fonts,
+      prepared.request.identity,
+    );
+    if (
+      pageFontReferenceSummary(expected.plan) !== pageFontReferenceSummary(fontReferenceRequest) ||
+      JSON.stringify(fontReference.fonts) !== JSON.stringify(fontReferenceRequest.fonts.map((item) => ({
+        resourceName: item.resourceName,
+        font: { objectNumber: item.font.objectNumber, generation: item.font.generation },
+      }))) ||
+      fontReference.resources.objectNumber !== expected.plan.resources.objectNumber ||
+      fontReference.resources.generation !== 0 ||
+      fontReference.resources.sha256 !== (await sha256PdfBytes(expected.resourcesObject)) ||
+      fontReference.page.objectNumber !== fontReferenceRequest.page.objectNumber ||
+      fontReference.page.generation !== fontReferenceRequest.page.generation ||
+      fontReference.page.sha256 !== (await sha256PdfBytes(expected.revisedPage))
+    ) {
+      fail("verification-failed", "Page Font reference identity changed.");
+    }
+    for (const item of [fontReference.resources, fontReference.page]) {
+      const entry = reopened.current.entries.get(item.objectNumber);
+      if (!entry?.inUse || entry.generation !== item.generation || entry.offset !== item.offset) {
+        fail("verification-failed", "Page Font reference incremental ownership is invalid.");
+      }
+      const object = parseIndirectObject(prepared.candidateBytes, reopened, item.objectNumber, item.generation);
+      if ((await sha256PdfBytes(object.bytes)) !== item.sha256) {
+        fail("verification-failed", "Page Font reference object failed deterministic reopen verification.");
+      }
+    }
+    const pages = await inspectMraiNativeDocumentPageGraphs(prepared.candidateBytes);
+    const page = pages[fontReferenceRequest.pageNumber - 1];
+    if (
+      !page ||
+      page.pageNumber !== fontReferenceRequest.pageNumber ||
+      page.resourceAuthority.owner.objectNumber !== fontReference.resources.objectNumber ||
+      page.resourceAuthority.owner.generation !== 0 ||
+      page.resourceAuthority.dictionaryKind !== "resource-dictionary"
+    ) {
+      fail("verification-failed", "Reopened page Font owner is inconsistent.");
+    }
+    const mappings = parseMraiNativeDirectFontDictionaryEntries(
+      parseIndirectObject(prepared.candidateBytes, reopened, fontReference.resources.objectNumber, 0).bytes,
+      "resource-dictionary",
+      "Reopened page",
+    );
+    for (const item of fontReferenceRequest.fonts) {
+      const named = mappings.filter((entry) => entry.resourceName === item.resourceName);
+      if (
+        named.length !== 1 || named[0].inlineDictionary !== undefined ||
+        named[0].target.objectNumber !== item.font.objectNumber ||
+        named[0].target.generation !== item.font.generation
+      ) {
+        fail("verification-failed", "Reopened page Font mapping is inconsistent.");
+      }
+    }
+    // Nothing the reference reads was written: each font, the dictionary the
+    // page's resources came from and its Font category stand as they stood.
+    const stands = [
+      ...fontReferenceRequest.fonts.map((item) => item.font),
+      ...(sameNativeObjectRef(fontReferenceRequest.resourceOwner, fontReferenceRequest.page)
+        ? [] : [fontReferenceRequest.resourceOwner]),
+      ...(fontReferenceRequest.category.kind === "indirect" ? [fontReferenceRequest.category.target] : []),
+    ];
+    for (const item of stands) {
+      const object = parseIndirectObject(prepared.candidateBytes, reopened, item.objectNumber, item.generation);
+      if (
+        reopened.current.entries.has(item.objectNumber) ||
+        (await sha256PdfBytes(object.bytes)) !== item.expectedObjectSha256
+      ) {
+        fail("verification-failed", "An object a page Font reference only reads was written.");
+      }
+    }
+  }
   const appendReceipt = prepared.contentAppend;
   const appendRequest = prepared.request.contentAppend;
   if (Boolean(appendReceipt) !== Boolean(appendRequest)) {
@@ -21286,6 +21899,9 @@ async function verifyMraiNativeContentStreamCandidateOnce(
               revision.objectNumber === item.objectNumber &&
               revision.generation === item.generation,
           )) &&
+        (!fontReference ||
+          !(fontReference.page.objectNumber === item.objectNumber &&
+            fontReference.page.generation === item.generation)) &&
         (!consolidation ||
           !(consolidation.page.objectNumber === item.objectNumber &&
             consolidation.page.generation === item.generation)),

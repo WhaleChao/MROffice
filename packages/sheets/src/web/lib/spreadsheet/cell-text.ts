@@ -106,6 +106,27 @@ export function cellLineShown(text: string, wrapText: boolean | undefined): stri
   return wrapText === true || text.length <= EXCEL_SHOWN_LINE_CHARACTERS ? text : text.slice(0, EXCEL_SHOWN_LINE_CHARACTERS);
 }
 
+/** The faces' missing glyph (.notdef) advances, em: GDI's default character. */
+const EXCEL_NOTDEF_EM: Readonly<Record<string, number>> = {
+  arial: 0.75, "arial nova": 0.75, calibri: 0.5068359375, "times new roman": 0.77783203125, "courier new": 0.60009765625,
+};
+
+/**
+ * How far the line breaks of a one-line text (Wrap Text stated off) reach
+ * past its drawn characters, em: Windows Excel draws them as nothing but
+ * measures each as the face's missing glyph when it lays out the print range,
+ * the ones the text ends with too (lookwin p236: R462-X23's Info A3, bold
+ * Arial 12 ending in four breaks 14 pt short of D, prints a band of D with
+ * one trailing break and not with none). A face not listed reaches as
+ * Arial's. The API's writer measures the face's own (sheet_extent).
+ */
+export function excelOneLineBreaksReachEm(text: string, family: string | undefined): number {
+  let breaks = 0;
+  for (let index = text.indexOf("\n"); index >= 0; index = text.indexOf("\n", index + 1)) breaks += 1;
+  if (!breaks) return 0;
+  return breaks * (EXCEL_NOTDEF_EM[(family ?? "").trim().toLowerCase()] ?? EXCEL_NOTDEF_EM.arial ?? 0.75);
+}
+
 export function cellTextOnOneLine<T>(text: T, wrapText: boolean | undefined): T {
   if (wrapText !== false || typeof text !== "string" || !/[\r\n]/.test(text)) return text;
   return text.replace(/[\r\n]/g, "") as T;

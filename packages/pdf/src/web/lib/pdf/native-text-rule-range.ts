@@ -205,3 +205,29 @@ export function pdfNativeBoxTextRuleDecorations(proof: Readonly<{
     strikethrough: proof.textRules.strikethrough ? PDF_NATIVE_TEXT_RULE_WHOLE : null,
   });
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function pdfNativeOpenBoxTextRules(
+  proof: Parameters<typeof pdfNativeBoxTextRuleDecorations>[0],
+  beside: Readonly<{ underline: PdfNativeTextRuleRange | null; strikethrough: PdfNativeTextRuleRange | null }>,
+): Readonly<{ underline: PdfNativeTextRuleRange | null; strikethrough: PdfNativeTextRuleRange | null }> {
+  const stated = pdfNativeBoxTextRuleDecorations(proof);
+  return Object.freeze({
+    underline: stated?.underline ? PDF_NATIVE_TEXT_RULE_WHOLE : beside.underline,
+    strikethrough: stated?.strikethrough ? PDF_NATIVE_TEXT_RULE_WHOLE : beside.strikethrough,
+  });
+}

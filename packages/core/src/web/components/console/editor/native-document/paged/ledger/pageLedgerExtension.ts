@@ -110,6 +110,7 @@ import {
   sheetBlockElements,
   sheetProjectsFootZone,
   type LedgerBuild,
+  type LogicalBlock,
   refuseTableRowCut,
   holdRecutRows,
   encodedBlockMeasure,
@@ -144,7 +145,8 @@ import { footnotesAllowProgressiveLayout } from "../footnoteRefs";
 import { withRootMeasurementSlot } from "../renderedTextHead";
 import { askKatexFacesIfFormulas, createLedgerTypesetMath, katexFaceNews } from "./ledgerTypesetMath";
 import { projectionCoversHorizon, setMeasureHorizon, setSheetUnread, sheetsWithinMeasureHorizon , forgetDetachedHorizonSheets } from "../measureHorizon";
-import type { LedgerPage, LedgerPlan } from "./ledgerTypes";
+import type { LedgerCut, LedgerCutOptions, LedgerPage, LedgerPlan, LedgerSplitOracle } from "./ledgerTypes";
+import { planWithFootZones } from "./ledgerFootZonePlan";
 import { LedgerPhysicalRefusals } from "./ledgerRefusals";
 import { faceArrivalBound, faceArrivalSince } from "./ledgerFaceScan";
 import { editorFontFamilies, facesStartedByProbe, facesUsedBy, fontFamilyNames, loadFacesTheTextDraws, loadedFaceRanges, rangesDrawNarrowText, textDrawsCodePointIn } from "./ledgerFontRanges";
@@ -189,6 +191,9 @@ export interface PageLedgerOptions {
  * tails it estimated. A cycle here means a render/ledger disagreement, which
  * is reported, not hidden. */
 const MAX_PASSES = 24;
+/** Passes a block drawn anew without a transaction (`drawnHeightChanged`)
+ * may start after one change of the document. */
+const DRAWN_CHANGE_PASSES = 8;
 
 
 
@@ -320,6 +325,13 @@ export function seamWanderStops(view: EditorView): boolean {
  * (an A/B of one build). */
 function seamRecutPutBackHeld(view: EditorView): boolean {
   return (view.dom.ownerDocument.defaultView as (Window & { __docsSeamRecutPutBackHeld?: boolean }) | null)?.__docsSeamRecutPutBackHeld === true;
+}
+
+/** `window.__dqc2BandCreditOn = true` (A/B): a page whose body ends at a
+ * header or footer object (bandBodyFloorPx) still gives its last line the
+ * page-bottom Auto leading credit, past the object's top, as before. */
+function bandCreditStaysOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __dqc2BandCreditOn?: boolean }) | null)?.__dqc2BandCreditOn === true;
 }
 
 /** `window.__docsSectionColumnPage = false` reads a section's capacity on a
@@ -1412,6 +1424,40 @@ interface LedgerPlanning {
   noGeometry: boolean;
 }
 
+/** Column sheets up to which a document's note zones are read from the plan. */
+const FOOT_ZONE_PLAN_MAX_SHEETS = 40;
+
+/** `window.__docsFootZonesFromLayout = true` (A/B): a column page's footnote
+ * zone is read from where the fragments stand, as before, not from the plan. */
+function footZonesFromLayout(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __docsFootZonesFromLayout?: boolean }) | null)?.__docsFootZonesFromLayout === true;
+}
+
+/**
+ * Whether a zone note's reference stands before a planned cut of its block.
+ * A text cut says where it falls. Any other (a table's rows, a list's items)
+ * is held against the fragments as they stand: before a seam the cut is, or
+ * in a fragment up to the one the cut is planned in.
+ */
+export function zoneNoteBeforeCut(
+  block: LogicalBlock | undefined,
+  note: { logicalOffset: number; partIndex: number },
+  cut: LedgerCut,
+): boolean {
+  const payload = cut.payload as { logicalOffset?: unknown; partIndex?: unknown } | null | undefined;
+  if (cut.kind === "text") {
+    if (typeof payload?.logicalOffset === "number") return note.logicalOffset < payload.logicalOffset;
+    const at = /^text:(\d+)$/.exec(cut.key);
+    if (at) return note.logicalOffset < Number(at[1]);
+  }
+  if (block) {
+    for (let seam = 0; seam < block.parts.length - 1; seam += 1) {
+      if (existingSeamKey(block, seam) === cut.key) return note.partIndex <= seam;
+    }
+  }
+  return typeof payload?.partIndex === "number" ? note.partIndex <= payload.partIndex : true;
+}
+
 /** Plan one pass from its build: scope, planner, the composed plan. */
 function planLedgerPass(
   view: EditorView,
@@ -1460,21 +1506,124 @@ function planLedgerPass(
     });
     if (cache) cache.lastClear = null;
   }
-  const planWith = (source: LedgerBuild) =>
-    planLedgerPages(source.atoms, {
+  const standingCapacity = (index: number): number =>
+    Math.max(0, (capacities[Math.min(index, capacities.length - 1)] ?? capacities[capacities.length - 1] ?? 0) - shortOf(index));
+  const planPages = (
+    source: LedgerBuild,
+    capacityFor: (index: number) => number,
+    oracle: LedgerSplitOracle = source.oracle,
+    /** The plan may end at a page this says is past what is asked of it. */
+    endsAt: ((page: number) => boolean) | null = null,
+  ) => {
+    const own = scoped && source === build ? scoped : null;
+    // (A plan made more than once in a pass says where it resynced each time.)
+    if (own) own.resyncLeaves = [];
+    const scopedStop = own
+      ? scopedStopAt(build, own, currentStarts, carriedInto, hasNotes && resyncsOnlyLaidOut(view) ? pagesLaidOut(view) : null)
+      : null;
+    const stopAt: LedgerCutOptions["stopAt"] = scopedStop || endsAt
+      ? (page, atom, from) => scopedStop?.(page, atom, from) ?? (endsAt?.(page) ? "yield" : null)
+      : undefined;
+    return planLedgerPages(source.atoms, {
       ...(breakBefore?.size ? { breakBefore } : {}),
       noteContinuationChromePx: noteChromePx,
       noteContinuationMinBodyPx: notePitchPx * 2,
-      capacityFor: (index) => Math.max(0, (capacities[Math.min(index, capacities.length - 1)] ?? capacities[capacities.length - 1] ?? 0) - shortOf(index)),
+      capacityFor,
       sectionCapacityFor: sectionCapacityForPlan(source, sectionColumnPage(view)),
       columnsFor: (index) => source.columns[Math.min(index, source.columns.length - 1)] ?? 1,
       columnBandTopsFor: (index) => source.bandTops?.[index] ?? null,
+      ...(bandCreditStaysOff(view) ? {} : {
+        footCreditBlockedFor: (index: number) => source.bandFloored?.[Math.min(index, (source.bandFloored?.length ?? 1) - 1)] === true,
+      }),
       preserveLeadingSpace: (index, forced, tail) => (index < leading.length ? leading[index] : index === 0 || (forced && !tail)),
       gapPx: view.state.doc.attrs?.wordSpacingAddsUp === true ? ledgerAddedGapPx : ledgerGapPx,
-      oracle: source.oracle,
+      oracle,
       keepChainBacksUp: (normalizeWordCompatibilityMode(view.state.doc.attrs.wordCompatibilityMode) ?? 0) >= 15,
-      ...(scoped && source === build ? { start: hasNotes && notesCarryLeadingAfter(view) ? scoped.start : { ...scoped.start, leadingAfterPx: 0 }, stopAt: scopedStopAt(build, scoped, currentStarts, carriedInto, hasNotes && resyncsOnlyLaidOut(view) ? pagesLaidOut(view) : null) } : {}),
+      ...(own ? { start: hasNotes && notesCarryLeadingAfter(view) ? own.start : { ...own.start, leadingAfterPx: 0 } } : {}),
+      ...(stopAt ? { stopAt } : {}),
     });
+  };
+  // A column page's note zone comes off its capacity. Read from the plan
+  // (ledgerFootZonePlan), not from where the fragments stand: the capacity no
+  // longer follows the layout it is used to make (R372-D01).
+  const planWith = (source: LedgerBuild) => {
+    const footZones = footZonesFromLayout(view) ? null : source.footZones ?? null;
+    const zoneSheetCount = footZones ? footZones.zoneSheets.filter(Boolean).length : 0;
+    // Each try plans the document from its start as far as the page it is
+    // settling (ledgerFootZonePlan): a long document of column pages keeps
+    // the zones as they stand until a page can be planned again by itself.
+    // By the sheets, so every pass of a document reads its zones the same
+    // way. No note on a column page: nothing to find.
+    if (!footZones || footZones.notes.size === 0 || zoneSheetCount > FOOT_ZONE_PLAN_MAX_SHEETS) return planPages(source, standingCapacity);
+    const last = footZones.zoneSheets.length - 1;
+    const sheetOf = (page: number): number => Math.min(page, last);
+    const tZones = performance.now();
+    // The pages above the one being tried are planned the same every time:
+    // within this pass a cut asked for twice is the cut it was.
+    const asked = new Map<string, LedgerCut | null>();
+    const r = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : String(value));
+    const oracle: LedgerSplitOracle = {
+      planHead(request) {
+        const key = `${request.atom.index}|${r(request.availablePx)}|${r(request.fullCapacityPx)}|${request.pageEmpty ? 1 : 0}|${request.from ? `${request.from.key}@${r(request.from.headHeightPx)}@${r(request.from.tailHeightPx)}` : "-"}`;
+        const known = asked.get(key);
+        if (known !== undefined) return known;
+        const answer = source.oracle.planHead(request);
+        asked.set(key, answer);
+        return answer;
+      },
+    };
+    const forcedHead = source.oracle.forcedHead?.bind(source.oracle);
+    if (forcedHead) oracle.forcedHead = forcedHead;
+    const zoned = planWithFootZones({
+      plan: (zoneOf, through) => {
+        let truncated = false;
+        const plan = planPages(source, (index) => {
+          const sheet = sheetOf(index);
+          if (!footZones.zoneSheets[sheet]) return standingCapacity(index);
+          return Math.max(0, (footZones.baseCapacities[sheet] ?? 0) - zoneOf(index) * (source.columns[sheet] ?? 1) - shortOf(index));
+        }, oracle, (page) => {
+          if (page > through) truncated = true;
+          return truncated;
+        });
+        return { plan, truncated };
+      },
+      firstPage: scoped && source === build ? scoped.start.page : 0,
+      zonePage: (page) => footZones.zoneSheets[sheetOf(page)] === true,
+      nextZonePage: (from) => {
+        for (let page = from; page <= last; page += 1) if (footZones.zoneSheets[page]) return page;
+        return footZones.zoneSheets[last] ? Math.max(from, last + 1) : null;
+      },
+      notesOf: (atom) => footZones.notes.get(atom),
+      noteBeforeCut: (atom, note, cut) => zoneNoteBeforeCut(source.logical[atom], note, cut),
+      zonePx: (page, notes) => {
+        const sheet = sheetOf(page);
+        return projectedFootZonesPx(
+          1,
+          notes.map(() => 0),
+          notes.map((note) => ({
+            totalPx: note.heightPx > 0 ? note.heightPx + note.chromePx : 0,
+            chromePx: note.chromePx,
+            pitches: new Map([[note.id, note.pitchPx]]),
+          })),
+          [(footZones.baseCapacities[sheet] ?? 0) / Math.max(1, source.columns[sheet] ?? 1)],
+          [footZones.noteColumns[sheet] ?? 1],
+        )[0] ?? 0;
+      },
+    });
+    if (ledgerTraceEnabled(view)) {
+      traceLedgerPass(view, {
+        footZonePlan: {
+          plans: zoned.plans,
+          settled: zoned.settled,
+          ms: Math.round(performance.now() - tZones),
+          cuts: asked.size,
+          zones: [...zoned.zones.entries()].filter(([, px]) => px > 0).map(([page, px]) => [page + 1, Math.round(px * 100) / 100]),
+        },
+      });
+    }
+    // The zones would not settle: as before, the zones where the fragments stand.
+    return zoned.settled ? zoned.plan : planPages(source, standingCapacity);
+  };
   // A whole-document plan reads every atom: one left unmeasured voids it
   // before it is even made.
   if (!scoped && build.horizon && build.horizon.firstEstimated !== null) {
@@ -3111,11 +3260,49 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
           // Page-by-page reuse of the measurements: a pass reads again only
           // the sheets that changed. A picture that finished loading changed
           // its sheet without a transaction, so it starts a cycle of its own.
+          // A block a pass measured, drawn taller or shorter since without a
+          // transaction the ledger saw (a projection's decorations put back
+          // in its own frame, a field result or a node view's text drawn
+          // late): the pass that would read it again never came, and what
+          // the block had pushed to the next page stayed there when it
+          // shrank (R417-D03 page 40: a cell's tab stops dropped by a
+          // re-cut, then put back). Read here, once a frame, the sheets it
+          // changed are laid out again; the pass budget and the cycle watch
+          // stay as they are, and at most DRAWN_CHANGE_PASSES such passes
+          // follow one change of the document.
+          // `window.__docsDrawnChangeWatchOff = true` turns it off (A/B).
+          let drawnChangeFrame = 0;
+          let drawnChangePasses = 0;
+          const drawnChangeSheets = new Set<HTMLElement>();
+          const drawnChangeWatchOff = () =>
+            (win as (Window & { __docsDrawnChangeWatchOff?: boolean }) | null)?.__docsDrawnChangeWatchOff === true;
+          const onMeasuredSheetChanged = (changed: readonly HTMLElement[]) => {
+            if (destroyed || !win || drawnChangePasses >= DRAWN_CHANGE_PASSES || drawnChangeWatchOff()) return;
+            for (const sheet of changed) drawnChangeSheets.add(sheet);
+            if (drawnChangeFrame) return;
+            drawnChangeFrame = win.requestAnimationFrame(() => {
+              drawnChangeFrame = 0;
+              const sheets = [...drawnChangeSheets];
+              drawnChangeSheets.clear();
+              // A pass already coming reads the changed sheets itself; a
+              // ledger stopped on a cycle stays stopped.
+              if (destroyed || stalled || raf || turnAsked || editTimer !== undefined || selfDispatching) return;
+              if (drawnChangePasses >= DRAWN_CHANGE_PASSES) return;
+              const moved = sheets.filter((sheet) => sheet.isConnected && measureCache.drawnHeightChanged(sheet));
+              if (moved.length === 0) return;
+              drawnChangePasses += 1;
+              if (ledgerTraceEnabled(editorView)) {
+                const all = sheetsOf(editorView.dom);
+                traceLedgerPass(editorView, { drawnChange: { sheets: moved.map((sheet) => all.indexOf(sheet)), passes: drawnChangePasses } });
+              }
+              schedule();
+            });
+          };
           const measureCache = new LedgerMeasureCache(editorView.dom, () => {
             passes = 0;
             stalled = false;
             schedule();
-          });
+          }, onMeasuredSheetChanged);
           // WebKit: the sheets far from the reader that this ledger measured
           // as they stand leave the render tree (sheetDormancy).
           const dormancy = createSheetDormancy(editorView, {
@@ -4694,6 +4881,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
                 }
                 // A foreign change (typing, AI apply, undo) starts a fresh cycle.
                 passes = 0;
+                drawnChangePasses = 0;
                 backgroundPasses = 0;
                 splitPasses = 0;
                 clearRefusedColumnCuts(view);
@@ -4748,6 +4936,7 @@ export const PageLedger = Extension.create<PageLedgerOptions>({
               measureCache.disconnect();
               typesetMath.dispose();
               if (raf && win) win.cancelAnimationFrame(raf);
+              if (drawnChangeFrame && win) win.cancelAnimationFrame(drawnChangeFrame);
               fonts?.removeEventListener("loadingdone", onFontsLoaded);
               win?.removeEventListener("mrn-page-rebalance", onNudge);
               editorView.dom.removeEventListener("compositionend", onComposition);

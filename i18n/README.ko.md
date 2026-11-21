@@ -4,7 +4,7 @@
 
 <p align="center"><b>MR Office의 오픈 소스 편집기: 문서, 스프레드시트, 프레젠테이션, PDF, 필기, 코드가 브라우저에서 실행됩니다.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/ko"><b>▶ 라이브 데모 체험 (설치 불필요)</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Releases에서 MR Office 다운로드</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/ko"><b>▶ 온라인 체험</b></a> · <a href="https://mroffice.ai/ko/office/download"><b>⬇ 다운로드</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/ko/developers">🧑‍💻 개발자</a> · <a href="https://mroffice.ai/ko/developers/embed">🧩 임베드</a> · <a href="https://mroffice.ai/ko/developers/mcp">🤖 AI 앱용 MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/ko/developers/oauth">🔑 MR Office로 로그인</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office는 노트, AI, 실제 파일을 한곳에 모은 작업 공간입니다. 이 저장소는 그 편집기의 소스 코드를 공개합니다. MR Office에서 실행되는 것과 같은 편집기이며, 직접 빌드하고 실행하고 포함할 수 있습니다. 이것은 오픈 소스 편집기이지 완전한 오픈 소스 Office 제품군이 아닙니다. Microsoft Office 파일의 읽기와 쓰기는 MR Office가 제공합니다(아래 참고).
+
+## 개발자용
+
+개발자에게 필요한 모든 것은 **[MR Office Developers](https://mroffice.ai/ko/developers)**에 있습니다. 셀프 서비스이며 신청이 필요 없습니다. MR Office 계정으로 로그인하고 바로 시작하세요.
+
+### 웹 앱에 편집기 임베드하기(권장)
+
+편집기는 MR Office가 호스팅합니다. 서버가 짧게 유효한 세션 토큰에 서명하면 페이지가 그것으로 편집기를 엽니다. 실제 Word, Excel, PowerPoint, PDF 파일(.docx, .xlsx, .pptx, .pdf)을 편집하며 공동 편집, 업로드, 모든 내보내기 형식, 인쇄를 지원하고, 저장된 파일은 서명된 콜백으로 서버에 전달됩니다. 무료 플랜: localhost 개발 월 1,000회, 운영 도메인 월 100회, 앱 최대 2개. 호스팅되는 상용 서비스이므로 여러분의 앱은 이 저장소의 AGPL 라이선스에 구속되지 않습니다.
+
+1. 프로젝트 폴더에서 `npx mroffice-embed init`를 실행하세요(또는 개발자 콘솔에서 앱을 만드세요). 브라우저에서 "허용"을 한 번 누르면 앱의 키가 `.env.local` / `.env`에 기록됩니다.
+2. 서버는 `mroffice-embed/server`의 `createSessionToken`으로 세션 토큰을 발급합니다. 시크릿 키는 서버를 떠나지 않습니다.
+3. 페이지는 `mroffice-embed`의 `open()`(또는 스크립트 `https://mroffice.ai/embed/v1/embed.js`)으로 편집기를 엽니다.
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[임베드 가이드](https://mroffice.ai/ko/developers/embed) · [Markdown 가이드(AI 에이전트용)](https://mroffice.ai/developers/embed.md) · [가격 및 한도](https://mroffice.ai/ko/developers/pricing) · [개발자 콘솔](https://mroffice.ai/ko/developers/console) · [라이브 데모](https://mroffice.ai/ko/developers/embed/demo)
+
+### AI 앱: MCP 서버
+
+AI 앱은 MCP 서버를 통해 실제 MR Office 편집기에서 문서를 열고, 읽고, 편집하고, 내보낼 수 있습니다. 호스팅 엔드포인트 `https://mcp.mroffice.ai/mcp`(MR Office 계정으로 로그인, 키 불필요)에 연결하거나 내 컴퓨터에서 `npx -y mroffice-mcp`를 실행하세요. 소스는 `apps/mcp`에 있습니다. [MCP 가이드 →](https://mroffice.ai/ko/developers/mcp)
+
+### MR Office로 로그인(OAuth)
+
+MR Office는 OAuth 2.1 인가 서버입니다(PKCE, 클라이언트 ID 메타데이터 문서, 동적 등록). 여러분의 앱은 사용자를 MR Office 계정으로 로그인시키고 허용된 범위 안에서 동작할 수 있습니다. [OAuth 가이드 →](https://mroffice.ai/ko/developers/oauth)
+
+### 오픈 소스 편집기 직접 호스팅하기
+
+이 저장소의 편집기 6개는 AGPL-3.0에 따라 여러분의 제품에 넣을 수 있습니다. 수정한 버전을 네트워크로 제공한다면 전체 소스 코드를 제공하고 "MR Office" 표기(NOTICE.md)를 유지해야 합니다. 자체 형식, CSV, HTML, Markdown, PDF를 엽니다. Word, Excel, PowerPoint 파일은 오픈 소스 편집기에 포함되지 않습니다(위의 호스팅 임베드에서 지원). 상용 라이선스는 support@mr-note.com으로 문의하세요. [오픈 소스 가이드 →](https://mroffice.ai/ko/developers/open-source)
+
+npm 패키지를 `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`라는 이름으로 준비 중입니다. 게시되기 전까지는 이 저장소에서 편집기를 빌드하세요(아래 참고).
 
 ## 편집기
 
@@ -75,7 +119,7 @@ MR Office 데스크톱 앱은 무료이며 이 편집기들과 전체 서비스�
 - SmartArt 편집
 - PDF 편집 내용을 파일에 다시 저장
 
-**[Releases에서 MR Office 다운로드 →](https://github.com/XinaTian/MROffice/releases)** · [또는 mroffice.ai에서](https://mroffice.ai)
+**[MR Office 다운로드(무료) →](https://mroffice.ai/ko/office/download)**
 
 ### Word, Excel, PowerPoint, PDF 파일
 

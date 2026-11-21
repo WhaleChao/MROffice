@@ -72,7 +72,13 @@ interface FragmentEntry {
   node: PmNode;
   sheet: HTMLElement;
   measure: LedgerFragmentMeasure;
+  /** The element's drawn height when it was measured (its border box, as
+   * the browser lays it out): what `drawnHeightChanged` holds it against. */
+  drawnPx: number;
 }
+
+/** A drawn block whose height moved by less than this did not change. */
+const DRAWN_HEIGHT_TOLERANCE_PX = 0.5;
 
 interface EdgeEntry {
   node: PmNode;
@@ -199,6 +205,11 @@ export class LedgerMeasureCache {
     private readonly root: HTMLElement,
     /** A resized media element: the layout changed without a transaction. */
     private readonly onMediaResize?: () => void,
+    /** Sheets a pass had measured that changed since by something other
+     * than a pass (a decoration a projection put back in its own frame, a
+     * node view's text drawn late): `drawnHeightChanged` tells whether
+     * the change moved a block. */
+    private readonly onMeasuredSheetChanged?: (sheets: readonly HTMLElement[]) => void,
   ) {
     const Observer = root.ownerDocument.defaultView?.MutationObserver;
     if (Observer) {
@@ -272,7 +283,23 @@ export class LedgerMeasureCache {
   }
 
   storeFragment(dom: HTMLElement, node: PmNode, sheet: HTMLElement, measure: LedgerFragmentMeasure): void {
-    this.fragments.set(dom, { node, sheet, measure });
+    this.fragments.set(dom, { node, sheet, measure, drawnPx: dom.getBoundingClientRect().height });
+  }
+
+  /**
+   * Whether a block of `sheet` is now drawn taller or shorter than when a
+   * pass measured it. Only the sheet's own blocks with a measurement of
+   * this sheet count: a block a pass has not read yet is read by the pass
+   * that comes for it anyway.
+   */
+  drawnHeightChanged(sheet: HTMLElement): boolean {
+    for (const child of Array.from(sheet.children)) {
+      if (!(child instanceof HTMLElement)) continue;
+      const entry = this.fragments.get(child);
+      if (!entry || entry.sheet !== sheet) continue;
+      if (Math.abs(child.getBoundingClientRect().height - entry.drawnPx) > DRAWN_HEIGHT_TOLERANCE_PX) return true;
+    }
+    return false;
   }
 
   /** The kept sheet-edge probe of a block (its own margins and its collapse
@@ -443,6 +470,11 @@ export class LedgerMeasureCache {
     let objectRedrawn = false;
     const drawings = new Map<Element, Element | null>();
     const marked = new Set<Node>();
+    // Sheets a pass had measured, changed by something other than a pass.
+    const measuredChanged = own || !this.onMeasuredSheetChanged ? null : new Set<HTMLElement>();
+    const noteMeasured = (sheet: HTMLElement | null) => {
+      if (sheet && measuredChanged && this.settledSheets.has(sheet)) measuredChanged.add(sheet);
+    };
     // An object placed in this batch is drawn at its height from the start:
     // what changes inside it later at that height is no drawing. Counted as
     // one (no height known for a new element), every pass that placed a
@@ -474,7 +506,9 @@ export class LedgerMeasureCache {
           const height = object.getBoundingClientRect().height;
           if (this.objectHeights.get(object) !== height) {
             this.objectHeights.set(object, height);
-            if (this.mark(record.target, "object-drawn")) objectRedrawn = true;
+            const sheet = this.mark(record.target, "object-drawn");
+            if (sheet) objectRedrawn = true;
+            noteMeasured(sheet);
           }
         }
       }
@@ -524,14 +558,15 @@ export class LedgerMeasureCache {
       if (marked.has(record.target)) continue;
       marked.add(record.target);
       const target = record.target as Element;
-      this.mark(record.target, `${record.type}:${target.nodeName}${record.attributeName ? ":" + record.attributeName : ""}`);
+      noteMeasured(this.mark(record.target, `${record.type}:${target.nodeName}${record.attributeName ? ":" + record.attributeName : ""}`));
     }
     if (objectRedrawn && !own) this.onMediaResize?.();
+    if (measuredChanged?.size) this.onMeasuredSheetChanged?.([...measuredChanged]);
   }
 
-  /** Mark the sheet (and top-level block) `node` sits in. True when it sits
-   * inside a sheet of this editor. */
-  private mark(node: Node, why = "media"): boolean {
+  /** Mark the sheet (and top-level block) `node` sits in. The sheet, when it
+   * sits inside a sheet of this editor. */
+  private mark(node: Node, why = "media"): HTMLElement | null {
     let element: Element | null = node instanceof Element ? node : node.parentElement;
     let sheet: Element | null = null;
     let block: Element | null = null;
@@ -541,13 +576,13 @@ export class LedgerMeasureCache {
       element = element.parentElement;
     }
     // Detached (a removed subtree's own records) or the root itself.
-    if (element !== this.root || !(sheet instanceof HTMLElement)) return false;
+    if (element !== this.root || !(sheet instanceof HTMLElement)) return null;
     this.dirtySheets.add(sheet);
     this.projectionStale.add(sheet);
     if (!this.dirtyWhy.has(sheet)) this.dirtyWhy.set(sheet, why);
     // Whatever changed inside a block may change the margins its edges push.
     if (block instanceof HTMLElement) this.edges.delete(block);
-    return true;
+    return sheet;
   }
 }
 

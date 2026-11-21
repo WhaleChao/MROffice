@@ -84,6 +84,7 @@ import {
   readMraiNativeParagraphTextRules,
   readMraiNativeParagraphType3PicturesOnly,
   readMraiNativeParagraphStandingLook,
+  readMraiNativeParagraphStateFormatLook,
   readMraiNativeStandingTextLook,
   readMraiNativeParagraphRewriteEvidence,
   type MraiNativeStandingTextLook,
@@ -166,7 +167,9 @@ import {
   applyMraiNativeRequestSpans,
   expandPdfNativeReplacementPieces,
   inspectMraiNativePageContentStreams,
+  readMraiNativeDocumentFontReferences,
   readMraiNativePageResourceDictionaries,
+  planMraiNativePageFontReference,
 } from "./content-stream-transaction";
 import { matchAllBehind } from "@mrnote/core/web/lib/regexp-behind.ts";
 
@@ -697,7 +700,7 @@ export type PdfNativeListTextSourceRun = Readonly<{
 
 /** Why a box's words are fixed (PdfNativeListTextSelectionProof.wordsFixed). */
 export type PdfNativeTextWordsFixedReason = "glyphs-read-as-blanks" | "glyphs-read-as-blanks-near" |
-  "letters-read-reordered";
+  "letters-read-reordered" | "too-large-to-set-again";
 
 export interface PdfNativeListTextSelectionProof {
   readonly sourceGeometry?: import("../../source-text-appearance").PdfTextSourceAppearance;
@@ -712,7 +715,16 @@ export interface PdfNativeListTextSelectionProof {
 
 
 
-  readonly drawnStyle?: Readonly<{ bold?: true; italic?: true }>;
+
+
+
+
+
+
+
+
+
+  readonly drawnStyle?: Readonly<{ bold?: true; italic?: true; boldFaces?: "only" | "beside-strokes"; regularFace?: true }>;
   readonly target: PdfNativeIndirectObjectRef;
   readonly evidence: PdfNativeListTextFidelityEvidence;
   readonly properties: PdfNativeTextPropertyProof | null;
@@ -728,22 +740,30 @@ export interface PdfNativeListTextSelectionProof {
 
 
   readonly type3Pictures?: true;
-  /** Its words are fixed for another reason than a Type3 face, and nothing
-   * may set them again or carry them off -- no typing, no delete, no move,
-   * no text box of them: the formats that are written where the text stands
-   * (a colour, a stroked weight, a lean, a rule) can still be set.
-   * "glyphs-read-as-blanks": on its lines the page draws glyphs their font
-   * only calls white space (the dots an Urdu face stands over its letters),
-   * so what the reader reads of it is not what the page shows, and a box of
-   * those words would lose them (MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE).
-   * "glyphs-read-as-blanks-near": none stands on its own lines, but one
-   * stands on the lines around it, which a box made of it would come to
-   * paint over (pdfTextLinesWordsFixedReason).
-   * "letters-read-reordered": right-to-left text drawn in a font most of
-   * whose letters are glyphs of several, which the reader reads turned
-   * round: other words than the page shows, and a text box of them a line
-   * of other letters (pdfRightToLeftLinesReadReordered).
-   * Such a proof states no run and names no piece to hide. */
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   readonly wordsFixed?: PdfNativeTextWordsFixedReason;
   /** The editor asked for one word of a show the reader cut into words, and
    * this proof is of the whole show: `evidence.selection` is the item the
@@ -16108,7 +16128,10 @@ let lastTextEventReadingId = 0;
  * line's own font, as a witness -- are different objects with the same
  * decode, widths and encoding, and a walk reads only those. The tables are
  * serialised once per object and given the id of their content, so readings
- * made with either object are one reading. */
+ * made with either object are one reading. (A Standard 14 face's embedder is
+ * made from its name, which is among them: it is told by being there, never
+ * by which object it is -- by that, every derivation of the face was a font
+ * of its own, and each reading of a page in it a walk of its own.) */
 const fontContentIds = new WeakMap<FontMetrics, number>();
 const fontContentIdsBySignature = new Map<string, number>();
 let lastFontContentId = 0;
@@ -16124,7 +16147,7 @@ function fontContentId(metrics: FontMetrics): number {
     sortedMap(metrics.cidWidths), metrics.defaultVerticalMetric, sortedMap(metrics.cidVerticalMetrics),
     sortedMap(metrics.decode), sortedMap(metrics.encode), sortedSet(metrics.ambiguousEncodings),
     metrics.ligatureEncodings ?? null, sortedSet(metrics.cidGlyphCoverage), sortedMap(metrics.codeToCid),
-    sortedMap(metrics.standardGlyphWidths), metrics.standardFontEmbedder ? textEventReadingId(metrics.standardFontEmbedder) : null,
+    sortedMap(metrics.standardGlyphWidths), Boolean(metrics.standardFontEmbedder),
   ]);
   let id = fontContentIdsBySignature.get(signature);
   if (id === undefined) {
@@ -18647,7 +18670,22 @@ async function planMraiNativeListTextReplacementWithStateUnkept(
         "Encoding",
       ]);
       inlinedFontObjects = inlined.objects;
-      metrics = parseFontMetrics(inlined.source, null, toUnicode?.streamBytes ?? new Uint8Array());
+      // Kept per reader like an embedded font's (cachedEmbeddedFontDerivation):
+      // a plan reads its font once for every item, run and route it proves,
+      // and what a reader makes of a show is kept by the show and the font's
+      // tables as one object (keptPerEvent). Derived again each time, a
+      // paragraph of a hundred words set glyph by glyph in Courier kept a
+      // reading of every show of its page for each of some eight hundred
+      
+      metrics = (await cachedEmbeddedFontDerivation(
+        inspectObject,
+        embeddedFontDerivationKey("primary-standard14", inlined.source, null, null, toUnicode, null),
+        async () => Object.freeze({
+          metrics: parseFontMetrics(inlined.source, null, toUnicode?.streamBytes ?? new Uint8Array()),
+          cidGlyphMap: null,
+          inlinedFontObjects: inlined.objects,
+        }),
+      )).metrics;
     } else {
       const type3WithoutDescriptor =
         fontSubtype === "Type3" && !/\/FontDescriptor\b/.test(fontSource);
@@ -29122,6 +29160,15 @@ export interface PdfNativeParagraphFormatFields {
   /** A font of the PDF's (a resource name) or one it does not hold yet (an
    * embedded-font key, native-embedded-font-key.ts). */
   readonly fontResourceName?: string;
+  /** The font is named for the weight or the slant it carries (a press of
+   * 加粗 or 倾斜: the family's bold, its italic), not chosen for itself. A
+   * style is then all of the text's or is not written through that face:
+   * where the face cannot give it to a character -- which would keep its own
+   * face as it stands -- the write is refused in the rewrite's own words
+   * (MRAI_NATIVE_PARAGRAPH_STYLE_FACE_REFUSAL), and the caller sets the
+   * style where the text stands instead. Unset: a character the font does
+   * not hold keeps its own face, as under a font chosen for itself. */
+  readonly faceForStyle?: boolean;
   /** The size as a factor of each character's own. */
   readonly sizeScale?: number;
   /** The size on paper, in points, whatever each character's own (it rules
@@ -29152,6 +29199,21 @@ export interface PdfNativeParagraphFormat extends PdfNativeParagraphFormatFields
   /** Its first line's left edge from the others', in points (First line). */
   readonly firstLineIndent?: number;
   readonly parts?: readonly (PdfNativeParagraphFormatFields & Readonly<{ start: number; end: number }>)[];
+  
+
+
+
+
+
+
+
+  readonly leanReadBack?: "reader";
+  
+
+
+
+
+  readonly wordsReadBack?: "reader";
 }
 
 /** The lean of a synthesised italic (tan 12 degrees), as the paragraph
@@ -29182,12 +29244,14 @@ function paragraphFormatResolver(input: {
   readonly page: PdfNativeIndirectObjectRef | null;
   readonly embeddedFonts?: PdfNativeEmbeddedFontProvider;
 }): MraiNativeParagraphRewriteFormatsResolver {
-  // Whether the format asks nothing but what state draws where the text
-  // stands -- a colour, a stroked weight, a rule -- so that the rewrite may
+  // Whether the format asks nothing but what is written where the text
+  // stands -- a colour, a stroked weight, a rule by state, a lean by the
+  // matrices its shows are drawn under -- so that the rewrite may ask that
   
   const stateFields = (fields: object) => Object.entries(fields).every(([key, value]) =>
-    value === undefined || key === "color" || key === "syntheticBold" || key === "underline" || key === "strikethrough");
-  const { parts: askedParts, alignment, leftIndent, lineStep, firstLineIndent, ...whole } = input.format;
+    value === undefined || key === "color" || key === "syntheticBold" || key === "underline" || key === "strikethrough" ||
+    key === "slanted");
+  const { parts: askedParts, alignment, leftIndent, lineStep, firstLineIndent, leanReadBack, wordsReadBack, ...whole } = input.format;
   const stateOnly = !alignment && !leftIndent && lineStep === undefined && firstLineIndent === undefined && stateFields(whole) &&
     (askedParts ?? []).every((part) => stateFields({ ...part, start: undefined, end: undefined }));
   return Object.assign(async ({ request, evidence }: Parameters<MraiNativeParagraphRewriteFormatsResolver>[0]) => {
@@ -29246,6 +29310,9 @@ function paragraphFormatResolver(input: {
       // The slant a face that lacks the character asked for, drawn on the
       // character's own face instead (below).
       let leanedInPlace = false;
+      // The weight such a face asked for, named for it (faceForStyle): the
+      // rewrite, which knows the character's own face, says whether it has it.
+      let weightLeftToOwnFace = false;
       const name = fields.fontResourceName;
       if (name && character.text.trim()) {
         if (isPdfNativeEmbeddedFontKey(name)) {
@@ -29272,6 +29339,7 @@ function paragraphFormatResolver(input: {
             if (!(error instanceof Error && error.name === "PdfNativeEmbeddedFontError" &&
               (error as Error & { code?: string }).code === "missing-glyph")) throw error;
             leanedInPlace = readPdfNativeEmbeddedFontKey(name)?.italic === true;
+            weightLeftToOwnFace = fields.faceForStyle === true && readPdfNativeEmbeddedFontKey(name)?.bold === true;
           }
         } else {
           face = (await pageFace(name)) ?? undefined;
@@ -29280,6 +29348,8 @@ function paragraphFormatResolver(input: {
       }
       formats.push(Object.freeze({
         ...(face ? { face } : {}),
+        ...(face && fields.faceForStyle === true ? { faceForStyle: true as const } : {}),
+        ...(weightLeftToOwnFace ? { weightLeftToOwnFace: true as const } : {}),
         ...(fields.sizeScale !== undefined ? { sizeScale: fields.sizeScale } : {}),
         ...(fields.sizePoints !== undefined ? { sizePoints: fields.sizePoints } : {}),
         ...(fields.color ? { color: fields.color } : {}),
@@ -29312,7 +29382,8 @@ function paragraphFormatResolver(input: {
       ...(input.format.lineStep !== undefined ? { lineStep: input.format.lineStep } : {}),
       ...(input.format.firstLineIndent !== undefined ? { firstLineIndent: input.format.firstLineIndent } : {}),
     });
-  }, { stateOnly });
+  }, { stateOnly, ...(leanReadBack === "reader" ? { leanReadByReader: true } : {}),
+    ...(wordsReadBack === "reader" ? { wordsReadByReader: true } : {}) });
 }
 
 /**
@@ -30771,7 +30842,7 @@ export async function prepareMraiNativeTextEditingSelection(
 /** The formats standing on all of a box's text, as its proof states them. */
 export type PdfNativeTextStandingLook = Readonly<{
   textRules?: Readonly<{ underline?: true; strikethrough?: true }>;
-  drawnStyle?: Readonly<{ bold?: true; italic?: true }>;
+  drawnStyle?: Readonly<{ bold?: true; italic?: true; boldFaces?: "only" | "beside-strokes" }>;
 }>;
 
 function standingLookOf(read: Awaited<ReturnType<typeof readMraiNativeParagraphStandingLook>>): PdfNativeTextStandingLook | null {
@@ -30790,6 +30861,39 @@ function standingLookOf(read: Awaited<ReturnType<typeof readMraiNativeParagraphS
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+export async function mraiNativeTextTakesFormatsWhereItStands(
+  input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">,
+): Promise<Readonly<{ look: PdfNativeTextStandingLook; /** How many shows of the page are the box's. */ shows: number;
+  /** The Type3 glyphs of the box are pictures all (the proof's `type3Pictures`). */ type3Pictures: boolean }> | null> {
+  const sourceSha256 = await sha256PdfBytes(input.sourceBytes);
+  exactSelection(input.selection, sourceSha256);
+  const shared = await createNativeListTextSharedInspection(input.sourceBytes, sourceSha256);
+  try {
+    const read = await readMraiNativeParagraphStateFormatLook(paragraphRewriteKernel(input.sourceBytes, shared), input.selection);
+    if (!read) return null;
+    const { underline, strikethrough, syntheticBold, slanted, drawnBold, boldFaces } = read.look;
+    return Object.freeze({ shows: read.shows, type3Pictures: read.type3Pictures, look: Object.freeze({
+      ...(underline || strikethrough ? { textRules: Object.freeze({ ...(underline ? { underline } : {}), ...(strikethrough ? { strikethrough } : {}) }) } : {}),
+      ...(syntheticBold || slanted || drawnBold || boldFaces ? { drawnStyle: Object.freeze({
+        ...(syntheticBold || drawnBold ? { bold: true as const } : {}), ...(slanted ? { italic: true as const } : {}),
+        ...(boldFaces ? { boldFaces } : {}) }) } : {}),
+    }) });
+  } catch (error) {
+    if (!(error instanceof PdfNativeTransactionError)) throw error;
+    return null;
+  } finally { shared.dispose(); }
+}
 
 export async function readMraiNativeTextStandingLook(
   input: Omit<PdfNativeListTextSelectionReplacementInput, "replacementText">,
@@ -31046,6 +31150,32 @@ export async function readMraiNativeEvidenceFaceStyle(
  * stream starts in and the names its owner proves. The paragraph rewrite
  * reads the stream again from there. */
 const PLAN_STREAM_CONTEXTS = new WeakMap<PdfNativeListTextReplacementPlan, NativeTextPlanContext>();
+
+/** A font dictionary's base font name and descriptor, where it is a simple
+ * TrueType font that names both; null otherwise. */
+function simpleTrueTypeFaceNamed(dictionary: string): Readonly<{ baseFont: string; descriptor: PdfNativeIndirectObjectRef }> | null {
+  const read = pdfSourceNamesRead(dictionary);
+  const baseFont = /\/BaseFont[\x00\t\n\f\r ]*(\/[^\x00\t\n\f\r /<>[\]()%{}]+)/u.exec(read)?.[1];
+  const descriptor = indirectReferenceNamed(read, "FontDescriptor");
+  if (!/\/Subtype[\x00\t\n\f\r ]*\/TrueType(?![A-Za-z0-9])/u.test(read) || !baseFont || !descriptor) return null;
+  return Object.freeze({ baseFont: decodePdfSourceName(baseFont), descriptor });
+}
+
+/** The object a key of a dictionary names by reference, or null. */
+function indirectReferenceNamed(source: string, key: string): PdfNativeIndirectObjectRef | null {
+  const match = new RegExp(`/${key}[\\x00\\t\\n\\f\\r ]+(\\d+)[\\x00\\t\\n\\f\\r ]+(\\d+)[\\x00\\t\\n\\f\\r ]+R(?![A-Za-z0-9])`, "u").exec(source);
+  return match ? { objectNumber: Number(match[1]), generation: Number(match[2]) } : null;
+}
+
+/** The TrueType program a font descriptor embeds (its FontFile2), or null. */
+async function simpleTrueTypeProgram(
+  descriptor: PdfNativeIndirectObjectRef,
+  inspectObject: NativeObjectInspector,
+): Promise<Uint8Array | null> {
+  const program = indirectReferenceNamed(pdfSourceNamesRead(LATIN1.decode((await inspectObject(descriptor)).objectBytes)), "FontFile2");
+  const bytes = program ? (await inspectObject(program)).streamBytes : null;
+  return bytes?.length ? bytes : null;
+}
 
 /** The page's own content streams as the selection planner reads them: what a
  * format written where the text stands works from (standingPageStreams). */
@@ -31332,6 +31462,74 @@ function paragraphRewriteKernel(
       const object = await shared.inspectObject(target);
       return objectPrecondition(object);
     },
+    async trueTypeFaces(selection, names) {
+      const found = new Map<string, Readonly<{ baseFont: string; program: Uint8Array }>>();
+      const dictionaries = await readMraiNativePageResourceDictionaries(sourceBytes, selection.pageNumber, "Font",
+        names.map((name) => decodePdfSourceName(name)));
+      for (const name of names) {
+        const dictionary = dictionaries.get(decodePdfSourceName(name));
+        if (!dictionary) continue;
+        try {
+          const face = simpleTrueTypeFaceNamed(dictionary);
+          const program = face ? await simpleTrueTypeProgram(face.descriptor, shared.inspectObject) : null;
+          if (face && program) found.set(name, Object.freeze({ baseFont: face.baseFont, program }));
+        } catch (error) {
+          if (!(error instanceof PdfNativeTransactionError)) throw error;
+        }
+      }
+      return found;
+    },
+    async fileTrueTypeFaces(selection) {
+      const graph = shared.pages[selection.pageNumber - 1];
+      if (!graph) return Object.freeze([]);
+      const out: Awaited<ReturnType<NonNullable<MraiNativeParagraphRewriteKernel["fileTrueTypeFaces"]>>>[number][] = [];
+      for (const { font, pages } of await readMraiNativeDocumentFontReferences(sourceBytes)) {
+        if (pages.includes(selection.pageNumber)) continue;
+        let face: ReturnType<typeof simpleTrueTypeFaceNamed> = null;
+        try {
+          const object = await shared.inspectObject(font);
+          face = object.streamBytes === null ? simpleTrueTypeFaceNamed(LATIN1.decode(object.objectBytes)) : null;
+        } catch (error) {
+          if (!(error instanceof PdfNativeTransactionError)) throw error;
+        }
+        if (!face) continue;
+        const descriptor = face.descriptor;
+        let loaded: ReturnType<(typeof out)[number]["read"]> | null = null;
+        out.push(Object.freeze({
+          font,
+          baseFont: face.baseFont,
+          // Its metrics as a font of the page's is read (the same proof of
+          // its dictionary, descriptor, program and ToUnicode), though no
+          // resource of the page names it yet; the objects that proof read
+          // are what a write drawing in it pins.
+          read: () => loaded ??= (async () => {
+            try {
+              const program = await simpleTrueTypeProgram(descriptor, shared.inspectObject);
+              if (!program) return null;
+              const authority = await resolveNativeFontResourceAuthority({ resourceName: "", font }, graph.page, shared.inspectObject);
+              const read = await readSupportingFontGraph(shared.inspectObject, authority, false, [{}]);
+              return Object.freeze({
+                font: Object.freeze({ ...read.additionalMetrics,
+                  faceName: fontSubsetIndependentName(read.additionalFontSource) }) as MraiNativeParagraphRewriteFont,
+                program,
+                pins: Object.freeze([
+                  read.additionalFont, read.additionalDescendant, read.additionalDescriptor, read.additionalFontFile,
+                  read.additionalToUnicode, read.additionalCidGlyphMap?.object ?? null,
+                  read.additionalDescendantAuthority?.arrayObject ?? null,
+                  ...read.additionalBaseFontInline.objects, ...read.additionalDerived.inlinedFontObjects,
+                ].filter((item): item is PdfNativeObjectInspection => item !== null).map(objectPrecondition)),
+              });
+            } catch (error) {
+              if (!(error instanceof PdfNativeTransactionError)) throw error;
+              return null;
+            }
+          })(),
+        }));
+      }
+      return Object.freeze(out);
+    },
+    referencePageFonts: (selection, fonts, stream) =>
+      planMraiNativePageFontReference({ sourceBytes, pageNumber: selection.pageNumber, fonts, stream }),
     standingPageStreams: (selection) => standingPageStreams(sourceBytes, shared, selection),
     async standingStreamContext(selection, plan) {
       try {

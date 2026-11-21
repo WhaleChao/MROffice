@@ -4,7 +4,7 @@
 
 <p align="center"><b>Các trình soạn thảo mã nguồn mở của MR Office — tài liệu, bảng tính, bản trình bày, PDF, viết tay và mã — chạy trong trình duyệt.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/vi"><b>▶ Dùng thử bản demo trực tuyến — không cần cài đặt</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Tải MR Office từ Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/vi"><b>▶ Dùng thử trực tuyến</b></a> · <a href="https://mroffice.ai/vi/office/download"><b>⬇ Tải xuống</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/vi/developers">🧑‍💻 Nhà phát triển</a> · <a href="https://mroffice.ai/vi/developers/embed">🧩 Nhúng</a> · <a href="https://mroffice.ai/vi/developers/mcp">🤖 MCP cho ứng dụng AI</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 SDK npm</a> · <a href="https://mroffice.ai/vi/developers/oauth">🔑 Đăng nhập bằng MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office là không gian làm việc cho ghi chú, AI và tệp thực. Kho này công bố mã nguồn các trình soạn thảo của nó: chính những trình soạn thảo MR Office đang chạy, bạn có thể tự dựng, chạy và nhúng. Đây là các trình soạn thảo mã nguồn mở, không phải một bộ ứng dụng văn phòng mã nguồn mở hoàn chỉnh: việc đọc và ghi tệp Microsoft Office vẫn nằm trong MR Office (xem bên dưới).
+
+## Dành cho nhà phát triển
+
+Mọi thứ cho nhà phát triển có tại **[MR Office Developers](https://mroffice.ai/vi/developers)** — tự phục vụ, không cần đăng ký: đăng nhập bằng bất kỳ tài khoản MR Office nào và bắt đầu.
+
+### Nhúng trình soạn thảo vào ứng dụng web của bạn (khuyên dùng)
+
+MR Office lưu trữ các trình soạn thảo; máy chủ của bạn ký một token phiên ngắn hạn và trang của bạn mở trình soạn thảo bằng token đó. Nó chỉnh sửa tệp Word, Excel, PowerPoint và PDF thật (.docx, .xlsx, .pptx, .pdf), có cộng tác, tải lên, mọi định dạng xuất, in, và các lần lưu được gửi về máy chủ của bạn qua callback có chữ ký. Gói miễn phí: 1.000 phiên mỗi tháng trên localhost, 100 trên tên miền của bạn, tối đa 2 ứng dụng. Đây là dịch vụ thương mại được lưu trữ, nên ứng dụng của bạn không bị ràng buộc bởi giấy phép AGPL của kho này.
+
+1. Trong thư mục dự án, chạy `npx mroffice-embed init` (hoặc tạo ứng dụng trong bảng điều khiển nhà phát triển): bấm "Cho phép" một lần trong trình duyệt, khóa của ứng dụng sẽ được ghi vào `.env.local` / `.env`.
+2. Máy chủ của bạn tạo token phiên bằng `createSessionToken` từ `mroffice-embed/server`; khóa bí mật không bao giờ rời máy chủ.
+3. Trang của bạn mở trình soạn thảo bằng `open()` từ `mroffice-embed` (hoặc tập lệnh `https://mroffice.ai/embed/v1/embed.js`).
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[Hướng dẫn nhúng](https://mroffice.ai/vi/developers/embed) · [Hướng dẫn dạng Markdown (cho tác tử AI)](https://mroffice.ai/developers/embed.md) · [Giá và giới hạn](https://mroffice.ai/vi/developers/pricing) · [Bảng điều khiển nhà phát triển](https://mroffice.ai/vi/developers/console) · [Bản demo trực tiếp](https://mroffice.ai/vi/developers/embed/demo)
+
+### Ứng dụng AI: máy chủ MCP
+
+Ứng dụng AI mở, đọc, chỉnh sửa và xuất tài liệu trong trình soạn thảo MR Office thật thông qua máy chủ MCP: kết nối endpoint được lưu trữ `https://mcp.mroffice.ai/mcp` (đăng nhập bằng tài khoản MR Office, không cần khóa), hoặc chạy `npx -y mroffice-mcp` trên máy tính của bạn. Mã nguồn nằm trong `apps/mcp`. [Hướng dẫn MCP →](https://mroffice.ai/vi/developers/mcp)
+
+### Đăng nhập bằng MR Office (OAuth)
+
+MR Office là máy chủ ủy quyền OAuth 2.1 (PKCE, tài liệu siêu dữ liệu client ID, đăng ký động): ứng dụng của bạn có thể cho người dùng đăng nhập bằng tài khoản MR Office và hành động trong phạm vi họ cho phép. [Hướng dẫn OAuth →](https://mroffice.ai/vi/developers/oauth)
+
+### Tự lưu trữ các trình soạn thảo mã nguồn mở
+
+Sáu trình soạn thảo trong kho này có thể được tích hợp vào sản phẩm của bạn theo AGPL-3.0: nếu người khác dùng phiên bản đã sửa đổi qua mạng, bạn phải cung cấp cho họ toàn bộ mã nguồn và giữ ghi công "MR Office" (NOTICE.md). Chúng mở định dạng riêng, CSV, HTML, Markdown và PDF; tệp Word, Excel và PowerPoint không nằm trong các trình soạn thảo mã nguồn mở (bản nhúng được lưu trữ ở trên hỗ trợ). Giấy phép thương mại: liên hệ support@mr-note.com. [Hướng dẫn mã nguồn mở →](https://mroffice.ai/vi/developers/open-source)
+
+Các gói npm đang được chuẩn bị với tên `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` và `mroffice-code`; cho đến khi phát hành, hãy build các trình soạn thảo từ kho này (xem bên dưới).
 
 ## Các trình soạn thảo
 
@@ -75,7 +119,7 @@ npm run desktop
 - Chỉnh sửa SmartArt
 - Ghi các chỉnh sửa PDF trở lại tệp
 
-**[Tải MR Office từ Releases →](https://github.com/XinaTian/MROffice/releases)** · [hoặc từ mroffice.ai](https://mroffice.ai)
+**[Tải MR Office (miễn phí) →](https://mroffice.ai/vi/office/download)**
 
 ### Tệp Word, Excel, PowerPoint và PDF
 

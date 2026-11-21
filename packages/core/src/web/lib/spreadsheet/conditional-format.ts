@@ -2140,6 +2140,33 @@ export function normalizeRules(
   return out;
 }
 
+/** The rules past the page one sheet may add to a render
+ * (`conditionalFormatsPastPage`; the API's MAX_PAST_PAGE_RULES_PER_SHEET). */
+export const MAX_PAST_PAGE_CONDITIONAL_FORMATS = 20_000;
+
+/**
+ * A sheet's rules past the ones its page lists, as a render draws them after
+ * its own: `conditionalFormatsPastPage`, which the API reads from the
+ * workbook's saved file for a print it makes (spreadsheet_cf_overflow;
+ * R463-X31's grey survey rows past the page's 1,000), never saved or edited.
+ * Normalized as the page's own are, bounded by
+ * MAX_PAST_PAGE_CONDITIONAL_FORMATS.
+ */
+export function normalizePastPageRules(
+  raw: unknown,
+  bounds?: { maxRow?: number; maxCol?: number },
+): ConditionalFormatRule[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ConditionalFormatRule[] = [];
+  for (const item of raw) {
+    const rule = normalizeRule(item, bounds);
+    if (!rule) continue;
+    out.push(rule);
+    if (out.length >= MAX_PAST_PAGE_CONDITIONAL_FORMATS) break;
+  }
+  return out;
+}
+
 /**
  * Coerce a cell value to a finite number, or null. Numbers pass through;
  * strings are trimmed then parsed; blank/non-numeric values yield null so they
@@ -4335,6 +4362,99 @@ export function planRulesForFormatPaste(
   return {
     rules,
     changed: !rulesSayTheSame(rules, destinationRules),
+  };
+}
+
+
+
+
+
+
+
+export function formatPasteOverRuleLimit(
+  destinationRules: readonly ConditionalFormatRule[],
+  copiedRules: readonly ConditionalFormatRule[],
+  sourceRange: ConditionalRange,
+  destinationRange: ConditionalRange,
+  bounds?: { maxRow?: number; maxCol?: number },
+): boolean {
+  const destination = normalizeRange(destinationRange);
+  if (!destination) return false;
+  const retained = clearRulesInRange(destinationRules, destination);
+  if (copiedRules.length + retained.length <= MAX_CONDITIONAL_FORMATS) return false;
+  // The same plan with room for every copied rule: it holds when nothing but
+  // the bound refused it.
+  return planRulesForFormatPaste([], copiedRules, sourceRange, destinationRange, bounds) !== null;
+}
+
+
+
+
+
+
+
+
+
+
+export function planRulesForFormatPasteWithFile(
+  destinationRules: readonly ConditionalFormatRule[],
+  copiedRules: readonly ConditionalFormatRule[],
+  sourceRange: ConditionalRange,
+  destinationRange: ConditionalRange,
+  sourceRuleCount: number,
+  bounds?: { maxRow?: number; maxCol?: number },
+  options: { merge?: boolean } = {},
+): { plan: { rules: ConditionalFormatRule[]; changed: boolean }; fileCopy: { page: boolean } | null } | null {
+  return planRulesWithFile(
+    planRulesForFormatPaste,
+    destinationRules,
+    copiedRules,
+    sourceRange,
+    destinationRange,
+    sourceRuleCount,
+    bounds,
+    options,
+  );
+}
+
+type FormatPastePlanner = (
+  destinationRules: readonly ConditionalFormatRule[],
+  copiedRules: readonly ConditionalFormatRule[],
+  sourceRange: ConditionalRange,
+  destinationRange: ConditionalRange,
+  bounds?: { maxRow?: number; maxCol?: number },
+  options?: { merge?: boolean },
+) => { rules: ConditionalFormatRule[]; changed: boolean } | null;
+
+
+
+
+
+
+
+
+export function planRulesWithFile(
+  planner: FormatPastePlanner,
+  destinationRules: readonly ConditionalFormatRule[],
+  copiedRules: readonly ConditionalFormatRule[],
+  sourceRange: ConditionalRange,
+  destinationRange: ConditionalRange,
+  sourceRuleCount: number,
+  bounds?: { maxRow?: number; maxCol?: number },
+  options: { merge?: boolean } = {},
+): { plan: { rules: ConditionalFormatRule[]; changed: boolean }; fileCopy: { page: boolean } | null } | null {
+  const plan = planner(destinationRules, copiedRules, sourceRange, destinationRange, bounds, options);
+  if (plan) return { plan, fileCopy: sourceRuleCount >= MAX_CONDITIONAL_FORMATS ? { page: true } : null };
+  if (options.merge) return null;
+  const destination = normalizeRange(destinationRange);
+  if (!destination) return null;
+  const retained = clearRulesInRange(destinationRules, destination);
+  // Only the bound reads the destination's own rules: the same plan on a
+  // sheet with none holds when nothing but the bound refused it.
+  if (!planner([], copiedRules, sourceRange, destinationRange, bounds)) return null;
+  return {
+    plan: { rules: retained, changed: !rulesSayTheSame(retained, destinationRules) },
+    fileCopy: { page: false },
   };
 }
 

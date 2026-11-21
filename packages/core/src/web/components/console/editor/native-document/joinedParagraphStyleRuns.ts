@@ -110,7 +110,7 @@ export function paragraphStyleRunLook(docAttrs: Record<string, unknown>, styleId
 }
 
 /** The default paragraph style's id, for a paragraph naming none. */
-function defaultParagraphStyleId(docAttrs: Record<string, unknown>): string | null {
+export function defaultParagraphStyleId(docAttrs: Record<string, unknown>): string | null {
   const rows = record(docAttrs.styleDefinitions)?.styles;
   if (!Array.isArray(rows)) return null;
   const found = rows.map(record).find((style) => style?.type === "paragraph" && style.default === true);

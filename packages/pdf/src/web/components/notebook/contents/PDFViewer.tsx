@@ -4,6 +4,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { registerLiveEditor, type LivePdfEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
 import { openingPagePaint, type OpeningPagePaint } from "../../../lib/pdf/first-page-paint";
 import { pdfSourcePolicyRefusal } from "../../../lib/pdf/source-policy-refusal";
 import { pdfDevErrorText } from "../../../lib/pdf/dev-error-text";
@@ -435,6 +436,7 @@ import {
   PdfSemanticAppearanceInspectionError,
   type PdfNativeVectorSelectionRoute,
   type PdfSemanticAppearanceInspectionSession,
+  pdfSemanticAppearanceTargetsOnFilePage,
 } from "../../../lib/pdf/semantic-appearance-inspection";
 import { type PdfNativeVectorAcceptedTarget, type PdfNativeVectorLayerMove, type PdfNativeVectorCommitOutcome, type PdfNativeVectorGroupTransform, type PdfNativeVectorMergeOperation } from "../../../lib/pdf/native-vector-selection-edit";
 import { planPdfShapeAlignment, type PdfShapeAlignCommand } from "../../../lib/pdf/shape-align";
@@ -572,6 +574,7 @@ import { PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP, PDF_NATIVE_MAX_FIXED_FRAME_I
 import { summarizePdfNativeSelectionItems } from "../../../lib/pdf/engine/native/list-text-model";
 import {
   nativeParagraphEditBoxesOfTextContent,
+  pdfNativeParagraphBoxHasHandle,
   nativeTextItemLayoutGeometry,
   type PdfNativeParagraphEditBlockReason,
   type PdfNativeParagraphEditBox,
@@ -788,6 +791,8 @@ import {
 import { midpointOwnedPage, pagesAboutDocumentStart, pagesAboutView, readerPageAnchor, scrollTopForReaderPageAnchor,
   type PdfPageSpan, type PdfReaderPageAnchor } from "../../../lib/pdf/current-page";
 
+/** Development marks only: see vectorRouteViewerIdRef. */
+let vectorRouteViewerSeq = 0;
 /** How long the reader rests on a page before its text goes to the window. */
 const PDF_SHOWN_PAGE_REPORT_REST_MS = 250;
 import { observeElementResize } from "@mrnote/core/web/lib/shared-element-observers.ts";
@@ -6792,8 +6797,9 @@ export default function PDFViewer({
   /** The pages whose text a published revision brought with it: their paint
    * does not build it again. */
   const preparedNativeTextRef = useRef(new Map<number, Readonly<{ document: PdfDocument; scale: number; rotation: number }>>());
-  const prepareNativeTextOfPagesRef = useRef<(pdfDocument: PdfDocument, isCurrent: () => boolean) =>
-    Promise<readonly PreparedNativeTextOfPage[] | null>>(async () => null);
+  const prepareNativeTextOfPagesRef = useRef<(pdfDocument: PdfDocument, isCurrent: () => boolean,
+    /** The bytes the document was read from: its boxes are those bytes' own. */
+    sourceSha256: string) => Promise<readonly PreparedNativeTextOfPage[] | null>>(async () => null);
   /** The text of a working revision's pages read while its line is still
    * open (lib/pdf/staged-text-reads): the revision's worker parses its fonts
    * then, not between the reader leaving the line and the save. */
@@ -8318,9 +8324,23 @@ export default function PDFViewer({
     },
     [],
   );
+  /** Which viewer a mark of the route pipeline is from (development marks
+   * only): two viewers on one page, or one mounted again, read as one
+   * session lost without a word (pdf-walk-1000 rv0044: 「session-ready」,
+   * then 「page-skip no-session」 with no mark between). */
+  const vectorRouteViewerIdRef = useRef(0);
+  if (vectorRouteViewerIdRef.current === 0) vectorRouteViewerIdRef.current = (vectorRouteViewerSeq += 1);
   useEffect(() => {
     semanticAppearanceInspectionGenerationRef.current += 1;
     const generation = semanticAppearanceInspectionGenerationRef.current;
+    if (process.env.NODE_ENV !== "production") {
+      vectorRouteMark("session-effect", { viewer: vectorRouteViewerIdRef.current, generation,
+        live: semanticAppearanceInspectionBindingRef.current?.sourceSha256.slice(0, 8) ?? null,
+        parked: parkedSemanticAppearanceBindingRef.current?.sourceSha256.slice(0, 8) ?? null,
+        proven: provenNativeVectorRoutesRef.current?.sha256.slice(0, 8) ?? null,
+        source: sourceSha256?.slice(0, 8) ?? null, doc: Boolean(pdfDoc), item: Boolean(dataItemId),
+        revision: expectedSourceDocumentRevision, risk: matchedSourceRiskSnapshot?.identity.sha256.slice(0, 8) ?? null });
+    }
     // A route proves an object in exact bytes. When the source that is
     // arriving is those same bytes under another name (a save's accepted
     // revision replacing the candidate the reader already showed), the
@@ -8346,7 +8366,7 @@ export default function PDFViewer({
         previous.sourceSha256 === sourceSha256 && previous.dataItemId === (dataItemId ?? null)) {
         parkedSemanticAppearanceBindingRef.current = previous;
       } else {
-        vectorRouteMark("session-ended", {
+        vectorRouteMark("session-ended", { viewer: vectorRouteViewerIdRef.current,
           sha: previous.sourceSha256.slice(0, 8),
           reason: !sameBytesArriving ? "other-bytes" : previous.document !== pdfDoc ? "other-document"
             : previous.sourceSha256 !== sourceSha256 ? "other-sha" : "other-item",
@@ -8407,7 +8427,7 @@ export default function PDFViewer({
       carriedNativeVectorSelectionRef.current = null;
     }
     if (process.env.NODE_ENV !== "production" && (!pdfDoc || !retained || !loaded || !riskIdentity)) {
-      vectorRouteMark("session-wait", {
+      vectorRouteMark("session-wait", { viewer: vectorRouteViewerIdRef.current,
         doc: Boolean(pdfDoc), retained: Boolean(retained), loaded: Boolean(loaded), risk: Boolean(riskIdentity),
         parked: Boolean(parkedSemanticAppearanceBindingRef.current),
       });
@@ -8432,6 +8452,25 @@ export default function PDFViewer({
       riskIdentity.byteGenerationKey !== expectedSourceByteGenerationKey ||
       riskIdentity.documentRevision !== expectedSourceDocumentRevision
     ) {
+      // All four in hand and still no session: which of them is another
+      // file's, another load's or another revision's. Unsaid, a session
+      // that ended here ended without a mark -- a shape drawn after a blank
+      // page was inserted was painted and saved and never became a target,
+      // with only 「page-skip no-session」 to show for it (pdf-walk-1000
+      
+      if (process.env.NODE_ENV !== "production" && pdfDoc && retained && loaded && riskIdentity) {
+        vectorRouteMark("session-mismatch", { viewer: vectorRouteViewerIdRef.current,
+          item: Boolean(dataItemId) && retained.dataItemId === dataItemId && loaded.dataItemId === dataItemId,
+          document: retained.document === pdfDoc && loaded.document === pdfDoc,
+          url: retained.url === url && loaded.url === url,
+          bytesKey: [retained.byteGenerationKey === expectedSourceByteGenerationKey,
+            loaded.byteGenerationKey === expectedSourceByteGenerationKey,
+            riskIdentity.byteGenerationKey === expectedSourceByteGenerationKey].join(","),
+          revision: [retained.documentRevision, loaded.documentRevision, riskIdentity.documentRevision,
+            expectedSourceDocumentRevision].join(","),
+          sha: `${retained.sha256.slice(0, 8)}:${riskIdentity.sha256.slice(0, 8)}`,
+        });
+      }
       return;
     }
 
@@ -8451,7 +8490,7 @@ export default function PDFViewer({
         });
         semanticAppearanceInspectionBindingRef.current = rebound;
         provenNativeVectorRoutesRef.current = { dataItemId, sha256: retained.sha256 };
-        vectorRouteMark("session-kept", { sha: retained.sha256.slice(0, 8), keptTargets: semanticAppearanceTargetsByPageRef.current.size });
+        vectorRouteMark("session-kept", { viewer: vectorRouteViewerIdRef.current, sha: retained.sha256.slice(0, 8), keptTargets: semanticAppearanceTargetsByPageRef.current.size });
         void rebound.session.ready().then(() => {
           if (semanticAppearanceInspectionBindingRef.current !== rebound) return;
           // The routes on screen are this session's; refresh the pages
@@ -8470,7 +8509,7 @@ export default function PDFViewer({
           }
         };
       }
-      vectorRouteMark("session-ended", {
+      vectorRouteMark("session-ended", { viewer: vectorRouteViewerIdRef.current,
         sha: parked.sourceSha256.slice(0, 8),
         reason: parked.document !== pdfDoc ? "parked-other-document" : parked.sourceSha256 !== retained.sha256
           ? "parked-other-sha" : "parked-other-item",
@@ -8510,10 +8549,11 @@ export default function PDFViewer({
     });
     semanticAppearanceInspectionBindingRef.current = binding;
     provenNativeVectorRoutesRef.current = { dataItemId, sha256: retained.sha256 };
-    vectorRouteMark("session-created", { sha: retained.sha256.slice(0, 8), keptTargets: semanticAppearanceTargetsByPageRef.current.size });
+    vectorRouteMark("session-created", { viewer: vectorRouteViewerIdRef.current, sha: retained.sha256.slice(0, 8), keptTargets: semanticAppearanceTargetsByPageRef.current.size });
     void session.ready().then(() => {
       if (semanticAppearanceInspectionBindingRef.current !== binding) return;
-      vectorRouteMark("session-ready", { sha: retained.sha256.slice(0, 8) });
+      vectorRouteMark("session-ready", { viewer: vectorRouteViewerIdRef.current, sha: retained.sha256.slice(0, 8), generation,
+        page: currentPageRef.current });
       setObjectRecognitionFailedSha(null);
       // Pages whose targets were cached before this session existed (or
       // survived a same-bytes rebuild) route again through it, once the
@@ -8528,7 +8568,7 @@ export default function PDFViewer({
         return Number.isSafeInteger(next) ? next : 1;
       });
     }).catch((error: unknown) => {
-      vectorRouteMark("session-failed", {
+      vectorRouteMark("session-failed", { viewer: vectorRouteViewerIdRef.current,
         sha: retained.sha256.slice(0, 8),
         current: semanticAppearanceInspectionBindingRef.current === binding,
         code: (error as { code?: unknown } | null)?.code ?? null,
@@ -8542,7 +8582,7 @@ export default function PDFViewer({
         // The cached targets stay for the next session to route; nothing on
         // screen changes while it starts.
         semanticAppearanceSelectionRequestKeysRef.current.clear();
-        vectorRouteMark("session-retry", { sha: retained.sha256.slice(0, 8), attempt: attempt + 1 });
+        vectorRouteMark("session-retry", { viewer: vectorRouteViewerIdRef.current, sha: retained.sha256.slice(0, 8), attempt: attempt + 1 });
         retryTimer = window.setTimeout(() => {
           retryTimer = null;
           start(attempt + 1);
@@ -8571,6 +8611,10 @@ export default function PDFViewer({
       if (!binding) return;
       // Parked, not destroyed: the next run keeps it for the same bytes and
       // ends it for anything else; an unmount ends it below.
+      vectorRouteMark("session-cleanup", { viewer: vectorRouteViewerIdRef.current, generation,
+        sha: binding.sourceSha256.slice(0, 8),
+        does: semanticAppearanceInspectionBindingRef.current === binding ? "parks"
+          : parkedSemanticAppearanceBindingRef.current !== binding ? "ends" : "leaves-parked" });
       if (semanticAppearanceInspectionBindingRef.current === binding) {
         semanticAppearanceInspectionBindingRef.current = null;
         parkedSemanticAppearanceBindingRef.current = binding;
@@ -8592,13 +8636,20 @@ export default function PDFViewer({
   ]);
   // Declared after the session effect so its cleanup runs after that
   // effect's on unmount: whatever was parked is ended with the viewer.
-  useEffect(() => () => {
+  useEffect(() => {
+    vectorRouteMark("viewer-effects-on", { viewer: vectorRouteViewerIdRef.current });
+    return () => {
     const parked = parkedSemanticAppearanceBindingRef.current;
     parkedSemanticAppearanceBindingRef.current = null;
     parked?.session.destroy();
     const live = semanticAppearanceInspectionBindingRef.current;
     semanticAppearanceInspectionBindingRef.current = null;
     live?.session.destroy();
+    // (Said: this ends a session with no other mark -- an unmount, or the
+    // viewer's effects taken down while it is kept hidden.)
+    vectorRouteMark("viewer-effects-off", { viewer: vectorRouteViewerIdRef.current,
+      parked: parked?.sourceSha256.slice(0, 8) ?? null, live: live?.sourceSha256.slice(0, 8) ?? null });
+    };
   }, []);
   /** The bytes (SHA-256) the cached page text items were read from. */
   const nativeTextItemsSourceShaRef = useRef<string | null>(null);
@@ -8913,6 +8964,9 @@ export default function PDFViewer({
       itemIndex: number,
       endItemIndex = itemIndex,
       paragraphDisabledReason?: PdfNativeParagraphEditBlockReason,
+      /** The bytes the box is read from, when they are not the ones the
+       * reader shows yet (a revision's text built before it goes up). */
+      ofSourceSha256?: string,
     ): PdfNativeTextEditBoxPresentation => {
       // The document's own watermark, header, footer or page number (drawn
       // as /Artifact pagination) is no text to edit here: WPS changes them
@@ -8931,7 +8985,7 @@ export default function PDFViewer({
         pageNumber !== nativeTextEditCurrentPageRef.current
           ? { ...nativeTextEditBoxPresentationRef.current, otherPage: true }
           : nativeTextEditBoxPresentationRef.current;
-      const sourceSha256 = retainedPdfPrintSourceBytesRef.current?.sha256;
+      const sourceSha256 = ofSourceSha256 ?? retainedPdfPrintSourceBytesRef.current?.sha256;
       const refusalReason = sourceSha256
         ? nativeTextEditBoxRefusalReasonsRef.current.get(
             nativeTextEditBoxRefusalKey(
@@ -8957,10 +9011,22 @@ export default function PDFViewer({
     },
     [t],
   );
+  // A paragraph refused whole is known by the bytes it was refused on. A
+  // revision's text is built off the page before the revision goes up, the
+  // reader still holding the bytes before it: judged by those, a paragraph
+  // refused on them was built as its runs with no box of its own, and once
+  // the revision was up -- its bytes never refused anything -- the page read
+  // those runs as parts of a paragraph. The paragraph had no box and its
+  // runs had none: a press on it went to whatever lay under the text, and no
+  
+  
   const nativeTextParagraphUsesStandaloneFallback = useCallback(
-    (pageNumber: number, paragraph: PdfNativeParagraphEditBox): boolean => {
+    (pageNumber: number, paragraph: PdfNativeParagraphEditBox, ofSourceSha256?: string): boolean => {
       if (paragraph.disabledReason) return true;
-      const sourceSha256 = retainedPdfPrintSourceBytesRef.current?.sha256;
+      // (A box of one item has no runs to be offered as: refused, it stays
+      // the box it is and says why -- the activation's refusal below.)
+      if (paragraph.items.length < 2) return false;
+      const sourceSha256 = ofSourceSha256 ?? retainedPdfPrintSourceBytesRef.current?.sha256;
       const firstItemIndex = paragraph.items[0]?.itemIndex;
       const lastItemIndex = paragraph.sourceItemIndexes.at(-1);
       return Boolean(
@@ -9064,7 +9130,7 @@ export default function PDFViewer({
         paragraph ??
         pageParagraphs?.find(
           (entry) =>
-            entry.items.length > 1 &&
+            pdfNativeParagraphBoxHasHandle(entry) &&
             entry.sourceItemIndexes.includes(itemIndex),
         );
       const groupedParagraph =
@@ -11012,7 +11078,8 @@ export default function PDFViewer({
         prepareText: async () => {
           if (!working || !ownerIsCurrent()) return;
           try {
-            preparedText = await prepareNativeTextOfPagesRef.current(document, () => ownerIsCurrent() || pdfDocRef.current === document);
+            preparedText = await prepareNativeTextOfPagesRef.current(document, () => ownerIsCurrent() || pdfDocRef.current === document,
+              retained.sha256);
           } catch { preparedText = null; }
         },
         publish: () => {
@@ -12638,7 +12705,7 @@ export default function PDFViewer({
    * page, or a copy off it): nothing of the viewer's own record of the page
    * changes until commitNativeTextOfPage. Undefined: no longer wanted. */
   const buildNativeTextOfPage = useCallback(async ({ page, pdfDocument, pageNumber, textLayer, cssViewport, isCurrent, trackTask,
-    keepShown }: Readonly<{
+    keepShown, sourceSha256: builtSourceSha256 }: Readonly<{
     page: PdfPage; pdfDocument: PdfDocument; pageNumber: number; textLayer: HTMLDivElement;
     cssViewport: ReturnType<PdfPage["getViewport"]>; isCurrent: () => boolean;
     /** The reader's own render, cancelled with its page's tasks. */
@@ -12648,6 +12715,9 @@ export default function PDFViewer({
      * layer as it is (`kept`) and read only what the editor binds. Nothing
      * on the page is written either way. */
     keepShown?: string;
+    /** The bytes `pdfDocument` was read from, when the reader does not show
+     * them yet (nativeTextParagraphUsesStandaloneFallback). */
+    sourceSha256?: string;
   }>): Promise<BuiltNativeTextOfPage | undefined> => {
       const built: BuiltNativeTextOfPage = { items: null, paragraphs: null, layoutBoxes: null, artifacts: null, objects: null, objectCount: 0 };
       const cssUserUnit =
@@ -12851,8 +12921,8 @@ export default function PDFViewer({
           // since gave its handle up, and reads otherwise).
           const handles = [...textLayer.querySelectorAll<HTMLElement>(`span[${PDF_NATIVE_TEXT_PARAGRAPH_ID_ATTR}]`)]
             .map((span) => span.getAttribute(PDF_NATIVE_TEXT_PARAGRAPH_ID_ATTR) ?? "").sort();
-          const grouped = paragraphs.filter((paragraph) => paragraph.items.length > 1 &&
-            !nativeTextParagraphUsesStandaloneFallback(pageNumber, paragraph)).map((paragraph) => paragraph.id).sort();
+          const grouped = paragraphs.filter((paragraph) => pdfNativeParagraphBoxHasHandle(paragraph) &&
+            !nativeTextParagraphUsesStandaloneFallback(pageNumber, paragraph, builtSourceSha256)).map((paragraph) => paragraph.id).sort();
           if (handles.length !== grouped.length || handles.some((id, index) => id !== grouped[index])) {
             return { ...built, kept: false };
           }
@@ -12981,11 +13051,12 @@ export default function PDFViewer({
             !nativeTextParagraphUsesStandaloneFallback(
               pageNumber,
               paragraph,
+              builtSourceSha256,
             ),
         );
         const multiItemIndexes = new Set(
           groupedParagraphs
-            .filter((paragraph) => paragraph.items.length > 1)
+            .filter((paragraph) => pdfNativeParagraphBoxHasHandle(paragraph))
             .flatMap((paragraph) => paragraph.sourceItemIndexes),
         );
         const indexedSpans =
@@ -13008,7 +13079,7 @@ export default function PDFViewer({
           ) {
             applyNativeTextEditBoxPresentation(
               span,
-              readNativeTextEditBoxPresentation(pageNumber, itemIndex),
+              readNativeTextEditBoxPresentation(pageNumber, itemIndex, itemIndex, undefined, builtSourceSha256),
             );
             frames.push([
               span,
@@ -13038,6 +13109,7 @@ export default function PDFViewer({
               paragraph.items[0].itemIndex,
               paragraph.sourceItemIndexes.at(-1),
               paragraph.disabledReason,
+              builtSourceSha256,
             ),
           { width: cssViewport.width, height: cssViewport.height },
         );
@@ -13082,7 +13154,7 @@ export default function PDFViewer({
     if (built.layoutBoxes) nativeTextLayoutBoxesByPageRef.current.set(pageNumber, built.layoutBoxes);
   }, []);
   commitNativeTextOfPageRef.current = commitNativeTextOfPage;
-  prepareNativeTextOfPagesRef.current = async (pdfDocument, isCurrent) => {
+  prepareNativeTextOfPagesRef.current = async (pdfDocument, isCurrent, sourceSha256) => {
     const at = renderInvalidationSnapshotRef.current?.scale ?? scale;
     // The pages whose text is on screen (a page still painting the revision
     // before this one holds that revision's).
@@ -13121,7 +13193,7 @@ export default function PDFViewer({
       if (shownBuild && shownBuild.text === shown.textContent && deferredTextSwapsRef.current.length === 0 &&
         !shown.querySelector(NATIVE_TEXT_TRANSIENT_EDIT_STATE)) {
         const kept = await buildNativeTextOfPage({ page, pdfDocument, pageNumber, textLayer: shown,
-          cssViewport, isCurrent, trackTask: false, keepShown: shownBuild.signature });
+          cssViewport, isCurrent, trackTask: false, keepShown: shownBuild.signature, sourceSha256 });
         if (kept === undefined) return null;
         if (kept.kept && kept.items) {
           const annotations = await readAnnotations(page, pageNumber);
@@ -13134,7 +13206,7 @@ export default function PDFViewer({
       }
       const layer = shown.cloneNode(false) as HTMLDivElement;
       const built = await buildNativeTextOfPage({ page, pdfDocument, pageNumber, textLayer: layer,
-        cssViewport, isCurrent, trackTask: false });
+        cssViewport, isCurrent, trackTask: false, sourceSha256 });
       if (built === undefined) return null;
       // No text the editor binds (a scan): its paint reads it as ever.
       if (!built.items) continue;
@@ -14138,7 +14210,8 @@ export default function PDFViewer({
           // file holding the page's structure is shown as the upload).
           const routedFilePage = currentBinding ? shownDocumentFilePage(currentBinding.document, pageNumber) : null;
           if (currentBinding && routedFilePage !== null) void currentBinding.session
-            .routePage({ pageNumber: routedFilePage, targets: frozenTargets })
+            .routePage({ pageNumber: routedFilePage,
+              targets: pdfSemanticAppearanceTargetsOnFilePage(frozenTargets, pageNumber, routedFilePage) })
             .then((result) => semanticResultOnShownPage(result, routedFilePage, pageNumber))
             .then(
               (result) => {
@@ -14197,8 +14270,12 @@ export default function PDFViewer({
                 ) {
                   return;
                 }
-                if (error instanceof PdfSemanticAppearanceInspectionError && error.code === "page-refused") {
-                  vectorRouteMark("page-refused", { page: pageNumber });
+                // (Or one the session would not send: what was asked of
+                // this page was not a request it takes. The session stands
+                // -- it was never asked -- and every other page is routed.)
+                if (error instanceof PdfSemanticAppearanceInspectionError &&
+                  (error.code === "page-refused" || error.code === "invalid-request")) {
+                  vectorRouteMark("page-refused", { page: pageNumber, code: error.code });
                   return;
                 }
                 vectorRouteMark("page-failed", { page: pageNumber,
@@ -40349,7 +40426,7 @@ export default function PDFViewer({
           ),
           refusalReason,
         );
-        if (paragraph) {
+        if (paragraph && paragraph.items.length > 1) {
           span.remove();
           if (!nativeTextEditingActive) {
             onNativeListTextSelectionChange?.(null);
@@ -44361,9 +44438,16 @@ export default function PDFViewer({
       !binding ||
       !semanticAppearanceBindingIsCurrent(binding)
     ) {
-      vectorRouteMark("page-skip", {
+      vectorRouteMark("page-skip", { viewer: vectorRouteViewerIdRef.current,
         page: currentPage,
         reason: !binding ? "no-session" : "session-stale",
+        session: binding?.sourceSha256.slice(0, 8) ?? null,
+        parked: parkedSemanticAppearanceBindingRef.current?.sourceSha256.slice(0, 8) ?? null,
+        generation: semanticAppearanceInspectionGenerationRef.current,
+        targets: semanticAppearanceTargetsByPageRef.current.size,
+        revision: semanticAppearanceTargetRevision,
+        pages: pdfDoc?.numPages ?? null,
+        source: sourceSha256Ref.current?.slice(0, 8) ?? null,
       });
       return;
     }
@@ -44388,7 +44472,7 @@ export default function PDFViewer({
     let cancelled = false;
     let settled = false;
     const routeStartedAt = performance.now();
-    vectorRouteMark("page-start", { page: currentPage, sha: binding.sourceSha256.slice(0, 8) });
+    vectorRouteMark("page-start", { viewer: vectorRouteViewerIdRef.current, page: currentPage, sha: binding.sourceSha256.slice(0, 8) });
     void (async () => {
       const page = await binding.document.getPage(currentPage);
       if (
@@ -44539,7 +44623,7 @@ export default function PDFViewer({
       if (routedFilePage === null) return;
       const result = semanticResultOnShownPage(await binding.session.routePage({
         pageNumber: routedFilePage,
-        targets: targetRecord.targets,
+        targets: pdfSemanticAppearanceTargetsOnFilePage(targetRecord.targets, currentPage, routedFilePage),
         operatorEvidence,
       }), routedFilePage, currentPage);
       if (
@@ -44635,8 +44719,12 @@ export default function PDFViewer({
       // One page the inspection could not answer has nothing to route; the
       // rest of the file keeps its routes and its session (a page's refused
       
-      if (error instanceof PdfSemanticAppearanceInspectionError && error.code === "page-refused") {
-        vectorRouteMark("page-refused", { page: currentPage });
+      // (A request the session would not send is that page's too: thrown
+      // before anything is asked of the worker, it says nothing of the
+      // session, which a page's own bad request ended for every page.)
+      if (error instanceof PdfSemanticAppearanceInspectionError &&
+        (error.code === "page-refused" || error.code === "invalid-request")) {
+        vectorRouteMark("page-refused", { page: currentPage, code: error.code });
         setSemanticAppearanceRoutesByPage((current) => new Map(current).set(currentPage, new Map()));
         setNativeVectorSelectionRoutesByPage((current) => new Map(current).set(currentPage, []));
         setNativeImageTargetsByPage((current) => new Map(current).set(currentPage, []));
@@ -50308,6 +50396,79 @@ export default function PDFViewer({
     marker: "attribute",
     scroll: false,
   });
+
+  // The live PDF for callers outside this viewer (the embedded editor's
+  // Automation API, lib/embed/automation): its pages, its own find (the
+  // find bar's search, the same matches) and the ribbon's Highlight over a
+  // match (createPageHighlights: the page's own markup, saved with it).
+  const liveAutomationRef = useRef<Omit<LivePdfEditor, "kind">>(null!);
+  liveAutomationRef.current = {
+    pageCount: () => visiblePages.length,
+    currentPage: () => currentPageRef.current,
+    goToPage: (page) => {
+      if (!Number.isInteger(page) || page < 1 || !visiblePages.some((entry) => entry.pageNumber === page)) return false;
+      goToPage(page, { locate: true });
+      return true;
+    },
+    search: async (text, options) => {
+      const found = await computeDocumentFind(text, 0, { listOnly: true, current: () => true });
+      const limit = Math.max(1, Math.min(options.limit ?? 100, 1000));
+      return (found?.results ?? []).slice(0, limit).map((result, index) => ({
+        page: visiblePages[result.pageIndex]?.pageNumber ?? result.pageIndex + 1,
+        snippet: result.snippet,
+        index,
+      }));
+    },
+    markText: async (text, options) => {
+      if (!annotationContextWritable || !dataItemId) return { error: "read_only" as const };
+      // The find's own search (not listOnly): it states the page texts the
+      // matches are offsets into, which the measurement reads.
+      const found = await computeDocumentFind(text, findGenerationRef.current, { current: () => true });
+      const matches = (found?.matches ?? []).filter(
+        (match) => options.page === undefined || visiblePages[match.pageIndex]?.pageNumber === options.page,
+      );
+      const match = matches[Math.max(1, options.occurrence ?? 1) - 1];
+      const pageNumber = match ? visiblePages[match.pageIndex]?.pageNumber : undefined;
+      if (!match || !pageNumber) return { error: "not_found" as const };
+      goToPage(pageNumber, { locate: true });
+      // The page's text layer is drawn once it is shown: measured then.
+      for (let waited = 0; waited <= 8_000; waited += 100) {
+        const wrapper = pageRefs.current.get(pageNumber);
+        const layer = wrapper?.querySelector<HTMLDivElement>("div[data-pdf-text-layer]");
+        const entry = await getPageTextEntry(pageNumber);
+        if (wrapper && layer && entry && layer.querySelectorAll("span").length > 0) {
+          const wrapperRect = wrapper.getBoundingClientRect();
+          const searched = findPageSearchEntryRef.current.get(pageNumber) ?? entry;
+          const rects = wrapperRect.width > 0 && wrapperRect.height > 0
+            ? measureFindMatchRects(match, 0, searched, textLayerItemSpans(layer), wrapperRect)
+            : [];
+          if (rects.length) {
+            await createPageHighlights(
+              [{ text, pageNumber, rects: rects.map(({ x, y, width, height }) => ({ x, y, width, height })) }],
+              options.style ?? "highlight",
+            );
+            return { page: pageNumber };
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return { error: "not_measurable" as const };
+    },
+  };
+  // Registered once the file is open with its pages (a search before that
+  // finds nothing in a file that has the words).
+  const livePdfIn = Boolean(pdfDoc) && visiblePages.length > 0;
+  useEffect(() => {
+    if (!pageId || !livePdfIn) return undefined;
+    return registerLiveEditor(pageId, {
+      kind: "pdf",
+      pageCount: () => liveAutomationRef.current.pageCount(),
+      currentPage: () => liveAutomationRef.current.currentPage(),
+      goToPage: (page) => liveAutomationRef.current.goToPage(page),
+      search: (text, options) => liveAutomationRef.current.search(text, options),
+      markText: (text, options) => liveAutomationRef.current.markText(text, options),
+    });
+  }, [livePdfIn, pageId]);
 
   // Map a result's visible-page index to the 1-based page number for its label.
   const docSearchPageNumber = useCallback(

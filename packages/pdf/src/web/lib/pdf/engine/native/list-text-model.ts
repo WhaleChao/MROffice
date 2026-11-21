@@ -253,8 +253,9 @@ export function selectionVisualLineIndexes(
         : Math.hypot(deltaX, deltaY);
     return baselineDistance > Math.max(item.height, from.height) * 0.55;
   };
-  for (const item of items) {
-    if (previous && apart(previous, item) && (!anchor || apart(anchor, item))) {
+  for (const [index, item] of items.entries()) {
+    if (previous && apart(previous, item) && (!anchor || apart(anchor, item)) &&
+      !(anchor && raisedLettersOfLine(items, index, anchor, apart))) {
       lineIndex += 1;
       anchor = undefined;
     }
@@ -263,6 +264,56 @@ export function selectionVisualLineIndexes(
     previous = item;
   }
   return Object.freeze(indexes);
+}
+
+/** How close a raised letter's edge stands to the letter of its line it
+ * joins, and how far above the line's baseline a cascade raises a letter of
+ * the line's own size (em). The page's reader builds its boxes by the same
+ * two numbers (native-paragraph-edit-boxes, joinRaisedLettersOfTheirLine). */
+export const RAISED_LETTER_ABUT_EM = 0.08;
+export const RAISED_LETTER_RISE_EM = 0.8;
+const RIGHT_TO_LEFT_LETTER = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u;
+const LEFT_TO_RIGHT_LETTER = /[A-Za-z\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/u;
+
+/**
+ * Whether the item at `index`, standing off its line's baseline, is one of
+ * the line's own letters that the page raises: Nastaleeq cascades a word
+ * down to the baseline, and the raised part of the word is set with a text
+ * matrix of its own between the letters before and after it. The run of
+ * such items around it stands edge to edge between two items on the line's
+ * baseline, each of the line's size and of right-to-left letters, none
+ * further above the baseline than a cascade raises a letter. Further than
+ * 0.55 em up, such a letter opened a line of its own and the letter after it
+ * a third: the box read as three lines that do not run down a column, and
+ * nothing could be written to it. (Mirror of replay's _raised_letters_of_line.)
+ */
+function raisedLettersOfLine(
+  items: readonly PdfNativeListTextSelectionItemEvidence[],
+  index: number,
+  anchor: PdfNativeListTextSelectionItemEvidence,
+  apart: (from: PdfNativeListTextSelectionItemEvidence, item: PdfNativeListTextSelectionItemEvidence) => boolean,
+): boolean {
+  const size = anchor.height;
+  if (!(size > 0) || Math.abs(anchor.transform[1]) > 1e-6 * Math.abs(anchor.transform[0] || 1) ||
+    !RIGHT_TO_LEFT_LETTER.test(anchor.str) || LEFT_TO_RIGHT_LETTER.test(anchor.str)) return false;
+  let first = index, last = index;
+  while (first > 0 && apart(anchor, items[first - 1])) first -= 1;
+  while (last + 1 < items.length && apart(anchor, items[last + 1])) last += 1;
+  if (first < 1 || last + 1 >= items.length) return false;
+  const edge = size * RAISED_LETTER_ABUT_EM;
+  const end = (item: PdfNativeListTextSelectionItemEvidence) => item.transform[4] + item.width;
+  for (let at = first; at <= last + 1; at += 1) {
+    if (Math.abs(items[at].transform[4] - end(items[at - 1])) > edge) return false;
+  }
+  for (let at = first; at <= last; at += 1) {
+    const item = items[at];
+    if (Math.abs(item.height - size) > size * 0.05 || Math.abs(item.transform[1]) > 1e-6 * Math.abs(item.transform[0] || 1) ||
+      // (Raised: above the baseline, never below it.)
+      !(item.transform[5] > anchor.transform[5]) ||
+      item.transform[5] - anchor.transform[5] > size * RAISED_LETTER_RISE_EM ||
+      !RIGHT_TO_LEFT_LETTER.test(item.str) || LEFT_TO_RIGHT_LETTER.test(item.str)) return false;
+  }
+  return true;
 }
 
 export const CJK_VISUAL_LINE_BOUNDARY =

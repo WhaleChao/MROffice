@@ -28,6 +28,11 @@ const PART_SAVE_DEBOUNCE_MS = 400;
 const PART_SAVE_RETRY_MS = 3_000;
 /** The longest wait between tries of a part's save that does not go through. */
 const PART_SAVE_RETRY_MOST_MS = 30_000;
+/** How many times a part save refused for holding a block another part holds
+ * (`document_part_blocks_in_other_part`) is tried again before the view stops:
+ * 3, 6, 12, 24, 30, 30 s -- a block moved across parts is saved out of the
+ * part it left well within that. */
+const PART_BLOCKS_ELSEWHERE_TRIES = 6;
 
 /** The wait before try `tries` (1, 2, ...) of a part's save: doubling, at most PART_SAVE_RETRY_MOST_MS. */
 export function partSaveRetryDelay(tries: number): number {
@@ -299,6 +304,98 @@ export function documentDraftReach(base: readonly unknown[], draft: readonly unk
   return { changed, toEnd, through: !toEnd && furthest >= 0 ? blockId(base[furthest]) : null };
 }
 
+/**
+ * How many blocks of the document a draft changed that the view does not
+ * hold: each is `base`'s (the body the draft was made on), changed in `draft`
+ * as authored (`sameAuthoredBlock`, as documentDraftReach reads it), and not
+ * in `view`. In a view still loading its parts such a block is in a part not
+ * loaded yet (or another member deleted it): mergeCanonicalBlocks keeps a
+ * change over a deletion and puts it after the last block loaded, and its part
+ * brings it again when it loads (R482-D04 LIVE). Zero: the merge needs no
+ * part it lacks.
+ */
+export function draftChangesOutsideView<T>(
+  base: readonly T[],
+  draft: readonly T[],
+  view: readonly T[],
+  idOf: (block: T) => unknown,
+): number {
+  const inView = new Set<unknown>();
+  for (const block of view) inView.add(idOf(block));
+  const was = new Map<unknown, T>();
+  for (const block of base) {
+    const id = idOf(block);
+    if (typeof id === "string" && !was.has(id)) was.set(id, block);
+  }
+  let outside = 0;
+  for (const block of draft) {
+    const id = idOf(block);
+    if (typeof id !== "string" || inView.has(id)) continue;
+    const old = was.get(id);
+    if (old !== undefined && !sameAuthoredBlock(old, block)) outside += 1;
+  }
+  return outside;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function draftBaseInEditorForm<T>(
+  base: readonly T[],
+  editorFormOf: ((blocks: readonly T[]) => readonly unknown[] | null) | undefined,
+): readonly T[] {
+  if (!editorFormOf || base.length === 0) return base;
+  let read: readonly unknown[] | null = null;
+  try {
+    read = editorFormOf(base);
+  } catch {
+    read = null;
+  }
+  if (!read || read.length !== base.length) return base;
+  for (let index = 0; index < base.length; index += 1) {
+    if (blockId(read[index]) !== blockId(base[index])) return base;
+  }
+  return read as readonly T[];
+}
+
+/** How many of `draft`'s blocks `base` holds (by id) written otherwise as
+ * authored (`sameAuthoredBlock`), with the first few named by type and Word
+ * element: the handover trace's view of what a merge will read as edits. */
+export function draftBlocksChangedFrom(base: readonly unknown[], draft: readonly unknown[]): {
+  changed: number;
+  sample: Array<{ type: unknown; anchor: string | null }>;
+} {
+  const was = new Map<string, unknown>();
+  for (const block of base) {
+    const id = blockId(block);
+    if (id !== null && !was.has(id)) was.set(id, block);
+  }
+  let changed = 0;
+  const sample: Array<{ type: unknown; anchor: string | null }> = [];
+  for (const block of draft) {
+    const id = blockId(block);
+    const old = id !== null ? was.get(id) : undefined;
+    if (old === undefined || sameAuthoredBlock(old, block)) continue;
+    changed += 1;
+    if (sample.length < 24) sample.push({ type: isRecord(block) ? block.type : null, anchor: sourceAnchorOf(block) });
+  }
+  return { changed, sample };
+}
+
 /** A part's blocks with each block's place by id (null when a block has none
  * or one id stands twice: such a part is not spliced into). */
 function blockPlaces(blocks: readonly unknown[]): Map<string, number> | null {
@@ -436,6 +533,53 @@ function jsonOfBlock(block: unknown): string {
     blockJson.set(block, json);
   }
   return json;
+}
+
+/** Whether the handover trace is on (the harness set `window.__docsHandoverTrace = []`). */
+function docsTraceOn(): boolean {
+  return typeof window !== "undefined" && Array.isArray((window as Window & { __docsHandoverTrace?: unknown[] }).__docsHandoverTrace);
+}
+
+/** The Word element a top-level block was read from (`source.sourceAnchor`), or null. */
+function sourceAnchorOf(block: unknown): string | null {
+  const source = isRecord(block) && isRecord(block.attrs) && isRecord(block.attrs.source) ? block.attrs.source : null;
+  return source && typeof source.sourceAnchor === "string" && source.sourceAnchor ? source.sourceAnchor : null;
+}
+
+/** Add (or, with `by` -1, take back) how often each Word element stands in `blocks`. */
+export function countSourceAnchors(blocks: readonly unknown[], into: Map<string, number>, by = 1): void {
+  for (const block of blocks) {
+    const anchor = sourceAnchorOf(block);
+    if (anchor) into.set(anchor, (into.get(anchor) ?? 0) + by);
+  }
+}
+
+/** How many times `blocks` hold a Word element beyond what the stored
+ * document held it (`stored`, countSourceAnchors; once for an element not in
+ * it). Above zero, some blocks stand twice: a merge or a load put a block of
+ * the document in again (R482-D04 LIVE). */
+export function anchorsBeyondStored(blocks: readonly unknown[], stored: ReadonlyMap<string, number>): number {
+  const seen = new Map<string, number>();
+  let beyond = 0;
+  for (const block of blocks) {
+    const anchor = sourceAnchorOf(block);
+    if (!anchor) continue;
+    const count = (seen.get(anchor) ?? 0) + 1;
+    seen.set(anchor, count);
+    if (count > Math.max(1, stored.get(anchor) ?? 0)) beyond += 1;
+  }
+  return beyond;
+}
+
+/** The top-level source anchors `blocks` hold more than once (a Word element stored twice). */
+function repeatedSourceAnchors(blocks: readonly unknown[]): number {
+  return anchorsBeyondStored(blocks, new Map());
+}
+
+/** How many of `a`'s block ids `b` holds (a trace of how two readings of a part line up). */
+function sharedIds(a: readonly unknown[], b: readonly unknown[]): number {
+  const ids = new Set(b.map(blockId).filter((id): id is string => id !== null));
+  return a.reduce<number>((count, item) => count + (ids.has(blockId(item) ?? "\u0000") ? 1 : 0), 0);
 }
 
 /** Harness switch (`window.__docsHandoverTrace = []`, NoteEditor's): each part edit and block. */
@@ -870,6 +1014,11 @@ export interface UseDocumentPagePartsOptions {
   /** Stored blocks as this editor serializes them (what `serialize` would
    * give for them), or null. */
   readonly editorFormOf?: (blocks: readonly unknown[]) => unknown[] | null;
+  /** The block ids the view holds now (each block's, or its first piece's for
+   * a block cut across sheets), read from the editor's document without
+   * serializing it; null when there is no view. A part coming in is checked
+   * against them (see loadNext). */
+  readonly viewBlockIds?: () => ReadonlySet<string> | null;
   /** Make the editor's blocks `current` (a part's, by block id) read
    * `merged`; false when it cannot (nothing is changed then). */
   readonly mergePartIntoView?: (
@@ -1024,6 +1173,10 @@ export interface DocumentPageParts {
    * starting over for it (the parts loaded, and their count, are then the
    * reading before's). */
   readonly viewIsThisReading: () => boolean;
+  /** Blocks about to go into the view holding a Word element more often than
+   * the stored document: the view is stopped and true is said (nothing of
+   * them may go in); false when they hold each at most as often. */
+  readonly refuseBlocksTwice: (blocks: readonly unknown[], what: string) => boolean;
 }
 
 interface PartRecord {
@@ -1437,6 +1590,13 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
   // A part and the body as last known to read right. Moves with every look, so
   // an edit a block at a time never adds up to a jump.
   const partCounts = useRef(new Map<number, number>());
+  // How often each Word element (a top-level block's `source.sourceAnchor`)
+  // stands in the body and the parts loaded, as the server stored them. No
+  // gesture puts an element in a second time (a paste or a copy brings no
+  // `source`; a conflict's copy is a new block): a view holding one more often
+  // than this is a part's blocks entered twice (R482-D04 LIVE: a part's 17
+  // tables stored twice), and it saves nothing (partsReadRight).
+  const storedAnchors = useRef(new Map<string, number>());
   const lastBulkGestureAt = useRef<number | null>(null);
   // Whether anyone has done anything here. Until then what differs from the
   // stored part is the editor's own reading of it, never an edit: saved, it wrote
@@ -1517,8 +1677,27 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     }
     block("count-jump");
   }, [block, pageId]);
+  /**
+   * Blocks about to go into the view (a whole view's draft merged into the
+   * parts, NoteEditor adoptDraftIntoParts) holding a Word element more often
+   * than the stored document does: the view stops as a damaged one does and
+   * nothing of them goes in (true). Read here, before the editor has them:
+   * there the block-id plugin takes `source` from every paragraph after the
+   * first that claims one Word paragraph, so a paragraph put in twice no
+   * longer says so, and the guards after it (partsReadRight, the save's) see
+   * only its tables twice (R482-D04 LIVE: a part's tables and an empty
+   * paragraph stored twice, the paragraph written as `<w:p><w:r/></w:p>`).
+   */
+  const refuseBlocksTwice = useCallback((blocks: readonly unknown[], what: string): boolean => {
+    if (blockedRef.current) return true;
+    const twice = anchorsBeyondStored(blocks, storedAnchors.current);
+    if (twice === 0) return false;
+    refuseJump(0, 0, twice, what);
+    return true;
+  }, [refuseJump]);
   /** Whether partsReadRight would stop these parts (it says nothing, keeps nothing). */
   const partsJumped = useCallback((parts: readonly (readonly unknown[])[]): boolean => {
+    if (anchorsBeyondStored(parts.flat(), storedAnchors.current) > 0) return true;
     if (bulkGestureLately()) return false;
     if (repeatedBlockIds(parts.flat()) > PART_JUMP_BLOCKS) return true;
     return parts.some((blocks, index) => {
@@ -1537,6 +1716,12 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
   }, []);
   const partsReadRight = useCallback((parts: readonly (readonly unknown[])[]): boolean => {
     if (blockedRef.current) return false;
+    // Whatever the reader just did: no gesture holds a Word element twice.
+    const twice = anchorsBeyondStored(parts.flat(), storedAnchors.current);
+    if (twice > 0) {
+      refuseJump(0, 0, twice, "repeated-anchors");
+      return false;
+    }
     if (!bulkGestureLately()) {
       const repeated = repeatedBlockIds(parts.flat());
       if (repeated > PART_JUMP_BLOCKS) {
@@ -1575,7 +1760,9 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     blockedRef.current = null;
     prefetched.current.clear();
     const stored = optionsRef.current.body;
+    storedAnchors.current = new Map();
     if (isRecord(stored) && Array.isArray(stored.content)) {
+      countSourceAnchors(stored.content, storedAnchors.current);
       partCounts.current.set(0, stored.content.length);
       for (const block of stored.content) {
         const id = blockId(block);
@@ -1682,6 +1869,14 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         ? record.savedBlocks.map((json) => JSON.parse(json))
         : record.saved ? JSON.parse(record.saved) : record.recoveredBase ?? []) as MergeBlock[];
       const merged = mergeCanonicalBlocks(base, local, remote as MergeBlock[], { typedIntoBoth: true, mergeText: true });
+      if (docsTraceOn()) traceDocsHandoverPart({ step: "part-conflict-shape", index, base: base.length, local: local.length,
+        remote: remote.length, merged: merged.blocks.length, localInRemote: sharedIds(local, remote), localInBase: sharedIds(local, base),
+        conflicts: merged.conflicts, anchorsTwice: repeatedSourceAnchors(merged.blocks) });
+      // A part holding a Word element twice is not saved (see roomRead).
+      if (anchorsBeyondStored(merged.blocks, storedAnchors.current) > 0) {
+        refuseJump(index, remote.length, merged.blocks.length, "conflict-merge-repeated-anchors");
+        return "merged";
+      }
       // A view the merge cannot be written into exactly (a block cut across pages
       // being laid out): this view's edit stays kept, the part is merged again later.
       if (merged.changedLocal && !current.mergePartIntoView(local, merged.blocks)) return "later";
@@ -1708,7 +1903,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     } catch {
       return "later";
     }
-  }, [keepPartEdit, pageId]);
+  }, [keepPartEdit, pageId, refuseJump]);
 
   /** Whether a part's edits go to its room: it takes input, or may still (it
    * was asked for a moment ago; its first reading merges what was typed). */
@@ -1739,6 +1934,10 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         const known = partCounts.current.get(index);
         if (known !== undefined && partCountJumped(known, blocks.length) && !bulkGestureLately()) {
           refuseJump(index, known, blocks.length, "save");
+          return;
+        }
+        if (anchorsBeyondStored(blocks, storedAnchors.current) > 0) {
+          refuseJump(index, record.baseCount, blocks.length, "save-repeated-anchors");
           return;
         }
         if (sentBlocks) {
@@ -1777,7 +1976,20 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
             refuseJump(index, record.baseCount, blocks.length, "server");
             return;
           }
-          if (error instanceof ApiRequestError && error.status === 409) {
+          if (error instanceof ApiRequestError && error.code === "document_part_blocks_twice") {
+            refuseJump(index, record.baseCount, blocks.length, "server-repeated-anchors");
+            return;
+          }
+          // The part brings in a block another stored part holds: a block
+          // moved across parts waits for the part it left to be saved without
+          // it (tried again below); one still held there after every try is
+          // a block put in twice (R482-D04 LIVE), and the view stops.
+          const heldElsewhere = error instanceof ApiRequestError && error.code === "document_part_blocks_in_other_part";
+          if (heldElsewhere && saveTries.current >= PART_BLOCKS_ELSEWHERE_TRIES) {
+            refuseJump(index, record.baseCount, blocks.length, "server-blocks-in-other-part");
+            return;
+          }
+          if (!heldElsewhere && error instanceof ApiRequestError && error.status === 409) {
             // The part was saved elsewhere (another tab, another member):
             // both sides are kept, merged block by block, and saved again
             
@@ -1909,6 +2121,10 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       };
       if (json === live.viewJson && !attrsMoved) { keep(); return true; }
       const newAttrs = attrs && attrsMoved && !attrsSayNothingNew(attrs, live.room.attrs()) ? attrs : undefined;
+      if (newAttrs && docsTraceOn()) {
+        const notes = (value: unknown) => (Array.isArray(value) ? value.length : null);
+        traceDocsHandoverPart({ step: "pr-publish-attrs", index, notes: notes(newAttrs.footnotes), roomNotes: notes(live.room.attrs()?.footnotes) });
+      }
       if (json === live.viewJson && !newAttrs) {
         live.viewAttrs = attrsJson;
         keep();
@@ -2058,7 +2274,30 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
       return;
     }
     const local = withStoredIdsForEmptyBlocks(live.base as MergeBlock[], shown);
+    // The room and the view must be two readings of one part: a room holding
+    // none of the blocks the view shows of it (the part as loaded does), with
+    // blocks the view changed, is not merged -- merged, each changed block went
+    // in at the part's start beside the room's own (a part's blocks twice).
+    // One whose blocks the view left as loaded is the room's (another member
+    // wrote the part anew): the merge takes it.
+    if (local.length > 0 && remote.length > 0 && sharedIds(local, remote) === 0 &&
+        sharedIds(local, live.base) > 0 && !sameAuthoredBody({ content: local }, { content: live.base })) {
+      refuseJump(live.index, remote.length, local.length, "room-read-disjoint");
+      return;
+    }
     const merged = mergeCanonicalBlocks(live.base as MergeBlock[], local, remote as MergeBlock[], { typedIntoBoth: true, mergeText: true });
+    if (docsTraceOn()) traceDocsHandoverPart({ step: "pr-read-shape", index: live.index, base: live.base.length, local: local.length,
+      remote: remote.length, merged: merged.blocks.length, localInRemote: sharedIds(local, remote), localInBase: sharedIds(local, live.base),
+      remoteInBase: sharedIds(remote, live.base), conflicts: merged.conflicts, anchorsTwice: repeatedSourceAnchors(merged.blocks) });
+    // A merge that holds a Word element more often than the document does is
+    // no merge of two readings of one part (R482-D04 LIVE: a part's tables
+    // put in at its start a second time): nothing of it is shown, published
+    // or saved, and the view stops as a damaged one does.
+    const twice = anchorsBeyondStored(merged.blocks, storedAnchors.current);
+    if (twice > 0) {
+      refuseJump(live.index, remote.length, merged.blocks.length, "room-read-repeated-anchors");
+      return;
+    }
     const mergedWords = tracedWords(merged.blocks);
     if (mergedWords) traceDocsHandoverPart({ step: "pr-read", index: live.index, base: tracedWords(live.base),
       local: tracedWords(local), remote: tracedWords(remote), merged: mergedWords, conflicts: merged.conflicts });
@@ -2102,6 +2341,10 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     if (live.index === 0 && isRecord(serialized?.attrs)) {
       // The room's attributes stand: a body's are changed one at a time, so
       // one changed before this reading came is published with the next edit.
+      if (docsTraceOn()) {
+        const notes = (value: unknown) => (Array.isArray(value) ? value.length : null);
+        traceDocsHandoverPart({ step: "pr-read-attrs", roomNotes: notes(live.room.attrs().footnotes), viewNotes: notes(serialized?.attrs && (serialized.attrs as Record<string, unknown>).footnotes) });
+      }
       view.applyAttrs?.(live.room.attrs());
       live.viewAttrs = null;
     }
@@ -2120,7 +2363,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
     // stored; s7c2-1 likewise).
     if (viewChanged) roomsInStepWith.current = null;
     noteRoomsState();
-  }, [block, noteRoomsState]);
+  }, [block, noteRoomsState, refuseJump]);
 
   const startRoom = useCallback((index: number, partKey: string, base: readonly unknown[], inView = true): LivePartRoom | null => {
     const current = optionsRef.current;
@@ -2157,6 +2400,10 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         },
         caret: () => optionsRef.current.partRooms?.caret?.() ?? null,
         onRemote: (before, after, lost, caret) => {
+          if (docsTraceOn() && (before.length !== after.length || repeatedSourceAnchors(after) > 0)) {
+            traceDocsHandoverPart({ step: "pr-remote-shape", index, before: before.length, after: after.length,
+              shared: sharedIds(after, before), anchorsTwice: repeatedSourceAnchors(after) });
+          }
           const words = tracedWords(after), wordsBefore = tracedWords(before);
           if (words && (words.join() !== wordsBefore?.join() || generation.current !== started || blockedRef.current)) {
             traceDocsHandoverPart({ step: "pr-remote", index, before: wordsBefore, after: words,
@@ -2629,6 +2876,25 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
           }
         }
       }
+      // A part whose blocks the view holds already is not put in a second time:
+      // each of them would stand twice, the copy the view holds and the part's
+      // own (R482-D04 LIVE: a part's 17 tables and a paragraph put in before
+      // the part loaded, by a whole view's draft merged into a view that had
+      // not loaded it). In the editor the block-id plugin gives the second of
+      // each a new id and takes `source` from a paragraph, so no later look
+      // tells the paragraph from a new one. The view stops as a damaged one
+      // does; reading the page again gives the document as stored.
+      const held = optionsRef.current.viewBlockIds?.() ?? null;
+      if (held && held.size > 0) {
+        const twice = blocks.reduce<number>((count, item) => {
+          const id = blockId(item);
+          return count + (id !== null && held.has(id) ? 1 : 0);
+        }, 0);
+        if (twice > 0) {
+          refuseJump(index, blocks.length, twice, "part-load-blocks-in-view");
+          return;
+        }
+      }
       // Its room is joined now, while the part is laid out (seconds for a long
       // part, a minute on a busy machine): read and caught up by the time the
       
@@ -2655,9 +2921,12 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         }
       }
       loadedRef.current = index;
-      traceDocsHandoverPart({ step: "part-load", index, blocks: blocks.length, recovered });
+      countSourceAnchors(stored, storedAnchors.current);
+      traceDocsHandoverPart({ step: "part-load", index, blocks: blocks.length, recovered, owned: blocks.length - added.length,
+        ...(docsTraceOn() ? { anchorsTwice: repeatedSourceAnchors([...((optionsRef.current.serialize() as { content?: unknown[] } | null)?.content ?? []), ...blocks]) } : {}) });
       if (!optionsRef.current.appendBlocks(blocks, index, keptLayout)) {
         for (const id of added) owner.current.delete(id);
+        countSourceAnchors(stored, storedAnchors.current, -1);
         loadedRef.current = index - 1;
         dropEarly();
         return;
@@ -2735,7 +3004,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
         
       }
     }
-  }, [block, pageId, partsReadRight, publish, roomRead, scheduleSaves, startRoom, viewIsThisReading]);
+  }, [block, pageId, partsReadRight, publish, refuseJump, roomRead, scheduleSaves, startRoom, viewIsThisReading]);
   loadNextRef.current = loadNext;
 
   // The next part loads when the end of what is loaded nears the viewport.
@@ -2908,7 +3177,7 @@ export function useDocumentPageParts(options: UseDocumentPagePartsOptions): Docu
   }, []);
 
   return useMemo(
-    () => ({ state: { ...state, count }, sentinelRef, prepareContent, bodyCutSaidMeant, loadThroughBlock, closingParts, publishEdits, noteViewChanged, sendPresence, noteHand, dismissRefusedText, viewHoldsStored, viewIsThisReading }),
-    [bodyCutSaidMeant, closingParts, count, dismissRefusedText, loadThroughBlock, noteHand, noteViewChanged, prepareContent, publishEdits, sendPresence, sentinelRef, state, viewHoldsStored, viewIsThisReading],
+    () => ({ state: { ...state, count }, sentinelRef, prepareContent, bodyCutSaidMeant, loadThroughBlock, closingParts, publishEdits, noteViewChanged, sendPresence, noteHand, dismissRefusedText, viewHoldsStored, viewIsThisReading, refuseBlocksTwice }),
+    [bodyCutSaidMeant, closingParts, count, dismissRefusedText, loadThroughBlock, noteHand, noteViewChanged, prepareContent, publishEdits, refuseBlocksTwice, sendPresence, sentinelRef, state, viewHoldsStored, viewIsThisReading],
   );
 }

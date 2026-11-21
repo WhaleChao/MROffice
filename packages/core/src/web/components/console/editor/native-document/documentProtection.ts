@@ -30,6 +30,8 @@
  * `setEditable` wiring, the DOCX exporter and the DOCX importer.
  */
 
+import { embedAllowsRevisionResolution, embedImposedDocumentProtection } from "../../../../lib/embed/session-access";
+
 
 
 
@@ -344,4 +346,40 @@ export function documentProtectionDocxAttrs(
     ...(protection.formatting ? { formatting: "1" as const } : {}),
     enforcement: "1",
   };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function effectiveDocumentProtection(stored: unknown): unknown {
+  const imposed = embedImposedDocumentProtection();
+  if (!imposed) return stored;
+  const own = normalizeDocumentProtection(stored);
+  if (own && (own.mode === "readOnly" || own.mode === "formatting" || own.formatting === true || own.credentials)) {
+    return stored;
+  }
+  if (own && imposed.mode === "trackedChanges" && (own.mode === "comments" || own.mode === "forms")) return stored;
+  return imposed;
+}
+
+/**
+ * Whether tracked changes may not be accepted or rejected: the document's
+ * own tracking lock (Word: a Tracked changes restriction blocks resolving),
+ * or an embedded session without `permissions.acceptRejectChanges` (a review
+ * session by default). A review session that is given it records every edit
+ * and may resolve them.
+ */
+export function revisionResolutionLocked(stored: unknown): boolean {
+  return isDocumentTrackingLocked(stored) || !embedAllowsRevisionResolution();
 }

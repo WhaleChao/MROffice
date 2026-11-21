@@ -213,12 +213,23 @@ const ENGINE_FAUX_BOLD_STROKE = "0.06em";
  * R361-X03's 245 runs, SimSun and MS Mincho alike) -- not the screen's one
  * pixel of emboldening, 0.06 em, six times as heavy on paper. */
 const PRINTED_FAUX_BOLD_STROKE = "0.01em";
+/** The stroke an exported page's faux bold draws with: Excel's Save as PDF
+ * strokes the regular outlines a thirty-fifth of an em wide (Tr 2 at
+ * w = size / 35 in all 16 bench workbooks that export one, and R463-X65's
+ * bold ＭＳ 明朝 rows at 7.2 and 8.04 pt), nearly three times its print's. */
+const EXPORTED_FAUX_BOLD_STROKE = "0.02857em";
 
 let fauxBoldPrinted = false;
+let fauxBoldExported = false;
 /** Whether faux bold is drawn as Excel prints it (the print page, set with
  * the printer's resolution: native-typography setNativeTextPrinterDpi). */
 export function setSpreadsheetFauxBoldPrinted(printed: boolean): void {
   fauxBoldPrinted = printed;
+}
+/** Whether the print page makes an export (Save as PDF) rather than a
+ * print (File > Print): its faux bold strokes as Excel's Save as PDF does. */
+export function setSpreadsheetFauxBoldExported(exported: boolean): void {
+  fauxBoldExported = exported;
 }
 
 /**
@@ -231,7 +242,7 @@ export function setSpreadsheetFauxBoldPrinted(printed: boolean): void {
  * stroke stands in only where the browser does not synthesize, as before.
  */
 export function spreadsheetFauxBoldCss(): CSSProperties {
-  if (fauxBoldPrinted) return { WebkitTextStrokeWidth: PRINTED_FAUX_BOLD_STROKE, fontSynthesis: "style" };
+  if (fauxBoldPrinted) return { WebkitTextStrokeWidth: fauxBoldExported ? EXPORTED_FAUX_BOLD_STROKE : PRINTED_FAUX_BOLD_STROKE, fontSynthesis: "style" };
   return spreadsheetTextEngineOn()
     ? { WebkitTextStrokeWidth: ENGINE_FAUX_BOLD_STROKE, fontSynthesis: "style" }
     : { WebkitTextStrokeWidth: OFFICE_FAUX_BOLD_STROKE_WIDTH };
@@ -239,7 +250,7 @@ export function spreadsheetFauxBoldCss(): CSSProperties {
 
 /** Whether a stroke width is one {@link spreadsheetFauxBoldCss} set. */
 export function isSpreadsheetFauxBoldStroke(value: unknown): boolean {
-  return value === ENGINE_FAUX_BOLD_STROKE || value === PRINTED_FAUX_BOLD_STROKE || value === OFFICE_FAUX_BOLD_STROKE_WIDTH;
+  return value === ENGINE_FAUX_BOLD_STROKE || value === PRINTED_FAUX_BOLD_STROKE || value === EXPORTED_FAUX_BOLD_STROKE || value === OFFICE_FAUX_BOLD_STROKE_WIDTH;
 }
 
 /** The height of a laid-out paragraph's lines (`line-height: normal`), each

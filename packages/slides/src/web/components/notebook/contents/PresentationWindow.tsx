@@ -5,6 +5,7 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { registerLiveEditor, type LivePresentationEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
 import { reloadPage } from "@mrnote/core/web/lib/reload-reason.ts";
 import { listLevelGreyedForSmartArtShape } from "../../../lib/presentation-smartart-shape-selection";
 import { createInkPenDynamics, type InkPenDynamics } from "@mrnote/core/web/lib/office-ink-pen-dynamics.ts";
@@ -652,6 +653,7 @@ import { PAGE_REMOTE_SAVED_EVENT } from "@mrnote/core/web/lib/notebook-events.ts
 import { MultiRoomHistory, type HistoryRoom } from "@mrnote/core/web/lib/collab/multi-room-history.ts";
 import type { CollaborativeTextChange } from "@mrnote/core/web/lib/collab/json-crdt.ts";
 import type { DocumentPartRoom } from "@mrnote/core/web/lib/collab/document-part-room.ts";
+import { remoteUpdateOnStack } from "@mrnote/core/web/lib/collab/remote-update-payload.ts";
 import {
   DeckPartStubSlide,
   deckPartsLockMessage,
@@ -1990,6 +1992,7 @@ import {
   steppedRunFontSizePatch,
   stepFontSize,
 } from "@mrnote/core/web/lib/presentation-text-buttons.ts";
+import { latinTextFontPatch } from "@mrnote/core/web/lib/presentation-runs.ts";
 import { withEquationFormatsRead } from "@mrnote/core/web/lib/presentation-equation-run-italic.ts";
 import {
   emptyPlaceholderFontSize,
@@ -2998,6 +3001,7 @@ import { PresentationAuthoringRegion } from "./presentation/PresentationAuthorin
 import { blocksWithFitGeometry, type FitGeometry } from "../../../lib/presentation/fit-geometry";
 import type { DocumentSurfaceReadiness } from "@mrnote/docs/web/components/console/editor/NoteEditor.tsx";
 import {
+  importedTableRowMinimums,
   MAX_PRESENTATION_GEOMETRY_EMU,
   focusedTableCellSpan,
   tableCellAddressAt,
@@ -3723,6 +3727,19 @@ function smartArtColorThemeOf(
 const PRESENTATION_SMARTART_PREPARATIONS = createSmartArtPreparations<PresentationBlock, PresentationBlock[]>();
 /** How long a double click's SmartArt words may take to open, the keys meanwhile theirs (`smartArtWordsOpeningRef`). */
 const SMARTART_WORDS_OPENING_MS = 5000;
+
+
+
+
+
+
+
+
+
+
+
+
+const PREPARED_CANVAS_TYPING_NATIVE_WORDS: typeof nativeSmartArtWithWords | null = null;
 
 /** Words typed on a prepared diagram, written on its preserved members; null if it cannot take them. */
 function nativeSmartArtWithWords(
@@ -6505,6 +6522,10 @@ export default function PresentationWindow({
   // relying on (possibly stale) render closures. Kept in sync via the effect
   // below. This lets undo/redo apply atomic, side-effect-free state updates.
   const slidesRef = useRef(slides);
+  // Live-deck reads for a room's hand-over on the stack (`readLiveDeckSlides`),
+  // and the window's fit writer, for a fit put off until they return.
+  const deckReadDepthRef = useRef(0);
+  const commitLiveBlockFitsRef = useRef<(fits: ReadonlyMap<string, FitGeometry>, coalesceKey: string) => boolean>(() => false);
   /** The deck as last drawn. `slidesRef` runs ahead of it between a
    * collaborator's delivery and the render that shows it. */
   const renderedSlidesRef = useRef(slides);
@@ -9458,7 +9479,7 @@ export default function PresentationWindow({
    * (`preparedAfterCommit` says what the typed slide stands for). */
   const persistPreparedTyping = useCallback((slides: readonly SlideModel[]): void => {
     const prepared = preparedSmartArtRef.current;
-    if (prepared) preparedAfterCommit<PresentationBlock, SlideModel>(prepared, slides, nativeSmartArtWithWords);
+    if (prepared) preparedAfterCommit<PresentationBlock, SlideModel>(prepared, slides, PREPARED_CANVAS_TYPING_NATIVE_WORDS);
   }, []);
   const [preparedSmartArt, setPreparedSmartArtState] = useState<PreparedSmartArt<PresentationBlock, SlideModel> | null>(null);
   const setPreparedSmartArt = useCallback((next: PreparedSmartArt<PresentationBlock, SlideModel> | null) => {
@@ -12498,12 +12519,12 @@ export default function PresentationWindow({
       }
       const prepared = preparedSmartArtRef.current;
       if (prepared) {
-        // Words changed on a diagram with a text receipt are saved on the file's
-        // own drawing; anything else that changes the conversion lets it out.
+        // A change of the conversion lets it out: words typed on the canvas
+        // too, for now (`PREPARED_CANVAS_TYPING_NATIVE_WORDS`).
         const outcome = preparedAfterCommit<PresentationBlock, SlideModel>(
           prepared,
           authorizedSlides,
-          nativeSmartArtWithWords,
+          PREPARED_CANVAS_TYPING_NATIVE_WORDS,
         );
         const kept = outcome.kind === "kept" ? outcome.prepared : null;
         if (kept !== prepared) setPreparedSmartArt(kept);
@@ -21779,7 +21800,14 @@ export default function PresentationWindow({
   deckPartsResaveRef.current = resaveDeckParts;
   const readLiveDeckSlides = useCallback(() => {
     // Whoever asks is about to compare with them or put something over them.
-    flushTypingRef.current(true);
+    // Drawn now (flushSync): the effects of that drawing run inside this call,
+    // and a fit they come to waits until it returns (`commitLiveBlockFits`).
+    deckReadDepthRef.current += 1;
+    try {
+      flushTypingRef.current(true);
+    } finally {
+      deckReadDepthRef.current -= 1;
+    }
     return slidesRef.current;
   }, []);
   // The live deck, letters held included, without drawing them (`heldSlides`).
@@ -29978,6 +30006,60 @@ export default function PresentationWindow({
     });
   }
   const roomAwareness = pageAutosave.roomAwareness ?? null;
+  // TRIAGE S11g guard: a file's SmartArt's Text Pane (and its prepared
+  // conversion's) is read-only while another window is in this page's room:
+  // two windows writing one row through the pane lost one window's words. The
+  // canvas stays as it is. A row being typed in when the other window comes
+  // leaves first, by the pane's own path (its blur), then the pane locks; an
+  // IME composition ends first.
+  const [smartArtPanePeers, setSmartArtPanePeers] = useState(false);
+  const smartArtPaneLockAppliesRef = useRef(false);
+  smartArtPaneLockAppliesRef.current = Boolean(contextualNativeSmartArt || preparedSmartArt);
+  useEffect(() => {
+    if (!roomAwareness) {
+      setSmartArtPanePeers(false);
+      return;
+    }
+    let locked = false;
+    let waiting: { element: HTMLElement; done: () => void } | null = null;
+    const othersOnline = () =>
+      [...(roomAwareness.getStates() as Map<number, unknown>).keys()].some((id) => id !== roomAwareness.clientID);
+    const apply = () => {
+      if (!othersOnline()) {
+        locked = false;
+        setSmartArtPanePeers(false);
+        return;
+      }
+      if (locked) return;
+      const active = (rootRef.current?.ownerDocument ?? document).activeElement as HTMLElement | null;
+      const inRow = Boolean(active?.matches?.('[data-testid="presentation-smartart-outline-input"]')) && smartArtPaneLockAppliesRef.current;
+      if (inRow && active && active.dataset.smartartComposing === "true") {
+        if (!waiting) {
+          const element = active;
+          const done = () => {
+            element.removeEventListener("compositionend", done);
+            waiting = null;
+            window.setTimeout(apply, 0);
+          };
+          waiting = { element, done };
+          element.addEventListener("compositionend", done);
+        }
+        return;
+      }
+      // Only a row with words not left yet leaves them (its blur); a row unchanged just turns read-only where it
+      
+      const typedRow = inRow && active instanceof HTMLTextAreaElement && active.value !== active.defaultValue;
+      if (typedRow && active) active.blur();
+      locked = true;
+      setSmartArtPanePeers(true);
+    };
+    apply();
+    roomAwareness.on("change", apply);
+    return () => {
+      roomAwareness.off("change", apply);
+      if (waiting) waiting.element.removeEventListener("compositionend", waiting.done);
+    };
+  }, [roomAwareness]);
   useEffect(() => {
     if (!roomAwareness) return;
     const publisher = createInkPresencePublisher(roomAwareness);
@@ -32802,6 +32884,17 @@ export default function PresentationWindow({
   // 0a7dd1e1919 fitting every imported table edited here).
   const commitLiveBlockFits = useCallback(
     (fits: ReadonlyMap<string, FitGeometry>, coalesceKey: string): boolean => {
+      // Never from inside a delivery: a fit its drawing came to while a room
+      // applies a collaborator's update (or while that room's hand-over reads
+      // the live deck, `readLiveDeckSlides`) is written once that call has
+      // returned -- written from in there, it reached the room before the
+      
+      // a table fit made inside the delivery that brought it). Whatever the
+      // rest rule (`fitMustWait`) says, a fit never re-enters a delivery.
+      if (deckReadDepthRef.current > 0 || remoteUpdateOnStack()) {
+        queueMicrotask(() => { commitLiveBlockFitsRef.current(fits, coalesceKey); });
+        return false;
+      }
       const liveSlides = slidesRef.current;
       const liveIndex = activeIndexRef.current;
       const liveSlide = liveSlides[liveIndex];
@@ -32817,6 +32910,7 @@ export default function PresentationWindow({
     },
     [commitSlides],
   );
+  commitLiveBlockFitsRef.current = commitLiveBlockFits;
   // A fit waits for the deck to rest: no typing burst open, the live deck the one
   // drawn, nothing changed in FIT_QUIET_MS (a key, a collaborator's delivery). It
   // is looked at again then, so a fit is put off, never dropped.
@@ -33089,6 +33183,20 @@ export default function PresentationWindow({
             frameOfRows = (framePx > 0 ? framePx : statedSum) * ((statedSum + rowGrowth) / statedSum);
           }
         }
+      }
+      // An imported table is as tall as its rows (`importedTableRowMinimums`,
+      // each its stated height or its words'), and PowerPoint writes its
+      
+      
+      // frame): the drawn table is that sum, its rows already grown.
+      if (importedTableRowMinimums(block) !== null) {
+        const rowsPx = table.offsetHeight;
+        if (!rowHeights && (!(rowsPx > 0) || Math.abs(rowsPx - framePx) <= 1)) continue;
+        grown.set(block.id, {
+          height: Math.round(rowsPx * 9525),
+          ...(rowHeights ? { rowHeights } : {}),
+        });
+        continue;
       }
       const drawnPx = table.offsetHeight + rowGrowth;
       if (!rowHeights && (!(drawnPx > 0) || drawnPx <= framePx + 1)) continue;
@@ -40743,13 +40851,35 @@ export default function PresentationWindow({
       if (!contextualSmartArtTextIsWritable) return false;
       const nextText = text.slice(0, MAX_SMARTART_OUTLINE_TEXT_LENGTH);
       if (contextualNativeSmartArt) {
-        if (nativeSmartArtDispatchRef.current.readOnly || nativeSmartArtDispatchRef.current.pageId !== contextualNativeSmartArt.pageId || deckContentGenerationRef.current !== contextualNativeSmartArt.generation) return false;
-        return commitLiveActiveBlocks((blocks) => {
+        if (nativeSmartArtDispatchRef.current.readOnly || nativeSmartArtDispatchRef.current.pageId !== contextualNativeSmartArt.pageId) return false;
+        // The deck a generation on since the pane drew (another window came, its room
+        // delivered; an IME's words committing a moment later): the row's words are
+        // still written when the point's words are as the pane showed them, and never
+        
+        const shownWords = contextualNativeSmartArt.outline.find((point) => point.id === itemId)?.text;
+        const movedOn = deckContentGenerationRef.current !== contextualNativeSmartArt.generation;
+        let refused = "";
+        const written = commitLiveActiveBlocks((blocks) => {
           const primary = blocks.find(block => block.id === selectedBlockIdRef.current);
           const group = readNativeSmartArtGroup(blocks, primary);
-          return group && group.groupId === contextualNativeSmartArt.groupId && JSON.stringify(group.receipt) === JSON.stringify(contextualNativeSmartArt.receipt)
-            ? updateNativeSmartArtText(blocks, group, itemId, nextText) : null;
+          if (!group || group.groupId !== contextualNativeSmartArt.groupId || JSON.stringify(group.receipt) !== JSON.stringify(contextualNativeSmartArt.receipt)) {
+            refused = movedOn ? "group" : "";
+            return null;
+          }
+          if (movedOn && group.outline.find((point) => point.id === itemId)?.text !== shownWords) {
+            refused = "point-words-moved-on";
+            return null;
+          }
+          return updateNativeSmartArtText(blocks, group, itemId, nextText);
         });
+        if (!written && refused && nextText !== shownWords) {
+          reportClientError(
+            { name: "PresentationSmartArtPaneRowNotWritten", message: `local-refused:${refused} point=${itemId.slice(-12)}` },
+            { source: "window", windowType: "presentation" },
+          );
+          toast({ title: t("presentation.smartartContext.paneWordsNotSaved"), variant: "destructive" });
+        }
+        return written;
       }
       return commitLiveActiveBlocks((blocks) => {
         const liveSelection = resolvePresentationSelectionAuthority(
@@ -40810,6 +40940,32 @@ export default function PresentationWindow({
       const writtenNative = prepared && typeof paneIndex === "number"
         ? nativeSmartArtWithWords(prepared.originals, new Map([[paneIndex, text.slice(0, MAX_SMARTART_OUTLINE_TEXT_LENGTH)]]))
         : null;
+      if (prepared && writtenNative && typeof paneIndex === "number" && !slidesRef.current.includes(prepared.prepared)) {
+        // The prepared slide replaced in the deck (a delivery, its preparation not
+        // let go yet): mapped onto it, the words would go nowhere, unsaid. A defence
+        
+        // They are written on the file's diagram where it stands now, or the author
+        // is told -- never an empty write (TRIAGE S11g guard).
+        const live = slidesRef.current.find((slide) => slide.id === prepared.slideId);
+        const groupId = prepared.originals[0]?.groupId;
+        const member = live?.blocks.find((block) => block.groupId === groupId && block.type === "text");
+        const group = live && member ? readNativeSmartArtGroup(live.blocks, member) : null;
+        const pointId = preparedSmartArtViewRef.current?.outline[paneIndex]?.id;
+        const words = text.slice(0, MAX_SMARTART_OUTLINE_TEXT_LENGTH);
+        const already = group && pointId ? group.outline.find((point) => point.id === pointId)?.text === words : false;
+        const next = !already && live && group && pointId ? updateNativeSmartArtText(live.blocks, group, pointId, words) : null;
+        if (already || next) {
+          setPreparedSmartArt(null);
+          if (next && live) commitSlides(slidesRef.current.map((slide) => (slide === live ? { ...slide, blocks: next } : slide)));
+          return true;
+        }
+        reportClientError(
+          { name: "PresentationSmartArtPaneRowNotWritten", message: `local-refused:prepared-slide-replaced point=${String(pointId ?? itemId).slice(-12)}` },
+          { source: "window", windowType: "presentation" },
+        );
+        toast({ title: t("presentation.smartartContext.paneWordsNotSaved"), variant: "destructive" });
+        return false;
+      }
       if (prepared && writtenNative) {
         const replaced = new Map(prepared.originals.map((block, index) => [block, writtenNative[index]]));
         const restored: SlideModel = {
@@ -49198,6 +49354,74 @@ export default function PresentationWindow({
     t,
   ]);
 
+  // The live deck for callers outside this window (the embedded editor's
+  // Automation API, lib/embed/automation): read as an AI edit's base is, and
+  // a change of its slides committed as one step of the window's own
+  // history, room and autosave (commitDeck), as a ribbon button commits it;
+  // a new slide made as the ribbon's New Slide makes it.
+  const liveAutomationRef = useRef<Omit<LivePresentationEditor, "kind">>(null!);
+  liveAutomationRef.current = {
+    read: () =>
+      buildContent(
+        slidesRef.current, themeRef.current, mastersRef.current, sectionsRef.current, headerFooterRef.current,
+        printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current, customSlideShowsRef.current,
+        fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
+      ) as Record<string, unknown>,
+    writable: () => !previewMode && !autosave.readOnly && !autosave.loading,
+    activeSlideIndex: () => activeIndexRef.current,
+    withNewSlide: (layout, afterIndex) => {
+      const inserted = slidesWithNewSlideFromLayout(
+        slidesRef.current,
+        afterIndex,
+        layout,
+        () => crypto.randomUUID(),
+        layoutFrameSourceForTheme(themeRef.current),
+        mastersRef.current,
+      );
+      if (!inserted) return null;
+      return {
+        index: inserted.index,
+        content: buildContent(
+          inserted.slides, themeRef.current, mastersRef.current, sectionsRef.current, headerFooterRef.current,
+          printSettingsRef.current, sensitivityRef.current, slideShowSettingsRef.current, customSlideShowsRef.current,
+          fontFacesRef.current, viewSettingsRef.current, fontReplacementsRef.current,
+        ) as Record<string, unknown>,
+      };
+    },
+    goToSlide: (index) => {
+      if (!Number.isInteger(index) || index < 0 || index >= slidesRef.current.length) return false;
+      activeIndexRef.current = index;
+      setActiveIndex(index);
+      return true;
+    },
+    commit: (next, changedSlideIds) => {
+      if (!liveAutomationRef.current.writable()) return false;
+      const changed = new Set(changedSlideIds);
+      const own = new Map(slidesRef.current.map((slide) => [slide.id, slide]));
+      const nextSlides = normalizeSlides(next).map((slide) => (changed.has(slide.id) ? slide : own.get(slide.id) ?? slide));
+      if (!nextSlides.length) return false;
+      const nextSections = reconcileSectionsAfterSlideChange(slidesRef.current, sectionsRef.current, nextSlides);
+      const before = deckContentGenerationRef.current;
+      commitDeck(nextSlides, mastersRef.current, nextSections);
+      return deckContentGenerationRef.current !== before;
+    },
+  };
+  // Registered once the deck's slides are in (the window's load identity):
+  // a caller reads the deck, never the empty slide shown while it opens.
+  const liveDeckIn = autosave.page?.id === pageId && hydratedPresentationPageId === pageId;
+  useEffect(() => {
+    if (!pageId || guestMode || !liveDeckIn) return undefined;
+    return registerLiveEditor(pageId, {
+      kind: "presentation",
+      read: () => liveAutomationRef.current.read(),
+      writable: () => liveAutomationRef.current.writable(),
+      activeSlideIndex: () => liveAutomationRef.current.activeSlideIndex(),
+      withNewSlide: (layout, afterIndex) => liveAutomationRef.current.withNewSlide(layout, afterIndex),
+      goToSlide: (index) => liveAutomationRef.current.goToSlide(index),
+      commit: (next, changedSlideIds) => liveAutomationRef.current.commit(next, changedSlideIds),
+    });
+  }, [guestMode, liveDeckIn, pageId]);
+
   useEffect(() => {
     function handler(event: Event) {
       const detail = (event as CustomEvent<DocumentEditUndoRequestDetail>)
@@ -52885,7 +53109,12 @@ export default function PresentationWindow({
       ? null
       : presentationCharacterSpacingPreset(ribbonLetterSpacing);
   const applyFontDialogResult = (result: PresentationFontDialogResult): boolean => {
-    const runPatch = { ...result.runPatch };
+    // The dialog's face box is the Latin text font: its face goes on Latin
+    // characters only, as PowerPoint's Latin box writes `a:latin` alone
+    // (TRIAGE 54, `latinTextFontPatch`).
+    const runPatch = Object.hasOwn(result.runPatch, "fontFamily")
+      ? latinTextFontPatch({ ...result.runPatch })
+      : { ...result.runPatch };
     if (result.sizePt !== undefined) {
       const fontSize = ribbonFontSizeFromPoints(String(result.sizePt));
       if (fontSize === undefined) return false;
@@ -62919,6 +63148,7 @@ export default function PresentationWindow({
                 updateContextualSmartArtOutlineText,
                 changeNativeSmartArtStructure,
                 closeSmartArtTextPane,
+                smartArtPaneLockedByPeers: smartArtPanePeers && Boolean(contextualNativeSmartArt || preparedSmartArt),
               }}
             /></Suspense>
           ) : null}

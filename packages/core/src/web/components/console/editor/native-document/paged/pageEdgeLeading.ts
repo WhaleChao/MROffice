@@ -77,6 +77,9 @@ export function trailingAutoLeadingCreditPx(block: Element | null | undefined): 
   // Table rows and exact/atLeast rules are not covered by the controls.
   const table = last.closest("table");
   if (table && block.contains(table)) return 0;
+  // An "at least" line on the grid whose floor leaves it one slot is the
+  // slot's, its text centred by its own single line (gridFootCreditPx).
+  if (atLeastOneSlotGridLine(last)) return gridFootCreditPx(last, Number.parseFloat(getComputedStyle(last).lineHeight));
   if (last.hasAttribute("data-line-height-pt") || last.hasAttribute("data-line-height-rule")) return 0;
   // Word 文档网格 (`<w:docGrid w:type="lines">`): every line's advance IS a whole
   // grid slot, so there is no Auto leading hanging below the last line for the
@@ -135,6 +138,7 @@ export function trailingAutoLeadingCreditPx(block: Element | null | undefined): 
  */
 export function trailingAutoLeadingCreditUnlaidPx(block: HTMLElement): number {
   if (!block.matches(TEXT_BLOCK) || block.querySelector(INLINE_PICTURE)) return 0;
+  if (atLeastOneSlotGridLine(block)) return gridFootCreditPx(block, Number.parseFloat(getComputedStyle(block).lineHeight));
   if (block.hasAttribute("data-line-height-pt") || block.hasAttribute("data-line-height-rule")) return 0;
   if (block.closest('[data-doc-grid="lines"]') && block.getAttribute("data-snap-to-grid") !== "false") {
     return gridFootCreditPx(block, Number.parseFloat(getComputedStyle(block).lineHeight));
@@ -164,13 +168,32 @@ function gridFootCreditOff(): boolean {
  * past (gs45)). Corpus R393-D04's "1. Introduction" ended page 1 in Word
  * and opened page 2 here. Read from a block whose every line is the same
  * whole slots of one single line (`data-docs-word-grid-natural`, written by
- * DocumentPageSetup); any other grid block keeps the strict fit.
+ * DocumentPageSetup); any other grid block keeps the strict fit. One slot is
+ * no different (probes/vsp8, 16.3 pt grid: 10 pt Palatino Linotype, its
+ * single line 13.49 pt, stays 1.38 pt past the foot, goes on 1.68 pt past,
+ * Auto and at least 14 pt alike): such a block records its pitch too
+ * (`data-docs-word-grid-pitch`), and is credited while its line is that pitch.
+ * `window.__docsGridOneSlotFootOff = true` records none (A/B).
  */
 function gridFootCreditPx(block: HTMLElement, lineHeightPx: number): number {
   if (gridFootCreditOff() || block.querySelector(INLINE_PICTURE)) return 0;
   const natural = Number.parseFloat(block.getAttribute("data-docs-word-grid-natural") ?? "");
   if (!(natural > 0) || !(lineHeightPx > natural)) return 0;
+  // A one-slot block's (no slots recorded): only while its line is that slot.
+  const pitch = Number.parseFloat(block.getAttribute("data-docs-word-grid-pitch") ?? "");
+  if (!block.hasAttribute("data-docs-word-grid-block-slots") && !(pitch > 0 && Math.abs(lineHeightPx - pitch) <= 0.5)) return 0;
   return (lineHeightPx - natural) / 2;
+}
+
+/** A grid-snapped "at least" block DocumentPageSetup recorded a one-slot
+ * single line for (`data-docs-word-grid-natural` without slots): Word sets
+ * its text in the slot by that line, the floor aside (probes/vsp8). */
+function atLeastOneSlotGridLine(block: HTMLElement): boolean {
+  return block.getAttribute("data-line-height-rule") === "atLeast" &&
+    block.hasAttribute("data-docs-word-grid-natural") &&
+    !block.hasAttribute("data-docs-word-grid-block-slots") &&
+    block.closest('[data-doc-grid="lines"]') !== null &&
+    block.getAttribute("data-snap-to-grid") !== "false";
 }
 
 /** The bottom of the lowest in-line picture on `block`'s last line, or null. */

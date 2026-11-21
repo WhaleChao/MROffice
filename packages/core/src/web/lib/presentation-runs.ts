@@ -34,6 +34,8 @@ import { normalizeOfficeTextPaint, type OfficeTextPaint } from "./office-text-pa
 import { normalizeOfficeShapeShadow, type OfficeShapeShadow } from "./office-shape-paint";
 import { officeTextOutlineLineOfFields, type OfficeTextOutlineLine } from "./office-text-outline/office-text-outline-css";
 import { officeDashUnits } from "./office-stroke-dash";
+import { officeFaceIsEastAsian } from "./office-fonts/office-east-asian-faces";
+import { fontScriptClusters } from "../components/office-ribbon/officeFontScriptSlots";
 
 /** A theme colour on a run: its slot, Office's modifiers, and the RGB it resolved to. */
 export interface RunColorScheme {
@@ -1250,6 +1252,95 @@ export function applyRunFormat(
     }
   }
   return mergeRuns(out, options);
+}
+
+/** The keys of a run style that name its face. */
+const FACE_KEYS = ["fontFamily", "themeFontRole"] as const;
+
+
+
+
+
+
+
+
+
+
+export const LATIN_TEXT_FONT_PATCH: unique symbol = Symbol("latinTextFontPatch");
+
+/** The patch, marked as coming from a Latin text font box (`LATIN_TEXT_FONT_PATCH`). */
+export function latinTextFontPatch<T extends object>(patch: T): T {
+  return { ...patch, [LATIN_TEXT_FONT_PATCH]: true };
+}
+
+function isLatinTextFontPatch(patch: object): boolean {
+  return (patch as { [LATIN_TEXT_FONT_PATCH]?: boolean })[LATIN_TEXT_FONT_PATCH] === true;
+}
+
+/**
+ * Whether a face set by this patch goes on every character, or on the
+ * characters drawn from a run's Latin (or complex-script) slot only: the
+ * ribbon's font box puts an East Asian face on every character and a Latin
+ * face on Latin characters (`applyFontBoxRunFormat`); a Latin text font box
+ * puts any face on Latin characters.
+ */
+export function fontBoxFaceSkipsEastAsian(patch: object, fontFamily: unknown): boolean {
+  return typeof fontFamily === "string" && fontFamily.trim() !== ""
+    && (isLatinTextFontPatch(patch) || !officeFaceIsEastAsian(fontFamily));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function applyFontBoxRunFormat(
+  runs: readonly TextRun[],
+  start: number,
+  end: number,
+  patch: Partial<RunStyle> | ((style: RunStyle | undefined) => Partial<RunStyle>),
+  options?: RunNormalizationOptions,
+): TextRun[] {
+  // A patch made per run (a link's colour beside the face) states its face
+  // alike for every run: read it off a run with no style of its own.
+  const stated = typeof patch === "function" ? patch(undefined) : patch;
+  if (!fontBoxFaceSkipsEastAsian(stated, stated.fontFamily)) return applyRunFormat(runs, start, end, patch, options);
+  const face: Partial<RunStyle> = {};
+  for (const key of FACE_KEYS) {
+    if (Object.hasOwn(stated, key)) (face as Record<string, unknown>)[key] = stated[key];
+  }
+  const withoutFace = (made: Partial<RunStyle>): Partial<RunStyle> => {
+    const rest = { ...made };
+    for (const key of FACE_KEYS) delete (rest as Record<string, unknown>)[key];
+    return rest;
+  };
+  const rest = typeof patch === "function" ? (style: RunStyle | undefined) => withoutFace(patch(style)) : withoutFace(patch);
+  let out = typeof rest === "function" || Object.keys(rest).length
+    ? applyRunFormat(runs, start, end, rest, options)
+    : mergeRuns(runs, options);
+  const text = textFromRuns(out);
+  const from = Math.min(Math.max(Math.round(start), 0), text.length);
+  const to = Math.min(Math.max(Math.round(end), 0), text.length);
+  const stretches: Array<[number, number]> = [];
+  for (const cluster of fontScriptClusters(text)) {
+    if (cluster.slot === "eastAsia" || cluster.to <= from || cluster.from >= to) continue;
+    const a = Math.max(cluster.from, from);
+    const b = Math.min(cluster.to, to);
+    const last = stretches[stretches.length - 1];
+    if (last && last[1] === a) last[1] = b;
+    else stretches.push([a, b]);
+  }
+  for (const [a, b] of stretches) out = applyRunFormat(out, a, b, face, options);
+  return out;
 }
 
 /**

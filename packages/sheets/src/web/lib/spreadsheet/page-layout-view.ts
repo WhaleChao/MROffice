@@ -6,6 +6,7 @@
 import { pxToPt } from "@mrnote/core/web/lib/office-units.ts";
 import { aspectLockedResizeSize } from "./drawing-aspect";
 import { OFFICE_PRINT_IDENTITY, type OfficePrintScale } from "./office-print-metrics";
+import { styledColumnEdge } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import {
   DEFAULT_SPREADSHEET_ROW_HEIGHT_PX,
   DEFAULT_SPREADSHEET_COLUMN_WIDTH_PX,
@@ -235,6 +236,24 @@ export function pageLayoutDrawingBands(sizes: readonly number[], indices: readon
 }
 
 /**
+ * The cells that keep a trailing page for the blanks whose border or fill
+ * record widens Excel's range (the import's printedFormatExtent, reading
+ * 956): the two it ends at where the import names them (`ends`, reading
+ * 968: R454-X14's Assumptions ends at L38 and M5, and Windows Excel leaves
+ * out the M38 page nothing is on), else the range's far corner (lookwin
+ * p35-lw: Z5 alone, its blank band printed).
+ */
+export function printedFormatExtentKeys(extent: unknown): string[] {
+  const { rows, cols, ends } = (extent ?? {}) as { rows?: unknown; cols?: unknown; ends?: unknown };
+  if (typeof rows !== "number" || typeof cols !== "number" || !Number.isInteger(rows) || !Number.isInteger(cols)
+    || rows <= 0 || cols <= 0) return [];
+  const named = Array.isArray(ends) && ends.length > 0 && ends.every((end) => Array.isArray(end) && end.length === 2
+    && end.every((index) => typeof index === "number" && Number.isInteger(index) && index >= 0))
+    ? (ends as [number, number][]).map(([row, col]) => `${row}:${col}`) : null;
+  return named ?? [`${rows - 1}:${cols - 1}`];
+}
+
+/**
  * Whether a cell of its own (a line format painted onto the grid's blanks
  * set aside) widens the range Excel prints without a print area: a value, or
  * a blank whose format shows on paper -- a border, a pattern, a gradient or
@@ -248,6 +267,50 @@ export function printedCellWidensRange(cell: { value?: unknown; formula?: unknow
   const border = Boolean(style.border) || Boolean(style.borderEdges) || Boolean(style.borderTop || style.borderBottom || style.borderLeft || style.borderRight);
   const valued = (typeof cell.value === "string" && cell.value !== "") || (typeof cell.formula === "string" && cell.formula !== "");
   return valued || fill || border || Boolean(style.pattern) || Boolean(style.gradientFill);
+}
+
+const VALUED_CELLS_EXTENT = new WeakMap<object, { rows: number; cols: number }>();
+
+/**
+ * The range a sheet's real cells occupy, for its print: the import's
+ * occupiedExtent (`occupied`) widened to the cells holding a value or a
+ * formula now; null when the import read none. A tiled workbook's page body
+ * is projected from its stub, which leaves every valued cell to the tiles
+ * (they own them: a tiled save, sort and recalc write them there), so its
+ * extent stopped at the stub's last valued row (R13-X27: 50 rows for 51,
+ * R379-X18: 5 for 140); the cells the window holds carry the tiles' too. A
+ * whole read's extent already holds every valued cell, and a value entered
+ * past it is in Excel's used range as well. The API's writer reads the same
+ * (`_occupied_extent_with_values`).
+ */
+export function occupiedExtentWithValues(
+  cells: Readonly<Record<string, unknown>>,
+  occupied: unknown,
+): { rows: number; cols: number } | null {
+  const extent = occupied && typeof occupied === "object" ? occupied as { rows?: unknown; cols?: unknown } : null;
+  const importedRows = extent?.rows;
+  const importedCols = extent?.cols;
+  if (typeof importedRows !== "number" || typeof importedCols !== "number") return null;
+  let valued = VALUED_CELLS_EXTENT.get(cells);
+  if (!valued) {
+    let rows = 0;
+    let cols = 0;
+    for (const key in cells) {
+      const cell = cells[key] as { value?: unknown; formula?: unknown } | undefined;
+      if (!cell || typeof cell !== "object") continue;
+      if ((cell.value === undefined || cell.value === null || cell.value === "")
+        && !(typeof cell.formula === "string" && cell.formula !== "")) continue;
+      const separator = key.indexOf(":");
+      const row = Number(key.slice(0, separator));
+      const col = Number(key.slice(separator + 1));
+      if (separator <= 0 || !Number.isInteger(row) || !Number.isInteger(col)) continue;
+      if (row + 1 > rows) rows = row + 1;
+      if (col + 1 > cols) cols = col + 1;
+    }
+    valued = { rows, cols };
+    VALUED_CELLS_EXTENT.set(cells, valued);
+  }
+  return { rows: Math.max(importedRows, valued.rows), cols: Math.max(importedCols, valued.cols) };
 }
 
 /**
@@ -267,8 +330,13 @@ export function printedOccupiedLineBlanks(
   own: Readonly<Record<string, unknown>>,
   occupied: unknown,
 ): string[] {
+  // Down to the last valued row (a tiled body's valued cells stay the
+  // tiles', occupiedExtentWithValues), across the import's own columns only:
+  // past them a column format's painted blanks kept a trailing page Windows
+  // Excel leaves out (R379-X18's survey, values in O:Q beside an extent of
+  // N: 24 pages for 23).
   const extent = occupied && typeof occupied === "object" ? occupied as { rows?: unknown; cols?: unknown } : null;
-  const rows = typeof extent?.rows === "number" ? extent.rows : 0;
+  const rows = occupiedExtentWithValues(cells, occupied)?.rows ?? 0;
   const cols = typeof extent?.cols === "number" ? extent.cols : 0;
   if (!(rows > 0) || !(cols > 0) || cells === own) return [];
   const keys: string[] = [];
@@ -280,6 +348,46 @@ export function printedOccupiedLineBlanks(
     if (cell && typeof cell === "object" && printedCellWidensRange(cell as { value?: unknown; formula?: unknown; style?: Record<string, unknown> })) keys.push(key);
   }
   return keys;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function printedTailUsedColumnEdge(sheet: object): number {
+  const { cells, occupiedExtent } = sheet as { cells?: unknown; occupiedExtent?: unknown };
+  const cols = cells && typeof cells === "object"
+    ? occupiedExtentWithValues(cells as Record<string, unknown>, occupiedExtent)?.cols
+    : occupiedExtent && typeof occupiedExtent === "object" ? (occupiedExtent as { cols?: unknown }).cols : undefined;
+  const occupiedCols = typeof cols === "number" && Number.isInteger(cols) && cols > 0 && cols <= MAX_GRID_COLUMNS ? cols : 0;
+  return Math.max(styledColumnEdge(sheet), occupiedCols);
+}
+
+/**
+ * Whether a merged block whose value lies in its anchor covers the cell: a
+ * carried tail counts its columns as holding a value in the rows it spans
+ * (lookwin p222-lw n5: B10:C12 holding "merged", the note's tail prints on
+ * C's page; the server's column_holds).
+ */
+export function printedMergeHoldsAt(
+  spans: readonly { row: number; col: number; rowSpan: number; colSpan: number }[],
+  cells: Readonly<Record<string, unknown>>,
+  row: number,
+  col: number,
+): boolean {
+  for (const span of spans) {
+    if (row < span.row || row >= span.row + span.rowSpan || col < span.col || col >= span.col + span.colSpan) continue;
+    const anchor = cells[`${span.row}:${span.col}`] as { value?: unknown } | undefined;
+    if (typeof anchor?.value === "string" && anchor.value !== "") return true;
+  }
+  return false;
 }
 
 /**
@@ -363,6 +471,15 @@ export function pageLayoutCarriedRunPrints(input: {
   for (const col of pageCols) {
     if (col > runEndCol || leftOf(col) >= textEnd - slack) break;
     if (input.columnHolds(col)) return true;
+  }
+  // Running on past the page, it prints here too when it reaches a column
+  // holding a value further on before a value in its own row stops it
+  // (lookwin p222-lw n4: C5's "x" on the third page, the note prints on the
+  // second as well). The server's writer: reaches_later_value.
+  if (runEndCol >= last && textEnd + padding > leftOf(last) + slack) {
+    for (let col = last + 1; col <= runEndCol && lefts.has(col) && leftOf(col) < textEnd - slack; col += 1) {
+      if (input.columnHolds(col)) return true;
+    }
   }
   // With the cell's right padding (p63-lw's filled notes end 3 pt short of
   // the unfilled one that set the band, and print).

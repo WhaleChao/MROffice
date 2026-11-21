@@ -5,6 +5,8 @@
  * Copyright (C) 2026 MRNote. SPDX-License-Identifier: AGPL-3.0-only
  * Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
  */
+import { embedExportWatermark, getEmbedAccess } from "./embed/session-access";
+import { markServerStamped } from "./embed/watermark-pdf";
 import { SpreadsheetPdfViewError, assertSpreadsheetPdfViewBudget, type SpreadsheetPdfExportView } from "./spreadsheet/pdf-export-view";
 
 import { apiFetchRaw, isApiRequestError } from "./api";
@@ -161,6 +163,11 @@ export interface PageExportRequest {
    * (lib/document-export/fillable-pdf) before it is saved.
    */
   fillableForm?: boolean;
+  /**
+   * The file is printed, not saved (an embedded session's `print`
+   * permission admits it where `download` does not): `purpose=print`.
+   */
+  purpose?: "print";
 }
 
 export const PPTX_EXPORT_LOSS_CONFIRMATION_REQUIRED_CODE =
@@ -703,6 +710,11 @@ function pageExportRequest(
   if (request.showAllNotes === true && request.format === "pdf") {
     query.set("show_all_notes", "true");
   }
+  // An embedded session tells a print from a download (its permissions
+  // differ); the workspace's requests are unchanged.
+  if (request.purpose === "print" && request.format === "pdf" && getEmbedAccess() !== null) {
+    query.set("purpose", "print");
+  }
   if (request.printRoute === true && request.format === "pdf") {
     query.set("print_route", "true");
   }
@@ -827,7 +839,9 @@ export async function preparePageExport(request: PageExportRequest): Promise<str
 export async function fetchPageExportBlob(
   request: PageExportRequest,
 ): Promise<Blob> {
-  return withExportPassword(request, async (secured) => {
+  // A PDF read to be shown or printed: a print, to an embedded session.
+  const asked = request.format === "pdf" && request.purpose === undefined ? { ...request, purpose: "print" as const } : request;
+  return withExportPassword(asked, async (secured) => {
     const response = await requestPageExport(secured, "bytes");
     if (
       response.headers.get("x-mrnote-export-download") === "signed-url" ||
@@ -835,8 +849,14 @@ export async function fetchPageExportBlob(
     ) {
       throw new Error("The export arrived as a download link, not a file.");
     }
-    return encryptedExportBlob(await response.blob(), secured);
+    return serverStampedInEmbed(await encryptedExportBlob(await response.blob(), secured), secured.format);
   });
+}
+
+/** A PDF the export answered an embedded session whose watermark is stamped
+ * into exports: the server stamped it (lib/embed/watermark-pdf). */
+function serverStampedInEmbed(blob: Blob, format: PageExportFormat): Blob {
+  return format === "pdf" && embedExportWatermark() ? markServerStamped(blob) : blob;
 }
 
 /**
@@ -1064,7 +1084,7 @@ async function downloadPlainPageExport(request: PageExportRequest): Promise<Page
     fallback,
     extension,
   );
-  const blob = await readResponseWithProgress(response, filename);
+  const blob = serverStampedInEmbed(await readResponseWithProgress(response, filename), request.format);
   // A long export finishes after its click stopped counting as one: the
   // browser may then block the download silently (startDownloadWhenAllowed).
   if (!startDownloadWhenAllowed(filename, () => downloadBlobFile(filename, blob))) {

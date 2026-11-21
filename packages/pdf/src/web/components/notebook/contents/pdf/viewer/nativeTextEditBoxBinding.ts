@@ -10,8 +10,9 @@ import type {
 import {
   summarizePdfNativeSelectionItems,
 } from "../../../../../lib/pdf/engine/native/list-text-model";
-import type {
-  PdfNativeParagraphEditBox,
+import {
+  pdfNativeParagraphBoxHasHandle,
+  type PdfNativeParagraphEditBox,
 } from "../../../../../lib/pdf/native-paragraph-edit-boxes";
 import {
   PDF_NATIVE_TEXT_ITEM_INDEX_ATTR,
@@ -95,7 +96,9 @@ export function bindNativeTextParagraphEditBoxes(
     stale.remove();
   }
   for (const paragraph of paragraphs) {
-    if (paragraph.items.length < 2) continue;
+    // (A box of one item the reader read from several runs of ink has a
+    // handle too: no one span of the layer holds its words.)
+    if (!pdfNativeParagraphBoxHasHandle(paragraph)) continue;
     const overlay = layer.ownerDocument.createElement("span");
     const summaryText =
       paragraph.selectionItem?.str ??

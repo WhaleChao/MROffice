@@ -70,6 +70,7 @@ import {
 import { isImeCompositionActive } from "./native-document/imeCompositionGuard";
 import { useCurrentPageId } from "./PageIdContext";
 import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
+import { embedAllowsManagingComment } from "../../../lib/embed/session-access";
 
 interface CommentsPanelProps {
   editor: Editor;
@@ -602,6 +603,8 @@ export default function CommentsPanel({
     (rendered: CommentThread) => {
       const liveThread = authenticateRenderedThread(rendered);
       if (!liveThread) return;
+      // An embedded session without manageComments resolves its own only.
+      if (!embedAllowsManagingComment(liveThread.comments[0]?.author, author)) return;
       if (
         editor.commands.setCommentResolved(liveThread.id, !liveThread.resolved)
       ) {
@@ -610,20 +613,21 @@ export default function CommentsPanel({
         publishCurrentSnapshot();
       }
     },
-    [authenticateRenderedThread, editor, publishCurrentSnapshot],
+    [author, authenticateRenderedThread, editor, publishCurrentSnapshot],
   );
 
   const removeThreadHandler = useCallback(
     (rendered: CommentThread) => {
       const liveThread = authenticateRenderedThread(rendered);
       if (!liveThread) return;
+      if (!liveThread.comments.every((comment) => embedAllowsManagingComment(comment.author, author))) return;
       if (editor.commands.removeComment(liveThread.id)) {
         setActiveThreadId(null);
         setEditingTarget(null);
         publishCurrentSnapshot();
       }
     },
-    [authenticateRenderedThread, editor, publishCurrentSnapshot],
+    [author, authenticateRenderedThread, editor, publishCurrentSnapshot],
   );
 
   const removeReplyHandler = useCallback(
@@ -641,23 +645,25 @@ export default function CommentsPanel({
       ) {
         return;
       }
+      if (!embedAllowsManagingComment(liveReply.author, author)) return;
       if (editor.commands.removeCommentReply(liveThread.id, replyIndex)) {
         const rootId = liveThread.comments[0]?.id;
         if (rootId) commentFocusRefs.current.get(rootId)?.focus();
         publishCurrentSnapshot();
       }
     },
-    [authenticateRenderedThread, editor, publishCurrentSnapshot],
+    [author, authenticateRenderedThread, editor, publishCurrentSnapshot],
   );
 
   const removeAllThreads = useCallback(() => {
     if (!authenticateRenderedSnapshot()) return;
+    if (!embedAllowsManagingComment(null, author)) return;
     if (editor.commands.removeAllComments()) {
       setActiveThreadId(null);
       setEditingTarget(null);
       publishCurrentSnapshot();
     }
-  }, [authenticateRenderedSnapshot, editor, publishCurrentSnapshot]);
+  }, [author, authenticateRenderedSnapshot, editor, publishCurrentSnapshot]);
 
   const focusRange = useCallback(
     (rendered: CommentThread) => {

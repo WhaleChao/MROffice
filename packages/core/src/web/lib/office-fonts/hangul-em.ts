@@ -108,3 +108,28 @@ export function withHangulEmFaces(stack: string, ensure?: (family: string) => vo
   }
   return changed ? out.join(", ") : stack;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function withHangulFallback(stack: string, ensure?: (family: string) => void): string {
+  if (hangulEmOff() || !stack) return stack;
+  const tokens = stack.split(",").map((token) => token.trim()).filter(Boolean);
+  if (tokens.some((token) => isHangulEmAlias(token))) return stack;
+  const malgun = hangulEmFamilyOf("Malgun Gothic");
+  if (!malgun) return stack;
+  // The sans fallback only: a serif or monospace face's Hangul on Windows is not yet measured.
+  const at = tokens.findIndex((token) => unquote(token) === "MRAI Script Fallback");
+  if (at < 0) return stack;
+  ensure?.("Malgun Gothic");
+  return [...tokens.slice(0, at), `"${malgun.alias}"`, ...tokens.slice(at)].join(", ");
+}

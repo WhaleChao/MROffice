@@ -204,6 +204,40 @@ export function resolveDocumentWordWrap(docAttrs:Record<string,unknown>,blockAtt
   return resolveParagraphOnOff("wordWrap",docAttrs,blockAttrs,sourceAdapter,unresolvedTable);
 }
 
+
+
+
+
+
+export function docsWordWrapInertOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsWordWrapInertOff?: boolean }).__docsWordWrapInertOff === true;
+}
+
+/**
+ * Whether a Word document leaves w:wordWrap off without effect: Windows Word
+ * cuts a word only in compatibility mode 14 and later. In mode 12, mode 11
+ * and a document that states no mode, a paragraph with wordWrap off breaks
+ * Latin and Hangul words as one with it on, in the body and in a table cell,
+ * whatever the alignment, font or East Asian language
+ * (docx-look/print9/probes ww3 and ww4: 30 x, a space and 50 y in Courier New
+ * 12 pt take the y down whole in 11/12/none and cut them at the margin in
+ * 14/15; corpus R461-D71, a pandoc document whose Source Code style turns it
+ * off, wraps its R code at the spaces in Word's 160 pages).
+ */
+export function documentWordWrapOffInert(docAttrs: Record<string, unknown>, sourceAdapter: unknown): boolean {
+  if (sourceAdapter == null && docAttrs.styleDefinitions != null) sourceAdapter = "docx";
+  if (sourceAdapter !== "docx" || docsWordWrapInertOff()) return false;
+  const mode = normalizeWordCompatibilityMode(docAttrs.wordCompatibilityMode);
+  return mode === null || mode < 14;
+}
+
+/** The paragraph's word wrap as Word applies it: resolveDocumentWordWrap, with
+ * an off that the document's compatibility mode leaves inert read as on. */
+export function resolveEffectiveDocumentWordWrap(docAttrs:Record<string,unknown>,blockAttrs:Record<string,unknown>,sourceAdapter:unknown,inTable=false,tableAttrs?:Record<string,unknown>):boolean|null {
+  const value = resolveDocumentWordWrap(docAttrs,blockAttrs,sourceAdapter,inTable,tableAttrs);
+  return value === false && documentWordWrapOffInert(docAttrs, sourceAdapter) ? true : value;
+}
+
 /** A Word compatibility mode the document states (1..99), else null. */
 export function normalizeWordCompatibilityMode(value: unknown): number | null {
   return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 99 ? value : null;

@@ -218,6 +218,20 @@ export function sheetWithoutHyperlinkAreasAround<S extends object>(sheet: S, ran
 }
 
 /**
+ * The sheet without the area links Clear All and Clear Contents delete
+ * whole: those holding all of `range` and those inside it
+ * (`laidAreaLinksClearedBy`). The same sheet when none is.
+ */
+export function sheetWithoutHyperlinkAreasClearedBy<S extends object>(sheet: S, range: Rect): S {
+  return without(
+    sheet,
+    (area) =>
+      (area.r1 <= range.r1 && area.r2 >= range.r2 && area.c1 <= range.c1 && area.c2 >= range.c2) ||
+      (area.r1 >= range.r1 && area.r2 <= range.r2 && area.c1 >= range.c1 && area.c2 <= range.c2),
+  );
+}
+
+/**
  * The sheet with the first area link over a place given a new address and
  * ScreenTip (Edit Hyperlink on a cell the area's link is first over): the
  * whole area's, its range and its place in the list unchanged. A new address
@@ -305,13 +319,8 @@ export function laidAreaLinksOver(cells: LaidCells | null | undefined, range: Re
   return ranks;
 }
 
-/**
- * The laid area links that hold all of `range`: those touching it whose
- * cells reach every side of it.
- */
-export function laidAreaLinksAround(cells: LaidCells | null | undefined, range: Rect): ReadonlySet<number> {
-  const touching = laidAreaLinksOver(cells, range);
-  if (!cells || touching.size === 0) return touching;
+/** The box of the cells that hold each laid area link `touching` names. */
+function laidAreaBoxes(cells: LaidCells, touching: ReadonlySet<number>): Map<number, Rect> {
   const boxes = new Map<number, Rect>();
   for (const key of Object.keys(cells)) {
     const rank = laidAreaRank(cells[key]);
@@ -326,11 +335,40 @@ export function laidAreaLinksAround(cells: LaidCells | null | undefined, range: 
       box.c2 = Math.max(box.c2, col);
     }
   }
+  return boxes;
+}
+
+/**
+ * The laid area links that hold all of `range`: those touching it whose
+ * cells reach every side of it.
+ */
+export function laidAreaLinksAround(cells: LaidCells | null | undefined, range: Rect): ReadonlySet<number> {
+  const touching = laidAreaLinksOver(cells, range);
+  if (!cells || touching.size === 0) return touching;
   const around = new Set<number>();
-  for (const [rank, box] of boxes) {
+  for (const [rank, box] of laidAreaBoxes(cells, touching)) {
     if (box.r1 <= range.r1 && box.r2 >= range.r2 && box.c1 <= range.c1 && box.c2 >= range.c2) around.add(rank);
   }
   return around;
+}
+
+/**
+ * The laid area links Clear All and Clear Contents delete whole: those that
+ * hold all of `range` and those `range` holds all of; one reaching past the
+ * selection on some side and not holding it stays (Windows Excel,
+ * xlsx-rounds probe/n48-clearlinks: Clear Contents A1:D9 over A1:C8 deletes
+ * it, B7:B10 and B3:D4 across its edge leave it; CRITERIA XC-209).
+ */
+export function laidAreaLinksClearedBy(cells: LaidCells | null | undefined, range: Rect): ReadonlySet<number> {
+  const touching = laidAreaLinksOver(cells, range);
+  if (!cells || touching.size === 0) return touching;
+  const cleared = new Set<number>();
+  for (const [rank, box] of laidAreaBoxes(cells, touching)) {
+    const around = box.r1 <= range.r1 && box.r2 >= range.r2 && box.c1 <= range.c1 && box.c2 >= range.c2;
+    const within = box.r1 >= range.r1 && box.r2 <= range.r2 && box.c1 >= range.c1 && box.c2 <= range.c2;
+    if (around || within) cleared.add(rank);
+  }
+  return cleared;
 }
 
 const LAID_LINK_KEYS = [
@@ -400,6 +438,75 @@ export function cellsWithoutLaidAreaLinks<C extends LaidCells>(
     else next[key] = plain;
   }
   return (next ?? cells) as C;
+}
+
+/**
+ * `cells` (after a Clear All or Clear Contents over `range`, the links of
+ * `ranks` deleted by `cellsWithoutLaidAreaLinks`) with the range's cells
+ * holding what Windows Excel leaves them: their own links go with their
+ * contents, and a laid area link the clear did not delete (one reaching past
+ * the selection) stays on them -- shown where it was shown, and shown now
+ * where it lay beneath the cell's own link (xlsx-rounds probe/n48-clearlinks
+ * pc3: Clear Contents B3:D4 deletes B3's own link, A1:C8 stays and B3
+ * follows it). A cleared cell that showed a deleted link holds none: the
+ * one under it was its own (R462-X28 WALK1, Table List A32:B35 over
+ * A32:B32 and A32's own link kept hyperlinkOwnUnder and the link's place,
+ * and the save wrote the deleted area back). `before` is the sheet's cells
+ * before the clear.
+ */
+export function clearedCellsWithAreaLinksKept<C extends LaidCells>(
+  before: LaidCells,
+  cells: C,
+  ranks: ReadonlySet<number>,
+  range: Rect,
+): C {
+  if (laidAreaLinksOver(before, range).size === 0) return cells;
+  let next: Record<string, object | undefined> | null = null;
+  for (const key of Object.keys(before)) {
+    const was = before[key] as LaidLinkCell | undefined;
+    if (!was) continue;
+    const { row, col } = placeOf(key);
+    if (row < range.r1 || row > range.r2 || col < range.c1 || col > range.c2) continue;
+    if (!LAID_LINK_KEYS.some((name) => name in was)) continue;
+    const plain: Record<string, unknown> = { ...((cells[key] as object | undefined) ?? { value: "", kind: "text" }) };
+    for (const name of LAID_LINK_KEYS) delete plain[name];
+    const shown = was.hyperlinkInArea === true ? was.hyperlinkRank : undefined;
+    const beneath = was.hyperlink && was.hyperlinkInArea !== true ? was.hyperlinkArea : undefined;
+    let kept: { hyperlink?: string; hyperlinkTooltip?: string; hyperlinkDisplay?: string; hyperlinkRank?: number } | undefined;
+    if (typeof shown === "number" && Number.isInteger(shown) && !ranks.has(shown)) {
+      kept = { hyperlink: was.hyperlink, hyperlinkTooltip: was.hyperlinkTooltip, hyperlinkDisplay: was.hyperlinkDisplay, hyperlinkRank: shown };
+    } else if (
+      beneath &&
+      typeof beneath.hyperlinkRank === "number" &&
+      Number.isInteger(beneath.hyperlinkRank) &&
+      !ranks.has(beneath.hyperlinkRank)
+    ) {
+      kept = beneath;
+    }
+    if (kept && typeof kept.hyperlink === "string" && kept.hyperlink) {
+      plain.hyperlink = kept.hyperlink;
+      if (kept.hyperlinkTooltip) plain.hyperlinkTooltip = kept.hyperlinkTooltip;
+      if (kept.hyperlinkDisplay) plain.hyperlinkDisplay = kept.hyperlinkDisplay;
+      plain.hyperlinkInArea = true;
+      plain.hyperlinkRank = kept.hyperlinkRank;
+    }
+    const current = cells[key] as Record<string, unknown> | undefined;
+    const left = Object.keys(plain);
+    const empty =
+      !plain.hyperlink &&
+      (plain.value === "" || plain.value === undefined || plain.value === null) &&
+      left.every((name) => name === "value" || name === "kind");
+    if (empty ? current === undefined : current !== undefined && sameFields(current, plain)) continue;
+    next ??= { ...cells };
+    if (empty) delete next[key];
+    else next[key] = plain;
+  }
+  return (next ?? cells) as C;
+}
+
+function sameFields(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => Object.is(a[key], b[key]));
 }
 
 /**

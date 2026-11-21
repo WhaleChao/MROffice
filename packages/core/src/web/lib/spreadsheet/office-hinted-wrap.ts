@@ -30,6 +30,7 @@
  */
 import TABLE from "./office-wrap-advances.json";
 import { excelWindowsFaceKey, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
+import { officeArabicWrapAdvances } from "./office-arabic";
 
 type FaceTable = Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, string>>>>>>;
 
@@ -245,7 +246,24 @@ function tokens(paragraph: string): string[] {
 export function officeHintedWrapLines(text: string, face: OfficeHintedWrapFace, columnPx: number, options: OfficeHintedWrapOptions = {}): string[] | undefined {
   const advance = advancesOf(face);
   if (!advance) return undefined;
+  if (OFFICE_COMPLEX_WRAP_TEXT.test(text)) {
+    // A Calibri cell's Arabic at Windows Calibri's own joined, kerned widths
+    // (officeArabicWrapAdvances, lookwin p220-lw), in Excel's room of the
+    // column scaled to the face's size (complexWrapWidth; the API's
+    // cell_text_lines); other complex text the table cannot say for.
+    const shares = officeArabicWrapAdvances(text, face.family, face.bold === true, face.sizePt);
+    if (!shares) return undefined;
+    const scale = complexRoomScale(face.sizePt);
+    return wrapWith(text, (at) => (shares[at] ?? 0) * scale, columnPx, emPxOf(face.sizePt), options, officeDigitPx(face));
+  }
   return wrapWith(text, (_at, ch) => advance(ch), columnPx, emPxOf(face.sizePt), options, officeDigitPx(face));
+}
+
+/** Complex-script text wraps in Excel's room of the column at the face's
+ * whole-pixel em scaled to its size (lookwin p119-lw): its advances over that
+ * scale, against the room at the em. */
+function complexRoomScale(sizePt: number): number {
+  return emPxOf(sizePt) / (sizePt * 96 / 72);
 }
 
 /** One rich-text run: its text and the face it is set in. */
@@ -264,13 +282,25 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
   let emPx: number | undefined;
   let digitPx: number | undefined;
   let firstRun = true;
+  const complex = runs.some((run) => OFFICE_COMPLEX_WRAP_TEXT.test(String(run.text)));
+  const scale = complex ? complexRoomScale(runs.find((run) => String(run.text))?.sizePt ?? 11) : 1;
   for (const run of runs) {
     const piece = String(run.text).replace(/\r\n?/g, "\n");
     if (!piece) continue;
     const advance = advancesOf(run);
     if (!advance) return undefined;
     text += piece;
-    owners.push(...Array.from(piece, () => advance));
+    if (complex && OFFICE_COMPLEX_WRAP_TEXT.test(piece)) {
+      // Each run's words at its face's Arabic widths (officeHintedWrapLines).
+      const shares = officeArabicWrapAdvances(piece, run.family, run.bold === true, run.sizePt);
+      if (!shares || /[\ud800-\udfff]/.test(piece)) return undefined;
+      owners.push(...shares.map((share) => () => share * scale));
+    } else if (complex) {
+      owners.push(...Array.from(piece, () => (ch: string) => {
+        const value = advance(ch);
+        return value === undefined ? undefined : value * scale;
+      }));
+    } else owners.push(...Array.from(piece, () => advance));
     // The cell's margin is its first run's face's.
     emPx ??= emPxOf(run.sizePt);
     if (firstRun) {

@@ -1586,6 +1586,8 @@
  "presentation.smartartContext.formatReadOnly": "This SmartArt graphic's formatting can't be changed here.",
  "presentation.smartartContext.formatSelectShape": "Select a shape in the SmartArt graphic.",
  "presentation.smartartContext.formatUnavailable": "MR Note can't set this on one shape of a SmartArt graphic yet.",
+ "presentation.smartartContext.paneWordsNotSaved": "Some words you typed in the Text Pane weren't saved. Type them again.",
+ "presentation.smartartContext.paneLockedCoediting": "Someone else is editing this presentation. Edit this SmartArt graphic on the slide.",
  "presentation.smartartContext.formatArrangedByLayout": "The shapes of a SmartArt graphic are arranged by its layout.",
  "presentation.view.blackWhiteMode.gray": "Greyscale",
  "presentation.view.blackWhiteMode.ltGray": "Light Greyscale",

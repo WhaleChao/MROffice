@@ -92,9 +92,10 @@ import {
 } from "../../../lib/spreadsheet/equation-box";
 import { DEFAULT_CELL_FONT_SIZE_PT, SpreadsheetCellIndexes, borderLineWidthPx, cellFontTallerThanDefault, cellTextScripted, cellTextTurned, cellTextWraps } from "../../../lib/spreadsheet/cell-indexes";
 import { advancesOf, OFFICE_COMPLEX_WRAP_TEXT, officeDigitPx } from "@mrnote/core/web/lib/spreadsheet/office-hinted-wrap.ts";
+import { officeArabicWrapAdvances } from "@mrnote/core/web/lib/spreadsheet/office-arabic.ts";
 import { officeSymbolText } from "../../../lib/spreadsheet/office-symbol-fonts";
 import { OFFICE_PRINTED_GDI_MIDDLE_RISE_DOTS, OFFICE_PRINTED_GDI_TOP_DOTS, OFFICE_PRINTED_MERGED_MIDDLE_RISE_DOTS, OFFICE_PRINTED_TEXT_DROP_DOTS, officeBottomPitch, officeBottomRiseDots, officePrintedBoxDots, officePrintedGdiLineDots, officePrintedDescentDots, officePrintedTopDots, officeMergedRowsRiseDots, officeMergedWrappedExtraDots, officePrintedBaselineShiftPx, officePrintedBaselineSnapPx, officeThickBottomRiseDots } from "../../../lib/spreadsheet/office-wrapped-bottom";
-import { officeSpacedWraps, officeWrapSpacedAt } from "../../../lib/spreadsheet/office-complex-wrap";
+import { officeNormalWrapFirst, officeSpacedWraps, officeWrapSpacedAt } from "../../../lib/spreadsheet/office-complex-wrap";
 import { SpreadsheetRowRevisions } from "../../../lib/spreadsheet/row-revisions";
 import { revealGridWindowRows, spreadsheetGridVisibleRows } from "../../../lib/spreadsheet/grid-scroll";
 import {
@@ -372,7 +373,7 @@ import {
   type SpreadsheetCell,
 } from "@mrnote/core/web/lib/spreadsheet/cell-buttons.ts";
 import { cellShiftedSheet, columnWidthsSheet, defaultColumnWidthSheet, deletedLinesSheet, insertedLinesSheet, lineFormatProtected as lineFormatProtectedFor, manualHiddenSpanSheet, pivotSourcesFollowLines, resolveSpreadsheetNativeGrid, sizeMapsEqual } from "../../../lib/spreadsheet/row-column-buttons";
-import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont } from "../../../lib/spreadsheet/office-print-metrics";
+import { OFFICE_PRINT_IDENTITY, officeEastAsianFamily, officePrintAnchorKind, officePrintedDrawingFrame, officePrintedDrawingReach, officePrintedFontPx, officePrintedRowDots, officePrintedTextInsetDots, officePrintsInApplicationStandardFont } from "../../../lib/spreadsheet/office-print-metrics";
 import { printedStripEdges } from "../../../lib/spreadsheet/printed-cell-borders";
 import { forecastOutputSheet, type ForecastOutputRequest } from "../../../lib/spreadsheet/forecast-sheet-output";
 import { activeSheetAfterDelete, copiedSheetWorkbook, deletedSheetWorkbook, MAX_SHEETS, movedSheetIndex, movedSheetWorkbook, newWorksheetFor, renamedSheetWorkbook, sheetHiddenWorkbook, sheetUnhideable, tabColoredWorkbook, unhiddenSheet, visibleSheetAfterHiding, workbookNameMirrorsForNewSheet } from "../../../lib/spreadsheet/sheet-buttons";
@@ -430,7 +431,7 @@ import {
 import { consolidatePlan, parseConsolidateSource, type ConsolidateSourceParseResult } from "../../../lib/spreadsheet/consolidate-buttons";
 import { advancedFilterCriteriaFormulas, advancedFilterPlan } from "../../../lib/spreadsheet/advanced-filter-buttons";
 import { MAX_PIVOT_SOURCE_CELLS, pivotSourceReference, pivotSourceRefusal, NEW_PIVOT_LAYOUT_DEFAULTS, pivotClearedAll, pivotNewWorksheet, pivotLiveSource, pivotRefreshPlan, pivotSourceSheetOf, type PivotLiveSource, newPivotChartRecord as newPivotChartRecordFor, nextPivotWorksheetIdentity, pivotCommitPlan, pivotConfigForNewSheet, pivotConfigWithSafeOutput as pivotConfigWithSafeOutputOn, PIVOT_NEW_SHEET_ANCHOR, pivotSourceSnapshot, sheetWithPivotColumnsFitted } from "../../../lib/spreadsheet/pivot-buttons";
-import { autoFilledSheet, cellForFill, edgeFillRequest, resolveCellClipboardScalar, seriesAutoFillPlan, seriesFillRequest, textToColumnsRequest } from "../../../lib/spreadsheet/fill-buttons";
+import { autoFilledSheet, cellForFill, edgeFillRequest, edgeFillRulePlans, resolveCellClipboardScalar, seriesAutoFillPlan, seriesFillRequest, textToColumnsRequest } from "../../../lib/spreadsheet/fill-buttons";
 import { autoOutlinedGroups, outlineGroupsSheet, removeDuplicatesSheet, removeSubtotalsSheet, subtotaledSheet } from "../../../lib/spreadsheet/data-tool-buttons";
 import {
   viewOptionsWithWorkbookTheme,
@@ -1861,7 +1862,6 @@ import {
 } from "../../../lib/spreadsheet/scenario-summary";
 import { buildScenarioPivotRecipe } from "../../../lib/spreadsheet/scenario-pivot";
 import {
-  planRulesForValidationFill,
   dependentOptionsForCell,
   listRuleOptions,
   normalizeRules,
@@ -2270,13 +2270,14 @@ import {
   pageLayoutEdgeScrollStep,
   pageLayoutDataAreaWidth,
   pageLayoutWideColumnLimitPx,
-  printedCellWidensRange, printedOccupiedLineBlanks,
+  printedCellWidensRange, printedFormatExtentKeys, printedMergeHoldsAt, printedOccupiedLineBlanks, printedTailUsedColumnEdge,
   pageLayoutSpansKeepPage,
 } from "../../../lib/spreadsheet/page-layout-view";
 import {
   hasManualLineBreak,
   cellLineShown,
   cellTextOnOneLine,
+  excelOneLineBreaksReachEm,
   autoRowMeasuredText,
   cellWrapTextSetting,
   insertLineBreakAt,
@@ -2515,8 +2516,8 @@ import {
   ruleOverlaps as conditionalRuleOverlaps,
   isClassicNativeConditionalRuleEditable,
   normalizeRules as normalizeConditionalRules,
+  normalizePastPageRules,
   rulesKeepingStoredAreas,
-  planRulesForFill as planRulesForConditionalFill,
   rangeHasRule as rangeHasConditionalRule,
   rangesOverlap as conditionalRangesOverlap,
   conditionalRulesCover,
@@ -2729,7 +2730,7 @@ import {
   type NavDirection,
 } from "@mrnote/core/web/lib/spreadsheet/grid-nav.ts";
 import { gridCellWithDefaultLook, xlsxDefaultLookEnabled, type DefaultLookSheet } from "@mrnote/core/web/lib/spreadsheet/default-look.ts";
-import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, styledColumnEdge, writeLineBlanksIn, materializeLineStyles, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
+import { compactLineStyleCells, deferredLineStyleBudget, expandLineStyleRuns, lineBlankAt, lineStyleAt, newCellsTakeLineFormats, writeLineBlanksIn, materializeLineStyles, type LineStyleMap } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
 import {
   entryWalkAnchor,
   nextCellInReorderedSelection,
@@ -2838,6 +2839,7 @@ import { CHART_FORMAT_VIEWPORT_GUTTER_PX, DEFAULT_SHEET_COLUMNS, DEFAULT_SHEET_R
 import { columnLabel, spreadsheetRangeA1 } from "./spreadsheet/spreadsheetRangeA1";
 import { fetchDeferredChartObjects, pendingChartIds, pendingCharts, withDeferredChartsFilled } from "../../../lib/spreadsheet/deferred-charts";
 import { fetchDeferredSheetBodies, pendingSheetIds, rememberPlaceholderSheet, sheetsStillLoading, storedContentWithSheetsFilled, storedPlaceholderSheet } from "../../../lib/spreadsheet/deferred-sheets";
+import { registerLiveEditor, type LiveSpreadsheetEditor } from "@mrnote/core/web/lib/live-editor-registry.ts";
 import { emptySheet, hasPersistedContentVersion, normalizeObjects, normalizeSheets, type NormalizeSheetsOutcome, normalizeSpreadsheetAdvancedFilterState, restoreSetAsideValues, type SpreadsheetSetAsideValue } from "./spreadsheet/spreadsheetNormalizeSheets";
 import { sheetAfterCheckboxDelete } from "../../../lib/spreadsheet/checkbox-delete";
 import { filterCriteriaMovedFrom, filterCriteriaSignature, filtersToApply, storedFilterHiddenRows, withFilterResult } from "@mrnote/core/web/lib/spreadsheet/filter-result.ts";
@@ -9651,7 +9653,8 @@ function SpreadsheetWindow({
     // faces of a row's empty positions (officeEmptyRowHeight); a replaced
     // theme font re-measures it in the new face.
     nativeGrid?.fontReplaced ? nativeGrid.fontRowHeight
-      : nativeGrid?.automaticDefaultRow ? officeEmptyRowHeight(nativeGrid.rowFont, expandLineStyleRuns(sheet.columnStyles as LineStyleMap | undefined)) : undefined),
+      : nativeGrid?.automaticDefaultRow ? officeEmptyRowHeight(nativeGrid.rowFont, expandLineStyleRuns(sheet.columnStyles as LineStyleMap | undefined)) : undefined,
+    nativeGrid?.fontReplaced === true),
   [sheet.nativeGrid?.rowMetrics,sheet.rowHeights,sheet.defaultRowHeight,nativeGrid,sheet.columnStyles]);
   const displayDefaultRowHeight = nativeRows?.defaultHeight ?? sheet.defaultRowHeight ?? DEFAULT_SPREADSHEET_ROW_HEIGHT_PX;
   const displayCellPadding = nativeGrid ? nativeCellPaddingPx(nativeGrid.dpi) : CELL_BASE_PADDING_X_PX;
@@ -10679,7 +10682,11 @@ function SpreadsheetWindow({
     // range's (RO046, R105-X05), but R453-X52's cover sheet, whose columns
     // are filled white and whose K5 is a cell of its own, prints A:G and a
     // second page of the white H:K where one page printed here.
-    for (const key of printedOccupiedLineBlanks(sheet.cells, own, (sheet as { occupiedExtent?: unknown }).occupiedExtent)) visible[key] = { value: "x" };
+    const lineOnly: string[] = [];
+    for (const key of printedOccupiedLineBlanks(sheet.cells, own, (sheet as { occupiedExtent?: unknown }).occupiedExtent)) {
+      if (!visible[key]) lineOnly.push(key);
+      visible[key] = { value: "x" };
+    }
     // A sparkline is drawn in its cell however empty the cell is, and Excel
     // prints it: P23's sparklines in I1:I8 past the data (A1:H8) printed on a
     // second page in Excel and not at all here.
@@ -10689,6 +10696,17 @@ function SpreadsheetWindow({
     const used: UsedRangeRect | null = storedUsedRangeRect(visible, sheet.rowCount, sheet.columnCount);
     let rows = used ? used.r2 + 1 : 1;
     let cols = used ? used.c2 + 1 : 1;
+    // Those line-painted blanks hold no page of their own where the file
+    // states its rows' spans: a page they alone paint is held by a span
+    // reaching it (pageLayoutSpansKeepPage), as the API's print counts it
+    // (page_shows_line_formats_only). R224-X01's Freschi Case: rows 42-80
+    // filled white, the cells of rows 49-64 spanning D alone; Excel leaves
+    // the last band's second page out (11 pages), as it did here before the
+    // occupied range reached row 50.
+    if (Array.isArray((sheet as { rowSpans?: unknown }).rowSpans) && ((sheet as { rowSpans?: unknown[] }).rowSpans ?? []).length) {
+      const sparklines = sheet.sparklines ?? {};
+      for (const key of lineOnly) if (!(key in sparklines)) delete visible[key];
+    }
     // A blank whose border or fill record draws nothing still widens Excel's
     // range (the import's printedFormatExtent, reading 956; lookwin p35-lw,
     // R455-X10's Fermentation sheet: five bands in Excel, three here).
@@ -10699,7 +10717,9 @@ function SpreadsheetWindow({
       && formatExtent.rows <= MAX_GRID_ROWS ? formatExtent.rows : 0;
     const formatCols = formatRows && typeof formatExtent?.cols === "number" && Number.isInteger(formatExtent.cols) && formatExtent.cols > 0
       && formatExtent.cols <= MAX_GRID_COLUMNS ? formatExtent.cols : 0;
-    if (formatRows && formatCols) visible[`${formatRows - 1}:${formatCols - 1}`] = { value: "x" };
+    // The two blanks the range ends at where the import names them (reading
+    // 968), else its far corner (printedFormatExtentKeys).
+    if (formatRows && formatCols) for (const key of printedFormatExtentKeys(formatExtent)) visible[key] = { value: "x" };
     for (const merge of mergeSpans) {
       // A merged block widens the range to its far corner wherever it lies,
       // its cells empty or not (lookwin p193-lw: A60:A62 merged over nothing,
@@ -11269,7 +11289,21 @@ function SpreadsheetWindow({
     sheetId: string;
     rule: ConditionalFormatRule;
   } | null>(null);
+  // A print the server makes (presentation "print") paints the sheet's rules
+  // past the ones its page lists too: `conditionalFormatsPastPage`, which the
+  // API reads from the saved file for that print only
+  // (spreadsheet_cf_overflow), after the page's own (lowest in priority, and
+  // first cut by the rule-formula bound). Never on a page the editor holds.
+  const printPastPageRules = useMemo(() => {
+    if (embeddedWorkbook?.presentation !== "print") return null;
+    const raw = Array.isArray(embeddedWorkbook.content["sheets"]) ? embeddedWorkbook.content["sheets"] as unknown[] : [];
+    const entry = raw.find((candidate): candidate is { id?: unknown; conditionalFormatsPastPage?: unknown } =>
+      Boolean(candidate) && typeof candidate === "object" && (candidate as { id?: unknown }).id === sheet.id);
+    const rules = normalizePastPageRules(entry?.conditionalFormatsPastPage, { maxRow: sheet.rowCount - 1, maxCol: sheet.columnCount - 1 });
+    return rules.length ? rules : null;
+  }, [embeddedWorkbook?.presentation, embeddedWorkbook?.content, sheet.id, sheet.rowCount, sheet.columnCount]);
   const displayConditionalFormats = useMemo(() => {
+    if (printPastPageRules) return [...conditionalFormats, ...printPastPageRules];
     if (condPreview?.sheetId !== sheet.id || condDialog?.kind !== "quickRule") {
       return conditionalFormats;
     }
@@ -11278,7 +11312,7 @@ function SpreadsheetWindow({
       maxCol: sheet.columnCount - 1,
     });
     return preview.length > 0 ? [...preview, ...conditionalFormats] : conditionalFormats;
-  }, [condDialog?.kind, condPreview, conditionalFormats, sheet.columnCount, sheet.id, sheet.rowCount]);
+  }, [condDialog?.kind, condPreview, conditionalFormats, printPastPageRules, sheet.columnCount, sheet.id, sheet.rowCount]);
   // The sheet's rule formulas (conditional formats as painted, the quick
   // dialog's preview included; validation formulas and formula bounds), which
   // the calculation session evaluates with each calculation (C2), within
@@ -12123,6 +12157,8 @@ function SpreadsheetWindow({
         pivotOutputLabelsRef.current,
         workbookDateSystemRef.current,
         (candidate) => untouchedSheetIds.has(candidate.id),
+        // The body leaves the tiles' cells out: a spill is still blocked by them.
+        tiledSave ? tiledSave.spillTargets(persistedSheets) : undefined,
       );
       // Built with a sheet still its placeholder: the results it stores are the
       // loaded ones, and the open saves once more when the sheets are in.
@@ -20440,10 +20476,36 @@ function SpreadsheetWindow({
   // complex-script cell of the load (officeSpacedWraps, lookwin p118-lw). The
   // load opens on the workbook's active sheet: a print job's own sheet is
   // made active for its window, so the job names the workbook's.
-  const officeNormalDigitPx = useMemo(() => nativeGrid?.dpi === 96 && nativeCellFont
+  const officeViewZoom: unknown = (sheet as { zoomScale?: unknown }).zoomScale;
+  const officeNormalDigitPx = useMemo(() => {
+    if (nativeGrid?.dpi !== 96 || !nativeCellFont) return undefined;
     // In the face Windows draws a Normal font it lacks (Carlito stating
     // nothing: Arial's digit), as its grid is sized.
-    ? officeDigitPx({ family: nativeCellFont.family, sizePt: nativeCellFont.sizePt, record: nativeCellFont.record }) : undefined, [nativeGrid, nativeCellFont]);
+    const face = { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt, record: nativeCellFont.record };
+    return officeDigitPx(face);
+  }, [nativeGrid, nativeCellFont]);
+  // A sheet opened zoomed out fits its rows with the digit of the Normal
+  // font at the view's size, the text measured at 100% (lookwin p239-lw:
+  // Calibri 11 at 40-95% steps its room by a 3-7 px digit; R462-X41's
+  // zoom-70 sheet), until a wrapped cell in the Normal font itself is fitted
+  // (officeNormalWrapFirst, p247-lw). Zoomed in, the room is not this: left
+  // at 100%. The API's writer: normal_digit_px.
+  const officeZoomedDigit = useMemo(() => {
+    if (nativeGrid?.dpi !== 96 || !nativeCellFont) return undefined;
+    if (typeof officeViewZoom !== "number" || !Number.isInteger(officeViewZoom) || officeViewZoom < 10 || officeViewZoom >= 100) return undefined;
+    const digit = officeDigitPx({ family: nativeCellFont.family, sizePt: nativeCellFont.sizePt * officeViewZoom / 100, record: nativeCellFont.record });
+    if (digit === undefined) return undefined;
+    const before = officeNormalWrapFirst(sheet, { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt });
+    // A string, so an edit that moves nothing keeps it (the auto-row caches' deps).
+    return before ? `${digit}:${before[0]}:${before[1]}` : `${digit}`;
+  }, [nativeGrid, nativeCellFont, officeViewZoom, sheet]);
+  const cellNormalDigitPx = useCallback((row: number, col: number) => {
+    if (officeZoomedDigit === undefined) return officeNormalDigitPx;
+    const [digit, firstRow, firstCol] = officeZoomedDigit.split(":").map(Number);
+    if (digit === undefined) return officeNormalDigitPx;
+    if (firstRow === undefined || firstCol === undefined) return digit;
+    return row < firstRow || (row === firstRow && col < firstCol) ? digit : officeNormalDigitPx;
+  }, [officeZoomedDigit, officeNormalDigitPx]);
   const openActiveSheetId = typeof embeddedWorkbook?.content["openActiveSheetId"] === "string"
     ? embeddedWorkbook.content["openActiveSheetId"] as string : sheet.id;
   const sheetSpacedWrap = useMemo(() => {
@@ -20464,8 +20526,26 @@ function SpreadsheetWindow({
   // Excel's opening view shows; the ones below are fitted (nativeDefaultViewRows).
   const sheetZoomScale: unknown = (sheet as { zoomScale?: unknown }).zoomScale;
   const sheetOpeningTopRow: unknown = (sheet as { openingTopRow?: unknown }).openingTopRow;
-  const viewHeldRows = useMemo(() => nativeDefaultViewRows(sheet.nativeGrid?.rowMetrics, fileHidesRows, sheetZoomScale, sheet.freezeRows, sheetOpeningTopRow),
-    [sheet.nativeGrid?.rowMetrics, fileHidesRows, sheetZoomScale, sheet.freezeRows, sheetOpeningTopRow]);
+  const viewHeldRows = useMemo(() => {
+    const held = nativeDefaultViewRows(sheet.nativeGrid?.rowMetrics, fileHidesRows, sheetZoomScale, sheet.freezeRows, sheetOpeningTopRow);
+    const font = sheet.nativeGrid?.font;
+    const heightPt = sheet.nativeGrid?.rowMetrics?.default.heightPt;
+    if (held === undefined || !font?.bodyFamily || font.family.trim().toLowerCase() !== font.bodyFamily.trim().toLowerCase() || heightPt === undefined) return held;
+    // Where the Normal font is the theme's body face (a Google Sheets export,
+    // Arial over Arial) every row keeps the default, unless a cell in the
+    // opening view is set in a face whose one line is as tall as the default
+    // or taller (lookwin p233-lw, R461-X32: a bold Arial 12 cell, 21 px under
+    // a 15.75 pt default, in row 5 fits the rows below the view, in row 100
+    // nothing). The API's _custom_default_view_rows is the same.
+    const defaultPx = Math.floor(heightPt / .75 + .5);
+    for (const [key, cell] of Object.entries(sheet.cells)) {
+      const [row, col] = key.split(":").map(Number);
+      if (!cell || !Number.isInteger(row) || !Number.isInteger(col) || row >= held) continue;
+      const face = officeKnownStyleFace(cellDisplayTextCss(pageLayoutCellStyle(row, col, cell)));
+      if (face && officeRowHeight(face) >= defaultPx) return held;
+    }
+    return undefined;
+  }, [sheet.nativeGrid?.rowMetrics, sheet.nativeGrid?.font, sheet.cells, fileHidesRows, sheetZoomScale, sheet.freezeRows, sheetOpeningTopRow, pageLayoutCellStyle]);
   const autoRowCellEntries = useCallback((cell: SpreadsheetCell, key: string) => {
     const entries: AutoRowMeasurement[] = [];
     let grows = false;
@@ -20623,7 +20703,7 @@ function SpreadsheetWindow({
       entries.push({ row, width: Math.max(1, intrinsicColWidth(col) - indentRoom), text: singleLine ? cellTextOnOneLine(text, cellWrapTextSetting(cell)) : text,
         ...(singleLine ? { singleLine: true } : {}),
         ...(nativeGrid ? { dpi: nativeGrid.dpi, paddingX: displayCellPadding } : {}),
-        ...(officeNormalDigitPx !== undefined ? { normalDigitPx: officeNormalDigitPx } : {}),
+        ...(cellNormalDigitPx(row, col) !== undefined ? { normalDigitPx: cellNormalDigitPx(row, col) } : {}),
         ...(!singleLine && cellWrapsSpaced(row, col) ? { spaced: true as const } : {}),
         ...(rowEmptyFonts(row) ? { rowFonts: rowEmptyFonts(row) } : {}),
         // Only a bottom-aligned cell stands its lines on the row's baseline (lookwin p44b/p44c).
@@ -20635,7 +20715,7 @@ function SpreadsheetWindow({
     })();
     return { entries, grows };
   }, [sheet, mergeSpans, intrinsicColWidth, cellDisplayValue, pageLayoutCellStyle, nativeGrid, displayCellPadding, hasNativeTextLayout, fontRunStyle, formulaEvaluator, rowEmptyFonts, indentStepPx,
-    officeNormalDigitPx, cellWrapsSpaced, fileHidesRows, viewHeldRows]);
+    cellNormalDigitPx, cellWrapsSpaced, fileHidesRows, viewHeldRows]);
 
   const [{ autoRowCandidatesByCells, autoRowCellMeasurements }] = useState(createSpreadsheetWindowCaches);
   const autoRowCandidates = useMemo(() => {
@@ -20650,7 +20730,7 @@ function SpreadsheetWindow({
     const inheritanceDeps = [cellIndex.autoHeightKeys, sheet.rowCount, sheet.columnCount, sheet.rowHeights, sourceDefault, sheet.defaultRowHeight,
       mergeSpans, intrinsicColWidth, nativeGrid, displayCellPadding, fontRunStyle, workbookThemeFontFamily, workbookThemeHeadingFontFamily,
       workbookThemeColorId, workbookThemeAccentColors, tableStylePreview, workbookNativeTableStyles, nativeCellFont, workbookFontAssets.aliases, rowEmptyFonts,
-      officeNormalDigitPx, sheetSpacedWrap];
+      officeNormalDigitPx, officeZoomedDigit, sheetSpacedWrap];
     const projection = backgroundCalculation.projection;
     const literalEdit = !automaticNativeBase && backgroundCalculation.pending && projection &&
       conditionalFormats.length === 0 && dataTables.length === 0 && !activePivotOutputCells ? literalEditSources.get(sheet.cells) : undefined;
@@ -20717,7 +20797,7 @@ function SpreadsheetWindow({
     intrinsicColWidth, cellDisplayValue, pageLayoutCellStyle, nativeGrid, displayCellPadding, hasNativeTextLayout, fontRunStyle, formulaEvaluator,
     backgroundCalculation.pending, backgroundCalculation.projection, conditionalFormats, dataTables, activePivotOutputCells,
     workbookThemeFontFamily, workbookThemeHeadingFontFamily, workbookThemeColorId, workbookThemeAccentColors, tableStylePreview, workbookNativeTableStyles, nativeCellFont, workbookFontAssets.aliases,
-    rowContext, sheet, sheets, displayConditionalFormats, viewOptions, displayDefaultRowHeight, autoRowCellEntries, officeNormalDigitPx, sheetSpacedWrap]);
+    rowContext, sheet, sheets, displayConditionalFormats, viewOptions, displayDefaultRowHeight, autoRowCellEntries, officeNormalDigitPx, officeZoomedDigit, sheetSpacedWrap]);
   const measuredRowHeights = useSpreadsheetAutoRowHeights(rootRef, autoRowCandidates.measurements, displayDefaultRowHeight ?? effectiveDefaultRowHeight, `${pageId}:${sheet.id}`);
   // The automatic heights of the selected rows with the selection's cells in
   // a previewed font, by the measurement the press's rows go through. The
@@ -20892,7 +20972,11 @@ function SpreadsheetWindow({
       // script (the API's writer keeps the stated height where its wrap is
       // not GDI's: R379-X18's Bengali notes).
       const shown = (cell.value ?? "") === "" ? "" : cellDisplayValue(cell, row, col, false);
-      if (shown && (cellTextWraps(cell.style) || (cellWrapTextSetting(cell) !== false && shown.includes("\n"))) &&
+      // A Calibri cell's Arabic wraps at Windows Calibri's own widths
+      // (officeArabicWrapAdvances, lookwin p220-lw): Excel's lines too.
+      const arabicKnown = OFFICE_COMPLEX_WRAP_TEXT.test(shown) && faces.every((face) =>
+        face?.family !== undefined && officeArabicWrapAdvances(shown, face.family, face.bold === true, face.sizePt ?? 0) !== undefined);
+      if (shown && !arabicKnown && (cellTextWraps(cell.style) || (cellWrapTextSetting(cell) !== false && shown.includes("\n"))) &&
           (OFFICE_COMPLEX_WRAP_TEXT.test(shown) || faces.some((face) => {
             const advance = face?.family && face.sizePt ? advancesOf({ family: face.family, sizePt: face.sizePt, bold: face.bold }) : undefined;
             return !advance || [...shown].some((character) => character !== "\n" && advance(character) === undefined);
@@ -41281,11 +41365,12 @@ function SpreadsheetWindow({
     const level = (id: string) => levels.get(id.startsWith("chart:") ? id : `object:${id}`) ?? 0;
     return [...imported, ...floating].sort((a, b) => level(a[0]) - level(b[0]));
   }, [chartViews, colWidth, rowHeight, sheet, sheetObjects, importedChartRenderData, t, hiddenRows, groupHiddenRows, groupHiddenCols, manualHiddenRows, manualHiddenCols, pageLayoutDrawingDisabledReason, pageLayoutRowMap,workbookThemeAccentColors,previewChart,selectedObjectId,selectedNativeChart?.id,webImageRevision,embeddedWorkbook?.presentation,nativeGrid?.printScale]);
+  // On the unscaled grid, as the page view counts them (officePrintedDrawingReach).
   const pageLayoutDrawingBounds = useMemo(() => [
-    ...pageLayoutDrawings.map((drawing) => drawing[1]),
+    ...pageLayoutDrawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, nativeGrid?.printScale)),
     ...slicers.map((slicer, index) => [slicer.x ?? 12 + index * 184, slicer.y ?? 12,
       slicer.width ?? DEFAULT_SLICER_WIDTH, slicer.height ?? DEFAULT_SLICER_HEIGHT] as const),
-  ], [pageLayoutDrawings, slicers]);
+  ], [nativeGrid?.printScale, pageLayoutDrawings, slicers]);
   // Page Break Preview (Excel/WPS "View ▸ Page Break Preview"): compute the
   // break LINES to draw (automatic pagination unioned with the sheet's manual
   // breaks). The page data area is derived from the persisted stock,
@@ -50911,30 +50996,12 @@ function SpreadsheetWindow({
     });
     if (!request) return;
     // The source cells' conditional formats and validation reach over what
-    // they fill, as Excel's Fill does (live audit S-034).
-    const destination = {
-      r1: request.baseRow,
-      c1: request.baseCol,
-      r2: request.baseRow + request.rows.length - 1,
-      c2: request.baseCol + Math.max(1, request.rows[0]?.length ?? 1) - 1,
-    };
-    const source =
-      direction === "down"
-        ? { ...destination, r1: destination.r1 - 1, r2: destination.r1 - 1 }
-        : direction === "up"
-          ? { ...destination, r1: destination.r2 + 1, r2: destination.r2 + 1 }
-          : direction === "right"
-            ? { ...destination, c1: destination.c1 - 1, c2: destination.c1 - 1 }
-            : { ...destination, c1: destination.c2 + 1, c2: destination.c2 + 1 };
-    const filled = {
-      r1: Math.min(source.r1, destination.r1),
-      c1: Math.min(source.c1, destination.c1),
-      r2: Math.max(source.r2, destination.r2),
-      c2: Math.max(source.c2, destination.c2),
-    };
-    const ruleBounds = { maxRow: MAX_SHEET_ROWS - 1, maxCol: MAX_SHEET_COLS - 1 };
-    const conditionalFormatPlan = planRulesForConditionalFill(conditionalFormats, source, filled, ruleBounds);
-    const validationPlan = planRulesForValidationFill(validations, source, filled, shiftFormula, ruleBounds);
+    // they fill, as Excel's Fill does (live audit S-034), past the page's
+    
+    const rulePlans = edgeFillRulePlans(request, direction, conditionalFormats, validations, {
+      maxRow: MAX_SHEET_ROWS - 1,
+      maxCol: MAX_SHEET_COLS - 1,
+    });
     pasteGridIntoCells(
       request.baseRow,
       request.baseCol,
@@ -50942,11 +51009,7 @@ function SpreadsheetWindow({
       undefined,
       request.clipboardCells,
       undefined,
-      {
-        ...request.options,
-        ...(conditionalFormatPlan ? { conditionalFormatPlan } : {}),
-        ...(validationPlan ? { validationPlan } : {}),
-      },
+      { ...request.options, ...rulePlans },
     );
   };
   const fillDown = () => fillSelectionFrom("down");
@@ -52257,6 +52320,83 @@ function SpreadsheetWindow({
     t,
   ]);
 
+  // The live workbook for callers outside this window (the embedded editor's
+  // Automation API, lib/embed/automation): its sheets and the values the grid
+  // shows, and cells entered as the formula bar enters them (updateCellValue)
+  // or a sheet inserted as Insert Sheet does, each committed as one step of
+  // the window's own history, room and autosave (commitSheets).
+  const liveAutomationRef = useRef<Omit<LiveSpreadsheetEditor, "kind">>(null!);
+  liveAutomationRef.current = {
+    sheets: () =>
+      sheets.map((candidate) => ({
+        id: candidate.id,
+        name: candidate.name,
+        hidden: Boolean((candidate as { hidden?: unknown }).hidden),
+        rowCount: candidate.rowCount,
+        columnCount: candidate.columnCount,
+        cells: candidate.cells as Record<string, { value?: string; formula?: string }>,
+      })),
+    activeSheetId: () => sheet.id ?? null,
+    // The window has rendered what was last committed (commitSheets writes
+    // the live array at once; this render's ``sheets`` are the next one's).
+    settled: () => sheets === liveSheetsRef.current,
+    writable: () =>
+      pageTakesEditsRef.current && !autosave.readOnly && !autosave.loading && sheetViewSessionRef.current?.sheetId !== sheet.id,
+    computed: (sheetId, row, col) => {
+      const target = sheets.find((candidate) => candidate.id === sheetId);
+      if (!target) return null;
+      if (target.id === sheet.id) return formulaWorkbook.evaluator.getComputed(row, col);
+      return formulaWorkbook.workbook.hasSheet(target.name) ? formulaWorkbook.workbook.getComputed(target.name, row, col) : null;
+    },
+    writeCells: (sheetId, writes, asTyped) => {
+      if (!liveAutomationRef.current.writable()) return "read_only";
+      const index = sheets.findIndex((candidate) => candidate.id === sheetId);
+      if (index < 0) return "not_found";
+      const target = sheets[index]!;
+      // A protected sheet is read only to in-app writes, as the typed, paste
+      // and fill guards keep it (the open sheet by its own cell rule).
+      if (target.id === sheet.id ? writes.some((write) => !isEditableCell(write.row, write.col)) : Boolean(target.protected)) return "protected";
+      let next = target;
+      for (const write of writes) {
+        next = asTyped
+          ? updateCellValue(next, write.row, write.col, write.value, locale, undefined, excelDateSystemArg(workbookDateSystemRef.current))
+          : updateCellValue(next, write.row, write.col, write.value);
+      }
+      const nextSheets = sheets.map((candidate, at) => (at === index ? next : candidate));
+      return commitSheets(nextSheets) === nextSheets ? "written" : "read_only";
+    },
+    addSheet: (name) => {
+      if (!liveAutomationRef.current.writable() || !resolveLiveWorkbookTopologyMutation()) return null;
+      const fresh: SheetModel | null = newWorksheetFor(sheets);
+      if (!fresh) return null;
+      let nextSheets: SheetModel[] = [...sheets, fresh];
+      if (name !== undefined && name !== fresh.name) {
+        const renamed = renamedSheetWorkbook(nextSheets, nextSheets.length - 1, name);
+        if (!Array.isArray(renamed)) return null;
+        nextSheets = renamed;
+      }
+      if (commitSheets(nextSheets) !== nextSheets) return null;
+      const made = nextSheets[nextSheets.length - 1]!;
+      return { id: made.id, name: made.name };
+    },
+  };
+  // Registered once the workbook's sheets are in (what the loading state
+  // waits for): a caller reads the workbook, never the one shown while it opens.
+  const liveWorkbookIn = !autosave.loading && autosave.page?.id === pageId && hydratedPageId === pageId;
+  useEffect(() => {
+    if (!pageId || embeddedWorkbook || guestMode || !liveWorkbookIn) return undefined;
+    return registerLiveEditor(pageId, {
+      kind: "spreadsheet",
+      sheets: () => liveAutomationRef.current.sheets(),
+      activeSheetId: () => liveAutomationRef.current.activeSheetId(),
+      settled: () => liveAutomationRef.current.settled(),
+      writable: () => liveAutomationRef.current.writable(),
+      computed: (sheetId, row, col) => liveAutomationRef.current.computed(sheetId, row, col),
+      writeCells: (sheetId, writes, asTyped) => liveAutomationRef.current.writeCells(sheetId, writes, asTyped),
+      addSheet: (name) => liveAutomationRef.current.addSheet(name),
+    });
+  }, [embeddedWorkbook, guestMode, liveWorkbookIn, pageId]);
+
   useEffect(() => {
     function handler(event: Event) {
       const detail = (event as CustomEvent<DocumentEditUndoRequestDetail>)
@@ -53199,8 +53339,15 @@ function SpreadsheetWindow({
       hyperlinks ||= entry.hyperlinks;
       if (comments && hyperlinks) break;
     }
+    // A link the file states over a merged area's covered cell is the
+    // selection's too: Remove Hyperlinks takes it with the area (XC-208 B).
+    hyperlinks ||= mergeSpans.some(
+      (span) =>
+        (span.coveredLinks !== undefined || span.coveredLink !== undefined) &&
+        rangeHasMerge([span], selRect),
+    );
     return { comments, hyperlinks };
-  }, [selRect, homeFacetCells]);
+  }, [selRect, homeFacetCells, mergeSpans]);
   const homeSelectionHasConditionalRule = rangeHasConditionalRule(
     conditionalFormats,
     {
@@ -68086,10 +68233,12 @@ function SpreadsheetWindow({
     normalizePrintSettings(sheet.printSettings)?.scaling, nativeGrid?.printScale);
   const printedColumnWidthPx = (col: number) => Math.min(intrinsicColWidth(col), pageLayoutWideLimitPx);
   // The last column a cell's text spilling right reaches, or null.
-  const pageLayoutSpillReach = (row: number, col: number, shown?: string): number | null => {
+  const pageLayoutSpillReach = (row: number, col: number, shownLine?: string): number | null => {
     const cell = sheet.cells[`${row}:${col}`];
     if (!cell || typeof cell.value !== "string" || cell.value === "" || cell.style?.wrapText) return null;
-    const text = shown ?? cellTextOnOneLine(cellLineShown(cellDisplayValue(cell, row, col, false), cellWrapTextSetting(cell)), cellWrapTextSetting(cell));
+    const wrapSetting = cellWrapTextSetting(cell);
+    const line = shownLine ?? cellLineShown(cellDisplayValue(cell, row, col, false), wrapSetting);
+    const text = cellTextOnOneLine(line, wrapSetting);
     // A column wider than the page runs its text on from the page's cut: the
     // text is laid against the width it prints at, so a line that fits the
     // column but not the page still reaches past it (R34-X08's H10, 3 pt
@@ -68111,12 +68260,18 @@ function SpreadsheetWindow({
     // columns print 5.1 % wider than its screen pixels, Calibri 11's 7.4 %,
     // while the screen's hinted text runs 1-2 % narrow).
     const printing = embeddedWorkbook?.presentation === "print";
+    // A one-line text's breaks reach on as the face's missing glyph, drawn as
+    // nothing (excelOneLineBreaksReachEm; lookwin p236, R462-X23).
+    const breaksPx = wrapSetting === false && typeof effective.fontSize === "number" && Number.isFinite(effective.fontSize)
+      ? excelOneLineBreaksReachEm(line.replace(/\r/g, ""), cell.style?.fontFamily ?? nativeGrid?.grid.font.family) * effective.fontSize
+      : 0;
     const drawnPx = nativeGrid ? spreadsheetNativeTextWidthPx(text, effective, nativeGrid.dpi, printing ? "paint" : "measure") : undefined;
     const columnScale = printing ? nativeGrid?.printScale?.x : undefined;
-    const drawn = drawnPx !== undefined && columnScale !== undefined && columnScale > 0 ? drawnPx / columnScale : drawnPx;
+    const drawn = drawnPx !== undefined && columnScale !== undefined && columnScale > 0 ? (drawnPx + breaksPx) / columnScale
+      : drawnPx !== undefined ? drawnPx + breaksPx : undefined;
     const width = drawn !== undefined
       ? drawn + 2 * displayCellPadding
-      : spillTextWidthPx(text, cell.style, workbookFontAssets.aliases, effective) + 2 * CELL_BASE_PADDING_X_PX;
+      : spillTextWidthPx(text, cell.style, workbookFontAssets.aliases, effective) + breaksPx + 2 * CELL_BASE_PADDING_X_PX;
     const centred = spill.startCol < col && spill.endCol > col;
     let need = centred ? (width - printedColumnWidthPx(col)) / 2 : width - printedColumnWidthPx(col);
     let reach = col;
@@ -68142,9 +68297,10 @@ function SpreadsheetWindow({
       if (!(col < extent.cols) || !(row < extent.rows)) continue;
       // What the cell shows, not its formula's text (a TEXTJOIN's result runs
       // far longer than "=TEXTJOIN(...)"), on one line where Wrap Text is off.
-      const text = cellTextOnOneLine(cellLineShown(cellDisplayValue(cell, row, col, false), cellWrapTextSetting(cell)), cellWrapTextSetting(cell));
-      if (estimateTextWidthPx(text, 24) < room[col]) continue;
-      const reach = pageLayoutSpillReach(row, col, text);
+      // (Its breaks too, which reach on as missing glyphs: pageLayoutSpillReach.)
+      const line = cellLineShown(cellDisplayValue(cell, row, col, false), cellWrapTextSetting(cell));
+      if (estimateTextWidthPx(line, 24) < room[col]) continue;
+      const reach = pageLayoutSpillReach(row, col, line);
       if (reach !== null && reach + 1 > cols) cols = Math.min(MAX_GRID_COLUMNS, reach + 1);
     }
     return cols;
@@ -68176,15 +68332,32 @@ function SpreadsheetWindow({
         const cell = sheet.cells[`${row}:${col}`];
         return cell !== undefined && printedCellWidensRange(cell as { value?: unknown; formula?: unknown; style?: Record<string, unknown> });
       })))) return true;
-    // Drawings, in the page's worksheet pixels.
+    // Drawings, in the page's worksheet pixels -- across, as the print lays
+    // them: a column wider than the page at the page's width, a drawing
+    // keeping its own width from where its left edge prints (lookwin p225-lw
+    // d1: a 600 pt picture in a 129.71-wide A prints on over B's page, and
+    // R458-X11's Cover prints that page; pageLayoutClampColumnPoint).
     const edge = (count: number, size: (index: number) => number) => {
       let offset = 0;
       for (let index = 0; index < count; index += 1) offset += size(index);
       return offset;
     };
-    const left = edge(colLow, intrinsicColWidth), right = left + edge(colHigh + 1, intrinsicColWidth) - edge(colLow, intrinsicColWidth);
+    const printedX = (x: number) => {
+      let source = 0, printed = 0;
+      for (let col = 0; col < MAX_GRID_COLUMNS; col += 1) {
+        const width = intrinsicColWidth(col);
+        if (source + width >= x) return printed + Math.min(Math.max(0, x - source), printedColumnWidthPx(col));
+        source += width;
+        printed += printedColumnWidthPx(col);
+      }
+      return printed;
+    };
+    const left = edge(colLow, printedColumnWidthPx), right = left + edge(colHigh + 1, printedColumnWidthPx) - edge(colLow, printedColumnWidthPx);
     const top = edge(rowLow, intrinsicRowHeight), bottom = top + edge(rowHigh + 1, intrinsicRowHeight) - edge(rowLow, intrinsicRowHeight);
-    if (pageLayoutDrawingBounds.some(([x, y, width, height]) => x < right && x + width > left && y < bottom && y + height > top)) return true;
+    if (pageLayoutDrawingBounds.some(([x, y, width, height]) => {
+      const printedLeft = printedX(x);
+      return printedLeft < right && printedLeft + width > left && y < bottom && y + height > top;
+    })) return true;
     // A spill from the left reaching the page.
     for (const row of rows) {
       let source = colLow - 1;
@@ -87184,9 +87357,9 @@ function SpreadsheetWindow({
             getTextSpill={(row, col, cellWidthPx, fontScale) =>
               pageLayoutTextSpill(row, col, cellWidthPx, fontScale)
             }
-            cellHoldsValue={(row, col) => spillTargetOccupied(sheet.cells, EMPTY_CELL_KEYS, row, col)}
+            cellHoldsValue={(row, col) => spillTargetOccupied(sheet.cells, EMPTY_CELL_KEYS, row, col) || printedMergeHoldsAt(mergeSpans, sheet.cells, row, col)}
             printedUsedColumns={printedExtent?.cols}
-            printedStyledColumns={printedExtent ? styledColumnEdge(sheet) : undefined}
+            printedStyledColumns={printedExtent ? printedTailUsedColumnEdge(sheet) : undefined}
             printedCenterAcrossRunAt={printedCenterAcrossRunAt}
             pagePrints={printedExtent ? pageLayoutPagePrints : undefined}
             renderCellContent={(row, col, fontScale, nativeTextWidth, frame) =>

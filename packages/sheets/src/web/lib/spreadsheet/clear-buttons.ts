@@ -27,9 +27,10 @@ import { shiftFormula } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts
 import { MAX_GRID_COLUMNS, MAX_GRID_ROWS } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
 import {
   cellsWithoutLaidAreaLinks,
-  laidAreaLinksAround,
+  clearedCellsWithAreaLinksKept,
+  laidAreaLinksClearedBy,
   laidAreaLinksOver,
-  sheetWithoutHyperlinkAreasAround,
+  sheetWithoutHyperlinkAreasClearedBy,
   sheetWithoutHyperlinkAreasOver,
 } from "@mrnote/core/web/lib/spreadsheet/hyperlink-areas.ts";
 import { lineStyleAt, patchLineStyles } from "@mrnote/core/web/lib/spreadsheet/line-styles.ts";
@@ -185,21 +186,32 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
   // selection: one the sheet holds over a large area goes whole (Windows
   // Excel, xlsx-rounds probe/n35-p948/a pa1, pa6, pa9).
   // Clear All and Clear Contents (the Delete key) on cells inside such a
-  // link delete it whole too; Clear Formats leaves it (pb6, pb7, pb8, pb11).
+  // link delete it whole too, and one the selection holds whole; one reaching
+  // past the selection stays. Clear Formats leaves it (pb6, pb7, pb8, pb11;
+  // probe/n48-clearlinks pc1-pc4).
   const areaLinksCleared =
     variant === "hyperlinks" || variant === "removeHyperlinks"
       ? sheetWithoutHyperlinkAreasOver(sheet, range)
-      : variant === "all" || variant === "contents"
-        ? sheetWithoutHyperlinkAreasAround(sheet, range)
+      : clearsValues
+        ? sheetWithoutHyperlinkAreasClearedBy(sheet, range)
         : sheet;
   // A link laid over a small area on its cells goes whole the same way
   // (the probes' own area is A1:C8), off the cells outside the selection too.
   const laidLinksCleared =
     variant === "hyperlinks" || variant === "removeHyperlinks"
       ? laidAreaLinksOver(sheet.cells, range)
-      : variant === "all" || variant === "contents"
-        ? laidAreaLinksAround(sheet.cells, range)
+      : clearsValues
+        ? laidAreaLinksClearedBy(sheet.cells, range)
         : new Set<number>();
+  // The links the file states over a merged area's covered cells go with the
+  // area's when Remove Hyperlinks or Clear Hyperlinks meets it (Windows
+  // Excel, xlsx-rounds XC-208 B, n43/link: A4:C4 with only B4 linked, A6:C6
+  // with A6 and C6). Kept on the merge, an unmerge and the save brought them
+  
+  const coveredLinksCleared =
+    variant === "hyperlinks" || variant === "removeHyperlinks"
+      ? mergesWithoutCoveredLinks(mergeSpans, range)
+      : null;
   const lineCleared = clearLineStyles(areaLinksCleared);
   // A cleared cell of a line that keeps its format holds the default
   // format as its own, so it does not read the line's again (B255).
@@ -218,6 +230,7 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
     !cellsChanged &&
     !conditionalClear.changed &&
     !clearedMerges &&
+    !coveredLinksCleared &&
     !validationClear.changed &&
     !lineStylesCleared &&
     areaLinksCleared === sheet &&
@@ -233,7 +246,14 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
   // never expose a state in which only half of the command has landed.
   const nextSheet: S = {
     ...lineCleared,
-    cells: cellsWithoutLaidAreaLinks(nextCells, laidLinksCleared, range, "unlinked"),
+    cells: clearsValues
+      ? clearedCellsWithAreaLinksKept(
+          sheet.cells,
+          cellsWithoutLaidAreaLinks(nextCells, laidLinksCleared, range, "unlinked"),
+          laidLinksCleared,
+          range,
+        )
+      : cellsWithoutLaidAreaLinks(nextCells, laidLinksCleared, range, "unlinked"),
   };
   if (clearedTables) nextSheet.dataTables = clearedTables;
   if (whatIfTablesLeft) {
@@ -247,6 +267,7 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
       delete nextSheet.conditionalFormats;
     }
   }
+  if (coveredLinksCleared && !clearedMerges) nextSheet.merges = coveredLinksCleared;
   if (clearedMerges) {
     const nextMerges = removeMergesInRange(mergeSpans, range);
     nextSheet.cells = cellsAfterMergesRemoved(nextSheet.cells, mergeSpans, nextMerges);
@@ -261,4 +282,26 @@ export function clearedSheetForRange<S extends ClearButtonSheet>(
     }
   }
   return nextSheet;
+}
+
+/** The merges with the covered cells' links taken off every area the range
+ *  meets (``coveredLinks``, ``coveredLink`` on a page read before, and the
+ *  area's link beneath a linked anchor, ``coveredAnchorArea``); null when no
+ *  area it meets states one. */
+function mergesWithoutCoveredLinks(
+  spans: readonly MergeSpan[],
+  range: { r1: number; c1: number; r2: number; c2: number },
+): MergeSpan[] | null {
+  let changed = false;
+  const next = spans.map((span) => {
+    if (!span.coveredLinks && !span.coveredLink && !span.coveredAnchorArea) return span;
+    if (!rangeHasMerge([span], range)) return span;
+    changed = true;
+    const rest: MergeSpan = { ...span };
+    delete rest.coveredLinks;
+    delete rest.coveredLink;
+    delete rest.coveredAnchorArea;
+    return rest;
+  });
+  return changed ? next : null;
 }

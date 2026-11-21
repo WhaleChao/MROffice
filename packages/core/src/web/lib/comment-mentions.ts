@@ -343,12 +343,34 @@ export interface MentionCandidatePage {
   complete: boolean;
 }
 
+/**
+ * Where an embedded editor finds the people a comment may mention, and tells
+ * of a comment that names them (components/embed/EmbedFrame): the partner's
+ * own directory, through its page (embed.js `onRequestUsers`), instead of the
+ * page's MR Office roster. Unset outside an embed.
+ */
+export interface MentionDirectory {
+  search(query: string, limit: number): Promise<MentionCandidate[]>;
+  notify(pageId: string, body: { commentId: string; userIds: readonly string[]; excerpt: string }): Promise<CommentMentionReceipt>;
+}
+
+let directory: MentionDirectory | null = null;
+
+export function setMentionDirectory(next: MentionDirectory | null): void {
+  directory = next;
+  candidateCache.clear();
+}
+
 export async function fetchMentionCandidates(
   pageId: string,
   query: string,
   options: { workspaceId?: string | null; limit?: number; signal?: AbortSignal } = {},
 ): Promise<MentionCandidatePage> {
   const limit = options.limit ?? MENTION_ROSTER_LIMIT;
+  if (directory) {
+    const items = (await directory.search(query.trim().slice(0, 80), limit)).slice(0, limit);
+    return { items, complete: items.length < limit };
+  }
   const params = new URLSearchParams({ limit: String(limit) });
   const q = query.trim().slice(0, 80);
   if (q) params.set("q", q);
@@ -379,6 +401,7 @@ export async function postCommentMentions(
   body: { commentId: string; userIds: readonly string[]; excerpt: string },
   options: { workspaceId?: string | null } = {},
 ): Promise<CommentMentionReceipt> {
+  if (directory) return directory.notify(pageId, body);
   const data = await apiPost<Wire>(
     `/api/v1/pages/${encodeURIComponent(pageId)}/comment-mentions`,
     {

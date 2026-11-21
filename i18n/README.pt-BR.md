@@ -4,7 +4,7 @@
 
 <p align="center"><b>Os editores de código aberto do MR Office — documentos, planilhas, apresentações, PDF, escrita à mão e código — no navegador.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/pt-BR"><b>▶ Experimente a demonstração online — sem instalar</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Baixar o MR Office em Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/pt-BR"><b>▶ Experimentar online</b></a> · <a href="https://mroffice.ai/pt-BR/office/download"><b>⬇ Baixar</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/pt-BR/developers">🧑‍💻 Desenvolvedores</a> · <a href="https://mroffice.ai/pt-BR/developers/embed">🧩 Incorporar</a> · <a href="https://mroffice.ai/pt-BR/developers/mcp">🤖 MCP para apps de IA</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 SDK npm</a> · <a href="https://mroffice.ai/pt-BR/developers/oauth">🔑 Entrar com o MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 O MR Office é um espaço de trabalho para notas, IA e arquivos reais. Este repositório publica o código-fonte dos seus editores: os mesmos editores que rodam no MR Office, que você pode compilar, executar e incorporar por conta própria. São editores de código aberto, não um pacote Office de código aberto completo: a leitura e a gravação de arquivos do Microsoft Office ficam no MR Office (veja abaixo).
+
+## Para desenvolvedores
+
+Tudo para desenvolvedores está em **[MR Office Developers](https://mroffice.ai/pt-BR/developers)** — autoatendimento, sem solicitação: entre com qualquer conta MR Office e comece.
+
+### Incorpore os editores no seu app web (recomendado)
+
+O MR Office hospeda os editores; seu servidor assina um token de sessão de curta duração e sua página abre o editor com ele. Ele edita arquivos reais do Word, Excel, PowerPoint e PDF (.docx, .xlsx, .pptx, .pdf), com coedição, uploads, todos os formatos de exportação, impressão e salvamentos enviados ao seu servidor em um callback assinado. Plano gratuito: 1.000 sessões por mês em localhost, 100 nos seus próprios domínios, até 2 apps. É um serviço comercial hospedado, então seu app não fica sujeito à licença AGPL deste repositório.
+
+1. Na pasta do seu projeto, execute `npx mroffice-embed init` (ou crie um app no console do desenvolvedor): um clique em "Permitir" no navegador e as chaves do app são gravadas em `.env.local` / `.env`.
+2. Seu servidor gera um token de sessão com `createSessionToken` de `mroffice-embed/server`; a chave secreta nunca sai do servidor.
+3. Sua página abre o editor com `open()` de `mroffice-embed` (ou o script `https://mroffice.ai/embed/v1/embed.js`).
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[Guia de incorporação](https://mroffice.ai/pt-BR/developers/embed) · [O guia em Markdown (para agentes de IA)](https://mroffice.ai/developers/embed.md) · [Preços e limites](https://mroffice.ai/pt-BR/developers/pricing) · [Console do desenvolvedor](https://mroffice.ai/pt-BR/developers/console) · [Demonstração ao vivo](https://mroffice.ai/pt-BR/developers/embed/demo)
+
+### Apps de IA: o servidor MCP
+
+Apps de IA abrem, leem, editam e exportam documentos no editor real do MR Office pelo servidor MCP: conecte o endpoint hospedado `https://mcp.mroffice.ai/mcp` (entre com sua conta MR Office, sem chave) ou execute `npx -y mroffice-mcp` no seu computador. O código-fonte está em `apps/mcp`. [Guia do MCP →](https://mroffice.ai/pt-BR/developers/mcp)
+
+### Entrar com o MR Office (OAuth)
+
+O MR Office é um servidor de autorização OAuth 2.1 (PKCE, documentos de metadados de ID de cliente, registro dinâmico): seu app pode conectar pessoas com a conta MR Office delas e agir com os escopos que elas permitirem. [Guia de OAuth →](https://mroffice.ai/pt-BR/developers/oauth)
+
+### Hospede você mesmo os editores de código aberto
+
+Os seis editores deste repositório podem ser integrados ao seu produto sob a AGPL-3.0: se pessoas usarem uma versão modificada pela rede, você deve oferecer a elas o código-fonte completo e manter a atribuição "MR Office" (NOTICE.md). Eles abrem seus próprios formatos, CSV, HTML, Markdown e PDF; arquivos do Word, Excel e PowerPoint não fazem parte dos editores de código aberto (a incorporação hospedada acima oferece). Uma licença comercial está disponível em support@mr-note.com. [Guia de código aberto →](https://mroffice.ai/pt-BR/developers/open-source)
+
+Pacotes npm estão sendo preparados com os nomes `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` e `mroffice-code`; até serem publicados, compile os editores a partir deste repositório (veja abaixo).
 
 ## Os editores
 
@@ -75,7 +119,7 @@ O aplicativo para desktop MR Office é gratuito, traz estes editores e o serviç
 - Edição de SmartArt
 - Gravar no arquivo as edições feitas em um PDF
 
-**[Baixar o MR Office em Releases →](https://github.com/XinaTian/MROffice/releases)** · [ou em mroffice.ai](https://mroffice.ai)
+**[Baixar o MR Office (grátis) →](https://mroffice.ai/pt-BR/office/download)**
 
 ### Arquivos do Word, Excel, PowerPoint e PDF
 

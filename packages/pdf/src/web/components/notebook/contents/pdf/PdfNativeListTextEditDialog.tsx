@@ -85,6 +85,7 @@ import { TEXTBOX_FONT_FAMILY_OPTIONS } from "../../../../lib/pdf/text-box-font-o
 import { isPortableNativeTextBoxTypography } from "../../../../lib/pdf/native-text-box-roundtrip";
 import { pdfEngineFailureMessageKey } from "../../../../lib/pdf/pdf-native-remote";
 import { MRAI_NATIVE_GLYPHS_READ_AS_BLANKS_MESSAGE } from "../../../../lib/pdf/engine/native/vocabulary";
+import { pdfTextHasRightToLeftRun } from "../../../../lib/pdf/engine/native/reader-order";
 import { pdfNativeSourceLineRoomFactor,
   pdfNativeSourceTextFitsPropertyFrame, pdfNativeSourceTextFitsMeasuredFrame, pdfNativeSourceTextFitUndecided } from "../../../../lib/pdf/native-text-source-fit";
 import { classifyFontName, FONT_STACK, needsEastAsianFace, withEastAsianFallback } from "../../../../lib/pdf/font-resolve";
@@ -370,6 +371,17 @@ export interface PdfNativeListTextEditDialogProps {
 
 
   readonly onApplyRowFormat?: (format: PdfNativeRowFormat, replacementText?: string) => Promise<boolean | null>;
+  /** A paragraph open as a block for its formats alone
+   * (initialLayout.wordsFixed, "too-large-to-set-again") was pressed for the
+   * words of the line under the press (a double click): the window lets the
+   * block go and opens that line. */
+  readonly onOpenLineOfBlock?: (press: Readonly<{ clientX: number; clientY: number }>) => void;
+  /** The line open here is one of a paragraph that was refused whole and
+   * opens as a block for its formats alone (the window's offer,
+   * lib/pdf/text-edit/block-only-opening): asked from the line's notice, the
+   * window lets the line go and opens the paragraph selected whole. Absent
+   * for any other line. */
+  readonly onSelectWholeParagraph?: () => void;
   /** The same format written by the window after this editor has closed
    * (the reader goes on at once, the box keeps the look it was left with);
    * false when the window does not take it now. */
@@ -393,7 +405,15 @@ export interface PdfNativeListTextEditDialogProps {
   readonly sourceAppearance?: readonly PdfNativeSourceTextAppearanceRun[];
   
 
-  readonly boxDrawnStyle?: Readonly<{ bold?: true; italic?: true }>;
+
+
+
+
+
+
+
+
+  readonly boxDrawnStyle?: Readonly<{ bold?: true; italic?: true; boldFaces?: "only" | "beside-strokes"; regularFace?: true }>;
   /** The Type3 glyphs of the box are pictures all (colour emoji), as its
    * proof reads them (`type3Pictures`, the engine's own reading): a weight
    * asked of the box is written on its words. Absent, a line that holds a
@@ -520,8 +540,12 @@ export interface PdfNativeListTextEditDialogProps {
    * goes down leaves them (lib/pdf/native-text-typing-drafts). Both as the
    * box reads them, which is how they are put back
    * (lib/pdf/native-text-queued-draft). Closing says nothing here: whether
-   * the words were placed or are still owed is the window's to know. */
-  readonly onTypingDraftChange?: (draft: Readonly<{ originalText: string; value: string }> | null) => void;
+   * the words were placed or are still owed is the window's to know.
+   * The formats pressed in the line and not written go with them. */
+  readonly onTypingDraftChange?: (draft: Readonly<{ originalText: string; value: string;
+    /** The formats pressed in the line and not written, kept with the words
+     * (and on their own where the words are the line's still). */
+    formats?: PdfNativeTextFormatDraft }> | null) => void;
   /** Delete the selected run's whole source text object, natively. */
   readonly onDeleteTextObject?: () => void | Promise<unknown>;
   /** The fonts from readers' computers the page keeps (page-fonts.ts):
@@ -587,6 +611,11 @@ export interface PdfNativeListTextEditDialogProps {
   ) => Promise<HTMLCanvasElement | null>;
   readonly onCancel: () => void;
   readonly captureNextTextTarget?: PdfNativeTextContinuationCapture;
+  /** Undo pressed in the line (Ctrl/Cmd+Z): true when the page takes the
+   * press itself -- the line of a new text box still being typed, whose
+   * Undo takes the box whole rather than leave the line as it opened, on
+   * the box's first letter (lib/pdf/created-text-typing). */
+  readonly pageTakesUndo?: () => boolean;
   /** The line pressed next while an earlier editor of this line held it
    * (this editor opened anew on the revision): taken over at mount. */
   readonly inheritNextTextTarget?: () => ((accepted: boolean) => void) | null;
@@ -771,6 +800,20 @@ export type PdfNativeListTextEditorController = Readonly<{
 
 
   stepHistory?: (direction: "undo" | "redo") => boolean;
+  /**
+   * Put back the formats pressed in this line before its window went (a
+   * reload, a browser that went down with the line open), as the window
+   * kept them: taken once the line's proof is in, as one step of the line's
+   * own history. Resolves false where they are not this line's any more
+   * (its run reads otherwise than when they were pressed, its opening was
+   * refused) -- nothing of them is set then; null where this editor closed
+   * before its proof came (the line opened again on a revision read in
+   * under it): they are still the line's, for the editor that opens next.
+   */
+  restoreFormats?: (formats: PdfNativeTextFormatDraft) => Promise<boolean | null>;
+  /** How many steps of its own the line has left to take back (what was
+   * typed, format presses). */
+  historySteps?: () => number;
   /** What the line shows now, copied onto the page (its ghost) until the
    * returned function takes it away: a finish the window writes behind the
    * reader keeps the line's look while the editor closes at once. */
@@ -938,6 +981,38 @@ type PartFormatSnapshot = Readonly<{
   /** How many presses were held for the proof before this one. */
   queued: number;
 }>;
+
+/**
+ * The formats pressed in an open line and not written yet, as the line's
+ * editor holds them -- what a step of its own format history holds (the
+ * session's part formats, the run's property draft, the box's row format)
+ * and the presses still held for its proof. The window keeps them with the
+ * words typed (lib/pdf/native-text-typing-drafts) and hands them back to the
+ * line's editor when the page is opened again (`restoreFormats`).
+ */
+export type PdfNativeTextFormatDraft = Readonly<{
+  parts: PdfTextPartFormats;
+  properties: PdfNativeTextPropertyDraft | null;
+  /** The run as its proof read it when `properties` was drafted: that draft
+   * is put back onto a run that still reads so, and onto no other. */
+  propertyBaseline: PdfNativeTextPropertyDraft | null;
+  rowFormat: PdfNativeRowFormat | null;
+  queued: readonly QueuedNativeTextRibbonAction[];
+}>;
+
+/** A value read back from where the window kept it, where it is a format
+ * draft in shape; null otherwise. */
+function readPdfNativeTextFormatDraft(value: unknown): PdfNativeTextFormatDraft | null {
+  if (!value || typeof value !== "object") return null;
+  const draft = value as Record<string, unknown>;
+  const plain = (held: unknown) => held === null || (typeof held === "object" && !Array.isArray(held));
+  if (!Array.isArray(draft.parts) || !Array.isArray(draft.queued) || !plain(draft.properties) ||
+    !plain(draft.propertyBaseline) || !plain(draft.rowFormat) ||
+    draft.parts.some((part) => !part || typeof part !== "object") ||
+    draft.queued.some((entry) => !entry || typeof entry !== "object" ||
+      !(entry as { action?: unknown }).action || typeof (entry as { action?: unknown }).action !== "object")) return null;
+  return draft as unknown as PdfNativeTextFormatDraft;
+}
 
 /** A box's row format with its parts given as the session's part formats,
  * each in the box's text as it is now (row -1): the parts a press named on
@@ -2005,6 +2080,8 @@ function PdfNativeListTextInlineEditor({
   nativeMoveProof: nativeMoveProofInput = null,
   nativeGroupMoveProof: nativeGroupMoveProofInput = null,
   onApplyRowFormat,
+  onOpenLineOfBlock,
+  onSelectWholeParagraph,
   onDetachRowFormat,
   onApplyParagraphFormat,
   onDetachParagraphFormat,
@@ -2057,6 +2134,7 @@ function PdfNativeListTextInlineEditor({
   onPreparePreview,
   onCancel,
   captureNextTextTarget,
+  pageTakesUndo,
   inheritNextTextTarget,
 }: Omit<PdfNativeListTextEditDialogProps, "open">): React.JSX.Element {
   const originalText = editableSourceText(sourceOriginalText);
@@ -2074,6 +2152,12 @@ function PdfNativeListTextInlineEditor({
   // the page's own ink stays the line -- never the reader's words set in a
   // browser's face, which for such a line are other letters.
   const wordsUnread = Boolean(initialLayout?.wordsFixed);
+  
+  // for its formats alone: its words are fixed the same way while it is
+  // open, and a line of it opens for them (onOpenLineOfBlock).
+  const wordsByLine = initialLayout?.wordsFixed === "too-large-to-set-again";
+  const wordsByLineRef = useRef(wordsByLine);
+  wordsByLineRef.current = wordsByLine;
   // (Nor is such a line its runs' to move, size or stroke as a group: the
   // runs a row of it proves as are not all the page draws of it.)
   const nativeMoveProof = wordsUnread ? null : nativeMoveProofInput;
@@ -2662,16 +2746,26 @@ function PdfNativeListTextInlineEditor({
     const right = Math.round((wrapFrameRight * initialLayout.pageWidthPx - matrix[4]) / matrix[0] * 1e4) / 1e4;
     return Number.isFinite(right) ? right : null;
   }, [initialLayout, wrapFrameRight]);
+  // The words the paragraph already stands in that box's frame with: the
+  // writer answered that setting them in it again changes nothing (its
+  // preview's refusal, below). The box's frame is then no request of these
+  // words -- it is one again as soon as they change. Asked for as long as
+  // the line stood open, a line written into a text box and opened again
+  // read as changed with nothing to write: its Leave waited for a preview
+  // that had already answered, the editor stayed over the page and the
+  
+  const [handoffFrameStandsFor, setHandoffFrameStandsFor] = useState<string | null>(null);
+  const handoffFrameAsked = handoffFrameStandsFor === replacementText ? null : handoffFrameRight;
   const paragraphFrameRequest = useMemo<PdfNativeParagraphFrameRequest | null>(() => {
     if (paragraphFrameRight === null && paragraphLineStep === null && paragraphSizeScale === null &&
-      handoffFrameRight === null) return null;
-    const right = paragraphFrameRight ?? (paragraphSizeScale !== null ? paragraphOwnRight : null) ?? handoffFrameRight;
+      handoffFrameAsked === null) return null;
+    const right = paragraphFrameRight ?? (paragraphSizeScale !== null ? paragraphOwnRight : null) ?? handoffFrameAsked;
     return Object.freeze({
       ...(right !== null ? { right } : {}),
       ...(paragraphLineStep !== null ? { lineStep: paragraphLineStep } : {}),
       ...(paragraphSizeScale !== null ? { sizeScale: paragraphSizeScale } : {}),
     });
-  }, [paragraphFrameRight, paragraphLineStep, paragraphSizeScale, paragraphOwnRight, handoffFrameRight]);
+  }, [paragraphFrameRight, paragraphLineStep, paragraphSizeScale, paragraphOwnRight, handoffFrameAsked]);
   // A box no run property states: its formats are previewed as the write
   // Leave makes of them (onDetachRowFormat's arguments), so the preview of a
   // format pressed is that format, and the key names them.
@@ -2728,8 +2822,18 @@ function PdfNativeListTextInlineEditor({
   const severalRowsBox = Boolean(initialLayout && !initialLayout.promoted &&
     Number(initialLayout.box.height) > Number(initialLayout.box.fontSize) * 1.5);
   const propertyParagraph = Boolean(!onApplyRowFormat && onApplyParagraphFormat && propertyProof && severalRowsBox);
-  const applyBoxFormat = onApplyRowFormat ?? (alignedRetype || propertyParagraph ? onApplyParagraphFormat : undefined);
-  const detachBoxFormat = onDetachRowFormat ?? (alignedRetype || propertyParagraph ? onDetachParagraphFormat : undefined);
+  // A run of right-to-left text drawn in a bold face of its own, its proof
+  // the run's (one show): its bold is taken off by its paragraph's writer --
+  // the box's words set again in the family's regular face where they stand,
+  // where the engine says they can be (boxDrawnStyle.regularFace) -- never by
+  // the run's own, which sets no glyph of text the reader reorders. The
+  // press records it as the box's format (boldFaceRunPress, below).
+  const boldFaceRun = Boolean(propertyProof) && boxDrawnStyle?.boldFaces === "only" && pdfTextHasRightToLeftRun(originalText);
+  const boldFaceRunSetRegular = boldFaceRun && boxDrawnStyle?.regularFace === true && rowFormat?.bold === false;
+  const applyBoxFormat = onApplyRowFormat ??
+    (alignedRetype || propertyParagraph || boldFaceRunSetRegular ? onApplyParagraphFormat : undefined);
+  const detachBoxFormat = onDetachRowFormat ??
+    (alignedRetype || propertyParagraph || boldFaceRunSetRegular ? onDetachParagraphFormat : undefined);
   const boxFormatPreview = useMemo(() => {
     if ((properties !== null && !alignedRetype && !propertyParagraph) || !boxRowFormat || !applyBoxFormat) return null;
     // A scanned line's own rules are drawn beside its words as they stand:
@@ -3033,6 +3137,24 @@ function PdfNativeListTextInlineEditor({
     useState<readonly QueuedNativeTextRibbonAction[]>([]);
   const queuedRibbonActionsRef = useRef(queuedRibbonActions);
   queuedRibbonActionsRef.current = queuedRibbonActions;
+  // The formats the window kept of this line from before it went (a reload,
+  // a browser that went down with the line open), handed back by
+  // `restoreFormats` and waiting for the line's proof.
+  const [formatRestore, setFormatRestore] = useState<Readonly<{
+    draft: PdfNativeTextFormatDraft; settle: (restored: boolean | null) => void }> | null>(null);
+  const formatRestoreRef = useRef(formatRestore);
+  formatRestoreRef.current = formatRestore;
+  const restoreFormatsRef = useRef<(formats: PdfNativeTextFormatDraft) => Promise<boolean | null>>(() => Promise.resolve(false));
+  restoreFormatsRef.current = (formats) => new Promise<boolean | null>((resolve) => {
+    // (Read back from where the window kept them: taken only in their shape.)
+    const draft = readPdfNativeTextFormatDraft(formats);
+    if (!draft) { resolve(false); return; }
+    // (A later hand-back takes the place of one not taken yet.)
+    formatRestoreRef.current?.settle(null);
+    setFormatRestore(Object.freeze({ draft, settle: resolve }));
+  });
+  // Closed with them still waiting: not refused -- the line's next editor's.
+  useEffect(() => () => formatRestoreRef.current?.settle(null), []);
   const [finishAfterQueuedActions, setFinishAfterQueuedActions] = useChangedState(false);
   // The text's own right-click menu (WPS: 复制 · 剪切 · 粘贴 · 粘贴为无格式文本 ·
   // 删除 | 全选), where it was opened and whether text was selected then;
@@ -3325,6 +3447,9 @@ function PdfNativeListTextInlineEditor({
   const lastPreviewAskedRef = useRef<{ text: string; formats: string } | null>(null);
   const activePreviewStartRef = useRef<(() => void) | null>(null);
   const finishPendingRef = useRef(false);
+  /** A Leave was waiting when the writer answered that the text box's frame
+   * leaves the line as it is (handoffFrameStandsFor): it finishes clean. */
+  const leftWithFrameStandingRef = useRef(false);
   const prepareEditingSurfaceRef = useRef(onPreparePreview);
   const sourcePropertyDraftRef = useRef<PdfNativeTextPropertyDraft | null>(
     propertyProof ? draftFromPropertyProof(propertyProof) : null,
@@ -4985,6 +5110,14 @@ function PdfNativeListTextInlineEditor({
           if (typeof message === "string" && PARAGRAPH_FRAME_UNCHANGED_REFUSAL.test(message)) {
             setPreviewError(null);
             setNativeRefusalDraftKey(null);
+            // The frame asked was the text box's the line was typed into,
+            // not one the reader dragged: these words stand in it already.
+            // (A Leave that waited for this answer has nothing to write.)
+            if (paragraphFrameRight === null && paragraphFrameRequest?.right !== undefined &&
+              paragraphFrameRequest.lineStep === undefined && paragraphFrameRequest.sizeScale === undefined) {
+              leftWithFrameStandingRef.current = finishPendingRef.current;
+              setHandoffFrameStandsFor(replacementText);
+            }
             setParagraphFrameRight(null);
             return;
           }
@@ -5773,7 +5906,9 @@ function PdfNativeListTextInlineEditor({
       return;
     }
     const own = returnFocusRef.current;
-    if (own?.isConnected && !deletesOnLeave) {
+    // (A block of a paragraph's formats is left for good: its box on the
+    // page is a line of it, which is not the block to open again.)
+    if (own?.isConnected && !deletesOnLeave && !wordsByLine) {
       const box = own.getBoundingClientRect();
       settleNextTextTarget(false);
       nextTextTargetRef.current = captureNextTextTarget?.(own, {
@@ -5863,8 +5998,13 @@ function PdfNativeListTextInlineEditor({
   // an IPCC title set in FrutigerLTPro-BlackCn carries no bold, and 加粗
   // read unpressed until the proof came, so a press meant to take the bold
   
+  // (A box its proof reads as bold faces beside other text -- drawnStyle's
+  // boldFaces without its bold -- is not bold as a whole, whatever face the
+  // reader names for its first words: 加粗 there strokes the rest.)
+  const boxOfMixedWeights = boxDrawnStyle?.boldFaces !== undefined && boxDrawnStyle.bold !== true;
   const currentBold = managedLayoutTypography ? managedBold : useStoredLayoutTypography ? Boolean(initialLayout?.box.bold) : faceReadsBold(selectedFont) || syntheticBold ||
-    (!propertyProof && (Boolean(initialLayout?.box.bold) || sourceFacesBold || Boolean(readerFontIdentity?.bold)));
+    (!propertyProof && !boxOfMixedWeights &&
+      (Boolean(initialLayout?.box.bold) || sourceFacesBold || Boolean(readerFontIdentity?.bold)));
   // A bold drawn as a stroke (the face has no bold): drafted as that stroke
   // on the regular face, every glyph at its own advance as the writer keeps
   // it. Drafted at weight 700 the words widened and a bolded paragraph ran
@@ -7520,6 +7660,11 @@ function PdfNativeListTextInlineEditor({
     const ownBox = (target: HTMLElement) => target === returnFocusRef.current || target === inlineEditorHost;
     const enterAt = (press: PdfNativeTextPress) => {
       takePdfNativeTextDoublePress(press);
+      // (A block that takes formats alone: the words are the line's under the press.)
+      if (wordsByLine && onOpenLineOfBlock) {
+        onOpenLineOfBlock({ clientX: press.clientX, clientY: press.clientY });
+        return;
+      }
       const bounds = (inputRef.current ?? press.target).closest<HTMLElement>(".pdf-viewer__page")?.getBoundingClientRect();
       const offset = bounds && bounds.width > 0 && bounds.height > 0
         ? caretOffsetAtPoint({
@@ -7538,7 +7683,7 @@ function PdfNativeListTextInlineEditor({
     return subscribePdfNativeTextDoublePress((press) => {
       if (ownBox(press.target)) enterAt(press);
     });
-  }, [objectSelected, inlineEditorHost, returnFocusRef, caretOffsetAtPoint, enterTextEditing]);
+  }, [objectSelected, inlineEditorHost, returnFocusRef, caretOffsetAtPoint, enterTextEditing, wordsByLine, onOpenLineOfBlock]);
   // Auto-measurement may refine height while a finish is pending. That is the
   // same user's draft; only content/formatting or manual geometry cancels it.
   const finishDraftKey = JSON.stringify([
@@ -8372,7 +8517,36 @@ function PdfNativeListTextInlineEditor({
   // draft cancels the intent; errors preserve it for an explicit user retry.
   useEffect(() => {
     if (finishRequested === null) return;
+    // This draft is with the window already (it took it behind the reader):
+    // nothing is waited for, asked again or written here. The intent can
+    // outlive the hand-over -- a leave asked twice of one draft, the second
+    // taken at once, leaves the first's intent standing; and an effect of a
+    // render made before the hand-over runs after it when a timer's callback
+    // (the retry below) comes ahead of that commit's passive effects (walk
+    // rv0052, WebKit under load: finish.detached-later, then finish.waiting
+    // previewBusy,grown from the render before it). Waited for here, the
+    // window was asked for the same draft again a moment later, and the
+    // exact preview's answer would have written it a second time.
+    if (draftHandedOver()) {
+      finishPendingRef.current = false;
+      setFinishRequested(null);
+      return;
+    }
+    if (leftWithFrameStandingRef.current && !draftDirty) {
+      // The draft this Leave was asked of was only the text box's frame,
+      // which its words already stand in (the preview's answer): nothing to
+      // write, and the reader has left -- the editor goes, as a line left
+      // unchanged does.
+      leftWithFrameStandingRef.current = false;
+      finishPendingRef.current = false;
+      setFinishRequested(null);
+      markPdfTextLatency("finish.clean");
+      onCancel();
+      settleNextTextTarget(true);
+      return;
+    }
     if (finishRequested !== finishDraftKey) {
+      leftWithFrameStandingRef.current = false;
       settleNextTextTarget(false);
       finishPendingRef.current = false;
       setFinishRequested(null);
@@ -8404,6 +8578,12 @@ function PdfNativeListTextInlineEditor({
       let retry = 0, delay = 100;
       const tryDetach = () => {
         retry = 0;
+        // (Taken meanwhile by a leave asked again: not handed over twice.)
+        if (draftHandedOver()) {
+          finishPendingRef.current = false;
+          setFinishRequested(null);
+          return;
+        }
         // A box whose rows (its paragraph) write it, once its proof gave it
         
         // writes it behind the reader, as a leave with the proof in does.
@@ -8428,6 +8608,9 @@ function PdfNativeListTextInlineEditor({
             detachableFinishRef.current || detachableMoveRef.current ? detachPropertiesRef.current : null,
             acceptedPropertiesRef.current)) {
           markPdfTextLatency("finish.detached-later");
+          // (Handed over, as at the leave: said of this draft from here on
+          // by the window alone -- draftHandedOver.)
+          markFinishHandedOver();
           finishPendingRef.current = false;
           activePreviewControllerRef.current?.abort();
           settleNextTextTarget(true);
@@ -8442,6 +8625,7 @@ function PdfNativeListTextInlineEditor({
     }
     applyFinishRef.current();
   }, [
+    draftDirty,
     finishMustWait,
     finishRequested,
     finishDraftKey,
@@ -8595,6 +8779,8 @@ function PdfNativeListTextInlineEditor({
       readFormat: () => formatStateRef.current,
       readFinishing: () => finishPendingRef.current,
       stepHistory: (direction) => stepLineHistoryRef.current(direction),
+      restoreFormats: (formats) => restoreFormatsRef.current(formats),
+      historySteps: () => textHistoryRef.current.past.length + formatHistoryRef.current.past.length,
       ghost: () => makeFinishGhostRef.current(),
       leave: () => requestLeaveRef.current(),
       readFrame: () => shownFrameRef.current,
@@ -8932,18 +9118,52 @@ function PdfNativeListTextInlineEditor({
     returnFocusRef]);
 
   useEffect(() => {
+    // A draft the window has taken is the window's to answer for: it closes
+    // this editor and clears the draft's flags as it takes it. Said again
+    // as unsaved after that -- by a render of the editor before the
+    // window's own, or by an effect of the render before the hand-over run
+    // after it -- nothing ever cleared it once the editor was gone: the
+    // page read 「未保存」 for good over an edit written and saved, the
+    // working copy clean (walk rv0052: a line slanted and left).
+    if (draftHandedOver()) return;
     if (!unverifiedNativeSource) onDraftStateChange?.(draftState);
   }, [draftState, onDraftStateChange, unverifiedNativeSource]);
   const typingUnsaved = draftState.dirty;
   useEffect(() => {
+    // (Not of a draft the window has taken, as above: the window answers
+    // for those words from the hand-over on.)
+    if (typingUnsaved && draftHandedOver()) return;
     onUnsavedTypingChange?.(typingUnsaved);
   }, [onUnsavedTypingChange, typingUnsaved]);
   // Closed (written, handed to the window, or dropped): nothing of it waits here.
   useEffect(() => () => onUnsavedTypingChange?.(false), [onUnsavedTypingChange]);
   const typingDraftText = typingUnsaved && replacementText !== originalText ? replacementText : null;
+  // The formats pressed and not written: those of the page's own text, which
+  // this editor holds as its history holds them (a text box's and a scanned
+  // line's are its box's runs, kept with the box). Ones handed back and
+  // still waiting for the proof are the line's already. Not once written:
+  // the draft is dirty no more, and nothing is held.
+  const typingDraftFormats = useMemo<PdfNativeTextFormatDraft | null>(() => {
+    if (formatRestore) return formatRestore.draft;
+    if (managedLayoutTypography || coverLaneLine) return null;
+    const pressed = draftDirty && (partFormats.length > 0 || propertyOverride !== null || rowFormat !== null);
+    if (!pressed && queuedRibbonActions.length === 0) return null;
+    return Object.freeze({ parts: partFormats, properties: propertyOverride,
+      propertyBaseline: propertyOverride ? propertyBaseline : null, rowFormat, queued: queuedRibbonActions });
+  }, [coverLaneLine, draftDirty, formatRestore, managedLayoutTypography, partFormats, propertyBaseline, propertyOverride,
+    queuedRibbonActions, rowFormat]);
   useEffect(() => {
-    onTypingDraftChange?.(typingDraftText === null ? null : { originalText, value: typingDraftText });
-  }, [onTypingDraftChange, originalText, typingDraftText]);
+    // Nor are words the window has taken kept as this line's typing: said
+    // after the hand-over (an effect of the render before it), the window
+    // kept them as the typing of whatever line was open by then -- the line
+    // pressed next opens in the hand-over's own update -- to be typed into
+    // it when the page comes back after a reload. The formats pressed with
+    // them the same.
+    const held = typingDraftText !== null || typingDraftFormats !== null;
+    if (held && draftHandedOver()) return;
+    onTypingDraftChange?.(held ? { originalText, value: replacementText,
+      ...(typingDraftFormats ? { formats: typingDraftFormats } : {}) } : null);
+  }, [onTypingDraftChange, originalText, replacementText, typingDraftFormats, typingDraftText]);
 
   useEffect(() => {
     if (!layoutDrag) return;
@@ -9258,7 +9478,9 @@ function PdfNativeListTextInlineEditor({
       if (press?.pointerId !== event.pointerId) return;
       pendingObjectPressRef.current = null;
       // Released where it was pressed (a move cleared the press above): a click.
-      if (event.type === "pointerup" && event.button === 0) enterTextAtPressRef.current(press.clientX, press.clientY);
+      // (A paragraph open as a block for its formats alone stays selected:
+      // its words are a line's, opened by a double press -- onOpenLineOfBlock.)
+      if (event.type === "pointerup" && event.button === 0 && !wordsByLineRef.current) enterTextAtPressRef.current(press.clientX, press.clientY);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", release);
@@ -9806,9 +10028,16 @@ function PdfNativeListTextInlineEditor({
   // nothing, and any typed while its proof was on the way are taken back
   // when it comes.
   const initialLayoutType3 = Boolean(initialLayout?.type3Text);
-  const wordsFixed = initialLayoutType3 ? "type3" as const : wordsUnread ? "unread" as const : null;
+  // (A paragraph open as a block for its formats alone is that whatever
+  // faces its lines hold -- an emoji's Type3 face among them: it says its
+  // own sentence and takes the formats written where its text stands, not a
+  // Type3 line's. Opened in the window, the reader's own reading of the page
+  // names the Type3 face, and the block said a Type3 line's sentence and
+  
+  const wordsFixed = wordsByLine ? "unread" as const : initialLayoutType3 ? "type3" as const
+    : wordsUnread ? "unread" as const : null;
   const wordsFixedNotice = wordsFixed === "unread"
-    ? translate("pdf.nativeTextEdit.unreadWordsNotEditable")
+    ? translate(wordsByLine ? "pdf.nativeTextEdit.paragraphFormatsOnly" : "pdf.nativeTextEdit.unreadWordsNotEditable")
     : translate("pdf.nativeTextEdit.type3WordsNotEditable");
   const wordsFixedNoticeId = wordsFixed === "unread"
     ? "pdf-native-list-text-edit-words-fixed" : "pdf-native-list-text-edit-type3";
@@ -10097,6 +10326,17 @@ function PdfNativeListTextInlineEditor({
       }}
       onClick={stopNativeTextGesture}
       onDoubleClick={(event) => {
+        // A paragraph open as a block for its formats alone: its words are
+        // the line's under the press, which the window opens in its place.
+        // (Whether the block is still selected as an object or not: only the
+        // press the reader noted before the editor came up was handed on,
+        
+        
+        if (wordsByLine && onOpenLineOfBlock) {
+          event.preventDefault();
+          onOpenLineOfBlock({ clientX: event.clientX, clientY: event.clientY });
+          return;
+        }
         if (!objectSelected) return;
         // WPS: a double click on the selected block puts the caret in where
         // it lands (a word is not selected).
@@ -10220,6 +10460,10 @@ function PdfNativeListTextInlineEditor({
         if ((event.metaKey || event.ctrlKey) && !event.altKey) {
           const key = event.key.toLowerCase();
           const redo = (key === "z" && event.shiftKey) || (key === "y" && !event.shiftKey);
+          if (key === "z" && !event.shiftKey && pageTakesUndo?.()) {
+            event.preventDefault();
+            return;
+          }
           if (((key === "z" && !event.shiftKey) || redo) && stepLineHistory(redo ? "redo" : "undo")) {
             event.preventDefault();
             return;
@@ -10523,9 +10767,16 @@ function PdfNativeListTextInlineEditor({
   // left. Written once the block has been still for a moment, so a run of
   // presses or a drag in steps is one write (the Escape path: the line opens
   // again on the new revision with its block selected).
+  // (Not a paragraph open as a block for its formats alone: the box the
+  // reader would open again in its place is the line it was asked from, and
+  // on the revision the write makes that line is no box of its own -- the
+  // paragraph is one again. The reader opened the line queued on the page as
+  // shown, nothing took it over, and the box, with no proof to come, held
+  
+  // formats are written when it is left, one write for all that was pressed.)
   const selectedBlockDraftKey =
     objectSelected && draftDirty && !layoutDrag && !busy && !submitting && !composing &&
-    !formatProofPending && finishRequested === null && !deletesOnLeave
+    !formatProofPending && finishRequested === null && !deletesOnLeave && !wordsByLine
       ? `${finishDraftKey}\u0000${JSON.stringify(rowFormat)}`
       : null;
   const commitSelectedBlockRef = useRef(escapeToBlock);
@@ -11144,13 +11395,18 @@ function PdfNativeListTextInlineEditor({
   // words again, carry them off or make a text box of them: each of those
   // says why (a face, a size, a script, a spacing, an alignment, a turn, a
   // delete, the format painter's copy of all of them).
-  const nativeCapabilities: typeof capabilitiesOfLine = initialLayoutType3 ? Object.freeze({ ...capabilitiesOfLine,
+  // (The block of a paragraph too large to set again is of the second kind,
+  // whatever faces it holds; a weight is refused it only where a Type3 glyph
+  // of it is a letter -- the same reading, type3PicturesOnly.)
+  const nativeCapabilities: typeof capabilitiesOfLine = initialLayoutType3 && !wordsByLine ? Object.freeze({ ...capabilitiesOfLine,
     ...(type3PicturesOnly && !propertyProof ? {} : { bold: Object.freeze({ enabled: false, reason: type3Unavailable }) }),
     fontFamily: Object.freeze({ enabled: false, reason: type3Unavailable }),
     delete: Object.freeze({ enabled: false, reason: translate("pdf.nativeTextEdit.type3WordsNotEditable") }),
   }) : wordsFixed === "unread" ? Object.freeze(Object.fromEntries(
     (Object.keys(capabilitiesOfLine) as (keyof typeof capabilitiesOfLine)[]).map((control) => [control,
-      WORDS_UNREAD_KEPT_CONTROLS.has(control) ? capabilitiesOfLine[control]
+      control === "bold" && wordsByLine && initialLayoutType3 && !type3PicturesOnly
+        ? Object.freeze({ enabled: false, reason: type3Unavailable })
+        : WORDS_UNREAD_KEPT_CONTROLS.has(control) ? capabilitiesOfLine[control]
         : Object.freeze({ enabled: false, reason: wordsFixedNotice })]),
   ) as typeof capabilitiesOfLine) : capabilitiesOfLine;
   // The selection's part of the run, when the run has formats of its own
@@ -11623,13 +11879,40 @@ function PdfNativeListTextInlineEditor({
   
 
 
-  const refusePartPress = () => {
+  const refusePartPress = (  reason?: string) => {
     const before = pressPartsBeforeRef.current;
     if (before) {
       partFormatsRef.current = before;
       setPartFormats(before);
     }
-    toast({ description: translate("pdf.nativeTextEdit.formatNotApplied") });
+    toast({ description: reason ?? translate("pdf.nativeTextEdit.formatNotApplied") });
+  };
+  // A box whose proof states no run and whose only bold is its face's own (the
+  // proof's drawnStyle.boldFaces "only": a title set in Times New Roman Bold): the
+  // page holds no state to take that weight off, and text the reader
+  // reorders is set in no other face where it stands -- the PDF's regular
+  // face of the family has other widths, so its joined letters would come
+  
+  // the press that would take it off is answered at once with that reason:
+  // recorded as a format of the box (rowFormat), it was asked of the page
+  // when the box was left, refused there as "drawn in the format asked
+  // already" and said only as 「未能应用」 -- and pressed once more it asked
+  // for a stroke over the bold face.
+  // (Not where the engine says the box's words can be set again in the
+  // family's regular face: there the press is written, boxDrawnStyle.regularFace.)
+  const boldFaceKeptReason = !propertyProof && !managedLayoutTypography && boxDrawnStyle?.boldFaces === "only" &&
+    boxDrawnStyle.regularFace !== true
+    ? translate(pdfTextHasRightToLeftRun(originalText)
+      ? "pdf.nativeTextEdit.boldFaceKeptRightToLeft" : "pdf.nativeTextEdit.boldFaceKept")
+    : null;
+  /** The weight a painted format asks of a box whose formats are its rows'
+   * (rowFormat): not a bold taken off a box whose bold is its face's own --
+   * said (boldFaceKeptReason), and the rest of the format painted. Asked with
+   * it, the page refused the colour and the rules painted too. */
+  const paintedRowBold = (bold: boolean): Readonly<{ bold?: boolean }> => {
+    if (bold || !boldFaceKeptReason) return { bold };
+    toast({ description: boldFaceKeptReason });
+    return {};
   };
   /** A rule pressed on a scanned line while the window still reads whether
    * the page takes it beside the line's invisible words (coverRulesWaiting):
@@ -12075,6 +12358,44 @@ function PdfNativeListTextInlineEditor({
       return;
     }
     const want = (control: NativeTextToggleControl) => pressedArg ?? displayedRibbonModel[control] !== true;
+    // 加粗 on a run of right-to-left text in a bold face of its own (boldFaceRun):
+    // taken off by its paragraph's writer where the engine says the box's words
+    // can be set in the family's regular face, said as the face's own where not;
+    // pressed again in the same draft, that press is taken back.
+    if (action.type === "toggle" && action.control === "bold" && boldFaceRun && !managedLayoutTypography && !partialTextRange()) {
+      const off = !want("bold");
+      if (off && boxDrawnStyle?.regularFace === true && onApplyParagraphFormat) {
+        setRowFormat((current) => ({ ...(current ?? {}), bold: false }));
+        return;
+      }
+      if (off) {
+        refusePartPress(translate("pdf.nativeTextEdit.boldFaceKeptRightToLeft"));
+        return;
+      }
+      if (rowFormat?.bold === false) {
+        setRowFormat((current) => {
+          const { bold: _bold, ...rest } = current ?? {};
+          void _bold;
+          return Object.keys(rest).length ? rest : null;
+        });
+        return;
+      }
+    }
+    // (A bold that is the face's own, pressed off: boldFaceKeptReason.)
+    if (action.type === "toggle" && action.control === "bold" && boldFaceKeptReason && !want("bold")) {
+      // (A bold this draft asked of the box's other words is taken back, the
+      // box as the page draws it again: nothing of that is the face's.)
+      if (rowFormat?.bold === true) {
+        setRowFormat((current) => {
+          const { bold: _bold, ...rest } = current ?? {};
+          void _bold;
+          return Object.keys(rest).length ? rest : null;
+        });
+        return;
+      }
+      refusePartPress(boldFaceKeptReason);
+      return;
+    }
     // A rule pressed on a run its property proof states (the selected
     // characters, else the whole run) is written with the run's other
     // formats, in one write, under the characters as that write places
@@ -12801,9 +13122,10 @@ function PdfNativeListTextInlineEditor({
     // stands, and nothing of the rest (a size or a paragraph setting painted
     // with it refused the whole format).
     if (!properties && wordsUnread && onApplyRowFormat) {
+      const weight = paintedRowBold(format.bold);
       setRowFormat((current) => ({
         ...(current ?? {}),
-        bold: format.bold, italic: format.italic,
+        ...weight, italic: format.italic,
         ...(format.color ? { color: format.color.toLowerCase() } : {}),
         underline: format.underline, strikethrough: format.strikethrough,
       }));
@@ -12814,9 +13136,10 @@ function PdfNativeListTextInlineEditor({
     // family its page may not hold refused the whole format).
     if (!properties && paragraphAlignable) {
       const paragraph = format.paragraph ?? {};
+      const weight = paintedRowBold(format.bold);
       setRowFormat((current) => ({
         ...(current ?? {}),
-        bold: format.bold, italic: format.italic,
+        ...weight, italic: format.italic,
         ...(format.fontSizePoints && Math.abs(format.fontSizePoints - paragraphSourcePoints) > 0.05
           ? { sizePoints: format.fontSizePoints } : {}),
         ...(format.color ? { color: format.color.toLowerCase() } : {}),
@@ -12922,6 +13245,41 @@ function PdfNativeListTextInlineEditor({
   // Once, as the editor opens; and as it closes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // The formats handed back (restoreFormats), taken once the line's proof is
+  // in: the parts, the run's draft and the box's row format as they were, as
+  // one step of the line's history (Undo takes them back whole), and the
+  // presses that were still held, held again. A run's draft goes back onto
+  // the run it was pressed on alone -- one that reads otherwise now (another
+  // face, another size: the page was written since) takes none of it, nor
+  // does an opening that was refused.
+  useEffect(() => {
+    if (!formatRestore) return;
+    if (preparationFailed) { setFormatRestore(null); formatRestore.settle(false); return; }
+    if (formatProofPending || propertyControlsBusy || composing) return;
+    const { draft, settle } = formatRestore;
+    setFormatRestore(null);
+    if (managedLayoutTypography || coverLaneLine ||
+      (draft.properties !== null && (!propertyBaseline || !samePropertyDraft(draft.propertyBaseline, propertyBaseline)))) {
+      settle(false);
+      return;
+    }
+    const history = formatHistoryRef.current;
+    history.past.push(Object.freeze({ parts: partFormatsRef.current, properties: propertyOverride, rowFormat,
+      queued: queuedRibbonActionsRef.current.length }));
+    history.log.push("format");
+    history.future = [];
+    history.redoLog = [];
+    partFormatsRef.current = draft.parts;
+    setPartFormats(draft.parts);
+    setProperties(draft.properties);
+    setRowFormat(draft.rowFormat);
+    if (draft.queued.length) {
+      setQueuedRibbonActions((queue) => draft.queued.reduce(queueNativeTextRibbonAction,
+        [] as readonly QueuedNativeTextRibbonAction[]).concat(queue));
+    }
+    settle(true);
+  }, [composing, coverLaneLine, formatProofPending, formatRestore, managedLayoutTypography, preparationFailed,
+    propertyBaseline, propertyControlsBusy, propertyOverride, rowFormat, setPartFormats, setProperties]);
   useEffect(() => {
     const latest = latestRibbonRef.current;
     if (queuedRibbonActions.length === 0 || formatProofPending || propertyControlsBusy || composing || coverRulesWaiting ||
@@ -13230,6 +13588,33 @@ function PdfNativeListTextInlineEditor({
 
 
 }
+      {/* A line of a paragraph that was refused whole and opens as a block
+          for its formats: the whole paragraph is one press away, where a
+          format had to be set on each of its lines in turn (a hundred lines
+          of a browser's print, pdf-walk-1000 0294). Not while this line holds
+          words or formats of its own not yet written: they are written when
+          it is left, and the paragraph read again after. */}
+      {onSelectWholeParagraph && !wordsByLine && !displayedError ? (
+        <span
+          role="status"
+          data-testid="pdf-native-list-text-edit-whole-paragraph-notice"
+          className="basis-full flex flex-wrap items-center gap-2 rounded border border-sky-400/40 bg-sky-50 px-2 py-1 text-xs text-sky-900 dark:bg-sky-950/30 dark:text-sky-100"
+        >
+          <span>{translate("pdf.nativeTextEdit.paragraphWholeFormatsHint")}</span>
+          <button
+            type="button"
+            data-testid="pdf-native-list-text-edit-whole-paragraph"
+            className="rounded border border-sky-500/50 bg-white px-2 py-0.5 font-medium text-sky-900 hover:bg-sky-100 disabled:opacity-50 dark:bg-sky-900/40 dark:text-sky-50"
+            disabled={draftDirty || submitting || busy}
+            title={draftDirty ? translate("pdf.nativeTextEdit.paragraphWholeAfterLine") : undefined}
+            onPointerDown={(event) => event.stopPropagation()}
+            onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}
+            onClick={(event) => { event.stopPropagation(); onSelectWholeParagraph(); }}
+          >
+            {translate("pdf.nativeTextEdit.selectWholeParagraph")}
+          </button>
+        </span>
+      ) : null}
       {wordsFixed !== null && !displayedError ? (
         <span
           id={wordsFixedNoticeId}
@@ -13253,7 +13638,7 @@ function PdfNativeListTextInlineEditor({
       ) : null}
     </>
   ), [displayedError, effectiveApplyDisabledReason, geometryNotice, wordsFixed, wordsFixedNotice, wordsFixedNoticeId, manualLayoutChanged,
-    openedInFallbackLane, refusalFallbackEligible, submitting, translate]);
+    openedInFallbackLane, refusalFallbackEligible, submitting, translate, onSelectWholeParagraph, draftDirty, busy, wordsByLine]);
   const shownRibbonStatus = useDeferredValue(ribbonStatus);
   // Live Preview (components/office-ribbon/officeFormatPreview.tsx): the
   // font, size or colour under the pointer shows on the selected characters

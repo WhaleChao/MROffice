@@ -35,7 +35,8 @@ import { parseSpreadsheetClipboardHtml } from "../../../../lib/spreadsheet/clipb
 import { richClipboardCellHasTransferableContent, standardPasteGrid, pasteLinkSnapshotDimensions, valuesWithSourceFormatting, type PasteOptionsChoice, valuesOnlyGrid, transposedPasteGrid, pasteLinkGrid, formatsGrid, type PastedContent, type PasteSpecialDraft, settlePasteSpecialDraft, commentsGrid, formulasGrid, numberFormatsGrid, type RichClipboard, transposeClipboard, arithmeticGrid, clipboardCellContent, transposedValuesGrid, applySkipBlanks, pasteOptionsSpecialDraft, layPasteTiles } from "@mrnote/core/web/lib/spreadsheet/paste-special.ts";
 import { readSheetObjectClipboardToken, clipboardHtmlHoldsOnlyPictures } from "../../../../lib/spreadsheet/object-clipboard";
 import { type SheetChartClipboardItem, type SheetChartClipboardFrame } from "../../../../lib/spreadsheet/chart-clipboard";
-import { clearRulesInRange as clearConditionalRulesInRange, MAX_CONDITIONAL_FORMATS, normalizeRules as normalizeConditionalRules, planRulesForFormatPaste, planRulesForTiledFormatPaste, planRulesForTransposedFormatPaste, ruleMovedBy, type ConditionalFormatRule } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
+import { clearRulesInRange as clearConditionalRulesInRange, MAX_CONDITIONAL_FORMATS, normalizeRules as normalizeConditionalRules, planRulesForFormatPaste, planRulesForFormatPasteWithFile, planRulesForTiledFormatPaste, planRulesForTransposedFormatPaste, planRulesWithFile, ruleMovedBy, type ConditionalFormatRule } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
+import { withConditionalFormatFileCopyRecorded, type ConditionalFormatFileCopyLayout } from "@mrnote/core/web/lib/spreadsheet/structural.ts";
 import { rewriteConditionalFormatReferences, rewriteValidationReferences } from "../../../../lib/spreadsheet/sheet-formula-references";
 import { rangeLayoutToPngDataUrl, type RangeLayout } from "../../../../lib/spreadsheet/image-export";
 import { type SheetModel, type SpreadsheetObject } from "./spreadsheetSheetModel";
@@ -128,6 +129,35 @@ export interface SpreadsheetClipboardPasteInputs {
 }
 
 /** Moved verbatim from SpreadsheetWindow (called at the same position, so hook order is unchanged). */
+
+
+
+
+
+
+
+function conditionalFormatFileCopyOf(
+  fileCopy: { page: boolean } | null | undefined,
+  copied: SheetModel | undefined,
+  pastedSheetId: string,
+  sourceRange: { r1: number; c1: number; r2: number; c2: number },
+  at: { row: number; col: number },
+  layout: ConditionalFormatFileCopyLayout = {},
+) {
+  if (!fileCopy || !copied) return undefined;
+  return {
+    source: copied.id === pastedSheetId ? null : copied,
+    rect: [sourceRange.r1, sourceRange.c1, sourceRange.r2, sourceRange.c2] as [number, number, number, number],
+    at: [at.row, at.col] as [number, number],
+    page: fileCopy.page,
+    ...layout,
+  };
+}
+
+/** How many rules the copied sheet lists (a page lists up to the bound). */
+function listedRuleCount(copied: SheetModel | undefined): number {
+  return Array.isArray(copied?.conditionalFormats) ? copied.conditionalFormats.length : 0;
+}
 
 function pasteLinkSourceBlockUnmoved(
   origin: { row: number; col: number; sourceRows?: readonly number[]; sourceCells: CellMap },
@@ -725,18 +755,32 @@ export function useSpreadsheetClipboardPaste({
             }
             tiledValidationPlan = plan;
           }
-          const tiledConditionalFormatPlan = planRulesForTiledFormatPaste(
+          // Past the page's bound the file pastes, as on a single paste
+          
+          const copiedSheet = sheets.find((candidate) => candidate.id === origin.sheetId);
+          const tiledFormatPaste = planRulesWithFile(
+            planRulesForTiledFormatPaste,
             conditionalFormats,
             copiedConditionalFormats,
             sourceRange,
             selRect,
+            listedRuleCount(copiedSheet),
             plannerBounds,
             { merge: pasteOptions.mergeConditionalFormats === true },
           );
-          if (!tiledConditionalFormatPlan) {
+          if (!tiledFormatPaste) {
             toast({ title: t("toolbar.pasteFailed") });
             return;
           }
+          const tiledConditionalFormatPlan = tiledFormatPaste.plan;
+          const tiledFileCopy = conditionalFormatFileCopyOf(
+            tiledFormatPaste.fileCopy,
+            copiedSheet,
+            sheet.id,
+            sourceRange,
+            { row: selRect.r1, col: selRect.c1 },
+            { tiles: [tileRows, tileCols], ...(origin.sourceRows ? { rows: origin.sourceRows } : {}) },
+          );
           const tiledMerges: MergeSpan[] = [];
           for (let tileRow = 0; tileRow < tileRows; tileRow += 1) {
             for (let tileCol = 0; tileCol < tileCols; tileCol += 1) {
@@ -784,7 +828,8 @@ export function useSpreadsheetClipboardPaste({
               selectPasted: true,
               skipIfUnchanged: true,
               ...(carriesMerges ? { authoritativeMerges: true } : {}),
-              ...(tiledConditionalFormatPlan.changed ? { conditionalFormatPlan: tiledConditionalFormatPlan } : {}),
+              ...(tiledConditionalFormatPlan.changed || tiledFileCopy ? { conditionalFormatPlan: tiledConditionalFormatPlan } : {}),
+              ...(tiledFileCopy ? { conditionalFormatFileCopy: tiledFileCopy } : {}),
               ...(tiledValidationPlan ? { validationPlan: tiledValidationPlan } : {}),
               skipBlankSources: pasteOptions.skipBlanks === true,
               expandTables: true,
@@ -867,15 +912,29 @@ export function useSpreadsheetClipboardPaste({
         maxRow: nextRowCount - 1,
         maxCol: nextColumnCount - 1,
       };
-      const conditionalFormatPlan = planRulesForFormatPaste(
+      // The copied sheet: a page lists its first MAX_CONDITIONAL_FORMATS
+      // rules and the file keeps the rest, which the write-back pastes, as
+      
+      const copiedSheet = sheets.find((candidate) => candidate.id === origin.sheetId);
+      const formatPaste = planRulesForFormatPasteWithFile(
         conditionalFormats,
         copiedConditionalFormats,
         sourceRange,
         destinationRange,
+        listedRuleCount(copiedSheet),
         plannerBounds,
         // Paste Special > All merging conditional formats keeps the
         // destination's rules beside the copied ones (XLS-A063).
         { merge: pasteOptions.mergeConditionalFormats === true },
+      );
+      const conditionalFormatPlan = formatPaste?.plan ?? null;
+      const conditionalFormatFileCopy = conditionalFormatFileCopyOf(
+        formatPaste?.fileCopy,
+        copiedSheet,
+        sheet.id,
+        sourceRange,
+        { row: destinationRange.r1, col: destinationRange.c1 },
+        origin.sourceRows ? { rows: origin.sourceRows } : {},
       );
       const validationPlan = planRulesForValidationPaste(
         validations,
@@ -926,6 +985,7 @@ export function useSpreadsheetClipboardPaste({
           authoritativeMerges: true,
           conditionalFormatPlan,
           validationPlan,
+          ...(conditionalFormatFileCopy ? { conditionalFormatFileCopy } : {}),
           skipBlankSources: pasteOptions.skipBlanks === true,
           expandTables: true,
         },
@@ -1810,12 +1870,24 @@ export function useSpreadsheetClipboardPaste({
       maxRow: nextRowCount - 1,
       maxCol: nextColumnCount - 1,
     };
-    const conditionalFormatPlan = planRulesForTransposedFormatPaste(
+    const copiedSheet = sheets.find((candidate) => candidate.id === origin.sheetId);
+    const formatPaste = planRulesWithFile(
+      planRulesForTransposedFormatPaste,
       conditionalFormats,
       copiedConditionalFormats,
       sourceRange,
       destinationRange,
+      listedRuleCount(copiedSheet),
       plannerBounds,
+    );
+    const conditionalFormatPlan = formatPaste?.plan ?? null;
+    const conditionalFormatFileCopy = conditionalFormatFileCopyOf(
+      formatPaste?.fileCopy,
+      copiedSheet,
+      sheet.id,
+      sourceRange,
+      { row: destinationRange.r1, col: destinationRange.c1 },
+      { transpose: true, ...(origin.sourceRows ? { rows: origin.sourceRows } : {}) },
     );
     const validationPlan = planRulesForTransposedValidationPaste(
       validations,
@@ -1862,6 +1934,7 @@ export function useSpreadsheetClipboardPaste({
         authoritativeMerges: true,
         conditionalFormatPlan,
         validationPlan,
+        ...(conditionalFormatFileCopy ? { conditionalFormatFileCopy } : {}),
         skipBlankSources: skipBlanks,
       },
     );
@@ -1872,6 +1945,7 @@ export function useSpreadsheetClipboardPaste({
     pageId,
     pasteGridIntoCells,
     sheet,
+    sheets,
     showProtectNotice,
     validations,
   ]);
@@ -2002,14 +2076,34 @@ export function useSpreadsheetClipboardPaste({
       maxCol: nextColumnCount - 1,
     };
     const tiledNoBorders = noBorderTiles?.tiled === true;
-    const conditionalFormatPlan = (
-      tiledNoBorders ? planRulesForTiledFormatPaste : planRulesForFormatPaste
-    )(
+    const copiedSheet = sheets.find((candidate) => candidate.id === origin.sheetId);
+    const formatPaste = planRulesWithFile(
+      tiledNoBorders ? planRulesForTiledFormatPaste : planRulesForFormatPaste,
       conditionalFormats,
       copiedConditionalFormats,
       sourceRange,
       destinationRange,
+      listedRuleCount(copiedSheet),
       plannerBounds,
+    );
+    const conditionalFormatPlan = formatPaste?.plan ?? null;
+    const conditionalFormatFileCopy = conditionalFormatFileCopyOf(
+      formatPaste?.fileCopy,
+      copiedSheet,
+      sheet.id,
+      sourceRange,
+      { row: destinationRange.r1, col: destinationRange.c1 },
+      {
+        ...(tiledNoBorders
+          ? {
+              tiles: [
+                (destinationRange.r2 - destinationRange.r1 + 1) / dimensions.rows,
+                (destinationRange.c2 - destinationRange.c1 + 1) / dimensions.cols,
+              ] as [number, number],
+            }
+          : {}),
+        ...(origin.sourceRows ? { rows: origin.sourceRows } : {}),
+      },
     );
     const validationPlan = (
       tiledNoBorders ? planRulesForTiledValidationPaste : planRulesForValidationPaste
@@ -2059,6 +2153,7 @@ export function useSpreadsheetClipboardPaste({
         authoritativeMerges: true,
         conditionalFormatPlan,
         validationPlan,
+        ...(conditionalFormatFileCopy ? { conditionalFormatFileCopy } : {}),
       },
     );
   }, [
@@ -2069,6 +2164,7 @@ export function useSpreadsheetClipboardPaste({
     pasteGridIntoCells,
     pasteSpecialTiles,
     sheet,
+    sheets,
     showProtectNotice,
     validations,
   ]);
@@ -2249,25 +2345,39 @@ export function useSpreadsheetClipboardPaste({
       c2: origin.col + dimensions.cols - 1,
     };
     const ruleBounds = { maxRow: nextRowCount - 1, maxCol: nextColumnCount - 1 };
-    const rulePlan = tiles.tiled
-      ? planRulesForTiledFormatPaste(
-          conditionalFormats,
-          copiedRules,
-          copiedRange,
-          destinationRange,
-          ruleBounds,
-        )
-      : planRulesForFormatPaste(
-          conditionalFormats,
-          copiedRules,
-          copiedRange,
-          destinationRange,
-          ruleBounds,
-        );
-    if (!rulePlan) {
+    const copiedSheet = sheets.find((candidate) => candidate.id === origin.sheetId);
+    const formatPaste = planRulesWithFile(
+      tiles.tiled ? planRulesForTiledFormatPaste : planRulesForFormatPaste,
+      conditionalFormats,
+      copiedRules,
+      copiedRange,
+      destinationRange,
+      listedRuleCount(copiedSheet),
+      ruleBounds,
+    );
+    if (!formatPaste) {
       toast({ title: t("toolbar.pasteFailed") });
       return;
     }
+    const rulePlan = formatPaste.plan;
+    const fileCopy = conditionalFormatFileCopyOf(
+      formatPaste.fileCopy,
+      copiedSheet,
+      sheet.id,
+      copiedRange,
+      { row: destinationRange.r1, col: destinationRange.c1 },
+      {
+        ...(tiles.tiled
+          ? {
+              tiles: [
+                (destinationRange.r2 - destinationRange.r1 + 1) / dimensions.rows,
+                (destinationRange.c2 - destinationRange.c1 + 1) / dimensions.cols,
+              ] as [number, number],
+            }
+          : {}),
+        ...(origin.sourceRows ? { rows: origin.sourceRows } : {}),
+      },
+    );
 
     const nextCells = copyCellMap(sheet.cells);
     let cellsChanged = false;
@@ -2316,7 +2426,7 @@ export function useSpreadsheetClipboardPaste({
       }
     }
     }
-    if (!cellsChanged && !rulePlan.changed) return;
+    if (!cellsChanged && !rulePlan.changed && !fileCopy) return;
     const nextSheet: SheetModel = {
       ...sheet,
       cells: cellsChanged ? nextCells : sheet.cells,
@@ -2328,7 +2438,9 @@ export function useSpreadsheetClipboardPaste({
     } else {
       delete nextSheet.conditionalFormats;
     }
-    replaceActiveSheet(nextSheet);
+    replaceActiveSheet(
+      fileCopy ? withConditionalFormatFileCopyRecorded(nextSheet, fileCopy.source ?? nextSheet, fileCopy) : nextSheet,
+    );
   }, [
     activeCell,
     conditionalFormats,
@@ -2337,6 +2449,7 @@ export function useSpreadsheetClipboardPaste({
     pasteSpecialTiles,
     replaceActiveSheet,
     sheet,
+    sheets,
     showProtectNotice,
   ]);
 

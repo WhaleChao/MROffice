@@ -26726,6 +26726,12 @@ html[data-platform="other"][data-theme-mode="high-contrast"] :is(.note-window-sc
   height: 30px;
   flex: 0 0 30px;
 }
+/* A saved page's row draws it as itself (PageMiniature): the page on its
+   little stack in the icon's own 30px, so the row keeps its height. */
+.page-list-item .sidebar-page-miniature {
+  --dock-box: 30px;
+  --dock-badge: 13px;
+}
 
 /* A row's trailing actions step aside until the row is pointed at, focused or
    selected, so the name keeps the panel's width: with both always on, a 215px

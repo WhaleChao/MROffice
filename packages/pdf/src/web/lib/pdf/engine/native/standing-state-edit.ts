@@ -316,7 +316,28 @@ export function planStandingStateEdits(
           written[kind] = show.state[kind];
           continue;
         }
-        for (const operator of region) if (operator.kind === kind) removeBefore(operator.start, operator.end);
+        // Where the page itself sets the kind once directly before the show
+        // (`0 g` `0 G` `(...) Tj`), the want is written in that operator's
+        // place: the state is set where the page set it, in the order it
+        // set its kinds. Taken away and written anew against the show, a
+        // colour set and then set back left the page's own two operators
+        // the other way round (`0 G` `0 g`) -- the same paint, other bytes,
+        // and a format taken back gives the page's bytes back (pdf-walk-1000
+        
+        // own is kept so even where the state before it is the want already
+        // (the page's operator said it again; what was set in its place is
+        // set back in its place); one set against the show on its line, as
+        // this writer sets what it adds, goes as it came where it is no
+        // longer wanted.
+        const own = region.filter((operator) => operator.kind === kind);
+        if (want !== null && own.length === 1 &&
+          (want !== written[kind] || /[\n\r]/u.test(source.slice(own[0].end, show.start)))) {
+          const set = kind === "tr" ? `${want} Tr` : want;
+          if (source.slice(own[0].start, own[0].end) !== set) edits.push({ start: own[0].start, end: own[0].end, text: set });
+          written[kind] = want;
+          continue;
+        }
+        for (const operator of own) removeBefore(operator.start, operator.end);
         if (want !== written[kind]) {
           if (want === null) return refuse(MRAI_NATIVE_STANDING_STATE_UNKNOWN_MESSAGE);
           adds.push(kind === "tr" ? `${want} Tr` : want);
@@ -464,7 +485,12 @@ const RULE_BLOCK = new RegExp(String.raw`\nq (?:${RULE_NUMBER} ){1,4}(?:g|rg|k) 
   String.raw`(?:${RULE_NUMBER} ${RULE_NUMBER} l ){3}h f Q\n`, "g");
 const STATE_OPERATOR = String.raw`(?:[02] Tr|${STATE_NUMBER} w|${STATE_NUMBER} [Gg]|(?:${STATE_NUMBER} ){3}(?:RG|rg)|` +
   String.raw`(?:${STATE_NUMBER} ){4}[Kk]|${STATE_NAME} (?:CS|cs)|(?:(?:${STATE_NUMBER}|${STATE_NAME}) ){1,33}(?:SCN|SC|scn|sc))`;
-const STATE_RUN = new RegExp(String.raw`^[\x00\t\n\f\r ]*(?:${STATE_OPERATOR}(?:[\x00\t\n\f\r ]+|$))*$`);
+// (And, for a lean: a text matrix or a move with its operands, a `T*` -- what
+// planStandingLeanEdits sets before and after the box's shows, and takes away
+// again. They place text; that no show moves is read back by the writer. No
+// part of what may stand between the two pieces of a cut show: SHOW_CUT.)
+const PLACING_OPERATOR = String.raw`(?:(?:${STATE_NUMBER} ){6}Tm|${STATE_NUMBER} ${STATE_NUMBER} Td|T\*)`;
+const STATE_RUN = new RegExp(String.raw`^[\x00\t\n\f\r ]*(?:(?:${STATE_OPERATOR}|${PLACING_OPERATOR})(?:[\x00\t\n\f\r ]+|$))*$`);
 
 /** Whether `bytes` (a stream's bytes as text) is nothing but state operators
  * of such a format and rules of this writer's form. */
@@ -581,15 +607,475 @@ export function standingShowCuts(
   return Object.freeze(out);
 }
 
-const SHOW_CUT = new RegExp(String.raw`^(?:\)\] TJ[\x00\t\n\f\r ]+(?:${STATE_OPERATOR}[\x00\t\n\f\r ]+)*\[\(|` +
-  String.raw`>\] TJ[\x00\t\n\f\r ]+(?:${STATE_OPERATOR}[\x00\t\n\f\r ]+)*\[<|` +
-  String.raw`\] TJ[\x00\t\n\f\r ]+(?:${STATE_OPERATOR}[\x00\t\n\f\r ]+)*\[|` +
-  String.raw`\) Tj[\x00\t\n\f\r ]+(?:${STATE_OPERATOR}[\x00\t\n\f\r ]+)*\(|` +
-  String.raw`> Tj[\x00\t\n\f\r ]+(?:${STATE_OPERATOR}[\x00\t\n\f\r ]+)*<)$`);
+// (Between the two pieces: state operators, and -- for a lean of the box's
+// stretch of the show -- the text matrix the piece after starts under, set
+// where it stands. No move: a `Td` or a `T*` there would carry the piece.)
+const CUT_BETWEEN = String.raw`[\x00\t\n\f\r ]+(?:(?:${STATE_OPERATOR}|(?:${STATE_NUMBER} ){6}Tm)[\x00\t\n\f\r ]+)*`;
+const SHOW_CUT = new RegExp(String.raw`^(?:\)\] TJ${CUT_BETWEEN}\[\(|>\] TJ${CUT_BETWEEN}\[<|\] TJ${CUT_BETWEEN}\[|` +
+  String.raw`\) Tj${CUT_BETWEEN}\(|> Tj${CUT_BETWEEN}<)$`);
 
 /** Whether `bytes` cuts a show in two (standingShowCuts), with nothing but
- * state operators between the two shows. (Mirror of the server's
- * standing_bytes_cut_a_show.) */
+ * state operators -- and the text matrix of the piece after -- between the
+ * two shows. (Mirror of the server's standing_bytes_cut_a_show.) */
 export function mraiNativeStandingBytesCutAShow(bytes: string): boolean {
   return SHOW_CUT.test(bytes);
+}
+
+// ---------------------------------------------------------------------------
+// A lean written where the text stands.
+//
+// A lean is a shear of text space: x += delta * y. No operator shears the
+// text matrix a show is drawn under; it is whatever the last `Tm` set, moved
+// on by the `Td`, `TD` and `T*` since (the line matrix) and by the shows
+// drawn (the pen). So the lean of a box's shows is written into the
+// positioning operators that bring the text to them:
+//
+//  - a `Tm` that sets the matrix of shows of the box is written leaned (its
+//    c and d operands; where it stands is as it was);
+//  - a move down a line under a leaned matrix would carry the text along the
+//    line too (ty times the lean): a move of its own along the line, written
+//    right after it (`x 0 Td`), takes that back. The page's own move -- its
+//    operands as the page spelled them, a `T*` as a `T*` -- is not touched, so
+//    that the lean taken off leaves the bytes the page had: the move this
+//    writer set goes, and nothing has to be spelled again;
+//  - where the box's shows are reached from other text by a move alone, the
+//    leaned line matrix is set before them by a `Tm` of its own, and where
+//    other text is reached from them by a move alone the line matrix is set
+//    back before the move;
+//  - where a show runs on from one that leans otherwise (a word of the box
+//    after a word of another, a formula's letter in its italic face among
+//    leaned words), the matrix it starts under is set there, and the next
+//    move takes back how far along its line that was (again by a move of
+//    its own after it).
+//
+// Taken off, what a lean set goes the way it came: a matrix that sets what
+// the matrix already is once the lean is off is taken away (with the cut of
+// the show it stood in, where it stood in one: the show is one show again),
+// and a move of this writer's that then moves nowhere with it.
+//
+// No show's bytes change and no show moves; every show of the stream that is
+// not the box's stands under the matrix it had. That is checked by the
+// caller from the bytes written, as its paint state is.
+// ---------------------------------------------------------------------------
+
+const IDENTITY: Matrix = [1, 0, 0, 1, 0, 0];
+const sheared = (matrix: Matrix, delta: number): Matrix =>
+  [matrix[0], matrix[1], matrix[2] + delta * matrix[0], matrix[3] + delta * matrix[1], matrix[4], matrix[5]];
+const moved = (matrix: Matrix, tx: number, ty: number): Matrix => [matrix[0], matrix[1], matrix[2], matrix[3],
+  tx * matrix[0] + ty * matrix[2] + matrix[4], tx * matrix[1] + ty * matrix[3] + matrix[5]];
+const sameMatrix = (left: Matrix, right: Matrix) => left.every((value, at) =>
+  Math.abs(value - right[at]) <= 2e-6 * Math.max(1, Math.abs(value), Math.abs(right[at])));
+const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)$/u;
+const linearOf = (matrix: Matrix): Matrix => [matrix[0], matrix[1], matrix[2], matrix[3], 0, 0];
+
+// A show cut in two with the matrix of the piece after set between the two
+// (standingShowCuts, and the lean's own matrix): what closes the first piece
+// and what opens the second, as this writer writes them.
+const CUT_ENDS: readonly (readonly [string, string])[] = [[")] TJ", "[("], [">] TJ", "[<"], ["] TJ", "["], [") Tj", "("], ["> Tj", "<"]];
+const CUT_MATRIX_LINE_END = /Tm\n(\[\(|\[<|\[|\(|<)$/u;
+/** How far from the pen a matrix this writer set at it may stand when the
+ * lean is taken off: the digits it was stated in, and those of each move this
+ * writer set on the lines before it (a paragraph of many lines adds them up). */
+const PEN_SET_REACH = 1e-4;
+
+/** The bytes of such a cut round the matrix at `from..to` (its operands to
+ * its operator), or null where the matrix stands in none: taken away, the
+ * two pieces are one show again. The cut and its matrix stand on one line
+ * (composeStandingCutEdits); two shows of the page with a matrix this writer
+ * set between them do not. (Two strings of an array that stood side by side
+ * with no number between them read back as one string: the same glyphs from
+ * the same pen.) */
+function standingCutAround(source: string, from: number, to: number): Readonly<{ start: number; end: number }> | null {
+  for (const [close, open] of CUT_ENDS) {
+    if (source.slice(from - close.length - 1, from) === `${close} ` && source.slice(to, to + 1 + open.length) === ` ${open}`) {
+      return { start: from - close.length - 1, end: to + 1 + open.length };
+    }
+  }
+  return null;
+}
+
+type LeanOperator = Readonly<{
+  kind: "Tm" | "Td" | "TD" | "T*" | "next-line-show";
+  /** Its operator among the walk's tokens, and its operands. */
+  token: number;
+  operands: readonly number[];
+  /** The line matrix before it, as the stream stands (null: not known). */
+  before: Matrix | null;
+  /** The leading in force at it (null: not known). */
+  leading: number | null;
+}>;
+
+/**
+ * The edits that lean the shows of `owned` (by the end of each show's span:
+ * the shear `delta` of text space it takes) where they stand in the stream
+ * `walk` reads. A string instead: why this stream cannot take the lean so (the
+ * caller draws the box again, or refuses in its own words).
+ */
+export function planStandingLeanEdits(input: Readonly<{
+  walk: StandingWalk;
+  owned: ReadonlyMap<number, number>;
+  /** Shows of `owned` that hang off their line -- a sign set above or below
+   * the baseline of the text it belongs to (by the end of the show's span):
+   * how far along its line each moves with the lean, in the units of the
+   * matrix it is drawn under. A show on its line's baseline leans about its
+   * own origin and moves nowhere; one that hangs off it is carried along by
+   * the lean of the line, as far as it hangs. */
+  hangs?: ReadonlyMap<number, number>;
+  /** The text matrix each show of the stream starts under, by the end of its span. */
+  pens: ReadonlyMap<number, Matrix>;
+  /** Whether the stream starts with no leading set (the page's first stream). */
+  leadingKnown: boolean;
+  format: (value: number) => string;
+  /** The text matrix the show after the bytes `from..to` of the stream (a
+   * matrix set alone between two shows) starts under without them: where the
+   * show before it leaves the pen. Null: not read. Asked of a matrix that may
+   * set nothing once the lean is off. */
+  penWithout?: (from: number, to: number) => Matrix | null;
+}>): readonly StandingEdit[] | string {
+  const { walk, owned, format } = input;
+  const { source, tokens } = walk;
+  const text = (index: number) => source.slice(tokens[index].start, tokens[index].end);
+  const numberAt = (index: number): number | null => {
+    const spelled = index >= 0 && !tokens[index].operator ? text(index) : "";
+    return NUMBER.test(spelled) ? Number(spelled) : null;
+  };
+  const showAt = new Map(walk.shows.map((show) => [show.first, show] as const));
+  const edits: StandingEdit[] = [];
+  const matrixText = (matrix: Matrix) => matrix.map(format).join(" ");
+  const space = (at: number) => at >= 0 && at < source.length && /[\x00\t\n\f\r ]/u.test(source[at]);
+
+  let leading: number | null = input.leadingKnown ? 0 : null;
+  const leadings: (number | null)[] = [];
+  let inText = false;
+  let line: Matrix | null = null;
+  // What was drawn before the positioning operators gathered in `gap`: the
+  // text object's start, a show of the box (and the shear it takes), or
+  // another show.
+  let before: "start" | "other" | Readonly<{ delta: number; hang: number }> = "start";
+  let beforeEnd = 0;
+  let gap: LeanOperator[] = [];
+
+  // How far along its line the line matrix stands from where the stream as
+  // it was has it: a matrix this writer sets where a show starts mid-line
+  // (below) is that show's, and the next move from it takes the difference.
+  let shift = 0;
+  const unread = "The matrix this text is drawn under cannot be read from the page's content.";
+
+  // A move, made to land where it did: under a leaned line matrix it would
+  // carry the text along the line too (ty times the lean), and from a line
+  // matrix set mid-line it would start that much further on. The move stays
+  // as the page wrote it; a move along the line alone is written after it
+  // (`correction`: the one already there -- this writer's, set by a lean
+  // before -- which is then set anew, or taken away where it would move
+  // nowhere).
+  // (`hang`: how far further along the line the show the move reaches is to
+  // land -- a sign carried along by the lean of the line it hangs on.)
+  const landed = (operator: LeanOperator, correction: LeanOperator | null, lean: number | null, hang = 0): string | null => {
+    const delta = lean ?? 0;
+    const carried = shift - hang;
+    shift = 0;
+    if (operator.kind === "Tm") return hang === 0 ? null : "A sign that hangs on a line of this box is placed by a matrix after a move.";
+    if (operator.kind === "next-line-show") {
+      if (carried === 0 && (delta === 0 || operator.leading === 0)) return null;
+      return "A show of other text moves to its line as it is drawn, after text of this box.";
+    }
+    let down = 0;
+    if (delta !== 0) {
+      if (operator.kind === "T*") {
+        if (operator.leading === null) return "The line spacing a `T*` of this text moves by is not stated where this writer can read it.";
+        down = -operator.leading;
+      } else down = numberAt(operator.operands[1])!;
+    }
+    const further = -delta * down - carried;
+    if (correction) {
+      const had = numberAt(correction.operands[0])!;
+      const to = had + further;
+      if (Math.abs(to - had) <= 1e-12) return null;
+      const first = tokens[correction.operands[0]];
+      // (Nowhere, to the digits this writer states a move and a matrix in: a
+      // move in the line's own units, a matrix on the page.)
+      const along = operator.before ? Math.hypot(operator.before[0], operator.before[1]) : 1;
+      if (Math.abs(to) <= 1e-6 * (1 + 1 / Math.max(along, 1e-9)) || format(to) === "0") {
+        edits.push({ start: space(first.start - 1) ? first.start - 1 : first.start, end: tokens[correction.token].end, text: "" });
+      } else edits.push({ start: first.start, end: first.end, text: format(to) });
+      return null;
+    }
+    if (Math.abs(further) <= 1e-12 || format(further) === "0") return null;
+    const after = tokens[operator.token].end;
+    edits.push({ start: after, end: after, text: ` ${format(further)} 0 Td` });
+    return null;
+  };
+  /** A move along the line alone, right after another move: what this writer sets after a move (above). */
+  const alongOnly = (operator: LeanOperator | undefined): operator is LeanOperator =>
+    operator !== undefined && operator.kind === "Td" && numberAt(operator.operands[1]) === 0;
+  /** The moves of `operators`, each made to land where it did (the last of them `hang` further on). */
+  const landedAll = (operators: readonly LeanOperator[], lean: number | null, hang = 0): string | null => {
+    for (let at = 0; at < operators.length; at += 1) {
+      const operator = operators[at];
+      const moves = operator.kind === "Td" || operator.kind === "TD" || operator.kind === "T*";
+      const correction = moves && alongOnly(operators[at + 1]) ? operators[at + 1] : null;
+      const last = at + (correction ? 1 : 0) === operators.length - 1;
+      const why = landed(operator, correction, lean, last ? hang : 0);
+      if (why) return why;
+      if (correction) at += 1;
+    }
+    return null;
+  };
+  const sameLean = (left: number | null, right: number | null) => left === right ||
+    (left !== null && right !== null && Math.abs(left - right) <= 1e-12 * Math.max(1, Math.abs(left)));
+
+  /** The operators gathered are done: `next` is drawn after them (null: the
+   * text object ends), its span from `nextStart` to `nextEnd`. */
+  const close = (next: "other" | Readonly<{ delta: number; hang: number }> | null, nextStart: number, nextEnd: number): string | null => {
+    const lean = next !== null && next !== "other" ? next.delta : null;
+    const leaned = before !== "start" && before !== "other" ? before.delta : null;
+    // A sign that hangs on its line is carried along it by the lean: the
+    // move (or the matrix) that reaches it lands that much further on, and
+    // what is drawn after it is reached from there as it was (`shift`). It is
+    // reached by a move or a matrix of its own -- one that runs on from the
+    // show before it, or that a show runs on from, is not carried so.
+    const hang = next !== null && next !== "other" ? next.hang : 0;
+    const hungBefore = before !== "start" && before !== "other" ? before.hang : 0;
+    if (hungBefore !== 0 && gap.length === 0 && next !== null) return "A show runs on from a sign that hangs on a line of this box.";
+    if (hang !== 0 && gap.length === 0) return "A sign that hangs on a line of this box runs on from the show before it.";
+    if (hang !== 0) {
+      const lastSetOfSign = gap.map((operator) => operator.kind).lastIndexOf("Tm");
+      if (lastSetOfSign >= 0) {
+        // Placed by a matrix: its origin set that much further along the line it is drawn on.
+        const set = gap[lastSetOfSign];
+        const matrix = set.operands.map((operand) => numberAt(operand)!) as unknown as Matrix;
+        const leanedMatrix = sheared(matrix, lean ?? 0);
+        const carriedTo = moved(leanedMatrix, hang, 0);
+        shift = 0;
+        for (const at of [2, 3, 4, 5]) {
+          if (Math.abs(carriedTo[at] - matrix[at]) <= 1e-12) continue;
+          edits.push({ start: tokens[set.operands[at]].start, end: tokens[set.operands[at]].end, text: format(carriedTo[at]) });
+        }
+        const why = landedAll(gap.slice(lastSetOfSign + 1), lean);
+        if (why) return why;
+        shift = hang;
+        return null;
+      }
+      if (!sameLean(lean, leaned)) return "A sign that hangs on a line of this box is reached from text leaned otherwise.";
+      const why = landedAll(gap, lean, hang);
+      if (why) return why;
+      shift = hang;
+      return null;
+    }
+    const lastSet = gap.map((operator) => operator.kind).lastIndexOf("Tm");
+    if (lastSet >= 0) {
+      const set = gap[lastSet];
+      const matrix = set.operands.map((operand) => numberAt(operand)!) as unknown as Matrix;
+      const carried = shift;
+      shift = 0;
+      const leanedMatrix = sheared(matrix, lean ?? 0);
+      // The frame the line matrix stands in before this matrix, once the
+      // lean is written: the frame of the show before it.
+      const frame = set.before ? sheared(set.before, leaned ?? 0) : null;
+      const only = gap.filter((operator) => operator.kind === "Tm").length === 1;
+      const from = tokens[set.operands[0]].start, to = tokens[set.token].end;
+      // Alone between two shows, where it stands now it changes the frame the
+      // text is drawn in at the pen (a show that runs on from one leaned
+      // otherwise: this writer set it, and cut the show where it stands in
+      // one). With the lean written it sets what the matrix already is: it
+      // goes, the cut with it, and the next move starts from the line matrix
+      // that was there before it.
+      // (This writer's, by how it is written: the matrix in the digits this
+      // writer states one in, at the pen to those digits, ending its line or
+      // standing in a cut. A matrix of the page's own that this writer leaned
+      // is spelled otherwise -- below -- and stays.)
+      const between = only && gap.length === 1 && before !== "start" && next !== null && set.before !== null && frame !== null;
+      const cut = between ? standingCutAround(source, from, to) : null;
+      if (between && !sameMatrix(linearOf(matrix), linearOf(set.before!)) && sameMatrix(linearOf(leanedMatrix), linearOf(frame!)) &&
+        source.slice(from, to) === `${matrixText(matrix)} Tm` && (cut !== null || source[to] === "\n")) {
+        const pen = input.penWithout?.(from, to + 1) ?? null;
+        const [a, b] = [set.before![0], set.before![1]];
+        const along = a * a + b * b;
+        const [dx, dy] = [matrix[4] - set.before![4], matrix[5] - set.before![5]];
+        const reach = along > 0 ? (dx * a + dy * b) / along : 0;
+        if (pen && along > 0 && sameMatrix(linearOf(pen), linearOf(set.before!)) &&
+          Math.abs(pen[4] - matrix[4]) <= PEN_SET_REACH && Math.abs(pen[5] - matrix[5]) <= PEN_SET_REACH &&
+          Math.hypot(dx - reach * a, dy - reach * b) <= 1e-6 * Math.max(1, Math.hypot(dx, dy))) {
+          edits.push({ ...(cut ?? { start: from, end: to + 1 }), text: "" });
+          shift = carried - reach;
+          return null;
+        }
+      }
+      // It sets what the line matrix already is once the lean is written
+      // (as this writer set it: back before the moves other text is reached
+      // from by, or leaned before the box's shows where they are reached by
+      // moves), the pen at the line's start or the text moved on from it:
+      // it goes.
+      if (only && frame && (lastSet > 0 || before === "start" || lastSet < gap.length - 1) &&
+        !sameMatrix(matrix, set.before!) && sameMatrix(leanedMatrix, moved(frame, carried, 0))) {
+        edits.push(lastSet === 0 && gap.length > 1 ? { start: space(from - 1) ? from - 1 : from, end: to, text: "" }
+          : { start: from, end: space(to) ? to + 1 : to, text: "" });
+        return landedAll(gap.slice(lastSet + 1), lean);
+      }
+      if (lean !== null) {
+        // A matrix of the page's own between two shows of one frame that the
+        // lean parts is, leaned, what a matrix this writer sets at a pen
+        // looks like (above). Its leaned operand is spelled as this writer
+        // spells no number -- a nought after its last digit -- so that with
+        // the lean off it is the page's still: set upright where it stands.
+        const ownsPlace = between && sameMatrix(linearOf(matrix), linearOf(set.before!)) && !sameLean(lean, leaned);
+        for (const at of [2, 3]) {
+          if (Math.abs(leanedMatrix[at] - matrix[at]) <= 1e-12) continue;
+          const spelled = format(leanedMatrix[at]);
+          edits.push({ start: tokens[set.operands[at]].start, end: tokens[set.operands[at]].end,
+            text: ownsPlace && spelled !== "0" ? `${spelled}${spelled.includes(".") ? "" : "."}0` : spelled });
+        }
+      }
+      return landedAll(gap.slice(lastSet + 1), lean);
+    }
+    // (Moves the text object ends on bring text to nothing.)
+    if (next === null) return null;
+    // The same lean before and after (or none), by moves alone.
+    if (sameLean(lean, leaned)) return landedAll(gap, lean);
+    if (gap.length === 0) {
+      // The lean changes where a show runs on from the show before it: the
+      // matrix it starts under is set there, leaned as it takes it. (The first
+      // show of a text object that places nothing starts under the line matrix.)
+      const pen = input.pens.get(nextEnd) ?? (before === "start" ? line : null);
+      if (!pen || !line) return unread;
+      const [a, b] = [line[0], line[1]];
+      const along = a * a + b * b;
+      if (!(along > 0) || !sameMatrix([pen[0], pen[1], pen[2], pen[3], 0, 0], [line[0], line[1], line[2], line[3], 0, 0])) return unread;
+      const [dx, dy] = [pen[4] - line[4], pen[5] - line[5]];
+      const from = (dx * a + dy * b) / along;
+      if (Math.hypot(dx - from * a, dy - from * b) > 1e-6 * Math.max(1, Math.hypot(dx, dy))) return unread;
+      edits.push({ start: nextStart, end: nextStart, text: `${matrixText(lean === null ? pen : sheared(pen, lean))} Tm\n` });
+      shift = from;
+      return null;
+    }
+    if (lean !== null) {
+      // Reached by moves from text leaned otherwise (or not): the line matrix
+      // is set, leaned, before the show -- where the stream as it was has it,
+      // whatever the moves before it now start from. (They are left as the
+      // page wrote them: with the lean off and this matrix gone they land
+      // where they did.)
+      if (!line) return unread;
+      shift = 0;
+      edits.push({ start: nextStart, end: nextStart, text: `${matrixText(sheared(line, lean))} Tm\n` });
+      return null;
+    }
+    // Other text reached from the box's by moves: the line matrix set back before them.
+    const set = gap[0].before;
+    if (!set) return unread;
+    edits.push({ start: beforeEnd, end: beforeEnd, text: `\n${matrixText(set)} Tm` });
+    shift = 0;
+    return null;
+  };
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const show = showAt.get(index);
+    if (show) {
+      if (!inText) return "A show of this page is drawn outside a text object.";
+      const operator = text(show.operator);
+      const delta = owned.get(show.end);
+      if (operator === "'" || operator === '"') {
+        if (delta !== undefined) return "A show of this box moves to its line as it is drawn.";
+        gap.push({ kind: "next-line-show", token: show.operator, operands: [], before: line, leading });
+        line = line && leading !== null ? moved(line, 0, -leading) : null;
+      }
+      const next = delta !== undefined ? Object.freeze({ delta, hang: input.hangs?.get(show.end) ?? 0 }) : "other" as const;
+      const why = close(next, tokens[show.first].start, show.end);
+      if (why) return why;
+      before = next;
+      beforeEnd = tokens[show.operator].end;
+      gap = [];
+      index = show.operator;
+      continue;
+    }
+    if (!tokens[index].operator) continue;
+    const operator = text(index);
+    if (operator === "q") leadings.push(leading);
+    else if (operator === "Q") leading = leadings.length ? leadings.pop()! : null;
+    else if (operator === "TL") leading = numberAt(index - 1);
+    else if (operator === "BT") {
+      inText = true;
+      line = IDENTITY;
+      shift = 0;
+      before = "start";
+      gap = [];
+    } else if (operator === "ET") {
+      const why = close(null, tokens[index].start, tokens[index].end);
+      if (why) return why;
+      inText = false;
+      before = "start";
+      gap = [];
+    } else if (operator === "Tm" && inText) {
+      const operands = [6, 5, 4, 3, 2, 1].map((back) => index - back);
+      if (operands.some((operand) => numberAt(operand) === null)) return "A text matrix of this page is not six plain numbers.";
+      gap.push({ kind: "Tm", token: index, operands, before: line, leading });
+      line = operands.map((operand) => numberAt(operand)!) as unknown as Matrix;
+    } else if ((operator === "Td" || operator === "TD") && inText) {
+      const operands = [index - 2, index - 1];
+      const [tx, ty] = operands.map(numberAt);
+      if (tx === null || ty === null) return "A text move of this page is not two plain numbers.";
+      gap.push({ kind: operator, token: index, operands, before: line, leading });
+      line = line ? moved(line, tx, ty) : null;
+      if (operator === "TD") leading = -ty;
+    } else if (operator === "T*" && inText) {
+      gap.push({ kind: "T*", token: index, operands: [], before: line, leading });
+      line = line && leading !== null ? moved(line, 0, -leading) : null;
+    }
+  }
+  if (inText) return "A text object of this page is not closed.";
+  return normalizeStandingEdits(edits);
+}
+
+/**
+ * Edits of a stream whose shows were cut first (`cuts`: what each cut wrote,
+ * by where in the stream as it was), as edits of the stream as it was: an
+ * edit that stands in what a cut wrote is written with the cut, the others
+ * where they stood before the cuts. Null where an edit takes away part of
+ * what a cut wrote, or runs across one.
+ */
+export function composeStandingCutEdits(
+  cuts: readonly StandingEdit[],
+  edits: readonly StandingEdit[],
+): readonly StandingEdit[] | null {
+  let grown = 0;
+  const written = cuts.map((cut) => {
+    if (cut.start !== cut.end) return null;
+    const at = cut.start + grown;
+    grown += cut.text.length;
+    return { at, end: at + cut.text.length, source: cut.start, text: cut.text, splices: [] as { at: number; text: string }[] };
+  });
+  if (written.some((entry) => entry === null)) return null;
+  const out: StandingEdit[] = [];
+  for (const edit of edits) {
+    const inside = written.find((entry) => entry!.at <= edit.start && edit.end <= entry!.end);
+    if (inside) {
+      if (edit.start !== edit.end) return null;
+      inside.splices.push({ at: edit.start - inside.at, text: edit.text });
+      continue;
+    }
+    if (written.some((entry) => edit.start < entry!.end && entry!.at < edit.end)) return null;
+    const before = written.reduce((sum, entry) => (entry!.end <= edit.start ? sum + entry!.text.length : sum), 0);
+    out.push({ start: edit.start - before, end: edit.end - before, text: edit.text });
+  }
+  for (const entry of written) {
+    let text = entry!.text;
+    // (From the last place to the first, so that each place is still where it was; two at one place in their order.)
+    for (const splice of entry!.splices.map((value, order) => ({ ...value, order }))
+      .sort((left, right) => right.at - left.at || right.order - left.order)) {
+      text = text.slice(0, splice.at) + splice.text + text.slice(splice.at);
+    }
+    // The matrix of the piece after, set in the cut: on one line with it. A
+    // matrix set before a show the page drew apart ends its line (the lean's
+    // own form), and the two are told by that when the lean is taken off --
+    // a cut is one show again, two shows of the page stay two.
+    text = text.replace(CUT_MATRIX_LINE_END, "Tm $1");
+    out.push({ start: entry!.source, end: entry!.source, text });
+  }
+  return normalizeStandingEdits(out);
+}
+
+/** Whether `text` is one plain number: an operand of a positioning operator
+ * a lean rewrites (a `Tm`'s c or d, a move's tx), written for the number it
+ * was. Mirror of the server's standing_bytes_are_a_number. */
+export function mraiNativeStandingBytesAreANumber(text: string): boolean {
+  return NUMBER.test(text);
 }

@@ -18,18 +18,22 @@ export interface KeptSpan {
   readonly hyphen?: true;
   /** The engine hyphenates the paragraph (`from === to` at its content). */
   readonly manualHyphens?: true;
+  /** The hyphen a page cut's head ends with (`from === to` at its end). */
+  readonly headHyphen?: true;
 }
 
 /** A span's kind as a row keeps it (its seventh number). */
 const KIND_TAB_BREAK = 1;
 const KIND_HYPHEN = 2;
 const KIND_MANUAL_HYPHENS = 3;
+const KIND_HEAD_HYPHEN = 4;
 const kindOf = (span: KeptSpan): number =>
-  span.tabBreak ? KIND_TAB_BREAK : span.hyphen ? KIND_HYPHEN : span.manualHyphens ? KIND_MANUAL_HYPHENS : 0;
+  span.tabBreak ? KIND_TAB_BREAK : span.hyphen ? KIND_HYPHEN : span.manualHyphens ? KIND_MANUAL_HYPHENS : span.headHyphen ? KIND_HEAD_HYPHEN : 0;
 const kindFields = (kind: number | undefined) =>
   kind === KIND_TAB_BREAK ? { tabBreak: true as const }
     : kind === KIND_HYPHEN ? { hyphen: true as const }
-      : kind === KIND_MANUAL_HYPHENS ? { manualHyphens: true as const } : {};
+      : kind === KIND_MANUAL_HYPHENS ? { manualHyphens: true as const }
+        : kind === KIND_HEAD_HYPHEN ? { headHyphen: true as const } : {};
 
 export interface KeptLines {
   readonly width: number;

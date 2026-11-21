@@ -158,6 +158,14 @@ export interface ChartNativeLookBuiltInStyle {
    * phClr) an unpainted line, X Y or radar series draws its automatic
    * colour through, in any classic style 1-48 (X-257). */
   seriesLine?: ChartNativeLookTransform[];
+  /** A workbook's classic chart in built-in style 2 (or none): the width
+   * (px) its line, X Y and radar series that state none print at, three
+   * times the theme's first line style (lookwin p226-lw / p227-lw: 1.5 pt
+   * under the Office 2013+ theme, 2.25 pt under 2007's; API readings row 965). */
+  seriesLineWidth?: number;
+  /** ... and its axis lines that state none: that first line style's width
+   * (px), black. */
+  axisLine?: { width: number; color: string };
 }
 
 export interface ChartNativeLook {
@@ -195,6 +203,11 @@ export interface ChartNativeLook {
    * whose High labels take theirs on the far side, as Windows PowerPoint lays
    * it out (`source.windowsHiddenAxisRoom`, `OFFICE_WINDOWS_AXIS_ROOM`). Display only. */
   windowsHiddenAxisRoom?: boolean;
+  /** A deck's chart whose long category names down a bar chart's vertical
+   * axis are broken, cut at the lines a band holds and centred as Windows
+   * PowerPoint sets them (`source.windowsBarNameLines`,
+   * `OFFICE_WINDOWS_BAR_NAME_LINES`). Display only. */
+  windowsBarNameLines?: boolean;
   /** The text insets (pt) the chart's data labels' box states
    * (`c:dLbls/c:txPr/a:bodyPr`, the import's `source.dataLabelInsets`,
    * reading row 821); absent is DrawingML's 7.2 / 3.6pt. Display only. */
@@ -426,6 +439,10 @@ export function normalizeChartNativeLookBuiltInStyle(raw: unknown): ChartNativeL
   if (isHex(raw.textColor)) result.ink = raw.textColor.toLowerCase();
   const seriesLine = transforms(raw.seriesLine);
   if (seriesLine?.length) result.seriesLine = seriesLine;
+  if (finite(raw.seriesLineWidth, 0.1, 30)) result.seriesLineWidth = raw.seriesLineWidth;
+  if (isRecord(raw.axisLine) && finite(raw.axisLine.width, 0.1, 30) && isHex(raw.axisLine.color)) {
+    result.axisLine = { width: raw.axisLine.width, color: raw.axisLine.color.toLowerCase() };
+  }
   // Styles 1-8 paint nothing past the series' colours: only their line
   // series' first-line-style transforms are stated (X-257).
   const gallery = (raw.style as number) >= 9;
@@ -527,7 +544,9 @@ export function normalizeChartNativeLookBuiltInStyle(raw: unknown): ChartNativeL
   if (Array.isArray(raw.slots) && raw.slots.length <= 255 && raw.slots.every((slot) => Number.isInteger(slot) && finite(slot, 0, 254))) {
     result.slots = (raw.slots as number[]).slice();
   }
-  return result.fill || result.line || result.shadow || result.effect3d || result.seriesLine ? result : undefined;
+  return result.fill || result.line || result.shadow || result.effect3d || result.seriesLine || result.seriesLineWidth || result.axisLine
+    ? result
+    : undefined;
 }
 
 /** A chart's data labels' text insets (pt, each 0..100), or undefined. */
@@ -550,6 +569,7 @@ export function normalizeChartNativeLook(raw: unknown): ChartNativeLook | undefi
   if (raw.windowsBarDepth === true) result.windowsBarDepth = true;
   if (raw.windowsInnerPlot === true) result.windowsInnerPlot = true;
   if (raw.windowsHiddenAxisRoom === true) result.windowsHiddenAxisRoom = true;
+  if (raw.windowsBarNameLines === true) result.windowsBarNameLines = true;
   const insets = chartLabelInsets(raw.dataLabelInsets);
   if (insets) result.dataLabelInsets = insets;
   const builtInStyle = normalizeChartNativeLookBuiltInStyle(raw.builtInStyle);

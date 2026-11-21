@@ -52,6 +52,9 @@ const IDLE = Object.freeze({
   lastSaveAcknowledgement: undefined,
   causalUpgradeHeldBy: undefined,
   blockedRecoveryDraft: null,
+  // No room: no awareness, so an editor sees nobody else online (read
+  // through the Proxy it was a truthy inert value, and New Presentation threw).
+  roomAwareness: null,
   queueSave: noop,
   replacePendingDraft: noop,
   saveNow: resolved,

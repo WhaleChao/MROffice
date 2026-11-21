@@ -2,6 +2,8 @@
 
 > **For the full experience, install the MR Office desktop app (free): https://github.com/XinaTian/MROffice/releases** (or https://mroffice.ai) — it adds opening and saving Word, Excel and PowerPoint files, formulas with functions, charts, SmartArt editing, and saving PDF edits back into the file.
 
+On npm as [`mroffice-code`](https://www.npmjs.com/package/mroffice-code): compiled, with its types and stylesheet, no build setup needed (`npm i mroffice-code mroffice-core`; built from this tree by `npm run pack:npm`, scripts/npm/).
+
 The code editor of [MR Office](https://mroffice.ai): CodeMirror 6 with MR Office's ribbon, syntax highlighting for many languages, an outline, find and replace, formatting, problems, and code that runs right in the browser.
 
 This package is generated from MR Office's own source (see the repository README, "How this repository is made").

@@ -23,7 +23,7 @@ import { isUsableEditor, type MaybeNoteEditor } from "./editorRuntime";
 import { fontFamilyWithCjkRenderFallback, normalizeFontSize, normalizeTextColor, withThaiScriptFallback } from "@mrnote/core/web/components/console/editor/extensions/TextStyling.ts";
 import { documentDefaultParagraphSpacing, normalizeDefaultLineHeight, normalizeDoNotUseEastAsianBreakRules, normalizeDocumentCharacterSpacingControl, normalizeDocumentDefaultKinsoku, normalizeDocumentDefaultTextAlign, type DocumentCharacterSpacingControl, type DocumentDefaultTextAlign } from "@mrnote/core/web/components/console/editor/extensions/DocumentPageSetup.ts";
 import { normalizeFirstLineIndentPt, normalizeIndentPt } from "@mrnote/core/web/components/console/editor/native-document/preciseIndent.ts";
-import { EMPTY_DOCUMENT_DEFAULT_INDENTS } from "../paragraphSetAsDefault";
+import { EMPTY_DOCUMENT_DEFAULT_INDENTS } from "@mrnote/core/web/components/console/editor/native-document/paragraphSetAsDefault.ts";
 import { normalizeDocumentProtection, type DocumentProtection } from "@mrnote/core/web/components/console/editor/native-document/documentProtection.ts";
 import { protectionHonorsEditableRanges } from "@mrnote/core/web/components/console/editor/native-document/rangePermissions.ts";
 import { normalizeHandwritingDocument, type HandwritingDocumentSetting } from "@mrnote/core/web/lib/handwriting-paper.ts";

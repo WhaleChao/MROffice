@@ -90,6 +90,15 @@ interface TabbedLine {
 
 
 
+/**
+ * Harness switch (`window.__docsOldModeTabCarryOff = true`): in a Word 2010
+ * (or earlier) paragraph whose tabs may run past the edge, a tab whose next
+ * word does not fit after its stop stays on its line, as before (A/B).
+ */
+export function oldModeTabCarryOff(win: Window | null | undefined): boolean {
+  return (win as (Window & { __docsOldModeTabCarryOff?: boolean }) | null | undefined)?.__docsOldModeTabCarryOff === true;
+}
+
 export function tabOverMarginLineOff(win: Window | null | undefined): boolean {
   return (win as (Window & { __docsTabOverMarginLineOff?: boolean }) | null | undefined)?.__docsTabOverMarginLineOff === true;
 }
@@ -353,6 +362,12 @@ export function tabRestoreOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsTabRestoreOff?: boolean }).__docsTabRestoreOff === true;
 }
 
+
+
+function tabRestoreByNodeOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabRestoreByNodeOff?: boolean }).__docsTabRestoreByNodeOff === true;
+}
+
 /** Each tabbed paragraph's tabs as last measured, by what decides them: its
  * own content and attributes, and its cell's attributes (the column width). */
 const tabsByContent = new WeakMap<HTMLElement, Map<string, { at: string; tabs: LineTabs }>>();
@@ -398,10 +413,25 @@ function restoreDroppedTabs(before: DecorationSet, tr: Transaction, mapped: Deco
   const old = tr.before;
   const byKey = new Map<string, LineTabDecoration[]>();
   const keyOfBlock = new Map<number, string | null>();
+  // By the paragraph itself first: a block the pagination moved to another
+  // sheet is the same node there. By content alone, paragraphs of one content
+  // were never put back (the first of them took it), and a document of many
+  // paragraphs holding only a tab had them measured with unsized tabs a line
+  // taller after every move, the page start beside them going and coming back
+  // on each key (corpus R484-D04, pages 6, 10 and 13).
+  const byNode = tabRestoreByNodeOff() ? null : new Map<PmNode, LineTabDecoration[]>();
   for (const decoration of before.find()) {
     const item = (decoration.spec as { bandTab?: LineTabDecoration } | undefined)?.bandTab;
     if (!item) continue;
     const blockPos = decoration.from - item.from;
+    if (byNode) {
+      const node = old.nodeAt(blockPos);
+      if (node) {
+        const items = byNode.get(node);
+        if (items) items.push(item);
+        else byNode.set(node, [item]);
+      }
+    }
     let key = keyOfBlock.get(blockPos);
     if (key === undefined) {
       key = contentKeyAt(old, blockPos);
@@ -414,7 +444,7 @@ function restoreDroppedTabs(before: DecorationSet, tr: Transaction, mapped: Deco
     }
     if (key !== null) byKey.get(key)!.push(item);
   }
-  if (byKey.size === 0) return null;
+  if (byKey.size === 0 && !byNode?.size) return null;
   const added: Decoration[] = [];
   const seen = new Set<number>();
   for (const line of tabbedLines(tr.doc)) {
@@ -422,8 +452,8 @@ function restoreDroppedTabs(before: DecorationSet, tr: Transaction, mapped: Deco
     seen.add(line.blockPos);
     const block = tr.doc.nodeAt(line.blockPos);
     if (!block || mapped.find(line.blockPos, line.blockPos + block.nodeSize).length > 0) continue;
-    const key = contentKeyAt(tr.doc, line.blockPos);
-    const items = key !== null ? byKey.get(key) : undefined;
+    const key = byNode?.has(block) ? null : contentKeyAt(tr.doc, line.blockPos);
+    const items = byNode?.get(block) ?? (key !== null ? byKey.get(key) : undefined);
     if (!items) continue;
     for (const item of items) added.push(tabDecoration(line.blockPos, item));
   }
@@ -474,6 +504,31 @@ function tabLedgerNudgeOff(): boolean {
  * (Word, whose tabs are laid out with the line, sets such a gloss on one).
  */
 interface TabRound { times: number; widthPx: number; widths: number[]; shape: string; tabs: LineTabs }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function tabRoundsByWidthOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabRoundsByWidthOff?: boolean }).__docsTabRoundsByWidthOff === true;
+}
+
+
+
+function tabKeptWholeParagraphOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTabKeptWholeParagraphOff?: boolean }).__docsTabKeptWholeParagraphOff === true;
+}
 export type TabRounds = WeakMap<PmNode, TabRound[]>;
 
 /** A line's tab widths, and what else its keys say (each tab's place and leader). */
@@ -489,6 +544,11 @@ function tabWidthsOf(tabs: LineTabs): { widths: number[]; shape: string } {
     } else shape.push(item);
   }
   return { widths, shape: shape.join(",") };
+}
+
+/** The width a reading was taken at (its `col=` key), or null. */
+function widthKeyOf(tabs: LineTabs): string | null {
+  return tabs.keys.find((key) => key.startsWith("col=")) ?? null;
 }
 
 export function settledRound(rounds: TabRounds | null, block: PmNode | null | undefined, tabs: LineTabs): LineTabs {
@@ -510,13 +570,16 @@ export function settledRound(rounds: TabRounds | null, block: PmNode | null | un
   // back: R350-D07, one gloss one line on one opening and two on the next).
   // (A count of widths is no round: taken by one, the narrowest of a justified
   // paragraph's readings moved a Greek paragraph's first line, R282-D25.)
+  // Only readings at this one's width (`tabRoundsByWidthOff`).
+  const width = widthKeyOf(tabs);
+  const same = width === null ? seen : seen.filter((candidate) => widthKeyOf(candidate.tabs) === width);
   let flipped = false;
-  if (!entry && seen.length >= 2) {
-    flipped = seen.some((candidate) => candidate.tabs.wrapped) && seen.some((candidate) => !candidate.tabs.wrapped);
+  if (!entry && same.length >= 2) {
+    flipped = same.some((candidate) => candidate.tabs.wrapped) && same.some((candidate) => !candidate.tabs.wrapped);
   }
-  if ((!entry && !flipped) || seen.length < 2) return tabs;
+  if ((!entry && !flipped) || same.length < 2) return tabs;
   let narrowest: TabRound | null = null;
-  for (const candidate of seen) {
+  for (const candidate of same) {
     if (!narrowest || candidate.widthPx < narrowest.widthPx - 0.01 ||
       (Math.abs(candidate.widthPx - narrowest.widthPx) <= 0.01 && candidate.tabs.keys.join(",") < narrowest.tabs.keys.join(","))) {
       narrowest = candidate;
@@ -644,6 +707,9 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
         (Number.parseFloat(style.borderLeftWidth) || 0) +
         (Number.parseFloat(style.paddingLeft) || 0);
     }
+    // The width the line was read at: readings at another width (the page
+    // before its columns were projected) are no round of this one.
+    if (!tabRoundsByWidthOff()) lineKeys.push(`col=${Math.round(columnPx * 4) / 4}`);
     const customStops = (line.stops ?? []).some((stop) => stop.align !== "bar");
     if (
       !customStops &&
@@ -895,7 +961,20 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
             node: true,
             from: 0,
             to: line.contentEnd + 1 - line.blockPos,
-            attrs: { "data-tab-over-margin-line": to === line.contentEnd ? "end" : "true" },
+            attrs: {
+              "data-tab-over-margin-line": to === line.contentEnd ? "end" : "true",
+              // The kept line is the whole paragraph: no break anywhere in it.
+              // A list number before it is an inline-block, and Chromium
+              // breaks after an inline-block by the paragraph's white-space,
+              // not the kept span's: the number stood on a line of its own
+              // and the kept line went under it (corpus R470-D37 page 1,
+              // "2." / "Date and hour:<Tab>__ __", one line in Windows Word;
+              // look25/probes/markerbreak: only a paragraph that does not
+              // wrap, or an inline number, holds them).
+              ...(from === line.contentStart && to === line.contentEnd && !tabKeptWholeParagraphOff()
+                ? { "data-tab-over-margin-whole": "true" }
+                : {}),
+            },
           });
           lineDecorations.push({
             node: false,
@@ -907,7 +986,13 @@ function measure(view: EditorView, rounds: TabRounds | null = null): { set: Deco
       }
       if (
         wraps &&
-        !overMarginLine &&
+        // Word 2010 and earlier carry such a tab to the next line all the
+        // same: only a stop past the edge keeps its line whole (the branch
+        // above). R417-D03 page 40, mode 14, a cell 80 pt wide: "2nd most
+        // worst shock<Tab>2" on a stop at 79.2 pt is three lines in Word --
+        // the words, the tab alone at the stop, the "2" -- and was two here,
+        // the whole row 32 pt short (`oldModeTabCarryOff`).
+        (!overMarginLine || !oldModeTabCarryOff(view.dom.ownerDocument.defaultView)) &&
         overFrom === null &&
         !line.positional[index] &&
         pen > line.indentLeftPx + TAB_STOP_REACH_PX &&

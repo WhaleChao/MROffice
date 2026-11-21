@@ -156,6 +156,24 @@ export function spillTargetOccupied(
   return v === "" && cell?.stringValue === true && !cell.formula;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+export interface SpillTargetsBeyondCells {
+  readonly cells: CellMap;
+  rowsKnown(first: number, last: number): boolean;
+  /** Filled with the "row:col" of each anchor left undetermined. */
+  readonly undetermined: Set<string>;
+}
+
 /**
  * Materialize the sheet's dynamic-array spill overlay (#SPILL! guard) for a
  * given evaluator. A target counts as occupied (blocks a spill) when it
@@ -171,6 +189,8 @@ export function buildSpillOverlay(
   mergeAnchors?: ReadonlySet<string>,
   /** The sheet's tables: a formula inside one cannot spill (B323). */
   tables?: readonly DataTable[],
+  /** The cells in the way that `cells` does not hold (SpillTargetsBeyondCells). */
+  beyond?: SpillTargetsBeyondCells,
 ): SpillOverlay {
   const anchors: Array<{ row: number; col: number }> = [];
   // Indexed candidates name every stored formula key; the current cell decides.
@@ -181,10 +201,40 @@ export function buildSpillOverlay(
   };
   if (candidates) for (const key of candidates) visit(key);
   else for (const key in cells) if (Object.prototype.hasOwnProperty.call(cells, key)) visit(key);
+  // The cells beyond `cells` inside a range an anchor states it spills over
+  // are that spill's own cached results (Excel writes them as plain cells; a
+  // tile keeps them, as the whole import clears them: _xlsx_clear_array_formula_members):
+  // not in its way.
+  const stated: Array<readonly [number, number, number, number]> = [];
+  if (beyond) {
+    for (const { row, col } of anchors) {
+      const ref = (cells[`${row}:${col}`] as { spillRef?: unknown } | undefined)?.spillRef;
+      if (typeof ref !== "string" || !ref.includes(":")) continue;
+      const [first, last] = ref.replace(/\$/g, "").split(":");
+      const a = parseCellRef(first ?? "");
+      const b = parseCellRef(last ?? "");
+      if (a && b) stated.push([Math.min(a.row, b.row), Math.min(a.col, b.col), Math.max(a.row, b.row), Math.max(a.col, b.col)]);
+    }
+  }
+  const statedSpill = (row: number, col: number): boolean =>
+    stated.some(([r1, c1, r2, c2]) => row >= r1 && row <= r2 && col >= c1 && col <= c2);
   return computeSpillOverlay({
     anchors,
-    getArray: (row, col) => evaluator.getArray(row, col),
-    isOccupied: (row, col) => spillTargetOccupied(cells, covered, row, col, mergeAnchors),
+    getArray: beyond
+      ? (row, col) => {
+          const block = evaluator.getArray(row, col);
+          // Rows not read here may hold what blocks it: whether it spills is not known.
+          if (block && !beyond.rowsKnown(row, row + block.length - 1)) {
+            beyond.undetermined.add(`${row}:${col}`);
+            return null;
+          }
+          return block;
+        }
+      : (row, col) => evaluator.getArray(row, col),
+    isOccupied: beyond
+      ? (row, col) => spillTargetOccupied(cells, covered, row, col, mergeAnchors) ||
+          (spillTargetOccupied(beyond.cells, covered, row, col) && !statedSpill(row, col))
+      : (row, col) => spillTargetOccupied(cells, covered, row, col, mergeAnchors),
     ...(tables && tables.length > 0
       ? {
           isAnchorBlocked: (row: number, col: number) =>
@@ -924,7 +974,12 @@ export function withDisplayCache<S extends DisplayCacheSheet>(
    * stores, and what it spills. A formatted cell's text waits until its sheet
    * is edited: a first save stamping every sheet sent 3 MB for one typed cell
    * (xlsx-rounds R116-X02) and wrote into sheets nobody opened (R133-X02). */
-  options?: { readonly withholdComputed?: boolean; readonly resultsOnly?: boolean },
+  options?: {
+    readonly withholdComputed?: boolean;
+    readonly resultsOnly?: boolean;
+    /** What the sheet's `cells` leave out that can block a spill (a tiled body's tile-owned cells). */
+    readonly spillTargets?: Pick<SpillTargetsBeyondCells, "cells" | "rowsKnown">;
+  },
 ): S {
   const withhold = options?.withholdComputed === true;
   const resultsOnly = options?.resultsOnly === true;
@@ -988,8 +1043,11 @@ export function withDisplayCache<S extends DisplayCacheSheet>(
           return createValueStoreWorkbook([{ name: sheetName, getRawCell }], { results, onMissing: "throw" }).evaluatorFor(sheetName);
         })();
   let overlay: SpillOverlay;
+  const undetermined = new Set<string>();
+  const targets = options?.spillTargets;
   try {
-    overlay = buildSpillOverlay(cells, covered, evaluator, candidates?.formulaKeys);
+    overlay = buildSpillOverlay(cells, covered, evaluator, candidates?.formulaKeys, undefined, undefined,
+      targets ? { cells: targets.cells, rowsKnown: (first, last) => targets.rowsKnown(first, last), undetermined } : undefined);
   } catch (error) {
     if (!(error instanceof FormulaResultUnavailableError)) throw error;
     overlay = { spilled: new Map(), blocked: new Set() };
@@ -1023,6 +1081,8 @@ export function withDisplayCache<S extends DisplayCacheSheet>(
     let display: string;
     let chartValueCache: ChartValueCache | undefined;
     try {
+      // Whether it spills is not known here: kept as a formula without a result is.
+      if (undetermined.has(key)) throw new FormulaResultUnavailableError(sheetName, row, col);
       display =
         Number.isFinite(row) && Number.isFinite(col)
           ? resolveCellDisplay(cell, row, col, evaluator, overlay)

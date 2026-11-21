@@ -17,6 +17,7 @@ import {
   type Transaction,
 } from "@tiptap/pm/state";
 import { CellSelection, TableMap, addColumn, type Rect } from "@tiptap/pm/tables";
+import { Transform } from "@tiptap/pm/transform";
 import { readWordTableLayout } from "../../../../lib/document-word-table-autofit";
 
 import {
@@ -670,7 +671,18 @@ function insertLogicalTableColumn(
       table: fragment.node,
     };
     const insertAt = Math.min(column, fragmentMap.width);
-    addColumn(tr, fragmentRect, insertAt);
+    // The table plugin's addColumn maps the positions it reads off the table
+    // through the whole transaction (tr.mapping), as if they were the
+    // positions of the document the transaction started from. A second
+    // column inserted in the same transaction (Insert Right with a count of
+    // two, two AI column operations in one chain) read the table as the first
+    // insert left it and was moved by that insert again: its cells went into
+    // the words of other cells or past the table, refused (R483-D43 WALK1:
+    // "Sudah Dilaksanakan" split into two cells, then the save left the
+    // columns out). Run on the document as it is now, its steps added to tr.
+    const step = new Transform(tr.doc);
+    addColumn(step as unknown as Transaction, fragmentRect, insertAt);
+    for (const each of step.steps) tr.step(each);
     giveInsertedColumnItsNeighbourWidth(
       tr,
       fragment.pos,

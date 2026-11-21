@@ -629,6 +629,19 @@ export class TiledSheets {
     });
   }
 
+  /** What `bodySheets` leaves out that can still block a dynamic array the
+   * body holds: each tiled sheet's cells as `sheets` (the window's) hold them,
+   * and which of its rows are read here (display-cache SpillTargetsBeyondCells;
+   * R461-X01: E33 saved over E33:E58 through the tiles' "Female" in E34). */
+  spillTargets<S extends SheetLike>(sheets: readonly S[]): (sheet: { id: string }) => { cells: CellMap; rowsKnown(first: number, last: number): boolean } | undefined {
+    const byId = new Map(sheets.map((sheet) => [sheet.id, sheet]));
+    return ({ id }) => {
+      const sheet = byId.get(id);
+      if (!sheet || !this.sheets.has(id)) return undefined;
+      return { cells: sheet.cells, rowsKnown: (first, last) => this.rowsResident(id, first, last) };
+    };
+  }
+
   // ── reading ────────────────────────────────────────────────────────────
 
   /** The tiles holding rows `first..last` of a sheet. */

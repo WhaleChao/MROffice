@@ -4,7 +4,7 @@
 
 <p align="center"><b>Editor sumber terbuka MR Office — dokumen, lembar kerja, presentasi, PDF, tulisan tangan, dan kode — yang berjalan di peramban.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/id"><b>▶ Coba demo langsung — tanpa instalasi</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Unduh MR Office dari Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/id"><b>▶ Coba online</b></a> · <a href="https://mroffice.ai/id/office/download"><b>⬇ Unduh</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/id/developers">🧑‍💻 Pengembang</a> · <a href="https://mroffice.ai/id/developers/embed">🧩 Sematkan</a> · <a href="https://mroffice.ai/id/developers/mcp">🤖 MCP untuk aplikasi AI</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 SDK npm</a> · <a href="https://mroffice.ai/id/developers/oauth">🔑 Masuk dengan MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office adalah ruang kerja untuk catatan, AI, dan file sungguhan. Repositori ini menerbitkan kode sumber editornya: editor yang sama dengan yang dijalankan MR Office, yang bisa Anda bangun, jalankan, dan sematkan sendiri. Ini adalah editor sumber terbuka, bukan paket perkantoran sumber terbuka yang lengkap: membaca dan menulis file Microsoft Office tetap ada di MR Office (lihat di bawah).
+
+## Untuk pengembang
+
+Semua untuk pengembang ada di **[MR Office Developers](https://mroffice.ai/id/developers)** — layanan mandiri, tanpa pengajuan: masuk dengan akun MR Office mana pun dan mulai.
+
+### Sematkan editor di aplikasi web Anda (disarankan)
+
+MR Office menghosting editor; server Anda menandatangani token sesi berumur pendek dan halaman Anda membuka editor dengannya. Editor ini mengedit file Word, Excel, PowerPoint, dan PDF yang sesungguhnya (.docx, .xlsx, .pptx, .pdf), dengan pengeditan bersama, unggahan, semua format ekspor, pencetakan, dan hasil simpan yang dikirim ke server Anda lewat callback bertanda tangan. Paket gratis: 1.000 sesi per bulan di localhost, 100 di domain Anda sendiri, hingga 2 aplikasi. Ini layanan komersial yang dihosting, jadi aplikasi Anda tidak terikat lisensi AGPL repositori ini.
+
+1. Di folder proyek Anda, jalankan `npx mroffice-embed init` (atau buat aplikasi di konsol pengembang): satu klik "Izinkan" di browser, dan kunci aplikasi ditulis ke `.env.local` / `.env`.
+2. Server Anda membuat token sesi dengan `createSessionToken` dari `mroffice-embed/server`; kunci rahasia tidak pernah meninggalkan server.
+3. Halaman Anda membuka editor dengan `open()` dari `mroffice-embed` (atau skrip `https://mroffice.ai/embed/v1/embed.js`).
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[Panduan penyematan](https://mroffice.ai/id/developers/embed) · [Panduan dalam Markdown (untuk agen AI)](https://mroffice.ai/developers/embed.md) · [Harga dan batas](https://mroffice.ai/id/developers/pricing) · [Konsol pengembang](https://mroffice.ai/id/developers/console) · [Demo langsung](https://mroffice.ai/id/developers/embed/demo)
+
+### Aplikasi AI: server MCP
+
+Aplikasi AI membuka, membaca, mengedit, dan mengekspor dokumen di editor MR Office yang sesungguhnya melalui server MCP-nya: hubungkan endpoint yang dihosting `https://mcp.mroffice.ai/mcp` (masuk dengan akun MR Office Anda, tanpa kunci), atau jalankan `npx -y mroffice-mcp` di komputer Anda. Kode sumbernya ada di `apps/mcp`. [Panduan MCP →](https://mroffice.ai/id/developers/mcp)
+
+### Masuk dengan MR Office (OAuth)
+
+MR Office adalah server otorisasi OAuth 2.1 (PKCE, dokumen metadata ID klien, pendaftaran dinamis): aplikasi Anda dapat memasukkan orang dengan akun MR Office mereka dan bertindak dalam cakupan yang mereka izinkan. [Panduan OAuth →](https://mroffice.ai/id/developers/oauth)
+
+### Host sendiri editor sumber terbuka
+
+Enam editor di repositori ini dapat dibangun ke dalam produk Anda di bawah AGPL-3.0: jika orang menggunakan versi yang diubah melalui jaringan, Anda wajib menawarkan kode sumber lengkapnya dan mempertahankan atribusi "MR Office" (NOTICE.md). Editor ini membuka format miliknya sendiri, CSV, HTML, Markdown, dan PDF; file Word, Excel, dan PowerPoint tidak termasuk dalam editor sumber terbuka (penyematan yang dihosting di atas mendukungnya). Lisensi komersial tersedia melalui support@mr-note.com. [Panduan sumber terbuka →](https://mroffice.ai/id/developers/open-source)
+
+Paket npm sedang disiapkan dengan nama `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, dan `mroffice-code`; sampai diterbitkan, bangun editor dari repositori ini (lihat di bawah).
 
 ## Editor
 
@@ -75,7 +119,7 @@ Aplikasi desktop MR Office gratis, berisi editor-editor ini dan layanan lengkap,
 - Pengeditan SmartArt
 - Menyimpan hasil edit PDF kembali ke file
 
-**[Unduh MR Office dari Releases →](https://github.com/XinaTian/MROffice/releases)** · [atau dari mroffice.ai](https://mroffice.ai)
+**[Unduh MR Office (gratis) →](https://mroffice.ai/id/office/download)**
 
 ### File Word, Excel, PowerPoint, dan PDF
 

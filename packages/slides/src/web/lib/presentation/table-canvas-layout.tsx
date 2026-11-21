@@ -1952,12 +1952,18 @@ export function tableWithScaledGestureGeometry(
  * source model untouched, but render its explicit grid proportionally inside
  * the frame so selection never reveals a wider/taller table beneath it.
  */
-const storedRowsOf = new WeakMap<PresentationTableBlock, readonly unknown[]>();
 
-/** The rows the page stores for a table `tableWithFrameAlignedGrid` fitted
- * to its frame (the text engine's rows start from them), or undefined. */
-export function tableStoredRowHeights(aligned: PresentationTableBlock): readonly unknown[] | undefined {
-  return storedRowsOf.get(aligned);
+
+
+
+
+
+
+
+
+
+export function importedTableRowMinimums(block: PresentationTableBlock): readonly unknown[] | null {
+  return importedPresentationTable(block) && Array.isArray(block.rowHeights) ? block.rowHeights : null;
 }
 
 export function tableWithFrameAlignedGrid(
@@ -2019,20 +2025,26 @@ export function tableWithFrameAlignedGrid(
   ) {
     return { ...aligned, rowHeights: statedRowsPx };
   }
+  // An imported table's rows are its stated heights, each a minimum its words
+  // grow, and the frame follows the rows -- never the rows the frame
+  // (`importedTableRowMinimums`): a frame lower than its rows (Google's stale
+  
+  
+  
+  
+  // p19, 525.6) handed each row a share in proportion to its stated height,
+  // not what its words take.
   if (
     height !== null &&
     rowHeights &&
-    !importedAutoRow
+    !importedAutoRow &&
+    importedTableRowMinimums(block) === null
   ) {
     aligned = resizeTableFrame(
       aligned,
       "height",
       height / TABLE_FRAME_EMU_PER_CM,
     );
-    // The rows as the page stores them, for the text engine's rows
-    // (`presentationEngineTable`): a stated row is a minimum its words grow,
-    // and the frame fit above is for the browser's own table layout.
-    if (importedPresentationTable(block) && Array.isArray(block.rowHeights)) storedRowsOf.set(aligned, block.rowHeights);
   }
   return aligned;
 }

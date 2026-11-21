@@ -66,6 +66,11 @@ export function pdfLinksCarriedWith(
   to: PageFractionBox,
 ): NativePdfLinkRecord[] | null {
   if (!(from.width > 0) || !(from.height > 0) || !(to.width > 0) || !(to.height > 0)) return null;
+  // A box that stays where it is carries nothing (a group edit of its weight
+  // alone, the map the identity): its links were written again as geometry
+  // edits of the rectangles they had, a save of nothing.
+  if (Math.abs(to.x - from.x) < 1e-9 && Math.abs(to.y - from.y) < 1e-9 &&
+    Math.abs(to.width - from.width) < 1e-9 && Math.abs(to.height - from.height) < 1e-9) return null;
   const ids = new Set(linkIdsOnText(links.flatMap((record) => (record.deleted ? [] : [record])), pageNumber, from));
   if (ids.size === 0) return null;
   const sx = to.width / from.width;
@@ -119,6 +124,23 @@ export function textRulesOf<T extends Readonly<{ bounds: PageFractionBox }>>(
     const middle = y + height / 2;
     return middle >= box.y && middle <= box.y + box.height + below;
   });
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function pdfLinksFollowTextOnEditPath(path: string | null | undefined): boolean {
+  return path !== "move" && path !== "unchanged";
 }
 
 type LinkRect = { x: number; y: number; width: number; height: number };

@@ -6,7 +6,7 @@
 import { pdfTextListMarkerOf } from "./text-list-marker";
 import { type PdfNativeListTextSelectionItemEvidence } from "./engine/native/list-text-fidelity";
 import { PDF_NATIVE_MAX_FIXED_FRAME_ITEM_INDEX_GAP, PDF_NATIVE_MAX_FIXED_FRAME_ITEMS, PDF_NATIVE_MAX_ITEM_TEXT_LENGTH } from "./engine/native/vocabulary";
-import { summarizePdfNativeSelectionItems } from "./engine/native/list-text-model";
+import { RAISED_LETTER_ABUT_EM, RAISED_LETTER_RISE_EM, selectionVisualLineIndexes, summarizePdfNativeSelectionItems } from "./engine/native/list-text-model";
 import { multiplyMatrix, type PdfViewportLike } from "./text-boxes";
 import type { PdfNativeKeptTextBlock } from "./native-kept-text-blocks";
 import { nativeListTextItemEvidence } from "./native-list-text-item-evidence";
@@ -23,6 +23,9 @@ const PDFJS_SPLIT_SPACE_MAX_EM = 1.5;
 // pdf.js reads a gap between two glyphs of at least this many ems as a space
 // (its tracking bound) and keeps reading on within the in-flow bound.
 const PDFJS_TRACKING_SPACE_EM = 0.102;
+/** How far back the pen may stand from where the item being built ends and
+ * the reader still goes on in that item (pdf.js NEGATIVE_SPACE_FACTOR). */
+const PDFJS_NEGATIVE_SPACE_EM = -0.2;
 const PDFJS_SPACE_IN_FLOW_MAX_EM = 0.6;
 // pdf.js keeps a run in the item it is building while its baseline stands
 // within this share of the item's height (VERTICAL_SHIFT_RATIO).
@@ -74,6 +77,17 @@ export type PdfNativeParagraphEditBox = Readonly<{
   editable: boolean;
   disabledReason?: PdfNativeParagraphEditBlockReason;
 }>;
+
+/**
+ * Whether the box is shown by a handle of its own over the page's text
+ * layer rather than by a span of that layer: a box of several items, or one
+ * whose single item the reader read from several runs of ink
+ * (foldSkewedFrameLineEnds) -- no one span of the layer holds its words.
+ */
+export function pdfNativeParagraphBoxHasHandle(box: Pick<PdfNativeParagraphEditBox, "items">): boolean {
+  return box.items.length > 1 ||
+    ((box.items[0] as (PdfNativeListTextSelectionItemEvidence & Readonly<{ joinedRuns?: number }>) | undefined)?.joinedRuns ?? 1) > 1;
+}
 
 type ProjectedNativeItem = Readonly<{
   evidence: PdfNativeListTextSelectionItemEvidence;
@@ -166,7 +180,11 @@ type PdfJsNormalizedParagraphItem = PdfNativeListTextSelectionItemEvidence &
   Readonly<{ sourceItemIndexes?: readonly number[];
     /** The width of the reader's space folded before the item's text: its
      * first glyph stands that far in from the item's origin. */
-    foldedLeadWidth?: number }>;
+    foldedLeadWidth?: number;
+    /** How many runs of ink the reader reported apart are read as this one
+     * item (foldSkewedFrameLineEnds): its words are no one span's of the
+     * page's text layer. */
+    joinedRuns?: number }>;
 
 function rawSourceItemIndexes(
   item: PdfNativeListTextSelectionItemEvidence,
@@ -432,15 +450,29 @@ export function normalizePdfJsNativeParagraphItems(
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 function foldSkewedFrameLineEnds(
   normalized: (PdfNativeListTextSelectionItemEvidence | null)[],
 ): void {
   let before: PdfNativeListTextSelectionItemEvidence | null = null;
+  let beforeAt = -1;
   for (let index = 0; index < normalized.length; index += 1) {
     const after = normalized[index];
     if (!after) continue;
     const previous = before;
+    const previousAt = beforeAt;
     before = after;
+    beforeAt = index;
     if (
       !previous ||
       !previous.hasEOL ||
@@ -483,13 +515,29 @@ function foldSkewedFrameLineEnds(
     // On the page the two share a baseline, as close as the reader keeps a
     // run in the item it is building, and the gap reads as one space.
     const gap = bx - penX;
-    if (
-      Math.abs(by - ay) > previous.height * PDFJS_VERTICAL_SHIFT_RATIO ||
-      gap < axis * PDFJS_TRACKING_SPACE_EM ||
-      gap > axis * PDFJS_SPLIT_SPACE_MAX_EM
-    ) {
+    if (Math.abs(by - ay) > previous.height * PDFJS_VERTICAL_SHIFT_RATIO) continue;
+    if (gap < axis * PDFJS_TRACKING_SPACE_EM) {
+      // (The reader measures the gap in the size it is drawing in.)
+      const size = Math.hypot(a2, a3);
+      if (previous.fontName !== after.fontName || gap < size * PDFJS_NEGATIVE_SPACE_EM) continue;
+      const joined: PdfNativeListTextSelectionItemEvidence = Object.freeze({
+        ...previous,
+        str: previous.str + after.str,
+        width: bx + after.width - ax,
+        hasEOL: after.hasEOL,
+        sourceItemIndexes: Object.freeze([
+          ...rawSourceItemIndexes(previous),
+          ...rawSourceItemIndexes(after),
+        ]),
+        joinedRuns: ((previous as PdfJsNormalizedParagraphItem).joinedRuns ?? 1) + 1,
+      });
+      normalized[previousAt] = joined;
+      normalized[index] = null;
+      before = joined;
+      beforeAt = previousAt;
       continue;
     }
+    if (gap > axis * PDFJS_SPLIT_SPACE_MAX_EM) continue;
     const folded: PdfNativeListTextSelectionItemEvidence = Object.freeze({
       ...after,
       str: ` ${after.str}`,
@@ -1016,6 +1064,88 @@ function joinRowsOfOneJustifiedLine(
   }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function joinRaisedLettersOfTheirLine(rows: ProjectedNativeItem[][]): void {
+  const rightToLeft = (item: ProjectedNativeItem) => {
+    const text = item.evidence.str;
+    return (text.match(STRONG_RTL)?.length ?? 0) > 0 && (text.match(STRONG_LTR)?.length ?? 0) === 0;
+  };
+  const standIn = (raised: readonly ProjectedNativeItem[], line: readonly ProjectedNativeItem[]): boolean => {
+    const size = raised[0].fontSize;
+    const edge = size * RAISED_LETTER_ABUT_EM;
+    const byInline = [...raised].sort((x, y) => x.inlineStart - y.inlineStart);
+    for (let from = 0; from < byInline.length;) {
+      let to = from;
+      while (to + 1 < byInline.length && Math.abs(byInline[to + 1].inlineStart - byInline[to].inlineEnd) <= edge) to += 1;
+      const start = byInline[from].inlineStart, end = byInline[to].inlineEnd;
+      const before = line.find((item) => Math.abs(item.inlineEnd - start) <= edge);
+      const after = line.find((item) => Math.abs(item.inlineStart - end) <= edge);
+      if (!before || !after || before === after) return false;
+      if (line.some((item) => item.inlineStart < end - edge && item.inlineEnd > start + edge)) return false;
+      const first = Math.min(before.evidence.itemIndex, after.evidence.itemIndex);
+      const last = Math.max(before.evidence.itemIndex, after.evidence.itemIndex);
+      for (let index = from; index <= to; index += 1) {
+        const item = byInline[index];
+        if (item.evidence.itemIndex <= first || item.evidence.itemIndex >= last) return false;
+        for (const beside of [before, after]) {
+          if (beside.evidence.fontName !== item.evidence.fontName ||
+            Math.abs(beside.fontSize - item.fontSize) > size * 0.05 ||
+            Math.abs(beside.angle - item.angle) >= UPRIGHT_ANGLE_EPSILON) return false;
+        }
+        const rise = Math.min(Math.abs(item.baselineBlock - before.baselineBlock),
+          Math.abs(item.baselineBlock - after.baselineBlock));
+        if (rise > size * RAISED_LETTER_RISE_EM) return false;
+      }
+      from = to + 1;
+    }
+    return true;
+  };
+  for (let joined = true; joined;) {
+    joined = false;
+    search: for (let raisedAt = 0; raisedAt < rows.length; raisedAt += 1) {
+      const raised = rows[raisedAt];
+      if (!raised.every(rightToLeft)) continue;
+      for (let lineAt = 0; lineAt < rows.length; lineAt += 1) {
+        const line = rows[lineAt];
+        if (lineAt === raisedAt || line.length < 2 || !rightToLeftLine(line) || !standIn(raised, line)) continue;
+        // (And the line reads as the lines it read as before, by the count
+        // every writer of the box takes its lines by: joined into a line
+        // that count would then break in three, the box could not be
+        // written at all.)
+        const inLine = (members: readonly ProjectedNativeItem[]) => Math.max(...selectionVisualLineIndexes(
+          [...members].sort((x, y) => x.baselineInline - y.baselineInline || x.evidence.itemIndex - y.evidence.itemIndex)
+            .map((member) => member.evidence)));
+        if (inLine([...line, ...raised]) !== inLine(line)) continue;
+        line.push(...raised);
+        line.sort((x, y) => x.baselineInline - y.baselineInline || x.evidence.itemIndex - y.evidence.itemIndex);
+        rows.splice(raisedAt, 1);
+        joined = true;
+        break search;
+      }
+    }
+  }
+}
+
 function visualLines(
   items: readonly ProjectedNativeItem[],
 ): readonly NativeVisualLine[] {
@@ -1113,6 +1243,7 @@ function visualLines(
       }
     }
   }
+  joinRaisedLettersOfTheirLine(rows);
   joinRowsOfOneJustifiedLine(rows, ordered);
   // A radical sign read onto another row than the glyph it stands before.
   // Its origin is nearer the line above its own than its own (radicandOf),
@@ -1230,6 +1361,12 @@ function splitRowAtTableCells(
 
 
 
+/** How far apart the baselines of a script and the word beside it may stand
+ * and be one line of a box whose reader ended its line between them for
+ * their leaned frame alone (itemAfterSkewedFrameLineEnd), as a share of the
+ * larger size: the viewer's own bound for a raised item of a line. */
+const SKEWED_FRAME_SCRIPT_BASELINE_RATIO = 0.55;
+
 function itemAfterSkewedFrameLineEnd(
   previous: PdfNativeListTextSelectionItemEvidence,
   next: PdfNativeListTextSelectionItemEvidence,
@@ -1247,16 +1384,22 @@ function itemAfterSkewedFrameLineEnd(
   }
   const [a0, a1, a2, a3, ax, ay] = previous.transform;
   const [b0, b1, b2, b3, bx, by] = next.transform;
-  // Both run along the page's x axis, one way, in one size; the reader
-  // compared in a frame that is not the page's (the next run's matrix leans).
+  // Both run along the page's x axis, one way; the reader compared in a
+  // frame that is not the page's (the next run's matrix leans). In one size
+  // on one baseline -- or a script beside a word of its line (a subscript and
+  // the word after it, «r0 is»; a superscript and the word after it,
+  // «(mj)−1/2 at»: two sizes, baselines a part of the larger one apart,
+  // which the reader comparing on the page keeps in one line).
   if (
     Math.abs(a1) > PDFJS_SPLIT_SPACE_TOLERANCE || Math.abs(b1) > PDFJS_SPLIT_SPACE_TOLERANCE ||
-    !(a0 > 0) || !(b0 > 0) || b2 === 0 ||
-    Math.abs(a3 - b3) > PDFJS_SPLIT_SPACE_TOLERANCE ||
-    Math.abs(by - ay) > PDFJS_SPLIT_SPACE_TOLERANCE
+    !(a0 > 0) || !(b0 > 0) || b2 === 0
   ) {
     return null;
   }
+  const sameSet = Math.abs(a3 - b3) <= PDFJS_SPLIT_SPACE_TOLERANCE && Math.abs(by - ay) <= PDFJS_SPLIT_SPACE_TOLERANCE;
+  // (No further apart than the item before is high, either: on the page the reader ends its line past that.)
+  if (!sameSet && !(Math.abs(by - ay) <= Math.min(SKEWED_FRAME_SCRIPT_BASELINE_RATIO * Math.max(Math.abs(a3), Math.abs(b3)),
+    Math.abs(a3)))) return null;
   // The pen after the item before and the origin of the item after, each
   // through its own matrix: the reader ended the line because these lie a
   // line apart, and for no other reason.
@@ -1265,6 +1408,9 @@ function itemAfterSkewedFrameLineEnd(
   const nextAcross = (b2 * bx + b3 * by) / b0;
   if (!(Math.abs(nextAcross - lastAcross) > previous.height)) return null;
   const gap = bx - penX;
+  // (By the size of the item before, a script's too: the reader measures the
+  // gap in the size it was drawing in -- 0.77 pt after a 6 pt subscript is a
+  // space to it, «r0 .», pdf-walk-1000 0676.)
   if (!(gap >= PDFJS_TRACKING_SPACE_EM * Math.hypot(a2, a3))) return null;
   return Object.freeze({
     ...next,

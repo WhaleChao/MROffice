@@ -29,7 +29,7 @@ import {
   documentDefaultIndentCss,
   EMPTY_DOCUMENT_DEFAULT_INDENTS,
   type DocumentDefaultIndents,
-} from "./paragraphSetAsDefault";
+} from "@mrnote/core/web/components/console/editor/native-document/paragraphSetAsDefault.ts";
 import {
   useEffect,
   useId,

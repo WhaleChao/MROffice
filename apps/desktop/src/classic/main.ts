@@ -49,14 +49,18 @@ import { readDefaultAppChoice, shouldOfferDefaultApp, writeDefaultAppChoice } fr
 import { MAX_OPEN_FILE_PART_BYTES, openablePathsFromArgv, readOpenedFiles, readOpenFilePart } from "../files";
 import { loadBundledPage } from "../bundled-page";
 import { FocusOrder } from "../document-target";
+import { autoSaveToOriginalEnabled, writeSettings } from "./desktop-settings";
 import {
+  linkOf,
   linkOriginal,
   nameLocalFilesAtStart,
+  originalLinksStore,
   originalOf,
   pageOfUnchangedFile,
   pathOfToken,
   registerLocalFile,
   savedStateOf,
+  unchangedSinceLinked,
   writeFileAtomically,
 } from "./local-files";
 import { buildMenu } from "../menu";
@@ -99,6 +103,14 @@ import {
   removeLibreOffice,
   prefetchLibreOffice,
 } from "./libreoffice";
+import {
+  cancelLocalModelDownload,
+  type LocalModelContext,
+  localModelStatus,
+  pauseLocalModelDownload,
+  removeLocalModelFiles,
+  startLocalModelDownload,
+} from "./local-model";
 import { chooseWebPort, lastWebServerHolds, parseLastWebServer, usablePort } from "./web-port";
 import {
   apiEnv,
@@ -124,6 +136,7 @@ import { printerEnabled, startPrinter } from "./printer";
 import { PRODUCT, productDisplayName, productWords } from "./product";
 import { officeSurfaceRedirect, withOfficeSurface } from "./surface";
 import { registerAgentComputer } from "./agent-computer";
+import { registerPlaces } from "./places-ipc";
 import { startAgentControl } from "./agent-control";
 import { vibeCheckerEnabled } from "./vibe-checker";
 import { startVibeCheckerProcess } from "./vibe-checker-process";
@@ -624,7 +637,10 @@ function fromApp(event: Electron.IpcMainInvokeEvent): boolean {
 
 // --- documents from the system -------------------------------------------------
 
-function openDocuments(paths: string[]): void {
+/** ``into``: the window that asked (a document chosen in its sidebar's
+ * places, ./places-ipc.ts), opened there as the window in use opens one
+ * from Finder. */
+function openDocuments(paths: string[], into?: BrowserWindow | null): void {
   const documents = paths.filter((item) => fs.existsSync(item));
   if (!documents.length) return;
   if (!ready) {
@@ -636,7 +652,7 @@ function openDocuments(paths: string[]): void {
   // a large workbook starts its conversion server meanwhile (the API's
   // /desktop/local-files), seconds before the window asks for the import.
   for (const document of documents) void registerLocalFile(launch, document);
-  const target = pageWindows.target();
+  const target = into && !into.isDestroyed() ? into : pageWindows.target();
   if (!target) {
     createWindow(OPEN_ROUTE, documents);
     return;
@@ -778,8 +794,13 @@ ipcMain.handle("mrai:take-open-files", async (event, keep: unknown) => {
 // edit mode, a save refused) still asks, as it always did -- and the services
 // stop once every window has closed (will-quit), never under a page saving.
 const SETTLE_EDITS_MS = 5000;
+/** The most a page may ask to be waited on for (once per settle) to write a
+ * pending autosave back to the file it came from (preload onSettleEdits'
+ * ``extend``): an export of a long document takes a few seconds. */
+const SETTLE_ORIGINAL_WRITE_MAX_MS = 20_000;
 const settlesEdits = new Set<number>();
 const settleReplies = new Map<string, () => void>();
+const settleExtensions = new Map<string, (ms: number) => void>();
 const closeSettling = new Set<number>();
 const closeSettled = new Set<number>();
 let quitSettling = false;
@@ -798,6 +819,14 @@ ipcMain.handle("mrai:edits-settled", (event, nonce: unknown, result: unknown) =>
   if (!settled) console.warn(`[classic] a page's edits were not all saved in ${SETTLE_EDITS_MS} ms: it asks before closing`);
   done();
 });
+ipcMain.handle("mrai:edits-settle-extend", (event, nonce: unknown, ms: unknown) => {
+  if (!fromApp(event)) return false;
+  const extend = settleExtensions.get(String(nonce));
+  const wait = Number(ms);
+  if (!extend || !Number.isFinite(wait) || wait <= 0) return false;
+  extend(Math.min(wait, SETTLE_ORIGINAL_WRITE_MAX_MS));
+  return true;
+});
 
 function settleEdits(pages: WebContents[]): Promise<void> {
   const asked = pages.filter((contents) => !contents.isDestroyed() && settlesEdits.has(contents.id));
@@ -809,11 +838,18 @@ function settleEdits(pages: WebContents[]): Promise<void> {
           const finish = () => {
             clearTimeout(timer);
             settleReplies.delete(nonce);
+            settleExtensions.delete(nonce);
             resolve();
           };
           // The page's own wait, and a little for its answer.
-          const timer = setTimeout(finish, SETTLE_EDITS_MS + 700);
+          let timer = setTimeout(finish, SETTLE_EDITS_MS + 700);
           settleReplies.set(nonce, finish);
+          // Once: a page writing its pending autosave back to its file.
+          settleExtensions.set(nonce, (ms) => {
+            settleExtensions.delete(nonce);
+            clearTimeout(timer);
+            timer = setTimeout(finish, ms + 700);
+          });
           contents.send("mrai:settle-edits", nonce, SETTLE_EDITS_MS);
         }),
     ),
@@ -890,18 +926,61 @@ ipcMain.handle("mrai:original-of", async (event, pageId: unknown) => {
   return filePath ? { name: path.basename(filePath), savedState: savedStateOf(pageId) } : null;
 });
 
+/** What the window's autosave asks before it exports a page: whether the page
+ * is linked to a file, whether that file is still there and as the app last
+ * saw it (opened or written), and whether autosave is on. */
+ipcMain.handle("mrai:original-status", async (event, pageId: unknown) => {
+  if (!fromApp(event) || typeof pageId !== "string") return null;
+  const link = linkOf(pageId);
+  const autosave = autoSaveToOriginalEnabled();
+  if (!link) return { linked: false, autosave };
+  const missing = !fs.existsSync(link.path);
+  return {
+    linked: true,
+    autosave,
+    name: path.basename(link.path),
+    missing,
+    changedElsewhere: !missing && !unchangedSinceLinked(pageId),
+    savedState: missing ? null : savedStateOf(pageId),
+  };
+});
+
+ipcMain.handle("mrai:original-autosave", async (event, on: unknown) => {
+  if (!fromApp(event)) return null;
+  if (typeof on === "boolean") {
+    try {
+      writeSettings({ autoSaveToOriginal: on });
+    } catch (error) {
+      console.error(`[classic] autosave setting not saved: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  return autoSaveToOriginalEnabled();
+});
+
 /** Save: the page written back to the file it came from; a page that came
- * from none asks where once, and is linked to that file from then on. */
+ * from none asks where once, and is linked to that file from then on. The
+ * file as the person had it is copied first (original-links writeOriginal).
+ * ``auto`` (the window's autosave once edits settle): only the page's own
+ * linked file, only while it is there and unchanged since the app last saw
+ * it, and only while autosave is on -- never a dialog. */
 ipcMain.handle("mrai:save-to-original", async (event, request: unknown) => {
   if (!fromApp(event) || !request || typeof request !== "object") return null;
-  const { pageId, bytes, filename, state } = request as {
+  const { pageId, bytes, filename, state, auto } = request as {
     pageId?: string;
     bytes?: ArrayBuffer;
     filename?: string;
     state?: string;
+    auto?: boolean;
   };
   if (typeof pageId !== "string" || !(bytes instanceof ArrayBuffer) || typeof filename !== "string" || !filename) {
     return null;
+  }
+  const savedState = typeof state === "string" ? state : undefined;
+  if (auto === true) {
+    if (!autoSaveToOriginalEnabled()) return { error: "autosave_off", code: "autosave_off" };
+    const written = await originalLinksStore.writeOriginal(pageId, null, new Uint8Array(bytes), { auto: true, savedState });
+    if (!written.ok) return { error: written.message ?? written.error, code: written.error };
+    return { path: written.path, name: path.basename(written.path) };
   }
   let target = originalOf(pageId);
   if (!target) {
@@ -911,13 +990,9 @@ ipcMain.handle("mrai:save-to-original", async (event, request: unknown) => {
     if (result.canceled || !result.filePath) return null;
     target = result.filePath;
   }
-  try {
-    await writeFileAtomically(target, new Uint8Array(bytes));
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : String(error) };
-  }
-  linkOriginal(pageId, target, undefined, typeof state === "string" ? state : undefined);
-  return { path: target, name: path.basename(target) };
+  const written = await originalLinksStore.writeOriginal(pageId, target, new Uint8Array(bytes), { savedState });
+  if (!written.ok) return { error: written.message ?? written.error, code: written.error };
+  return { path: written.path, name: path.basename(written.path) };
 });
 
 ipcMain.handle("mrai:read-open-file", async (event, token: unknown, start: unknown, end: unknown) => {
@@ -1063,6 +1138,7 @@ async function pullProfileCard(): Promise<void> {
 }
 
 registerAgentComputer(() => launch, fromApp);
+registerPlaces(fromApp, (paths, window) => openDocuments(paths, window));
 
 ipcMain.handle("mrai:ai-account", async (event) => {
   if (!fromApp(event)) return null;
@@ -1146,6 +1222,44 @@ ipcMain.handle("mrai:libreoffice-install", async (event) => {
 ipcMain.handle("mrai:libreoffice-remove", async (event) => {
   if (!fromApp(event)) return { ok: false };
   return removeLibreOffice(libreOfficeContext, BrowserWindow.fromWebContents(event.sender));
+});
+
+// --- the model on this computer, downloaded when the person asks (local-model.ts) -------
+
+const localModelContext: LocalModelContext = {
+  hidden: HIDDEN,
+  notify: () => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed() && window !== splash) window.webContents.send("mrai:local-model-changed");
+    }
+  },
+  // Its files are held open by the server the API runs (Windows cannot
+  // delete them then): the API stops it first.
+  stopServer: async () => {
+    if (!launch) return;
+    await fetch(`${launch.apiOrigin}/api/v1/desktop/local-model/stop`, {
+      method: "POST",
+      headers: { origin: launch.webOrigin, "x-mrai-desktop-launch": launch.launchToken },
+      signal: AbortSignal.timeout(20_000),
+    });
+  },
+};
+
+ipcMain.handle("mrai:local-model-status", async (event) => (fromApp(event) ? localModelStatus() : null));
+
+ipcMain.handle("mrai:local-model-download", async (event, request: unknown) => {
+  if (!fromApp(event)) return { ok: false };
+  const asked = request && typeof request === "object" ? (request as { key?: unknown; mirror?: unknown }) : {};
+  return startLocalModelDownload(localModelContext, { key: asked.key, mirror: asked.mirror });
+});
+
+ipcMain.handle("mrai:local-model-pause", async (event) => (fromApp(event) ? pauseLocalModelDownload() : { ok: false }));
+
+ipcMain.handle("mrai:local-model-cancel", async (event) => (fromApp(event) ? cancelLocalModelDownload(localModelContext) : { ok: false }));
+
+ipcMain.handle("mrai:local-model-remove", async (event) => {
+  if (!fromApp(event)) return { ok: false };
+  return removeLocalModelFiles(localModelContext, BrowserWindow.fromWebContents(event.sender));
 });
 
 // --- new versions of the app (../updates.ts): Settings › Software Update ----------------

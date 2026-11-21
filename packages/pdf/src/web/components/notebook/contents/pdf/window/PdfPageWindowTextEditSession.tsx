@@ -55,6 +55,7 @@ import type {
   PdfTextBoxCommandTargetLike,
 } from "../../../../../lib/pdf/text-box-command-target";
 import type { BoxRect } from "@mrnote/core/web/lib/pdf/text-box-geometry.ts";
+import { pdfNativeParagraphBlockOfferedFor, type PdfNativeParagraphBlockOffer } from "../../../../../lib/pdf/text-edit/block-only-opening";
 import type { PdfReaderLineAnnotationPlace } from "../PdfNativeListTextEditDialog";
 import type { useTranslations } from "@mrnote/core/host/next-intl.tsx";
 
@@ -118,14 +119,23 @@ export interface PdfPageWindowTextEditSessionModel {
   /** The open line's words while they differ from the page's (null once they
    * do not), as its box reads them: kept past the tab
    * (lib/pdf/native-text-typing-drafts). */
-  keepNativeListTextTypingDraft?: (draft: Readonly<{ originalText: string; value: string }> | null) => void;
+  keepNativeListTextTypingDraft?: (draft: Readonly<{ originalText: string; value: string;
+    formats?: import("../PdfNativeListTextEditDialog").PdfNativeTextFormatDraft }> | null) => void;
   pdfNativeTransactionsRef: RefObject<JsonValue | undefined>;
   page: PageItem | null;
   dataItemId: string;
   captureNextTextTarget: PdfNativeTextContinuationCapture;
+  /** Undo pressed in the open line: true when the page takes the press (a
+   * new text box still being typed is taken back whole). */
+  takeNativeTextUndoKey?: () => boolean;
   inheritNextTextTarget?: () => ((accepted: boolean) => void) | null;
   dismissNativeTextContinuation: () => void;
   closeNativeListTextDialog: () => void;
+  openLineOfNativeTextBlock: (press: Readonly<{ clientX: number; clientY: number }>) => void;
+  /** The paragraphs refused whole that open as a block for their formats,
+   * and the ask for the one the open line is of (block-only-opening). */
+  nativeParagraphBlockOffers: readonly PdfNativeParagraphBlockOffer[];
+  selectWholeNativeTextParagraph: () => void;
   retainNativeListTextDraft: (text: string) => void;
   exitReaderContentEditMode: () => void;
   requestReaderHandTool: () => void;
@@ -211,9 +221,13 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
     page,
     dataItemId,
     captureNextTextTarget,
+    takeNativeTextUndoKey,
     inheritNextTextTarget,
     dismissNativeTextContinuation,
     closeNativeListTextDialog,
+    openLineOfNativeTextBlock,
+    nativeParagraphBlockOffers,
+    selectWholeNativeTextParagraph,
     retainNativeListTextDraft,
     exitReaderContentEditMode,
     requestReaderHandTool,
@@ -424,6 +438,9 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
       onUnsavedTypingChange={setNativeListTextUnsavedTyping}
       onTypingDraftChange={keepNativeListTextTypingDraft}
       onCancel={closeNativeListTextDialog}
+      onOpenLineOfBlock={openLineOfNativeTextBlock}
+      onSelectWholeParagraph={nativeParagraphBlockOffers.some((offer) => pdfNativeParagraphBlockOfferedFor(offer,
+        nativeListTextDialogProofRef.current?.evidence.selection)) ? selectWholeNativeTextParagraph : undefined}
       preparationFailed={nativeListTextPreparationFailed}
       initialDraftText={spelling && initialDraftText === spelling.source ? spelling.reader : initialDraftText}
       onRetainUnsavedDraft={retainAsCommitted}
@@ -448,6 +465,7 @@ export function PdfPageWindowTextEditSession({ session }: { session: PdfPageWind
       onConvertToFormula={convertReaderTextLineToFormula}
       onDismiss={dismissNativeTextContinuation}
       captureNextTextTarget={captureNextTextTarget}
+      pageTakesUndo={takeNativeTextUndoKey}
       inheritNextTextTarget={inheritNextTextTarget}
     />
   );

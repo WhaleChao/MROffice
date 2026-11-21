@@ -21,6 +21,7 @@ import {
   SECTION_UNEQUAL_COLUMN_TRACKS_ATTR,
 } from "../sectionLayouts";
 import { trailingAutoLeadingCreditPx } from "./pageEdgeLeading";
+import { rejudgeInlinePicturesPastLine } from "../inlinePicturePastLine";
 
 export const UNEQUAL_COLUMN_FLOW_ATTR = "data-page-unequal-column-flow";
 /** A page holding several sections (continuous section breaks): one token
@@ -267,6 +268,27 @@ export function ownSectionColumnCount(block: Element): number {
   return parseUnequalColumnTracks(token)?.length ?? 1;
 }
 
+/** `window.__dqc2SeamMarginOff = true` (A/B): a fragment its paragraph goes
+ * on from keeps its paragraph's space after in the column flow, as before. */
+function seamMarginOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __dqc2SeamMarginOff?: boolean }).__dqc2SeamMarginOff === true;
+}
+
+/**
+ * A fragment its paragraph goes on from (a page or column cut's head) ends
+ * mid-paragraph: its space after belongs to the paragraph's last line, where
+ * the paragraph ends (Word), and the page planner charges the head none. Read
+ * as the paragraph's margin, the piece that goes on in the same column stood
+ * that much lower than planned: corpus R460-D16 p10, a head 497.8 px with
+ * 13.33 px below it pushed its 29.3 px piece past the column's foot into a
+ * third track; the overflow repair moved it on, the plan took it back, and
+ * which of the two each opening kept depended on timing.
+ */
+function seamBottomMarginPx(block: HTMLElement, marginBottomPx: number): number {
+  if (seamMarginOff() || block.getAttribute("data-page-split-continues") !== "true") return marginBottomPx;
+  return Math.min(0, marginBottomPx);
+}
+
 export function parseColumnBandExclusion(token: string | null): ColumnBandExclusion | null {
   if (!token) return null;
   const values = token.split(",").map(Number);
@@ -360,6 +382,47 @@ const twipsToPx = (twips: number): number =>
 
 const EQUAL_TRACKS_GRAMMAR = /^equal:(\d+):(\d+)$/;
 
+/** `window.__docsWordColumnTwipsOff = true`: equal columns share the width
+ * to the hundredth of a px and the sheet is read at its whole-px client
+ * width, as before. */
+function wordColumnTwipsOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsWordColumnTwipsOff?: boolean }).__docsWordColumnTwipsOff === true;
+}
+
+/**
+ * Word's width of each of `count` equal columns: the share of the text width
+ * less the gaps, cut to whole twips. Windows Word, docx-look/brk10/probes/
+ * exact: a line exactly as wide as its measure stays whole (x3: 4675 twips
+ * of TNR 10 in 4675), and a line of 5037.5 twips stays whole in a column of
+ * 5038 but goes down in a two-column section whose share is 5037.5 twips
+ * (text width 10435, gap 360; modes 14 and 15) -- the column is 5037.
+ * Corpus R409-D06: "immunotherapeutic potential" filled that column to the
+ * font unit, Word set "potential" on the next line and we kept it.
+ */
+export function equalColumnWidthPx(printableWidthPx: number, gapTwips: number, count: number): number {
+  if (wordColumnTwipsOff()) return Math.round(((printableWidthPx - twipsToPx(gapTwips) * (count - 1)) / count) * 100) / 100;
+  // In twips; a hair under a whole twip still counts as it (the sheet's
+  // width is read in CSS px, a twip is 1/15 px).
+  const twips = Math.floor((printableWidthPx * 15 - gapTwips * (count - 1)) / count + 0.02);
+  return twips / 15;
+}
+
+/** The sheet's content width, px, as CSS sizes it: its computed width (a
+ * fraction of a px where the page is, 11909 twips = 793.93 px), less padding
+ * and border where the box includes them; `clientWidth` rounds to a whole px. */
+function sheetContentWidthPx(sheet: HTMLElement, style: CSSStyleDeclaration, paddingLeftPx: number, paddingRightPx: number): number {
+  const client = Math.max(0, sheet.clientWidth - paddingLeftPx - paddingRightPx);
+  if (wordColumnTwipsOff()) return client;
+  const width = Number.parseFloat(style.width);
+  if (!(width > 0)) return client;
+  const inner = style.boxSizing === "border-box"
+    ? width - paddingLeftPx - paddingRightPx - (Number.parseFloat(style.borderLeftWidth) || 0) - (Number.parseFloat(style.borderRightWidth) || 0)
+    : width;
+  // Only a reading within a px of the client one (a sheet drawn at its
+  // stated width); anything else keeps the client width.
+  return inner > 0 && Math.abs(inner - client) < 1 ? inner : client;
+}
+
 /**
  * Parse the closed decoration grammar emitted by sectionLayouts.ts: an exact
  * unequal twip sequence, or `equal:<count>:<gapTwips>` whose tracks share the
@@ -399,7 +462,7 @@ export function parseUnequalColumnTracks(
     const gapPx = twipsToPx(gapTwips);
     const widthPx =
       printableWidthPx !== undefined && printableWidthPx > 0
-        ? Math.max(1, Math.round(((printableWidthPx - gapPx * (count - 1)) / count) * 100) / 100)
+        ? Math.max(1, equalColumnWidthPx(printableWidthPx, gapTwips, count))
         : 1;
     return Array.from({ length: count }, (_, index) => ({
       widthPx,
@@ -524,8 +587,30 @@ function columnKeepNextOff(): boolean {
 /** What `followerStartsPast` reads of the block after a kept one: whether it
  * may break after its first line, and that line's pitch. */
 function followerFacts(block: HTMLElement | undefined): { splittable?: boolean; lineHeightPx?: number; minSplitLines?: number } {
-  if (!block || !block.matches(SPLITTABLE_TEXT_SELECTOR)) return {};
+  if (!block) return {};
+  // A list follows as its first item's paragraph does: keep with next holds
+  // the kept paragraph with that paragraph's first lines, and the list is cut
+  // between or inside its items like any text (R482-D01 p10: "References",
+  // kept with a 30-item list, was moved into the second column because the
+  // whole list did not fit below it in the first; the ledger kept it there
+  // with the list's first items, and the page ran into a third column).
+  if (!listFollowerWhole() && block.matches("ol, ul")) {
+    const item = block.querySelector<HTMLElement>(":scope > li");
+    const first = item?.querySelector<HTMLElement>(SPLITTABLE_TEXT_SELECTOR) ?? item;
+    if (!first) return {};
+    const pitch = blockLinePitchPx(first);
+    return pitch > 0
+      ? { splittable: true, lineHeightPx: pitch, minSplitLines: first.getAttribute("data-widow-control") === "false" ? 1 : 2 }
+      : {};
+  }
+  if (!block.matches(SPLITTABLE_TEXT_SELECTOR)) return {};
   return { splittable: true, lineHeightPx: blockLinePitchPx(block), minSplitLines: block.getAttribute("data-widow-control") === "false" ? 1 : 2 };
+}
+
+/** `window.__dqc2ListFollowerWhole = true` (A/B): a list after a kept
+ * paragraph must fit whole below it, as before. */
+function listFollowerWhole(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __dqc2ListFollowerWhole?: boolean }).__dqc2ListFollowerWhole === true;
 }
 
 /** `window.__docsColumnKeepBackUpOff = true` (A/B): in a compatibility mode
@@ -555,6 +640,19 @@ function keptLastLinesCut(block: UnequalColumnBlockMetric, heightPx: number, roo
   if (Math.round(heightPx / pitch) < floor * 2) return null;
   const availablePx = Math.min(roomPx, heightPx - Math.min(0.5, pitch / 2));
   return availablePx >= pitch * floor - 0.5 ? availablePx : null;
+}
+
+/** `window.__dqc2SplitHeadKeepsNext = true` (A/B): the head of a paragraph
+ * cut at a column's foot keeps with next as the whole paragraph does, as
+ * before. Keep with next holds a paragraph's LAST line with the next one; a
+ * head's last line is not that, and its follower is its own rest: kept, the
+ * head was moved whole into the next column after its rest (R482-D01 pages
+ * 5 and 6, body text in a Heading 1 style: the head, cut for 198 px of the
+ * first column, drawn in the second over its rest, the rest in a third
+ * column the page does not have; the ledger joined the two pieces in one
+ * track and refused the cut there for the rest of the layout). */
+function splitHeadKeepsNext(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __dqc2SplitHeadKeepsNext?: boolean }).__dqc2SplitHeadKeepsNext === true;
 }
 
 function lastColumnHolds(): boolean {
@@ -633,7 +731,8 @@ export function planUnequalColumnFlow(
     let creditPx = creditFor(columnIndex);
     // Keep with next: a block that fits here but whose follower's first line
     // would not opens the next column with it (as the balance planned it).
-    if (block.keepNext && cursorPx > 0 && columnIndex < tracks.length - 1 &&
+    if (block.keepNext && !(splitHeadKeepsNext() ? false : (block as { continuesNext?: boolean }).continuesNext) &&
+        cursorPx > 0 && columnIndex < tracks.length - 1 &&
         topPx + heightPx - creditPx <= footOf(columnIndex) &&
         followerStartsPast(blocks, blockIndex, columnIndex, topPx + heightPx, footOf(columnIndex))) {
       const lastLinesRoom = options.keepNextCutsLastLines && !columnKeepBackUpOff()
@@ -1869,6 +1968,8 @@ function splitRegionsAtSpanningBands(
   regionOf: number[],
   regionTracks: Array<readonly UnequalColumnTrack[]>,
   printableWidthPx: number,
+  /** Each region's side insets (parseColumnRegionInsets), split alike. */
+  insets?: Array<{ startPx: number; endPx: number }>,
 ): void {
   for (let region = regionTracks.length - 1; region >= 0; region -= 1) {
     const tracks = regionTracks[region];
@@ -1898,7 +1999,9 @@ function splitRegionsAtSpanningBands(
       if ((block.textContent ?? "").trim() || block.querySelector("img, svg, table, canvas")) break;
     }
     if (band < 0) continue;
-    regionTracks.splice(region, 0, [{ widthPx: printableWidthPx, gapAfterPx: 0 }]);
+    const inset = insets?.[region] ?? { startPx: 0, endPx: 0 };
+    regionTracks.splice(region, 0, [{ widthPx: printableWidthPx - inset.startPx - inset.endPx, gapAfterPx: 0 }]);
+    insets?.splice(region, 0, inset);
     for (let index = 0; index < regionOf.length; index += 1) {
       if (regionOf[index] > region || (regionOf[index] === region && index > band)) regionOf[index] += 1;
     }
@@ -1918,16 +2021,39 @@ export function parseColumnRegions(
   const tokens = value.split("|");
   if (tokens.length < 2 || tokens.length > 64) return null;
   const regions: Array<readonly UnequalColumnTrack[]> = [];
-  for (const token of tokens) {
-    if (token === "1") {
-      regions.push([{ widthPx: printableWidthPx, gapAfterPx: 0 }]);
+  for (const raw of tokens) {
+    const inset = regionInsetOf(raw);
+    if (!inset) return null;
+    const widthPx = printableWidthPx - inset.startPx - inset.endPx;
+    if (!(widthPx > 0)) return null;
+    if (inset.token === "1") {
+      regions.push([{ widthPx, gapAfterPx: 0 }]);
       continue;
     }
-    const tracks = parseUnequalColumnTracks(token, printableWidthPx);
+    const tracks = parseUnequalColumnTracks(inset.token, widthPx);
     if (!tracks) return null;
     regions.push(tracks);
   }
   return regions;
+}
+
+const REGION_MARGINS_GRAMMAR = /^(.*)@(-?\d{1,6}),(-?\d{1,6})$/;
+
+/** A region token's own side margins against the sheet's
+ * (columnFlowDecorations' `@<left>,<right>` twips), px; none: 0. */
+function regionInsetOf(raw: string): { token: string; startPx: number; endPx: number } | null {
+  const match = REGION_MARGINS_GRAMMAR.exec(raw);
+  if (!match) return raw.includes("@") ? null : { token: raw, startPx: 0, endPx: 0 };
+  return { token: match[1]!, startPx: Number(match[2]) / 15, endPx: Number(match[3]) / 15 };
+}
+
+/** Each region's left and right inset from the sheet's content box, px
+ * (a section of the page with side margins of its own). */
+export function parseColumnRegionInsets(value: string | null | undefined): Array<{ startPx: number; endPx: number }> {
+  return (value ?? "").split("|").map((raw) => {
+    const inset = regionInsetOf(raw);
+    return { startPx: inset?.startPx ?? 0, endPx: inset?.endPx ?? 0 };
+  });
 }
 
 const SPLITTABLE_TEXT_SELECTOR = "p, h1, h2, h3, h4, h5, h6";
@@ -2019,8 +2145,9 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
   const paddingLeftPx = px(sheetStyle, "padding-left");
   const minHeightPx = px(sheetStyle, "min-height");
   const capacityPx = Math.max(0, minHeightPx - paddingTopPx - paddingBottomPx);
-  const printableWidthPx = Math.max(0, sheet.clientWidth - paddingLeftPx - paddingRightPx);
+  const printableWidthPx = sheetContentWidthPx(sheet, sheetStyle, paddingLeftPx, paddingRightPx);
   const regionTracks = parseColumnRegions(sheet.getAttribute(COLUMN_REGIONS_ATTR), printableWidthPx);
+  const regionInsets = parseColumnRegionInsets(sheet.getAttribute(COLUMN_REGIONS_ATTR));
   if (!regionTracks || blocks.length === 0 || !(capacityPx > 0)) {
     clearUnequalColumnProjection(sheet);
     return null;
@@ -2048,7 +2175,7 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
   const closing = blocks[blocks.length - 1];
   const endsHere = closing.matches('[data-type="section-break"]') &&
     (closing.getAttribute("data-break-type") ?? "nextPage") === "continuous";
-  splitRegionsAtSpanningBands(blocks, regionOf, regionTracks, printableWidthPx);
+  splitRegionsAtSpanningBands(blocks, regionOf, regionTracks, printableWidthPx, regionInsets);
   const regions: ColumnRegionSpec[] = regionTracks.map((tracks, index) => ({
     tracks,
     balance: index < regionTracks.length - 1 || endsHere,
@@ -2062,7 +2189,7 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
     return {
       top: px(style, "margin-top"),
       right: px(style, "margin-right"),
-      bottom: px(style, "margin-bottom"),
+      bottom: seamBottomMarginPx(block, px(style, "margin-bottom")),
       left: px(style, "margin-left"),
     };
   });
@@ -2144,6 +2271,11 @@ function projectColumnRegionSheet(sheet: HTMLElement, sheetOptions: UnequalColum
     const block = blocks[blockIndex];
     const metric = metrics[blockIndex];
     const trackWidthPx = placement.widthPx + metric.marginLeftPx + metric.marginRightPx;
+    // A region with side margins of its own starts that far in from the
+    // sheet's: its blocks' inline starts are the sheet's from here on (the
+    // table frame and the floats read them).
+    const inset = regionInsets[regionOf[blockIndex]!];
+    if (inset && (inset.startPx || inset.endPx)) placement.inlineStartPx += rtl ? inset.endPx : inset.startPx;
     const physicalInlineStart = rtl
       ? printableWidthPx - placement.inlineStartPx - trackWidthPx
       : placement.inlineStartPx;
@@ -2205,10 +2337,7 @@ export function projectUnequalColumnSheet(
     0,
     minHeightPx - paddingTopPx - paddingBottomPx - (Number.isFinite(footZonePx) ? Math.max(0, footZonePx) : 0),
   );
-  const printableWidthPx = Math.max(
-    0,
-    sheet.clientWidth - paddingLeftPx - paddingRightPx,
-  );
+  const printableWidthPx = sheetContentWidthPx(sheet, sheetStyle, paddingLeftPx, paddingRightPx);
   const tracks = parseUnequalColumnTracks(token, printableWidthPx);
   if (!tracks || blocks.length === 0 || !(capacityPx > 0)) {
     clearUnequalColumnProjection(sheet);
@@ -2224,7 +2353,7 @@ export function projectUnequalColumnSheet(
     return {
       top: px(style, "margin-top"),
       right: px(style, "margin-right"),
-      bottom: px(style, "margin-bottom"),
+      bottom: seamBottomMarginPx(block, px(style, "margin-bottom")),
       left: px(style, "margin-left"),
     };
   });
@@ -2235,6 +2364,10 @@ export function projectUnequalColumnSheet(
   const distinctTracks = tracks.filter(
     (track, index) => tracks.findIndex((other) => other.widthPx === track.widthPx) === index,
   );
+  // `window.__dqc2PastLineAsPlaced = true`: judge a picture past its line at
+  // the width its paragraph last stood at, as before (A/B).
+  const picturesByTrack = (sheet.ownerDocument.defaultView as (Window & { __dqc2PastLineAsPlaced?: boolean }) | null)
+    ?.__dqc2PastLineAsPlaced !== true;
   distinctTracks.forEach((track) => {
     const measured = new Map<number, number>();
     blocks.forEach((_block, blockIndex) => {
@@ -2243,6 +2376,9 @@ export function projectUnequalColumnSheet(
     });
     writeMeasurementWidths(sheet, measured);
     blocks.forEach((block, blockIndex) => {
+      // A picture wider than this track's line takes no extra line under it
+      // here, whatever track the paragraph stood in before.
+      if (picturesByTrack) rejudgeInlinePicturesPastLine(block);
       const height = laidOutHeightPx(block, scale);
       const extent = Math.max(0, block.scrollWidth);
       tracks.forEach((candidate, trackIndex) => {
@@ -2273,6 +2409,9 @@ export function projectUnequalColumnSheet(
       // drawn alone at column 1's foot; corpus R432-D07). The page planner
       // already charged the column so (ledgerCut's keep chains).
       ...(!columnKeepNextOff() && domKeepFlag(block, "keepNext") ? { keepNext: true } : {}),
+      // A cut paragraph's head: its rest follows, so it keeps nothing with
+      // its follower (`splitHeadKeepsNext`).
+      ...(block.getAttribute("data-page-split-continues") === "true" && !splitHeadKeepsNext() ? { continuesNext: true } : {}),
       ...(!columnKeepNextOff() && blockIndex > 0 && domKeepFlag(blocks[blockIndex - 1], "keepNext")
         ? followerFacts(block)
         : {}),
@@ -2389,22 +2528,29 @@ export function projectUnequalColumnSheet(
     };
   });
   writeProjection(sheet, sheetDeclarations, slotPlacements);
+  // ...and is drawn as it was measured in the track it stands in.
+  if (picturesByTrack) for (const block of blocks) rejudgeInlinePicturesPastLine(block);
+  // The columns a section declares wider than its text area (R456-D20: 5509
+  // and 5040 twips in 10520, 2.07 px over) stand a little into the margin, as
+  // Word draws them. That is the section's geometry, not flow spilling: read
+  // as the page's overflow, no block moved on could cure it, and the physical
+  // repair moved the page's last block on after every pass that verified it
+  // (13 times a page in one opening), so the pages came out as many blocks
+  // short as passes had run: another layout on every opening.
+  // `window.__dqc2TrackOverhangSpills = true` reads it as overflow, as before.
+  const overhangSpills = (sheet.ownerDocument.defaultView as (Window & { __dqc2TrackOverhangSpills?: boolean }) | null)
+    ?.__dqc2TrackOverhangSpills === true;
+  const trackOverhangPx = Math.max(
+    0,
+    tracks.reduce((total, track) => total + track.widthPx + track.gapAfterPx, 0) -
+      (tracks[tracks.length - 1]?.gapAfterPx ?? 0) -
+      printableWidthPx,
+  );
   const projection: UnequalColumnProjection = {
     ...plan,
     tracks,
     capacityPx,
-    inlineOverflowPx: Math.max(
-      plan.inlineOverflowPx,
-      Math.max(
-        0,
-        tracks.reduce(
-          (total, track) => total + track.widthPx + track.gapAfterPx,
-          0,
-        ) -
-          (tracks[tracks.length - 1]?.gapAfterPx ?? 0) -
-          printableWidthPx,
-      ),
-    ),
+    inlineOverflowPx: overhangSpills ? Math.max(plan.inlineOverflowPx, trackOverhangPx) : plan.inlineOverflowPx,
   };
   projectionBySheet.set(sheet, projection);
   return projection;

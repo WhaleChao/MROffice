@@ -1,5 +1,5 @@
 {
- "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14",
+ "probe": "xlsx-rounds/lookwin/faces (fx-a, fx-*, fy-*), Windows Excel 16.0.20527 en-US, 2026-11-14; fresh-name class pass fresh-co 2026-11-14; PostScript names p234-lw 2026-11-20",
  "drawn": {
   "&amp;quot": "Arial",
   "&quot;aptos narrow&quot;": "Arial",
@@ -73,7 +73,9 @@
   "arial rounded mt": "Arial",
   "arial unicode ms": "Arial",
   "arial, helvetica, sans-serif": "Arial",
+  "arial-bolditalicmt": "Arial",
   "arial-boldmt": "Arial",
+  "arial-italicmt": "Arial",
   "arial1": "Arial",
   "arialmt": "Arial",
   "arialunicodems": "Arial",
@@ -168,6 +170,10 @@
   "cooper std black": "Arial",
   "corsiva": "Arial",
   "courier new ce": "Arial",
+  "couriernewps-bolditalicmt": "Arial",
+  "couriernewps-boldmt": "Arial",
+  "couriernewps-italicmt": "Arial",
+  "couriernewpsmt": "Arial",
   "cronos pro": "Arial",
   "czcionka tekstu podstawowego": "Arial",
   "daxot-light": "Arial",
@@ -463,6 +469,8 @@
   "times new roman regular": "Times New Roman",
   "times roman": "Times New Roman",
   "times-roman": "Times New Roman",
+  "timesnewromanps-bolditalicmt": "Times New Roman",
+  "timesnewromanps-boldmt": "Times New Roman",
   "timesnewromanps-italicmt": "Times New Roman",
   "timesnewromanpsmt": "Times New Roman",
   "titillium": "Arial",
@@ -575,6 +583,10 @@
   "architects daughter",
   "archivo",
   "archivo black",
+  "arial-bolditalicmt",
+  "arial-boldmt",
+  "arial-italicmt",
+  "arialmt",
   "arimo",
   "arimo bold",
   "arvo",
@@ -666,6 +678,10 @@
   "corsiva",
   "courier",
   "courier new ce",
+  "couriernewps-bolditalicmt",
+  "couriernewps-boldmt",
+  "couriernewps-italicmt",
+  "couriernewpsmt",
   "cronos pro",
   "czcionka tekstu podstawowego",
   "daxot-light",
@@ -969,6 +985,10 @@
   "the hand bold",
   "thorndale",
   "time",
+  "timesnewromanps-bolditalicmt",
+  "timesnewromanps-boldmt",
+  "timesnewromanps-italicmt",
+  "timesnewromanpsmt",
   "titillium",
   "titillium bd",
   "titillium light",
@@ -1112,6 +1132,12 @@
   "ｄｈｐ平成ゴシックw5",
   "ｍｓゴシック"
  ],
+ "recordless": {
+  "timesnewromanpsmt": "Times New Roman",
+  "timesnewromanps-boldmt": "Times New Roman",
+  "timesnewromanps-italicmt": "Times New Roman",
+  "timesnewromanps-bolditalicmt": "Times New Roman"
+ },
  "substitutes": {
   "family": {
    "1": {

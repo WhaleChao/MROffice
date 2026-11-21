@@ -525,6 +525,22 @@ interface JoinedCopy {
  * out as the page does (no editor root, columns, right-to-left or vertical
  * text).
  */
+/** A page whose blocks stand narrower than its sheet: stacked column regions,
+ * unequal columns, or the sheet's own CSS columns. */
+function pageHasColumns(sheet: HTMLElement): boolean {
+  if (sheet.hasAttribute(COLUMN_REGIONS_ATTR)) return true;
+  const unequal = unequalColumnCount(sheet);
+  if (unequal !== null && unequal > 1) return true;
+  const columns = Number.parseInt(getComputedStyle(sheet).columnCount, 10);
+  return Number.isFinite(columns) && columns > 1;
+}
+
+/** `window.__docsJoinedColumnsOff = true`: a seam on a page of columns is not
+ * read (the copy gives up there, as before), for an A/B of one build. */
+function joinedColumnsOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsJoinedColumnsOff?: boolean }) | null)?.__docsJoinedColumnsOff === true;
+}
+
 function withJoinedCopy<T>(head: HTMLElement, tail: HTMLElement, read: (copy: JoinedCopy) => T | null): T | null {
   const doc = head.ownerDocument;
   const root = head.closest<HTMLElement>(".ProseMirror");
@@ -532,14 +548,19 @@ function withJoinedCopy<T>(head: HTMLElement, tail: HTMLElement, read: (copy: Jo
   const style = getComputedStyle(head);
   if (style.direction === "rtl" || /^(vertical|sideways)/.test(style.writingMode)) return null;
   const sheet = head.closest<HTMLElement>("article[data-page-sheet]");
-  if (sheet) {
-    // As for a head (createRenderedTextHeadProbe): a column's width is not
-    // the page's, where the shell lays the copy out.
-    if (sheet.hasAttribute(COLUMN_REGIONS_ATTR)) return null;
-    const unequal = unequalColumnCount(sheet);
-    if (unequal !== null && unequal > 1) return null;
-    const columns = Number.parseInt(getComputedStyle(sheet).columnCount, 10);
-    if (Number.isFinite(columns) && columns > 1) return null;
+  // A column's width is not the page's, where the shell lays the copy out:
+  // on a page of columns the copy is laid out at the width its two pieces
+  // stand at, in one column. Given up there before, every edit near a seam
+  // on a two-column page was read "cannot tell", and the seam was cut away
+  // and put back on each key (corpus R482-D01, its page 1). Pieces standing
+  // at two widths say nothing of one row: those still give up.
+  let columnWidth: string | null = null;
+  if (sheet && pageHasColumns(sheet)) {
+    if (joinedColumnsOff(doc)) return null;
+    const headWidth = Number.parseFloat(style.width);
+    const tailWidth = Number.parseFloat(getComputedStyle(tail).width);
+    if (!(headWidth > 0) || !(Math.abs(headWidth - tailWidth) <= 0.5)) return null;
+    columnWidth = style.width;
   }
   const ancestors: HTMLElement[] = [];
   for (let element = head.parentElement; element !== root; element = element.parentElement) {
@@ -555,6 +576,16 @@ function withJoinedCopy<T>(head: HTMLElement, tail: HTMLElement, read: (copy: Jo
   const tailNodes = Array.from(tail.childNodes, (child) => child.cloneNode(true));
   copy.append(...tailNodes);
   const context = contextShell(root, task, ancestors);
+  if (columnWidth !== null) {
+    // One column at the pieces' width: the clone keeps its own box sizing,
+    // and no ancestor's columns or the projector's placement move it.
+    for (const [name, value] of [["width", columnWidth], ["min-width", "0"], ["max-width", "none"], ["position", "static"],
+      ["left", "auto"], ["top", "auto"], ["transform", "none"]] as const) copy.style.setProperty(name, value, "important");
+    for (let element: HTMLElement | null = context.slot; element && element !== task.context; element = element.parentElement) {
+      element.style.setProperty("column-count", "auto", "important");
+      element.style.setProperty("column-width", "auto", "important");
+    }
+  }
   context.slot.replaceChildren(
     ...[context.leading, copy, context.trailing].filter((node): node is HTMLElement => node !== null),
   );

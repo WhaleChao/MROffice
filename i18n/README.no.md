@@ -4,7 +4,7 @@
 
 <p align="center"><b>MR Offices redigeringsverktøy med åpen kildekode – dokumenter, regneark, presentasjoner, PDF, håndskrift og kode – i nettleseren.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/no"><b>▶ Prøv live-demoen – ingen installasjon</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Last ned MR Office fra Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/no"><b>▶ Prøv på nett</b></a> · <a href="https://mroffice.ai/no/office/download"><b>⬇ Last ned</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/no/developers">🧑‍💻 Utviklere</a> · <a href="https://mroffice.ai/no/developers/embed">🧩 Bygg inn</a> · <a href="https://mroffice.ai/no/developers/mcp">🤖 MCP for KI-apper</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/no/developers/oauth">🔑 Logg på med MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office er et arbeidsområde for notater, KI og ekte filer. Dette repositoriet publiserer kildekoden til redigeringsverktøyene: de samme som MR Office bruker, og som du selv kan bygge, kjøre og bygge inn. Dette er redigeringsverktøy med åpen kildekode, ikke en komplett kontorpakke med åpen kildekode: lesing og skriving av Microsoft Office-filer blir værende i MR Office (se nedenfor).
+
+## For utviklere
+
+Alt for utviklere finnes på **[MR Office Developers](https://mroffice.ai/no/developers)** — selvbetjening, ingen søknad: logg på med en hvilken som helst MR Office-konto og sett i gang.
+
+### Bygg inn redigeringsprogrammene i nettappen din (anbefalt)
+
+MR Office er vert for redigeringsprogrammene; serveren din signerer et kortlivet økttoken, og siden din åpner redigeringsprogrammet med det. Det redigerer ekte Word-, Excel-, PowerPoint- og PDF-filer (.docx, .xlsx, .pptx, .pdf), med samredigering, opplastinger, alle eksportformater, utskrift og lagringer som sendes til serveren din i en signert tilbakekalling. Gratisplan: 1 000 økter i måneden på localhost, 100 på dine egne domener, opptil 2 apper. Det er en vertsbasert kommersiell tjeneste, så din egen app er ikke bundet av AGPL-lisensen til dette depotet.
+
+1. Kjør `npx mroffice-embed init` i prosjektmappen (eller opprett en app i utviklerkonsollen): ett klikk på «Tillat» i nettleseren, så skrives appens nøkler til `.env.local` / `.env`.
+2. Serveren din lager et økttoken med `createSessionToken` fra `mroffice-embed/server`; den hemmelige nøkkelen forlater aldri serveren.
+3. Siden din åpner redigeringsprogrammet med `open()` fra `mroffice-embed` (eller skriptet `https://mroffice.ai/embed/v1/embed.js`).
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[Veiledning for innbygging](https://mroffice.ai/no/developers/embed) · [Veiledningen som Markdown (for KI-agenter)](https://mroffice.ai/developers/embed.md) · [Priser og grenser](https://mroffice.ai/no/developers/pricing) · [Utviklerkonsoll](https://mroffice.ai/no/developers/console) · [Live-demo](https://mroffice.ai/no/developers/embed/demo)
+
+### KI-apper: MCP-serveren
+
+KI-apper åpner, leser, redigerer og eksporterer dokumenter i det ekte MR Office-redigeringsprogrammet via MCP-serveren: koble til det vertsbaserte endepunktet `https://mcp.mroffice.ai/mcp` (logg på med MR Office-kontoen din, ingen nøkkel), eller kjør `npx -y mroffice-mcp` på din egen datamaskin. Kildekoden ligger i `apps/mcp`. [MCP-veiledning →](https://mroffice.ai/no/developers/mcp)
+
+### Logg på med MR Office (OAuth)
+
+MR Office er en OAuth 2.1-autorisasjonsserver (PKCE, metadatadokumenter for klient-ID, dynamisk registrering): appen din kan logge folk på med MR Office-kontoen deres og handle med tillatelsene de gir. [OAuth-veiledning →](https://mroffice.ai/no/developers/oauth)
+
+### Kjør redigeringsprogrammene med åpen kildekode selv
+
+De seks redigeringsprogrammene i dette depotet kan bygges inn i ditt eget produkt under AGPL-3.0: bruker andre en endret versjon over et nettverk, må du tilby dem den fullstendige kildekoden og beholde merkingen «MR Office» (NOTICE.md). De åpner egne formater, CSV, HTML, Markdown og PDF; Word-, Excel- og PowerPoint-filer er ikke med i redigeringsprogrammene med åpen kildekode (den vertsbaserte innbyggingen over har dem). En kommersiell lisens fås via support@mr-note.com. [Veiledning for åpen kildekode →](https://mroffice.ai/no/developers/open-source)
+
+npm-pakker forberedes under navnene `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` og `mroffice-code`; til de er publisert, bygger du redigeringsprogrammene fra dette depotet (se nedenfor).
 
 ## Redigeringsverktøyene
 
@@ -75,7 +119,7 @@ MR Offices skrivebordsapp er gratis, har disse redigeringsprogrammene og hele tj
 - Redigering av SmartArt
 - Lagre endringer i en PDF tilbake i filen
 
-**[Last ned MR Office fra Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller fra mroffice.ai](https://mroffice.ai)
+**[Last ned MR Office (gratis) →](https://mroffice.ai/no/office/download)**
 
 ### Word-, Excel-, PowerPoint- og PDF-filer
 

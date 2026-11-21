@@ -73,6 +73,13 @@ export interface DocsPiece {
    * the edge. Set by the page (bandTabLayout's kept line) or as the engine
    * fills the line from the paragraph's stops. */
   readonly overMargin?: boolean;
+  /** Text pieces: the run breaks between any two letters (`word-break:
+   * break-all`, Word's "Allow Latin text to wrap in the middle of a word"
+   * in compatibility mode 14 and later). */
+  readonly anywhere?: boolean;
+  /** A line break kept as text: its run's face, which sets a line of
+   * nothing else (Word sets a break's line by the rest of it). */
+  readonly breakFont?: EngineFont;
 }
 
 /** The page's kept line after a Word 2010 tab past the edge (bandTabLayout). */
@@ -200,6 +207,9 @@ export function docsHyphenationOff(): boolean {
 /** The soft hyphen the engine draws where it ends a line at an automatic
  * hyphenation point: no piece of the paragraph. */
 export const DOCS_ENGINE_HYPHEN_CLASS = "docs-engine-hyphen";
+/** The hyphen the engine draws at the end of a page cut's head that ends
+ * inside a hyphenated word: read as text, the last piece of its line. */
+export const DOCS_ENGINE_HEAD_HYPHEN_CLASS = "docs-engine-head-hyphen";
 
 /** The room line `line` of the paragraph has, CSS px. */
 export function docsLineWidth(paragraph: DocsParagraph, line: number): number {
@@ -493,6 +503,13 @@ export interface ReadDocsParagraphOptions {
    * `exact` holds "engine-formula" in its flags.
    */
   readonly formulaBox?: (ordinal: number, preview: HTMLElement) => DocsFormulaBox | null;
+  /**
+   * The element is the node drawn without the page's decorations (a hollow
+   * sheet's probe): its `word-break: break-all` is the attribute's, which a
+   * decoration may take back (an inert wordWrap off, Korean whole words), so
+   * its runs break at words as before.
+   */
+  readonly undecorated?: boolean;
 }
 
 /** An in-line formula's box: its width, its height and its depth below the
@@ -616,6 +633,7 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
     const spacePx = spaceMeasure.status === "ok" ? spaceMeasure.width + letterSpacing + wordSpacing : undefined;
     const fontPx = font.sizePx;
     const box = runBox(parent, runStyle);
+    const anywhere = runStyle.wordBreak === "break-all" && !options.undecorated && !engineBreakAllOff();
     // Tabs and line feeds are pieces of their own; the text between them is
     // measured run by run.
     let at = 0;
@@ -641,7 +659,7 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
         pushSoftHyphens();
         const isSpace = grapheme.text === " " || grapheme.text === " ";
         const advance = grapheme.advance + (grapheme.advance > 0 || !isZeroWidth(grapheme.text) ? letterSpacing : 0) + (isSpace ? wordSpacing : 0);
-        pieces.push({ kind: grapheme.text === " " ? "space" : "text", text: grapheme.text, advance, node, offset, fontPx, font, spacePx, letterSpacing, wordSpacing, ...(correction ? { correction } : {}), ...box });
+        pieces.push({ kind: grapheme.text === " " ? "space" : "text", text: grapheme.text, advance, node, offset, fontPx, font, spacePx, letterSpacing, wordSpacing, ...(correction ? { correction } : {}), ...(anywhere ? { anywhere } : {}), ...box });
         offset += grapheme.text.length;
       }
       pushSoftHyphens();
@@ -651,7 +669,7 @@ export function readDocsParagraph(element: HTMLElement, options: ReadDocsParagra
       const char = text[index];
       if (char === "\t" || char === "\n") {
         flush(index);
-        if (char === "\n") pieces.push({ kind: "break", text: "\n", advance: 0, node, offset: index });
+        if (char === "\n") pieces.push({ kind: "break", text: "\n", advance: 0, node, offset: index, ...(textBreakFontOff() ? {} : { breakFont: font }) });
         else if (unlaid && options.tabStops) {
           flags.add("tab");
           flags.add("tab-stops");
@@ -1100,6 +1118,23 @@ function docsTabAdvance(paragraph: DocsParagraph, tabs: DocsTabLayout, index: nu
  * fills a line. A paragraph read with its stops (`tabStops`) gets each tab's
  * advance here, from where its line has got to.
  */
+
+
+export function engineBreakAllOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsEngineBreakAllOff?: boolean }).__docsEngineBreakAllOff === true;
+}
+
+
+
+
+function textBreakFontOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsEngineBreakFontOff?: boolean }).__docsEngineBreakFontOff === true;
+}
+
+/** A letter or digit a `break-all` run may break beside (CSS Text 3: such a
+ * run's letters and numbers break as ideographs do). */
+const BREAK_ALL_LETTER = /^[\p{L}\p{N}]/u;
+
 /** Harness switch (`window.__docsSpaceBreakOff = true`): a space after a
  * character wider than its line hangs in every mode, as before (A/B). */
 function spaceBreakOff(): boolean {
@@ -1109,6 +1144,10 @@ function spaceBreakOff(): boolean {
 /** Harness switch (`window.__docsLastLetterHangOff = true`): the paragraph's
  * last line of one letter wider than the measure is drawn as it comes, and
  * the paragraph's closing widgets wrap under it (A/B). */
+function correctionPullUpOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsCorrectionPullUpOff?: boolean }).__docsCorrectionPullUpOff === true;
+}
+
 function lastLetterHangOff(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsLastLetterHangOff?: boolean }).__docsLastLetterHangOff === true;
 }
@@ -1155,7 +1194,13 @@ export function docsEngineLineStarts(paragraph: DocsParagraph, rules: DocsLayout
   // Opportunities over the visible sequence: zero-width atoms (editor
   // chrome) are transparent, an atom with width breaks on both sides as a
   // browser and Word break around an inline picture.
-  const texts = pieces.map((piece) => (piece.kind === "box" ? "￼" : piece.kind === "break" ? "\n" : piece.text));
+  // A letter of a break-all run is read as an ideograph, as the browser
+  // breaks it: between any two, but not before a closing mark or after an
+  // opening one (Windows Word, mode 14/15, print9/probes ww3: "xxx yyy..."
+  // cut at the margin). Where the page sets ideographs as letters the run
+  // keeps its words.
+  const texts = pieces.map((piece) => (piece.kind === "box" ? "￼" : piece.kind === "break" ? "\n"
+    : piece.anywhere && !rules.ideographsAsLetters && BREAK_ALL_LETTER.test(piece.text) ? "\u4e00" : piece.text));
   const visible: number[] = [];
   for (let index = 0; index < count; index += 1) {
     const piece = pieces[index];
@@ -1416,10 +1461,12 @@ function keepsWord(
 /** Word's room for automatic hyphenation in compatibility mode 15, px: the
  * word that does not fit is hyphenated only when moving it whole would leave
  * at least this much of a left-aligned line empty, whatever the document's
- * hyphenation zone (Windows Word, brk10/probes/hyph h2/h3: a quarter inch from
- * the end of the line's text, with zones of 0, 283, 425 and 1440 twips; 17.5
- * pt left the word whole, 18 pt broke it). A justified line has no such room. */
-const WORD_15_HYPHENATION_ROOM_PX = 24;
+ * hyphenation zone (Windows Word, brk10/probes/hyph h2/h3: zones of 0, 283,
+ * 425 and 1440 twips, 1 pt steps; brk12/probes/sq sq5, 0.1 pt steps: 17.6 pt,
+ * between 17.58 and 17.64, with Calibri and Times New Roman 11 and 4 to 28
+ * spaces on the line). A justified line weighs its spaces instead
+ * (justifiedHyphenCut). */
+const WORD_15_HYPHENATION_ROOM_PX = 17.6 * 4 / 3;
 /** The rooms above are met within this, px: Word's 17.98 pt broke a word
  * (brk11/probes/h5), its widths a hair from the served faces'. */
 const ROOM_TOLERANCE_PX = 0.05;
@@ -1504,6 +1551,13 @@ function hyphenCut(
     if (pieces[at].kind !== "break") natural += pieces[at].advance;
     through.push(natural);
   }
+  if (modern && justified && !justifiedHyphenChoiceOff()) {
+    const allowed = (at: number) => {
+      const kind = hyphenPointKind(paragraph, at);
+      return kind !== null && (kind === "soft" || (hyphenation !== undefined && (hyphenation.consecutiveLimit <= 0 || run < hyphenation.consecutiveLimit)));
+    };
+    return justifiedHyphenCut(pieces, lineStart, wordStart, end, lastTab, width, content, through, fit, allowed);
+  }
   for (let at = end - 2; at >= wordStart && at >= lineStart; at -= 1) {
     const kind = hyphenPointKind(paragraph, at);
     if (!kind || (kind === "auto" ? !autoAllowed : !softAllowed)) continue;
@@ -1516,6 +1570,84 @@ function hyphenCut(
     }
   }
   return -1;
+}
+
+/**
+ * Word's choice on a justified line in compatibility mode 15 when a word
+ * does not fit (and narrowing the spaces does not keep it whole): end the
+ * line at a hyphenation point, or move the word down. Windows Word weighs
+ * how far each choice moves the line's spaces, per point of space width
+ * (brk12/probes/sq sq2-sq4: Calibri 11 and 16, Arial 11, Times New Roman 11,
+ * 4 to 28 spaces before the word, 0.1 pt steps of the measure, 160 measured
+ * edges):
+ * - moving the word down stretches the line's inner spaces (those after its
+ *   last tab, up to the word, not the one before it) by r of their width;
+ * - ending at a point that fits stretches all of them by r', one that does
+ *   not fit narrows them by s (a quarter of a space each at most, as for a
+ *   whole word);
+ * - the choice costs r'^6 or (2s)^6, and a hyphen costs as much as stretching
+ *   the spaces by 0.4875 of their width: Word hyphenates only when moving the
+ *   word down would stretch them more than that ("es-" of "establishment"
+ *   after 16 and 28 spaces went down until moving it stretched them 0.4865 to
+ *   0.4880 of a space, whatever the font, the size or the stretch of the line
+ *   with the hyphen), and keeps an overflowing piece against an earlier point
+ *   while it narrows the spaces by at most half what the earlier point would
+ *   stretch them ("estab-" against "es-": 0.499 to 0.507 of it).
+ * These choose as Word did in 12,050 of 12,071 probe lines (the rest within a
+ * step of 0.1 pt of the edge; the earlier reading 8,609), and in all 228
+ * justified lines of optional hyphens (brk11/probes/h5; earlier 212).
+ * The piece the line ends after, or -1.
+ * `window.__docsJustifiedHyphenChoiceOff = true`: the earlier reading (no
+ * room needed, the piece's letters kept as a whole word is).
+ */
+function justifiedHyphenCut(
+  pieces: readonly DocsPiece[], lineStart: number, wordStart: number, end: number, lastTab: number, width: number, content: number,
+  through: readonly number[], fit: number, allowed: (at: number) => boolean,
+): number {
+  let from = Math.max(lineStart, lastTab + 1);
+  if (from === lineStart) while (from < wordStart && (pieces[from].kind === "space" || (pieces[from].kind === "box" && pieces[from].advance <= 0.01))) from += 1;
+  let inner = 0;
+  let pending = 0;
+  for (let at = from; at < wordStart; at += 1) {
+    const piece = pieces[at];
+    if (piece.kind === "space") { pending += piece.spacePx ?? piece.advance; continue; }
+    if (piece.kind === "box" && piece.advance <= 0.01) continue;
+    inner += pending;
+    pending = 0;
+  }
+  const all = inner + pending;
+  const room = width - content;
+  // A line of one word left behind stretches nothing: its word is broken.
+  const down = inner > 0 ? Math.max(0, room) / inner : Number.POSITIVE_INFINITY;
+  let best = -1;
+  let bestCost = Number.POSITIVE_INFINITY;
+  for (let at = end - 2; at >= wordStart && at >= lineStart; at -= 1) {
+    if (!allowed(at)) continue;
+    const over = through[at - lineStart]! + hyphenAdvance(pieces[at]) - width;
+    let cost: number;
+    if (over <= fit) {
+      cost = all > 0 ? (Math.max(0, -over) / all) ** JUSTIFY_BADNESS_POWER : 0;
+    } else {
+      if (!(all > 0) || over > all * WORD_JUSTIFY_SPACE_SHARE_OF_HYPHEN + fit) continue;
+      cost = (JUSTIFY_SHRINK_WEIGHT * over / all) ** JUSTIFY_BADNESS_POWER;
+    }
+    if (cost < bestCost) { best = at; bestCost = cost; }
+    // Earlier points stretch the line more than this one that fits.
+    if (over <= fit) break;
+  }
+  if (best < 0) return -1;
+  return bestCost + JUSTIFY_HYPHEN_COST <= down ** JUSTIFY_BADNESS_POWER ? best : -1;
+}
+
+const JUSTIFY_BADNESS_POWER = 6;
+const JUSTIFY_SHRINK_WEIGHT = 2;
+/** What a hyphen costs: the spaces stretched by 0.4875 of their width. */
+const JUSTIFY_HYPHEN_COST = 0.4875 ** JUSTIFY_BADNESS_POWER;
+/** At most a quarter of each space narrowed, for a piece as for a whole word. */
+const WORD_JUSTIFY_SPACE_SHARE_OF_HYPHEN = 0.25;
+
+function justifiedHyphenChoiceOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsJustifiedHyphenChoiceOff?: boolean }).__docsJustifiedHyphenChoiceOff === true;
 }
 
 /**
@@ -1894,6 +2026,9 @@ export function planDocsLineCorrections(
         needed = true;
       }
     }
+    /** The drawn width this line must reach for the browser to leave the
+     * next line's first word down, when it would pull that word up. */
+    let pullUpTo = 0;
     if (!needed && Math.abs(engine - browser) > SAME_WIDTH) {
       // Does the browser keep this line whole?
       if (browser > width + fit) needed = true;
@@ -1908,7 +2043,10 @@ export function planDocsLineCorrections(
           nextWidth += drawn[next];
           next += 1;
         }
-        if (browser + trailing + nextWidth <= width + fit) needed = true;
+        if (browser + trailing + nextWidth <= width + fit) {
+          needed = true;
+          if (!correctionPullUpOff()) pullUpTo = width + fit - trailing - nextWidth;
+        }
       }
     }
     if (!needed) continue;
@@ -1922,13 +2060,22 @@ export function planDocsLineCorrections(
     const rounding = docsLineItems(pieces, from, end, lastTab + 1) * LAYOUT_UNIT * Math.max(1, paragraph.unscale || 1);
     const slack = roundingSlack ? Math.max(CORRECTION_SLACK, rounding - Math.max(0, width - engine)) : CORRECTION_SLACK;
     const narrow = squeeze > 0 ? squeeze + slack : 0;
+    // A line the browser would pull the next word up to: drawn at the
+    // engine's width less the slack, a face the browser draws narrower than
+    // the engine measures it (an installed Calibri, CoreText's advances
+    // 0.14 % under the file's) still let the word up. Drawn instead past
+    // where the word fits, by the slack, while the line itself still fits
+    // with it: corpus R366-D13, "...to detect adrenal" (Word, 468.04 pt with
+    // "insufficiency" in 468) drawn 623.77 px of 624 with the word.
+    // `window.__docsCorrectionPullUpOff = true`: as before.
+    const target = pullUpTo > 0 ? Math.min(Math.max(engine - slack, pullUpTo + slack), width - slack) : engine - slack;
     // Word justifies the line a tab left: its spaces take up the room.
     const room = tabOpensNext ? Math.max(0, width - engine) : 0;
     const stretches = room > 0 && spaces > 0 && paragraph.align === "justify";
     out.push({
       from,
       to: end,
-      letterSpacing: (engine - browser - (narrow > 0 && spaces ? 0 : narrow + slack)) / graphemes,
+      letterSpacing: (narrow > 0 ? engine - browser - (spaces ? 0 : narrow + slack) : target - browser) / graphemes,
       wordSpacing: narrow > 0 && spaces ? -narrow / spaces : stretches ? room / spaces : 0,
       spacesFrom: lastTab + 1,
       tabBreak: tabOpensNext || spaceOpensNext || modelBreak ? to : null,

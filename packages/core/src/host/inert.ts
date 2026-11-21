@@ -115,10 +115,13 @@ export function inertFunction(label: string, returns: ReturnKind = "unknown"): (
 }
 
 const FLAG_MEMBER = /^(is|has|can|should|was|did|will|needs|show|allow)[A-Z]|(Owned|Enabled|Active|Open|Visible|Ready|Pending|Busy|Loading|Available|Allowed)$|^(runOwned|stayLocal|following|loading|pending|active|enabled|visible|open|ready|busy|dirty|available|supported|known|writable|connected|online)$/;
+/** A live collaboration object (a room's Yjs awareness): absent without MR
+ * Note's rooms, so an editor's `?? null` sees none and nobody else online. */
+const ABSENT_MEMBER = /[aA]wareness$/;
 const ACTION_MEMBER = /^(on[A-Z]|set[A-Z]|open[A-Z]?|close|start|stop|toggle|refresh|reload|request|dispatch|register|unregister|subscribe|clear|reset|apply|update|run|save|cancel|dismiss|hide|focus|track|notify|emit|send|load|fetch|retry)/;
 
-/** What a stand-in hook returns: flags read false, actions do nothing, and
- * anything else is inert. One object per hook, so its identity is stable. */
+/** What a stand-in hook returns: flags read false, actions do nothing, a
+ * room's awareness is null, and anything else is inert. One object per hook, so its identity is stable. */
 function inertHookResult(label: string): any {
   const members = new Map<string, unknown>();
   return new Proxy(
@@ -130,7 +133,7 @@ function inertHookResult(label: string): any {
         if (!members.has(key)) {
           members.set(
             key,
-            FLAG_MEMBER.test(key) ? false : ACTION_MEMBER.test(key) ? () => undefined : inertValue(`${label}().${key}`),
+            ABSENT_MEMBER.test(key) ? null : FLAG_MEMBER.test(key) ? false : ACTION_MEMBER.test(key) ? () => undefined : inertValue(`${label}().${key}`),
           );
         }
         return members.get(key);

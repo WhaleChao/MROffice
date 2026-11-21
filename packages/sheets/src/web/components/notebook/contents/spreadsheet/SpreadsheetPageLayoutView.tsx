@@ -7,7 +7,7 @@
  */
 import { OFFICE_TITLE_THICK_GAP_DOTS } from "../../../../lib/spreadsheet/office-wrapped-bottom";
 import { PX_PER_PT, pxToPt } from "@mrnote/core/web/lib/office-units.ts";
-import { OFFICE_PRINT_IDENTITY, officePrintedDrawingFrame, type OfficePrintScale } from "../../../../lib/spreadsheet/office-print-metrics";
+import { OFFICE_PRINT_IDENTITY, officePrintedDrawingFrame, officePrintedDrawingReach, type OfficePrintScale } from "../../../../lib/spreadsheet/office-print-metrics";
 import { PRINT_DOT_PT, PRINTED_DIAGONAL_VARIABLE, PRINTED_GRID_FRAME_PT, PRINTED_GRID_INSET_PT, isPrintedDiagonal, printedBorderLine, printedDiagonalEdges, printedDiagonalStroke, printedGridOffset, printedLeftEdgeFloor, printedBorderLineOfVariable, printedEdgeStrokes, printedEdgeVariable, type PrintedEdge } from "../../../../lib/spreadsheet/printed-cell-borders";
 import { officeObjectKeyAction } from "@mrnote/core/web/lib/office-object-nudge.ts";
 import { isMacPlatform } from "@mrnote/core/web/lib/mac-platform.ts";
@@ -1527,7 +1527,7 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
       ? { ...(rowHeights ?? {}), [keyboardResize.index]: keyboardResize.size }
       : rowHeights;
   const laidOutGeometry = resolveSpreadsheetPageLayoutGeometry({
-    drawingBounds: drawings.map((drawing) => drawing[1]),
+    drawingBounds: drawings.map((drawing) => officePrintedDrawingReach(drawing[1], drawing[4]?.printAnchor, printScale)),
     totalRows: rowCount,
     nativeGridDpi: nativeTextDpi,
     nativeDigitWidth,
@@ -2532,18 +2532,18 @@ export default function SpreadsheetPageLayoutView(pageLayoutProps: SpreadsheetPa
           const ownColumns = page.cols.every((value, index) => index === 0 || value === page.cols[index - 1] + 1);
           // The page's columns holding a value in its rows (asked once a run
           // reaches the page).
-          let pageHeldColumns: Set<number> | null = null;
+          // (Past the page's last column too: a run carried on reaches them.)
+          const pageHeldColumns = new Map<number, boolean>();
           const pageColumnHolds = (col: number) => {
-            if (!pageHeldColumns) {
-              pageHeldColumns = new Set();
-              for (const pageCol of page.cols) {
-                if (page.rows.some((pageRow) => {
-                  const held = sourceRowAt(pageRow);
-                  return cellHoldsValue ? cellHoldsValue(held, pageCol) : Boolean(getCellDisplay(held, pageCol));
-                })) pageHeldColumns.add(pageCol);
-              }
+            let held = pageHeldColumns.get(col);
+            if (held === undefined) {
+              held = page.rows.some((pageRow) => {
+                const sourceRow = sourceRowAt(pageRow);
+                return cellHoldsValue ? cellHoldsValue(sourceRow, col) : Boolean(getCellDisplay(sourceRow, col));
+              });
+              pageHeldColumns.set(col, held);
             }
-            return pageHeldColumns.has(col);
+            return held;
           };
           // File > Print's unclipped texts (unclippedTexts) print in a layer
           // of their own over the grid, cut by the paper alone: not by the

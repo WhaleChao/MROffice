@@ -111,6 +111,14 @@ function appendFootnoteZone(
     maxHeight: "none",
     overflow: "visible",
   });
+  // Measured one column wide (below): the zone's own CSS columns would set
+  // the rows in columns of that column, read off the sheet's --note-columns
+  // its clone carries. A 4-line note of a two-column page (look22 probe
+  // fn-f6b, Word: 2 + 2 lines) measured 5 lines in quarter-page columns and
+  // the page's zone a row taller than it draws: every column of the page
+  // held a line less than Word's. `window.__docsNoteMeasureColumnsOff = true`
+  // measures as before (A/B).
+  if (!noteMeasureColumnsOff()) zone.style.columnCount = "auto";
   // A page of newspaper columns sets its notes in those columns (Word's
   // "Columns: Match section layout"): each row is measured at a column's
   // width, and the page's zone balances them (projectedFootZonesPx).
@@ -146,6 +154,11 @@ function appendFootnoteZone(
   }
   container.appendChild(zone);
   return { zone, rows };
+}
+
+function noteMeasureColumnsOff(): boolean {
+  return typeof window !== "undefined" &&
+    (window as Window & { __docsNoteMeasureColumnsOff?: boolean }).__docsNoteMeasureColumnsOff === true;
 }
 
 function readFootnoteZone({ zone, rows }: PendingFootnoteZone): {

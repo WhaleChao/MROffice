@@ -52,7 +52,28 @@ export interface PrintPdfOptions {
   readonly name?: string;
 }
 
+/**
+ * An embedded editor's hold on its prints (lib/embed/print-guard): whether
+ * this session may print, and the watermark a printed PDF must carry.
+ */
+interface EmbedPrintHook {
+  allowed(): boolean;
+  prepare(pdf: Blob): Promise<Blob>;
+}
+
 export function printPdfBlob(blob: Blob, options: PrintPdfOptions = {}): Promise<PrintPdfOutcome> {
+  const hook = (globalThis as Record<string, unknown>).__mroEmbedPrintHook as EmbedPrintHook | undefined;
+  if (hook) {
+    if (!hook.allowed()) return Promise.resolve("blocked");
+    return hook.prepare(blob).then(
+      (prepared) => printPdfBlobNow(prepared, options),
+      () => "blocked" as const,
+    );
+  }
+  return printPdfBlobNow(blob, options);
+}
+
+function printPdfBlobNow(blob: Blob, options: PrintPdfOptions): Promise<PrintPdfOutcome> {
   releaseActiveFrame();
   const pdf =
     blob.type === "application/pdf"

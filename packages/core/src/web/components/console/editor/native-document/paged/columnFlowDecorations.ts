@@ -19,6 +19,7 @@ import { Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 import { COLUMN_GAP_PX, resolveColumnSeparator, resolveColumns } from "../documentLayout";
+import { normalizeWordDocumentSettings, resolveWordPageBox, type WordDocumentSettings } from "../wordDocumentSettings";
 import {
   SECTION_NATIVE_PAGE_BORDER_ATTR,
   SECTION_UNEQUAL_COLUMN_SEPARATOR_ATTR,
@@ -27,6 +28,7 @@ import {
   normalizeSectionLayouts,
   sectionLayoutPageBorderCss,
   sectionLayoutColumnTracksToken,
+  type SectionLayout,
 } from "../sectionLayouts";
 import {
   COLUMN_REGIONS_ATTR,
@@ -204,6 +206,26 @@ export function leadingSpaceKeptPt(
   return { pos: opening.pos, nodeSize: first.nodeSize, pt: Math.max(0, own - after) };
 }
 
+/**
+ * A column region's own side margins against the sheet's (the margins of the
+ * section the page starts in), as `@<left>,<right>` twips more; "" when the
+ * same. Word lays each section of a page out between its own left and right
+ * margins, a continuous one too: R351-D09's two-column section (right margin
+ * 758 twips) under a single-column one (560) on page 1 has columns of 4971
+ * twips in Word's PDF; drawn in the sheet's margins they were 5070, and each
+ * line held a word more. `window.__docsRegionMarginsOff = true`: the sheet's
+ * margins for every region, as before.
+ */
+function regionMarginsSuffix(region: SectionLayout, sheet: SectionLayout, settings: WordDocumentSettings | null, pageIndex: number): string {
+  if (typeof window !== "undefined" && (window as Window & { __docsRegionMarginsOff?: boolean }).__docsRegionMarginsOff === true) return "";
+  if (region === sheet) return "";
+  const own = resolveWordPageBox(region, settings, pageIndex);
+  const base = resolveWordPageBox(sheet, settings, pageIndex);
+  const left = Math.max(0, Math.round(own.leftTwips)) - Math.max(0, Math.round(base.leftTwips));
+  const right = Math.max(0, Math.round(own.rightTwips)) - Math.max(0, Math.round(base.rightTwips));
+  return left || right ? `@${left},${right}` : "";
+}
+
 /** Build only selectors whose presence is known from durable document attrs. */
 export function buildColumnFlowDecorations(
   doc: PmNode,
@@ -238,6 +260,7 @@ export function buildColumnFlowDecorations(
   let sectionIndex = 0;
   let pageIndexInSection = 0;
   const decorations: Decoration[] = [];
+  const wordSettings = normalizeWordDocumentSettings((doc.attrs as Record<string, unknown>).wordSettings);
 
   pages.forEach((page, pageIndex) => {
     const layout = layouts?.[sectionIndex] ?? null;
@@ -255,7 +278,9 @@ export function buildColumnFlowDecorations(
       regionLayouts.length === page.innerBreaks + 1 &&
       regionLayouts.some((region) => region.columns.count > 1) &&
       new Set(regionLayouts.map((region) => sectionLayoutColumnTracksToken(region) ?? "1")).size > 1
-        ? regionLayouts.map((region) => sectionLayoutColumnTracksToken(region) ?? "1").join("|")
+        // (Which pages are region pages is decided by the columns alone, as before.)
+        ? regionLayouts.map((region) => (sectionLayoutColumnTracksToken(region) ?? "1") +
+          regionMarginsSuffix(region, regionLayouts[0]!, wordSettings, pageIndex)).join("|")
         : null;
     const columnCount = regionsToken ? 1 : (layout?.columns.count ?? globalColumnCount);
     const attrs: Record<string, string> = {};

@@ -41,7 +41,7 @@ import { calculationPivotsFromResults } from "@mrnote/core/web/lib/spreadsheet/c
 import { type PivotOutputLabels } from "@mrnote/core/web/lib/spreadsheet/pivot-output.ts";
 import { localFilterDateToday, type FilterDateToday } from "@mrnote/core/web/lib/spreadsheet/date-filter-tree.ts";
 import { parseA1Range } from "@mrnote/core/web/lib/spreadsheet/print-settings.ts";
-import { normalizeRules as normalizeConditionalRules } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
+import { normalizePastPageRules, normalizeRules as normalizeConditionalRules, type ConditionalFormatRule } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
 import { applySheetViewFilters, sheetViewRowOrder, type SpreadsheetSheetViewFilterState, type SpreadsheetSheetViewSortState } from "../../../../lib/spreadsheet/sheet-views";
 import { type SheetModel } from "./spreadsheetSheetModel";
 import { MAX_SHEET_COLS, MAX_SHEET_ROWS } from "./spreadsheetGridConstants";
@@ -62,6 +62,27 @@ export function resolveCellChartValue(
   return typeof value === "number" && Number.isFinite(value) ? String(value) : formatCellValue(value);
 }
 
+/**
+ * Each sheet's rules past the ones its page lists (by sheet id), from the raw
+ * content's read-only `conditionalFormatsPastPage` (the API reads them from
+ * the saved file for a print it makes, spreadsheet_cf_overflow), clamped to
+ * the normalized sheet's grid; empty for every page the editor holds.
+ */
+export function spreadsheetPastPageRules(content: Record<string, unknown>, sheets: readonly SheetModel[]): Map<string, ConditionalFormatRule[]> {
+  const out = new Map<string, ConditionalFormatRule[]>();
+  const raw = Array.isArray(content["sheets"]) ? content["sheets"] as unknown[] : [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as { id?: unknown; conditionalFormatsPastPage?: unknown };
+    if (!Array.isArray(record.conditionalFormatsPastPage) || record.conditionalFormatsPastPage.length === 0) continue;
+    const sheet = sheets.find((candidate) => candidate.id === record.id);
+    if (!sheet) continue;
+    const rules = normalizePastPageRules(record.conditionalFormatsPastPage, { maxRow: sheet.rowCount - 1, maxCol: sheet.columnCount - 1 });
+    if (rules.length) out.set(sheet.id, rules);
+  }
+  return out;
+}
+
 /** What the saved workbook's PDF view reads from the calculation: every
  * formula result, and the conditional-format rule formulas its colour
  * filters read (C2). */
@@ -73,20 +94,32 @@ export async function spreadsheetPdfExportValues(savedContent: Record<string, un
   /** A print no window makes reads every result (its derived cells do: a
    * PivotTable's source, a spill, a formula's number format), answered by
    * `request` (the engine host's own calculation on the server). */
-  options?: { readonly always?: boolean; readonly request?: WorkbookAnswerRequest }): Promise<SpreadsheetPdfValues | null> {
+  options?: {
+    readonly always?: boolean; readonly request?: WorkbookAnswerRequest;
+    /** A server-only print's own bound on the rule formulas it asks (the
+     * engine answers them in one call on one workbook); the protocol's
+     * MAX_CALCULATION_RULES / MAX_CALCULATION_RULE_CELLS without. */
+    readonly ruleBounds?: { readonly requests: number; readonly cells: number };
+  }): Promise<SpreadsheetPdfValues | null> {
   const sheets = normalizeSheets(savedContent);
+  const pastPage = spreadsheetPastPageRules(savedContent, sheets);
   const filtered = sheets.some(sheet => Object.keys(sheet.filters ?? {}).length || Object.keys(sheet.colorFilters ?? {}).length ||
     Object.keys(sheet.conditionFilters ?? {}).length || sheet.dataTables?.some(table => Object.keys(table.columnFilters ?? {}).length));
   // A colour filter over a formula rule's colour reads the rule's answer,
   // and so does the PDF's own paint of a formula rule or a formula stop
   // (the grid reads the calculation's answer for them, never evaluating).
-  const sheetRules = sheets.map(sheet => normalizeConditionalRules(sheet.conditionalFormats, { maxRow: sheet.rowCount - 1, maxCol: sheet.columnCount - 1 }));
+  // A sheet's rules past the ones its page lists follow its own, lowest in
+  // priority: a bound cuts them first.
+  const sheetRules = sheets.map(sheet => [
+    ...normalizeConditionalRules(sheet.conditionalFormats, { maxRow: sheet.rowCount - 1, maxCol: sheet.columnCount - 1 }),
+    ...(pastPage.get(sheet.id) ?? []),
+  ]);
   const formulaPainted = sheetRules.map(rules => rules.some(rule => conditionalRuleFormulas(rule).length > 0));
   if (!filtered && !sorted && !formulaPainted.some(Boolean) && !options?.always) return null;
   const rules = sheets.flatMap((sheet, index) => formulaPainted[index] || Object.keys(sheet.colorFilters ?? {}).length ||
       sheet.dataTables?.some(table => Object.keys(table.columnFilters ?? {}).length)
-    ? calculationRuleRequests(sheet, sheetRules[index]) : [])
-    .slice(0, MAX_CALCULATION_RULES);
+    ? calculationRuleRequests(sheet, sheetRules[index], [], [], options?.ruleBounds) : [])
+    .slice(0, options?.ruleBounds?.requests ?? MAX_CALCULATION_RULES);
   const settled = await fetchSettledWorkbook({ sheets, dateSystem: savedContent["dateSystem"] }, view, rules, options?.request).catch(() => null);
   return settled ? { results: settled.results, rules: ruleAnswersOf({ rules, ruleValues: settled.ruleValues ?? new Map() }) } : null;
 }

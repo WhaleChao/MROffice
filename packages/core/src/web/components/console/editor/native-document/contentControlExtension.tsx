@@ -10,7 +10,7 @@ import { SheetFact } from "../../../../lib/editor/sheet-facts";
 import { Mark, Node, Extension, mergeAttributes } from "@tiptap/core";
 import { Plugin, PluginKey, TextSelection, type Transaction } from "@tiptap/pm/state";
 import { findWrapping } from "@tiptap/pm/transform";
-import { isDocumentFormsProtected, unprotectedFormSections } from "./documentProtection";
+import { effectiveDocumentProtection, isDocumentFormsProtected, unprotectedFormSections } from "./documentProtection";
 import { legacyFormFieldEnabled, legacyFormFieldFillOnly } from "./legacyFormFields";
 import {
   AddMarkStep,
@@ -2228,7 +2228,7 @@ export const DocumentContentControls = Extension.create<ContentControlOptions>({
           // only a content control's contents change; every edit outside one
           // is refused, as Word keeps the insertion point in the fields.
           if (
-            isDocumentFormsProtected(state.doc.attrs?.documentProtection) &&
+            isDocumentFormsProtected(effectiveDocumentProtection(state.doc.attrs?.documentProtection)) &&
             !isTrustedReadOnlyDocumentMutation(tr) &&
             tr.getMeta("history$") === undefined &&
             !editsOnlyInsideControls(tr)

@@ -856,7 +856,38 @@ export function spreadsheetChartLiveFromStoredCells(
   const kind = spreadsheetChartCollectionKind(chart);
   const type = normalizeSpreadsheetChartType(spreadsheetChartFlatKind(chart));
   if (type === "camera" || chart.pivotSource) return null;
-  const cellOf = (owner: SpreadsheetChartStoredSheet, row: number, col: number) => owner.cells[`${row}:${col}`];
+  // A legacy array formula's other cells hold no result on the page (only
+  // its first cell does): a chart reading them reads nothing it can trust, and
+  // its cached data stands (R427-X05: Grafik!C10:C55 read as one point).
+  let unread = false;
+  const membersByOwner = new Map<SpreadsheetChartStoredSheet, Set<string>>();
+  const arrayMembers = (owner: SpreadsheetChartStoredSheet): Set<string> => {
+    let members = membersByOwner.get(owner);
+    if (members) return members;
+    members = new Set<string>();
+    for (const [key, cell] of Object.entries(owner.cells)) {
+      const ref = (cell as { arrayRef?: unknown } | undefined)?.arrayRef;
+      const area = typeof ref === "string" ? storedArrayArea(ref) : null;
+      if (!area || (area.r2 - area.r1 + 1) * (area.c2 - area.c1 + 1) > 100_000) continue;
+      for (let r = area.r1; r <= area.r2; r += 1) {
+        for (let c = area.c1; c <= area.c2; c += 1) {
+          if (`${r}:${c}` !== key) members.add(`${r}:${c}`);
+        }
+      }
+    }
+    membersByOwner.set(owner, members);
+    return members;
+  };
+  const cellOf = (owner: SpreadsheetChartStoredSheet, row: number, col: number) => {
+    const cell = owner.cells[`${row}:${col}`];
+    if (
+      (!cell || (!cell.formula && String(cell.value ?? "") === "" && cell.chartValueCache === undefined)) &&
+      arrayMembers(owner).has(`${row}:${col}`)
+    ) {
+      unread = true;
+    }
+    return cell;
+  };
   const display = (owner: SpreadsheetChartStoredSheet) => (row: number, col: number): string => {
     const cell = cellOf(owner, row, col);
     if (!cell) return "";
@@ -889,6 +920,7 @@ export function spreadsheetChartLiveFromStoredCells(
       : [];
     const rows = record.range ? buildChartSeries({ ...record, type }, display(source), numeric(source)) : [];
     const headerRow = nativeChartHeaderRow(record);
+    if (unread) return null;
     return { rows, xySeries, ...(headerRow !== undefined ? { headerRow } : {}) };
   }
   const refs = normalizeChartSeriesRefs(chart.seriesRefs);
@@ -917,7 +949,21 @@ export function spreadsheetChartLiveFromStoredCells(
     dateCategories: spreadsheetChartHasDateAxis(chart),
   });
   const xySeries = buildChartXYSeriesFromRefs(refs, type, source.name, display(source), numeric(source), workbook);
+  if (unread) return null;
   return { rows, xySeries, headerRow: rows.length > 0 ? true : undefined };
+}
+
+/** A stored `arrayRef` ("C10:C55", "C10") as zero-based bounds, or null. */
+function storedArrayArea(ref: string): { r1: number; c1: number; r2: number; c2: number } | null {
+  const match = /^\$?([A-Z]{1,3})\$?(\d{1,7})(?::\$?([A-Z]{1,3})\$?(\d{1,7}))?$/.exec(ref.trim().toUpperCase());
+  if (!match) return null;
+  const column = (letters: string) => [...letters].reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0) - 1;
+  const c1 = column(match[1]!);
+  const r1 = Number(match[2]) - 1;
+  const c2 = match[3] ? column(match[3]) : c1;
+  const r2 = match[4] ? Number(match[4]) - 1 : r1;
+  if (r1 < 0 || r2 < r1 || c2 < c1) return null;
+  return { r1, c1, r2, c2 };
 }
 
 /**

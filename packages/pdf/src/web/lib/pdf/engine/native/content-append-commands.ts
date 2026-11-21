@@ -403,6 +403,14 @@ export function readContent(value: unknown): PdfNativeContentAppendContent {
   return invalid("Content append content kind is invalid.");
 }
 
+/** The block a removal names beside its span (its `like`). */
+function readRemovedBlock(value: unknown): string {
+  if (typeof value !== "string" || !value || value.length > 400_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+    invalid("Content removal block is invalid.");
+  }
+  return value;
+}
+
 export function readPdfNativeContentAppendPayload(
   value: unknown,
 ): PdfNativeContentAppendPayload {
@@ -426,6 +434,7 @@ export function readPdfNativeContentAppendPayload(
       direction: "remove" as const,
       appendKind: exactKind(request.appendKind),
       span: readSpan(request.span),
+      ...(request.like === undefined ? {} : { like: readRemovedBlock(request.like) }),
     });
   } else if (request.direction === "append" && "blockBase64" in request) {
     if (typeof request.blockBase64 !== "string" || !request.blockBase64) {

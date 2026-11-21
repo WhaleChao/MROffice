@@ -4,7 +4,7 @@
 
 <p align="center"><b>MR Offices redigerare med öppen källkod – dokument, kalkylblad, presentationer, PDF, handskrift och kod – i webbläsaren.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/sv"><b>▶ Prova livedemon – ingen installation</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Ladda ned MR Office från Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/sv"><b>▶ Prova online</b></a> · <a href="https://mroffice.ai/sv/office/download"><b>⬇ Ladda ned</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/sv/developers">🧑‍💻 Utvecklare</a> · <a href="https://mroffice.ai/sv/developers/embed">🧩 Bädda in</a> · <a href="https://mroffice.ai/sv/developers/mcp">🤖 MCP för AI-appar</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/sv/developers/oauth">🔑 Logga in med MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office är en arbetsyta för anteckningar, AI och riktiga filer. Det här arkivet publicerar källkoden till dess redigerare: samma redigerare som MR Office använder, som du själv kan bygga, köra och bädda in. Det är redigerare med öppen källkod, inte ett komplett kontorspaket med öppen källkod: läsning och skrivning av Microsoft Office-filer finns kvar i MR Office (se nedan).
+
+## För utvecklare
+
+Allt för utvecklare finns på **[MR Office Developers](https://mroffice.ai/sv/developers)** — självbetjäning, ingen ansökan: logga in med valfritt MR Office-konto och börja.
+
+### Bädda in redigerarna i din webbapp (rekommenderas)
+
+MR Office är värd för redigerarna; din server signerar en kortlivad sessionstoken och din sida öppnar redigeraren med den. Den redigerar riktiga Word-, Excel-, PowerPoint- och PDF-filer (.docx, .xlsx, .pptx, .pdf), med samredigering, uppladdningar, alla exportformat, utskrift och sparningar som skickas till din server i ett signerat callback. Gratisplan: 1 000 sessioner i månaden på localhost, 100 på dina egna domäner, upp till 2 appar. Det är en hostad kommersiell tjänst, så din egen app är inte bunden av detta förråds AGPL-licens.
+
+1. Kör `npx mroffice-embed init` i projektets mapp (eller skapa en app i utvecklarkonsolen): ett klick på "Tillåt" i webbläsaren, så skrivs appens nycklar till `.env.local` / `.env`.
+2. Din server skapar en sessionstoken med `createSessionToken` från `mroffice-embed/server`; den hemliga nyckeln lämnar aldrig servern.
+3. Din sida öppnar redigeraren med `open()` från `mroffice-embed` (eller skriptet `https://mroffice.ai/embed/v1/embed.js`).
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[Guide för inbäddning](https://mroffice.ai/sv/developers/embed) · [Guiden som Markdown (för AI-agenter)](https://mroffice.ai/developers/embed.md) · [Priser och gränser](https://mroffice.ai/sv/developers/pricing) · [Utvecklarkonsol](https://mroffice.ai/sv/developers/console) · [Livedemo](https://mroffice.ai/sv/developers/embed/demo)
+
+### AI-appar: MCP-servern
+
+AI-appar öppnar, läser, redigerar och exporterar dokument i den riktiga MR Office-redigeraren via dess MCP-server: anslut den hostade slutpunkten `https://mcp.mroffice.ai/mcp` (logga in med ditt MR Office-konto, ingen nyckel) eller kör `npx -y mroffice-mcp` på din egen dator. Källkoden finns i `apps/mcp`. [MCP-guide →](https://mroffice.ai/sv/developers/mcp)
+
+### Logga in med MR Office (OAuth)
+
+MR Office är en OAuth 2.1-auktoriseringsserver (PKCE, metadatadokument för klient-ID, dynamisk registrering): din app kan logga in personer med deras MR Office-konto och agera med de behörigheter de tillåter. [OAuth-guide →](https://mroffice.ai/sv/developers/oauth)
+
+### Kör redigerarna med öppen källkod själv
+
+De sex redigerarna i detta förråd kan byggas in i din egen produkt under AGPL-3.0: om andra använder en ändrad version över ett nätverk måste du erbjuda dem dess fullständiga källkod och behålla angivelsen "MR Office" (NOTICE.md). De öppnar sina egna format, CSV, HTML, Markdown och PDF; Word-, Excel- och PowerPoint-filer ingår inte i redigerarna med öppen källkod (den hostade inbäddningen ovan har dem). En kommersiell licens finns via support@mr-note.com. [Guide för öppen källkod →](https://mroffice.ai/sv/developers/open-source)
+
+npm-paket förbereds under namnen `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` och `mroffice-code`; tills de är publicerade bygger du redigerarna från detta förråd (se nedan).
 
 ## Redigerarna
 
@@ -75,7 +119,7 @@ MR Offices skrivbordsapp är kostnadsfri, innehåller de här redigerarna och he
 - Redigering av SmartArt
 - Spara ändringar i en PDF tillbaka i filen
 
-**[Ladda ned MR Office från Releases →](https://github.com/XinaTian/MROffice/releases)** · [eller från mroffice.ai](https://mroffice.ai)
+**[Ladda ned MR Office (gratis) →](https://mroffice.ai/sv/office/download)**
 
 ### Word-, Excel-, PowerPoint- och PDF-filer
 

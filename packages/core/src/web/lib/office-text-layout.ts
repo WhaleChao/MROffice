@@ -514,16 +514,66 @@ export function officeTextBodyInsetsPx(body?: OfficeTextBodyProperties): {
 
 
 
-export function officeAnchorCenterShift(lineRights: readonly number[], width: number): number {
-  const rights = lineRights.filter((right) => Number.isFinite(right));
-  if (!rights.length || !(width > 0)) return 0;
-  const right = Math.max(...rights);
-  return right < width ? (width - right) / 2 : 0;
+
+
+
+
+
+
+
+
+export function officeAnchorCenterShift(
+  lines: readonly (readonly [left: number, right: number])[],
+  width: number,
+): number {
+  let left = Infinity;
+  let right = -Infinity;
+  for (const [l, r] of lines) {
+    if (!Number.isFinite(l) || !Number.isFinite(r)) continue;
+    left = Math.min(left, l);
+    right = Math.max(right, r);
+  }
+  if (!(right > -Infinity) || !(width > 0) || right - left >= width) return 0;
+  return (width - right - left) / 2;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function officeAnchorCenterLineExtents(
+  paragraphs: readonly {
+    readonly lines: readonly { readonly inkLeft: number; readonly inkRight: number }[];
+    readonly marker?: { readonly x: number; readonly width: number };
+  }[],
+  inputs: readonly { readonly marginLeftPt: number; readonly marginRightPt: number; readonly indentPt: number }[],
+): [left: number, right: number][] {
+  const lines: [number, number][] = [];
+  paragraphs.forEach((paragraph, index) => {
+    const input = inputs[index];
+    const marL = input?.marginLeftPt ?? 0;
+    const marR = input?.marginRightPt ?? 0;
+    const firstStart = Math.max(0, marL + (input?.indentPt ?? 0));
+    paragraph.lines.forEach((line, lineIndex) => {
+      if (!(line.inkRight > line.inkLeft)) return;
+      lines.push([line.inkLeft - (lineIndex === 0 ? firstStart : marL), line.inkRight + marR]);
+    });
+    if (paragraph.marker) lines.push([paragraph.marker.x - firstStart, paragraph.marker.x + paragraph.marker.width + marR]);
+  });
+  return lines;
 }
 
 /**
  * {@link officeAnchorCenterShift} for a body the browser laid out: the
- * right edges of its drawn text, read off the layout in `element`'s own
+ * extents of its drawn text, read off the layout in `element`'s own
  * (untransformed) CSS pixels, whatever scale the canvas is drawn at.
  */
 export function measuredOfficeAnchorCenterShift(element: HTMLElement): number {
@@ -536,16 +586,16 @@ export function measuredOfficeAnchorCenterShift(element: HTMLElement): number {
   const doc = element.ownerDocument;
   const walker = doc.createTreeWalker(element, NodeFilter.SHOW_TEXT);
   const range = doc.createRange();
-  const rights: number[] = [];
+  const lines: [number, number][] = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     if (!(node.textContent ?? "").trim()) continue;
     range.selectNodeContents(node);
     for (const rect of Array.from(range.getClientRects())) {
-      if (rect.width > 0 && rect.height > 0) rights.push((rect.right - box.left) / scale);
+      if (rect.width > 0 && rect.height > 0) lines.push([(rect.left - box.left) / scale, (rect.right - box.left) / scale]);
     }
   }
   range.detach?.();
-  return officeAnchorCenterShift(rights, width);
+  return officeAnchorCenterShift(lines, width);
 }
 
 export function officeAnchorCenterBoundsCss(anchorCtr: boolean): CSSProperties {

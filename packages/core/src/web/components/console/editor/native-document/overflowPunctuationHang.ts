@@ -33,6 +33,7 @@ import { BULK_FILL_CHUNK_META } from "./bulkFillTransaction";
 import { INLINE_FORMULA_TYPESET_EVENT, PAGED_BULK_FILL_ATTR } from "./documentLayoutStatus";
 import { releaseFreshRange } from "./paged/measurementRange";
 import { mergedRanges, touchedTextblockRanges } from "./touchedTextblocks";
+import { blockDomLocator, type BlockDomLocator } from "./blockDomLocator";
 
 const overflowPunctuationHangKey = new PluginKey<HangState>("overflowPunctuationHang");
 const META = "overflowPunctuationHang";
@@ -71,10 +72,12 @@ interface Hang {
   widthPx: number;
 }
 
-function charBox(view: EditorView, pos: number): Box | null {
+function charBox(view: EditorView, pos: number, locate?: BlockDomLocator): Box | null {
   try {
-    const start = view.domAtPos(pos, 1);
-    const end = view.domAtPos(pos + 1, -1);
+    // `locate`: the block's own positions (blockDomLocator), the answers of
+    // view.domAtPos without walking every run before them.
+    const start = locate ? locate(pos, 1) : view.domAtPos(pos, 1);
+    const end = locate ? locate(pos + 1, -1) : view.domAtPos(pos + 1, -1);
     // A fresh Range per character. Reused across the plugin's measures
     // (measurementRange), the book's forced whole pass ended on 365 or 366
     // pages from run to run, against
@@ -177,6 +180,7 @@ function formulaCarriedDown(
   formula: number,
   before: number | null,
   contentRight: number,
+  locate?: BlockDomLocator,
 ): boolean {
   const pieces = formulaPieces(view, formula);
   const last = pieces?.[pieces.length - 1];
@@ -190,7 +194,7 @@ function formulaCarriedDown(
     if (sameRow(previous, last) || previous.bottom > last.top + 1) return false;
     lineAboveEnds = previous.right;
   } else {
-    const above = before === null ? null : before >= 0 ? charBox(view, before) : null;
+    const above = before === null ? null : before >= 0 ? charBox(view, before, locate) : null;
     if (!above || sameRow(above, last) || above.bottom > last.top + 1) return false;
     lineAboveEnds = above.right;
   }
@@ -223,6 +227,7 @@ function measureBlock(
   const atoms: number[] = [];
   const texts: string[] = [];
   const chars = characterPositions(node, pos, atoms, texts);
+  const locate = blockDomLocator(view, element, pos, node.content.size);
   const out: Hang[] = [];
   const eastAsianMarks = !eastAsianHangOff() && wordEastAsianLineRulesApply(view.state.doc.attrs, node) &&
     !wordSetsIdeographsAsLetters(view.state.doc.attrs);
@@ -230,11 +235,11 @@ function measureBlock(
     const at = chars[index];
     if (at < 0 || !(HANGING.has(texts[index]!) || (eastAsianMarks && EAST_ASIAN_HANGING.has(texts[index]!) &&
       (FULL_WIDTH.test(texts[index]!) || KINSOKU_EAST_ASIAN.test(texts[index - 1] ?? ""))))) continue;
-    const mark = charBox(view, at);
+    const mark = charBox(view, at, locate);
     if (!mark) continue;
     const width = mark.right - mark.left;
     if (!(width > 0)) continue;
-    const next = index + 1 < chars.length && chars[index + 1] >= 0 ? charBox(view, chars[index + 1]) : null;
+    const next = index + 1 < chars.length && chars[index + 1] >= 0 ? charBox(view, chars[index + 1], locate) : null;
     const endsRow = !next || !sameRow(next, mark);
     if (current.has(at)) {
       // Already hanging: kept while it still ends its line past the edge.
@@ -247,14 +252,14 @@ function measureBlock(
     const above = index >= 2 ? chars[index - 2] : -1;
     if (before < 0) {
       const formula = atoms[index - 1];
-      if (formula !== undefined && formulaCarriedDown(view, mark, formula, index >= 2 ? above : null, contentRight)) {
+      if (formula !== undefined && formulaCarriedDown(view, mark, formula, index >= 2 ? above : null, contentRight, locate)) {
         out.push({ pos: at, widthPx: width });
       }
       continue;
     }
     if (above < 0) continue;
-    const beforeBox = charBox(view, before);
-    const aboveBox = charBox(view, above);
+    const beforeBox = charBox(view, before, locate);
+    const aboveBox = charBox(view, above, locate);
     if (!beforeBox || !aboveBox || !sameRow(beforeBox, mark) || sameRow(aboveBox, beforeBox)) continue;
     if (aboveBox.bottom > beforeBox.top + 1) continue;
     const room = contentRight - aboveBox.right;

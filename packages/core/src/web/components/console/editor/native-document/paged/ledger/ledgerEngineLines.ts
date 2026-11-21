@@ -170,6 +170,36 @@ export function noteEngineTailLines(
 }
 
 /**
+ * The lines of a block's head cut from `whole` where one of its lines starts
+ * (`offset`, in the whole's content): the whole's lines before there, with
+ * the head's own padding and borders. Held against the page as any block's
+ * lines are. False when the whole's lines do not start there.
+ */
+export function noteEngineHeadLines(
+  head: PmNode,
+  whole: PmNode,
+  offset: number,
+  rule: DocsLineRule,
+  chrome: { readonly top: number; readonly bottom: number },
+): boolean {
+  const block = blocks.get(whole);
+  if (!block) return false;
+  const end = block.lines.findIndex((line) => line.offset === offset);
+  if (end <= 0) return false;
+  const lines = block.lines.slice(0, end);
+  const chromePx = Math.max(0, chrome.top) + Math.max(0, chrome.bottom);
+  blocks.set(head, {
+    heightPx: lines.reduce((sum, line) => sum + line.heightPx, 0) + chromePx,
+    chromed: chromePx > 0.01,
+    lineCount: lines.length,
+    kind: `${head.type.name}:${rule.kind}:${lines.length === 1 ? "one" : "many"}`,
+    lines,
+    state: "new",
+  });
+  return true;
+}
+
+/**
  * The block's height for the ledger. `sheetKey` names what its width comes
  * from: an agreement holds while that, the document's attributes and the
  * faces stay as they were.
@@ -204,6 +234,15 @@ export function engineBlockHeightPx(
     block.docAttrs = docAttrs;
     block.epoch = epoch;
     if (count) count.agreed += 1;
+    // Agreed, it is the engine's from this reading on, as it is on every
+    // later one: the browser draws Word's exact lines rounded to 1/64 px
+    // (13.7988 pt as 18.40625 px), and a block first read in a pass -- a
+    // fragment a cut just made -- was charged so while the blocks around it
+    // were charged exact. Corpus R441-D03 p6: the last paragraph's head was
+    // charged 2 x 18.406 and its third line (18.398) missed the 18.389 px
+    // left; Word sets three lines there. `window.__docsLedgerAgreedDrawn =
+    // true` charges the drawn height on that first reading, as before (A/B).
+    if (!agreedDrawn(win)) return charged();
   } else {
     block.state = "page";
     if (count) count.differed[block.kind] = (count.differed[block.kind] ?? 0) + 1;
@@ -226,6 +265,10 @@ function noteDifference(win: Window | null | undefined, node: PmNode, block: Eng
     text: node.textContent.slice(0, 48),
     attrs: { lineHeight: node.attrs.lineHeight ?? null, rule: node.attrs.lineHeightRule ?? null },
   });
+}
+
+function agreedDrawn(win: Window | null | undefined): boolean {
+  return (win as (Window & { __docsLedgerAgreedDrawn?: boolean }) | null | undefined)?.__docsLedgerAgreedDrawn === true;
 }
 
 /** The block's line count, when its height agreed with the page. */
@@ -365,7 +408,7 @@ export function unlaidEngineBlock(
   if (element.closest(outside) || (inside === "cell" && element.closest("li"))) unlaidReasons.set(node, "inside a list or table");
   else {
     const formulaBox = blockFormulaBoxes(node, engineFormulas);
-    const paragraph = readDocsParagraph(element, { columnWidthPx, approximateTabs: true, approximateFonts: true, ...paragraphTabStops(node, inside, around), ...(formulaBox ? { formulaBox } : {}) });
+    const paragraph = readDocsParagraph(element, { columnWidthPx, approximateTabs: true, approximateFonts: true, ...paragraphTabStops(node, inside, around), ...(formulaBox ? { formulaBox } : {}), ...(probe ? { undecorated: true } : {}) });
     if (paragraph.unsupported) unlaidReasons.set(node, paragraph.unsupported);
     else if (paragraph.pending) unlaidReasons.set(node, "face loading");
     // An empty paragraph is one line of its own font (its mark's), as Word

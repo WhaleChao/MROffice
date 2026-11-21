@@ -4,7 +4,7 @@
 
 <p align="center"><b>De opensource-editors van MR Office — documenten, spreadsheets, presentaties, pdf, handschrift en code — in de browser.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/nl"><b>▶ Probeer de live demo – zonder installatie</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ MR Office downloaden via Releases</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/nl"><b>▶ Online proberen</b></a> · <a href="https://mroffice.ai/nl/office/download"><b>⬇ Downloaden</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/nl/developers">🧑‍💻 Ontwikkelaars</a> · <a href="https://mroffice.ai/nl/developers/embed">🧩 Insluiten</a> · <a href="https://mroffice.ai/nl/developers/mcp">🤖 MCP voor AI-apps</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/nl/developers/oauth">🔑 Inloggen met MR Office</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office is een werkruimte voor notities, AI en echte bestanden. Deze repository publiceert de broncode van de editors: dezelfde editors die MR Office gebruikt, die je zelf kunt bouwen, draaien en insluiten. Het zijn opensource-editors, geen volledige opensource-kantoorsuite: het lezen en schrijven van Microsoft Office-bestanden blijft in MR Office (zie hieronder).
+
+## Voor ontwikkelaars
+
+Alles voor ontwikkelaars staat op **[MR Office Developers](https://mroffice.ai/nl/developers)** — selfservice, geen aanvraag: log in met een willekeurig MR Office-account en begin.
+
+### De editors in je webapp insluiten (aanbevolen)
+
+MR Office host de editors; je server ondertekent een kortlevend sessietoken en je pagina opent daarmee de editor. Hij bewerkt echte Word-, Excel-, PowerPoint- en PDF-bestanden (.docx, .xlsx, .pptx, .pdf), met samen bewerken, uploads, alle exportformaten, afdrukken en opgeslagen versies die via een ondertekende callback naar je server gaan. Gratis abonnement: 1.000 sessies per maand op localhost, 100 op je eigen domeinen, tot 2 apps. Het is een gehoste commerciële dienst, dus je eigen app valt niet onder de AGPL-licentie van deze repository.
+
+1. Voer in de map van je project `npx mroffice-embed init` uit (of maak een app in de ontwikkelaarsconsole): één klik op "Toestaan" in de browser en de sleutels van de app staan in `.env.local` / `.env`.
+2. Je server maakt een sessietoken met `createSessionToken` uit `mroffice-embed/server`; de geheime sleutel verlaat de server nooit.
+3. Je pagina opent de editor met `open()` uit `mroffice-embed` (of het script `https://mroffice.ai/embed/v1/embed.js`).
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[Insluitgids](https://mroffice.ai/nl/developers/embed) · [De gids als Markdown (voor AI-agents)](https://mroffice.ai/developers/embed.md) · [Prijzen en limieten](https://mroffice.ai/nl/developers/pricing) · [Ontwikkelaarsconsole](https://mroffice.ai/nl/developers/console) · [Live demo](https://mroffice.ai/nl/developers/embed/demo)
+
+### AI-apps: de MCP-server
+
+AI-apps openen, lezen, bewerken en exporteren documenten in de echte MR Office-editor via de MCP-server: verbind het gehoste eindpunt `https://mcp.mroffice.ai/mcp` (inloggen met je MR Office-account, geen sleutel) of voer `npx -y mroffice-mcp` uit op je eigen computer. De broncode staat in `apps/mcp`. [MCP-gids →](https://mroffice.ai/nl/developers/mcp)
+
+### Inloggen met MR Office (OAuth)
+
+MR Office is een OAuth 2.1-autorisatieserver (PKCE, client-ID-metadatadocumenten, dynamische registratie): je app kan mensen laten inloggen met hun MR Office-account en handelen met de scopes die zij toestaan. [OAuth-gids →](https://mroffice.ai/nl/developers/oauth)
+
+### De open-source editors zelf hosten
+
+De zes editors in deze repository kun je onder de AGPL-3.0 in je eigen product opnemen: gebruiken mensen een gewijzigde versie via een netwerk, dan moet je hun de volledige broncode aanbieden en de vermelding "MR Office" (NOTICE.md) behouden. Ze openen hun eigen formaten, CSV, HTML, Markdown en PDF; Word-, Excel- en PowerPoint-bestanden horen niet bij de open-source editors (de gehoste insluiting hierboven wel). Een commerciële licentie is verkrijgbaar via support@mr-note.com. [Open-sourcegids →](https://mroffice.ai/nl/developers/open-source)
+
+Er worden npm-pakketten voorbereid onder de namen `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` en `mroffice-code`; tot ze gepubliceerd zijn, bouw je de editors uit deze repository (zie hieronder).
 
 ## De editors
 
@@ -75,7 +119,7 @@ De desktop-app van MR Office is gratis, bevat deze editors en de volledige diens
 - SmartArt bewerken
 - Bewerkingen van een pdf terugschrijven in het bestand
 
-**[MR Office downloaden via Releases →](https://github.com/XinaTian/MROffice/releases)** · [of via mroffice.ai](https://mroffice.ai)
+**[MR Office downloaden (gratis) →](https://mroffice.ai/nl/office/download)**
 
 ### Word-, Excel-, PowerPoint- en pdf-bestanden
 

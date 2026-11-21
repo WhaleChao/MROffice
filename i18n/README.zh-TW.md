@@ -4,7 +4,7 @@
 
 <p align="center"><b>MR Office 的開源編輯器：文件、試算表、簡報、PDF、手寫和程式碼，全部在瀏覽器中執行。</b></p>
 
-<p align="center"><a href="https://mroffice.ai/zh-TW"><b>▶ 線上試用，無需安裝</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ 從 Releases 下載 MR Office</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/zh-TW"><b>▶ 線上試用</b></a> · <a href="https://mroffice.ai/zh-TW/office/download"><b>⬇ 下載</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/zh-TW/developers">🧑‍💻 開發人員</a> · <a href="https://mroffice.ai/zh-TW/developers/embed">🧩 嵌入</a> · <a href="https://mroffice.ai/zh-TW/developers/mcp">🤖 AI 應用程式的 MCP</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm SDK</a> · <a href="https://mroffice.ai/zh-TW/developers/oauth">🔑 使用 MR Office 登入</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office 是一個結合筆記、AI 與真實檔案的工作空間。本儲存庫公開它的編輯器原始碼：與 MR Office 中執行的是同一套編輯器，你可以自行建置、執行與嵌入。這是開源編輯器，不是一套完整開源的 Office 套件：Microsoft Office 檔案的讀寫由 MR Office 提供（見下文）。
+
+## 開發人員
+
+開發人員需要的一切都在 **[MR Office Developers](https://mroffice.ai/zh-TW/developers)**——自助開通，無需申請：用任何 MR Office 帳號登入即可開始。
+
+### 把編輯器嵌入你的網頁應用程式（建議）
+
+編輯器由 MR Office 託管；你的伺服器簽發短期工作階段權杖，你的網頁用它開啟編輯器。它編輯真正的 Word、Excel、PowerPoint 和 PDF 檔案（.docx、.xlsx、.pptx、.pdf），支援多人共同編輯、上傳、所有匯出格式、列印，並透過簽署的回呼把儲存的檔案交回你的伺服器。免費：本機開發每月 1,000 次，正式網域每月 100 次，最多 2 個應用程式。這是託管的商業服務，你自己的應用程式不受本儲存庫 AGPL 授權約束。
+
+1. 在你的專案資料夾執行 `npx mroffice-embed init`（或在開發人員主控台建立應用程式）：在瀏覽器按一次「允許」，應用程式的金鑰就會寫入 `.env.local` / `.env`。
+2. 你的伺服器用 `mroffice-embed/server` 的 `createSessionToken` 簽發工作階段權杖；秘密金鑰只留在伺服器上。
+3. 你的網頁用 `mroffice-embed` 的 `open()` 開啟編輯器（或用指令碼 `https://mroffice.ai/embed/v1/embed.js`）。
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[嵌入指南](https://mroffice.ai/zh-TW/developers/embed) · [Markdown 版指南（給 AI 程式設計助理）](https://mroffice.ai/developers/embed.md) · [價格與限制](https://mroffice.ai/zh-TW/developers/pricing) · [開發人員主控台](https://mroffice.ai/zh-TW/developers/console) · [線上展示](https://mroffice.ai/zh-TW/developers/embed/demo)
+
+### AI 應用程式：MCP 伺服器
+
+AI 應用程式可透過 MCP 伺服器在真正的 MR Office 編輯器中開啟、讀取、編輯和匯出文件：連線到託管端點 `https://mcp.mroffice.ai/mcp`（用 MR Office 帳號登入，不需金鑰），或在自己的電腦執行 `npx -y mroffice-mcp`。原始碼在 `apps/mcp`。 [MCP 指南 →](https://mroffice.ai/zh-TW/developers/mcp)
+
+### 使用 MR Office 帳號登入（OAuth）
+
+MR Office 是 OAuth 2.1 授權伺服器（PKCE、用戶端 ID 中繼資料文件、動態註冊）：你的應用程式可以讓使用者用 MR Office 帳號登入，並在其允許的範圍內操作。 [OAuth 指南 →](https://mroffice.ai/zh-TW/developers/oauth)
+
+### 自行架設開放原始碼編輯器
+
+本儲存庫的六個編輯器可依 AGPL-3.0 整合到你自己的產品：若他人透過網路使用你修改過的版本，你必須提供完整原始碼，並保留「MR Office」標示（NOTICE.md）。它們開啟自有格式、CSV、HTML、Markdown 和 PDF；Word、Excel 和 PowerPoint 檔案不在開放原始碼編輯器中（上面的託管嵌入有支援）。商業授權請洽 support@mr-note.com。 [開放原始碼指南 →](https://mroffice.ai/zh-TW/developers/open-source)
+
+npm 套件正在準備中，名稱為 `mroffice-core`、`mroffice-docs`、`mroffice-sheets`、`mroffice-slides`、`mroffice-pdf`、`mroffice-ink` 和 `mroffice-code`；發布之前，請從本儲存庫建置編輯器（見下文）。
 
 ## 編輯器一覽
 
@@ -75,7 +119,7 @@ MR Office 桌面版免費，包含這些編輯器和完整服務，在你自己�
 - SmartArt 編輯
 - PDF 編輯後寫回檔案
 
-**[從 Releases 下載 MR Office →](https://github.com/XinaTian/MROffice/releases)** · [或前往 mroffice.ai](https://mroffice.ai)
+**[下載 MR Office（免費） →](https://mroffice.ai/zh-TW/office/download)**
 
 ### Word、Excel、PowerPoint 和 PDF 檔案
 

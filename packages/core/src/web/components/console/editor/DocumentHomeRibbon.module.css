@@ -51,31 +51,33 @@
   min-height: 34px;
 }
 
+/* Word blue, unless an embedded editor's white-label theme names its own
+   accent (lib/embed/frame-theme: --embed-accent*, set only there). */
 .docsRibbon.docsRibbon :global(.note-editor-ribbon-tab:hover) {
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--embed-accent-strong, #1d4ed8);
+  background: var(--embed-accent-soft, #eff6ff);
 }
 
 .docsRibbon.docsRibbon :global(.note-editor-ribbon-tab:focus-visible) {
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--embed-accent-strong, #1d4ed8);
+  background: var(--embed-accent-soft, #eff6ff);
 }
 
 .docsRibbon.docsRibbon :global(.note-editor-ribbon-tab:focus-visible) {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--embed-accent, #2563eb);
   outline-offset: -2px;
 }
 
 .docsRibbon.docsRibbon :global(.note-editor-ribbon-tab--active) {
-  color: #2563eb;
+  color: var(--embed-accent, #2563eb);
 }
 
 .docsRibbon.docsRibbon :global(.note-editor-ribbon-scroll) {
-  color: #2563eb;
+  color: var(--embed-accent, #2563eb);
 }
 
 .docsRibbon.docsRibbon :global(.note-editor-ribbon-tab--active::after) {
-  background: #2563eb;
+  background: var(--embed-accent, #2563eb);
 }
 
 /* Contextual tabs take the shared tint (styles/note-editor.css,

@@ -224,15 +224,31 @@ export function parseTocStyleLevelSpec(spec: string): TocStyleLevel[] {
 }
 
 /**
+ * The instruction as Word reads its switches: a token outside quotes written
+ * with two backslashes (`\\h`, `\\o "1-3"`) is no switch at all (Word truth:
+ * `TOC \\o "1-3" \\h \\t "Page,1" \\f "a"` builds what a bare `TOC` builds;
+ * corpus R483-D08). Kept in step with `word_switch_text` in
+ * document_docx_toc_field.py.
+ */
+export function wordSwitchText(instruction: string): string {
+  if (!instruction.includes("\\\\")) return instruction;
+  const tokens = instruction.match(/"(?:\\.|[^"\\])*"|\S+/g) ?? [];
+  const kept = tokens.filter((token) => token.startsWith('"') || !token.startsWith("\\\\"));
+  return ` ${kept.join(" ")} `;
+}
+
+/**
  * The settings a Word `TOC` instruction spells (ECMA-376 17.16.5.68), for
  * every importer to read the same way. `null` for a `TOC \c` table of figures
  * or anything that is not a TOC field. Word writes `\o "1-3"`; an instruction
  * with no `\o` and no `\t` builds from headings 1-9.
  */
 export function tocSettingsFromInstruction(
-  instruction: string,
+  written: string,
 ): Omit<TocSettings, "tabLeader" | "format" | "title"> | null {
-  if (!/^\s*TOC\b/i.test(instruction) || /\\c\s+"/i.test(instruction)) return null;
+  if (!/^\s*TOC\b/i.test(written)) return null;
+  const instruction = wordSwitchText(written);
+  if (/\\c\s+"/i.test(instruction)) return null;
   const preserved: string[] = [];
   for (const match of instruction.matchAll(
     /\\([a-z])(?:\s+("[^"]*"|[^\s"\\]+))?/gi,

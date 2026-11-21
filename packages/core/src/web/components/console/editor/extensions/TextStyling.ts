@@ -36,6 +36,7 @@ import {
   type Step,
 } from "@tiptap/pm/transform";
 import { touchedTextblocks } from "../native-document/touchedTextblocks";
+import { defaultParagraphStyleId, paragraphStyleRunLook } from "../native-document/joinedParagraphStyleRuns";
 import Strike from "@tiptap/extension-strike";
 import { normalizeOfficeFontFace, parseOfficeFontFace, officeFontFaceStyle, type OfficeFontFace, type OfficeFontAsset } from "../../../office-ribbon/officeFontFace";
 import { retainOfficeFontAssets } from "../../../office-ribbon/officeFontAssets";
@@ -907,6 +908,58 @@ function selectionHasTextStyleMark(
   return selection.ranges.some((range) =>
     state.doc.rangeHasMark(range.$from.pos, range.$to.pos, markType),
   );
+}
+
+/**
+ * Clear Formatting in an imported Word document takes off the runs' direct
+ * formatting and leaves what their paragraph style gives (Word: the text
+ * "goes back to the style's formatting"). The page states the style's face,
+ * size and colour on each imported run as marks, so taking every mark off
+ * drew the words in the editor's default face and colour while the file, and
+ * Word, kept the style's (corpus R485-D87 WALK1: a Heading 2 of the style's
+ * Calibri blue drew black). The style's face, size and colour go back on the
+ * cleared words (``paragraphStyleRunLook``), and a heading's words say again
+ * that their bold is the style's.
+ */
+function restoreImportedStyleRunLook(tr: Transaction, state: EditorState): void {
+  const docAttrs = state.doc.attrs as Record<string, unknown>;
+  if (!docAttrs.styleDefinitions || state.selection.empty) return;
+  const { fontFamily, fontSize, textColor, bold } = state.schema.marks;
+  const blocks = new Set(["paragraph", "heading"]);
+  const looks = new Map<string, ReturnType<typeof paragraphStyleRunLook>>();
+  const adds: Array<{ from: number; to: number; mark: ProseMirrorMark }> = [];
+  for (const range of state.selection.ranges) {
+    const from = range.$from.pos;
+    const to = range.$to.pos;
+    state.doc.nodesBetween(from, to, (node, pos) => {
+      if (!blocks.has(node.type.name)) return true;
+      const own = typeof node.attrs.docxStyleId === "string" && node.attrs.docxStyleId ? node.attrs.docxStyleId : null;
+      const styleId = own ?? defaultParagraphStyleId(docAttrs);
+      if (!styleId) return false;
+      if (!looks.has(styleId)) looks.set(styleId, paragraphStyleRunLook(docAttrs, styleId));
+      const look = looks.get(styleId);
+      if (!look) return false;
+      node.descendants((child, offset) => {
+        if (!child.isText) return true;
+        const start = Math.max(from, pos + 1 + offset);
+        const end = Math.min(to, pos + 1 + offset + child.nodeSize);
+        if (start >= end) return false;
+        if (fontFamily && typeof look.family === "string") {
+          adds.push({ from: start, to: end, mark: fontFamily.create({ family: `"${look.family}"` }) });
+        }
+        if (fontSize && look.sizePt) {
+          adds.push({ from: start, to: end, mark: fontSize.create({ size: `${Math.round(((look.sizePt * 4) / 3) * 10000) / 10000}px` }) });
+        }
+        if (textColor && look.color) adds.push({ from: start, to: end, mark: textColor.create({ color: look.color }) });
+        // An imported heading's runs say "bold as the style has it" (the
+        // import's bold of value null), which is what cleared words are.
+        if (bold && node.type.name === "heading") adds.push({ from: start, to: end, mark: bold.create({ value: null }) });
+        return false;
+      });
+      return false;
+    });
+  }
+  for (const { from, to, mark } of adds) tr.addMark(from, to, mark);
 }
 
 function clearSelectedParagraphPresentation(
@@ -2325,6 +2378,43 @@ const WORD_COMPLEX_SCALES: Readonly<Record<string, Readonly<Partial<Record<"arab
   "times new roman": { hebrew: 0.796 },
 };
 
+/** Word's face for Hebrew or Arabic in a face without them: Times New Roman
+ * behind a serif face, Courier New behind a monospace one, Arial behind any
+ * other (docx-look/probes/cjk15 b1, Windows Word, a run's face installed and
+ * lacking Arabic: Georgia, Cambria, Book Antiqua, Garamond, SimSun, Batang,
+ * Comic Sans MS, Gabriola, Segoe Print -> Times New Roman; Malgun Gothic,
+ * Yu Gothic, Microsoft YaHei, Verdana, Candara, Century Gothic, Impact ->
+ * Arial; Consolas -> Courier New). */
+function wordComplexFallbackKey(key: string): "times new roman" | "arial" | null {
+  if (/mono|consol|courier|menlo|monaco|lucida console/i.test(key)) return null;
+  return SERIF_LATIN_FACE_RE.test(key) && !/sans/i.test(key) ? "times new roman" : "arial";
+}
+const WORD_COMPLEX_FALLBACK_FACES = { "times new roman": "Times New Roman", arial: "Arial" } as const;
+/** Arial's Arabic alone: the core stylesheet's family of the Arabic blocks
+ * in Arial's metric-clone part (then the installed Arial), which presentations
+ * draw a missing complex-script face's words in (sync-office-fonts.mjs
+ * MISSING_SCRIPT_FAMILY, presentation-font-face-reads.ts). */
+const WORD_ARIAL_ARABIC_FAMILY = "MRAI Missing Script Arial";
+
+/**
+ * The face Word sets a run's Hebrew or Arabic in when the run's face (the
+ * stack's first) has none: Times New Roman, Arial or Courier New, which the
+ * line then takes its box from. Null for a face with its own (a face of the
+ * script, Arial, Times New Roman, Calibri, Tahoma, Segoe UI, a generic).
+ * Corpus R458-D53: Jameel Noori Nastaleeq, which Word lacks, set in its font
+ * table's altName Malgun Gothic -- its Urdu in Arial, every line Arial's
+ * 16.1 pt at 14 pt, where Malgun Gothic's East Asian line is 21 pt.
+ */
+export function wordComplexScriptFallbackFace(stack: string | null | undefined): string | null {
+  const tokens = stack ? stack.split(",").map((token) => token.trim()).filter(Boolean) : [];
+  const first = tokens.length ? unquotedFontFamilyToken(tokens[runFaceIndex(tokens)]!).trim() : "";
+  if (!first || TERMINAL_GENERIC_FAMILIES.has(first.toLowerCase()) || OWN_COMPLEX_SCRIPT_FACE_RE.test(first)) return null;
+  const key = first.toLowerCase();
+  if (OWN_COMPLEX_SCALE_FACES.has(key)) return null;
+  const as = wordComplexFallbackKey(key);
+  return as ? WORD_COMPLEX_FALLBACK_FACES[as] : "Courier New";
+}
+
 /**
  * Hebrew, Arabic and Bengali at Windows Word's widths, right behind the
  * run's face (ahead of its stand-ins and every other fallback): the letters
@@ -2341,19 +2431,46 @@ const WORD_COMPLEX_SCALES: Readonly<Record<string, Readonly<Partial<Record<"arab
 function withWordComplexScriptWidths(tokens: string[]): string[] {
   if (typeof window !== "undefined" &&
     (window as Window & {__docsWordComplexWidthsOff?: boolean}).__docsWordComplexWidthsOff === true) return tokens;
-  const first = tokens[0] ? unquotedFontFamilyToken(tokens[0]).trim() : "";
+  const at = runFaceIndex(tokens);
+  const first = at < tokens.length ? unquotedFontFamilyToken(tokens[at]!).trim() : "";
   if (!first || TERMINAL_GENERIC_FAMILIES.has(first.toLowerCase()) || OWN_COMPLEX_SCRIPT_FACE_RE.test(first)) return tokens;
   if (tokens.some((token) => unquotedFontFamilyToken(token).startsWith(OFFICE_COMPLEX_SCALE_PREFIX))) return tokens;
   const key = first.toLowerCase();
-  const as = OWN_COMPLEX_SCALE_FACES.has(key)
-    ? key
-    : /mono|consol|courier|menlo|monaco|lucida console/i.test(key)
-      ? null
-      : SERIF_LATIN_FACE_RE.test(key) && !/sans/i.test(key) ? "times new roman" : "arial";
+  const as = OWN_COMPLEX_SCALE_FACES.has(key) ? key : wordComplexFallbackKey(key);
   if (!as) return tokens;
   const families = officeComplexScaleStack(as, { ownScriptParts: false, scales: WORD_COMPLEX_SCALES[as] })
     .split(",").map((token) => token.trim()).filter(Boolean);
-  return families.length ? [tokens[0]!, ...families, ...tokens.slice(1)] : tokens;
+  // Arial's Arabic is Office's own advances (the metric-clone part behind
+  // WORD_ARIAL_ARABIC_FAMILY, Arabic blocks only), ahead of Excel's
+  // printed scale of Noto Sans Arabic, which sets Word's text 6 % narrow
+  // (corpus R458-D53, Urdu Word lays at Arial's hmtx).
+  // `window.__docsWordArialArabicPartOff = true`: the scale alone (A/B).
+  const arialArabic = as === "arial" && !(typeof window !== "undefined" &&
+    (window as Window & {__docsWordArialArabicPartOff?: boolean}).__docsWordArialArabicPartOff === true)
+    ? [`"${WORD_ARIAL_ARABIC_FAMILY}"`] : [];
+  const added = [...arialArabic, ...families];
+  return added.length ? [...tokens.slice(0, at + 1), ...added, ...tokens.slice(at + 1)] : tokens;
+}
+
+/** The run's own face in a display stack: past the Hangul full-em faces the
+ * stack leads with for a Korean Office family (`withHangulEmFaces`). */
+function runFaceIndex(tokens: readonly string[]): number {
+  let at = 0;
+  while (at < tokens.length - 1 && /^MRAI-Metric-Hangul-/i.test(unquotedFontFamilyToken(tokens[at]!))) at += 1;
+  return at;
+}
+
+/**
+ * A family Word lacks, drawn in its picks (documentDisplayFonts): its Hebrew
+ * and Arabic in the face Word sets them in behind the first pick, as a run
+ * of that face has them (`withThaiScriptFallback`). Corpus R458-D53: Urdu in
+ * Jameel Noori Nastaleeq, drawn in its altName Malgun Gothic, which has no
+ * Arabic -- Word's PDF sets it in Arial; the page fell to the reader's
+ * system Arabic (Geeza Pro, 9 % wider). Display only.
+ */
+export function withWordComplexScriptFallback(stack: string | null): string | null {
+  if (!stack) return stack;
+  return withWordComplexScriptWidths(stack.split(",").map((token) => token.trim()).filter(Boolean)).join(", ");
 }
 
 /**
@@ -4470,6 +4587,7 @@ const TextStyling = Extension.create({
           applyPlannedKerningThresholdChange(tr, state, kerningPlan);
           applyFontSizeToMathNodes(tr, state, null);
           clearSelectedParagraphPresentation(tr, state);
+          restoreImportedStyleRunLook(tr, state);
 
           if (!tr.docChanged && !tr.storedMarksSet) {
             tr.setMeta("preventDispatch", true);

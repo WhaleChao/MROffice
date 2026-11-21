@@ -475,11 +475,23 @@ export function presentationCustomPathArcEnd(
 export function presentationCustomPathToSvgPath(value: unknown): string | null {
   const path = normalizePresentationCustomPath(value);
   if (!path) return null;
+  return presentationCustomPathCommandsToSvgPath(path.commands, path.closed);
+}
+
+/**
+ * The SVG path data of commands an already-normalized envelope holds -- the
+ * whole of one, or the commands of ONE of its painted paths
+ * (`lib/office-custom-path-paints`), which need not be an envelope alone.
+ */
+export function presentationCustomPathCommandsToSvgPath(
+  commands: readonly PresentationCustomPathCommand[],
+  closed: boolean,
+): string {
   // An arc starts where the pen is, and a `close` puts the pen back at the
   // figure's first point, so drawing needs the position the commands imply.
   let pen: PresentationCustomPathPoint = { x: 0, y: 0 };
   let figureStart: PresentationCustomPathPoint = pen;
-  const d = path.commands
+  const d = commands
     .map((command) => {
       if (command.type === "close") {
         pen = figureStart;
@@ -511,7 +523,7 @@ export function presentationCustomPathToSvgPath(value: unknown): string | null {
       return `C${formatGrid(command.x1)} ${formatGrid(command.y1)} ${formatGrid(command.x2)} ${formatGrid(command.y2)} ${formatGrid(command.x)} ${formatGrid(command.y)}`;
     })
     .join(" ");
-  return path.closed ? `${d} Z` : d;
+  return closed ? `${d} Z` : d;
 }
 
 export function presentationCustomPathToLegacyPoints(

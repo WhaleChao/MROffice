@@ -41,6 +41,7 @@ import {
   WORD_MATH_LINE_MOVED_EVENT,
 } from "./lazyKatex";
 import { holdEquationInPlace } from "./equationInPlace";
+import { displayEquationHasItsLine, inlineMathStandsAlone, inlineMathStandsAlonePlugin } from "./inlineMathStandsAlone";
 import { wordDisplayLatex, wordMathStatedLine } from "./wordDisplayMath";
 import { applyWordDisplayMathBox, applyWordInlineMathBox } from "./wordMathMetrics";
 import {
@@ -81,6 +82,15 @@ import {
   type CarriedEquationDraft,
   type EquationDraftIdentity,
 } from "./equationDraftCarry";
+
+/** Stated on a display equation Word sets at a side of its line. */
+export const INLINE_MATH_JUSTIFICATION_ATTR = "data-math-justification";
+
+/** The side a display equation's `mathJustification` puts it at, when it is
+ * not the centre every display equation stands at otherwise. */
+export function displayMathSide(value: unknown): "left" | "right" | null {
+  return value === "left" || value === "right" ? value : null;
+}
 
 // ---------------------------------------------------------------------------
 // Vanilla ProseMirror node view
@@ -171,6 +181,7 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
       // box, are kept by it (lazyKatex).
       let currentNode: object = node;
       let currentMathDisplay = node.attrs.mathDisplay === true;
+      let currentMathJustification = displayMathSide(node.attrs.mathJustification);
       let currentLatex: string = node.attrs.latex || "";
       let currentInputMode = normalizeEquationInputMode(node.attrs.inputMode);
       let currentLayoutMode = normalizeEquationLayoutMode(
@@ -208,15 +219,19 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
         };
       };
 
-      /** Word's display equation with words beside it in its paragraph. In a
-       * paragraph holding nothing else (a list item's, whose number it follows
-       * on the one line) it stays where it is. */
+      /** Word's display equation with words in its paragraph and a line of
+       * its own among them (displayEquationHasItsLine: a word on its line
+       * sets it inline), and Word's equation that is all its paragraph holds,
+       * stated display or not (inlineMathStandsAlone). In a list item, whose
+       * number it follows on the one line, it stays where it is. */
       const standsAsDisplay = (): boolean => {
-        if (!currentMathDisplay) return false;
         const pos = typeof getPos === "function" ? getPos() : null;
         if (typeof pos !== "number") return false;
+        if (inlineMathStandsAlone(editor.state.doc, pos)) return true;
+        if (!currentMathDisplay) return false;
         try {
-          return editor.state.doc.resolve(pos).parent.textContent.trim().length > 0;
+          const $pos = editor.state.doc.resolve(pos);
+          return $pos.parent.textContent.trim().length > 0 && displayEquationHasItsLine($pos.parent, $pos.index());
         } catch {
           return false;
         }
@@ -309,6 +324,16 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
           for (const element of [wrapper, preview]) {
             if (display) element.setAttribute(INLINE_DISPLAY_MATH_ATTR, "true");
             else element.removeAttribute(INLINE_DISPLAY_MATH_ATTR);
+          }
+        }
+        // The side Word sets the display equation at (its own m:jc, else the
+        // document's m:defJc), where the file states one: never its
+        // paragraph's alignment. Stating none it is the centred group.
+        const side = display ? currentMathJustification : null;
+        if (side !== wrapper.getAttribute(INLINE_MATH_JUSTIFICATION_ATTR)) {
+          for (const element of [wrapper, preview]) {
+            if (side) element.setAttribute(INLINE_MATH_JUSTIFICATION_ATTR, side);
+            else element.removeAttribute(INLINE_MATH_JUSTIFICATION_ATTR);
           }
         }
         // Word's box for the equation in its line, from the formula alone:
@@ -573,6 +598,11 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
         wrapper.setAttribute("data-editing", "true");
         noteEquationEditorOpen(wrapper, true);
         noteDraftOpen(true);
+        // An equation that is all its paragraph holds is Word's display
+        // equation whatever it is stated as (inlineMathStandsAlone): there is
+        // no inline placement for it to change to, nor a display one.
+        const startPos = typeof getPos === "function" ? getPos() : null;
+        const alone = typeof startPos === "number" && inlineMathStandsAlone(editor.state.doc, startPos);
         visualEditor = createVisualMathEditor({
           initialLatex: carried?.state.latex ?? currentLatex,
           initialInputMode: carried?.state.inputMode ?? currentInputMode,
@@ -611,15 +641,19 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
           // draft, then gives the equation its own paragraph. `setNodeMarkup`
           // on commit keeps the node's position.
           onPointerSelectionExit: leaveEquationByDrag,
-          onPlacementChange: (placement) => {
-            const identity = readNodeIdentity();
-            if (!identity) return;
-            stopEditing(true);
-            // Word keeps the converted equation active in its container.
-            if (setEquationPlacement(editor.view, identity.pos, placement)) {
-              reopenSelectedVisualMathEditor(editor);
-            }
-          },
+          ...(alone
+            ? {}
+            : {
+                onPlacementChange: (placement: "inline" | "display") => {
+                  const identity = readNodeIdentity();
+                  if (!identity) return;
+                  stopEditing(true);
+                  // Word keeps the converted equation active in its container.
+                  if (setEquationPlacement(editor.view, identity.pos, placement)) {
+                    reopenSelectedVisualMathEditor(editor);
+                  }
+                },
+              }),
         });
         releaseInPlace = holdEquationInPlace(wrapper, preview, visualEditor.dom);
         if (carried?.caret) visualEditor.restoreCaret?.(carried.caret);
@@ -764,6 +798,8 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
         carryFormulaState(currentNode, updated);
         currentNode = updated;
         currentMathDisplay = updated.attrs.mathDisplay === true;
+        const previousMathJustification = currentMathJustification;
+        currentMathJustification = displayMathSide(updated.attrs.mathJustification);
           if (editing) noteDraftOpen(true);
           applyFontSize(updated.attrs.fontSize, updated.attrs.runStyle);
           const previousMathStyle = currentMathStyle;
@@ -784,7 +820,8 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
             next !== currentLatex ||
             nextInputMode !== currentInputMode ||
             nextLayoutMode !== currentLayoutMode ||
-            currentMathStyle !== previousMathStyle
+            currentMathStyle !== previousMathStyle ||
+            currentMathJustification !== previousMathJustification
           ) {
             currentLatex = next;
             currentInputMode = nextInputMode;
@@ -792,6 +829,10 @@ function createInlineMathNodeView(options: InlineMathOptions): any {
             // While editing, the draft keeps priority (matches the old
             // React view where `draft ?? latex` fed the input).
             if (!editing) renderPreview();
+          } else if (!editing && standsAsDisplay() !== wrapper.hasAttribute(INLINE_DISPLAY_MATH_ATTR)) {
+            // The words beside it went, or came (Accept on a tracked Convert
+            // to Equation): a display equation, or an inline one, again.
+            renderPreview();
           }
           return true;
         },
@@ -968,6 +1009,10 @@ const InlineMath = Node.create<InlineMathOptions>({
 
   addNodeView() {
     return createInlineMathNodeView(this.options);
+  },
+
+  addProseMirrorPlugins() {
+    return [inlineMathStandsAlonePlugin()];
   },
 
   /**

@@ -21,7 +21,7 @@ import {
   getTrackedChanges,
   type TrackedChangeEntry,
 } from "./native-document/trackChangesExtension";
-import { isDocumentTrackingLocked } from "./native-document/documentProtection";
+import { revisionResolutionLocked } from "./native-document/documentProtection";
 import type { TrackedObjectKind } from "./native-document/trackChanges";
 import { pageInterfaceLocale } from "../../../lib/i18n/content-locale";
 import { aiEditReviewEnabled, fetchAiEditReview } from "../../../__cut__/mdc1651b936";
@@ -170,9 +170,7 @@ export default function TrackChangesPanel({
     () =>
       !editor.isDestroyed &&
       editor.isEditable &&
-      !isDocumentTrackingLocked(
-        editor.state.doc.attrs.documentProtection,
-      ),
+      !revisionResolutionLocked(editor.state.doc.attrs.documentProtection),
   );
   const changes = snapshot.changes;
   const acceptAllRef = useRef<HTMLButtonElement | null>(null);
@@ -205,9 +203,7 @@ export default function TrackChangesPanel({
       setEditable(
         !editor.isDestroyed &&
           editor.isEditable &&
-          !isDocumentTrackingLocked(
-            editor.state.doc.attrs.documentProtection,
-          ),
+          !revisionResolutionLocked(editor.state.doc.attrs.documentProtection),
       );
       const state = editor.state;
       const nextChanges = getTrackedChanges(state);
@@ -277,9 +273,7 @@ export default function TrackChangesPanel({
       if (
         editor.isDestroyed ||
         !editor.isEditable ||
-        isDocumentTrackingLocked(
-          editor.state.doc.attrs.documentProtection,
-        ) ||
+        revisionResolutionLocked(editor.state.doc.attrs.documentProtection) ||
         !renderedSnapshotIsCurrent()
       ) {
         return;
@@ -294,9 +288,7 @@ export default function TrackChangesPanel({
       if (
         editor.isDestroyed ||
         !editor.isEditable ||
-        isDocumentTrackingLocked(
-          editor.state.doc.attrs.documentProtection,
-        ) ||
+        revisionResolutionLocked(editor.state.doc.attrs.documentProtection) ||
         !renderedSnapshotIsCurrent()
       ) {
         return;
@@ -310,7 +302,7 @@ export default function TrackChangesPanel({
     if (
       editor.isDestroyed ||
       !editor.isEditable ||
-      isDocumentTrackingLocked(editor.state.doc.attrs.documentProtection) ||
+      revisionResolutionLocked(editor.state.doc.attrs.documentProtection) ||
       !renderedSnapshotIsCurrent()
     ) {
       return;
@@ -322,7 +314,7 @@ export default function TrackChangesPanel({
     if (
       editor.isDestroyed ||
       !editor.isEditable ||
-      isDocumentTrackingLocked(editor.state.doc.attrs.documentProtection) ||
+      revisionResolutionLocked(editor.state.doc.attrs.documentProtection) ||
       !renderedSnapshotIsCurrent()
     ) {
       return;

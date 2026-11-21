@@ -16,7 +16,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import type { BandRichBlock } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
 import { afterFontsReady } from "@mrnote/core/web/lib/font-face-news.ts";
 
-import { buildBandRichDom, keepBandObjectsOnPaper, layoutBandTabs, paintBandTextWarps, wrapBandTextAroundObjects, type BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
+import { bandMayPassHalfPage, buildBandRichDom, clipBandsToHalfPage, keepBandObjectsOnPaper, layoutBandTabs, paintBandTextWarps, wrapBandTextAroundObjects, type BandTokenContext } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 
 
 
@@ -101,13 +101,17 @@ export default function BandRichView({
       // A WordArt box whose words are painted bent once laid out
       // (`paintBandTextWarps`).
       warps: Boolean(host.querySelector("[data-band-text-warp]")),
+      // A Word 2010 layout band, cut at half its page once laid out
+      // (`clipBandsToHalfPage`).
+      halves: bandMayPassHalfPage(host),
     });
     const layout = () => {
-      const { tabs, kept, wraps, warps } = watched();
+      const { tabs, kept, wraps, warps, halves } = watched();
       if (tabs) layoutBandTabs(host);
       if (kept) keepBandObjectsOnPaper(host);
       if (wraps || host.querySelector("[data-band-wrap-push]")) wrapBandTextAroundObjects(host);
       if (warps) paintBandTextWarps(host);
+      if (halves) clipBandsToHalfPage(host);
     };
     let cancelled = false;
     const fonts = host.ownerDocument.fonts;
@@ -124,8 +128,8 @@ export default function BandRichView({
     // (each read lays the whole document out first: afterFontsReady).
     const stopRedraw = afterFontsReady(host.ownerDocument, redraw);
     fonts?.addEventListener?.("loadingdone", redraw);
-    const { tabs, kept, wraps, warps } = watched();
-    if (!tabs && !kept && !wraps && !warps) {
+    const { tabs, kept, wraps, warps, halves } = watched();
+    if (!tabs && !kept && !wraps && !warps && !halves) {
       return () => {
         cancelled = true;
         stopRedraw();

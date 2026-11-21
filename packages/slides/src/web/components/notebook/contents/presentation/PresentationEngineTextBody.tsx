@@ -200,6 +200,13 @@ export function presentationEngineBodyInput(args: {
   kerning?: unknown;
   /** `source.nativeEastAsianLines` (readings row 1001): PowerPoint's own East Asian line rules. */
   eastAsianLines?: unknown;
+  /** `source.nativeLineBox` (readings row 1013): the lines as PowerPoint for Windows stands them. */
+  lineBox?: unknown;
+  /** `source.nativeMarkLines` (readings row 1013): each paragraph's empty last line's mark ({@link presentationEmptyLineFonts}). */
+  markLines?: unknown;
+  /** A flat body (no `paragraphs`): its text and runs, whose breaks set its empty rows (row 1013). */
+  flatText?: string;
+  flatRuns?: unknown;
   now?: Date;
 }): EngineBodyInput | { unsupported: string } {
   const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale } = args;
@@ -225,6 +232,12 @@ export function presentationEngineBodyInput(args: {
       args.eastAsianLines && typeof args.eastAsianLines === "object" && !Array.isArray(args.eastAsianLines)
         ? (args.eastAsianLines as Record<string, unknown>)
         : null;
+    // A body imported under readings row 1013 (`source.nativeLineBox`).
+    const windowsLineBox = presentationWindowsLineBox(args.lineBox);
+    // Under it, an empty line a paragraph ends on is laid in its mark's (or its break's) size and face.
+    const emptyLineFonts = windowsLineBox
+      ? presentationEmptyLineFonts({ markLines: args.markLines, flatText: args.flatText, flatRuns: args.flatRuns, rowCount: rows.length })
+      : [];
     const eastAsianLines = rowsCarryEastAsianLines || bodyEastAsianLines !== null;
     const eastAsianRow = (key: keyof ParagraphEastAsianLines, row: PresentationParagraphRowPlan): unknown => {
       if (rowsCarryEastAsianLines) return row.nativeEastAsianLines?.[key];
@@ -294,7 +307,11 @@ export function presentationEngineBodyInput(args: {
         };
       });
       rowRuns.push(displayed);
-      const endFont = fontOf({});
+      // The font of the line that holds only the mark (or, in a flat body, only a break): readings row 1013.
+      const emptyLine = emptyLineFonts[row.index];
+      const endFont = emptyLine
+        ? fontOf(runStyleCss({ fontSize: emptyLine.sizePt, ...(emptyLine.face ? { fontFamily: emptyLine.face } : {}) }, fontSizeUnit, fontAliases, autofitScale))
+        : fontOf({});
       const align = need(alignOf(rowStyle.textAlign ?? bodyStyle.textAlign, rowStyle.textAlignLast ?? bodyStyle.textAlignLast), "alignment");
       // Line spacing: a unitless CSS line height is the percentage times
       // Office's single line (its autofit reduction already taken off); a
@@ -344,8 +361,12 @@ export function presentationEngineBodyInput(args: {
       paragraphs.push({
         runs,
         endFont,
-        // The mark's Latin face as the file states it (readings row 899).
+        // The mark's Latin face as the file states it (readings row 899), and
+        // under row 1013 as a font the line that holds the mark is laid by.
         ...(row.endLatinFace ? { markLatinFace: row.endLatinFace } : {}),
+        ...(windowsLineBox && row.endLatinFace
+          ? { markLatinFont: fontOf({ fontFamily: runStyleCss({ fontFamily: row.endLatinFace }, fontSizeUnit, fontAliases, autofitScale).fontFamily }) }
+          : {}),
         ...(row.endsInLineBreak ? { endsInLineBreak: true as const } : {}),
         align,
         marginLeftPt: start * PT_PER_PX,
@@ -421,6 +442,12 @@ export function usePresentationEngineBody(args: {
   kerning?: unknown;
   /** `source.nativeEastAsianLines` (readings row 1001). */
   eastAsianLines?: unknown;
+  /** `source.nativeLineBox` (readings row 1013). */
+  lineBox?: unknown;
+  /** `source.nativeMarkLines` and a flat body's text and runs (readings row 1013, {@link presentationEmptyLineFonts}). */
+  markLines?: unknown;
+  flatText?: string;
+  flatRuns?: unknown;
   widthPx: number | null;
   wrap: boolean;
   /** Lay out whatever the surface: the lines a body being typed in should end at. */
@@ -432,19 +459,99 @@ export function usePresentationEngineBody(args: {
   const slideNumber = useContext(PresentationSlideNumberContext);
   const active = args.enabled && surface && args.rows !== null && args.widthPx !== null && textEngineOn("slides");
   const epoch = useTextEngineEpoch(active);
-  const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, eastAsianLines, widthPx, wrap } = args;
+  const { rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, flatText, flatRuns, widthPx, wrap } = args;
   const naturalLines = args.naturalLines === true;
   return useMemo((): PresentationEngineBodyAnswer => {
     void epoch;
     if (!surface) return { status: "off" };
     if (!active || !rows || widthPx === null) return noteEngine("off", !args.enabled ? "not a candidate" : !rows ? "no rows" : widthPx === null ? "no width" : "switched off");
-    const input = presentationEngineBodyInput({ rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines });
+    const input = presentationEngineBodyInput({ rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, flatText, flatRuns });
     if ("unsupported" in input) return noteEngine("off", input.unsupported);
-    const layout = layoutOfficeTextBody({ widthPt: widthPx * PT_PER_PX, wrap, paragraphs: input.paragraphs, naturalLines }, pageOfficeTextMeasurer);
+    const layout = layoutOfficeTextBody({ widthPt: widthPx * PT_PER_PX, wrap, paragraphs: input.paragraphs, naturalLines, ...(presentationWindowsLineBox(lineBox) ? { windowsLineBox: true } : {}) }, pageOfficeTextMeasurer);
     if (layout.status === "pending") return noteEngine("pending", "pending");
     if (layout.status === "unsupported") return noteEngine("off", layout.reason);
     return noteEngine("ok", "laid", { status: "ok", layout, input });
-  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, widthPx, wrap, naturalLines]);
+  }, [surface, active, args.enabled, epoch, rows, bodyStyle, fontSizeUnit, fontAliases, autofitScale, slideNumber, tabStops, defaultTabPx, kerning, eastAsianLines, lineBox, markLines, flatText, flatRuns, widthPx, wrap, naturalLines]);
+}
+
+/** The size (pt) and Latin face an empty line is laid in. */
+export interface PresentationEmptyLineFont {
+  readonly sizePt: number;
+  readonly face?: string;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function presentationEmptyLineFonts(args: {
+  markLines: unknown;
+  flatText?: string;
+  flatRuns?: unknown;
+  rowCount: number;
+}): (PresentationEmptyLineFont | undefined)[] {
+  const read = (value: unknown): PresentationEmptyLineFont | undefined => {
+    if (!value || typeof value !== "object") return undefined;
+    const raw = value as { sizePt?: unknown; face?: unknown };
+    const size = raw.sizePt;
+    if (typeof size !== "number" || !Number.isFinite(size) || size < 1 || size > 4000) return undefined;
+    const face = typeof raw.face === "string" && raw.face.trim() ? raw.face.trim() : undefined;
+    return face ? { sizePt: size, face } : { sizePt: size };
+  };
+  const marks = Array.isArray(args.markLines) ? args.markLines.map(read) : [];
+  const out: (PresentationEmptyLineFont | undefined)[] = new Array(args.rowCount).fill(undefined);
+  if (typeof args.flatText !== "string") {
+    for (let index = 0; index < args.rowCount; index += 1) out[index] = marks[index];
+    return out;
+  }
+  const rows = args.flatText.split("\n");
+  if (rows.length !== args.rowCount) return out;
+  const runText = (run: unknown): string =>
+    run && typeof run === "object" && typeof (run as { text?: unknown }).text === "string" ? (run as { text: string }).text : "";
+  // Runs that are not the text's own (a stale copy) say nothing of its breaks.
+  const runs = Array.isArray(args.flatRuns) && args.flatRuns.map(runText).join("") === args.flatText ? args.flatRuns : [];
+  // The style of the run that holds the text's character at `offset`.
+  const styleAt = (offset: number): { fontSize?: unknown; fontFamily?: unknown } | undefined => {
+    let start = 0;
+    for (const run of runs) {
+      const text = runText(run);
+      if (offset >= start && offset < start + text.length) {
+        const style = (run as { style?: unknown }).style;
+        return style && typeof style === "object" ? (style as { fontSize?: unknown; fontFamily?: unknown }) : undefined;
+      }
+      start += text.length;
+    }
+    return undefined;
+  };
+  let offset = 0;
+  rows.forEach((row, index) => {
+    const breakAt = offset + row.length;
+    if (index === rows.length - 1) {
+      if (row === "" && index > 0) out[index] = marks[0];
+    } else if (row === "") {
+      const style = styleAt(breakAt);
+      out[index] = read({ sizePt: style?.fontSize, face: style?.fontFamily });
+    }
+    offset = breakAt + 1;
+  });
+  return out;
+}
+
+/** Whether a body's receipt says its lines stand as PowerPoint for Windows stands them (readings row 1013). */
+export function presentationWindowsLineBox(value: unknown): boolean {
+  return value === 1013;
 }
 
 /**
@@ -579,6 +686,24 @@ export const ENGINE_SVG_STYLE: CSSProperties = {
   overflow: "visible",
   direction: "ltr",
 };
+
+
+
+
+
+
+
+
+
+export function presentationEngineMarkerPaint(
+  rowStyle: CSSProperties,
+  markerCss: CSSProperties,
+  colorOverride: string | undefined,
+  measured: OfficeTextFont | undefined,
+): CSSProperties {
+  const paint = svgTextPaint({ ...rowStyle, ...markerCss }, colorOverride ?? (markerCss.color as string | undefined));
+  return measured ? { ...paint, fontSize: px(measured.sizePt) } : paint;
+}
 
 /** Positions in CSS px, at most 1/1000 px apart from the engine's. */
 function px(points: number): number {
@@ -882,7 +1007,7 @@ export function PresentationEngineTextBody({
     // find highlights): its marker apart, its words in order in one group.
     const markerNodes: ReactElement[] = [];
     if (paragraph.marker && row && firstLine) {
-      const markerPaint = svgTextPaint({ ...rowStyle, ...row.markerCss }, colorOverride ?? (row.markerCss.color as string | undefined));
+      const markerPaint = presentationEngineMarkerPaint(rowStyle, row.markerCss, colorOverride, input.paragraphs[rowIndex]?.marker?.font);
       if (row.markerPicture) {
         const size = runInputs[0]?.font.sizePt ?? paragraph.lines[0].sizePt;
         markerNodes.push(
@@ -980,6 +1105,10 @@ export function PresentationEngineOrFallback({
   defaultTabPx,
   kerning,
   eastAsianLines,
+  lineBox,
+  markLines,
+  flatText,
+  flatRuns,
   widthPx,
   wrap,
   colorOverride,
@@ -995,6 +1124,12 @@ export function PresentationEngineOrFallback({
   kerning?: unknown;
   /** `source.nativeEastAsianLines` (readings row 1001). */
   eastAsianLines?: unknown;
+  /** `source.nativeLineBox` (readings row 1013). */
+  lineBox?: unknown;
+  /** `source.nativeMarkLines` and a flat body's text and runs (readings row 1013, {@link presentationEmptyLineFonts}). */
+  markLines?: unknown;
+  flatText?: string;
+  flatRuns?: unknown;
   widthPx: number | null;
   wrap: boolean;
   colorOverride?: string;
@@ -1014,6 +1149,10 @@ export function PresentationEngineOrFallback({
     defaultTabPx,
     kerning,
     eastAsianLines,
+    lineBox,
+    markLines,
+    flatText,
+    flatRuns,
     widthPx,
     wrap,
     naturalLines,

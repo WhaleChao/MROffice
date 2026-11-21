@@ -19,6 +19,7 @@ import {
   normalizeDocumentParagraphBorders,
 } from "../../../../lib/document-borders";
 import { ptToPx } from "../../../../lib/office-units";
+import { wordPositionedFrame } from "./wordFramePosition";
 
 /**
  * Word's text frames (`w:framePr`, not a drop cap): a paragraph Word lifts out
@@ -91,7 +92,9 @@ function readFrame(node: ProseMirrorNode): WordFrame | null {
   if (!node.isTextblock || source?.adapter !== "docx" || !source.frame || typeof source.frame !== "object") return null;
   const frame = source.frame as WordFrame;
   if (frame.yAlign === "inline") return null;
-  return frame;
+  // A framePr that neither moves nor sizes the paragraph is no frame in Word
+  // (wordFramePosition.ts; corpus R480-D18's docDefaults frame).
+  return wordPositionedFrame(frame);
 }
 
 const HOLDS_FRAME = new SheetFact((node) => readFrame(node) !== null);

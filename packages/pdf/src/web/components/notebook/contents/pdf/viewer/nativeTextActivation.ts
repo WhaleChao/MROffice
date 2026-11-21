@@ -55,6 +55,11 @@ export type PdfNativeTextEditActivationEvidence = Readonly<{
    * the Text Editing tab up, with no caret. The keyboard, a double click and
    * the ribbon open it with the caret in. */
   selectObject?: boolean;
+  /** The window's own, never the viewer's: the box is asked for as a block
+   * that takes formats where its text stands and no words -- the whole of a
+   * paragraph refused before, asked from a line of it
+   * (lib/pdf/text-edit/block-only-opening). */
+  formatsWhole?: boolean;
   /** Clicked while the page's boxes wait for the revision an edit just made
    * (the working copy's staged head being read in): the line opens at once
    * on the page as shown, typing live, and is opened again on that revision

@@ -273,16 +273,18 @@ function paintEnvelope(
     const maxX = Math.max(...group.map((g) => g.x + g.advance)) + 4;
     const minY = Math.min(...group.map((g) => g.baseline - g.ascent * 1.4)) - 4;
     const maxY = Math.max(...group.map((g) => g.baseline + g.descent * 1.4)) + 4;
-    const render = (resolution: number) => {
-      const sourceWidth = Math.max(1, Math.ceil((maxX - minX) * resolution));
-      const sourceHeight = Math.max(1, Math.ceil((maxY - minY) * resolution));
+    const render = (resolution: number, squash: readonly [number, number] = [1, 1]) => {
+      const resolutionX = resolution * squash[0];
+      const resolutionY = resolution * squash[1];
+      const sourceWidth = Math.max(1, Math.ceil((maxX - minX) * resolutionX));
+      const sourceHeight = Math.max(1, Math.ceil((maxY - minY) * resolutionY));
       if (sourceWidth * sourceHeight > 16_000_000) return null;
       const canvas = document.createElement("canvas");
       canvas.width = sourceWidth;
       canvas.height = sourceHeight;
       const sourceContext = canvas.getContext("2d", { willReadFrequently: true });
       if (!sourceContext) return null;
-      sourceContext.setTransform(resolution, 0, 0, resolution, -minX * resolution, -minY * resolution);
+      sourceContext.setTransform(resolutionX, 0, 0, resolutionY, -minX * resolutionX, -minY * resolutionY);
       sourceContext.textBaseline = "alphabetic";
       // The band is fitted to the ink of the WHOLE glyphs -- their
       // silhouette -- whichever part this pass draws and whatever paints
@@ -313,12 +315,35 @@ function paintEnvelope(
       (input.width * scale) / Math.max(1, drawn.bounds[2] - drawn.bounds[0]),
     );
     if (stretch > 1.25) drawn = render(scale * Math.min(8, stretch)) ?? drawn;
+    // Words SQUEEZED onto the band (more than two source pixels to one
+    // device pixel along an axis) are drawn again already squeezed along
+    // that axis: the canvas samples a few source rows per device row, so a
+    // thin stroke between them never lands -- R234-D21's 1 pt "DRAFT" strip
+    // lost the T's bar, ending about 37 pt short of Word's, which fills the
+    // glyph outlines at that size (a bar becomes a faint hairline). The fit
+    // stays on the ink measured unsqueezed.
+    if (!textWarpSquashOff(document)) {
+      const [inkLeft, inkTopEdge, inkRight, inkBottomEdge] = drawn.bounds;
+      const squash: [number, number] = [
+        Math.min(1, (2 * input.width * scale) / Math.max(1, inkRight - inkLeft)),
+        Math.min(1, (2 * bandHeight * scale) / Math.max(1, inkBottomEdge - inkTopEdge)),
+      ];
+      if (squash[0] < 1 || squash[1] < 1) {
+        const squeezed = render(drawn.resolution, squash);
+        if (squeezed) {
+          drawn = {
+            ...squeezed,
+            bounds: [inkLeft * squash[0], inkTopEdge * squash[1], inkRight * squash[0], inkBottomEdge * squash[1]],
+          };
+        }
+      }
+    }
     const source = drawn.canvas;
     const [left, inkTop, right, inkBottom] = drawn.bounds;
     const inkWidth = right - left;
     // About one strip per two device pixels of the band, never more strips
     // than the source has columns.
-    const strips = Math.max(1, Math.min(MAX_STRIPS, inkWidth, Math.ceil((input.width * scale) / 2)));
+    const strips = Math.max(1, Math.min(MAX_STRIPS, Math.floor(inkWidth), Math.ceil((input.width * scale) / 2)));
     const toCanvas = ([x, y]: readonly [number, number]): [number, number] => [
       (input.originX + x) * scale,
       (input.originY + y) * scale,
@@ -711,6 +736,36 @@ export function paintTextWarpSurface(canvas: HTMLCanvasElement, options: TextWar
 
 const TEXT_WARP_TURNED_ATTRIBUTE = "data-office-text-warp-turned";
 
+const TEXT_WARP_SOURCE_STYLE_ID = "mrnote-office-text-warp-source";
+
+/**
+ * A source hidden by its fill hides the runs inside it too: a run stating its
+ * own Word text fill (`w14:textFill`, an inline `-webkit-text-fill-color`)
+ * overrode the source's transparent one and drew its glyphs under the warped
+ * canvas (corpus 7d3bc247's "SAMPLE"). The painter still reads the run's own
+ * fill from its inline style (`statedTextFill`), which this rule does not
+ * change.
+ */
+function ensureTextWarpSourceStyle(doc: Document): void {
+  if (doc.getElementById(TEXT_WARP_SOURCE_STYLE_ID)) return;
+  const style = doc.createElement("style");
+  style.id = TEXT_WARP_SOURCE_STYLE_ID;
+  style.textContent = `[${TEXT_WARP_SOURCE_ATTRIBUTE}="fill"] *{-webkit-text-fill-color:transparent!important}`;
+  (doc.head ?? doc.documentElement).append(style);
+}
+
+
+
+function textWarpSourceRunFillsOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsTextWarpSourceRunFillsOff?: boolean }) | null)?.__docsTextWarpSourceRunFillsOff === true;
+}
+
+
+
+function textWarpSquashOff(doc: Document): boolean {
+  return (doc.defaultView as (Window & { __docsTextWarpSquashOff?: boolean }) | null)?.__docsTextWarpSquashOff === true;
+}
+
 
 
 function textWarpTurnedMeasureOff(doc: Document): boolean {
@@ -816,7 +871,9 @@ export function attachOfficeTextWarp(options: TextWarpSurfaceOptions): () => voi
   const hide = options.hide ?? "opacity";
   const previousOpacity = source.style.opacity;
   const previousFill = source.style.getPropertyValue("-webkit-text-fill-color");
-  source.setAttribute(TEXT_WARP_SOURCE_ATTRIBUTE, "");
+  const runFills = hide === "fill" && !textWarpSourceRunFillsOff(document);
+  source.setAttribute(TEXT_WARP_SOURCE_ATTRIBUTE, runFills ? "fill" : "");
+  if (runFills) ensureTextWarpSourceStyle(document);
   if (hide === "opacity") source.style.opacity = "0";
   else source.style.setProperty("-webkit-text-fill-color", "transparent");
   host.append(canvas);

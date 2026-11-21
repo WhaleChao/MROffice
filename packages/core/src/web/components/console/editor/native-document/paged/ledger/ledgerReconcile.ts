@@ -54,6 +54,8 @@ import {
 } from "../containerSplitting";
 import { mergeAdjacentTableFragmentsJson } from "../tablePagination";
 import { PAGE_BLOCK_NODE } from "../pageBlockExtension";
+import { unequalColumnPlacementForBlock, unequalColumnProjectionForSheet } from "../unequalColumnProjection";
+import type { JoinedColumnCut } from "./ledgerColumns";
 import { isContinuationTail } from "../blockSplitting";
 import {
   applyRowSliceBoundarySplit,
@@ -64,6 +66,7 @@ import type { LedgerCut, LedgerPlan } from "./ledgerTypes";
 import {
   existingSeamKey,
   isColumnSeam,
+  rebasedContainerPlan,
   type CodeCutPayload,
   type ContainerCutPayload,
   type LogicalBlock,
@@ -79,9 +82,10 @@ export interface ReconcileResult {
   /** Cuts the helpers refused (kept whole; the verifier reports overflow). */
   refusedCuts: number;
   mergedSeams: number;
-  /** Blocks whose seam between two fragments on one sheet was merged, as
-   * `blockId@sheet` (see refuseColumnCuts). */
-  mergedInSheet: string[];
+  /** Blocks whose seam between two fragments in one track of a sheet was
+   * merged, as `blockId@sheet` with the room the head's track left before it
+   * (see refuseColumnCuts). */
+  mergedInSheet: JoinedColumnCut[];
   splits: number;
   moves: number;
   /** Per-boundary diagnostics for verification harnesses. */
@@ -92,6 +96,21 @@ interface SequenceEntry {
   atom: number;
   /** Original part index this fragment starts with (after merges). */
   startPart: number;
+}
+
+/** The room the head's track leaves before it when the projector drew the
+ * head whole in a later track (its split candidate there); null when the
+ * head stands where it fits. */
+function headColumnRoomPx(head: HTMLElement): number | null {
+  const sheet = head.parentElement;
+  if (!sheet) return null;
+  const projection = unequalColumnProjectionForSheet(sheet);
+  if (!projection) return null;
+  // The projector's own index: every element child of the sheet.
+  const index = Array.from(sheet.children).filter((child) => child instanceof HTMLElement).indexOf(head);
+  if (index < 0) return null;
+  const candidate = projection.splitCandidates.find((entry) => entry.blockIndex === index);
+  return candidate ? candidate.availablePx : null;
 }
 
 function cutPartIndex(cut: LedgerCut): number | null {
@@ -331,11 +350,24 @@ export function reconcileLedgerPlan(
   merges.sort((a, b) => b.headPos - a.headPos);
   for (const merge of merges) {
     const head = merge.block.parts[merge.seam];
-    const inSheet = head.sheet === merge.block.parts[merge.seam + 1].sheet;
+    const tail = merge.block.parts[merge.seam + 1];
+    const inSheet = head.sheet === tail.sheet;
+    // Only a column cut the projector drew with both pieces in one track is
+    // refused on its sheet (R13-D13, see refuseColumnCuts). Any other seam
+    // joined inside a sheet -- a page cut whose pieces a pass brought onto
+    // one page, a cut a later pass moved -- is no such cut: refusing it kept
+    // the block whole on that sheet for the rest of the layout even where it
+    // later straddled a column's foot, so the page's cut and the plan's parted
+    // by which pass came first (R460-D16 p10, a paragraph the plan cut at the
+    // first column's foot drawn whole in the second).
+    const headTrack = inSheet && !head.hollow ? unequalColumnPlacementForBlock(head.dom)?.columnIndex : undefined;
+    const tailTrack = inSheet && !tail.hollow ? unequalColumnPlacementForBlock(tail.dom)?.columnIndex : undefined;
+    const anySeam = (head.dom.ownerDocument?.defaultView as (Window & { __dqc2RefuseAnySeam?: boolean }) | null)?.__dqc2RefuseAnySeam === true;
+    const oneTrack = anySeam ? inSheet : headTrack !== undefined && headTrack === tailTrack;
     const headId = head.node.attrs?.[MRNOTE_BLOCK_ID_ATTR];
     if (mergeSeam(tr, merge.block, merge.headPos, merge.tailPos)) {
       result.mergedSeams += 1;
-      if (inSheet && typeof headId === "string" && headId) result.mergedInSheet.push(`${headId}@${head.sheet}`);
+      if (oneTrack && typeof headId === "string" && headId) result.mergedInSheet.push({ key: `${headId}@${head.sheet}`, roomPx: headColumnRoomPx(head.dom) });
     } else {
       // A seam the helpers cannot join stays a fragment boundary.
       const kept = keptSeams.get(merge.block.index) ?? [];
@@ -560,8 +592,8 @@ function applyPlannedCut(tr: Transaction, boundary: number, cut: LedgerCut, bloc
       return applyCodeBlockSplit(tr, boundary, headLines);
     }
     case "container": {
-      const payload = cut.payload as ContainerCutPayload;
-      return applyContainerBoundarySplit(tr, boundary, payload.plan);
+      const plan = rebasedContainerPlan(cut.payload as ContainerCutPayload, opener);
+      return plan !== null && applyContainerBoundarySplit(tr, boundary, plan);
     }
     case "table": {
       const payload = cut.payload as TableCutPayload;
@@ -599,8 +631,10 @@ function applyPlannedOverflowCut(tr: Transaction, sheetIndex: number, cut: Ledge
       const headLines = payload.line - codeLinesBeforeOpener(tr, openerPos, opener, block);
       return headLines > 0 && applyOverflowSplit(tr, sheetIndex, headLines);
     }
-    case "container":
-      return applyContainerOverflowSplit(tr, sheetIndex, (cut.payload as ContainerCutPayload).plan);
+    case "container": {
+      const plan = rebasedContainerPlan(cut.payload as ContainerCutPayload, opener);
+      return plan !== null && applyContainerOverflowSplit(tr, sheetIndex, plan);
+    }
     case "table": {
       const payload = cut.payload as TableCutPayload;
       return Boolean(payload.planned) && applyTableOverflowSplit(tr, sheetIndex, payload.planned!.plan, payload.planned!.cuts);

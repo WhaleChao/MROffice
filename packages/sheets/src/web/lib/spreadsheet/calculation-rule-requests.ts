@@ -70,6 +70,10 @@ export function calculationRuleRequests(
   /** Other expressions read at one cell (a =HYPERLINK formula's link
    * location), after the rules: what the budget leaves goes unanswered. */
   cellFormulas: ReadonlyArray<{ readonly row: number; readonly col: number; readonly formula: string }> = [],
+  /** The requests and cells sent at most: the protocol's (the browser's
+   * worker) unless a server-only print asks for its own, which it answers in
+   * one call on one workbook (sheet-calc printView). */
+  bounds: { readonly requests: number; readonly cells: number } = { requests: MAX_CALCULATION_RULES, cells: MAX_CALCULATION_RULE_CELLS },
 ): CalculationRuleRequest[] {
   const requests: CalculationRuleRequest[] = [];
   // The answer is keyed by formula and anchor (calculationRuleKey): a cell's
@@ -91,12 +95,12 @@ export function calculationRuleRequests(
       const union = { r1: Math.min(before.r1, clamped.r1), c1: Math.min(before.c1, clamped.c1), r2: Math.max(before.r2, clamped.r2), c2: Math.max(before.c2, clamped.c2) };
       const grown = areaOf(union) - areaOf(before);
       if (grown <= 0) return true;
-      if (cells + grown > MAX_CALCULATION_RULE_CELLS) return false;
+      if (cells + grown > bounds.cells) return false;
       requests[index] = { ...requests[index], range: union }; cells += grown;
       return true;
     }
     const area = areaOf(clamped);
-    if (requests.length >= MAX_CALCULATION_RULES || cells + area > MAX_CALCULATION_RULE_CELLS) return false;
+    if (requests.length >= bounds.requests || cells + area > bounds.cells) return false;
     byKey.set(key, requests.length); cells += area; requests.push(request);
     return true;
   };

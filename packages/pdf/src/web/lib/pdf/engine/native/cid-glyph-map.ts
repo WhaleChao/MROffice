@@ -40,24 +40,14 @@ export function readPdfCidGlyphCoverage(mapping: Uint8Array, font: Uint8Array): 
   return covered;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-export function readPdfSimpleTrueTypeGlyphCodes(
-  font: Uint8Array,
-  unicodeOf: (code: number) => string | undefined,
-): ReadonlySet<number> | null {
-  try {
-    const glyphLimit = readPdfTrueTypeGlyphCount(font);
-    const view = new DataView(font.buffer, font.byteOffset, font.byteLength);
+/**
+ * The cmap subtables a PDF reader looks a simple TrueType font's codes up in
+ * (ISO 32000-1 9.6.6.4), as lookups from a code (the (1,0) table by code, the
+ * (3,0) table by code or F000+code) and from a character (a Unicode table).
+ * Null where a subtable it would be looked up in cannot be read.
+ */
+function simpleTrueTypeLookups(font: Uint8Array, view: DataView):
+  Readonly<{ byCode: Array<(code: number) => number>; byUnicode: Array<(code: number) => number> }> | null {
     const count = view.getUint16(4);
     let cmap: { offset: number; length: number } | null = null;
     for (let i = 0; i < count; i++) {
@@ -120,6 +110,30 @@ export function readPdfSimpleTrueTypeGlyphCodes(
       else if (symbolOrMac) byCode.push(lookup);
       else byUnicode.push(lookup);
     }
+    return { byCode, byUnicode };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+export function readPdfSimpleTrueTypeGlyphCodes(
+  font: Uint8Array,
+  unicodeOf: (code: number) => string | undefined,
+): ReadonlySet<number> | null {
+  try {
+    const glyphLimit = readPdfTrueTypeGlyphCount(font);
+    const view = new DataView(font.buffer, font.byteOffset, font.byteLength);
+    const lookups = simpleTrueTypeLookups(font, view);
+    if (!lookups) return null;
+    const { byCode, byUnicode } = lookups;
     if (!byCode.length && !byUnicode.length) return null;
     const drawn = (glyph: number) => glyph > 0 && glyph < glyphLimit;
     const covered = new Set<number>();
@@ -344,4 +358,56 @@ export function pdfTrueTypeGlyphName(points: readonly number[] | undefined): str
     return text;
   }
   return null;
+}
+
+/**
+ * Where the ink of each glyph of a simple TrueType font starts and ends
+ * along its line, by the code a PDF shows it with: the box its `glyf` record
+ * states, in thousandths of the em from the glyph's origin. What tells two
+ * joined letters of a cursive script from two that only stand beside one
+ * another -- a letter that joins the next reaches its advance, one that is
+ * joined starts before its origin -- and so whether text set again in
+ * another face of its family still joins where it joined (paragraph-rewrite's
+ * bold face set regular where its words stand). Read-only.
+ *
+ * The lookup is null for a code the program draws nothing for, or whose
+ * record states no box. Null where the program's `head`, `loca`, `glyf` or
+ * the cmap its codes are looked up in cannot be read.
+ */
+export function readPdfSimpleTrueTypeGlyphExtents(font: Uint8Array):
+  ((code: number) => Readonly<{ left: number; right: number }> | null) | null {
+  try {
+    const glyphLimit = readPdfTrueTypeGlyphCount(font);
+    const view = new DataView(font.buffer, font.byteOffset, font.byteLength);
+    const head = trueTypeTable(font, view, 0x68656164); // head
+    const loca = trueTypeTable(font, view, 0x6c6f6361); // loca
+    const glyf = trueTypeTable(font, view, 0x676c7966); // glyf
+    if (!head || !loca || !glyf || head.length < 54) return null;
+    const unitsPerEm = view.getUint16(head.offset + 18);
+    const format = view.getInt16(head.offset + 50);
+    if (!(unitsPerEm >= 16 && unitsPerEm <= 16_384) || (format !== 0 && format !== 1)) return null;
+    if (loca.length < (glyphLimit + 1) * (format === 1 ? 4 : 2)) return null;
+    const lookups = simpleTrueTypeLookups(font, view);
+    if (!lookups || !lookups.byCode.length) return null;
+    const at = (glyph: number) => format === 1
+      ? view.getUint32(loca.offset + glyph * 4)
+      : view.getUint16(loca.offset + glyph * 2) * 2;
+    return (code) => {
+      try {
+        const glyph = lookups.byCode.map((lookup) => lookup(code)).find((found) => found > 0 && found < glyphLimit);
+        if (glyph === undefined) return null;
+        const start = at(glyph), end = at(glyph + 1);
+        if (end <= start || end > glyf.length || end - start < 10) return null;
+        const record = glyf.offset + start;
+        if (view.getInt16(record) === 0) return null;
+        const left = view.getInt16(record + 2), right = view.getInt16(record + 6);
+        if (!(right > left)) return null;
+        return Object.freeze({ left: (left * 1000) / unitsPerEm, right: (right * 1000) / unitsPerEm });
+      } catch {
+        return null;
+      }
+    };
+  } catch {
+    return null;
+  }
 }

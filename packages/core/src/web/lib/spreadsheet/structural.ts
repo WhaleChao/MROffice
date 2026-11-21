@@ -661,6 +661,112 @@ export function withLineMoveRecorded<T extends StructuralSheet>(
   return { ...next, [`${LINE_MOVE_KEY_PREFIX}${id}`]: { prev, axis, at, delta } };
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+export interface ConditionalFormatFileCopy {
+  after: string;
+  src: string;
+  srcAfter: string;
+  rect: [number, number, number, number];
+  at: [number, number];
+  page: boolean;
+  n: number;
+  tiles?: [number, number];
+  transpose?: true;
+  fill?: [number, number, number, number];
+}
+
+/** How a Copy laid its block: copies of it, transposed, or filled over.
+ * `rows`: the source row each copied row came from, for a Copy that left
+ * rows out (the visible rows of a filtered table), whose runs are recorded
+ * one by one. */
+export interface ConditionalFormatFileCopyLayout {
+  tiles?: [number, number];
+  transpose?: true;
+  fill?: [number, number, number, number];
+  rows?: readonly number[];
+}
+
+export const CF_FILE_COPY_KEY_PREFIX = "cfCopy:";
+/** Records a sheet keeps; past them a Copy pastes what the page lists only. */
+export const MAX_CF_FILE_COPIES = 64;
+
+/** `dest` with the record of a Copy from `source` (the same object when the
+ * Copy stays on one sheet), or `dest` itself when a chain it would be placed
+ * in has forked or the sheet holds {@link MAX_CF_FILE_COPIES} already. */
+export function withConditionalFormatFileCopyRecorded<T extends object>(
+  dest: T,
+  source: object,
+  copy: { rect: [number, number, number, number]; at: [number, number]; page: boolean } & ConditionalFormatFileCopyLayout,
+): T {
+  const destChain = sheetLineMoveChain(dest);
+  const sourceChain = source === dest ? destChain : sheetLineMoveChain(source);
+  const sourceId = (source as { id?: unknown }).id;
+  if (destChain === null || sourceChain === null || (typeof sourceId !== "string" && typeof sourceId !== "number")) return dest;
+  const held = Object.keys(dest).filter((key) => key.startsWith(CF_FILE_COPY_KEY_PREFIX)).length;
+  if (held >= MAX_CF_FILE_COPIES) return dest;
+  const rows = copy.rows;
+  if (rows && rows.some((row, index) => row !== copy.rect[0] + index)) {
+    // A Copy that left rows out pastes each run of the rows it kept closed
+    // up under the one before, as the page lays its rules (keptRowRuns,
+    // snapshotRulesForKeptRowsFormatPaste): one record a run, in order, or
+    
+    const runs: Array<{ from: number; to: number; offset: number }> = [];
+    rows.forEach((row, index) => {
+      const last = runs[runs.length - 1];
+      if (last && row === last.to + 1) last.to = row;
+      else runs.push({ from: row, to: row, offset: index });
+    });
+    if (
+      copy.tiles || copy.transpose || copy.fill ||
+      rows.length !== copy.rect[2] - copy.rect[0] + 1 ||
+      held + runs.length > MAX_CF_FILE_COPIES
+    ) {
+      return dest;
+    }
+    let out = dest;
+    for (const run of runs) {
+      out = withConditionalFormatFileCopyRecorded(out, source === dest ? out : source, {
+        rect: [run.from, copy.rect[1], run.to, copy.rect[3]],
+        at: [copy.at[0] + run.offset, copy.at[1]],
+        page: copy.page,
+      });
+    }
+    return out;
+  }
+  const record: ConditionalFormatFileCopy = {
+    after: destChain.length > 0 ? destChain[destChain.length - 1]!.id : "",
+    src: String(sourceId),
+    srcAfter: sourceChain.length > 0 ? sourceChain[sourceChain.length - 1]!.id : "",
+    rect: copy.rect,
+    at: copy.at,
+    page: copy.page,
+    n: held,
+    ...(copy.tiles && (copy.tiles[0] !== 1 || copy.tiles[1] !== 1) ? { tiles: copy.tiles } : {}),
+    ...(copy.transpose ? { transpose: true as const } : {}),
+    ...(copy.fill ? { fill: copy.fill } : {}),
+  };
+  return { ...dest, [`${CF_FILE_COPY_KEY_PREFIX}${lineMoveId()}`]: record };
+}
+
 /** A defined name bound to an A1 reference string (named-ranges.ts). */
 export interface StructuralNamedRange {
   ref: string;
@@ -2935,9 +3041,20 @@ function remapOverlays<T extends StructuralSheet>(
   }
   if (opened.size > 0) {
     const stayHidden = new Set<number>(axis === "row" ? patch.manuallyHiddenRows ?? [] : patch.manuallyHiddenCols ?? []);
+    // A line a group inside it still hides (collapsed, and not opened by this
+    // insert) stays that group's: the file states it hidden under a collapsed
+    // summary, which reads back as the outline's, not hidden by hand
+    // (xlsx-rounds R462-X38 E4: rows 207:208 and 211:212 under their own
+    // collapsed groups inside the opened 205:223).
+    const stillCollapsed = (patch.outlineGroups ?? []).filter(
+      (group, index) => group.axis === axis && (group as { collapsed?: boolean }).collapsed === true && !opened.has(index),
+    );
     for (const index of opened) {
       const group = sheet.outlineGroups![index]!;
-      for (let line = group.start; line <= group.end; line += 1) stayHidden.add(line >= at ? line + delta : line);
+      for (let line = group.start; line <= group.end; line += 1) {
+        const moved = line >= at ? line + delta : line;
+        if (!stillCollapsed.some((inner) => inner.start <= moved && moved <= inner.end)) stayHidden.add(moved);
+      }
     }
     const sorted = [...stayHidden].sort((a, b) => a - b);
     if (axis === "row") patch.manuallyHiddenRows = sorted;

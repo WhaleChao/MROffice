@@ -251,6 +251,26 @@ export function stableRecord(
           },
         }
       : {}),
+    // Fonts of the file the write names in the page's resources: what it
+    // names and what it read them from, as the request pins them.
+    ...(request.pageFontReference
+      ? {
+          pageFontReference: {
+            pageNumber: request.pageFontReference.pageNumber,
+            page: { ...request.pageFontReference.page },
+            resourceOwner: { ...request.pageFontReference.resourceOwner },
+            category:
+              request.pageFontReference.category.kind === "indirect"
+                ? { ...request.pageFontReference.category, target: { ...request.pageFontReference.category.target } }
+                : { ...request.pageFontReference.category },
+            resources: { ...request.pageFontReference.resources },
+            fonts: request.pageFontReference.fonts.map((item) => ({
+              resourceName: item.resourceName,
+              font: { ...item.font },
+            })),
+          },
+        }
+      : {}),
     ...(request.pageContentConsolidation
       ? {
           pageContentConsolidation: {
@@ -281,6 +301,24 @@ export function stableRecord(
             revisedObjects: [
               prepared.pageContentConsolidation.stream,
               prepared.pageContentConsolidation.page,
+              ...(prepared.structActualText ?? []),
+              ...pdfNativePdfaIdentificationRevisedObjects(prepared),
+            ]
+              .sort(
+                (left, right) =>
+                  left.objectNumber - right.objectNumber ||
+                  left.generation - right.generation,
+              )
+              .map((item) => ({ ...item })),
+          }
+        : {}),
+      // A font reference writes the page and its new Resources beside the
+      // stream: the receipt names both, where they stand and their digests.
+      ...(prepared.pageFontReference
+        ? {
+            revisedObjects: [
+              prepared.pageFontReference.resources,
+              prepared.pageFontReference.page,
               ...(prepared.structActualText ?? []),
               ...pdfNativePdfaIdentificationRevisedObjects(prepared),
             ]

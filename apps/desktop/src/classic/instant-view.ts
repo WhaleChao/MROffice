@@ -25,9 +25,10 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { app, protocol, session, type BrowserWindow, type Session, type WebContents, WebContentsView } from "electron";
+import { app, protocol, session, type BrowserWindow, type Session, WebContentsView } from "electron";
 
 import { documentThumbnail, instantDocument, quickLookThumbnail } from "./document-thumbnail";
+import { holdAnimations } from "./held-animations";
 
 export { documentThumbnail, instantDocument } from "./document-thumbnail";
 
@@ -180,50 +181,6 @@ function instantSession(webDir: string): Session {
   return ses;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-const HELD_ANIMATIONS = "*,*::before,*::after{animation-play-state:paused!important}";
-
-function holdCoveredAnimations(page: WebContents, coverGone: () => boolean): () => void {
-  const keys = new Set<string>();
-  const hold = () => {
-    if (coverGone() || page.isDestroyed()) return;
-    void page
-      .insertCSS(HELD_ANIMATIONS, { cssOrigin: "user" })
-      .then((key) => {
-        if (coverGone() && !page.isDestroyed()) void page.removeInsertedCSS(key).catch(() => undefined);
-        else keys.add(key);
-      })
-      .catch(() => undefined);
-  };
-  // A new document has none of the old one's sheets: held again as it commits.
-  const committed = (_event: unknown, _url: string, _code: number, _status: string) => {
-    keys.clear();
-    hold();
-  };
-  page.on("did-navigate", committed);
-  page.on("dom-ready", hold);
-  return () => {
-    page.removeListener("did-navigate", committed);
-    page.removeListener("dom-ready", hold);
-    if (page.isDestroyed()) return;
-    for (const key of keys) void page.removeInsertedCSS(key).catch(() => undefined);
-    keys.clear();
-  };
-}
-
 export interface InstantCover {
   readonly kind: InstantKind;
   /** Take the cover off (the live page shows the same now, or gave up). */
@@ -280,7 +237,8 @@ export function coverWindow(
   contents.once("did-finish-load", () => options.onShown?.());
   void contents.loadURL(`${INSTANT_SCHEME}://app/${kind}`).catch(() => undefined);
   let removed = false;
-  const releaseCovered = holdCoveredAnimations(window.webContents, () => removed);
+  // The page's CSS animations wait under the cover (./held-animations.ts).
+  const releaseCovered = holdAnimations(window.webContents);
   const remove = (reason = "shown") => {
     if (removed) return;
     removed = true;

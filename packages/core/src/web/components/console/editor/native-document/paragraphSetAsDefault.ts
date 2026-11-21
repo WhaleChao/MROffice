@@ -38,16 +38,16 @@ import {
   normalizeLineHeightPt,
   normalizeLineHeightRule,
   normalizeSpacing,
-} from "@mrnote/core/web/components/console/editor/extensions/DocumentFormatting.ts";
+} from "../extensions/DocumentFormatting";
 import {
   normalizeDocumentDefaultTextAlign,
   normalizeStyleDefinitions,
-} from "@mrnote/core/web/components/console/editor/extensions/DocumentPageSetup.ts";
+} from "../extensions/DocumentPageSetup";
 import {
   MAX_INDENT_PT,
   normalizeFirstLineIndentPt,
   normalizeIndentPt,
-} from "@mrnote/core/web/components/console/editor/native-document/preciseIndent.ts";
+} from "./preciseIndent";
 
 export type ParagraphDefaultAlign = "left" | "center" | "right" | "justify" | "distribute";
 

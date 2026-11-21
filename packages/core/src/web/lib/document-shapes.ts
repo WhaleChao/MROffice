@@ -13,6 +13,7 @@
  * `presentation-shapes` as the one rendering authority.
  */
 
+import { normalizeOfficeCustomPathPaints, type OfficeCustomPathPaint } from "./office-custom-path-paints";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { pictureObjectTokenSha } from "./page-picture-objects";
 import { SheetFact } from "./editor/sheet-facts";
@@ -1285,6 +1286,13 @@ export interface DocumentShapeAttrs {
    * converted diagram back into an ordinary group.
    */
   customPath?: PresentationCustomPath | null;
+  /**
+   * How each of {@link customPath}'s paths is painted when they paint apart
+   * (`a:path@fill` / `@stroke`: a bent arrow's darker fold, an arc's unstroked
+   * wedge), as `lib/office-custom-path-paints` reads it. A group member's,
+   * from its package; absent: the whole outline takes the shape's paint.
+   */
+  readonly customPathPaints?: readonly OfficeCustomPathPaint[];
   xEmu: number;
   yEmu: number;
   widthEmu: number;
@@ -1689,6 +1697,8 @@ export interface DocumentShapeGroupMember {
    * its route.
    */
   readonly customPath?: PresentationCustomPath;
+  /** Its paths' own paints, as {@link DocumentShapeAttrs.customPathPaints}. */
+  readonly customPathPaints?: readonly OfficeCustomPathPaint[];
   /**
    * A stroke the pen drew, grouped with others: still ink (its tool, effect,
    * cut ends and pressures, as {@link DocumentShapeAttrs.inkTool} and the
@@ -2780,6 +2790,9 @@ function normalizeDocumentShapeLeafAttrs(
     // whole shape: `preset` is always a real auto-shape, so the shape keeps
     // drawing at its exact rect instead of disappearing.
     ...(customPath ? { customPath } : {}),
+    ...(customPath && normalizeOfficeCustomPathPaints(attrs.customPathPaints, customPath)
+      ? { customPathPaints: normalizeOfficeCustomPathPaints(attrs.customPathPaints, customPath)! }
+      : {}),
     xEmu: boundedInteger(
       attrs.xEmu,
       0,
@@ -3202,6 +3215,7 @@ function normalizeDocumentShapeGroupMembersUncached(
             : {}),
       preset: attrs.preset,
       ...(attrs.customPath ? { customPath: attrs.customPath } : {}),
+      ...(attrs.customPathPaints ? { customPathPaints: attrs.customPathPaints } : {}),
       ...(attrs.adjustments ? { adjustments: attrs.adjustments } : {}),
       // A line's arrowheads, read by the leaf normalizer as a lone shape's
       // (`normalizeDocumentShapeLineEnds`): dropped here, a Word group's

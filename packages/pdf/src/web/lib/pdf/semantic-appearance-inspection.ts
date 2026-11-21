@@ -306,6 +306,21 @@ export type PdfSemanticAppearanceInspectionErrorCode =
   | "superseded"
   | "destroyed";
 
+
+
+
+
+
+
+
+
+export function pdfSemanticAppearanceTargetsOnFilePage<T extends Readonly<{ pageNumber: number }>>(
+  targets: readonly T[], shownPage: number, filePage: number): readonly T[] {
+  if (filePage === shownPage) return targets;
+  return Object.freeze(targets.map((target) => (target.pageNumber === shownPage
+    ? Object.freeze({ ...target, pageNumber: filePage }) : target)));
+}
+
 export class PdfSemanticAppearanceInspectionError extends Error {
   constructor(readonly code: PdfSemanticAppearanceInspectionErrorCode) {
     super(`PDF semantic appearance inspection failed: ${code}.`);

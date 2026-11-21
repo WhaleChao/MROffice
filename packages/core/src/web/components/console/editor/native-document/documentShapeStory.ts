@@ -103,6 +103,9 @@ export function marksForRunStyle(schema: Schema, style: RunStyle | undefined): M
     add("fontSize", { size: canonicalDocumentFontSizePx(style.fontSize) });
   }
   if (style.fontFamily) add("fontFamily", { family: style.fontFamily });
+  // Hidden words (Word's `w:vanish`, an imported shape's runs) stay hidden
+  // as the body's own hidden text when the label becomes a story.
+  if ((style as { hidden?: unknown }).hidden === true) add("hiddenText");
   return marks;
 }
 

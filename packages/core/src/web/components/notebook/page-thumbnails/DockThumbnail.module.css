@@ -4,7 +4,9 @@
    the page's own shape: a portrait page is as tall as the box, a slide or
    a sheet as wide. */
 
-/* --dock-box is the host's to set (46px when it does not) */
+/* --dock-box and --dock-badge are the host's to set (46px and 17px when it
+   does not): a sidebar row's miniature is about its icon's size, a tile's
+   larger */
 .host {
   display: inline-grid;
   flex: none;
@@ -57,16 +59,28 @@
   transform: rotate(-1.5deg);
 }
 
+/* a picture the system made of a file on this computer (the desktop app's
+   places tree: Quick Look's, or the one an Office file carries), as the
+   card: fitted to the box in its own shape */
+.image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: var(--dock-box, 46px);
+  max-height: var(--dock-box, 46px);
+  background: #fff;
+}
+
 /* the page's format, in the corner, so the kind still reads at a glance */
 .badge {
   position: absolute;
   z-index: 2;
   /* overlapping the card's corner, so a slide as wide as the box keeps its
      glyph within a 56px rail */
-  right: -3px;
-  bottom: -4px;
-  width: 17px;
-  height: 17px;
+  right: calc(var(--dock-badge, 17px) * -0.18);
+  bottom: calc(var(--dock-badge, 17px) * -0.24);
+  width: var(--dock-badge, 17px);
+  height: var(--dock-badge, 17px);
   filter: drop-shadow(0 0.5px 1px rgba(15, 23, 42, 0.35));
   pointer-events: none;
 }

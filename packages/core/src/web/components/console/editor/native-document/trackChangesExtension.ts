@@ -41,8 +41,10 @@ import { paginationLayoutScale, paginationTransformScale } from "./paged/paginat
 import { positionOnHollowPage } from "./paged/pageHollowSheets";
 import { sectionBandsWithRevisionsSettled } from "./bandStoryRevisions";
 import {
+  effectiveDocumentProtection,
   isDocumentTrackingLocked,
   normalizeDocumentProtection,
+  revisionResolutionLocked,
   toggleDocumentTrackingLock,
 } from "./documentProtection";
 import {
@@ -177,8 +179,14 @@ interface TrackChangesPluginState {
   markupFilter: TrackedChangeMarkupFilter;
 }
 
+/** Accepting or rejecting is refused (revisionResolutionLocked). */
+function resolutionIsLocked(state: { doc: ProseMirrorNode }): boolean {
+  return revisionResolutionLocked(state.doc.attrs.documentProtection);
+}
+
 function trackingIsLocked(state: { doc: ProseMirrorNode }): boolean {
-  return isDocumentTrackingLocked(state.doc.attrs.documentProtection);
+  // An embedded review session records every edit too (effectiveDocumentProtection).
+  return isDocumentTrackingLocked(effectiveDocumentProtection(state.doc.attrs.documentProtection));
 }
 
 /** The document's For Everyone setting (`w:trackRevisions`). */
@@ -616,6 +624,7 @@ function analyzeSteps(
     }
     if (!(step instanceof ReplaceStep)) continue;
     if (isObjectPropertyChange(docBeforeStep, step)) continue;
+    if (tablePropertyReplacement(docBeforeStep, step)) continue;
     const respelled = respelledLineBreak(docBeforeStep, step);
     if (respelled) {
       respelledBreaks.push({ at: tailMapping.map(step.from, 1), marks: respelled });
@@ -698,6 +707,50 @@ function isObjectPropertyChange(doc: ProseMirrorNode, step: ReplaceStep): boolea
       step.to - step.from === before.nodeSize &&
       !supportsTrackedInsertion(after),
   );
+}
+
+/**
+ * Whether two nodes say the same words in the same shape: the same node types
+ * and children, the same text and marks, every node but a table, row or cell
+ * with the same attributes. Only the table's own properties may differ.
+ */
+function sameTableContent(a: ProseMirrorNode, b: ProseMirrorNode): boolean {
+  if (a.type !== b.type || a.childCount !== b.childCount) return false;
+  if (a.isText) return a.text === b.text && a.sameMarkup(b);
+  if (a.type.spec.tableRole === undefined && !a.sameMarkup(b)) return false;
+  for (let index = 0; index < a.childCount; index += 1) {
+    if (!sameTableContent(a.child(index), b.child(index))) return false;
+  }
+  return true;
+}
+
+/**
+ * A table replaced whole by a copy with the same words, marks and shape (the
+ * table writers of Column Width, Row Height, Distribute Columns and AutoFit
+ * put a new table node in the old one's place): a change of its properties,
+ * as Word records it (``w:tblPrChange`` / ``w:trPrChange`` / ``w:tcPrChange``),
+ * never a deleted table and an inserted one. Read as content, the old table
+ * stayed as a struck copy beside the new one (corpus R490-D16 WALK1, a column
+ * width set with Track Changes on: two tables, the save refused).
+ */
+function tablePropertyReplacement(
+  doc: ProseMirrorNode,
+  step: ReplaceStep,
+): { before: ProseMirrorNode; after: ProseMirrorNode } | null {
+  const { slice } = step;
+  if (slice.openStart !== 0 || slice.openEnd !== 0 || slice.content.childCount !== 1) return null;
+  const before = doc.nodeAt(step.from);
+  const after = slice.content.firstChild;
+  if (
+    !before ||
+    !after ||
+    before.type.spec.tableRole !== "table" ||
+    step.to - step.from !== before.nodeSize ||
+    !sameTableContent(before, after)
+  ) {
+    return null;
+  }
+  return { before, after };
 }
 
 /**
@@ -942,6 +995,21 @@ function analyzeFormatSteps(
     const step = tr.steps[i];
     const before = tr.docs[i] ?? oldState.doc;
     let nodePos: number | null = null;
+    const replaced = step instanceof ReplaceStep ? tablePropertyReplacement(before, step) : null;
+    if (replaced) {
+      // Same shape, so a node of the old table and its new copy stand at the
+      // same position: each one whose properties changed is re-marked there.
+      const visit = (previous: ProseMirrorNode, next: ProseMirrorNode, pos: number) => {
+        if (previous.type.spec.tableRole === undefined) return;
+        if (!previous.sameMarkup(next)) {
+          const final = toFinal(pos, i, -1);
+          if (!tableNodes.has(final)) tableNodes.set(final, previous);
+        }
+        previous.forEach((child, offset, index) => visit(child, next.child(index), pos + 1 + offset));
+      };
+      visit(replaced.before, replaced.after, (step as ReplaceStep).from);
+      continue;
+    }
     // A list wrapped around paragraphs: the gap is what it holds now.
     if (step instanceof ReplaceAroundStep && step.gapTo > step.gapFrom) {
       let wraps = false;
@@ -2848,7 +2916,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       acceptChange:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           const did = resolveSelectedChanges(tr, acceptChangeAt, false, readMarkupFilter(editor.state));
           if (did && dispatch) dispatch(closeHistory(tr));
           return did;
@@ -2856,7 +2924,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       rejectChange:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           const did = resolveSelectedChanges(tr, rejectChangeAt, false, readMarkupFilter(editor.state));
           if (did && dispatch) dispatch(closeHistory(tr));
           return did;
@@ -2864,7 +2932,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       acceptChangeAndMoveNext:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           const did = resolveSelectedChanges(tr, acceptChangeAt, true, readMarkupFilter(editor.state));
           if (did && dispatch) dispatch(closeHistory(tr));
           return did;
@@ -2872,7 +2940,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       rejectChangeAndMoveNext:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           const did = resolveSelectedChanges(tr, rejectChangeAt, true, readMarkupFilter(editor.state));
           if (did && dispatch) dispatch(closeHistory(tr));
           return did;
@@ -2880,7 +2948,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       acceptChangeAtPos:
         (pos: number) =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
           // acceptChangeAt re-resolves `pos` against tr.doc (the LIVE doc), so a
           // position captured when the panel rendered is validated here — a since-
@@ -2892,7 +2960,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       rejectChangeAtPos:
         (pos: number) =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
           const did = rejectChangeAt(tr, pos);
           if (did && dispatch) dispatch(tr);
@@ -2901,7 +2969,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       acceptAllChanges:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
           // Word's command settles the headers and footers with the body.
           const bands = sectionBandsWithRevisionsSettled(tr.doc.attrs, "accept");
@@ -2916,7 +2984,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       rejectAllChanges:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
           // Word's command settles the headers and footers with the body.
           const bands = sectionBandsWithRevisionsSettled(tr.doc.attrs, "reject");
@@ -2931,7 +2999,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       acceptAllShownChanges:
         () =>
         ({ editor, state, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           const filter = readMarkupFilter(state);
           if (filter === "all" || filter === "simple" || filter === "none") {
             return false;
@@ -2950,7 +3018,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       rejectAllShownChanges:
         () =>
         ({ editor, state, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           const filter = readMarkupFilter(state);
           if (filter === "all" || filter === "simple" || filter === "none") {
             return false;
@@ -2969,7 +3037,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       acceptAllChangesAndStopTracking:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
           const did = acceptAllChanges(tr);
           if (!did) return false;
@@ -2980,7 +3048,7 @@ export const TrackChanges = Extension.create<{ changeBarsOnlyWhenAsked: boolean 
       rejectAllChangesAndStopTracking:
         () =>
         ({ editor, tr, dispatch }) => {
-          if (!editor.isEditable || trackingIsLocked(tr)) return false;
+          if (!editor.isEditable || resolutionIsLocked(tr)) return false;
           tr.setMeta(TRACK_CHANGES_SKIP_META, true);
           const did = rejectAllChanges(tr);
           if (!did) return false;

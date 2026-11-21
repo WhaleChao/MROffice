@@ -1,5 +1,5 @@
 {
- "_source": "Windows Excel's own automatic row heights (96-dpi pixels) for faces and sizes where officeRowHeight's metric formula is off. Defaults: the defaultRowHeight most often stated by 5,187 xlsx-rounds files written by Windows Excel (font 0, no customHeight), each pair seen in at least 5 files and in at least 45% of them (tools/rowmetric_check.py). Other sizes: the ht Windows Excel wrote for rows set in that one font alone, in workbooks whose default font it outgrows or where the row stands below the default, and n wrapped lines n times one (tools/rowfont_by_default.py, rowlines_check.py, 2026-11-13). MS Gothic, MS PGothic, MS Mincho and MS PMincho at 9, 9.5 and 10.5 pt, and the names Windows lacks that real files give with charset 128 (明朝, MS　明朝, 標準ゴシック, Osaka, 細明朝体: GDI maps them to MS Mincho), from Windows Excel's printed rows (xlsx-rounds/lookwin probes p3, p23). Small Normal fonts (5-10 pt: Calibri, Arial, Aptos Narrow, Aptos, Times New Roman, Verdana, Tahoma, Segoe UI, Cambria), Windows Excel's default row off its printed rows (lookwin p88-lw, 2026-11-15): GDI's hinted heights there are not monotonic (Times New Roman 7 is 14 px, 7.5 is 13). 游ゴシック Medium 8-14 pt, Windows Excel's default row off its printed rows (lookwin p180-lw, 2026-11-18): the metric formula gives 18, 20, 23, 27 and 31 px at 8, 9, 10, 12 and 14 pt where Excel's rows are 17, 21, 22, 26 and 32.",
+ "_source": "Windows Excel's own automatic row heights (96-dpi pixels) for faces and sizes where officeRowHeight's metric formula is off. Defaults: the defaultRowHeight most often stated by 5,187 xlsx-rounds files written by Windows Excel (font 0, no customHeight), each pair seen in at least 5 files and in at least 45% of them (tools/rowmetric_check.py). Other sizes: the ht Windows Excel wrote for rows set in that one font alone, in workbooks whose default font it outgrows or where the row stands below the default, and n wrapped lines n times one (tools/rowfont_by_default.py, rowlines_check.py, 2026-11-13). MS Gothic, MS PGothic, MS Mincho and MS PMincho at 9, 9.5 and 10.5 pt, and the names Windows lacks that real files give with charset 128 (明朝, MS　明朝, 標準ゴシック, Osaka, 細明朝体: GDI maps them to MS Mincho), from Windows Excel's printed rows (xlsx-rounds/lookwin probes p3, p23). Small Normal fonts (5-10 pt: Calibri, Arial, Aptos Narrow, Aptos, Times New Roman, Verdana, Tahoma, Segoe UI, Cambria), Windows Excel's default row off its printed rows (lookwin p88-lw, 2026-11-15): GDI's hinted heights there are not monotonic (Times New Roman 7 is 14 px, 7.5 is 13). 游ゴシック Medium 8-14 pt, Windows Excel's default row off its printed rows (lookwin p180-lw, 2026-11-18): the metric formula gives 18, 20, 23, 27 and 31 px at 8, 9, 10, 12 and 14 pt where Excel's rows are 17, 21, 22, 26 and 32. Open Sans 8-12: lookwin p240-lw; Palatino Linotype 10-12: p241-lw (its 45 pt rows over its default rows printed, 2026-11-21).",
  "ｍｓ ｐゴシック": {
   "9": 15,
   "9.5": 16,
@@ -42,6 +42,11 @@
  },
  "新細明體": {
   "12": 22
+ },
+ "palatino linotype": {
+  "10": 20,
+  "11": 22,
+  "12": 24
  },
  "pmingliu": {
   "12": 22
@@ -206,6 +211,13 @@
   "11": 18,
   "12": 19,
   "14": 23
+ },
+ "open sans": {
+  "8": 17,
+  "9": 19,
+  "10": 20,
+  "11": 22,
+  "12": 24
  },
  "osaka": {
   "9": 15,

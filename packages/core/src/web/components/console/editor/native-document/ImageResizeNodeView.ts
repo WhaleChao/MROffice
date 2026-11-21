@@ -30,6 +30,7 @@
  */
 
 import { SHEET_DORMANT_ATTR } from "./paged/sheetDormancy";
+import { PICTURE_LINE_EXTENT_ATTR } from "./inlinePicturePastLine";
 import { EMU_PER_PX } from "../../../../lib/office-units";
 import { ptToPx } from "../../../../lib/office-units";
 import {
@@ -561,7 +562,8 @@ export function refreshInlineImagePageProjection(
   // before measuring the page box forced a style and layout recalc per
   // picture (WebKit, the 296-page book: ~28 s of forced reads).
   const fit = inlineImagePageFit(node, wrapper);
-  const pastLine = !fit && inlinePictureRunsPastItsLine(node, wrapper);
+  const lineExtent = fit ? null : inlinePictureLineExtentPx(node, wrapper);
+  const pastLine = lineExtent !== null && lineExtent > contentBoxWidth(inlinePictureHost(node, wrapper)!);
   const apply = (name: string, value: string | null) => {
     if (value === null) {
       if (wrapper.hasAttribute(name)) wrapper.removeAttribute(name);
@@ -578,6 +580,9 @@ export function refreshInlineImagePageProjection(
   };
   apply("data-page-fit-inline-image", fit ? "true" : null);
   apply("data-picture-past-line", pastLine ? "true" : null);
+  // The picture's extent on its line, for a projector that lays its paragraph
+  // out at another width (an unequal column's track) to judge it there.
+  apply(PICTURE_LINE_EXTENT_ATTR, lineExtent !== null ? String(Math.round(lineExtent * 100) / 100) : null);
   apply("data-page-fit-scale", fit ? fit.scale.toFixed(6) : null);
   applyVar("--page-fit-image-width", fit ? `${fit.width}px` : null);
   applyVar("--page-fit-image-height", fit ? `${fit.height}px` : null);
@@ -588,14 +593,15 @@ export function refreshInlineImagePageProjection(
  * paragraph's line. Nothing more fits on that line: what the editor draws after
  * the picture took a line of its own, and the page ran a line long under every
  * such picture (note-editor.css; corpus R282-D05: 27 px). */
-function inlinePictureRunsPastItsLine(node: ProseMirrorNode, wrapper: HTMLElement): boolean {
-  if (!isPictureNode(node)) return false;
+function inlinePictureLineExtentPx(node: ProseMirrorNode, wrapper: HTMLElement): number | null {
+  if (!isPictureNode(node)) return null;
   const host = inlinePictureHost(node, wrapper);
   const width = attrsDimensionPx(node.attrs as Record<string, unknown>, "width", "widthEmu");
-  if (!host || width === null) return false;
+  if (!host || width === null) return null;
   const room = (side: string) => Number.parseFloat(wrapper.style.getPropertyValue(`--picture-room-${side}`)) || 0;
-  return width + room("left") + room("right") > contentBoxWidth(host);
+  return width + room("left") + room("right");
 }
+
 
 /** The page fit an inline picture takes, read without writing (null when it
  * takes none). */

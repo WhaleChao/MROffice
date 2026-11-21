@@ -19,6 +19,7 @@ import { createElement } from "react";
 import { type SpreadsheetPdfConditionalStyle, type SpreadsheetPdfDerivedCell, MAX_SPREADSHEET_PDF_DERIVED_CELLS, MAX_SPREADSHEET_PDF_GLYPH_CHARS, MAX_SPREADSHEET_PDF_GLYPHS, MAX_SPREADSHEET_PDF_PANELS, type SpreadsheetPdfDerivedStyle, type SpreadsheetPdfExportView, type SpreadsheetPdfPanel, SpreadsheetPdfViewError } from "@mrnote/core/web/lib/spreadsheet/pdf-export-view.ts";
 import { buildSpillOverlay, resolveCellDisplay } from "@mrnote/core/web/lib/spreadsheet/display-cache.ts";
 import { conditionalPdfCellsForSheet } from "./spreadsheetPdfConditionalCells";
+import { type ConditionalFormatRule } from "@mrnote/core/web/lib/spreadsheet/conditional-format.ts";
 import { SlicerPrintGlyph, TimelinePrintGlyph } from "./SpreadsheetPrintPanels";
 import { spreadsheetSlicerView } from "../../../../lib/spreadsheet/slicer-view";
 import { DEFAULT_SLICER_HEIGHT, DEFAULT_SLICER_WIDTH, normalizeSlicers } from "../../../../lib/spreadsheet/slicer";
@@ -44,7 +45,7 @@ import { normalizeViewOptions, spreadsheetViewThemeAccents } from "../../../../l
 import { type FilterDateToday } from "@mrnote/core/web/lib/spreadsheet/date-filter-tree.ts";
 import { type WorkbookAnswerRequest } from "@mrnote/core/web/lib/spreadsheet/workbook-values-cache.ts";
 import { type SheetModel } from "./spreadsheetSheetModel";
-import { createSpreadsheetPdfExportView, spreadsheetPdfExportValues } from "./spreadsheetWorkbookValuePlans";
+import { createSpreadsheetPdfExportView, spreadsheetPastPageRules, spreadsheetPdfExportValues } from "./spreadsheetWorkbookValuePlans";
 import { type SheetEvaluator, type Workbook } from "@mrnote/core/web/lib/spreadsheet/formula-engine.ts";
 import { type SpreadsheetNativeTableStyle } from "@mrnote/core/web/lib/spreadsheet/native-table-styles.ts";
 import { type ExcelDateSystemArg, excelDateSystemArg } from "@mrnote/core/web/lib/spreadsheet/excel-1900-calendar.ts";
@@ -72,6 +73,9 @@ export interface SpreadsheetPdfDerivedSources {
   workbookThemeAccentColors: readonly string[];
   printPanelLabels: SpreadsheetPrintPanelLabels;
   locale?: string;
+  /** A sheet's rules past the ones its page lists, read from its saved file
+   * for a print the server makes (spreadsheetPastPageRules); none otherwise. */
+  pastPageRulesFor?: (sheetId: string) => readonly ConditionalFormatRule[];
 }
 
 /**
@@ -204,7 +208,7 @@ export function derivedPdfCellsForSheet(
         (formula, row, col, anchorRow, anchorCol) => {
           const answered = answeredRuleValue(answers, candidate.id, formula, row, col, anchorRow, anchorCol);
           return answered === SESSION_PENDING ? undefined : answered;
-        });
+        }, sources.pastPageRulesFor?.(candidate.id));
       glyphs = conditional.glyphs;
       if (conditional.cells.length >= budget || conditional.glyphs.length >= MAX_SPREADSHEET_PDF_GLYPHS) trimmed = true;
       const byKey = new Map(out.map((cell) => [`${cell.r}:${cell.c}`, cell] as const));
@@ -348,6 +352,9 @@ export interface SavedWorkbookPdfViewOptions {
   /** The stateless calculation that answers the saved workbook (the engine
    * host's own runtime on the server). */
   request: WorkbookAnswerRequest;
+  /** The server's own bound on the rule formulas asked (sheet-calc printView
+   * answers them in one call on one workbook); the protocol's without. */
+  ruleBounds?: { readonly requests: number; readonly cells: number };
 }
 
 /**
@@ -364,9 +371,10 @@ export async function spreadsheetSavedWorkbookPdfView(
 ): Promise<SpreadsheetPdfExportView> {
   const collapsed = new Set<string>();
   const values = await spreadsheetPdfExportValues(content, false, { labels: options.pivotLabels, collapsed },
-    { always: true, request: options.request });
+    { always: true, request: options.request, ...(options.ruleBounds ? { ruleBounds: options.ruleBounds } : {}) });
   if (!values) throw new SpreadsheetPdfViewError("view_unavailable");
   const savedSheets = normalizeSheets(content);
+  const pastPage = spreadsheetPastPageRules(content, savedSheets);
   const date1904 = excelDateSystemArg(content["dateSystem"]);
   const viewOptions = normalizeViewOptions(content);
   const sources: SpreadsheetPdfDerivedSources = {
@@ -378,6 +386,7 @@ export async function spreadsheetSavedWorkbookPdfView(
     workbookThemeAccentColors: spreadsheetViewThemeAccents(viewOptions),
     printPanelLabels: options.printPanelLabels,
     locale: options.locale,
+    pastPageRulesFor: (sheetId) => pastPage.get(sheetId) ?? [],
   };
   return createSpreadsheetPdfExportView(content, undefined, options.today,
     (sheet) => derivedPdfCellsForSheet(sheet, sources), values);

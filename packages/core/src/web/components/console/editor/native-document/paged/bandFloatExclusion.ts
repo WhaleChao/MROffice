@@ -112,6 +112,48 @@ function pageExclusions(sheet: HTMLElement, box: HTMLElement | null): BandExclus
   return out;
 }
 
+/** `window.__dqc2BandFloorOff = true` (A/B): a band object that leaves no
+ * strip beside it at the foot of the body takes no room from the page plan. */
+function bandFloorOff(view: EditorView): boolean {
+  return (view.dom.ownerDocument.defaultView as (Window & { __dqc2BandFloorOff?: boolean }) | null)?.__dqc2BandFloorOff === true;
+}
+
+/**
+ * Where the body of sheet `sheetIndex` ends for the text, from the body's
+ * top (px), when a header or footer object wraps with no strip beside it
+ * (top and bottom, or a strip narrower than a word) from that point to the
+ * foot of the body; null when none does. Word sets no line of the body below
+ * the top of such an object (its wrap distance included). Drawn, every block
+ * after the exclusion float goes below it, past the foot; planned against the
+ * whole body, the plan put a block there that fits by its height, the page
+ * drew it lower and spilled, the plan put it back -- a cycle on every key
+ * (R484-D04 p9/p10: a tab-only paragraph, 27.6 px planned, 32.6 px and past
+ * the foot when drawn after the footer's exclusion).
+ */
+export function bandBodyFloorPx(view: EditorView, sheetIndex: number, sheet: HTMLElement): number | null {
+  if (bandFloorOff(view)) return null;
+  const overlay = bandOverlay(view);
+  if (!overlay) return null;
+  let box: HTMLElement | null = null;
+  for (const candidate of overlay.querySelectorAll<HTMLElement>(".sheet-band-box[data-band-sheet-index]")) {
+    if (candidate.dataset.bandSheetIndex === String(sheetIndex)) {
+      box = candidate;
+      break;
+    }
+  }
+  if (!box || !box.querySelector("[data-band-wrap]")) return null;
+  const style = getComputedStyle(sheet);
+  const bodyHeight = sheet.offsetHeight - (Number.parseFloat(style.paddingTop) || 0) - (Number.parseFloat(style.paddingBottom) || 0);
+  let floor: number | null = null;
+  for (const exclusion of pageExclusions(sheet, box)) {
+    // A float with a strip beside it narrows lines; one reaching the foot
+    // with none beside it ends the body at its top.
+    if (exclusion.side !== "full" || exclusion.heightPx < bodyHeight - 1 || !(exclusion.topPx > 0)) continue;
+    floor = floor === null ? exclusion.topPx : Math.min(floor, exclusion.topPx);
+  }
+  return floor;
+}
+
 function exclusionElement(exclusion: BandExclusion): HTMLElement {
   const element = document.createElement("div");
   element.setAttribute("data-band-exclusion", exclusion.side);

@@ -4,7 +4,7 @@
 
 <p align="center"><b>MR Officen avoimen lähdekoodin editorit – asiakirjat, laskentataulukot, esitykset, PDF, käsiala ja koodi – selaimessa.</b></p>
 
-<p align="center"><a href="https://mroffice.ai/fi"><b>▶ Kokeile live-demoa – ei asennusta</b></a> · <a href="https://github.com/XinaTian/MROffice/releases">⬇ Lataa MR Office Releases-sivulta</a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a></p>
+<p align="center"><a href="https://mroffice.ai/fi"><b>▶ Kokeile verkossa</b></a> · <a href="https://mroffice.ai/fi/office/download"><b>⬇ Lataa</b></a> · <a href="https://mroffice.ai">🌐 mroffice.ai</a><br><a href="https://mroffice.ai/fi/developers">🧑‍💻 Kehittäjät</a> · <a href="https://mroffice.ai/fi/developers/embed">🧩 Upota</a> · <a href="https://mroffice.ai/fi/developers/mcp">🤖 MCP tekoälysovelluksille</a> · <a href="https://www.npmjs.com/package/mroffice-embed">📦 npm-SDK</a> · <a href="https://mroffice.ai/fi/developers/oauth">🔑 Kirjaudu MR Officella</a></p>
 
 <p align="center"><a href="../LICENSE"><img alt="AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-blue"></a> <a href="https://github.com/XinaTian/MROffice/releases"><img alt="release" src="https://img.shields.io/github/v/release/XinaTian/MROffice"></a> <a href="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/XinaTian/MROffice/actions/workflows/ci.yml/badge.svg"></a> <a href="https://github.com/XinaTian/MROffice/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/XinaTian/MROffice?style=social"></a></p>
 
@@ -28,6 +28,50 @@
 </table>
 
 MR Office on työtila muistiinpanoille, tekoälylle ja oikeille tiedostoille. Tämä tietovarasto julkaisee sen editorien lähdekoodin: samat editorit, joita MR Office käyttää ja jotka voit itse koota, ajaa ja upottaa. Nämä ovat avoimen lähdekoodin editoreja, eivät täydellinen avoimen lähdekoodin toimisto-ohjelmisto: Microsoft Office -tiedostojen lukeminen ja kirjoittaminen jäävät MR Officeen (katso alla).
+
+## Kehittäjille
+
+Kaikki kehittäjille on osoitteessa **[MR Office Developers](https://mroffice.ai/fi/developers)** — itsepalvelu, ei hakemusta: kirjaudu millä tahansa MR Office -tilillä ja aloita.
+
+### Upota editorit verkkosovellukseesi (suositus)
+
+MR Office ylläpitää editoreja; palvelimesi allekirjoittaa lyhytikäisen istuntotunnuksen, ja sivusi avaa editorin sillä. Se muokkaa oikeita Word-, Excel-, PowerPoint- ja PDF-tiedostoja (.docx, .xlsx, .pptx, .pdf) yhteismuokkauksen, latausten, kaikkien vientimuotojen ja tulostuksen kera, ja tallennukset lähetetään palvelimellesi allekirjoitetulla takaisinkutsulla. Ilmainen paketti: 1 000 istuntoa kuukaudessa localhostissa, 100 omilla verkkotunnuksillasi, enintään 2 sovellusta. Se on ylläpidetty kaupallinen palvelu, joten oma sovelluksesi ei ole tämän repositorion AGPL-lisenssin sitoma.
+
+1. Suorita projektin kansiossa `npx mroffice-embed init` (tai luo sovellus kehittäjäkonsolissa): yksi "Salli"-napsautus selaimessa, ja sovelluksen avaimet kirjoitetaan tiedostoon `.env.local` / `.env`.
+2. Palvelimesi luo istuntotunnuksen `mroffice-embed/server`-moduulin `createSessionToken`-funktiolla; salainen avain ei koskaan poistu palvelimelta.
+3. Sivusi avaa editorin `mroffice-embed`-paketin `open()`-funktiolla (tai skriptillä `https://mroffice.ai/embed/v1/embed.js`).
+
+```js
+// server: GET /api/mroffice/session (check who is signed in first)
+import { createSessionToken } from "mroffice-embed/server";
+const token = await createSessionToken({
+  appId: process.env.MROFFICE_APP_ID,
+  secretKey: process.env.MROFFICE_SECRET_KEY, // mro_sk_..., server only
+  file: { key: "contract-42", name: "contract.docx", url: signedUrlToTheFile },
+  user: { id: user.id, name: user.name },
+  mode: "edit",
+});
+
+// page
+import { open } from "mroffice-embed";
+open({ container: "#editor", token: () => fetch("/api/mroffice/session").then((r) => r.json()).then((b) => b.token) });
+```
+
+[Upotusopas](https://mroffice.ai/fi/developers/embed) · [Opas Markdownina (tekoälyagenteille)](https://mroffice.ai/developers/embed.md) · [Hinnat ja rajat](https://mroffice.ai/fi/developers/pricing) · [Kehittäjäkonsoli](https://mroffice.ai/fi/developers/console) · [Live-demo](https://mroffice.ai/fi/developers/embed/demo)
+
+### Tekoälysovellukset: MCP-palvelin
+
+Tekoälysovellukset avaavat, lukevat, muokkaavat ja vievät asiakirjoja oikeassa MR Office -editorissa sen MCP-palvelimen kautta: yhdistä ylläpidettyyn päätepisteeseen `https://mcp.mroffice.ai/mcp` (kirjaudu MR Office -tililläsi, ei avainta) tai suorita `npx -y mroffice-mcp` omalla koneellasi. Lähdekoodi on hakemistossa `apps/mcp`. [MCP-opas →](https://mroffice.ai/fi/developers/mcp)
+
+### Kirjaudu MR Officella (OAuth)
+
+MR Office on OAuth 2.1 -valtuutuspalvelin (PKCE, asiakastunnuksen metatietoasiakirjat, dynaaminen rekisteröinti): sovelluksesi voi kirjata ihmiset sisään heidän MR Office -tilillään ja toimia heidän sallimillaan oikeuksilla. [OAuth-opas →](https://mroffice.ai/fi/developers/oauth)
+
+### Ylläpidä avoimen lähdekoodin editoreja itse
+
+Tämän repositorion kuusi editoria voi rakentaa omaan tuotteeseesi AGPL-3.0-lisenssillä: jos muut käyttävät muokattua versiota verkon yli, sinun on tarjottava heille sen koko lähdekoodi ja säilytettävä "MR Office" -maininta (NOTICE.md). Ne avaavat omia muotojaan, CSV-, HTML-, Markdown- ja PDF-tiedostoja; Word-, Excel- ja PowerPoint-tiedostot eivät kuulu avoimen lähdekoodin editoreihin (yllä oleva ylläpidetty upotus tukee niitä). Kaupallisen lisenssin saa osoitteesta support@mr-note.com. [Avoimen lähdekoodin opas →](https://mroffice.ai/fi/developers/open-source)
+
+npm-paketteja valmistellaan nimillä `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` ja `mroffice-code`; kunnes ne julkaistaan, rakenna editorit tästä repositoriosta (katso alla).
 
 ## Editorit
 
@@ -75,7 +119,7 @@ MR Office -työpöytäsovellus on maksuton, sisältää nämä editorit ja koko 
 - SmartArtin muokkaus
 - PDF-muokkausten tallentaminen takaisin tiedostoon
 
-**[Lataa MR Office Releases-sivulta →](https://github.com/XinaTian/MROffice/releases)** · [tai osoitteesta mroffice.ai](https://mroffice.ai)
+**[Lataa MR Office (ilmainen) →](https://mroffice.ai/fi/office/download)**
 
 ### Word-, Excel-, PowerPoint- ja PDF-tiedostot
 

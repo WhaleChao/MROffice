@@ -214,6 +214,10 @@ export function registerPagePictureObjects(
       if (!image || image.type !== "image") continue;
       const sha = pictureObjectTokenSha(image.src);
       if (sha) remember(sha);
+      // Its blend layer (readings row 1021), a picture the page holds beside it.
+      const blend = asRec(asRec(image.source)?.pictureMetafileBlend);
+      const layerSha = pictureObjectTokenSha(blend?.layer);
+      if (layerSha) remember(layerSha);
     }
   }
   // A slide's recorded narration is the file's own clip, named the same way

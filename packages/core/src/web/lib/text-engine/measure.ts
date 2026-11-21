@@ -304,7 +304,12 @@ export function measureText(text: string, font: EngineFont): Measurement {
         ? officePairKerning(previous.face, font.weight, font.italic, previous.lastCode, answer.firstCode)
         : null;
       if (office === "pending") pending = true;
-      const em = office === "pending" ? 0 : office ?? (pairKerning(previous.metrics)?.(previous.lastGlyph, answer.firstGlyph) ?? 0) * (previous.scale ?? 0);
+      // A deck's embedded face (presentation-embedded-fonts' MRAI-Deck-*
+      // families) kerns as PowerPoint for Windows kerns it: by its legacy
+      // `kern` table alone (kerning.ts, `legacyKernOnly`). Served stand-ins
+      // and clones keep their own tables and Office's pairs.
+      const legacyKernOnly = previous.face?.family.startsWith("mrai-deck-") ?? false;
+      const em = office === "pending" ? 0 : office ?? (pairKerning(previous.metrics, { legacyKernOnly })?.(previous.lastGlyph, answer.firstGlyph) ?? 0) * (previous.scale ?? 0);
       if (em) {
         const delta = em * font.sizePx;
         const last = graphemes[graphemes.length - 1];

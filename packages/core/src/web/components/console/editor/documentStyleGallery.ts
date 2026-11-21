@@ -25,6 +25,11 @@ import {
   documentStyleRecipeFor,
   galleryStyleOfBlock,
 } from "./native-document/documentDesignRestyle";
+import {
+  defaultParagraphStyleId,
+  paragraphStyleRunLook,
+  restyleJoinedRuns,
+} from "./native-document/joinedParagraphStyleRuns";
 import { normalizeListChain } from "./native-document/listDefinitionMarkers";
 import {
   bulletListDefinition,
@@ -426,6 +431,35 @@ export function applyDocumentBuiltinStyle(
         for (const name of previousStyleRunMarks(tr.doc, design, node)) {
           const markType = tr.doc.type.schema.marks[name];
           if (markType) tr.removeMark(pos + 1, pos + 1 + node.content.size, markType);
+        }
+        // An imported heading's runs say "bold as the style has it" (a bold
+        // mark of value null, the page's reading of a heading run with no
+        // w:b of its own). Made a paragraph of another style, the heading's
+        // bold is no longer the style's, and the mark said nothing the file
+        // keeps: it read back as none (corpus R485-D42 WALK1, a Heading 3
+        // given No Spacing).
+        // An imported paragraph's runs carry the look its own Word style
+        // gave them (a heading's colour and size) as marks: in Word that look
+        // goes with the style, and the gallery style draws over Normal's. The
+        // marks that say the old style's value trade it for Normal's; a run's
+        // own formatting stays (as a join does, joinedParagraphStyleRuns.ts;
+        // corpus R485-D42 WALK1: a Heading 3's grey stayed on No Spacing and
+        // the save wrote none).
+        const docAttrs = tr.doc.attrs as Record<string, unknown>;
+        const ownStyle = typeof node.attrs.docxStyleId === "string" ? node.attrs.docxStyleId : null;
+        const normalStyle = defaultParagraphStyleId(docAttrs);
+        if (ownStyle && normalStyle && ownStyle !== normalStyle) {
+          const before = paragraphStyleRunLook(docAttrs, ownStyle);
+          const after = paragraphStyleRunLook(docAttrs, normalStyle);
+          if (before && after) restyleJoinedRuns(tr, tr.doc.type.schema, pos + 1, pos + 1 + node.content.size, before, after);
+        }
+        const bold = tr.doc.type.schema.marks.bold;
+        if (bold && node.type.name === "heading" && type.name !== "heading") {
+          node.descendants((child, offset) => {
+            const inherit = child.marks.find((mark) => mark.type === bold && mark.attrs.value === null);
+            if (inherit) tr.removeMark(pos + 1 + offset, pos + 1 + offset + child.nodeSize, inherit);
+            return true;
+          });
         }
       }
       if (type.name === "heading") {

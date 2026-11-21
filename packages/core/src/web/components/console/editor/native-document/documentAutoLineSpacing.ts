@@ -10,7 +10,10 @@ import { deferWhileSurfaceGlides } from "./surfaceGlide";
 import { editsStayInsideTextblocks, plainTextEdits } from "./textblockOnlyEdits";
 import { msSinceTyping, TYPING_IDLE_MS } from "../../../../lib/typing-session";
 import { touchedRanges } from "./touchedTextblocks";
+import { decorationMapping, removeDecorationList } from "./fastRangeMapping";
 import { LAYOUT_METRICS_FLUSH_EVENT, sourceFontPlanIsReady, writeDocumentLayoutStatus, DOCUMENT_AUTO_LINE_SPACING_PENDING } from "./documentLayoutStatus";
+import { blockDomLocator, type BlockDomLocator } from "./blockDomLocator";
+import { blockTextReader, type BlockTextReader } from "./blockTextReader";
 import { OFFICE_FONT_ASSETS_EVENT } from "../../../office-ribbon/officeFontAssets";
 import { editorFontFamilies, facesUsedBy, loadedFaceRanges } from "./paged/ledger/ledgerFontRanges";
 import { Extension } from "@tiptap/core";
@@ -21,7 +24,7 @@ import { measureOfficeFontBoundingBox, measureOfficeFontLineBox } from "../../..
 import { officePrimaryFontFamily } from "../../../office-ribbon/officeTypographyCatalog";
 import { normalizeOfficeFontFace, officeFontFaceFamily } from "../../../office-ribbon/officeFontFace";
 import { normalizeEastAsianFontFamilies, wordDocumentEastAsianSingleLineFactor } from "../../../../lib/document-word-line-metrics";
-import { documentFontScriptRanges } from "../extensions/TextStyling";
+import { documentFontScriptRanges, wordComplexScriptFallbackFace } from "../extensions/TextStyling";
 import { documentFormatPreviewRanges } from "../extensions/InactiveSelectionHighlight";
 import { documentDisplayFontAliasFamilies, documentDisplayFontEastAsianAliasFamilies, documentDisplayFontPluginKey, documentMissingFontSubstitutes, missingFontStackFrom } from "./documentDisplayFonts";
 import {guardAutoLineIntermediates} from './documentAutoLineSafety';
@@ -431,12 +434,14 @@ export function faceOfThePage(doc: Document, family: string): boolean {
   return !(substitution && (substitution.wordLines === true || substitution.metric === "exact"));
 }
 
-function elementAt(view: EditorView, position: number): Element | null {
+function elementAt(view: EditorView, position: number, locate?: BlockDomLocator): Element | null {
   // A position is a boundary, not a character. Look toward the current run;
   // moving one position forward reaches the *next* run for one-character text.
   // Decoration wrappers also make domAtPos return an element plus child offset,
   // so resolve that child before reading inherited font properties.
-  const anchor = view.domAtPos(position, 1);
+  // `locate`: the block's own positions (blockDomLocator), view.domAtPos's
+  // answers without walking every run before them.
+  const anchor = locate ? locate(position, 1) : view.domAtPos(position, 1);
   let dom: Node | undefined = anchor.node;
   if (dom.nodeType !== 3) dom = dom.childNodes[anchor.offset];
   while (dom && dom.nodeType !== 3) dom = dom.firstChild ?? undefined;
@@ -528,8 +533,28 @@ function nativeMarkerStrutOff(): boolean {
 function noteRefLineOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsNoteRefLineOff?: boolean}).__docsNoteRefLineOff === true;
 }
+/**
+ * An equation among a paragraph's words (`<m:oMath>`, the inlineMath atom):
+ * its view stands on the box Word gives it in a line (wordMathMetrics: its
+ * struts, or KaTeX's own where the model does not know it) and needs no leaf.
+ * Rejected, the paragraph kept its own strut -- the first face of its stack,
+ * a Korean document's Malgun Gothic under its Times New Roman runs -- on
+ * every line, not only the formula's: corpus R287-D30's table cells holding
+ * "t-1" stood 14.56 pt a line where Word's stand 13.8 pt (Windows Word 16,
+ * probes/vsp10 m1/m3: a line with a formula of a line's height is the text
+ * line, the other lines of its paragraph untouched). Display-standing views
+ * (`data-math-display`) keep the older reading.
+ * `window.__docsMathLineOff = true` asks the older reading, for an A/B of
+ * one build.
+ */
+const INLINE_MATH_NODE = "inlineMath";
+const INLINE_MATH_VIEW = "span.inline-math-wrapper";
+function mathLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsMathLineOff?: boolean}).__docsMathLineOff === true;
+}
 function lineFreeNode(name: string): boolean {
-  return linePicture(name) || name === SOURCE_PAGE_BREAK_NODE || (name === NOTE_REFERENCE_NODE && !noteRefLineOff());
+  return linePicture(name) || name === SOURCE_PAGE_BREAK_NODE || (name === NOTE_REFERENCE_NODE && !noteRefLineOff()) ||
+    (name === INLINE_MATH_NODE && !mathLineOff());
 }
 
 function plainParagraph(block: ProseMirrorNode): boolean {
@@ -604,6 +629,12 @@ function coversParagraph(block: ProseMirrorNode, position: number, leaves: reado
 /** `window.__docsUncoveredSpacesOff = true` asks the older reading (a space
  * no leaf took costs its paragraph the leaf-only line boxes), for an A/B of
  * one build. */
+
+
+
+function textBreakLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsTextBreakLineOff?: boolean }).__docsTextBreakLineOff === true;
+}
 function uncoveredSpacesOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsUncoveredSpacesOff?: boolean}).__docsUncoveredSpacesOff === true;
 }
@@ -613,6 +644,44 @@ function uncoveredSpacesOff(): boolean {
 function nativeLineCoverage(state: EditorState, from: number, to: number): Decoration[] {
   return documentDisplayFontPluginKey.getState(state)?.decorations.find(from, to,
     spec => spec.documentWordLineBox === true) ?? [];
+}
+
+
+
+function proofWalkOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsAutoLineProofWalkOff?: boolean}).__docsAutoLineProofWalkOff === true;
+}
+
+/**
+ * Where each of a textblock's own text nodes starts in the document, and its
+ * node's text length, read in one walk of the block's view: ProseMirror's
+ * posAtDOM sums every sibling before a node at every level, so asked of each
+ * text node of a paragraph it cost the square of its runs (R461-D71's code
+ * listings, ~3,500 runs: 13 s of a print's layout). Null when the block has
+ * no view to walk or the walk does not start where posAtDOM says; a node not
+ * in the map is asked of posAtDOM.
+ */
+function textNodeStarts(view: EditorView, dom: HTMLElement, position: number): Map<Node, readonly [number, number]> | null {
+  if (proofWalkOff()) return null;
+  interface Desc { children?: Desc[]; size?: number; node?: ProseMirrorNode | null; mark?: unknown; nodeDOM?: Node }
+  const desc = (dom as unknown as {pmViewDesc?: Desc}).pmViewDesc;
+  if (!desc?.children || desc.node == null || !desc.node.isTextblock) return null;
+  const starts = new Map<Node, readonly [number, number]>();
+  const walk = (children: readonly Desc[], at: number) => {
+    for (const child of children) {
+      if (child.mark && child.children) walk(child.children, at);
+      else if (child.node?.isText && child.nodeDOM) starts.set(child.nodeDOM, [at, child.node.text?.length ?? 0]);
+      at += child.size ?? 0;
+    }
+  };
+  walk(desc.children, position + 1);
+  const first = starts.entries().next().value;
+  if (first) {
+    try {
+      if (view.posAtDOM(first[0], 0) !== first[1][0]) return null;
+    } catch { return null; }
+  }
+  return starts;
 }
 
 function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, block: ProseMirrorNode): boolean {
@@ -664,9 +733,17 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
     const ref = element.closest(NOTE_REFERENCE_VIEW);
     return ref !== null && ref.parentElement !== null && dom.contains(ref);
   };
+  // An equation's view (INLINE_MATH_NODE): its box is its own, KaTeX's
+  // glyphs and MathML inside it are no run of the paragraph's.
+  const inlineFormula = (element: Element) => {
+    if (mathLineOff()) return false;
+    const formula = element.closest(INLINE_MATH_VIEW);
+    return formula !== null && dom.contains(formula) && !formula.hasAttribute("data-math-display");
+  };
   for (const element of dom.querySelectorAll(nonTextLayout)) {
     if (!zeroLayoutMark(element) && !listMarker(element) && !inlinePicture(element) &&
-      !controlAnchor(element) && !pageBreakMark(element) && !textOnlyFieldView(element) && !noteRef(element)) return false;
+      !controlAnchor(element) && !pageBreakMark(element) && !textOnlyFieldView(element) && !noteRef(element) &&
+      !inlineFormula(element)) return false;
   }
   // Never neutralize an authored inline line-height, or an unmapped label
   // supplied by a NodeView. This is a paragraph-source proof, not text matching
@@ -674,19 +751,22 @@ function sourceTextDOM(view: EditorView, dom: HTMLElement, position: number, blo
   // pieces (a picture's chrome, a control's anchor) are not authored.
   for (const span of dom.querySelectorAll<HTMLElement>("span")) {
     if (span.style.lineHeight && !span.classList.contains("document-auto-linebox") && !zeroLayoutMark(span) &&
-      !inlinePicture(span) && !controlAnchor(span)) return false;
+      !inlinePicture(span) && !controlAnchor(span) && !inlineFormula(span)) return false;
   }
+  const starts = textNodeStarts(view, dom, position);
   const walker = dom.ownerDocument.createTreeWalker(dom, 4 /* SHOW_TEXT */);
   while (walker.nextNode()) {
     const text = walker.currentNode as Text;
     if (!text.length) continue;
     if (text.parentElement && (listMarker(text.parentElement) || inlinePicture(text.parentElement) ||
-      controlAnchor(text.parentElement) || noteRef(text.parentElement))) continue;
+      controlAnchor(text.parentElement) || noteRef(text.parentElement) || inlineFormula(text.parentElement))) continue;
     // A field's result text is its view's, not the paragraph's: the field
     // carries its own leaf (`fieldLeaf`).
     if (text.parentElement && textOnlyFieldView(text.parentElement)) continue;
     try {
-      const from = view.posAtDOM(text, 0), to = view.posAtDOM(text, text.length);
+      const known = starts?.get(text);
+      const from = known ? known[0] : view.posAtDOM(text, 0);
+      const to = known ? known[0] + Math.min(text.length, known[1]) : view.posAtDOM(text, text.length);
       if (from < position + 1 || to > position + 1 + block.content.size || to - from !== text.length ||
           view.state.doc.textBetween(from, to, "", "") !== text.data) return false;
     } catch { return false; }
@@ -750,7 +830,7 @@ const REBUILD_REMOVALS = 512;
 export function removeDecorations(set: DecorationSet, doc: ProseMirrorNode, removed: readonly Decoration[]): DecorationSet {
   if (!removed.length) return set;
   const off = typeof window !== "undefined" && (window as Window & { __docsAutoLineRebuildOff?: boolean }).__docsAutoLineRebuildOff === true;
-  if (off || removed.length < REBUILD_REMOVALS) return set.remove(removed.slice());
+  if (off || removed.length < REBUILD_REMOVALS) return removeDecorationList(set, removed);
   const gone = new Map<string, Decoration[]>();
   for (const item of removed) {
     const key = `${item.from}:${item.to}`;
@@ -781,7 +861,7 @@ function withoutOrphanStruts(set: DecorationSet, within?: readonly (readonly [nu
   if (!struts.length) return set;
   const markers = new Set(inAll((from, to) => set.find(from, to, isMarker)).map(marker => `${marker.from}:${marker.to}`));
   const orphans = struts.filter(strut => !markers.has(`${strut.from}:${strut.to}`));
-  return orphans.length ? set.remove(orphans) : set;
+  return orphans.length ? removeDecorationList(set, orphans) : set;
 }
 
 /** A line box as the engine lays it out for one face and fixed line height. */
@@ -835,6 +915,20 @@ const HAN_TEXT = /[\u2e80-\u2fdf\u3000-\u303f\u3040-\u30ff\u3100-\u312f\u31f0-\u
  * kana under a Latin run measured as that run's face), for an A/B of one build. */
 function hanSimSunLineOff(): boolean {
   return typeof window !== "undefined" && (window as Window & {__docsHanSimSunLineOff?: boolean}).__docsHanSimSunLineOff === true;
+}
+/** Hebrew and Arabic: Word sets them in its own face for the script when the
+ * run's face has none (TextStyling `wordComplexScriptFallbackFace`: Times New
+ * Roman, Arial or Courier New), and a line of them takes that face's box.
+ * Corpus R458-D53: Urdu in Jameel Noori Nastaleeq, which Word lacks and sets
+ * in its font table's altName Malgun Gothic -- Malgun Gothic has no Arabic,
+ * so the Urdu is Arial and its lines Arial's 16.1 pt at 14 pt (Word's PDF);
+ * measured as Malgun Gothic's East Asian 21 pt line they ran 28 pages to
+ * Word's 18 (docx-look/probes/cjk15 a1, b1). */
+const COMPLEX_FALLBACK_TEXT = /[\u0590-\u06ff\u0750-\u077f\u0870-\u08ff\ufb1d-\ufdff\ufe70-\ufeff]/;
+/** `window.__docsComplexFallbackLineOff = true` asks the older reading
+ * (Hebrew and Arabic measured as the run's own face), for an A/B of one build. */
+function complexFallbackLineOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & {__docsComplexFallbackLineOff?: boolean}).__docsComplexFallbackLineOff === true;
 }
 /** Word's own faces for East Asian text under an all-Latin run: their box is
  * Word's file's, whatever the page paints the characters with. */
@@ -1495,10 +1589,11 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
    * back to, whose line box the line then takes (`wordEastAsianCoverage.ts`).
    * A part without `stack` is measured from the element's own stack.
    */
-  const autoLineParts = (from: number, to: number, element: Element): {from: number; to: number; stack?: string}[] => {
+  const autoLineParts = (from: number, to: number, element: Element, read?: (from: number, to: number) => string): {from: number; to: number; stack?: string}[] => {
     const whole = [{from, to}];
-    const text = view.state.doc.textBetween(from, to, "", "");
-    if (!text || text.length !== to - from || !MAYBE_EAST_ASIAN_TEXT.test(text)) return whole;
+    const text = read ? read(from, to) : view.state.doc.textBetween(from, to, "", "");
+    const complexText = COMPLEX_FALLBACK_TEXT.test(text) && !complexFallbackLineOff();
+    if (!text || text.length !== to - from || (!MAYBE_EAST_ASIAN_TEXT.test(text) && !complexText)) return whole;
     const stackOfElement = fontsOf(element).fontFamily;
     // Word's own East Asian faces for a family it lacks (documentDisplayFonts):
     // SimSun there is the face Word sets the text in, not the page's fallback.
@@ -1506,7 +1601,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       ?.getAttribute("data-document-word-east-asian") ?? "").toLowerCase().split(",").filter(Boolean));
     // The A/B switches of the Latin-run fallbacks are part of the key: a part
     // list read under one never answers the other.
-    const fallbackSwitches = `${hangulBatangLineOff() ? 1 : 0}${hanSimSunLineOff() ? 1 : 0}`;
+    const fallbackSwitches = `${hangulBatangLineOff() ? 1 : 0}${hanSimSunLineOff() ? 1 : 0}${complexText ? 1 : 0}`;
     const cacheKey = `${eastAsianKey}\u0000${[...wordEastAsian].join(",")}\u0000${stackOfElement}\u0000${fallbackSwitches}\u0000${text}`;
     const cached = autoLinePartCache.get(cacheKey);
     if (cached) return cached.map((part) => ({...part, from: from + part.from, to: from + part.to}));
@@ -1526,7 +1621,8 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     );
     const hangulFace = index < 0 && HANGUL_TEXT.test(text) && !hangulBatangLineOff() ? HANGUL_FALLBACK_FACE : null;
     const hanFace = index < 0 && HAN_TEXT.test(text) && !hanSimSunLineOff() ? HAN_FALLBACK_FACE : null;
-    if (index < 0 && !thaiFace && !hangulFace && !hanFace) return whole;
+    const complexFace = complexText ? wordComplexScriptFallbackFace(stackOfElement) : null;
+    if (index < 0 && !thaiFace && !hangulFace && !hanFace && !complexFace) return whole;
     const eastAsianFace = index >= 0 ? unquotedFamily(tokens[index]) : "";
     const eastAsianStack = own || index < 0 ? undefined : tokens.slice(index).join(", ");
     const parts: {from: number; to: number; stack?: string}[] = [];
@@ -1538,7 +1634,9 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     const slices = resolveFontScriptSlices([{text, primary: "primary", eastAsia: "eastAsia", complexScript: "cs"}]);
     for (const slice of slices) {
       if (slice.slot === "cs") {
-        push(from + slice.from, from + slice.to, thaiFace && /[\u0e00-\u0e7f]/.test(text.slice(slice.from, slice.to)) ? `"${thaiFace}"` : undefined);
+        const sliceText = text.slice(slice.from, slice.to);
+        push(from + slice.from, from + slice.to, thaiFace && /[\u0e00-\u0e7f]/.test(sliceText) ? `"${thaiFace}"`
+          : complexFace && COMPLEX_FALLBACK_TEXT.test(sliceText) ? `"${complexFace}"` : undefined);
         continue;
       }
       if (slice.slot === "eastAsia" && !eastAsianFace && (hangulFace || hanFace)) {
@@ -1791,6 +1889,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     };
     const blockDOM = view.nodeDOM(position);
     if (!(blockDOM instanceof win.HTMLElement)) return false;
+    const locate = blockDomLocator(view, blockDOM, position, block.content.size);
     if (blockDOM.closest('[data-text-direction]:not([data-text-direction="lrTb"])')) return false;
     // A block on a sheet past the horizon keeps the line boxes projected for
     // it before, and one never projected has none yet. A block that changed
@@ -1894,21 +1993,49 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
     const blockFrom = position + 1, blockTo = position + block.nodeSize - 1;
     // Any other leaf (a tab, a field, a picture) is content on the line.
     const leafText = (leaf: ProseMirrorNode) => (leaf.type.name === "hardBreak" ? "\n" : "\u0001");
+    // The block's text, read once for all its runs (blockTextReader).
+    let reader: BlockTextReader | null = null;
+    const textOf = (from: number, to: number, leaf?: (leaf: ProseMirrorNode) => string): string => {
+      if (autoLineBlockTextOff() || from < blockFrom || to > blockTo) return view.state.doc.textBetween(from, to, "", leaf ?? "");
+      reader ??= blockTextReader(block, blockFrom);
+      return leaf ? reader.between(from, to, leaf) : reader.plain(from, to);
+    };
     const aloneOnItsLine = (from: number, to: number) => {
-      const before = view.state.doc.textBetween(blockFrom, from, "", leafText);
-      const after = view.state.doc.textBetween(to, blockTo, "", leafText);
+      const before = textOf(blockFrom, from, leafText);
+      const after = textOf(to, blockTo, leafText);
       return `${before.slice(before.lastIndexOf("\n") + 1)}${after.split("\n")[0]}`.trim() === "";
     };
     // Spaces alone on the paragraph's last line share it with the mark only:
     // the mark sets that line (markLineOf), they set nothing.
     const aloneOnMarkLine = (from: number, to: number) =>
-      aloneOnItsLine(from, to) && !view.state.doc.textBetween(to, blockTo, "", leafText).includes("\n");
+      aloneOnItsLine(from, to) && !textOf(to, blockTo, leafText).includes("\n");
     let markLineStrut: number | null = null;
     for (const range of scripts.get(position) ?? []) {
-      const element = elementAt(view, range.from);
+      const element = elementAt(view, range.from, locate);
       if (!element || element.closest('[data-document-word-line-metrics="native-control"]')) continue;
-      for (const part of autoLineParts(range.from, range.to, element)) {
-        const spaces = /^ +$/.test(view.state.doc.textBetween(part.from, part.to, "", ""));
+      for (let part of autoLineParts(range.from, range.to, element, textOf)) {
+        // A line break kept as text ("\n": a source <w:br/> read into the
+        // paragraph's text) that ends a line holding anything else sets no
+        // height on it, as a hardBreak's does: Word sets a line by the rest of
+        // it, the break's face only on a line of nothing else (Windows Word,
+        // modes 12 and 15, docx-look/print9/probes br: Consolas 11 lines
+        // 12.84 pt apart between bare and 24 pt break runs alike; an empty
+        // line between two breaks 27.0 pt = 12.84 + the break's Cambria 12).
+        // Corpus R461-D71: pandoc's bare <w:r><w:br/></w:r> runs, in the
+        // Cambria 12 of the defaults, set every line of its Consolas 11 code
+        // 2 px taller than Word's and than the ledger's engine lines, so no
+        // page cut of the code could take the engine's lines.
+        if (!textBreakLineOff() && part.from > blockFrom &&
+          /^\n+$/.test(textOf(part.from, part.to)) &&
+          textOf(part.from - 1, part.from, leafText) !== "\n") {
+          leaves.push(Decoration.inline(part.from, part.from + 1,
+            {class: "document-auto-linebox", style: "--document-auto-line-height:0px;vertical-align:top"},
+            {autoLinePixels: 0, autoLineLeaf: true, autoLineEastAsian: false}));
+          // The breaks after it end lines of nothing else: their own face.
+          if (part.to - part.from === 1) continue;
+          part = {...part, from: part.from + 1};
+        }
+        const spaces = /^ +$/.test(textOf(part.from, part.to));
         const markLine = spaces && !blockHasWords && aloneOnMarkLine(part.from, part.to) ? markLineOf(element) : null;
         if (markLine !== null) markLineStrut = markLine;
         if (spaces && ((blockHasWords && !aloneOnItsLine(part.from, part.to)) || markLine !== null)) {
@@ -2106,7 +2233,7 @@ function projectionRun(view: EditorView, cache: Map<string, number>, lineBoxes: 
       lastLeaf && block.attrs[SPLIT_CONTINUES_ATTR] !== true &&
       (lastLeaf.type.name === "hardBreak" || (lastLeaf.isText && (lastLeaf.text ?? "").endsWith("\n")))
     ) {
-      const element = lastLeaf.isText ? elementAt(view, blockTo - 1) : view.nodeDOM(blockTo - lastLeaf.nodeSize);
+      const element = lastLeaf.isText ? elementAt(view, blockTo - 1, locate) : view.nodeDOM(blockTo - lastLeaf.nodeSize);
       if (element instanceof win.HTMLElement && !element.closest('[data-document-word-line-metrics="native-control"]')) {
         const markLine = markLineOf(element, true);
         const pixels = markLine ?? lineHeightOf(element);
@@ -2247,6 +2374,11 @@ const PATCHED_SIGNATURE = "\u0000patched";
 
 
 
+/** `window.__docsAutoLineBlockTextOff = true`: each run's text read with doc.textBetween (A/B). */
+function autoLineBlockTextOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsAutoLineBlockTextOff?: boolean }).__docsAutoLineBlockTextOff === true;
+}
+
 function autoLineCarryMoved(): boolean {
   return typeof window !== "undefined" && (window as Window & { __docsAutoLineCarryMoved?: boolean }).__docsAutoLineCarryMoved === true;
 }
@@ -2361,7 +2493,7 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
           // An edit of anyone's hand: what a restored layout drew no longer
           // stands for the blocks around it (engineLinesKept).
           if (transaction.docChanged && transaction.getMeta("addToHistory") !== false) retireSeededLines();
-          let mapped = transaction.docChanged ? previous.map(transaction.mapping, transaction.doc) : previous;
+          let mapped = transaction.docChanged ? previous.map(decorationMapping(transaction), transaction.doc) : previous;
           // The blocks a ledger move carried with their line boxes: the very
           // nodes they were, wherever the inverse mapping puts their place.
           let carriedBlocks: ReadonlySet<ProseMirrorNode> | null = null;
@@ -2482,10 +2614,11 @@ export const DocumentAutoLineSpacing = Extension.create<{ waitForSourceFontPlan:
               }
             }
           }
-          // remove() clears the entries it finds in the array it is given.
+          // remove() (removeDecorationList's old arm) clears the entries it
+          // finds in the array it is given.
           const revoked = stale.filter(item => item.spec.autoLineIntermediates === true).map(item => [item.from, item.to] as const);
           const withdrawn = keptBlockWithdrawn || withdrawnProjections.has(previous);
-          const next = mapped.remove(stale);
+          const next = removeDecorationList(mapped, stale);
           const result = revoked.length ? withoutOrphanStruts(next, reached ? revoked : undefined) : next;
           if (withdrawn) withdrawnProjections.add(result);
           return result;

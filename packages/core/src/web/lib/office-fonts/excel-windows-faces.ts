@@ -63,6 +63,7 @@ export function excelFontRecordOf(value: unknown): ExcelFontRecordClass | undefi
 type Table = Record<string, Record<string, ExcelWindowsFaces>>;
 const DRAWN: ReadonlyMap<string, string> = new Map(Object.entries((data as { drawn: Record<string, string> }).drawn));
 const LACKING: ReadonlySet<string> = new Set((data as { lacking: string[] }).lacking);
+const RECORDLESS: ReadonlyMap<string, string> = new Map(Object.entries((data as { recordless?: Record<string, string> }).recordless ?? {}));
 const SUBSTITUTES = (data as unknown as { substitutes: { family: Record<string, ExcelWindowsFaces>; charset: Table } }).substitutes;
 
 /** The faces GDI maps a font record Windows lacks to, by its charset and family class. */
@@ -88,7 +89,13 @@ export function excelWindowsDrawnFaces(
   const key = name.toLowerCase();
   // A face it lacks, with the record's own class: GDI's pick for that class
   // (a record that states none, `{}`, is Arial's).
-  if (LACKING.has(key) && record) return excelWindowsSubstitute(record);
+  if (LACKING.has(key) && record) {
+    // A Mac PostScript name stating no class: GDI's pick by the name (lookwin
+    // p234-lw: TimesNewRomanPSMT alone is Times New Roman; with family 2, as
+    // Excel for Mac writes it, Arial, R462-X17).
+    const recordless = record.family == null && record.charset == null ? RECORDLESS.get(key) : undefined;
+    return recordless ? facesOf(recordless) : excelWindowsSubstitute(record);
+  }
   const drawn = DRAWN.get(key);
   if (!drawn) return undefined;
   // Else the face its records in real files land on (明朝: MS PMincho), or

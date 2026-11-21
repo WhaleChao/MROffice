@@ -48,6 +48,10 @@ export interface PdfNativeTextPreparationRequest {
     paragraphSizeScale?: number;
     /** Where the editor's rows start in the text (native-text-row-starts). */
     rowStarts?: readonly number[] }>;
+  
+
+
+  readonly formatsWhole?: true;
 }
 
 export interface PdfNativeTextPreparation {
@@ -174,6 +178,7 @@ export async function preparePdfNativeTextOffThread(
         const result = await preparePdfNativeTextInBrowser({
           selection: input.selection, managedBoxId: input.managedBoxId, sourceText: input.sourceText,
           ...(input.compile ? { compile: input.compile } : {}),
+          ...(input.formatsWhole ? { formatsWhole: true as const } : {}),
           sourceBytes: ownedBytes, signal: input.signal, ...(input.background ? { background: true } : {}),
           ...(input.afterCompile ? { afterCompile: true } : {}),
         });
@@ -200,6 +205,7 @@ export async function preparePdfNativeTextOffThread(
       managedBoxId: input.managedBoxId,
       sourceText: input.sourceText,
       ...(input.compile ? { compile: input.compile } : {}),
+      ...(input.formatsWhole ? { formatsWhole: true as const } : {}),
     };
     let answer: Awaited<ReturnType<typeof callPdfNativeEngine<"prepare">>>;
     for (let attempt = 0; ; attempt++) {

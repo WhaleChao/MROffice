@@ -8,17 +8,19 @@
  * Hyphenation > Automatic), for the Docs line engine (docs-lines.ts), which
  * decides which of these points a line ends at by Word's own rules.
  *
- * Liang's pattern method over the TeX patterns of the language. Word's own
- * hyphenator is not published; on the 73 words Windows Word hyphenated in a
- * corpus document (en-US, Calibri, mode 15) these patterns give the point
- * Word broke at for 67 ("ap-proaches", "test-crosses", "genera-tions",
- * "technol-ogy"...); Word's own differ on six ("alt-hough", "var-iance",
- * "availa-ble", "ped-igree" twice, a place name).
+ * Liang's pattern method over the TeX patterns of the language, under the
+ * points Windows Word itself breaks the words it was measured on at
+ * (./hyphenation-en-us-word.ts). Word's own hyphenator is not published; on
+ * 9,594 words measured in Word the patterns give its points for 80 % of them
+ * ("ap-proaches", "test-crosses", "genera-tions", "technol-ogy"...) and
+ * break the rest elsewhere ("analy-sis" for "anal-y-sis", "de-f-i-n-i-tion"
+ * for "def-i-ni-tion", "knowl-edge" that Word leaves whole).
  *
  * Only languages with patterns here are hyphenated by the engine; the rest
  * are left to the browser (`hyphenationLanguage` returns null).
  */
 import { EN_US_EXCEPTIONS, EN_US_PATTERNS } from "./hyphenation-en-us";
+import { WORD_EN_US_EXCEPTIONS } from "./hyphenation-en-us-word";
 
 interface Hyphenator {
   /** Pattern letters → the digits of their gaps (length + 1). */
@@ -63,6 +65,12 @@ function build(patternText: string, exceptionText: string, left: number, right: 
 
 const built = new Map<string, Hyphenator>();
 
+/** `window.__docsHyphenationWordTableOff = true` (set before the first
+ * paragraph is hyphenated): the TeX patterns alone, as before. */
+function hyphenationWordTableOff(): boolean {
+  return typeof window !== "undefined" && (window as Window & { __docsHyphenationWordTableOff?: boolean }).__docsHyphenationWordTableOff === true;
+}
+
 /** The patterns a language tag is hyphenated with, or null (none here). */
 export function hyphenationLanguage(tag: string | null | undefined): string | null {
   if (!tag) return null;
@@ -77,7 +85,9 @@ function hyphenator(language: string): Hyphenator | null {
   const known = built.get(language);
   if (known) return known;
   if (language !== "en-us") return null;
-  const made = build(EN_US_PATTERNS, EN_US_EXCEPTIONS, 2, 3);
+  // Word's measured points over the patterns' own exceptions (a later entry
+  // of a word replaces an earlier one).
+  const made = build(EN_US_PATTERNS, `${EN_US_EXCEPTIONS} ${hyphenationWordTableOff() ? "" : WORD_EN_US_EXCEPTIONS}`, 2, 3);
   built.set(language, made);
   return made;
 }

@@ -45,7 +45,7 @@ import {
   resolveRichPageBands,
   resolveSectionSheetBands,
 } from "@mrnote/core/web/components/console/editor/native-document/headerFooter.ts";
-import { buildBandRichDom, keepBandObjectsOnPaper, paintBandTextWarps, wrapBandTextAroundObjects } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
+import { buildBandRichDom, clipBandsToHalfPage, keepBandObjectsOnPaper, paintBandTextWarps, wrapBandTextAroundObjects } from "@mrnote/core/web/components/console/editor/native-document/paged/bandRichDom.ts";
 import { stripFormattingMarks } from "@mrnote/core/web/components/console/editor/native-document/formattingMarksExtension.ts";
 import {
   buildFootnoteZoneDom,
@@ -1414,6 +1414,8 @@ function prepareStructuralSheets(options: StructuralPrintOptions, printWindow: W
       // Laid out with its fonts: the bands' objects Word keeps on the paper.
       keepBandObjectsOnPaper(surfaceClone);
       wrapBandTextAroundObjects(surfaceClone);
+      // A Word 2010 layout band, cut at half its page.
+      clipBandsToHalfPage(surfaceClone);
       // A band WordArt box's words, bent (laid out with its fonts first).
       paintBandTextWarps(surfaceClone);
       // A table of contents' leaders are measured in the editor when a row

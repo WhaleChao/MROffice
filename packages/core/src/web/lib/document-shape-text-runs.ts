@@ -50,6 +50,10 @@ export const DOCUMENT_SHAPE_RUN_STYLE_KEYS = [
   // Font > Advanced > Position (`w:position`, half-points raised or lowered):
   // the body run's own textPosition (corpus R158-D29).
   "positionHalfPoints",
+  // Font > Hidden (`w:vanish`): Word neither shows nor prints these words;
+  // the shape keeps them in its text and does not draw them -- the body
+  // run's own hidden (corpus R475-D21, a group member's hidden words).
+  "hidden",
 ] as const;
 
 export type DocumentShapeRunStyleKey = (typeof DOCUMENT_SHAPE_RUN_STYLE_KEYS)[number];
@@ -103,6 +107,12 @@ export function normalizeDocumentShapeRunStyle(value: unknown): RunStyle | undef
       if (!(typeof twips === "number" && Number.isInteger(twips) && twips >= 1 && twips <= 31680)) continue;
       if (key === "fitTextTwips") kept.fitTextTwips = twips;
       else if (typeof raw.fitTextId === "number" && Number.isInteger(raw.fitTextId)) kept.fitTextId = raw.fitTextId;
+      continue;
+    }
+    if (key === "hidden") {
+      // Read from the raw run: the cell model has no hidden words (server
+      // twin: document_shape_text_runs.normalize_document_shape_run_style).
+      if ((value as Record<string, unknown>).hidden === true) kept.hidden = true;
       continue;
     }
     if (key === "charScale") {

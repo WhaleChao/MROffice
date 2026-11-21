@@ -99,6 +99,7 @@ import type {
 } from "@mrnote/core/web/components/console/editor/native-document/documentCommands.ts";
 import { asRecord } from "@mrnote/core/web/lib/as-record.ts";
 import { cssFontFamilyList } from "@mrnote/core/web/lib/css-font-family.ts";
+import { powerPointFaceName } from "@mrnote/core/web/lib/office-fonts/powerpoint-face-name.ts";
 import {
   wordFontIsEastAsian,
   wordFontLineDescent,
@@ -442,10 +443,15 @@ function cssFontFamilyOrUndefined(value: string | undefined): string | undefined
  * to Safari's serif default and change wrapping/baselines.
  */
 function importedPptxFontFamilyCss(
-  value: string | undefined,
+  stored: string | undefined,
   unit: PresentationFontSizeUnit,
 ): string | undefined {
-  if (!value || unit !== "point") return value;
+  if (!stored || unit !== "point") return stored;
+  // The face PowerPoint looks the run's typeface up by: up to its first ","
+  // or "(" ("Arial (Body)" is Arial, "Qzxnone,Georgia" a face it lacks, so
+  // Calibri), never a CSS list (powerPointFaceName). The text engine
+  // measures through this same stack.
+  const value = powerPointFaceName(stored);
   const primary = value
     .split(",")[0]
     ?.trim()

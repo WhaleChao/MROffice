@@ -77,6 +77,9 @@ export function conditionalPdfCellsForSheet(
   /** The calculation's answer for a rule formula at a cell (the grid's
    * `evalConditionalFormula`), or `undefined` when it gave none. */
   answeredRule?: (formula: string, row: number, col: number, anchorRow: number, anchorCol: number) => CellValue | undefined,
+  /** The sheet's rules past the ones its page lists (normalizePastPageRules),
+   * drawn after its own: lower in priority than every rule the page lists. */
+  pastPage: readonly ConditionalFormatRule[] = [],
 ): SpreadsheetPdfConditionalCells {
   const cells = new Map<string, SpreadsheetPdfDerivedCell>();
   const glyphs: string[] = [];
@@ -100,10 +103,10 @@ export function conditionalPdfCellsForSheet(
     return fresh;
   };
 
-  const rules: ConditionalFormatRule[] = normalizeConditionalRules(sheet.conditionalFormats, {
+  const rules: ConditionalFormatRule[] = [...normalizeConditionalRules(sheet.conditionalFormats, {
     maxRow: sheet.rowCount - 1,
     maxCol: sheet.columnCount - 1,
-  });
+  }), ...pastPage];
   if (rules.length) {
     // Excel prints a sheet's used range, so a rule paints only there: the
     // stored cells' extent bounds the visit (a whole-column rule is not a

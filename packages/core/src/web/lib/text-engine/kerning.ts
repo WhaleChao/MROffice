@@ -25,10 +25,34 @@ export type PairKerning = (left: number, right: number) => number;
 const NOT_COVERED = Number.NaN;
 
 const cache = new WeakMap<FaceMetrics, PairKerning | null>();
+const legacyCache = new WeakMap<FaceMetrics, PairKerning | null>();
 
-/** The pair adjustment function of a face, in font units; null when the
- * face has no horizontal kerning. */
-export function pairKerning(metrics: FaceMetrics): PairKerning | null {
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function pairKerning(metrics: FaceMetrics, { legacyKernOnly = false }: { legacyKernOnly?: boolean } = {}): PairKerning | null {
+  if (legacyKernOnly) {
+    if (legacyCache.has(metrics)) return legacyCache.get(metrics)!;
+    let legacy: PairKerning | null = null;
+    try {
+      const kern = metrics.kerningTables?.get("kern");
+      legacy = kern ? legacyKerning(kern) : null;
+    } catch {
+      legacy = null;
+    }
+    legacyCache.set(metrics, legacy);
+    return legacy;
+  }
   if (cache.has(metrics)) return cache.get(metrics)!;
   let result: PairKerning | null = null;
   try {

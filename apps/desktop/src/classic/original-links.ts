@@ -15,6 +15,13 @@
  * the other side, or by another copy of the app, is seen at once instead of
  * the copy read at start (the AI's import linked a page the window's Save
  * never saw).
+ *
+ * Writing a page over its file (`writeOriginal`: ⌘S, the window's autosave,
+ * the AI's write) first copies a file the app did not write itself -- the
+ * person's own, untouched file, or one Word changed since -- into
+ * `originals-backup/<yyyy-mm-dd>/` beside the data folder, so what was
+ * there before the app's first overwrite can always be had back. A write
+ * whose copy fails writes nothing.
  */
 
 import fs from "node:fs";
@@ -31,7 +38,31 @@ export interface OriginalLink {
   /** The page body the file holds (last saved: its content version and
    * causal revision): Save of a page still at it writes nothing. */
   savedState?: string;
+  /** The size and time above are the app's own write of the file (not the
+   * file as the person had it): written over again, it is not copied first. */
+  written?: boolean;
 }
+
+/** Why a write of a page over its file was refused (nothing written). */
+export type OriginalWriteRefusal =
+  /** Autosave only: the page is linked to no file (it never asks where). */
+  | "not_linked"
+  /** Autosave only: the file was moved or deleted. */
+  | "missing"
+  /** Autosave only: the file changed on disk since it was opened or last
+   * written (Word saved it): never written over without the person's ⌘S. */
+  | "changed_elsewhere"
+  /** The copy of the person's file could not be made. */
+  | "backup_failed"
+  | "write_failed";
+
+export type OriginalWriteAnswer =
+  | { ok: true; path: string; backup: string | null }
+  | { ok: false; error: OriginalWriteRefusal; message?: string };
+
+/** How many copies of originals are kept, and for how long (the oldest go first). */
+export const ORIGINAL_BACKUPS_MAX_FILES = 200;
+export const ORIGINAL_BACKUPS_MAX_AGE_DAYS = 30;
 
 const PAGE_ID = /^[A-Za-z0-9-]{8,64}$/;
 const SAVED_STATE = /^[A-Za-z0-9_=&:.%+-]{1,400}$/;
@@ -78,17 +109,117 @@ export async function writeFileAtomically(target: string, bytes: Uint8Array): Pr
   }
 }
 
+function dayFolder(now: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+/** Copy ``file`` into ``backupRoot/<yyyy-mm-dd>/`` under its own name (`name (2).docx`
+ * beside one already there); the copy's path. Throws when it cannot be made. */
+export async function backupOriginal(file: string, backupRoot: string, now: Date = new Date()): Promise<string> {
+  const folder = path.join(backupRoot, dayFolder(now));
+  await fs.promises.mkdir(folder, { recursive: true });
+  const { name, ext } = path.parse(path.basename(file));
+  for (let n = 1; n < 10_000; n += 1) {
+    const target = path.join(folder, n === 1 ? `${name}${ext}` : `${name} (${n})${ext}`);
+    try {
+      // A clone on APFS (no second copy of the bytes), a copy elsewhere; never over another copy.
+      await fs.promises.copyFile(file, target, fs.constants.COPYFILE_EXCL | fs.constants.COPYFILE_FICLONE);
+      return target;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  throw new Error("no free name for the copy");
+}
+
+/** Keep the copies bounded: day folders older than ``maxAgeDays`` go, then the
+ * oldest copies past ``maxFiles``; ``keep`` (the copy just made) always stays. */
+export function pruneOriginalBackups(
+  backupRoot: string,
+  { maxFiles = ORIGINAL_BACKUPS_MAX_FILES, maxAgeDays = ORIGINAL_BACKUPS_MAX_AGE_DAYS, now = new Date(), keep }: {
+    maxFiles?: number;
+    maxAgeDays?: number;
+    now?: Date;
+    keep?: string;
+  } = {},
+): void {
+  let days: string[];
+  try {
+    days = fs.readdirSync(backupRoot).filter((name) => /^\d{4}-\d{2}-\d{2}$/.test(name));
+  } catch {
+    return;
+  }
+  const oldest = dayFolder(new Date(now.getTime() - maxAgeDays * 86_400_000));
+  const copies: { day: string; file: string; madeMs: number }[] = [];
+  for (const day of days) {
+    const folder = path.join(backupRoot, day);
+    if (day < oldest && !(keep && keep.startsWith(folder + path.sep))) {
+      fs.rmSync(folder, { recursive: true, force: true });
+      continue;
+    }
+    try {
+      for (const name of fs.readdirSync(folder)) {
+        const file = path.join(folder, name);
+        try {
+          const stat = fs.statSync(file);
+          copies.push({ day, file, madeMs: stat.birthtimeMs || stat.mtimeMs });
+        } catch {
+          // gone meanwhile
+        }
+      }
+    } catch {
+      // not a folder
+    }
+  }
+  if (copies.length <= maxFiles) return;
+  // A copy may keep its original's modification time: the day it was copied
+  // decides first, then when the copy was made.
+  copies.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : a.madeMs - b.madeMs));
+  let excess = copies.length - maxFiles;
+  for (const copy of copies) {
+    if (excess <= 0) break;
+    if (copy.file === keep) continue;
+    fs.rmSync(copy.file, { force: true });
+    excess -= 1;
+  }
+}
+
 export interface OriginalLinks {
-  linkOriginal(pageId: string, filePath: string, notebookId?: string, savedState?: string): boolean;
+  linkOriginal(pageId: string, filePath: string, notebookId?: string, savedState?: string, written?: boolean): boolean;
   originalOf(pageId: string): string | null;
   savedStateOf(pageId: string): string | null;
   linkOf(pageId: string): OriginalLink | null;
   /** The file is as it was when it was linked or last saved. */
   unchangedSinceLinked(pageId: string): boolean;
   pageOfUnchangedFile(filePath: string, stat: { size: number; mtimeMs: number }): { pageId: string; notebookId: string } | null;
+  /**
+   * Write a page's file over ``target`` (the file it is linked to, or the one
+   * the person picked) and link the page to it as written. The file on disk
+   * that is not the app's own last write is copied first (`backupOriginal`).
+   * ``auto``: the window's autosave, which writes only the page's own linked
+   * file, only while it is there and unchanged since it was opened or last
+   * written (``target`` is ignored).
+   */
+  writeOriginal(
+    pageId: string,
+    target: string | null,
+    bytes: Uint8Array,
+    options?: { auto?: boolean; savedState?: string },
+  ): Promise<OriginalWriteAnswer>;
+  /** Where the copies of originals go. */
+  backupRoot(): string;
+  /** An item renamed or moved on disk from any of ``from`` (the spellings of
+   * its old path) to ``to``: each link to it, or to a file inside it (a
+   * folder renamed), follows it, keeping what it recorded of the file.
+   * Returns how many links followed. */
+  followRename(from: readonly string[], to: string): number;
 }
 
-export function originalLinks(storeFile: () => string): OriginalLinks {
+/** ``storeFile``: `<data folder>/data/originals.json`; the copies of originals
+ * go to `<data folder>/originals-backup` unless ``backupRoot`` says otherwise. */
+export function originalLinks(storeFile: () => string, backupRoot?: () => string): OriginalLinks {
+  const backups = backupRoot ?? (() => path.join(path.dirname(path.dirname(storeFile())), "originals-backup"));
   let links: Record<string, OriginalLink> | null = null;
   let stamp: Stamp | null = null;
 
@@ -143,9 +274,9 @@ export function originalLinks(storeFile: () => string): OriginalLinks {
     return link && typeof link.path === "string" ? link : null;
   };
 
-  return {
+  const store: OriginalLinks = {
     /** Link a page to the file it came from (or was saved to), as the file is now. */
-    linkOriginal(pageId, filePath, notebookId, savedState) {
+    linkOriginal(pageId, filePath, notebookId, savedState, written) {
       if (!PAGE_ID.test(pageId) || !path.isAbsolute(filePath)) return false;
       // Read again first: a link written since by the other side is kept.
       const current = read();
@@ -161,6 +292,7 @@ export function originalLinks(storeFile: () => string): OriginalLinks {
         notebookId: notebookId && PAGE_ID.test(notebookId) ? notebookId : known?.notebookId,
         ...(stat ? { size: stat.size, mtimeMs: stat.mtimeMs } : {}),
         ...(savedState && SAVED_STATE.test(savedState) ? { savedState } : {}),
+        ...(written && stat ? { written: true } : {}),
       };
       links = current;
       write();
@@ -207,7 +339,95 @@ export function originalLinks(storeFile: () => string): OriginalLinks {
       }
       return found ? { pageId: found.pageId, notebookId: found.notebookId } : null;
     },
+
+    async writeOriginal(pageId, target, bytes, options = {}) {
+      const link = linkOf(pageId);
+      let file = target;
+      if (options.auto) {
+        if (!link) return { ok: false, error: "not_linked" };
+        if (!fs.existsSync(link.path)) return { ok: false, error: "missing" };
+        if (!unchanged(link)) return { ok: false, error: "changed_elsewhere" };
+        file = link.path;
+      }
+      if (!file || !path.isAbsolute(file)) return { ok: false, error: "write_failed", message: "no file to write" };
+      let backup: string | null = null;
+      let present: fs.Stats | null = null;
+      try {
+        present = fs.statSync(file);
+      } catch {
+        present = null;
+      }
+      if (present?.isDirectory()) return { ok: false, error: "write_failed", message: "The path is a folder." };
+      // The app's own last write of this very file, unchanged since: nothing of
+      // the person's to keep. Anything else (their untouched file, Word's save
+      // of it since, a file picked in Save's dialog) is copied first.
+      const ours = !!link && link.written === true && samePath(link.path, file) && unchanged(link);
+      if (present && !ours) {
+        try {
+          backup = await backupOriginal(file, backups());
+        } catch (error) {
+          return { ok: false, error: "backup_failed", message: error instanceof Error ? error.message : String(error) };
+        }
+        try {
+          pruneOriginalBackups(backups(), { keep: backup });
+        } catch {
+          // the copy is made; tidying is for the next one
+        }
+      }
+      try {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        await writeFileAtomically(file, bytes);
+      } catch (error) {
+        return { ok: false, error: "write_failed", message: error instanceof Error ? error.message : String(error) };
+      }
+      store.linkOriginal(pageId, file, undefined, options.savedState, true);
+      return { ok: true, path: file, backup };
+    },
+
+    backupRoot: backups,
+
+    followRename(from, to) {
+      if (!path.isAbsolute(to)) return 0;
+      // Each old spelling, and the same through its folder's links (macOS's
+      // /var and /private/var): the item itself is gone from there now.
+      const olds = [
+        ...new Set(
+          from
+            .filter((item) => path.isAbsolute(item))
+            .flatMap((item) => {
+              const resolved = path.resolve(item);
+              try {
+                return [resolved, path.join(fs.realpathSync(path.dirname(resolved)), path.basename(resolved))];
+              } catch {
+                return [resolved];
+              }
+            }),
+        ),
+      ];
+      if (!olds.length) return 0;
+      const current = read();
+      let followed = 0;
+      for (const link of Object.values(current)) {
+        if (!link || typeof link.path !== "string") continue;
+        const linked = path.resolve(link.path);
+        for (const old of olds) {
+          const relative = path.relative(old, linked);
+          if (linked !== old && (relative === "" || relative.startsWith("..") || path.isAbsolute(relative))) continue;
+          // The rename keeps the file's size and time: the link still says
+          // the file is unchanged since it was linked or saved.
+          link.path = linked === old ? to : path.join(to, relative);
+          followed += 1;
+          break;
+        }
+      }
+      if (followed) {
+        links = current;
+        write();
+      }
+      return followed;
+    },
   };
+  return store;
 }
 
 // --- the AI's computer tools (`POST /v1/originals`) ---------------------------------
@@ -285,14 +505,21 @@ export async function originalsAct(store: OriginalLinks, request: Record<string,
       if (fs.statSync(filePath, { throwIfNoEntry: false })?.isDirectory()) {
         return refuse("is_a_folder", "The path is a folder.");
       }
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      await writeFileAtomically(filePath, bytes);
     } catch (error) {
       return refuse("write_failed", error instanceof Error ? error.message : String(error));
     }
     if (pageId) {
+      // The page's own file: the person's untouched file is copied first.
       const savedState = typeof request.saved_state === "string" ? request.saved_state : undefined;
-      store.linkOriginal(pageId, store.linkOf(pageId)?.path ?? filePath, undefined, savedState);
+      const written = await store.writeOriginal(pageId, store.linkOf(pageId)?.path ?? filePath, bytes, { savedState });
+      if (!written.ok) return refuse(written.error, written.message ?? written.error);
+      return { ok: true, path: filePath, size: bytes.length };
+    }
+    try {
+      fs.mkdirSync(path.dirname(filePath), { recursive: true });
+      await writeFileAtomically(filePath, bytes);
+    } catch (error) {
+      return refuse("write_failed", error instanceof Error ? error.message : String(error));
     }
     return { ok: true, path: filePath, size: bytes.length };
   }

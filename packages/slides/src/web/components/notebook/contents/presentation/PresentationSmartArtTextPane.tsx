@@ -67,6 +67,8 @@ export interface PresentationSmartArtTextPaneCtl {
   updateContextualSmartArtOutlineText: (itemId: string, text: string) => boolean;
   changeNativeSmartArtStructure: (operation: NativeSmartArtStructureOperation, pointId: string, pendingText?: { itemId: string; text: string; }, newPointText?: string) => Promise<void>;
   closeSmartArtTextPane: (restoreFocus?: boolean) => void;
+  /** A file's SmartArt with another window in the page's room: the pane is read-only (TRIAGE S11g guard). */
+  smartArtPaneLockedByPeers?: boolean;
 }
 
 /** The selected diagram's frame, in the pane's own deck window. */
@@ -113,7 +115,12 @@ export function PresentationSmartArtTextPane({ ctl }: { ctl: PresentationSmartAr
     updateContextualSmartArtOutlineText,
     changeNativeSmartArtStructure,
     closeSmartArtTextPane,
+    smartArtPaneLockedByPeers = false,
   } = ctl;
+  // Another window is editing this deck: a file's SmartArt is edited on the
+  // canvas, not here (TRIAGE S11g: two windows writing one pane row lost one
+  // window's words). Read-only, its structure commands off, and said so.
+  const locked = smartArtPaneLockedByPeers;
   return (
             <OfficeSmartArtTextPane
               testIdPrefix="presentation"
@@ -127,7 +134,7 @@ export function PresentationSmartArtTextPane({ ctl }: { ctl: PresentationSmartAr
               hiddenPictureItemIds={smartArtHeldPictureItemIds(contextualSmartArtMarker?.groupId)}
               selectedItemId={contextualSmartArtSelectedItemId}
               maxTextLength={MAX_SMARTART_OUTLINE_TEXT_LENGTH}
-              canAddItem={Boolean(contextualSmartArtCanAddOutlineItem)}
+              canAddItem={!locked && Boolean(contextualSmartArtCanAddOutlineItem)}
               itemKeyPrefix={
                 contextualNativeSmartArt
                   ? `${contextualNativeSmartArt.pageId}:${contextualNativeSmartArt.generation}:`
@@ -153,14 +160,19 @@ export function PresentationSmartArtTextPane({ ctl }: { ctl: PresentationSmartAr
                   : undefined
               }
               notice={
-                contextualNativeSmartArt &&
+                locked
+                  ? t("presentation.smartartContext.paneLockedCoediting")
+                  : contextualNativeSmartArt &&
                 contextualSmartArtTextIsWritable &&
                 nativeSmartArtProfile?.scope === nativeSmartArtProfileScope &&
                 !nativeSmartArtProfile.result.supported
                   ? t("presentation.smartartContext.nativeTextOnly")
                   : undefined
               }
-              itemState={(item) => ({
+              itemState={(item) => locked ? {
+                canPromote: false, canDemote: false, canDelete: false, canBackspaceDelete: false,
+                canMoveUp: false, canMoveDown: false, readOnly: true,
+              } : ({
                 canPromote: contextualNativeSmartArt
                   ? nativeSmartArtCanOperate("promote", item.id)
                   : Boolean(

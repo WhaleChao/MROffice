@@ -47,6 +47,7 @@ import {
   isImportedPptxBlock,
 } from "@mrnote/core/web/lib/presentation-object-buttons.ts";
 import { buildBlockTransform, type BlockGeometry } from "@mrnote/core/web/lib/presentation-drag.ts";
+import { blendsWithSlide } from "./metafile-blend-layer";
 import { canManipulateBlock } from "@mrnote/core/web/lib/presentation-text-case.ts";
 import {
   blockNativeGroupMoveAuthority,
@@ -842,6 +843,10 @@ export function blockGeometryStyle(
         geometryNumber(block, "height") !== null));
   const exactGeometry =
     authorSized || isImportedPptxBlock(block) || isSmartArtMemberBlock(block);
+  const transform = buildBlockTransform(rotation, flipOverride ?? {
+    flipH: blockFlag(block, "flipH"),
+    flipV: blockFlag(block, "flipV"),
+  });
   return {
     left: `${(left / bounds.width) * 100}%`,
     top: `${(top / bounds.height) * 100}%`,
@@ -852,16 +857,16 @@ export function blockGeometryStyle(
     // then rotate — PowerPoint xfrm order; see buildBlockTransform). The flip is
     // render-only: it never touches the block's geometry/text. `center center`
     // origin makes flip-twice an exact identity.
-    transform: buildBlockTransform(rotation, flipOverride ?? {
-      flipH: blockFlag(block, "flipH"),
-      flipV: blockFlag(block, "flipV"),
-    }),
+    transform,
     transformOrigin: "center center",
     // Every object is a stacking layer of its own, drawn in the slide's paint
     // order (`presentationInPaintOrder`): what it holds inside -- a text
     // preview's layers, its grips -- stays with it, and a number it carries
-    // never outranks an object in front of it (PPT-B310).
-    zIndex: 0,
+    // never outranks an object in front of it (PPT-B310). A picture with a
+    // blend layer (readings row 1021) is not: the layer blends with the slide
+    // under it, which a stacking context of its own would hide from it; it
+    // is still painted in its place (positioned, in tree order).
+    ...(blendsWithSlide(block, transform) ? {} : { zIndex: 0 }),
   };
 }
 
