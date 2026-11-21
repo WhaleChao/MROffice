@@ -71,7 +71,7 @@ MR Office เป็นเซิร์ฟเวอร์อนุญาต OAuth 
 
 โปรแกรมแก้ไขทั้งหกในรีโพนี้นำไปรวมในผลิตภัณฑ์ของคุณได้ภายใต้ AGPL-3.0: หากผู้อื่นใช้เวอร์ชันที่แก้ไขผ่านเครือข่าย คุณต้องเสนอซอร์สโค้ดฉบับสมบูรณ์ให้ และคงการระบุ "MR Office" ไว้ (NOTICE.md) โปรแกรมเหล่านี้เปิดรูปแบบของตัวเอง, CSV, HTML, Markdown และ PDF ส่วนไฟล์ Word, Excel และ PowerPoint ไม่อยู่ในโปรแกรมแก้ไขโอเพนซอร์ส (การฝังแบบโฮสต์ด้านบนรองรับ) สัญญาอนุญาตเชิงพาณิชย์ติดต่อ support@mr-note.com [คู่มือโอเพนซอร์ส →](https://mroffice.ai/th/developers/open-source)
 
-กำลังเตรียมแพ็กเกจ npm ในชื่อ `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` และ `mroffice-code` ระหว่างที่ยังไม่เผยแพร่ ให้บิลด์โปรแกรมแก้ไขจากรีโพนี้ (ดูด้านล่าง)
+ตัวแก้ไขอยู่บน npm เป็นคอมโพเนนต์ React: `npm i mroffice-docs mroffice-core` (และ `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`) README ของแต่ละแพ็กเกจบอกวิธีฝัง
 
 ## ตัวแก้ไข
 

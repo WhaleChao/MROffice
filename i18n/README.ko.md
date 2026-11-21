@@ -71,7 +71,7 @@ MR Office는 OAuth 2.1 인가 서버입니다(PKCE, 클라이언트 ID 메타데
 
 이 저장소의 편집기 6개는 AGPL-3.0에 따라 여러분의 제품에 넣을 수 있습니다. 수정한 버전을 네트워크로 제공한다면 전체 소스 코드를 제공하고 "MR Office" 표기(NOTICE.md)를 유지해야 합니다. 자체 형식, CSV, HTML, Markdown, PDF를 엽니다. Word, Excel, PowerPoint 파일은 오픈 소스 편집기에 포함되지 않습니다(위의 호스팅 임베드에서 지원). 상용 라이선스는 support@mr-note.com으로 문의하세요. [오픈 소스 가이드 →](https://mroffice.ai/ko/developers/open-source)
 
-npm 패키지를 `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`라는 이름으로 준비 중입니다. 게시되기 전까지는 이 저장소에서 편집기를 빌드하세요(아래 참고).
+에디터는 React 컴포넌트로 npm에 있습니다: `npm i mroffice-docs mroffice-core` (그 밖에 `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`). 임베드 방법은 각 패키지의 README에 있습니다.
 
 ## 편집기
 

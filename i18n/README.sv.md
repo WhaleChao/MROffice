@@ -71,7 +71,7 @@ MR Office är en OAuth 2.1-auktoriseringsserver (PKCE, metadatadokument för kli
 
 De sex redigerarna i detta förråd kan byggas in i din egen produkt under AGPL-3.0: om andra använder en ändrad version över ett nätverk måste du erbjuda dem dess fullständiga källkod och behålla angivelsen "MR Office" (NOTICE.md). De öppnar sina egna format, CSV, HTML, Markdown och PDF; Word-, Excel- och PowerPoint-filer ingår inte i redigerarna med öppen källkod (den hostade inbäddningen ovan har dem). En kommersiell licens finns via support@mr-note.com. [Guide för öppen källkod →](https://mroffice.ai/sv/developers/open-source)
 
-npm-paket förbereds under namnen `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` och `mroffice-code`; tills de är publicerade bygger du redigerarna från detta förråd (se nedan).
+Redigerarna finns på npm som React-komponenter: `npm i mroffice-docs mroffice-core` (och `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); varje pakets README visar hur man bäddar in det.
 
 ## Redigerarna
 

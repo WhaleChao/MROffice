@@ -71,7 +71,7 @@ MR Office adalah server otorisasi OAuth 2.1 (PKCE, dokumen metadata ID klien, pe
 
 Enam editor di repositori ini dapat dibangun ke dalam produk Anda di bawah AGPL-3.0: jika orang menggunakan versi yang diubah melalui jaringan, Anda wajib menawarkan kode sumber lengkapnya dan mempertahankan atribusi "MR Office" (NOTICE.md). Editor ini membuka format miliknya sendiri, CSV, HTML, Markdown, dan PDF; file Word, Excel, dan PowerPoint tidak termasuk dalam editor sumber terbuka (penyematan yang dihosting di atas mendukungnya). Lisensi komersial tersedia melalui support@mr-note.com. [Panduan sumber terbuka →](https://mroffice.ai/id/developers/open-source)
 
-Paket npm sedang disiapkan dengan nama `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, dan `mroffice-code`; sampai diterbitkan, bangun editor dari repositori ini (lihat di bawah).
+Editor tersedia di npm sebagai komponen React: `npm i mroffice-docs mroffice-core` (serta `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); README tiap paket menjelaskan cara menyematkannya.
 
 ## Editor
 

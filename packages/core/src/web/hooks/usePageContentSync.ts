@@ -74,6 +74,7 @@ import {
 } from "../lib/collab/json-crdt";
 import { CollaborativeTextKeys, OrphanTextEdits, textKeyWritten, writeWaitingTextEdits } from "../lib/collab/collab-text-keys";
 import { remoteUpdateBeingApplied } from "../lib/collab/remote-update-payload";
+import { SERVER_OWNED_PAGE_ROOT_KEYS } from "../lib/import-losses";
 import { USE_COLLAB_EDITING } from "../lib/code-runner/editor-flags";
 import { createRoomCustodyPump, roomCustodyPumpEnabled } from "../lib/collab/room-custody-pump";
 import { closingBytesBase64 } from "../lib/page-closing-edits";
@@ -456,6 +457,20 @@ export function stripPrivate(
   return out;
 }
 
+/**
+ * `doc` without the root keys only the server writes (the import-loss record):
+ * what a member's publish compares, so it never writes or deletes them. The
+ * room's copy is delivered to the editor as before.
+ */
+export function withoutServerOwnedKeys(doc: PageContentDocument): PageContentDocument {
+  if (!SERVER_OWNED_PAGE_ROOT_KEYS.some((key) => Object.hasOwn(doc, key))) return doc;
+  const out: PageContentDocument = {};
+  for (const [key, value] of Object.entries(doc)) {
+    if (!SERVER_OWNED_PAGE_ROOT_KEYS.includes(key)) out[key] = value;
+  }
+  return out;
+}
+
 function pickPrivate(
   doc: PageContentDocument,
   privateKeys: readonly string[],
@@ -773,8 +788,10 @@ function useLegacyPageContentSync({
     // A text the editor still shows as it was before a key of it was carried
     // over a collaborator's characters is the room's words (no edit of it).
     const local = settleStaleTextViewsRef.current?.(shown, baseline) ?? shown;
-    const nextShared = stripPrivate(local, privateKeysRef.current);
-    const prevShared = stripPrivate(baseline, privateKeysRef.current);
+    // Neither a view's own keys nor the server's (`SERVER_OWNED_PAGE_ROOT_KEYS`):
+    // the room keeps the server's record, whatever the editor's content holds.
+    const nextShared = withoutServerOwnedKeys(stripPrivate(local, privateKeysRef.current));
+    const prevShared = withoutServerOwnedKeys(stripPrivate(baseline, privateKeysRef.current));
     // The editor now shows a body the server wrote (a version restore, read
     // back by a reload) whose causal checkpoint is still being merged into
     // the room. That merge brings these very values, as the server's own

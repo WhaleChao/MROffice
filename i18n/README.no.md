@@ -71,7 +71,7 @@ MR Office er en OAuth 2.1-autorisasjonsserver (PKCE, metadatadokumenter for klie
 
 De seks redigeringsprogrammene i dette depotet kan bygges inn i ditt eget produkt under AGPL-3.0: bruker andre en endret versjon over et nettverk, må du tilby dem den fullstendige kildekoden og beholde merkingen «MR Office» (NOTICE.md). De åpner egne formater, CSV, HTML, Markdown og PDF; Word-, Excel- og PowerPoint-filer er ikke med i redigeringsprogrammene med åpen kildekode (den vertsbaserte innbyggingen over har dem). En kommersiell lisens fås via support@mr-note.com. [Veiledning for åpen kildekode →](https://mroffice.ai/no/developers/open-source)
 
-npm-pakker forberedes under navnene `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` og `mroffice-code`; til de er publisert, bygger du redigeringsprogrammene fra dette depotet (se nedenfor).
+Redigeringsprogrammene finnes på npm som React-komponenter: `npm i mroffice-docs mroffice-core` (og `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); hver pakkes README viser hvordan den bygges inn.
 
 ## Redigeringsverktøyene
 

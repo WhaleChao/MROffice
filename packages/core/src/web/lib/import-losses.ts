@@ -18,6 +18,19 @@
  * package is preserved and exported untouched in every case recorded here.
  */
 
+/** The page key the server writes the record under. */
+export const PAGE_IMPORT_LOSSES_KEY = "importLosses";
+
+
+
+
+
+
+
+
+
+export const SERVER_OWNED_PAGE_ROOT_KEYS: readonly string[] = [PAGE_IMPORT_LOSSES_KEY];
+
 export interface ImportLossEntry {
   readonly code: string;
   readonly omitted: number;
@@ -176,7 +189,7 @@ export function readPageImportLosses(
   const fromMetadata = readImportLosses(resourceMetadataValue);
   if (fromMetadata.length > 0) return fromMetadata;
   return readImportLosses(
-    isRecord(pageContentJson) ? pageContentJson.importLosses : undefined,
+    isRecord(pageContentJson) ? pageContentJson[PAGE_IMPORT_LOSSES_KEY] : undefined,
   );
 }
 

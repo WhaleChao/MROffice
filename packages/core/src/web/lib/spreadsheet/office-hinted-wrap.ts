@@ -31,6 +31,7 @@
 import TABLE from "./office-wrap-advances.json";
 import { excelWindowsFaceKey, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
 import { officeArabicWrapAdvances } from "./office-arabic";
+import { officeRegionalLetterAdvance } from "./office-regional-letters";
 
 type FaceTable = Readonly<Record<string, Readonly<Record<string, Readonly<Record<string, string>>>>>>;
 
@@ -219,6 +220,9 @@ export function advancesOf(face: OfficeHintedWrapFace): ((ch: string) => number 
   };
   return (ch) => {
     if (zeroAdvance(ch)) return 0;
+    // Segoe UI Emoji's letter, whatever the face (office-regional-letters.ts, p254-lw).
+    const regional = officeRegionalLetterAdvance(ch);
+    if (regional !== undefined) return Math.floor(regional * Number(ppem) + 0.5);
     const at = charIndex.get(ch);
     const own = at === undefined ? undefined : decode(encoded[at]);
     if (own !== undefined) return own + widen;
@@ -256,7 +260,15 @@ export function officeHintedWrapLines(text: string, face: OfficeHintedWrapFace, 
     const scale = complexRoomScale(face.sizePt);
     return wrapWith(text, (at) => (shares[at] ?? 0) * scale, columnPx, emPxOf(face.sizePt), options, officeDigitPx(face));
   }
-  return wrapWith(text, (_at, ch) => advance(ch), columnPx, emPxOf(face.sizePt), options, officeDigitPx(face));
+  return wrapWith(text, (_at, ch) => advance(ch), columnPx, emPxOf(face.sizePt), options, officeDigitPx(face),
+    face.italic === true ? officeItalicWrapLess(emPxOf(face.sizePt)) : 0);
+}
+
+/** The pixels an italic cell's wrap room is short of its upright one's,
+ * about a fifth of its em (lookwin p250/p251-lw: 2 px up to a 15 px em, 3 at
+ * 16-19, 4 at 21-24, 5 at 27). The API's office_italic_wrap_less. */
+export function officeItalicWrapLess(emPx: number): number {
+  return Math.max(0, Math.floor(Math.trunc(emPx) * 4 / 21));
 }
 
 /** Complex-script text wraps in Excel's room of the column at the face's
@@ -323,9 +335,9 @@ export function officeHintedWrapRunLines(runs: readonly OfficeHintedWrapRun[], c
  * count as one; p117b/p117d/p118-lw; R379-X18's formula notes wrap 9 and 19
  * lines, not 8 and 18). The API's _wrap is the same rule. */
 function wrapWith(text: string, advanceAt: (at: number, ch: string) => number | undefined, columnPx: number, emPx = 15,
-  options: OfficeHintedWrapOptions = {}, digitPx?: number): string[] | undefined {
+  options: OfficeHintedWrapOptions = {}, digitPx?: number, roomLess = 0): string[] | undefined {
   if (!Number.isFinite(columnPx)) return undefined;
-  const room = officeHintedWrapRoom(columnPx, emPx, options.normalDigitPx, digitPx);
+  const room = officeHintedWrapRoom(columnPx, emPx, options.normalDigitPx, digitPx) - roomLess;
   const spaced = options.spaced === true;
   const lines: string[] = [];
   let offset = 0;

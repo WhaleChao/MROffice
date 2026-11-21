@@ -16,6 +16,7 @@ import { columnBaseWidthToPixels, columnFileWidthToPixels } from "./grid-sizing"
 import { isSpreadsheetFauxBoldStroke, setSpreadsheetFauxBoldPrinted, spreadsheetEngineIdealAdvances, spreadsheetEngineTextWidth, spreadsheetFauxBoldCss, spreadsheetTextEngineOn } from "./spreadsheet-text-engine";
 import { withScriptFallbacks } from "../office-fonts/script-fallbacks";
 import { OFFICE_COMPLEX_SCALE_PREFIX, officeComplexScaleStack } from "./office-complex-scales";
+import { officeRegionalLettersStack } from "./office-regional-letters";
 import { excelFontRecordOf, excelWindowsCellPitch, excelWindowsDrawnFaces, excelWindowsFaceKey, type ExcelFontRecordClass } from "../office-fonts/excel-windows-faces";
 import OFFICE_DIGIT_WHOLE_EM from "./office-digit-whole-em.json";
 import OFFICE_HINTED_ADVANCES from "./office-hinted-advances.json";
@@ -439,7 +440,7 @@ function buildSpreadsheetFontStack(family: string | undefined): string {
     // face that arrives later still wins.
     ensureOfficeFontFaces("Arial");
     const arial = officeFontSubstitutes("Arial").map((name) => `"${name}", `).join("");
-    return servedStack(`"${face}", "Arial", ${arial}${officeComplexScaleStack(face)}"Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", sans-serif`);
+    return servedStack(`"${face}", "Arial", ${arial}${officeComplexScaleStack(face)}${officeRegionalLettersStack()}"Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", sans-serif`);
   }
   ensureOfficeFontFaces(face);
   // A face Windows Excel prints lighter than the catalog's cut of its
@@ -476,7 +477,10 @@ function buildSpreadsheetFontStack(family: string | undefined): string {
   // fall to Wine Tahoma's Arabic, behind every face here, or to the script
   // fallback's Noto at its own size. Each family covers its script alone.
   const complex = officeComplexScaleStack(face);
-  return servedStack(`${face ? `${cut ? `"${cut.alias}", ` : ""}"${face}", ${complex}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
+  // Regional indicators as Excel's letters (office-regional-letters.ts),
+  // ahead of every stand-in and fallback that would draw a flag or a box.
+  const regional = officeRegionalLettersStack();
+  return servedStack(`${face ? `${cut ? `"${cut.alias}", ` : ""}"${face}", ${complex}${regional}${substitutes}${scriptSerif}${hanSerif}` : ""}"Calibri","Microsoft YaHei", "Malgun Gothic", "Mangal", "Tahoma", "PingFang SC", sans-serif`);
 }
 
 /** The system faces a stack's Han and kana fall to when its own faces lack them. */

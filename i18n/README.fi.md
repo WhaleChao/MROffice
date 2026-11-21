@@ -71,7 +71,7 @@ MR Office on OAuth 2.1 -valtuutuspalvelin (PKCE, asiakastunnuksen metatietoasiak
 
 Tämän repositorion kuusi editoria voi rakentaa omaan tuotteeseesi AGPL-3.0-lisenssillä: jos muut käyttävät muokattua versiota verkon yli, sinun on tarjottava heille sen koko lähdekoodi ja säilytettävä "MR Office" -maininta (NOTICE.md). Ne avaavat omia muotojaan, CSV-, HTML-, Markdown- ja PDF-tiedostoja; Word-, Excel- ja PowerPoint-tiedostot eivät kuulu avoimen lähdekoodin editoreihin (yllä oleva ylläpidetty upotus tukee niitä). Kaupallisen lisenssin saa osoitteesta support@mr-note.com. [Avoimen lähdekoodin opas →](https://mroffice.ai/fi/developers/open-source)
 
-npm-paketteja valmistellaan nimillä `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` ja `mroffice-code`; kunnes ne julkaistaan, rakenna editorit tästä repositoriosta (katso alla).
+Editorit ovat npm:ssä React-komponentteina: `npm i mroffice-docs mroffice-core` (sekä `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); kunkin paketin README kertoo, miten se upotetaan.
 
 ## Editorit
 

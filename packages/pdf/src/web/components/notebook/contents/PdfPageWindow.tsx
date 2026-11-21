@@ -20871,15 +20871,23 @@ export default function PdfPageWindow({
         let formats: unknown = null;
         try { formats = JSON.parse(carry.formats!); } catch { formats = null; }
         const input = document.activeElement;
-        // (Their offsets name letters of the words as they were kept.)
+        // (Their offsets name letters of the words as they were kept. Not
+        // asked of the box's field here: the editor opens at once on the
+        // reader's own text of the box -- a paragraph's rows a line break
+        // apart, taken by the carry as the line it is -- and reads the
+        // line's words when its proof lands. Compared here, the formats of
+        // a box of several rows were never the line's: a bold taken off a
+        // title of three rows, the browser gone and back, was said to be of
+        // a line drawn otherwise now, on a page nothing had written
+        
         const asKept = input instanceof HTMLTextAreaElement && input.value === carry.value;
         let editor = nativeListTextEditorControllerRef.current;
         for (const until = performance.now() + 2_000; !editor?.restoreFormats && performance.now() < until;) {
           await new Promise(resolve => requestAnimationFrame(resolve));
           editor = nativeListTextEditorControllerRef.current;
         }
-        const taken = formats !== null && asKept && editor?.restoreFormats
-          ? await editor.restoreFormats(formats as PdfNativeTextFormatDraft) : false;
+        const taken = formats !== null && editor?.restoreFormats
+          ? await editor.restoreFormats(formats as PdfNativeTextFormatDraft, carry.value) : false;
         markPdfTextLatency("typing-draft.formats", { taken, asKept });
         if (taken === null) {
           // That editor closed before its proof came (the line opened again
@@ -43189,14 +43197,32 @@ export default function PdfPageWindow({
         if (proven.fallbackText.unmatchedItems > 0) return decline("fallback-unmatched");
         let pieces: readonly Readonly<{ object: number; generation: number; start: number; end: number;
           codeRanges?: unknown; continuation?: unknown }>[] = proven.fallbackText.pieces;
+        // The shows are named by where they stand, not by what they draw:
+        // the delete is kept only when the page read again has lost this
+        // line's items and no other (as the other deletes of several shows
+        // are, below). A piece that was another box's row -- the word typed
+        // into the line above, wrapped to a second row close over this one
+        // -- was emptied here, the line's own shows left standing, and the
+        // line made a box all the same: the other box's word gone from the
+        // page and the file, this line's words in it twice (pdf-walk-1000
+        
+        const fallbackSelection = proven.evidence.selection ?? selection;
+        const onFallbackLine = boxReaderItems(fallbackSelection);
+        const readBefore = await headReaderItems().catch(() => null);
+        if (!readBefore) return decline("fallback-read");
         for (let round = 0; pieces.length; round += 1) {
           if (round >= 8 || !pieces.every((piece) => !piece.codeRanges && !piece.continuation)) {
             rollBack();
             return decline("fallback-pieces");
           }
           const piece = pieces[pieces.length - 1];
+          // (Named on the head it is planned on: a selection of other bytes
+          
+          // none of -- every piece after the first was refused so, and the
+          // line taken for deleted with one of its pieces gone.)
           const id = await stageRunDelete(proven, { start: piece.start, end: piece.end }, null,
-            proven.evidence.selection ?? selection, { objectNumber: piece.object, generation: piece.generation });
+            { ...fallbackSelection, sourceSha256: document.getSnapshot().workingSha256 },
+            { objectNumber: piece.object, generation: piece.generation }).catch(() => null);
           if (!id) {
             rollBack();
             return decline("fallback-staging");
@@ -43238,6 +43264,12 @@ export default function PdfPageWindow({
               return decline("fallback-relocate");
             }
           } finally { head.fill(0); }
+        }
+        const readAfter = await headReaderItems().catch(() => null);
+        if (!readAfter || !pdfReaderCountsLoseOnlyLine(readBefore, readAfter, onFallbackLine, true)) {
+          markPdfTextLatency("delete.fallback-read-back", { runs: stagedIds.length, read: Boolean(readAfter) });
+          rollBack();
+          return decline("fallback-read-back");
         }
         lastStagedTextDeleteIdsRef.current = [...stagedIds];
         await handNativeWorkingStagedPage(document, pageNumber);

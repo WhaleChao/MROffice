@@ -71,7 +71,7 @@ MR Office es un servidor de autorización OAuth 2.1 (PKCE, documentos de metadat
 
 Los seis editores de este repositorio pueden integrarse en tu producto bajo la AGPL-3.0: si otras personas usan una versión modificada a través de una red, debes ofrecerles su código fuente completo y mantener la atribución «MR Office» (NOTICE.md). Abren sus propios formatos, CSV, HTML, Markdown y PDF; los archivos de Word, Excel y PowerPoint no forman parte de los editores de código abierto (la inserción alojada de arriba sí los admite). Hay una licencia comercial disponible en support@mr-note.com. [Guía de código abierto →](https://mroffice.ai/es-419/developers/open-source)
 
-Se están preparando paquetes npm con los nombres `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` y `mroffice-code`; hasta que se publiquen, compila los editores desde este repositorio (ver abajo).
+Los editores están en npm como componentes de React: `npm i mroffice-docs mroffice-core` (y `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); el README de cada paquete explica cómo integrarlo.
 
 ## Los editores
 

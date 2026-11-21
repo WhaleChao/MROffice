@@ -809,8 +809,13 @@ export type PdfNativeListTextEditorController = Readonly<{
    * refused) -- nothing of them is set then; null where this editor closed
    * before its proof came (the line opened again on a revision read in
    * under it): they are still the line's, for the editor that opens next.
+   * `words`: the line's words as they were kept with the formats (their
+   * offsets name letters of those words). Asked of the line once its proof
+   * is in, not of the box as it opened: an editor opens at once on the
+   * reader's own text of the box -- a paragraph's rows a line break apart
+   * -- and reads the line's words when its proof lands.
    */
-  restoreFormats?: (formats: PdfNativeTextFormatDraft) => Promise<boolean | null>;
+  restoreFormats?: (formats: PdfNativeTextFormatDraft, words?: string) => Promise<boolean | null>;
   /** How many steps of its own the line has left to take back (what was
    * typed, format presses). */
   historySteps?: () => number;
@@ -3141,17 +3146,17 @@ function PdfNativeListTextInlineEditor({
   // a browser that went down with the line open), handed back by
   // `restoreFormats` and waiting for the line's proof.
   const [formatRestore, setFormatRestore] = useState<Readonly<{
-    draft: PdfNativeTextFormatDraft; settle: (restored: boolean | null) => void }> | null>(null);
+    draft: PdfNativeTextFormatDraft; words?: string; settle: (restored: boolean | null) => void }> | null>(null);
   const formatRestoreRef = useRef(formatRestore);
   formatRestoreRef.current = formatRestore;
-  const restoreFormatsRef = useRef<(formats: PdfNativeTextFormatDraft) => Promise<boolean | null>>(() => Promise.resolve(false));
-  restoreFormatsRef.current = (formats) => new Promise<boolean | null>((resolve) => {
+  const restoreFormatsRef = useRef<(formats: PdfNativeTextFormatDraft, words?: string) => Promise<boolean | null>>(() => Promise.resolve(false));
+  restoreFormatsRef.current = (formats, words) => new Promise<boolean | null>((resolve) => {
     // (Read back from where the window kept them: taken only in their shape.)
     const draft = readPdfNativeTextFormatDraft(formats);
     if (!draft) { resolve(false); return; }
     // (A later hand-back takes the place of one not taken yet.)
     formatRestoreRef.current?.settle(null);
-    setFormatRestore(Object.freeze({ draft, settle: resolve }));
+    setFormatRestore(Object.freeze({ draft, ...(words !== undefined ? { words } : {}), settle: resolve }));
   });
   // Closed with them still waiting: not refused -- the line's next editor's.
   useEffect(() => () => formatRestoreRef.current?.settle(null), []);
@@ -8779,7 +8784,7 @@ function PdfNativeListTextInlineEditor({
       readFormat: () => formatStateRef.current,
       readFinishing: () => finishPendingRef.current,
       stepHistory: (direction) => stepLineHistoryRef.current(direction),
-      restoreFormats: (formats) => restoreFormatsRef.current(formats),
+      restoreFormats: (formats, words) => restoreFormatsRef.current(formats, words),
       historySteps: () => textHistoryRef.current.past.length + formatHistoryRef.current.past.length,
       ghost: () => makeFinishGhostRef.current(),
       leave: () => requestLeaveRef.current(),
@@ -13257,6 +13262,17 @@ function PdfNativeListTextInlineEditor({
     if (preparationFailed) { setFormatRestore(null); formatRestore.settle(false); return; }
     if (formatProofPending || propertyControlsBusy || composing) return;
     const { draft, settle } = formatRestore;
+    // Their offsets name letters of the words they were kept with: the
+    // line's words now, its proof in. The same words set apart otherwise
+    // are the reader's rows still in the field (the proof's words take
+    // their place a render later): waited for, not refused.
+    if (formatRestore.words !== undefined && formatRestore.words !== replacementText) {
+      const bare = (text: string) => text.replace(/\s+/gu, "");
+      if (bare(formatRestore.words) === bare(replacementText)) return;
+      setFormatRestore(null);
+      settle(false);
+      return;
+    }
     setFormatRestore(null);
     if (managedLayoutTypography || coverLaneLine ||
       (draft.properties !== null && (!propertyBaseline || !samePropertyDraft(draft.propertyBaseline, propertyBaseline)))) {
@@ -13279,7 +13295,7 @@ function PdfNativeListTextInlineEditor({
     }
     settle(true);
   }, [composing, coverLaneLine, formatProofPending, formatRestore, managedLayoutTypography, preparationFailed,
-    propertyBaseline, propertyControlsBusy, propertyOverride, rowFormat, setPartFormats, setProperties]);
+    propertyBaseline, propertyControlsBusy, propertyOverride, replacementText, rowFormat, setPartFormats, setProperties]);
   useEffect(() => {
     const latest = latestRibbonRef.current;
     if (queuedRibbonActions.length === 0 || formatProofPending || propertyControlsBusy || composing || coverRulesWaiting ||

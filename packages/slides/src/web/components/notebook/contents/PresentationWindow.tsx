@@ -97,7 +97,7 @@ import {
   officeLineWeightPxAsPointText,
   officeLineWeightSteppedPx,
 } from "@mrnote/core/web/lib/office-line-weight.ts";
-import { nativeSmartArtConversionAtDrawnBoxes, nativeSmartArtConversionLikeness, nativeSmartArtConversionLooksLikeDrawing, nativeSmartArtConvertedShapeAt, nativeSmartArtConvertedShapeOf, nativeSmartArtConvertsFromOwnDefinition, nativeSmartArtConversionIdPrefix, nativeSmartArtDrawingAbsent, nativeSmartArtWordsOntoConversion, smartArtAnswerWithWords, isNativeSmartArtMember, readNativeSmartArtGroup, readNativeSmartArtView, updateNativeSmartArtText, type NativeSmartArtView } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
+import { nativeSmartArtConversionAtDrawnBoxes, nativeSmartArtConversionLikeness, nativeSmartArtConversionLooksLikeDrawing, nativeSmartArtConvertedShapeAt, nativeSmartArtConvertedShapeOf, nativeSmartArtConvertsFromOwnDefinition, nativeSmartArtConversionIdPrefix, nativeSmartArtDrawingAbsent, nativeSmartArtOutlineWithWrittenWords, nativeSmartArtWordsOntoConversion, smartArtAnswerWithWords, isNativeSmartArtMember, readNativeSmartArtGroup, readNativeSmartArtView, updateNativeSmartArtText, type NativeSmartArtView } from "@mrnote/core/web/lib/presentation-native-smartart.ts";
 import { registerSmartArtDefinitionPage } from "@mrnote/core/web/lib/office-smartart/layout-definition-client.ts";
 import { reportOfficeExperience } from "@mrnote/core/web/lib/office-experience-report.ts";
 import { SMARTART_OWN_DEFINITION_LIKENESS_LIMIT } from "@mrnote/core/web/lib/office-smartart/drawing-likeness.ts";
@@ -114,6 +114,7 @@ import {
   smartArtEngine,
 } from "@mrnote/core/web/lib/office-smartart/remote.ts";
 import { callEngine, EngineRefusedError } from "@mrnote/core/web/lib/engine-host/client.ts";
+import { createSmartArtPreparationKeys } from "@mrnote/core/web/lib/office-smartart/preparation-key.ts";
 import { useEngineCallQueue, useEngineCallSequence } from "@mrnote/core/web/lib/engine-host/use-engine-call.ts";
 import { smartArtShownOutline, useSmartArtPendingOutline } from "@mrnote/core/web/lib/office-smartart/use-pending-outline.ts";
 import {
@@ -3724,7 +3725,9 @@ function smartArtColorThemeOf(
   return presentationSmartArtColorTheme(effective, hostTheme, grid);
 }
 
-const PRESENTATION_SMARTART_PREPARATIONS = createSmartArtPreparations<PresentationBlock, PresentationBlock[]>();
+const PRESENTATION_SMARTART_PREPARATIONS = createSmartArtPreparations<object, PresentationBlock[]>();
+/** A diagram's prepared conversion is kept by its members as they are (TRIAGE S11l). */
+const presentationSmartArtPreparationKey = createSmartArtPreparationKeys<PresentationBlock>();
 /** How long a double click's SmartArt words may take to open, the keys meanwhile theirs (`smartArtWordsOpeningRef`). */
 const SMARTART_WORDS_OPENING_MS = 5000;
 
@@ -39217,7 +39220,10 @@ export default function PresentationWindow({
       // it, and the engine proves it against this outline first.
       // Runs in a theme colour the page's reading predates, read from the
       
-      const outline = layoutIdentity ? await outlineWithStoredRunColours(pageId, view.outline, view.slotMediaView) : view.outline;
+      // The words written on the diagram since the file was read go into its
+      // conversion (`nativeSmartArtOutlineWithWrittenWords`, TRIAGE S11m).
+      const written = nativeSmartArtOutlineWithWrittenWords(view);
+      const outline = layoutIdentity ? await outlineWithStoredRunColours(pageId, written, view.slotMediaView) : written;
       const converted = layoutIdentity
         ? (
             await smartArtEngine(
@@ -39770,14 +39776,14 @@ export default function PresentationWindow({
       ? view
       : null;
   const selectedConvertsOnEdit = preparedSmartArt ? null : nativeSmartArtConvertsOnEdit(contextualNativeSmartArtView);
-  // A diagram's answer is kept by its first member, which an edit replaces.
+  // A diagram's answer is kept by its members as they are (`presentationSmartArtPreparationKey`).
   const selectedSmartArtPreparation = selectedConvertsOnEdit
-    ? PRESENTATION_SMARTART_PREPARATIONS.read(selectedConvertsOnEdit.members[0])
+    ? PRESENTATION_SMARTART_PREPARATIONS.read(presentationSmartArtPreparationKey(selectedConvertsOnEdit.members))
     : null;
   const retrySelectedSmartArtPreparation = () => {
     const slide = slidesRef.current[activeIndexRef.current];
     if (!selectedConvertsOnEdit || !slide) return;
-    PRESENTATION_SMARTART_PREPARATIONS.retry(selectedConvertsOnEdit.members[0], () =>
+    PRESENTATION_SMARTART_PREPARATIONS.retry(presentationSmartArtPreparationKey(selectedConvertsOnEdit.members), () =>
       askSmartArtConversion(selectedConvertsOnEdit, slide),
     );
   };
@@ -39785,7 +39791,7 @@ export default function PresentationWindow({
     if (!selectedConvertsOnEdit) return;
     const slide = slidesRef.current[activeIndexRef.current];
     if (!slide) return;
-    PRESENTATION_SMARTART_PREPARATIONS.prepare(selectedConvertsOnEdit.members[0], () =>
+    PRESENTATION_SMARTART_PREPARATIONS.prepare(presentationSmartArtPreparationKey(selectedConvertsOnEdit.members), () =>
       askSmartArtConversion(selectedConvertsOnEdit, slide),
     );
   }, [askSmartArtConversion, selectedConvertsOnEdit, smartArtPreparationVersion]);
@@ -60799,7 +60805,7 @@ export default function PresentationWindow({
                   const preparation = view
                     ? view === selectedConvertsOnEdit
                       ? selectedSmartArtPreparation
-                      : PRESENTATION_SMARTART_PREPARATIONS.read(view.members[0])
+                      : PRESENTATION_SMARTART_PREPARATIONS.read(presentationSmartArtPreparationKey(view.members))
                     : null;
                   if (view && preparation?.state === "refused") {
                     refuseSmartArtConversion(preparation.refusal);
@@ -60812,7 +60818,7 @@ export default function PresentationWindow({
                     };
                     noteSmartArtWordsOpening(view.members.map((block) => block.id));
                     if (preparation?.state === "failed" && live) {
-                      PRESENTATION_SMARTART_PREPARATIONS.retry(view.members[0], () => askSmartArtConversion(view, live));
+                      PRESENTATION_SMARTART_PREPARATIONS.retry(presentationSmartArtPreparationKey(view.members), () => askSmartArtConversion(view, live));
                     }
                   }
                 }

@@ -2043,6 +2043,7 @@ import {
   officeEmptyRowHeight,
   officeFloorRowHeight,
   officeCombinedRowParts,
+  officeDigitWidth,
   officeRowHeight,
   stackedTextLetterSpacing,
 } from "@mrnote/core/web/lib/spreadsheet/grid-sizing.ts";
@@ -20477,13 +20478,36 @@ function SpreadsheetWindow({
   // load opens on the workbook's active sheet: a print job's own sheet is
   // made active for its window, so the job names the workbook's.
   const officeViewZoom: unknown = (sheet as { zoomScale?: unknown }).zoomScale;
+  // A Normal font bound to the theme's minor font (scheme minor) wraps in
+  // that font's Latin face's digit and column, whatever face it names
+  // (lookwin p249-lw: 宋体 11 over a Calibri theme wraps Calibri cells in a
+  // 148 px column where its grid is 169; R464-X87). The API's
+  // normal_wrap_family / screen_wrap_px.
+  const officeWrapFace = useMemo(() => {
+    const font = nativeGrid?.grid.font;
+    const body = font?.bodyFamily?.trim();
+    if (nativeGrid?.dpi !== 96 || !font || font.themeRole !== "minor" || !body || body.toLowerCase() === font.family.trim().toLowerCase()) return undefined;
+    const gridDigit = officeDigitWidth({ family: font.family, sizePt: font.sizePt, record: font.record });
+    const wrapDigit = officeDigitWidth({ family: body, sizePt: font.sizePt });
+    return { family: body, gridDigit, wrapDigit };
+  }, [nativeGrid]);
+  const wrapColumnPx = useCallback((px: number) => {
+    if (!officeWrapFace || officeWrapFace.gridDigit === officeWrapFace.wrapDigit) return px;
+    const { gridDigit, wrapDigit } = officeWrapFace;
+    const width = (px + .5) / gridDigit - Math.floor(128 / gridDigit) / 256;
+    return Math.max(1, Math.floor((width + Math.floor(128 / wrapDigit) / 256) * wrapDigit));
+  }, [officeWrapFace]);
   const officeNormalDigitPx = useMemo(() => {
     if (nativeGrid?.dpi !== 96 || !nativeCellFont) return undefined;
     // In the face Windows draws a Normal font it lacks (Carlito stating
-    // nothing: Arial's digit), as its grid is sized.
-    const face = { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt, record: nativeCellFont.record };
-    return officeDigitPx(face);
-  }, [nativeGrid, nativeCellFont]);
+    // nothing: Arial's digit), as its grid is sized. A face the hinted table
+    // lacks steps by the digit its columns are sized in (lookwin p256-lw:
+    // Franklin Gothic Book 11, a 9 px digit, 101 of 101 rows where the
+    // default 7 px steps had 97). The API's normal_digit_px.
+    const face = officeWrapFace ? { family: officeWrapFace.family, sizePt: nativeCellFont.sizePt }
+      : { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt, record: nativeCellFont.record };
+    return officeDigitPx(face) ?? officeDigitWidth(face);
+  }, [nativeGrid, nativeCellFont, officeWrapFace]);
   // A sheet opened zoomed out fits its rows with the digit of the Normal
   // font at the view's size, the text measured at 100% (lookwin p239-lw:
   // Calibri 11 at 40-95% steps its room by a 3-7 px digit; R462-X41's
@@ -20493,12 +20517,13 @@ function SpreadsheetWindow({
   const officeZoomedDigit = useMemo(() => {
     if (nativeGrid?.dpi !== 96 || !nativeCellFont) return undefined;
     if (typeof officeViewZoom !== "number" || !Number.isInteger(officeViewZoom) || officeViewZoom < 10 || officeViewZoom >= 100) return undefined;
-    const digit = officeDigitPx({ family: nativeCellFont.family, sizePt: nativeCellFont.sizePt * officeViewZoom / 100, record: nativeCellFont.record });
-    if (digit === undefined) return undefined;
+    const zoomedFace = officeWrapFace ? { family: officeWrapFace.family, sizePt: nativeCellFont.sizePt * officeViewZoom / 100 }
+      : { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt * officeViewZoom / 100, record: nativeCellFont.record };
+    const digit = officeDigitPx(zoomedFace) ?? officeDigitWidth(zoomedFace);
     const before = officeNormalWrapFirst(sheet, { family: nativeCellFont.family, sizePt: nativeCellFont.sizePt });
     // A string, so an edit that moves nothing keeps it (the auto-row caches' deps).
     return before ? `${digit}:${before[0]}:${before[1]}` : `${digit}`;
-  }, [nativeGrid, nativeCellFont, officeViewZoom, sheet]);
+  }, [nativeGrid, nativeCellFont, officeViewZoom, sheet, officeWrapFace]);
   const cellNormalDigitPx = useCallback((row: number, col: number) => {
     if (officeZoomedDigit === undefined) return officeNormalDigitPx;
     const [digit, firstRow, firstCol] = officeZoomedDigit.split(":").map(Number);
@@ -20700,7 +20725,7 @@ function SpreadsheetWindow({
       // indent, as Windows Excel fits its row (lookwin p87-lw; the API's
       // indented_room). A centred cell takes no indent.
       const indentRoom = nativeGrid && cellIndentEdge(cell.style) !== "none" ? indentPaddingPx(cell.style?.indent, indentStepPx) : 0;
-      entries.push({ row, width: Math.max(1, intrinsicColWidth(col) - indentRoom), text: singleLine ? cellTextOnOneLine(text, cellWrapTextSetting(cell)) : text,
+      entries.push({ row, width: Math.max(1, wrapColumnPx(intrinsicColWidth(col)) - indentRoom), text: singleLine ? cellTextOnOneLine(text, cellWrapTextSetting(cell)) : text,
         ...(singleLine ? { singleLine: true } : {}),
         ...(nativeGrid ? { dpi: nativeGrid.dpi, paddingX: displayCellPadding } : {}),
         ...(cellNormalDigitPx(row, col) !== undefined ? { normalDigitPx: cellNormalDigitPx(row, col) } : {}),
@@ -20715,7 +20740,7 @@ function SpreadsheetWindow({
     })();
     return { entries, grows };
   }, [sheet, mergeSpans, intrinsicColWidth, cellDisplayValue, pageLayoutCellStyle, nativeGrid, displayCellPadding, hasNativeTextLayout, fontRunStyle, formulaEvaluator, rowEmptyFonts, indentStepPx,
-    cellNormalDigitPx, cellWrapsSpaced, fileHidesRows, viewHeldRows]);
+    cellNormalDigitPx, cellWrapsSpaced, fileHidesRows, viewHeldRows, wrapColumnPx]);
 
   const [{ autoRowCandidatesByCells, autoRowCellMeasurements }] = useState(createSpreadsheetWindowCaches);
   const autoRowCandidates = useMemo(() => {

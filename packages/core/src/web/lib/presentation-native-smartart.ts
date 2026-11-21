@@ -993,6 +993,45 @@ function textBlockWithWords(block: PresentationBlock, text: string): Presentatio
   return withRunText(block as PresentationBlock & Row, text) as PresentationBlock;
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+export function nativeSmartArtOutlineWithWrittenWords(view: NativeSmartArtView): readonly NativeSmartArtOutlineItem[] {
+  const group = readNativeSmartArtGroup(view.members, view.members.find((block) => block.type === "text"));
+  if (!group) return view.outline;
+  const read = new Map<string, string>();
+  for (const value of group.receipt.points as unknown[]) {
+    const point = record(value);
+    if (point && typeof point.modelId === "string" && typeof point.text === "string") read.set(point.modelId, point.text);
+  }
+  const written = new Map(
+    group.outline
+      .filter((item) => read.has(item.id) && read.get(item.id) !== item.text)
+      .map((item) => [item.id, item.text] as const),
+  );
+  if (!written.size) return view.outline;
+  return view.outline.map((item) => {
+    const text = written.get(item.id);
+    if (text === undefined || text === item.text) return item;
+    const { textRuns, ...rest } = item;
+    const spans = textRuns ? nativeSmartArtRunSpanEdit(textRuns.map((run) => run.text), item.text, text) : null;
+    const runs = textRuns && spans
+      ? textRuns.map((run, i) => ({ ...run, text: spans[i] })).filter((run) => run.text.length > 0)
+      : null;
+    return { ...rest, text, ...(runs && runs.length && runs.map((run) => run.text).join("") === text ? { textRuns: runs } : {}) };
+  });
+}
+
 /**
  * The words another window wrote on a file's diagram -- its preserved members
  * as they were (`before`) and as they arrived (`after`) -- carried onto this

@@ -71,7 +71,7 @@ MR Office là máy chủ ủy quyền OAuth 2.1 (PKCE, tài liệu siêu dữ li
 
 Sáu trình soạn thảo trong kho này có thể được tích hợp vào sản phẩm của bạn theo AGPL-3.0: nếu người khác dùng phiên bản đã sửa đổi qua mạng, bạn phải cung cấp cho họ toàn bộ mã nguồn và giữ ghi công "MR Office" (NOTICE.md). Chúng mở định dạng riêng, CSV, HTML, Markdown và PDF; tệp Word, Excel và PowerPoint không nằm trong các trình soạn thảo mã nguồn mở (bản nhúng được lưu trữ ở trên hỗ trợ). Giấy phép thương mại: liên hệ support@mr-note.com. [Hướng dẫn mã nguồn mở →](https://mroffice.ai/vi/developers/open-source)
 
-Các gói npm đang được chuẩn bị với tên `mroffice-core`, `mroffice-docs`, `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink` và `mroffice-code`; cho đến khi phát hành, hãy build các trình soạn thảo từ kho này (xem bên dưới).
+Các trình soạn thảo có trên npm dưới dạng thành phần React: `npm i mroffice-docs mroffice-core` (cùng `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`); README của từng gói hướng dẫn cách nhúng.
 
 ## Các trình soạn thảo
 

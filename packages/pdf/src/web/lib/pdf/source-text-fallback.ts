@@ -26,6 +26,7 @@ export type PdfFallbackTextRefusalCode =
   | "text-box-source";
 
 import { appendMraiNativeObjectRevisions } from "./engine/native/content-stream-transaction";
+import { MRAI_NATIVE_BOX_MARK_TAG as MRAI_BOX_BLOCK_TAG } from "./engine/native/box-mark";
 import { PDF_FALLBACK_NOT_FOUND_MESSAGE, PDF_FALLBACK_TEXT_BOX_SOURCE_MESSAGE, PDF_FALLBACK_TYPE3_MESSAGE } from "./source-text-fallback-copy";
 import { pdfLibObjectsPerTick, pdfLibParseSpeed } from "@mrnote/core/web/lib/pdf/pdf-lib-pacing.ts";
 
@@ -391,6 +392,12 @@ interface ShowRecord {
   /** A show whose operands end the stream `ref` and whose operator starts
    * the next page content stream: `end` is then the first stream's length. */
   readonly continuation?: Readonly<{ ref: StreamRef; key: string; end: number }>;
+  /** Where its first glyph starts, in page space (its pen on its baseline). */
+  readonly origin: readonly [number, number];
+  /** The block of a box written here that draws it (`/MRAIBox BMC` ... `EMC`:
+   * a text box made of a line, a paragraph set again), counted along the
+   * page's drawing; absent for the page's other text. */
+  readonly box?: number;
 }
 
 interface StreamRecord {
@@ -681,6 +688,11 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
   const missingFont = missingFontInfo(lib);
   const stack: TextState[] = [];
   let tm: Matrix = IDENTITY, tlm: Matrix = IDENTITY;
+  // The marked content open where the drawing stands: a block of a box
+  // written here by its count, anything else null.
+  const marked: (number | null)[] = [];
+  let boxBlocks = 0;
+  const boxOpen = () => { for (let at = marked.length - 1; at >= 0; at -= 1) if (marked[at] !== null) return marked[at]!; return undefined; };
 
   // Operands a page content stream ends with belong to the operator the
   // next one starts with: the page's streams are one drawing.
@@ -727,6 +739,10 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
           break;
         case "Tm": if (values.length === 6) { tlm = values as unknown as Matrix; tm = tlm; } break;
         case "T*": tlm = multiply([1, 0, 0, 1, 0, -state.tl], tlm); tm = tlm; break;
+        case "BMC": case "BDC":
+          marked.push(operands.find((entry) => entry.kind === "name")?.text === MRAI_BOX_BLOCK_TAG ? (boxBlocks += 1) : null);
+          break;
+        case "EMC": marked.pop(); break;
         case "Tj": case "TJ": case "'": case "\"": {
           if (op === "\"" && values.length >= 2) { state.tw = values[0]; state.tc = values[1]; }
           if (op === "'" || op === "\"") { tlm = multiply([1, 0, 0, 1, 0, -state.tl], tlm); tm = tlm; }
@@ -734,6 +750,8 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
           const font = state.fontInfo ?? missingFont;
           const size = state.size, th = state.tz / 100;
           const glyphs: { x: number; y: number; ux: number; uy: number; ink: boolean; code: number; size: number; readAsBlank?: boolean }[] = [];
+          const origin = apply(multiply(tm, state.ctm), 0, state.ts);
+          const box = boxOpen();
           const elements = op === "TJ"
             ? operands.filter((entry) => entry.kind === "num" || entry.kind === "str" || entry.kind === "hex")
             : operands.filter((entry) => entry.kind === "str" || entry.kind === "hex").slice(-1);
@@ -774,10 +792,10 @@ async function readPage(sourceBytes: Uint8Array, pageNumber: number): Promise<Pa
             // The show starts in the stream before this one.
             shows.push({ ref: carried.ref, key: carried.key, start: first.start, end: carried.length,
               continuation: { ref, key, end: token.end }, codeCount: glyphs.length,
-              codeWidth: font.codeWidth, font, mode: state.tr, glyphs });
+              codeWidth: font.codeWidth, font, mode: state.tr, glyphs, origin, ...(box !== undefined ? { box } : {}) });
           } else {
             shows.push({ ref, key, start: first.start, end: token.end, codeCount: glyphs.length,
-              codeWidth: font.codeWidth, font, mode: state.tr, glyphs });
+              codeWidth: font.codeWidth, font, mode: state.tr, glyphs, origin, ...(box !== undefined ? { box } : {}) });
           }
           break;
         }
@@ -900,6 +918,33 @@ const boxItems = (selection: PdfNativeListTextSelectionEvidence) =>
 
 
 
+/**
+ * Whether a point is where a show of the item starts: on the item's
+ * baseline (a tenth of its height, half a point at least), from where the
+ * item begins to where it ends along it. The reader reads an item as one
+ * run along one baseline, so every show it read into the item starts there.
+ */
+function itemStart(item: PdfNativeListTextSelectionItemEvidence) {
+  const [a, b, c, d, e, f] = item.transform;
+  let ux = a, uy = b;
+  let length = Math.hypot(ux, uy);
+  let vx = c, vy = d;
+  let vLength = Math.hypot(vx, vy);
+  if (!(length > 0) && vLength > 0) { ux = vy / vLength; uy = -vx / vLength; length = 1; }
+  if (!(vLength > 0) && length > 0) { vx = -uy / length; vy = ux / length; vLength = 1; }
+  if (!(length > 0) || !(vLength > 0)) return null;
+  ux /= length; uy /= length; vx /= vLength; vy /= vLength;
+  const height = Math.max(item.height, Math.hypot(c, d), 0.5);
+  const det = ux * vy - uy * vx;
+  if (Math.abs(det) < 1e-6) return null;
+  const off = Math.max(0.5, 0.1 * height);
+  return (x: number, y: number): boolean => {
+    const px = x - e, py = y - f;
+    const s = (px * vy - py * vx) / det;
+    const t = (ux * py - uy * px) / det;
+    return Math.abs(t) <= off && s >= -0.2 * height - 0.5 && s <= item.width + 0.2 * height + 0.5;
+  };
+}
 function sizedLike(items: readonly PdfNativeListTextSelectionItemEvidence[]) {
   const heights = items.map((item) => Math.max(item.height, Math.hypot(item.transform[2], item.transform[3]), 0.5));
   return (show: ShowRecord, glyph: ShowRecord["glyphs"][number], at: number) =>
@@ -1171,7 +1216,19 @@ export async function locatePdfFallbackText(input: {
   const matchedItems = new Set<number>();
   // Codes of each show inside the box.
   const selected = new Map<ShowRecord, Set<number>>();
+  const starts = items.map((item) => itemStart(item));
   for (const show of reading.shows) {
+    // A show of a block written here (a text box made of a line, a
+    // paragraph set again) is that block's box's: it is this box's only
+    // where it starts on one of this box's items -- on the item's baseline,
+    // as the reader reads every row of a block. Standing in an item's region
+    // alone (the region reaches a line's height above the item's baseline,
+    // for the scripts and marks set off it) it is another box's row drawn
+    // close over this line: the word typed into the line above, wrapped to a
+    // second row 9 pt over this one, was named a piece of this line and
+    // emptied when this line was made a box (pdf-walk-1000 0337 p.1,
+    
+    if (show.box !== undefined && !starts.some((onItem) => onItem?.(show.origin[0], show.origin[1]))) continue;
     show.glyphs.forEach((glyph, code) => {
       // Every item the glyph stands in reads it: a superscript set right
       // after a word also stands in the word's slack, and crediting only the

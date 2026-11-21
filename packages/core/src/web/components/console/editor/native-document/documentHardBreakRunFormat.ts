@@ -18,6 +18,7 @@ import { normalizeWordFontHint, normalizeWordFontHintLanguage, normalizeWordFont
 import { normalizeOfficeFontFace, officeFontFaceStyle, registerOfficeFontFace } from "../../../office-ribbon/officeFontFace";
 
 import { imeSafeAppendTransaction } from "./imeCompositionGuard";
+import { UNDERLINE_STYLE_VALUES } from "./underlineStyles";
 
 export const DOCX_BREAK_RUN_MARKS = "docxRunMarks";
 /** Word's Text Wrapping break (`w:br w:clear`, ECMA-376 17.3.3.1): the
@@ -97,7 +98,9 @@ export function normalizeDocxBreakRunMarks(value: unknown): JSONContent[] | null
     if (type === "charSpacing" && normalizeCharSpacing(attrs.spacing) === null) return fail();
     if (type === "charScale" && normalizeCharScale(attrs.scale) === null) return fail();
     if (type === "underline") {
-      if (attrs.underlineStyle != null && !["single", "double", "dotted", "wavy"].includes(attrs.underlineStyle)) return fail();
+      // Any line style a run's underline takes (Word's Font dialog list, "none" included: corpus R492-D20, a break in a
+      // run of <w:u w:val="none"/> made the page fail to draw), as the API's carrier check reads it.
+      if (attrs.underlineStyle != null && !(UNDERLINE_STYLE_VALUES as readonly unknown[]).includes(attrs.underlineStyle)) return fail();
       if (attrs.underlineColor != null && !normalizeTextColor(attrs.underlineColor)) return fail();
     }
     if (type === "proofingLanguage") {

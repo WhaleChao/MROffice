@@ -71,7 +71,7 @@ MR Office 是一个 OAuth 2.1 授权服务器（PKCE、客户端 ID 元数据文
 
 本仓库的六个编辑器可以按 AGPL-3.0 集成到你自己的产品中：如果别人通过网络使用你修改过的版本，你必须向他们提供完整源代码，并保留“MR Office”署名（NOTICE.md）。它们打开自己的格式、CSV、HTML、Markdown 和 PDF；Word、Excel 和 PowerPoint 文件不在开源编辑器中（上面的托管嵌入支持）。商业许可请联系 support@mr-note.com。 [开源指南 →](https://mroffice.ai/developers/open-source)
 
-npm 包正在准备中，包名为 `mroffice-core`、`mroffice-docs`、`mroffice-sheets`、`mroffice-slides`、`mroffice-pdf`、`mroffice-ink` 和 `mroffice-code`；发布之前，请从本仓库构建编辑器（见下文）。
+编辑器已作为 React 组件发布到 npm：`npm i mroffice-docs mroffice-core`（另有 `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`），每个包的 README 写了嵌入方法。
 
 ## 编辑器一览
 

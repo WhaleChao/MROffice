@@ -71,7 +71,7 @@ MR Office は OAuth 2.1 認可サーバーです（PKCE、クライアント ID 
 
 このリポジトリの 6 つのエディターは AGPL-3.0 のもとで自社製品に組み込めます。改変版をネットワーク越しに利用させる場合は完全なソースコードを提供し、「MR Office」の表示（NOTICE.md）を残す必要があります。独自形式、CSV、HTML、Markdown、PDF を開けます。Word、Excel、PowerPoint ファイルはオープンソースのエディターには含まれません（上のホスト型埋め込みが対応）。商用ライセンスは support@mr-note.com へ。 [オープンソースガイド →](https://mroffice.ai/ja/developers/open-source)
 
-npm パッケージを `mroffice-core`、`mroffice-docs`、`mroffice-sheets`、`mroffice-slides`、`mroffice-pdf`、`mroffice-ink`、`mroffice-code` という名前で準備中です。公開までは、このリポジトリからエディターをビルドしてください（下記参照）。
+エディターは React コンポーネントとして npm にあります：`npm i mroffice-docs mroffice-core`（ほかに `mroffice-sheets`, `mroffice-slides`, `mroffice-pdf`, `mroffice-ink`, `mroffice-code`）。埋め込み方は各パッケージの README にあります。
 
 ## エディター
 
